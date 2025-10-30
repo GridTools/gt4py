@@ -857,7 +857,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 lambda_arg_nodes |= {
                     str(nested_param.id): nested_arg
                     for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(param, arg)
-                    if nested_arg is not None  # we filter out arguments with empty domain
                 }
 
         # inherit symbols from parent scope but eventually override with local symbols
