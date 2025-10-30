@@ -149,9 +149,7 @@ def test_complex_copies_global_access_node():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     ret = sdfg.apply_transformations_repeated(
-        gtx_transformations.RemoveAccessNodeCopies(
-            stencil_selection=["vertically_implicit_solver_like_sdfg", "smth"]
-        ),
+        gtx_transformations.RemoveAccessNodeCopies(),
         validate=True,
         validate_all=True,
     )

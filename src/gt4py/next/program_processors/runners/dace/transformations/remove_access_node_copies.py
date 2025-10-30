@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import warnings
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 
 import dace
 from dace import (
@@ -16,6 +16,7 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.sdfg import nodes as dace_nodes
+from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace.transformations import (
     splitting_tools as gtx_dace_split,
@@ -40,14 +41,6 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
     third_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     fourth_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
-    # If given, only apply the transformation to the selected stencils (by SDFG name)
-    stencil_selection = dace_properties.Property(
-        dtype=Sequence,
-        allow_none=True,
-        default=None,
-        desc="If given, only apply the transformation to the selected stencils (by SDFG name)",
-    )
-
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
     #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
@@ -55,13 +48,11 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
 
     def __init__(
         self,
-        stencil_selection: Optional[Sequence[str]] = None,
         *args: Any,
         single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.stencil_selection = stencil_selection
         self._single_use_data = None
         if single_use_data is not None:
             self._single_use_data = single_use_data
@@ -81,12 +72,6 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        # SDFG name is the stencil name followed by a unique id (hash)
-        # If stencil_selection is given, only apply the transformation to the selected stencils
-        if self.stencil_selection is not None and not any(
-            sdfg.name.startswith(stencil_name) for stencil_name in self.stencil_selection
-        ):
-            return False
         first_node: dace_nodes.AccessNode = self.first_node
         first_desc: dace_data.Data = first_node.desc(sdfg)
         second_node: dace_nodes.AccessNode = self.second_node
@@ -124,20 +109,21 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         if second_desc.shape != third_desc.shape:
             return False
 
-        # Make sure that second and fourth node have the same shape as the first node
-        if second_desc.shape != first_desc.shape or third_desc.shape != first_desc.shape:
-            warnings.warn(
-                f"[RemoveAccessNodeCopies] Shapes of second or third node do not match the shape of the first node: {second_desc.shape}, {third_desc.shape} vs {first_desc.shape}",
-                stacklevel=0,
-            )
-            # needs https://github.com/GridTools/gt4py/pull/2173 # return False
+        # Make sure that second and third node are not used anywhere else in the SDFG
+        if self._single_use_data is None:
+            find_single_use_data = dace_analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+        else:
+            single_use_data = self._single_use_data
+        if (
+            second_node.data not in single_use_data[sdfg]
+            and third_node.data not in single_use_data[sdfg]
+        ):
+            return False
 
-        # Make sure that there is no other AccessNode with the same data in the SDFG state
+        # Make sure that there is no other AccessNode with the same data as first and fourth nodes in the SDFG state
         for node in graph.data_nodes():
-            if (
-                node not in [first_node, second_node, third_node, fourth_node]
-                and node.data == first_node.data
-            ):
+            if node not in [first_node, fourth_node] and node.data == first_node.data:
                 return False
 
         # Make sure that the data written to the first node are not a subset of the data written to the fourth node
@@ -157,15 +143,16 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         # Make sure that the whole data of the first node is written
         first_node_range = first_desc.shape
 
-        union_written_to_first_node_data = next(
-            iter(gtx_dace_split.subset_merger(ranges_written_to_first_node))
-        )
-        union_written_to_fourth_node_data = next(
-            iter(gtx_dace_split.subset_merger(ranges_written_to_fourth_node))
-        )
+        first_node_writes_subset = gtx_dace_split.subset_merger(ranges_written_to_first_node)
+        assert len(first_node_writes_subset) == 1
+        fourth_node_writes_subset = gtx_dace_split.subset_merger(ranges_written_to_fourth_node)
+        assert len(fourth_node_writes_subset) == 1
+        union_written_to_first_node_data = next(iter(first_node_writes_subset))
+        union_written_to_fourth_node_data = next(iter(fourth_node_writes_subset))
         union_written_to_common_data = gtx_dace_split.subset_merger(
             [union_written_to_first_node_data, union_written_to_fourth_node_data]
         )
+        assert len(union_written_to_common_data) == 1
         if union_written_to_common_data != first_node_range:
             warnings.warn(
                 "[RemoveAccessNodeCopies] The whole range of the first node is not written.",
@@ -209,8 +196,9 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         )
 
         # Compute the offset of the data between first and second node
-        assert len(edge_between_first_and_second.data.src_subset) == len(
-            edge_between_first_and_second.data.dst_subset
+        assert (
+            edge_between_first_and_second.data.src_subset.dims()
+            == edge_between_first_and_second.data.dst_subset.dims()
         )
         node_offset = [
             range_first_min - range_second_min
