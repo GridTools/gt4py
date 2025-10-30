@@ -13,6 +13,7 @@ import pytest
 import re
 
 from gt4py import next as gtx
+from gt4py._core import definitions as core_defs
 import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
@@ -607,6 +608,52 @@ def test_dimension_promotion(
             promote_dims(*dim_list)
 
         assert exc_info.match(re.escape(expected_error_msg))
+
+
+class TestBufferInfo:
+    def test_from_numpy_ndarray(self):
+        import numpy as np
+
+        a = np.asarray([1, 2, 3, 4, 5])
+        buffer_info = common.BufferInfo.from_ndarray(a)
+
+        assert buffer_info.data_ptr == a.ctypes.data
+        assert buffer_info.ndim == a.ndim
+        assert buffer_info.shape == a.shape
+        assert buffer_info.byte_strides == a.strides
+        assert all(b >= e for b, e in zip(buffer_info.byte_strides, buffer_info.elem_strides))
+        assert buffer_info.device.device_type == core_defs.DeviceType.CPU
+        assert buffer_info.device.device_id == 0
+
+    def test_from_cupy_ndarray(self):
+        try:
+            import cp as cp
+        except ImportError:
+            pytest.skip("CuPy is not installed")
+
+        a = cp.asarray([1, 2, 3, 4, 5])
+        buffer_info = common.BufferInfo.from_ndarray(a)
+
+        assert buffer_info.data_ptr == a.data.ptr
+        assert buffer_info.ndim == a.ndim
+        assert buffer_info.shape == a.shape
+        assert buffer_info.byte_strides == a.strides
+        assert all(b >= e for b, e in zip(buffer_info.byte_strides, buffer_info.elem_strides))
+        assert buffer_info.device.device_type == core_defs.CUPY_DEVICE_TYPE
+        assert buffer_info.device.device_id == a.device.id
+
+    def test_hashes(self):
+        import numpy as np
+
+        a = np.asarray([1, 2, 3, 4, 5])
+        buffer_info = common.BufferInfo.from_ndarray(a)
+        assert hash(buffer_info) == buffer_info.hash_key
+
+        # Create a view with the same data pointer and shape
+        b = a[0:None]
+        assert np.allclose(a, b)
+        assert a is not b
+        assert hash(common.BufferInfo.from_ndarray(b)) == buffer_info.hash_key
 
 
 class TestCartesianConnectivity:

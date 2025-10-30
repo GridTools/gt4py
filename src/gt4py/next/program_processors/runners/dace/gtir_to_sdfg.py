@@ -37,7 +37,7 @@ from gt4py import eve
 from gt4py.eve import concepts
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import (
@@ -134,7 +134,6 @@ class SubgraphContext:
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-    target_domain: gtir_domain.FieldopDomain
 
 
 class SDFGBuilder(DataflowBuilder, Protocol):
@@ -315,7 +314,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, sdfg_name))
         sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(expr, default=parent_ctx.sdfg.debuginfo)
         state = sdfg.add_state(f"{sdfg_name}_entry")
-        nested_ctx = SubgraphContext(sdfg, state, parent_ctx.target_domain)
+        nested_ctx = SubgraphContext(sdfg, state)
         nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
 
         # We pass to the nested SDFG all GTIR-symbols in scope, which includes the
@@ -528,11 +527,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def _visit_expression(
         self,
         node: gtir.Expr,
-        domain: gtir_domain.FieldopDomain,
         sdfg: dace.SDFG,
         head_state: dace.SDFGState,
         use_temp: bool = True,
-    ) -> list[gtir_to_sdfg_types.FieldopData]:
+    ) -> gtir_to_sdfg_types.FieldopResult:
         """
         Specialized visit method for fieldview expressions.
 
@@ -540,10 +538,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         As such, it must preserve the property of single exit state in the SDFG.
 
         Returns:
-            A list of array nodes containing the result fields.
+            The SDFG array nodes containing the result of the fieldview expression.
+            The nodes are organized in tree form, in case of tuples.
         """
 
-        ctx = SubgraphContext(sdfg, head_state, domain)
+        ctx = SubgraphContext(sdfg, head_state)
         result = self.visit(node, ctx=ctx)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
@@ -552,7 +551,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         assert len(sink_states) == 1
         assert sink_states[0] == head_state
 
-        def make_temps(
+        def _visit_result(
             src: gtir_to_sdfg_types.FieldopData,
         ) -> gtir_to_sdfg_types.FieldopData:
             src_desc = sdfg.arrays[src.dc_node.data]
@@ -572,8 +571,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
                 return gtir_to_sdfg_types.FieldopData(dst_node, src.gt_type, src.origin)
 
-        temp_result = gtx_utils.tree_map(make_temps)(result)
-        return list(gtx_utils.flatten_nested_tuple((temp_result,)))
+        return gtx_utils.tree_map(_visit_result)(result)
 
     def _add_sdfg_params(
         self,
@@ -695,13 +693,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
           The SDFG head state, eventually updated if the target write requires a new state.
         """
 
-        # visit the domain expression
-        domain = gtir_domain.extract_domain(stmt.domain)
-        source_fields = self._visit_expression(stmt.expr, domain, sdfg, state)
+        # Visit the domain expression.
+        assert isinstance(stmt.domain.type, ts.DomainType)
+        domain = domain_utils.SymbolicDomain.from_expr(stmt.domain)
 
-        # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
-        # in case the statement returns more than one field
-        target_fields = self._visit_expression(stmt.target, domain, sdfg, state, use_temp=False)
+        # Visit the field operator expression.
+        source_tree = self._visit_expression(stmt.expr, sdfg, state)
+
+        # The target expression could be a `SymRef` to an output field or a `make_tuple`
+        # expression in case the statement returns more than one field.
+        target_tree = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
 
         expr_input_args = {
             sym_id
@@ -714,20 +715,26 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if node.data in expr_input_args and state.degree(node) != 0
         }
 
-        target_state: Optional[dace.SDFGState] = None
-        for source, target in zip(source_fields, target_fields, strict=True):
+        # For inout argument, write the result in separate next state
+        # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
+        # If this state is not used, we remove it before returning from the function.
+        target_state = sdfg.add_state_after(state, f"post_{state.label}")
+
+        def _visit_target(
+            source: gtir_to_sdfg_types.FieldopData,
+            target: gtir_to_sdfg_types.FieldopData,
+            target_domain: domain_utils.SymbolicDomain,
+            target_state: dace.SDFGState,
+        ) -> None:
             target_desc = sdfg.arrays[target.dc_node.data]
             assert not target_desc.transient
 
             assert source.gt_type == target.gt_type
-            source_subset = _make_access_index_for_field(domain, source)
-            target_subset = _make_access_index_for_field(domain, target)
+            field_domain = gtir_domain.get_field_domain(target_domain)
+            source_subset = _make_access_index_for_field(field_domain, source)
+            target_subset = _make_access_index_for_field(field_domain, target)
 
             if target.dc_node.data in state_input_data:
-                # if inout argument, write the result in separate next state
-                # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
-                if not target_state:
-                    target_state = sdfg.add_state_after(state, f"post_{state.label}")
                 # create new access nodes in the target state
                 target_state.add_nedge(
                     target_state.add_access(source.dc_node.data),
@@ -747,7 +754,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     ),
                 )
 
-        return target_state or state
+        gtx_utils.tree_map(
+            lambda source, target, _domain=domain, _target_state=target_state: _visit_target(
+                source, target, _domain, _target_state
+            )
+        )(source_tree, target_tree)
+
+        if target_state.is_empty():
+            sdfg.remove_node(target_state)
+            return state
+        else:
+            return target_state
 
     def visit_FunCall(
         self,
