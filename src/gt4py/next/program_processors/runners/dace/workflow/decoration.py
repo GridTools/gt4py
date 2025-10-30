@@ -11,7 +11,6 @@ from __future__ import annotations
 import functools
 from typing import Any, Sequence
 
-import dace
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -44,16 +43,8 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        try:
-            # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
-            #  so we just update it with the current call arguments.
-            update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
-            fun.fast_call()
-        except IndexError:
-            # First call, the SDFG is not initialized, so forward the call to `CompiledSDFG`
-            # to properly initialize it. Later calls to this SDFG will be handled through
-            # the `fast_call()` API.
-            assert len(fun.sdfg_program._lastargs) == 0  # `fun.sdfg_program._lastargs` is empty
+        if fun.csdfg_args is None:
+            # First call, set up the call vector of the `CompiledDaceProgram`.
             flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
             this_call_args = sdfg_callable.get_sdfg_args(
                 fun.sdfg_program.sdfg,
@@ -65,8 +56,16 @@ def convert_args(
                 gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
-            with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-                fun(**this_call_args)
+            fun.process_arguments(**this_call_args)
+
+        else:
+            # Not the first call to the program, just update the call vector. Note that
+            #  `fun.csdfg_args[1]` is only needed the first time thus we do not update
+            #  it, however, it should not change anyway.
+            update_sdfg_call_args(args, fun.csdfg_args[0])
+
+        # Perform the call to the SDFG.
+        fun.fast_call()
 
         if collect_time:
             metric_source = metrics.get_current_source()
