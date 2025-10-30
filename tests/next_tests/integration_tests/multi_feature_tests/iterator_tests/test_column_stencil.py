@@ -142,7 +142,6 @@ def k_level_condition_upper_tuple(k_idx, k_level):
                 gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             ),
             lambda inp: np.concatenate([(inp[0][1:] + inp[1][1:]), [0]]),
-            marks=pytest.mark.uses_tuple_iterator,
         ),
     ],
 )

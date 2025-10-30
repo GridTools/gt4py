@@ -99,7 +99,6 @@ def get_field_layout(
 
     Args:
         field_domain: The field operator domain.
-        target_domain: Domain of the target field in the root `SetAt` expression.
 
     Returns:
         A tuple of three lists containing:
