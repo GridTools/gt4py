@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import itertools
 from typing import (
     Any,
     Dict,
@@ -683,7 +682,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def visit_SetAt(
         self, stmt: gtir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState
-    ) -> dace.SDFGState | None:
+    ) -> dace.SDFGState:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of dataflow gragh writing to temporary storage.
@@ -694,7 +693,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
 
         # Visit the domain expression.
-        domain = gtir_domain.TargetDomainParser().apply(stmt.domain)
+        domain = gtir_domain.extract_target_domain(stmt.domain)
 
         # Visit the field operator expression.
         source_tree = self._visit_expression(stmt.expr, sdfg, state)
@@ -753,24 +752,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     ),
                 )
 
-        if isinstance(target_tree, tuple) and not isinstance(domain, tuple):
-            # This branch handles a specific case that indeed never happens in
-            # fieldview GTIR, only in iterator GTIR tests. The case corresponds
-            # to 'as_fieldop' with tuple output and single domain, which is a format
-            # used when multiple 'as_fieldop' are fused into one. The input to SDFG
-            # lowering is fieldview IR, where 'as_fieldop' will always have a single
-            # domain and the frontend will never emit 'as_fieldop' with tuple output.
-            gtx_utils.tree_map(
-                lambda source, target, domain_=domain, target_state_=target_state: _visit_target(
-                    source, target, domain_, target_state_
-                )
-            )(source_tree, target_tree)
-        else:
-            gtx_utils.tree_map(
-                lambda source, target, domain_, target_state_=target_state: _visit_target(
-                    source, target, domain_, target_state_
-                )
-            )(source_tree, target_tree, domain)
+        gtx_utils.tree_map(
+            lambda source, target, domain_, target_state_=target_state: _visit_target(
+                source, target, domain_, target_state_
+            )
+        )(source_tree, target_tree, domain)
 
         if target_state.is_empty():
             sdfg.remove_node(target_state)
@@ -858,26 +844,22 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         the previous symbol during traversal of the lambda expression.
         """
 
-        symbolic_args = {
-            str(param.id): arg
-            for param, arg in args.items()
-            if isinstance(arg, gtir_to_sdfg_types.SymbolicData)
-        }
-        data_args: dict[str, gtir_to_sdfg_types.FieldopResult] = {
-            str(param.id): arg  # type: ignore[misc]  # symbolic args are filtered out
-            for param, arg in args.items()
-            if arg is not None and param.id not in symbolic_args
-        }
-
-        lambda_arg_nodes = dict(
-            itertools.chain(
-                *[
-                    gtir_to_sdfg_types.flatten_tuple(param, arg)  # type: ignore[arg-type]  # symbolic args are filtered out
-                    for param, arg in args.items()
-                    if param.id in data_args
-                ]
-            )
-        )
+        data_args: dict[str, gtir_to_sdfg_types.FieldopResult] = {}
+        symbolic_args: dict[str, gtir_to_sdfg_types.SymbolicData] = {}
+        lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
+        for param, arg in args.items():
+            pname = str(param.id)
+            if arg is None:
+                pass  # domain inference has detetcted that this argument is not used
+            elif isinstance(arg, gtir_to_sdfg_types.SymbolicData):
+                symbolic_args[pname] = arg
+            else:
+                data_args[pname] = arg
+                lambda_arg_nodes |= {
+                    str(nested_param.id): nested_arg
+                    for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(param, arg)
+                    if nested_arg is not None  # we filter out arguments with empty domain
+                }
 
         # inherit symbols from parent scope but eventually override with local symbols
         lambda_symbols = {
@@ -908,33 +890,28 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         input_memlets = {}
+        unused_data = set()
         for nsdfg_dataname, nsdfg_datadesc in lambda_ctx.sdfg.arrays.items():
             if nsdfg_datadesc.transient:
-                continue
+                pass  # nothing to do here
             elif nsdfg_dataname in lambda_arg_nodes:
                 arg_node = lambda_arg_nodes[nsdfg_dataname]
-                if arg_node is None:
-                    # This argument has empty domain, which means that it should not be
-                    # used inside the nested SDFG, and does not need to be connected outside.
-                    assert all(
-                        node.data != nsdfg_dataname
-                        for node in lambda_ctx.sdfg.all_nodes_recursive()
-                        if isinstance(node, dace.nodes.AccessNode)
-                    )
-                    lambda_ctx.sdfg.arrays[nsdfg_dataname].transient = True
-                    continue
-                else:
-                    dataname = arg_node.dc_node.data
-                    datadesc = arg_node.dc_node.desc(ctx.sdfg)
+                source_data = arg_node.dc_node.data
+                input_memlets[nsdfg_dataname] = ctx.sdfg.make_array_memlet(source_data)
+            elif nsdfg_dataname in ctx.sdfg.arrays:
+                source_data = nsdfg_dataname
+                # ensure that connectivity tables are non-transient arrays in parent SDFG
+                if source_data in connectivity_arrays:
+                    ctx.sdfg.arrays[source_data].transient = False
+                input_memlets[nsdfg_dataname] = ctx.sdfg.make_array_memlet(source_data)
             else:
-                dataname = nsdfg_dataname
-                datadesc = ctx.sdfg.arrays[nsdfg_dataname]
+                # This argument has empty domain, which means that it is not used
+                # by the lambda expression, and does not need to be connected on
+                # the nested SDFG.
+                unused_data.add(nsdfg_dataname)
 
-            # ensure that connectivity tables are non-transient arrays in parent SDFG
-            if dataname in connectivity_arrays:
-                datadesc.transient = False
-
-            input_memlets[nsdfg_dataname] = ctx.sdfg.make_array_memlet(dataname)
+        for data in sorted(unused_data):  # NOTE: remove the data in deterministic order
+            lambda_ctx.sdfg.remove_data(data, validate=__debug__)
 
         # Process lambda outputs
         #
@@ -965,19 +942,18 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Map free symbols to parent SDFG
         nsdfg_symbols_mapping = {}
-        for sym in lambda_ctx.sdfg.free_symbols:
-            if (sym_id := str(sym)) in lambda_arg_nodes:
-                arg_node = lambda_arg_nodes[sym_id]
-                assert arg_node and isinstance(arg_node.gt_type, ts.ScalarType)
+        for symbol in lambda_ctx.sdfg.free_symbols:
+            if symbol in lambda_arg_nodes:
+                assert isinstance(lambda_arg_nodes[symbol].gt_type, ts.ScalarType)
                 raise NotImplementedError(
                     "Unexpected mapping of scalar node to symbol on nested SDFG."
                 )
-            elif sym_id in symbolic_args:
-                nsdfg_symbols_mapping[sym_id] = symbolic_args[sym_id].value
+            elif symbol in symbolic_args:
+                nsdfg_symbols_mapping[symbol] = symbolic_args[symbol].value
             else:
-                nsdfg_symbols_mapping[sym_id] = sym
-        for param, arg in data_args.items():
-            nsdfg_symbols_mapping |= gtir_to_sdfg_utils.get_arg_symbol_mapping(param, arg, ctx.sdfg)
+                nsdfg_symbols_mapping[symbol] = symbol
+        for pname, arg in lambda_arg_nodes.items():
+            nsdfg_symbols_mapping |= arg.get_symbol_mapping(pname, ctx.sdfg)
 
         nsdfg_node = ctx.state.add_nested_sdfg(
             lambda_ctx.sdfg,
@@ -990,17 +966,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for input_connector, memlet in input_memlets.items():
             if input_connector in lambda_arg_nodes:
                 arg_node = lambda_arg_nodes[input_connector]
-                if arg_node is None:
-                    # this argument has empty domain, therefore it should not be used inside the nested SDFG
-                    assert all(
-                        node.data != input_connector
-                        for node in lambda_ctx.sdfg.all_nodes_recursive()
-                        if isinstance(node, dace.nodes.AccessNode)
-                    )
-                    lambda_ctx.sdfg.arrays[input_connector].transient = True
-                    continue
-                else:
-                    src_node = arg_node.dc_node
+                src_node = arg_node.dc_node
             else:
                 src_node = ctx.state.add_access(memlet.data)
 

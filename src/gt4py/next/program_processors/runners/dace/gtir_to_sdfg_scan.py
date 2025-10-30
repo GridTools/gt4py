@@ -22,8 +22,7 @@ This is likely to change in the future, to enable GTIR optimizations for scan.
 
 from __future__ import annotations
 
-import itertools
-from typing import Any, Iterable
+from typing import Iterable
 
 import dace
 from dace import subsets as dace_subsets
@@ -53,7 +52,7 @@ def _parse_scan_fieldop_arg(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     field_domain: gtir_domain.FieldopDomain,
-) -> gtir_dataflow.MemletExpr | tuple[gtir_dataflow.MemletExpr | tuple[Any, ...], ...]:
+) -> MaybeNestedInTuple[gtir_dataflow.MemletExpr]:
     """Helper method to visit an expression passed as argument to a scan field operator.
 
     On the innermost level, a scan operator is lowered to a loop region which computes
@@ -107,8 +106,17 @@ def _create_scan_field_operator_impl(
     Therefore, the memlet subset will write a slice into the result array, that
     corresponds to the full vertical shape for each horizontal grid point.
 
+    Another difference is that this function is called on all fields inside a tuple,
+    in case of tuple return. Note that a regular field operator only computes a
+    single field, never a tuple of fields. For tuples, it can happen that one of
+    the nested fields is not used, outside the scan field operator, and therefore
+    does not need to be computed. Then, the domain inferred by gt4py on this field
+    is empty and the corresponding `output_edge` argument to this function is None.
+    In this case, the function does not allocate an array node for the output field
+    and returns None.
+
     Refer to `gtir_to_sdfg_primitives._create_field_operator_impl()` for
-    the description of function arguments and return values.
+    the description of function arguments.
     """
     if output_edge is None:
         # According to domain inference, this tuple field does not need to be computed.
@@ -223,7 +231,12 @@ def _create_scan_field_operator(
     by a loop region in a mapped nested SDFG.
 
     Refer to `gtir_to_sdfg_primitives._create_field_operator()` for the
-    description of function arguments and return values.
+    description of function arguments. Note that the return value is different,
+    because the scan field operator can return a tuple of fields, while a regular
+    field operator return a single field. The domain of the nested fields, in
+    a tuple, can be empty, in case the nested field is not used outside the scan.
+    In this case, the corresponding `output` edge will be None and this function
+    will also return None for the corresponding field inside the tree-like result.
     """
     dims, _, _ = gtir_domain.get_field_layout(field_domain)
 
@@ -254,29 +267,29 @@ def _create_scan_field_operator(
     for edge in input_edges:
         edge.connect(map_entry)
 
+    output_symbol: MaybeNestedInTuple[gtir.Sym]
     if isinstance(node_type, ts.FieldType):
-        assert isinstance(output, gtir_dataflow.DataflowOutputEdge)
-        assert isinstance(output_domain, domain_utils.SymbolicDomain)
-        return _create_scan_field_operator_impl(
-            ctx, sdfg_builder, output, output_domain, node_type, map_exit
-        )
+        assert isinstance(output_domain, infer_domain.NonTupleDomainAccess)
+        output_symbol = im.sym("__gtir_guaranteed_unused_dummy_variable", node_type)
     else:
-        # Handle tuples of fields. note that the symbol name 'x' in the call below
-        # is not used, we only need the tree structure of the `TupleType` definition
-        # to pass to `tree_map()` in order to retrieve the type of each field.
-        output_symbol_tree = gtir_to_sdfg_utils.make_symbol_tree("x", node_type)
-        return gtx_utils.tree_map(
-            lambda edge_, domain_, sym_, ctx_=ctx: (
-                _create_scan_field_operator_impl(
-                    ctx_,
-                    sdfg_builder,
-                    edge_,
-                    domain_,
-                    sym_.type,
-                    map_exit,
-                )
+        # handle tuples of fields
+        assert isinstance(output_domain, tuple)
+        output_symbol = gtir_to_sdfg_utils.make_symbol_tree(
+            "__gtir_guaranteed_unused_dummy_variable", node_type
+        )
+
+    return gtx_utils.tree_map(
+        lambda edge, domain, sym, ctx_=ctx: (
+            _create_scan_field_operator_impl(
+                ctx_,
+                sdfg_builder,
+                edge,
+                domain,
+                sym.type,
+                map_exit,
             )
-        )(output, output_domain, output_symbol_tree)
+        )
+    )(output, output_domain, output_symbol)
 
 
 def _scan_input_name(input_name: str) -> str:
@@ -508,15 +521,9 @@ def _lower_lambda_to_nested_sdfg(
 
     # write the stencil result (value on one vertical level) into a 1D field
     # with full vertical shape representing one column
-    if isinstance(scan_carry_input, tuple):
-        assert isinstance(lambda_result_shape, tuple)
-        lambda_output = gtx_utils.tree_map(connect_scan_output)(
-            lambda_result, lambda_result_shape, scan_carry_input
-        )
-    else:
-        assert isinstance(lambda_result[0], gtir_dataflow.DataflowOutputEdge)
-        assert isinstance(lambda_result_shape, list)
-        lambda_output = connect_scan_output(lambda_result[0], lambda_result_shape, scan_carry_input)
+    lambda_output = gtx_utils.tree_map(connect_scan_output)(
+        lambda_result, lambda_result_shape, scan_carry_input
+    )
 
     # in case tuples are passed as argument, isolated access nodes might be left in the state,
     # because not all tuple fields are necessarily accessed inside the lambda scope
@@ -569,13 +576,22 @@ def _connect_nested_sdfg_output_to_temporaries(
     return gtir_dataflow.DataflowOutputEdge(outer_ctx.state, output_expr)
 
 
-def _remove_nested_sdfg_connector(
-    inner_ctx: gtir_to_sdfg.SubgraphContext,
+def _handle_dataflow_result_of_nested_sdfg(
     nsdfg_node: dace.nodes.NestedSDFG,
+    inner_ctx: gtir_to_sdfg.SubgraphContext,
+    outer_ctx: gtir_to_sdfg.SubgraphContext,
     inner_data: gtir_to_sdfg_types.FieldopData,
-) -> None:
-    inner_data.dc_node.desc(inner_ctx.sdfg).transient = True
-    nsdfg_node.out_connectors.pop(inner_data.dc_node.data)
+    field_domain: infer_domain.NonTupleDomainAccess,
+) -> gtir_dataflow.DataflowOutputEdge | None:
+    if isinstance(field_domain, domain_utils.SymbolicDomain):
+        return _connect_nested_sdfg_output_to_temporaries(
+            inner_ctx, outer_ctx, nsdfg_node, inner_data
+        )
+    else:
+        assert field_domain == infer_domain.DomainAccessDescriptor.NEVER
+        inner_data.dc_node.desc(inner_ctx.sdfg).transient = True
+        nsdfg_node.out_connectors.pop(inner_data.dc_node.data)
+        return None
 
 
 def translate_scan(
@@ -657,13 +673,19 @@ def translate_scan(
     lambda_args = [sdfg_builder.visit(arg, ctx=ctx) for arg in node.args]
     lambda_args_mapping = [
         (im.sym(_scan_input_name(scan_carry), scan_carry_type), init_data),
-    ] + [(param, arg) for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)]
+    ] + [
+        (param, arg)
+        for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
+        if arg is not None
+    ]
 
-    lambda_arg_nodes = dict(
-        itertools.chain(
-            *[gtir_to_sdfg_types.flatten_tuple(psym, arg) for psym, arg in lambda_args_mapping]
-        )
-    )
+    lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
+    for param, arg in lambda_args_mapping:
+        lambda_arg_nodes |= {
+            str(nested_param.id): nested_arg
+            for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(param, arg)
+            if nested_arg is not None
+        }
 
     # parse the dataflow output symbols
     if isinstance(scan_carry_type, ts.TupleType):
@@ -678,8 +700,8 @@ def translate_scan(
 
     # build the mapping of symbols from nested SDFG to field operator context
     nsdfg_symbols_mapping = {str(sym): sym for sym in lambda_ctx.sdfg.free_symbols}
-    for psym, arg in lambda_args_mapping:
-        nsdfg_symbols_mapping |= gtir_to_sdfg_utils.get_arg_symbol_mapping(psym.id, arg, ctx.sdfg)
+    for pname, arg in lambda_arg_nodes.items():
+        nsdfg_symbols_mapping |= arg.get_symbol_mapping(pname, ctx.sdfg)
 
     # the scan nested SDFG is ready: it is instantiated in the field operator context
     # where the map scope over the horizontal domain lives
@@ -693,31 +715,23 @@ def translate_scan(
     input_edges = []
     for input_connector, outer_arg in lambda_arg_nodes.items():
         assert not lambda_ctx.sdfg.arrays[input_connector].transient
-        if outer_arg is None:
-            # This argument has empty domain, which means that it should not be
-            # used inside the nested SDFG, and does not need to be connected outside.
-            assert all(
-                node.data != input_connector
-                for node in lambda_ctx.sdfg.all_nodes_recursive()
-                if isinstance(node, dace.nodes.AccessNode)
-            )
-            lambda_ctx.sdfg.arrays[input_connector].transient = True
-        else:
-            arg_desc = outer_arg.dc_node.desc(ctx.sdfg)
-            input_subset = dace_subsets.Range.from_array(arg_desc)
-            input_edge = gtir_dataflow.MemletInputEdge(
-                ctx.state, outer_arg.dc_node, input_subset, nsdfg_node, input_connector
-            )
-            input_edges.append(input_edge)
+        arg_desc = outer_arg.dc_node.desc(ctx.sdfg)
+        input_subset = dace_subsets.Range.from_array(arg_desc)
+        input_edge = gtir_dataflow.MemletInputEdge(
+            ctx.state, outer_arg.dc_node, input_subset, nsdfg_node, input_connector
+        )
+        input_edges.append(input_edge)
 
     # for output connections, we create temporary arrays that contain the computation
     # results of a column slice for each point in the horizontal domain
     output_tree = gtx_utils.tree_map(
-        lambda output_data, output_domain: _connect_nested_sdfg_output_to_temporaries(
-            lambda_ctx, ctx, nsdfg_node, output_data
+        lambda output_data, output_domain: _handle_dataflow_result_of_nested_sdfg(
+            nsdfg_node=nsdfg_node,
+            inner_ctx=lambda_ctx,
+            outer_ctx=ctx,
+            inner_data=output_data,
+            field_domain=output_domain,
         )
-        if output_domain != infer_domain.DomainAccessDescriptor.NEVER
-        else _remove_nested_sdfg_connector(lambda_ctx, nsdfg_node, output_data)
     )(lambda_output, node.annex.domain)
 
     # we call a helper method to create a map scope that will compute the entire field

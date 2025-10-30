@@ -181,7 +181,13 @@ class FieldopData:
 
 
 FieldopResult: TypeAlias = MaybeNestedInTuple[FieldopData | None]
-"""Result of a field operator, can be either a field or a tuple fields."""
+"""Result of a field operator, can be either a field or a tuple fields.
+
+For tuple of fields, any of the nested fields can be None, in case it is not udes
+and therefore does not need to be computed. The information whether a field needs
+to be computed or not is the result of GTIR domain inference, and it is stored in
+the GTIR node annex domain.
+"""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -194,19 +200,18 @@ INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.Index
 """Data type used for field indexing."""
 
 
-def flatten_tuple(sym: gtir.Sym, arg: FieldopResult) -> list[tuple[str, FieldopData | None]]:
+def flatten_tuple(sym: gtir.Sym, arg: FieldopResult) -> list[tuple[gtir.Sym, FieldopData | None]]:
     """
-    Visit a `FieldopResult`, potentially containing nested tuples, and construct a list
-    of pairs `(str, FieldopData)` containing the symbol name of each tuple field and
-    the corresponding `FieldopData`.
+    Visit a `FieldopResult`, potentially containing nested tuples, and construct
+    a list of pairs `(gtir.Sym, FieldopData)` containing the symbol of each tuple
+    field and the corresponding `FieldopData`.
     """
     if isinstance(arg, tuple):
         assert isinstance(sym.type, ts.TupleType)
         tuple_symbols = gtir_to_sdfg_utils.flatten_tuple_fields(sym.id, sym.type)
         tuple_data_fields = gtx_utils.flatten_nested_tuple(arg)
         return [
-            (str(tsym.id), tfield)
-            for tsym, tfield in zip(tuple_symbols, tuple_data_fields, strict=True)
+            (tsym, tfield) for tsym, tfield in zip(tuple_symbols, tuple_data_fields, strict=True)
         ]
     else:
-        return [(sym.id, arg)]
+        return [(sym, arg)]

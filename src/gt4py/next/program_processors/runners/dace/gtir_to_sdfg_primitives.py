@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Iterable, Optional, Protocol
+from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
 from dace import subsets as dace_subsets
@@ -175,17 +175,13 @@ def _create_field_operator_impl(
 def _create_field_operator(
     ctx: gtir_to_sdfg.SubgraphContext,
     domain: gtir_domain.FieldopDomain,
-    node_type: ts.FieldType | ts.TupleType,
+    node_type: ts.FieldType,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
-    output_tree: tuple[gtir_dataflow.DataflowOutputEdge | tuple[Any, ...], ...],
+    output_edge: gtir_dataflow.DataflowOutputEdge,
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
-    Helper method to build the output of a field operator, which can consist of
-    a single field or a tuple of fields.
-
-    A tuple of fields is returned when one stencil computes a grid point on multiple
-    fields: for each field, this method will call `_create_field_operator_impl()`.
+    Helper method to build the output of a field operator.
 
     Args:
         ctx: The SDFG context in which to lower the field operator.
@@ -193,11 +189,11 @@ def _create_field_operator(
         node_type: The GT4Py type of the IR node that produces this field.
         sdfg_builder: The object used to build the map scope in the provided SDFG.
         input_edges: List of edges to pass input data into the dataflow.
-        output_tree: A tree representation of the dataflow output data.
+        output_edge: Edge corresponding to the dataflow output.
 
     Returns:
-        The descriptor of the field operator result, which can be either a single
-        field or a tuple fields.
+        The descriptor of the field operator result, which is a single field defined
+        on the domain of the field operator.
     """
 
     if len(domain) == 0:
@@ -219,22 +215,7 @@ def _create_field_operator(
     for edge in input_edges:
         edge.connect(map_entry)
 
-    if isinstance(node_type, ts.FieldType):
-        assert len(output_tree) == 1 and isinstance(
-            output_tree[0], gtir_dataflow.DataflowOutputEdge
-        )
-        output_edge = output_tree[0]
-        return _create_field_operator_impl(
-            ctx, sdfg_builder, domain, output_edge, node_type, map_exit
-        )
-    else:
-        # handle tuples of fields
-        output_symbol_tree = gtir_to_sdfg_utils.make_symbol_tree("x", node_type)
-        return gtx_utils.tree_map(
-            lambda edge, sym, ctx_=ctx: _create_field_operator_impl(
-                ctx_, sdfg_builder, domain, edge, sym.type, map_exit
-            )
-        )(output_tree, output_symbol_tree)
+    return _create_field_operator_impl(ctx, sdfg_builder, domain, output_edge, node_type, map_exit)
 
 
 def translate_as_fieldop(
@@ -266,11 +247,13 @@ def translate_as_fieldop(
     if cpm.is_call_to(fieldop_expr, "scan"):
         return translate_scan(node, ctx, sdfg_builder)
 
+    if not isinstance(node.type, ts.FieldType):
+        raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
+
     if cpm.is_ref_to(fieldop_expr, "deref"):
         # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
         # value to 'as_fieldop' function. It results in broadcasting the scalar value
         # over the field domain.
-        assert isinstance(node.type, ts.FieldType)
         stencil_expr = im.lambda_("a")(im.deref("a"))
         stencil_expr.expr.type = node.type.dtype
     elif isinstance(fieldop_expr, gtir.Lambda):
@@ -292,12 +275,13 @@ def translate_as_fieldop(
     fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, field_domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    input_edges, output_edges = gtir_dataflow.translate_lambda_to_dataflow(
+    input_edges, output_edge = gtir_dataflow.translate_lambda_to_dataflow(
         ctx.sdfg, ctx.state, sdfg_builder, stencil_expr, fieldop_args
     )
+    assert isinstance(output_edge, gtir_dataflow.DataflowOutputEdge)
 
     return _create_field_operator(
-        ctx, field_domain, node.type, sdfg_builder, input_edges, output_edges
+        ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
     )
 
 
@@ -511,7 +495,7 @@ def translate_index(
     ]
     output_edge = gtir_dataflow.DataflowOutputEdge(ctx.state, index_value)
     return _create_field_operator(
-        ctx, field_domain, node.type, sdfg_builder, input_edges, (output_edge,)
+        ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
     )
 
 

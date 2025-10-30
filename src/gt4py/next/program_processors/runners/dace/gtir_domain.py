@@ -63,21 +63,25 @@ def get_field_domain(domain: domain_utils.SymbolicDomain) -> FieldopDomain:
 TargetDomain: TypeAlias = MaybeNestedInTuple[domain_utils.SymbolicDomain]
 """Symbolic domain which defines the range to write in the target field.
 
-For tuple output, the corresponding domain in fieldview is a tuple of domains.
+For tuple output in fieldview, `TargetDomain` is a tree-like tuple of symbolic domains.
 """
 
 
-class TargetDomainParser(eve.visitors.NodeTranslator):
-    """Visitor class to build a `TargetDomain` symbolic domain."""
+def extract_target_domain(node: gtir.Expr) -> TargetDomain:
+    """
+    Visit a GTIR domain expression and construct a `TargetDomain` symbolic domain.
 
-    def visit_FunCall(self, node: gtir.FunCall) -> TargetDomain:
-        if cpm.is_call_to(node, "make_tuple"):
-            return tuple(self.visit(arg) for arg in node.args)
-        else:
-            return domain_utils.SymbolicDomain.from_expr(node)
+    We use a visitor class to extract the tree-like structure for (nested) tuple of domains.
+    """
 
-    def apply(cls, node: gtir.Expr) -> TargetDomain:
-        return cls.visit(node)
+    class TargetDomainParser(eve.visitors.NodeTranslator):
+        def visit_FunCall(self, node: gtir.FunCall) -> TargetDomain:
+            if cpm.is_call_to(node, "make_tuple"):
+                return tuple(self.visit(arg) for arg in node.args)
+            else:
+                return domain_utils.SymbolicDomain.from_expr(node)
+
+    return TargetDomainParser().visit(node)
 
 
 def get_domain_indices(
