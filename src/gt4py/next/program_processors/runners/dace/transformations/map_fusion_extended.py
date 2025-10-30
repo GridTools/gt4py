@@ -352,16 +352,10 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         #  by assumption inside the same Map.
         if containing_scope_or_none is None:
             for new_map_entry in new_map_entries_from_first + new_map_entries_from_second:
-                dace_sdutils.canonicalize_memlet_trees_for_scope(graph, new_map_entry)
-                dace_sdutils.canonicalize_memlet_trees_for_scope(
-                    graph, graph.exit_node(new_map_entry)
-                )
+                dace_sdutils.canonicalize_memlet_trees_for_map(graph, new_map_entry)
                 dace_propagation.propagate_memlets_map_scope(sdfg, graph, new_map_entry)
         else:
-            dace_sdutils.canonicalize_memlet_trees_for_scope(graph, containing_scope_or_none)
-            dace_sdutils.canonicalize_memlet_trees_for_scope(
-                graph, graph.exit_node(containing_scope_or_none)
-            )
+            dace_sdutils.canonicalize_memlet_trees_for_map(graph, containing_scope_or_none)
             dace_propagation.propagate_memlets_map_scope(sdfg, graph, containing_scope_or_none)
 
         # Workaround to ensure that some cache in DaCe has been cleared.
