@@ -202,7 +202,6 @@ def _create_scan_field_operator(
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
     output: MaybeNestedInTuple[gtir_dataflow.DataflowOutputEdge],
-    output_domain: domain_utils.SymbolicDomain,
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
     Helper method to build the output of a field operator, which can consist of
@@ -685,5 +684,5 @@ def translate_scan(
 
     # we call a helper method to create a map scope that will compute the entire field
     return _create_scan_field_operator(
-        ctx, field_domain, node.type, sdfg_builder, input_edges, output_tree, node.annex.domain
+        ctx, field_domain, node.type, sdfg_builder, input_edges, output_tree
     )
