@@ -457,12 +457,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for nsdfg_dataname, nsdfg_datadesc in inner_ctx.sdfg.arrays.items():
             if nsdfg_datadesc.transient:
                 pass  # nothing to do here
+            elif nsdfg_dataname in lambda_outputs:
+                pass  # the output connector will be handled by the caller
             elif nsdfg_dataname in data_args:
                 arg_node = data_args[nsdfg_dataname]
                 source_data = arg_node.dc_node.data
                 input_memlets[nsdfg_dataname] = outer_ctx.sdfg.make_array_memlet(source_data)
             else:
-                assert nsdfg_dataname in outer_ctx.sdfg.arrays
+                assert nsdfg_dataname in oute.sdfg.arrays
                 source_data = nsdfg_dataname
                 # ensure that connectivity tables are non-transient arrays in parent SDFG
                 if source_data in connectivity_arrays:
