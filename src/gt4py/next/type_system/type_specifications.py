@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from typing import Iterator, Optional, Sequence
 
 from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
@@ -141,6 +143,28 @@ class TupleType(DataType):
         return len(self.types)
 
 
+class NamedCollectionType(DataType):
+    keys: list[str]
+    types: list[DataType | DimensionType | DeferredType]
+    #: The original python type. It should be only used in the boundaries between
+    #: Python and GT4Py DSL, that is, `type translation` and in constructor/extractor
+    #: steps for custom containers.
+    #: It uses the "entry-point"-like format required by `pkgutil.resolve_name()`:
+    #:   '__module__:__qualname__'
+    original_python_type: (
+        str  # Format: '__module__:__qualname__' (as required by `pkgutil.resolve_name()`)
+    )
+
+    def __getattr__(self, name: str) -> DataType | DimensionType | DeferredType:
+        keys = object.__getattribute__(self, "keys")
+        if name in keys:
+            return self.types[keys.index(name)]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def __str__(self) -> str:
+        return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
+
+
 class FunctionType(CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]
@@ -156,6 +180,10 @@ class FunctionType(CallableType):
 
 class ConstructorType(CallableType):
     definition: FunctionType
+
+    @property
+    def constructed_type(self) -> TypeSpec:
+        return self.definition.returns
 
 
 class DomainType(DataType):

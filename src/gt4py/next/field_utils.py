@@ -7,11 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from types import ModuleType
+from typing import Callable
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, utils
+from gt4py.next import common, containers, utils
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -52,8 +53,16 @@ def field_from_typespec(
     (NumPyArrayField(... dtype=int32...), NumPyArrayField(... dtype=float32...))
     """
 
+    def _constructor(
+        type_: ts.TupleType, elems: ts.DataType
+    ) -> Callable[..., containers.Container]:
+        if isinstance(type_, ts.NamedCollectionType):
+            return containers.make_container_constructor_from_type_spec(type_)(elems)
+        return tuple(elems)
+
     @utils.tree_map(
-        collection_type=ts.TupleType, result_collection_constructor=lambda _, elts: tuple(elts)
+        collection_type=(ts.TupleType, ts.NamedCollectionType),
+        result_collection_constructor=lambda _, elts: tuple(elts),
     )
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
