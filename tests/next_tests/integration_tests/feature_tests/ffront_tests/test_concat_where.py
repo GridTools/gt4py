@@ -226,6 +226,29 @@ def test_dimension_two_nested_conditions(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
+def test_dimension_two_conditions_no_nesting(cartesian_case):
+    @gtx.field_operator
+    def testee(interior: cases.IJKField, boundary: cases.IJKField) -> cases.IJKField:
+        return concat_where(
+            ((KDim < 2), boundary),
+            ((KDim >= 5), boundary),
+            # ((KDim >= 6), boundary),
+            interior,
+        )  # TODO or a number which will be broadcast
+
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    ref = np.where(
+        (k[np.newaxis, np.newaxis, :] < 2) | (k[np.newaxis, np.newaxis, :] >= 5),
+        boundary.asnumpy(),
+        interior.asnumpy(),
+    )
+    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
+
+
 def test_dimension_two_conditions_and(cartesian_case):
     @gtx.field_operator
     def testee(interior: cases.KField, boundary: cases.KField, nlev: np.int32) -> cases.KField:
@@ -294,6 +317,31 @@ def test_lap_like(cartesian_case):
     cases.verify(cartesian_case, testee, inp, boundary, out.domain.shape, out=out, ref=ref)
 
 
+def test_lap_like_no_nesting(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        inp: cases.IJField, boundary: np.int32, shape: tuple[np.int32, np.int32]
+    ) -> cases.IJField:
+        # TODO add support for multi-dimensional concat_where masks
+        return concat_where(
+            ((IDim == 0) | (IDim == shape[0] - 1), boundary),
+            ((JDim == 0) | (JDim == shape[1] - 1), boundary),
+            inp,
+        )
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    inp = cases.allocate(cartesian_case, testee, "inp", domain=out.domain.slice_at[1:-1, 1:-1])()
+    boundary = 2
+
+    ref = np.full(out.domain.shape, np.nan)
+    ref[0, :] = boundary
+    ref[:, 0] = boundary
+    ref[-1, :] = boundary
+    ref[:, -1] = boundary
+    ref[1:-1, 1:-1] = inp.asnumpy()
+    cases.verify(cartesian_case, testee, inp, boundary, out.domain.shape, out=out, ref=ref)
+
+
 @pytest.mark.uses_tuple_returns
 def test_with_tuples(cartesian_case):
     @gtx.field_operator
@@ -335,6 +383,65 @@ def test_with_tuples(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
+def test_with_tuples_no_nesting(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        interior0: cases.IJKField,
+        boundary_l0: cases.IJField,
+        boundary_u0: cases.IJField,
+        interior1: cases.IJKField,
+        boundary_l1: cases.IJField,
+        boundary_u1: cases.IJField,
+    ) -> tuple[cases.IJKField, cases.IJKField]:
+        return concat_where(
+            (KDim == 0, (boundary_l0, boundary_l1)),
+            (KDim == 9, (boundary_u0, boundary_u1)),
+            (interior0, interior1),
+        )
+
+    interior0 = cases.allocate(cartesian_case, testee, "interior0")()
+    boundary_l0 = cases.allocate(cartesian_case, testee, "boundary_l0")()
+    boundary_u0 = cases.allocate(cartesian_case, testee, "boundary_u0")()
+    interior1 = cases.allocate(cartesian_case, testee, "interior1")()
+    boundary_l1 = cases.allocate(cartesian_case, testee, "boundary_l1")()
+    boundary_u1 = cases.allocate(cartesian_case, testee, "boundary_u1")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    ref0 = np.where(
+        k[np.newaxis, np.newaxis, :] == 0,
+        boundary_l0.asnumpy()[:, :, np.newaxis],
+        np.where(
+            k[np.newaxis, np.newaxis, :] == 9,
+            boundary_u0.asnumpy()[:, :, np.newaxis],
+            interior0.asnumpy(),
+        ),
+    )
+    ref1 = np.where(
+        k[np.newaxis, np.newaxis, :] == 0,
+        boundary_l1.asnumpy()[:, :, np.newaxis],
+        np.where(
+            k[np.newaxis, np.newaxis, :] == 9,
+            boundary_u1.asnumpy()[:, :, np.newaxis],
+            interior1.asnumpy(),
+        ),
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        interior0,
+        boundary_l0,
+        boundary_u0,
+        interior1,
+        boundary_l1,
+        boundary_u1,
+        out=out,
+        ref=(ref0, ref1),
+    )
+
+
 def test_nested_conditions_with_empty_branches(cartesian_case):
     @gtx.field_operator
     def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:
@@ -342,6 +449,30 @@ def test_nested_conditions_with_empty_branches(cartesian_case):
         interior = concat_where((1 <= IDim) & (IDim < N - 1), interior * 2, interior)
         interior = concat_where(IDim == N - 1, boundary, interior)
         return interior
+
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    N = cartesian_case.default_sizes[IDim]
+
+    i = np.arange(0, cartesian_case.default_sizes[IDim])
+    ref = np.where(
+        (i[:] == 0) | (i[:] == N - 1),
+        boundary.asnumpy(),
+        interior.asnumpy() * 2,
+    )
+    cases.verify(cartesian_case, testee, interior, boundary, N, out=out, ref=ref)
+
+
+def test_nested_conditions_with_empty_branches_no_nesting(cartesian_case):
+    @gtx.field_operator
+    def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:
+        return concat_where(
+            (IDim == 0, boundary),
+            ((1 <= IDim) & (IDim < N - 1), interior * 2),
+            (IDim == N - 1, boundary),
+            interior,
+        )
 
     interior = cases.allocate(cartesian_case, testee, "interior")()
     boundary = cases.allocate(cartesian_case, testee, "boundary")()
