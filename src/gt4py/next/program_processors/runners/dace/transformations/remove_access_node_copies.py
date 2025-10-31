@@ -53,9 +53,7 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._single_use_data = None
-        if single_use_data is not None:
-            self._single_use_data = single_use_data
+        self._single_use_data = single_use_data
 
     @classmethod
     def expressions(cls) -> Any:
@@ -144,21 +142,37 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         first_node_range = first_desc.shape
 
         first_node_writes_subset = gtx_dace_split.subset_merger(ranges_written_to_first_node)
-        assert len(first_node_writes_subset) == 1
+        if len(first_node_writes_subset) != 1:
+            warnings.warn(
+                "[RemoveAccessNodeCopies] The range of writes to the first node is not a single range.",
+                stacklevel=0,
+            )
+            return False
         fourth_node_writes_subset = gtx_dace_split.subset_merger(ranges_written_to_fourth_node)
-        assert len(fourth_node_writes_subset) == 1
+        if len(fourth_node_writes_subset) != 1:
+            warnings.warn(
+                "[RemoveAccessNodeCopies] The range of writes to the fourth node is not a single range.",
+                stacklevel=0,
+            )
+            return False
         union_written_to_first_node_data = next(iter(first_node_writes_subset))
         union_written_to_fourth_node_data = next(iter(fourth_node_writes_subset))
         union_written_to_common_data = gtx_dace_split.subset_merger(
             [union_written_to_first_node_data, union_written_to_fourth_node_data]
         )
-        assert len(union_written_to_common_data) == 1
+        if len(union_written_to_common_data) != 1:
+            warnings.warn(
+                "[RemoveAccessNodeCopies] The union of the ranges written to the first and fourth nodes is not a single range.",
+                stacklevel=0,
+            )
+            return False
         if union_written_to_common_data != first_node_range:
             warnings.warn(
                 "[RemoveAccessNodeCopies] The whole range of the first node is not written.",
                 stacklevel=0,
             )
-            # needs https://github.com/GridTools/gt4py/pull/2173 # return False
+            # When https://github.com/GridTools/gt4py/pull/2173 is merged we can return False
+            # At the moment we don't have the range of the global AccessNodes at compile time
 
         # Make sure that data written to first node are only copied from first to second node
         if any(edge.dst != second_node for edge in graph.out_edges(first_node)):
