@@ -256,6 +256,7 @@ def ksum_even_odd_fencil(i_size, k_size, inp, out):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_tuple_iterator
 def test_ksum_even_odd_scan(program_processor):
     program_processor, validate = program_processor
     shape = [1, 7]
@@ -304,6 +305,7 @@ def ksum_even_odd_nested_fencil(i_size, k_size, inp, out):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_tuple_iterator
 def test_ksum_even_odd_nested_scan(program_processor):
     program_processor, validate = program_processor
     shape = [1, 7]

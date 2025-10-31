@@ -247,7 +247,10 @@ def test_gtir_tuple_swap():
         body=[
             gtir.SetAt(
                 expr=im.make_tuple("y", "x"),
-                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "x", [IDim]),
+                domain=im.make_tuple(
+                    im.get_field_domain(gtx_common.GridType.CARTESIAN, "x", [IDim]),
+                    im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", [IDim]),
+                ),
                 # TODO(havogt): add a frontend check for this pattern
                 target=im.make_tuple("x", "y"),
             )
@@ -455,10 +458,22 @@ def test_gtir_tuple_return():
         body=[
             gtir.SetAt(
                 expr=im.make_tuple(im.make_tuple(im.op_as_fieldop("plus")("x", "y"), "x"), "y"),
-                domain=im.get_field_domain(
-                    gtx_common.GridType.CARTESIAN,
-                    im.tuple_get(0, im.tuple_get(0, "z")),
-                    [IDim],
+                domain=im.make_tuple(
+                    im.make_tuple(
+                        im.get_field_domain(
+                            gtx_common.GridType.CARTESIAN,
+                            im.tuple_get(0, im.tuple_get(0, "z")),
+                            [IDim],
+                        ),
+                        im.get_field_domain(
+                            gtx_common.GridType.CARTESIAN,
+                            im.tuple_get(1, im.tuple_get(0, "z")),
+                            [IDim],
+                        ),
+                    ),
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(1, "z"), [IDim]
+                    ),
                 ),
                 target=gtir.SymRef(id="z"),
             )
@@ -502,7 +517,10 @@ def test_gtir_tuple_target():
         body=[
             gtir.SetAt(
                 expr=im.make_tuple(im.op_as_fieldop("plus")("x", 1.0), gtir.SymRef(id="x")),
-                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "x", [IDim]),
+                domain=im.make_tuple(
+                    im.get_field_domain(gtx_common.GridType.CARTESIAN, "x", [IDim]),
+                    im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", [IDim]),
+                ),
                 target=im.make_tuple("x", "y"),
             )
         ],
@@ -1851,8 +1869,13 @@ def test_gtir_let_lambda_with_tuple1():
                         im.make_tuple(im.op_as_fieldop("plus", inner_domain)("x", "y"), "x"), "y"
                     ),
                 )(im.make_tuple(im.tuple_get(1, im.tuple_get(0, "t")), im.tuple_get(1, "t"))),
-                domain=im.get_field_domain(
-                    gtx_common.GridType.CARTESIAN, im.tuple_get(0, "z"), [IDim]
+                domain=im.make_tuple(
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(0, "z"), [IDim]
+                    ),
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(1, "z"), [IDim]
+                    ),
                 ),
                 target=gtir.SymRef(id="z"),
             )
@@ -1905,8 +1928,16 @@ def test_gtir_let_lambda_with_tuple2():
                         )
                     )
                 ),
-                domain=im.get_field_domain(
-                    gtx_common.GridType.CARTESIAN, im.tuple_get(0, "z"), [IDim]
+                domain=im.make_tuple(
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(0, "z"), [IDim]
+                    ),
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(1, "z"), [IDim]
+                    ),
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(2, "z"), [IDim]
+                    ),
                 ),
                 target=gtir.SymRef(id="z"),
             )
@@ -2248,7 +2279,7 @@ def test_gtir_scan(id, use_symbolic_column_size):
                         im.make_tuple(0.0, True),
                     )
                 )("x"),
-                domain=domain,
+                domain=im.make_tuple(domain, domain),
                 target=im.make_tuple(gtir.SymRef(id="y"), gtir.SymRef(id="z")),
             )
         ],
