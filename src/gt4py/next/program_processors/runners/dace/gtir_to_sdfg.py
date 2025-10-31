@@ -464,7 +464,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 source_data = arg_node.dc_node.data
                 input_memlets[nsdfg_dataname] = outer_ctx.sdfg.make_array_memlet(source_data)
             else:
-                assert nsdfg_dataname in oute.sdfg.arrays
+                assert nsdfg_dataname in outer_ctx.sdfg.arrays
                 source_data = nsdfg_dataname
                 # ensure that connectivity tables are non-transient arrays in parent SDFG
                 if source_data in connectivity_arrays:
