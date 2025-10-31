@@ -1291,6 +1291,23 @@ def test_absolute_K_index(backend):
     test_lower_dim_field(k_arr, out_arr)
     assert (out_arr[:, :, :] == 42.42).all()
 
+    @gtscript.stencil(backend=backend)
+    def test_conditional_absolute(
+        in_field: Field[np.float64],
+        out_field: Field[np.float64],
+    ) -> None:
+        with computation(PARALLEL), interval(...):
+            k_level = 0
+            while in_field.at(K=k_level) < 2:
+                k_level += 1
+            out_field[0, 0, 0] = k_level
+
+    in_arr[:, :, :] = 1
+    in_arr[:, :, 3] = 10
+    out_arr[:, :, :] = 0
+    test_conditional_absolute(in_arr, out_arr)
+    assert (out_arr[:, :, :] == 3).all()
+
 
 @pytest.mark.parametrize(
     "backend",
