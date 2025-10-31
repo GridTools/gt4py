@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any
+from typing import Any, Union
 
 import dace
 import factory
@@ -36,6 +37,12 @@ class CompiledDaceProgram(stages.CompiledProgram):
         None,
     ]
 
+    # Processed argument vectors that are passed to `CompiledSDFG.fast_call()`. If the
+    #  `tuple` is empty then it is not initialized. The first element is used in the
+    #  normal call and we update it, the second element is used only for initialization
+    #  and we do not update it.
+    csdfg_args: Union[tuple[list[Any], Sequence[Any]], tuple[()]]
+
     def __init__(
         self,
         program: dace.CompiledSDFG,
@@ -56,12 +63,33 @@ class CompiledDaceProgram(stages.CompiledProgram):
         # For debug purpose, we set a unique module name on the compiled function.
         self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
 
-    def __call__(self, **kwargs: Any) -> None:
-        result = self.sdfg_program(**kwargs)
-        assert result is None
+        # If not called they yet, thus empty tuple.
+        self.csdfg_args = ()
+
+    def process_arguments(self, **kwargs: Any) -> None:
+        """
+        This function will process the arguments and store the processed values in `self.csdfg_args`,
+        to call them use `self.fast_call()`.
+        """
+        with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
+            processed_csdfg_args = self.sdfg_program.construct_arguments(**kwargs)
+        assert isinstance(processed_csdfg_args, tuple) and len(processed_csdfg_args) == 2
+        # Note we only care about the first argument vector, that is used in normal call.
+        #  Since we update it, we ensure that it is a `list`.
+        self.csdfg_args = (list(processed_csdfg_args[0]), processed_csdfg_args[1])
 
     def fast_call(self) -> None:
-        result = self.sdfg_program.fast_call(*self.sdfg_program._lastargs)
+        """Perform a call to the compiled SDFG using the processed arguments, see `self.process_arguments()`."""
+        assert isinstance(self.csdfg_args, tuple) and len(self.csdfg_args) == 2
+        result = self.sdfg_program.fast_call(*self.csdfg_args)
+        assert result is None
+
+    def __call__(self, **kwargs: Any) -> None:
+        warnings.warn(
+            "Called an SDFG through the standard DaCe interface is not recommended, use `fast_call()` instead.",
+            stacklevel=1,
+        )
+        result = self.sdfg_program(**kwargs)
         assert result is None
 
 
