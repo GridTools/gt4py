@@ -630,36 +630,20 @@ def translate_scan(
         (im.sym(_scan_input_name(scan_carry), scan_carry_type), init_data),
     ] + [(param, arg) for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)]
 
+    symbolic_args: dict[str, gtir_to_sdfg_types.SymbolicData] = {}
     lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
     for gt_symbol, arg in lambda_args_mapping:
-        lambda_arg_nodes |= {
-            str(nested_gt_symbol.id): nested_arg
-            for nested_gt_symbol, nested_arg in gtir_to_sdfg_types.flatten_tuple(gt_symbol, arg)
-        }
+        gt_symbol_name = str(gt_symbol.id)
+        if isinstance(arg, gtir_to_sdfg_types.SymbolicData):
+            symbolic_args[gt_symbol_name] = arg
+        else:
+            lambda_arg_nodes |= {
+                str(nested_param.id): nested_arg
+                for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(gt_symbol, arg)
+            }
 
-    # parse the dataflow output symbols
-    if isinstance(scan_carry_type, ts.TupleType):
-        lambda_flat_outs = {
-            str(sym.id): sym.type
-            for sym in gtir_to_sdfg_utils.flatten_tuple_fields(
-                _scan_output_name(scan_carry), scan_carry_type
-            )
-        }
-    else:
-        lambda_flat_outs = {_scan_output_name(scan_carry): scan_carry_type}
-
-    # build the mapping of symbols from nested SDFG to field operator context
-    nsdfg_symbols_mapping = {str(sym): sym for sym in lambda_ctx.sdfg.free_symbols}
-    for pname, arg in lambda_arg_nodes.items():
-        nsdfg_symbols_mapping |= arg.get_symbol_mapping(pname, ctx.sdfg)
-
-    # the scan nested SDFG is ready: it is instantiated in the field operator context
-    # where the map scope over the horizontal domain lives
-    nsdfg_node = ctx.state.add_nested_sdfg(
-        lambda_ctx.sdfg,
-        inputs=set(lambda_arg_nodes.keys()),
-        outputs=set(lambda_flat_outs.keys()),
-        symbol_mapping=nsdfg_symbols_mapping,
+    nsdfg_node, input_memlets = sdfg_builder.add_nested_sdfg(
+        stencil_expr, lambda_ctx, ctx, symbolic_args, lambda_arg_nodes, lambda_output
     )
 
     # Block the inlining of NestedSDFG containing a scan.
@@ -674,12 +658,10 @@ def translate_scan(
     nsdfg_node.no_inline = True
 
     input_edges = []
-    for input_connector, outer_arg in lambda_arg_nodes.items():
-        assert not lambda_ctx.sdfg.arrays[input_connector].transient
-        arg_desc = outer_arg.dc_node.desc(ctx.sdfg)
-        input_subset = dace_subsets.Range.from_array(arg_desc)
+    for input_connector, memlet in input_memlets.items():
+        src_node = lambda_arg_nodes[input_connector]
         input_edge = gtir_dataflow.MemletInputEdge(
-            ctx.state, outer_arg.dc_node, input_subset, nsdfg_node, input_connector
+            ctx.state, src_node.dc_node, memlet.src_subset, nsdfg_node, input_connector
         )
         input_edges.append(input_edge)
 
