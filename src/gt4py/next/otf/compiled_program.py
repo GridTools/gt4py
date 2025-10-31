@@ -257,7 +257,7 @@ class CompiledProgramsPool:
         if (extractor := self._numeric_values_extractor) is not None:
             args, kwargs = extractor(*canonical_args, **canonical_kwargs)
         else:
-            args, kwargs = canonical_args, canonical_kwargs        
+            args, kwargs = canonical_args, canonical_kwargs
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
         key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
 

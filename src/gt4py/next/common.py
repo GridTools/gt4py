@@ -865,6 +865,7 @@ class BufferInfo:
     def __hash__(self) -> int:
         return self.hash_key
 
+
 class ConnectivityKind(enum.Flag):
     """
     Describes the kind of connectivity field.
