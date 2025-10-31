@@ -50,7 +50,7 @@ def convert_args(
             update_sdfg_call_args(args, fun.csdfg_args[0])  # type: ignore[misc]  # Will error out in first call.
 
         except IndexError:
-            # First call. Construct the initial argument vector of the `ComiledDaceProgram`.
+            # First call. Construct the initial argument vector of the `CompiledDaceProgram`.
             assert isinstance(fun.csdfg_args, tuple) and len(fun.csdfg_args) == 0
             flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
             this_call_args = sdfg_callable.get_sdfg_args(
