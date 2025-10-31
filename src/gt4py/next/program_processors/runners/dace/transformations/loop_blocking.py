@@ -16,7 +16,12 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes, propagation as dace_propagation
+from dace.sdfg import (
+    graph as dace_graph,
+    nodes as dace_nodes,
+    propagation as dace_propagation,
+    utils as dace_sdutils,
+)
 from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
@@ -837,6 +842,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         #  propagation fail, to clear the cache we call the hash function.
         #  See: https://github.com/spcl/dace/issues/1703
         _ = sdfg.reset_cfg_list()
+        dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=outer_entry)
         dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_entry)
 
     def _check_if_blocking_is_favourable(

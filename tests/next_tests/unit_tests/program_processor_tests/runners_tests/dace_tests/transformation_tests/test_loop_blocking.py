@@ -1439,7 +1439,7 @@ def _make_loop_blocking_only_independent_inner_map() -> tuple[
 
     state.add_edge(ime, "OUT_A", itlet, "__in", dace.Memlet("A[__i0, 1]"))
     state.add_edge(itlet, "__out", t, None, dace.Memlet("t[0]"))
-    state.add_edge(t, None, imx, "IN_B", dace.Memlet("t[0]"))
+    state.add_edge(t, None, imx, "IN_B", dace.Memlet("t[0] -> [__i0, __i1]"))
     ime.add_scope_connectors("A")
 
     state.add_edge(imx, "OUT_B", mx, "IN_B", dace.Memlet("B[__i0, __i1]"))
