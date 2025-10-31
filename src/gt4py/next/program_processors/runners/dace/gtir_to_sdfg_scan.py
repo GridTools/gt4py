@@ -267,16 +267,13 @@ def _create_scan_field_operator(
     for edge in input_edges:
         edge.connect(map_entry)
 
-    output_symbol: MaybeNestedInTuple[gtir.Sym]
-    if isinstance(node_type, ts.FieldType):
-        assert isinstance(output_domain, infer_domain.NonTupleDomainAccess)
-        output_symbol = im.sym("__gtir_guaranteed_unused_dummy_variable", node_type)
-    else:
-        # handle tuples of fields
-        assert isinstance(output_domain, tuple)
-        output_symbol = gtir_to_sdfg_utils.make_symbol_tree(
-            "__gtir_guaranteed_unused_dummy_variable", node_type
-        )
+    # Note that `output_symbol` below is not used, we only need the tree-like
+    # structure to get the type of each nested field in the `tree_map` visitor.
+    dummy_output_symbol = (
+        gtir_to_sdfg_utils.make_symbol_tree("__gtir_unused_dummy_var", node_type)
+        if isinstance(node_type, ts.TupleType)
+        else im.sym("__gtir_unused_dummy_var", node_type)
+    )
 
     return gtx_utils.tree_map(
         lambda edge, domain, sym, ctx_=ctx: (
@@ -289,7 +286,7 @@ def _create_scan_field_operator(
                 map_exit,
             )
         )
-    )(output, output_domain, output_symbol)
+    )(output, output_domain, dummy_output_symbol)
 
 
 def _scan_input_name(input_name: str) -> str:
@@ -680,10 +677,10 @@ def translate_scan(
     ]
 
     lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
-    for param, arg in lambda_args_mapping:
+    for gt_symbol, arg in lambda_args_mapping:
         lambda_arg_nodes |= {
-            str(nested_param.id): nested_arg
-            for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(param, arg)
+            str(nested_gt_symbol.id): nested_arg
+            for nested_gt_symbol, nested_arg in gtir_to_sdfg_types.flatten_tuple(gt_symbol, arg)
             if nested_arg is not None
         }
 
@@ -711,6 +708,17 @@ def translate_scan(
         outputs=set(lambda_flat_outs.keys()),
         symbol_mapping=nsdfg_symbols_mapping,
     )
+
+    # Block the inlining of NestedSDFG containing a scan.
+    #  We do this to avoid a bug in DaCe simplify transformations, see
+    #  [issue#2182](https://github.com/spcl/dace/issues/2182) for more. Before the bug
+    #  was hidden but once we started running `TrivialTaskletElimination` it was no
+    #  longer the case. The solution is to block the inlining and keep scans localized
+    #  inside their NestedSDFG.
+    # NOTE: Currently there is no transformation that takes advantages in any way
+    #   of a scan and they are mostly inside Maps anyway, except of unit tests,
+    #   where inlining is not possible anyway.
+    nsdfg_node.no_inline = True
 
     input_edges = []
     for input_connector, outer_arg in lambda_arg_nodes.items():

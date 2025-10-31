@@ -940,21 +940,23 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         for nstate, arg in zip([tstate, fstate], node.args[1:3]):
             # visit each if-branch in the corresponding state of the nested SDFG
-            in_edges, output_tree = self._visit_if_branch(
+            in_edges, out_edges = self._visit_if_branch(
                 nsdfg, nstate, arg, input_memlets, direct_deref_iterators
             )
             for edge in in_edges:
                 edge.connect(map_entry=None)
 
-            out_symbol = (
+            out_syms = (
                 gtir_to_sdfg_utils.make_symbol_tree("__output", node.type)
                 if isinstance(node.type, ts.TupleType)
                 else im.sym("__output", node.type)
             )
 
             outer_value = gtx_utils.tree_map(
-                lambda x, y, nstate=nstate: self._visit_if_branch_result(nsdfg, nstate, x, y)
-            )(output_tree, out_symbol)
+                lambda edge, sym, nstate_=nstate: self._visit_if_branch_result(
+                    nsdfg, nstate_, edge, sym
+                )
+            )(out_edges, out_syms)
 
             # Isolated access node will make validation fail.
             # Isolated access nodes can be found in `make_tuple` expressions that
