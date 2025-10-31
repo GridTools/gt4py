@@ -278,9 +278,7 @@ def make_primitive_value_args_extractor(
             if num_kwargs_to_extract
             else kwargs_param
         )
-
         extractor_func_src = f"lambda *{args_param}, **{kwargs_param}: ({args_expr}, {kwargs_expr})"
-
         return eval(extractor_func_src)
 
     return None

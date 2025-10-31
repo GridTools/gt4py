@@ -612,8 +612,8 @@ class NestedMixedTupleContainer:
     c: NamedTupleContainer
 
 
-def _expected_named_tuple_type_maker(original_python_type: type) -> ts.NamedTupleType:
-    return ts.NamedTupleType(
+def _expected_named_tuple_type_maker(original_python_type: type) -> ts.NamedCollectionType:
+    return ts.NamedCollectionType(
         types=[
             ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
             ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
@@ -625,10 +625,10 @@ def _expected_named_tuple_type_maker(original_python_type: type) -> ts.NamedTupl
 
 def _expected_nested_named_tuple_type_maker(
     original_python_type: type, element_types: Sequence[type]
-) -> ts.NamedTupleType:
+) -> ts.NamedCollectionType:
     inner_types = [_expected_named_tuple_type_maker(elem) for elem in element_types]
 
-    return ts.NamedTupleType(
+    return ts.NamedCollectionType(
         types=inner_types,
         keys=["a", "b", "c"],
         original_python_type=f"{original_python_type.__module__}:{original_python_type.__qualname__}",

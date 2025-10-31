@@ -239,7 +239,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         if isinstance(node.type, ts.DimensionType):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
 
-        if isinstance(named_tup_type := node.value.type, ts.NamedTupleType):
+        if isinstance(named_tup_type := node.value.type, ts.NamedCollectionType):
             ind = named_tup_type.keys.index(node.attr)
             return im.tuple_get(ind, self.visit(node.value, **kwargs))
 
@@ -371,7 +371,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 node.func.type, self.visit(node.args, **kwargs), self.visit(node.kwargs, **kwargs)
             )
             if isinstance(node.func, foast.Name) and isinstance(node.func.type, ts.ConstructorType):
-                if isinstance(node.func.type.definition.returns, ts.NamedTupleType):
+                if isinstance(node.func.type.definition.returns, ts.NamedCollectionType):
                     # construct a plain tuple from the custom container constructor
                     return im.make_tuple(*lowered_args, *lowered_kwargs.values())
                 elif isinstance(node.func.type.definition.returns, ts.ScalarType):
@@ -506,7 +506,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         if isinstance(type_, ts.TupleType):
-            if isinstance(type_, ts.NamedTupleType):
+            if isinstance(type_, ts.NamedCollectionType):
                 val = arguments.extract(val)
             return im.make_tuple(
                 *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))

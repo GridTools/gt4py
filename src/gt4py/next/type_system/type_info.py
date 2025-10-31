@@ -936,8 +936,8 @@ def accepts_args(
 
 def needs_value_extraction(
     type_spec: ts.TypeSpec,
-) -> xtyping.TypeIs[ts.NamedTupleType | ts.TupleType]:
-    return isinstance(type_spec, ts.NamedTupleType) or (
+) -> xtyping.TypeIs[ts.NamedCollectionType | ts.TupleType]:
+    return isinstance(type_spec, ts.NamedCollectionType) or (
         isinstance(type_spec, ts.TupleType)
         and any(needs_value_extraction(t) for t in type_spec.types)
     )

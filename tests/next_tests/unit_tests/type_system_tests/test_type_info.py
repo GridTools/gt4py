@@ -427,7 +427,7 @@ def test_return_type(
             False,
         ),
         (
-            ts.NamedTupleType(
+            ts.NamedCollectionType(
                 types=[
                     ts.ScalarType(kind=ts.ScalarKind.INT64),
                     ts.FieldType(
@@ -443,7 +443,7 @@ def test_return_type(
             ts.TupleType(
                 types=[
                     ts.ScalarType(kind=ts.ScalarKind.INT64),
-                    ts.NamedTupleType(
+                    ts.NamedCollectionType(
                         types=[
                             ts.ScalarType(kind=ts.ScalarKind.INT64),
                             ts.FieldType(

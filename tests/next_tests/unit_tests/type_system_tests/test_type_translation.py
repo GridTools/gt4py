@@ -120,7 +120,7 @@ def _make_type_string_for_container(cls: type) -> str:
         # Python container types
         (
             pc.NamedTupleContainer,
-            NamedTupleContainerTypeSpec := ts.NamedTupleType(
+            NamedTupleContainerTypeSpec := ts.NamedCollectionType(
                 types=[
                     ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
                     ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
@@ -131,7 +131,7 @@ def _make_type_string_for_container(cls: type) -> str:
         ),
         (
             pc.DataclassContainer,
-            DataclassContainerTypeSpec := ts.NamedTupleType(
+            DataclassContainerTypeSpec := ts.NamedCollectionType(
                 types=[
                     ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
                     ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
@@ -142,7 +142,7 @@ def _make_type_string_for_container(cls: type) -> str:
         ),
         (
             pc.NestedDataclassContainer,
-            ts.NamedTupleType(
+            ts.NamedCollectionType(
                 types=[
                     DataclassContainerTypeSpec,
                     DataclassContainerTypeSpec,
@@ -154,7 +154,7 @@ def _make_type_string_for_container(cls: type) -> str:
         ),
         (
             pc.NestedNamedTupleDataclassContainer,
-            ts.NamedTupleType(
+            ts.NamedCollectionType(
                 types=[
                     DataclassContainerTypeSpec,
                     DataclassContainerTypeSpec,
@@ -168,7 +168,7 @@ def _make_type_string_for_container(cls: type) -> str:
         ),
         (
             pc.NestedDataclassNamedTupleContainer,
-            ts.NamedTupleType(
+            ts.NamedCollectionType(
                 types=[
                     NamedTupleContainerTypeSpec,
                     NamedTupleContainerTypeSpec,
@@ -182,7 +182,7 @@ def _make_type_string_for_container(cls: type) -> str:
         ),
         (
             pc.NestedMixedTupleContainer,
-            ts.NamedTupleType(
+            ts.NamedCollectionType(
                 types=[
                     NamedTupleContainerTypeSpec,
                     DataclassContainerTypeSpec,
@@ -278,7 +278,7 @@ _FIELD = constructors.empty({pc.TDim: 1}, gtx.float32)
         # Python container types
         (
             pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
-            NamedTupleContainerTypeSpec := ts.NamedTupleType(
+            NamedTupleContainerTypeSpec := ts.NamedCollectionType(
                 types=[
                     ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
                     ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
@@ -289,7 +289,7 @@ _FIELD = constructors.empty({pc.TDim: 1}, gtx.float32)
         ),
         (
             pc.DataclassContainer(x=_FIELD, y=_FIELD),
-            DataclassContainerTypeSpec := ts.NamedTupleType(
+            DataclassContainerTypeSpec := ts.NamedCollectionType(
                 types=[
                     ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
                     ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
@@ -304,7 +304,7 @@ _FIELD = constructors.empty({pc.TDim: 1}, gtx.float32)
                 b=pc.DataclassContainer(x=_FIELD, y=_FIELD),
                 c=pc.DataclassContainer(x=_FIELD, y=_FIELD),
             ),
-            ts.NamedTupleType(
+            ts.NamedCollectionType(
                 types=[
                     DataclassContainerTypeSpec,
                     DataclassContainerTypeSpec,
@@ -320,7 +320,7 @@ _FIELD = constructors.empty({pc.TDim: 1}, gtx.float32)
                 b=pc.DataclassContainer(x=_FIELD, y=_FIELD),
                 c=pc.DataclassContainer(x=_FIELD, y=_FIELD),
             ),
-            ts.NamedTupleType(
+            ts.NamedCollectionType(
                 types=[
                     DataclassContainerTypeSpec,
                     DataclassContainerTypeSpec,
@@ -338,7 +338,7 @@ _FIELD = constructors.empty({pc.TDim: 1}, gtx.float32)
                 b=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
                 c=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
             ),
-            ts.NamedTupleType(
+            ts.NamedCollectionType(
                 types=[
                     NamedTupleContainerTypeSpec,
                     NamedTupleContainerTypeSpec,
@@ -356,7 +356,7 @@ _FIELD = constructors.empty({pc.TDim: 1}, gtx.float32)
                 b=pc.DataclassContainer(x=_FIELD, y=_FIELD),
                 c=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
             ),
-            ts.NamedTupleType(
+            ts.NamedCollectionType(
                 types=[
                     NamedTupleContainerTypeSpec,
                     DataclassContainerTypeSpec,

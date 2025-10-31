@@ -74,7 +74,7 @@ def make_constructor_type(type_spec: ts.TypeSpec) -> ts.ConstructorType:
                 )
             )
 
-        case ts.NamedTupleType() as named_tuple_type:
+        case ts.NamedCollectionType() as named_tuple_type:
             type_ = pkgutil.resolve_name(named_tuple_type.original_python_type)
             pos_or_kw_args = {k: t for k, t in zip(type_spec.keys, type_spec.types)}
             kw_only_args = (
@@ -114,7 +114,7 @@ def make_type(type_: type) -> ts.TypeSpec:
         keys = [*containers.elements_keys(type_)]
         hints = containers.elements_types(type_, globalns=sys.modules[type_.__module__].__dict__)
         types = [from_type_hint(hint) for hint in hints.values()]
-        return ts.NamedTupleType(
+        return ts.NamedCollectionType(
             types=types, keys=keys, original_python_type=f"{type_.__module__}:{type_.__qualname__}"
         )
 

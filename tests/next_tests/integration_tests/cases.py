@@ -602,7 +602,7 @@ def _allocate_from_type(
                     for t in types
                 )
             )
-            if isinstance(arg_tuple_type_spec, ts.NamedTupleType):
+            if isinstance(arg_tuple_type_spec, ts.NamedCollectionType):
                 container_constructor = containers.make_container_constructor_from_type_spec(
                     arg_tuple_type_spec, nested=False
                 )

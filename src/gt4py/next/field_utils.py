@@ -56,12 +56,12 @@ def field_from_typespec(
     def _constructor(
         type_: ts.TupleType, elems: ts.DataType
     ) -> Callable[..., containers.Container]:
-        if isinstance(type_, ts.NamedTupleType):
+        if isinstance(type_, ts.NamedCollectionType):
             return containers.make_container_constructor_from_type_spec(type_)(elems)
         return tuple(elems)
 
     @utils.tree_map(
-        collection_type=(ts.TupleType, ts.NamedTupleType),
+        collection_type=(ts.TupleType, ts.NamedCollectionType),
         result_collection_constructor=_constructor,
     )
     def impl(type_: ts.ScalarType) -> common.MutableField:

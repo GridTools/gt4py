@@ -23,26 +23,26 @@ def _tree_map_typespec_constructor(
 
 @overload
 def _tree_map_typespec_constructor(
-    func: Callable[..., ts.NamedTupleType],
-) -> Callable[..., ts.NamedTupleType]: ...
+    func: Callable[..., ts.NamedCollectionType],
+) -> Callable[..., ts.NamedCollectionType]: ...
 
 
 def _tree_map_typespec_constructor(
-    value: ts.NamedTupleType | ts.TupleType,
+    value: ts.NamedCollectionType | ts.TupleType,
     elems: ts.DataType,
-) -> Callable[..., ts.NamedTupleType] | Callable[..., ts.TupleType]:
+) -> Callable[..., ts.NamedCollectionType] | Callable[..., ts.TupleType]:
     return (
-        ts.NamedTupleType(
+        ts.NamedCollectionType(
             keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
         )
-        if isinstance(value, ts.NamedTupleType)
+        if isinstance(value, ts.NamedCollectionType)
         else ts.TupleType(types=list(elems))  # type: ignore[return-value]
     )
 
 
 tree_map_typespec = functools.partial(
     utils.tree_map,
-    collection_type=(ts.TupleType, ts.NamedTupleType),
+    collection_type=(ts.TupleType, ts.NamedCollectionType),
     result_collection_constructor=_tree_map_typespec_constructor,
 )
 

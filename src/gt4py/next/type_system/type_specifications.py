@@ -143,9 +143,17 @@ class TupleType(DataType):
         return len(self.types)
 
 
-class NamedTupleType(TupleType):
+class NamedCollectionType(DataType):
     keys: list[str]
-    original_python_type: str  # Format: '__module__:__qualname__' (used by pkgutil.resolve_name())
+    types: list[DataType | DimensionType | DeferredType]
+    #: The original python type. It should be only used in the boundaries between
+    #: Python and GT4Py DSL, that is, `type translation` and in constructor/extractor
+    #: steps for custom containers.
+    #: It uses the "entry-point"-like format required by `pkgutil.resolve_name()`:
+    #:   '__module__:__qualname__'
+    original_python_type: (
+        str  # Format: '__module__:__qualname__' (as required by `pkgutil.resolve_name()`)
+    )
 
     def __getattr__(self, name: str) -> DataType | DimensionType | DeferredType:
         keys = object.__getattribute__(self, "keys")

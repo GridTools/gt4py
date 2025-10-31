@@ -127,10 +127,10 @@ def make_container_extractor(container_type_hint: xtyping.TypeAnnotation) -> Con
 
 
 def make_container_extractor_from_type_spec(
-    container_type_spec: ts.NamedTupleType,
+    container_type_spec: ts.NamedCollectionType,
 ) -> ContainerExtractor:
     """Create an extractor function for the given container type specification."""
-    assert isinstance(container_type_spec, ts.NamedTupleType)
+    assert isinstance(container_type_spec, ts.NamedCollectionType)
     extractor_func_src = f"lambda x: {make_extractor_expr_from_type_spec(container_type_spec, 'x')}"
     return eval(extractor_func_src)
 
@@ -182,7 +182,7 @@ def make_extractor_expr(container_type_hint: xtyping.TypeAnnotation, value_expr:
 def make_extractor_expr_from_type_spec(type_: ts.TypeSpec, value_expr: str) -> str:
     """Create an expression string that extracts values from a container."""
     match type_:
-        case ts.NamedTupleType():
+        case ts.NamedCollectionType():
             return make_extractor_expr(pkgutil.resolve_name(type_.original_python_type), value_expr)
         case ts.TupleType() if type_info.needs_value_extraction(type_):
             args = [
@@ -262,10 +262,10 @@ def make_container_constructor(
 
 
 def make_container_constructor_from_type_spec(
-    container_type_spec: ts.NamedTupleType, nested: bool = True
+    container_type_spec: ts.NamedCollectionType, nested: bool = True
 ) -> ContainerConstructor:
     """Create a constructor function for the given container type specification."""
-    assert isinstance(container_type_spec, ts.NamedTupleType)
+    assert isinstance(container_type_spec, ts.NamedCollectionType)
     return make_container_constructor(
         pkgutil.resolve_name(container_type_spec.original_python_type), nested=nested
     )
