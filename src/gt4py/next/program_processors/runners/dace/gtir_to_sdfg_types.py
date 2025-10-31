@@ -183,7 +183,7 @@ class FieldopData:
 FieldopResult: TypeAlias = MaybeNestedInTuple[FieldopData | None]
 """Result of a field operator, can be either a field or a tuple fields.
 
-For tuple of fields, any of the nested fields can be None, in case it is not udes
+For tuple of fields, any of the nested fields can be None, in case it is not used
 and therefore does not need to be computed. The information whether a field needs
 to be computed or not is the result of GTIR domain inference, and it is stored in
 the GTIR node annex domain.

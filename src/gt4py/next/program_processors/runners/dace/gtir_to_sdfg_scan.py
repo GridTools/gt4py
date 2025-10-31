@@ -83,7 +83,7 @@ def _parse_scan_fieldop_arg(
         return _parse_fieldop_arg_impl(arg)
     else:
         # handle tuples of fields
-        return gtx_utils.tree_map(lambda x: _parse_fieldop_arg_impl(x))(arg)
+        return gtx_utils.tree_map(_parse_fieldop_arg_impl)(arg)
 
 
 def _create_scan_field_operator_impl(
@@ -276,9 +276,9 @@ def _create_scan_field_operator(
     )
 
     return gtx_utils.tree_map(
-        lambda edge, domain, sym, ctx_=ctx: (
+        lambda edge, domain, sym: (
             _create_scan_field_operator_impl(
-                ctx_,
+                ctx,
                 sdfg_builder,
                 edge,
                 domain,
@@ -676,8 +676,8 @@ def translate_scan(
     lambda_args_mapping = [
         (im.sym(_scan_input_name(scan_carry), scan_carry_type), init_data),
     ] + [
-        (param, arg)
-        for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
+        (gt_symbol, arg)
+        for gt_symbol, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
         if arg is not None
     ]
 

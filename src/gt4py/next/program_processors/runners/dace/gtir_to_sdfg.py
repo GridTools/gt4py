@@ -753,8 +753,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
 
         gtx_utils.tree_map(
-            lambda source, target, domain_, target_state_=target_state: _visit_target(
-                source, target, domain_, target_state_
+            lambda source, target, target_domain: _visit_target(
+                source, target, target_domain, target_state
             )
         )(source_tree, target_tree, domain)
 
