@@ -246,13 +246,11 @@ def _create_scan_field_operator(
 
     # Note that `output_symbol` below is not used, we only need the tree-like
     # structure to get the type of each nested field in the `tree_map` visitor.
-    output_symbol: MaybeNestedInTuple[gtir.Sym]
-    if isinstance(node_type, ts.FieldType):
-        output_symbol = im.sym("__gtir_guaranteed_unused_dummy_variable", node_type)
-    else:
-        output_symbol = gtir_to_sdfg_utils.make_symbol_tree(
-            "__gtir_guaranteed_unused_dummy_variable", node_type
-        )
+    dummy_output_symbol = (
+        gtir_to_sdfg_utils.make_symbol_tree("__gtir_unused_dummy_var", node_type)
+        if isinstance(node_type, ts.TupleType)
+        else im.sym("__gtir_unused_dummy_var", node_type)
+    )
 
     return gtx_utils.tree_map(
         lambda edge, sym: (
@@ -265,7 +263,7 @@ def _create_scan_field_operator(
                 map_exit,
             )
         )
-    )(output, output_symbol)
+    )(output, dummy_output_symbol)
 
 
 def _scan_input_name(input_name: str) -> str:
@@ -633,10 +631,10 @@ def translate_scan(
     ] + [(param, arg) for param, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)]
 
     lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
-    for param, arg in lambda_args_mapping:
+    for gt_symbol, arg in lambda_args_mapping:
         lambda_arg_nodes |= {
-            str(nested_param.id): nested_arg
-            for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(param, arg)
+            str(nested_gt_symbol.id): nested_arg
+            for nested_gt_symbol, nested_arg in gtir_to_sdfg_types.flatten_tuple(gt_symbol, arg)
         }
 
     # parse the dataflow output symbols

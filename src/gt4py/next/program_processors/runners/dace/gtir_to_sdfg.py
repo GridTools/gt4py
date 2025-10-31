@@ -587,12 +587,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # add non-transient arrays and/or SDFG symbols for the program arguments
         sdfg_args = []
         for param in node_params:
-            pname = str(param.id)
+            gt_symbol_name = str(param.id)
             assert isinstance(param.type, (ts.DataType))
             sdfg_args += self._add_storage(
                 sdfg=sdfg,
                 symbolic_params=symbolic_params,
-                name=pname,
+                name=gt_symbol_name,
                 gt_type=param.type,
                 transient=False,
             )
@@ -808,8 +808,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # All other lambda arguments are lowered to some dataflow that produces a data node.
             args = {
                 param: (
-                    gtir_to_sdfg_types.SymbolicData(param.type, symbolic_args[pname])  # type: ignore[arg-type]
-                    if (pname := str(param.id)) in symbolic_args
+                    gtir_to_sdfg_types.SymbolicData(param.type, symbolic_args[gt_symbol_name])  # type: ignore[arg-type]
+                    if (gt_symbol_name := str(param.id)) in symbolic_args
                     else self.visit(arg, ctx=ctx)
                 )
                 for param, arg in zip(node.fun.params, node.args, strict=True)
@@ -848,15 +848,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         data_args: dict[str, gtir_to_sdfg_types.FieldopResult] = {}
         symbolic_args: dict[str, gtir_to_sdfg_types.SymbolicData] = {}
         lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
-        for param, arg in args.items():
-            pname = str(param.id)
+        for gt_symbol, arg in args.items():
+            gt_symbol_name = str(gt_symbol.id)
             if isinstance(arg, gtir_to_sdfg_types.SymbolicData):
-                symbolic_args[pname] = arg
+                symbolic_args[gt_symbol_name] = arg
             else:
-                data_args[pname] = arg
+                data_args[gt_symbol_name] = arg
                 lambda_arg_nodes |= {
                     str(nested_param.id): nested_arg
-                    for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(param, arg)
+                    for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(gt_symbol, arg)
                 }
 
         # inherit symbols from parent scope but eventually override with local symbols
@@ -932,18 +932,18 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Map free symbols to parent SDFG
         nsdfg_symbols_mapping = {}
-        for symbol in lambda_ctx.sdfg.free_symbols:
-            if symbol in lambda_arg_nodes:
-                assert isinstance(lambda_arg_nodes[symbol].gt_type, ts.ScalarType)
+        for dc_symbol in lambda_ctx.sdfg.free_symbols:
+            if dc_symbol in lambda_arg_nodes:
+                assert isinstance(lambda_arg_nodes[dc_symbol].gt_type, ts.ScalarType)
                 raise NotImplementedError(
                     "Unexpected mapping of scalar node to symbol on nested SDFG."
                 )
-            elif symbol in symbolic_args:
-                nsdfg_symbols_mapping[symbol] = symbolic_args[symbol].value
+            elif dc_symbol in symbolic_args:
+                nsdfg_symbols_mapping[dc_symbol] = symbolic_args[dc_symbol].value
             else:
-                nsdfg_symbols_mapping[symbol] = symbol
-        for pname, arg in lambda_arg_nodes.items():
-            nsdfg_symbols_mapping |= arg.get_symbol_mapping(pname, ctx.sdfg)
+                nsdfg_symbols_mapping[dc_symbol] = dc_symbol
+        for gt_symbol_name, arg in lambda_arg_nodes.items():
+            nsdfg_symbols_mapping |= arg.get_symbol_mapping(gt_symbol_name, ctx.sdfg)
 
         nsdfg_node = ctx.state.add_nested_sdfg(
             lambda_ctx.sdfg,
