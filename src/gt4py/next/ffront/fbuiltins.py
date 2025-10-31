@@ -141,10 +141,14 @@ CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
 FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
 
 
-class WhereBuiltinFunction(
-    BuiltInFunction[_R, [CondT, FieldT, FieldT]], Generic[_R, CondT, FieldT]
-):
-    def __call__(self, cond: CondT, true_field: FieldT, false_field: FieldT) -> _R:
+class WhereBuiltInFunction(BuiltInFunction):
+    def __call__(self, *args) -> _R:
+        if len(args) == 3 and not isinstance(args[0], tuple):
+            return self._call_orig(*args)
+        else:
+            return self._call_extended(*args)
+
+    def _call_orig(self, cond, true_field, false_field):
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
@@ -155,8 +159,17 @@ class WhereBuiltinFunction(
                 raise ValueError(
                     "Tuple of different size not allowed."
                 )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(self(cond, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
+            return tuple(self(cond, t, f) for t, f in zip(true_field, false_field))
         return super().__call__(cond, true_field, false_field)
+
+    def _call_extended(self, *args):
+        pairs = args[:-1]
+        default = args[-1]
+        result = default
+        # TODO: are more checks needed here?
+        for cond, value in reversed(pairs):
+            result = self._call_orig(cond, value, result)
+        return result
 
 
 @BuiltInFunction
@@ -185,7 +198,7 @@ def broadcast(
     return field  # type: ignore[return-value] # see comment above
 
 
-@WhereBuiltinFunction
+@WhereBuiltInFunction
 def where(
     mask: common.Field,
     true_field: common.Field | core_defs.ScalarT | Tuple,

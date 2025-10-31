@@ -39,9 +39,11 @@ class _ExpandTupleArgs(PreserveLocationVisitor, FixedPointTransformation):
 
     def transform(self, node: itir.Node, **kwargs) -> Optional[itir.Node]:
         # `concat_where(cond, {a, b}, {c, d})`
-        # -> `{concat_where(cond, a, c), concat_where(cond, a, c)}`
-        if not cpm.is_call_to(node, "concat_where") or not isinstance(
-            type_inference.reinfer(node.args[1]).type, ts.TupleType
+        # -> `{concat_where(cond, a, c), concat_where(cond, b, d)}`
+        if (
+            not cpm.is_call_to(node, "concat_where")
+            or cpm.is_call_to(node.args[0], "make_tuple")
+            or not isinstance(type_inference.reinfer(node.args[1]).type, ts.TupleType)
         ):
             return None
 
