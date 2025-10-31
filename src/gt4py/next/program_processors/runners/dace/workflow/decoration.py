@@ -30,6 +30,7 @@ def convert_args(
 ) -> stages.CompiledProgram:
     # Retieve metrics level from GT4Py environment variable.
     collect_time = config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
+    collect_time_arg = np.array([1], dtype=np.float64)
     # We use the callback function provided by the compiled program to update the SDFG arglist.
     update_sdfg_call_args = functools.partial(
         fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
@@ -43,39 +44,33 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        if not fun.sdfg_program._lastargs:
-            # First call, the SDFG is not intitalized, so forward the call to `CompiledSDFG`
-            # to proper initilize it. Later calls to this SDFG will be handled through
+        try:
+            # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
+            #  so we just update it with the current call arguments.
+            update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
+            fun.fast_call()
+        except IndexError:
+            # First call, the SDFG is not initialized, so forward the call to `CompiledSDFG`
+            # to properly initialize it. Later calls to this SDFG will be handled through
             # the `fast_call()` API.
-            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
+            assert len(fun.sdfg_program._lastargs) == 0  # `fun.sdfg_program._lastargs` is empty
+            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
             this_call_args = sdfg_callable.get_sdfg_args(
                 fun.sdfg_program.sdfg,
                 offset_provider,
                 *flat_args,
                 filter_args=False,
             )
-            this_call_args[gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL] = config.COLLECT_METRICS_LEVEL
+            this_call_args |= {
+                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
+                gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
+            }
             with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-                result = fun(**this_call_args)
-
-        else:
-            # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
-            #  so we just update it with the current call arguments.
-            update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
-            result = fun.fast_call()
+                fun(**this_call_args)
 
         if collect_time:
-            if result is None:
-                raise RuntimeError(
-                    "Config 'COLLECT_METRICS_LEVEL' is set but the SDFG profiling"
-                    " report was not found. This might indicate that the backend"
-                    " is using a precompiled SDFG from persistent cache without"
-                    " metrics instrumentation."
-                )
-            assert len(result) == 1
-            assert isinstance(result[0], np.float64)
             metric_source = metrics.get_current_source()
             assert metric_source is not None
-            metric_source.metrics[metrics.COMPUTE_METRIC].add_sample(result[0].item())
+            metric_source.metrics[metrics.COMPUTE_METRIC].add_sample(collect_time_arg[0].item())
 
     return decorated_program

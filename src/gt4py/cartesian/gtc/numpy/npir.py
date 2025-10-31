@@ -68,11 +68,14 @@ class TemporaryDecl(Decl):
 
     Parameters
     ----------
+    data_dims: Data dimensions sizes (static)
+    dimensions: Mask which cartesian dimensions are present
     offset: Origin of the temporary field.
     padding: Buffer added to compute domain as field size.
     """
 
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    dimensions: Tuple[bool, bool, bool]
     offset: Tuple[int, int]
     padding: Tuple[int, int]
 

@@ -14,6 +14,7 @@ import dataclasses
 import enum
 import functools
 import math
+import sys
 import types
 from collections.abc import Iterable, Mapping, Sequence
 
@@ -695,14 +696,13 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray: ...
 
     @abc.abstractmethod
+    def as_scalar(self) -> core_defs.ScalarT: ...
+
+    @abc.abstractmethod
     def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
-
-    @abc.abstractmethod
-    def as_scalar(self) -> core_defs.ScalarT: ...
-
     # Operators
     @abc.abstractmethod
     def __call__(
@@ -798,6 +798,72 @@ PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_rep
     PrimitiveValue
 )
 
+
+@dataclasses.dataclass(frozen=True)
+class BufferInfo:
+    """Holds information about a buffer in memory."""
+
+    data_ptr: int
+    ndim: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    byte_strides: tuple[int, ...]
+    device: core_defs.Device
+
+    @classmethod
+    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
+        # TODO(egparedes): Implement this function using __dlpack__ and ctypes.
+        #   The current implementation is messy and only works for numpy and cupy.
+        try:
+            array_ns = ndarray.__array_namespace__()  # type: ignore[attr-defined]
+        except AttributeError:
+            array_ns = sys.modules[ndarray.__class__.__module__]
+
+        array_byte_bounds_func = (
+            getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
+        )
+
+        data_ptr = array_byte_bounds_func(ndarray)[0]
+        ndim = ndarray.ndim
+        shape = ndarray.shape
+        byte_strides = ndarray.strides
+        elem_strides = tuple(s // ndarray.dtype.itemsize for s in byte_strides)
+
+        try:
+            device = core_defs.from_dlpack_device(ndarray.__dlpack_device__())  # type: ignore[attr-defined]
+        except AttributeError as err:
+            ns = ndarray.__class__.__module__
+            if ns.startswith("numpy"):
+                device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+            elif ns.startswith("cupy"):
+                device = core_defs.Device(core_defs.CUPY_DEVICE_TYPE, ndarray.device.id)  # type: ignore[attr-defined]
+            else:
+                raise RuntimeError(f"Unsupported ndarray type '{type(ndarray)}'") from err
+
+        return BufferInfo(
+            data_ptr=data_ptr,
+            ndim=ndim,
+            shape=shape,
+            elem_strides=elem_strides,
+            byte_strides=byte_strides,
+            device=device,
+        )
+
+    @functools.cached_property
+    def hash_key(self) -> int:
+        return hash(
+            (
+                self.data_ptr,
+                self.ndim,
+                self.shape,
+                self.elem_strides,
+                self.byte_strides,
+                self.device,
+            )
+        )
+
+    def __hash__(self) -> int:
+        return self.hash_key
 
 class ConnectivityKind(enum.Flag):
     """
@@ -1079,12 +1145,15 @@ def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag:
     return True
 
 
-def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:
-    """Compute hash of an offset provider on the tuples of key and value id.
+def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
+    """
+    Compute hash of an offset provider on the tuples of key and value id.
 
-    Directly using the `id` of the offset provider is not possible as the decorator adds
-    the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
-    different `id` every time. Instead use the `id` of each individual offset provider.
+    This function is unsafe since it uses the `id` of the values in the
+    offset provider, which could generate different hashes for two
+    offset providers that are semantically equal. It additionally relies
+    on the ordering of the items in the mapping, which could also lead to
+    different hashes for semantically equal offset providers.
     """
     return hash(tuple((k, id(v)) for k, v in offset_provider.items()))
 
