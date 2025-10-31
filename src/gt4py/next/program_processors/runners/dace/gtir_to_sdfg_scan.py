@@ -581,10 +581,15 @@ def _handle_dataflow_result_of_nested_sdfg(
     field_domain: infer_domain.NonTupleDomainAccess,
 ) -> gtir_dataflow.DataflowOutputEdge | None:
     if isinstance(field_domain, domain_utils.SymbolicDomain):
+        # The field is used outside the nested SDFG, therefore it needs to be copied
+        # to a temporary array in the parent SDFG (outer context).
         return _connect_nested_sdfg_output_to_temporaries(
             inner_ctx, outer_ctx, nsdfg_node, inner_data
         )
     else:
+        # The field is not used outside the nested SDFG. It is likely just storage
+        # for some internal state, accessed during column scan, and can be turned
+        # into a transient array inside the nested SDFG.
         assert field_domain == infer_domain.DomainAccessDescriptor.NEVER
         inner_data.dc_node.desc(inner_ctx.sdfg).transient = True
         nsdfg_node.out_connectors.pop(inner_data.dc_node.data)
