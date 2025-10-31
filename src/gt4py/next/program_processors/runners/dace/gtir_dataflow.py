@@ -269,44 +269,16 @@ class DataflowOutputEdge:
         map_exit: Optional[dace.nodes.MapExit],
         dest: dace.nodes.AccessNode,
         dest_subset: dace_subsets.Range,
-    ) -> bool:
-        """Create the connection.
-
-        Might remove the last data container. Returns `True` if it was removed,
-        `False` if kept.
-        """
+    ) -> None:
+        """Create the connection to write the dataflow result."""
         write_edge = self.state.in_edges(self.result.dc_node)[0]
-        write_size = (
-            dace.symbolic.SymExpr(1)  # subset `None` not expected, but it can appear for scalars
-            if write_edge.data.dst_subset is None
-            else write_edge.data.dst_subset.num_elements()
-        )
+
         # check the kind of node which writes the result
-        if isinstance(write_edge.src, dace.nodes.Tasklet):
-            # The temporary data written by a tasklet can be safely deleted
-            assert isinstance(write_size, int) or str(write_size).isdigit()
-            remove_last_node = True
-        elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
-            # TODO(phimuell, edopao): We need a better justification here, best would
-            #   be a reference to a DaCe/GT4Py issue on GH.
-            if isinstance(write_size, int) or str(write_size).isdigit():
-                # Temporary data with compile-time size is allocated on the stack
-                # and therefore is safe to keep. We decide to keep it as a workaround
-                # for a dace issue with memlet propagation in combination with
-                # nested SDFGs containing conditional blocks. The output memlet
-                # of such blocks will be marked as dynamic because dace is not able
-                # to detect the exact size of a conditional branch dataflow, even
-                # in case of if-else expressions with exact same output data.
-                remove_last_node = False
-            else:
-                # In case the output data has runtime size it is necessary to remove
-                # it in order to avoid dynamic memory allocation inside a parallel
-                # map scope. Otherwise, the memory allocation will for sure lead
-                # to performance degradation, and eventually illegal memory issues
-                # when the gpu runs out of local memory.
-                remove_last_node = True
-        else:
-            remove_last_node = False
+        remove_last_node = (
+            True
+            if isinstance(write_edge.src, (dace.nodes.Tasklet, dace.nodes.NestedSDFG))
+            else False
+        )
 
         if remove_last_node:
             src_node = write_edge.src
@@ -334,8 +306,6 @@ class DataflowOutputEdge:
                 src_conn=src_node_connector,
                 memlet=dace.Memlet(data=dest.data, subset=dest_subset, other_subset=src_subset),
             )
-
-        return remove_last_node
 
 
 DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
