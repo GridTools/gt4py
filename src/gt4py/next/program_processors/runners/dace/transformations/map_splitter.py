@@ -197,7 +197,7 @@ class MapSplitter(dace_transformation.SingleStateTransformation):
             #  fail.
             # TODO(phimuell): Find out how to limit propagation only to the Maps that
             #   are not dead dataflow, in case we remove them anyway.
-            dace_sdutils.canonicalize_memlet_trees_for_map(state=graph, scope_node=sub_me)
+            dace_sdutils.canonicalize_memlet_trees_for_map(state=graph, map_node=sub_me)
             dace.sdfg.propagation.propagate_memlets_map_scope(
                 sdfg=sdfg,
                 state=graph,
