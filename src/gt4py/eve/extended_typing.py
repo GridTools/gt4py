@@ -17,6 +17,7 @@ from __future__ import annotations
 # ruff: noqa: F401, F405
 import abc as _abc
 import array as _array
+import collections.abc as _collections_abc
 import dataclasses as _dataclasses
 import functools as _functools
 import inspect as _inspect
@@ -426,21 +427,6 @@ class HasCustomHash(Hashable):
     @classmethod
     def __subclasshook__(cls, candidate_cls: type) -> bool:
         return is_type_with_custom_hash(candidate_cls)
-
-
-def is_value_hashable(obj: Any) -> TypeGuard[HasCustomHash]:
-    return isinstance(obj, type) or obj is None or isinstance(type(obj), HasCustomHash)
-
-
-def is_value_hashable_typing(
-    type_annotation: TypeAnnotation,
-    *,
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
-) -> bool:
-    """Check if a type annotation describes a type hashable by value."""
-    types = get_represented_types(type_annotation, globalns=globalns, localns=localns)
-    return all(is_value_hashable(t) for t in types)
 
 
 class TypedNamedTupleABC(_abc.ABC, Generic[_T_co]):
