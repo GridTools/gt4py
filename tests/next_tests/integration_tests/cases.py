@@ -602,6 +602,7 @@ def _allocate_from_type(
                     for t in types
                 )
             )
+            # TODO move this outside
             if isinstance(arg_tuple_type_spec, ts.NamedCollectionType):
                 container_constructor = containers.make_container_constructor_from_type_spec(
                     arg_tuple_type_spec, nested=False
@@ -633,7 +634,9 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
             return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
         case ts.ScalarType(shape=shape):
             return int(np.prod(shape)) if shape else 1
-        case ts.TupleType(types):
+        case ts.TupleType(types=types):
+            return sum([get_param_size(t, sizes=sizes) for t in types])
+        case ts.NamedCollectionType(types=types):
             return sum([get_param_size(t, sizes=sizes) for t in types])
         case _:
             raise TypeError(f"Can not get size for parameter of type '{param_type}'.")

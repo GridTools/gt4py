@@ -144,8 +144,8 @@ class TupleType(DataType):
 
 
 class NamedCollectionType(DataType):
-    keys: list[str]
     types: list[DataType | DimensionType | DeferredType]
+    keys: list[str]
     #: The original python type. It should be only used in the boundaries between
     #: Python and GT4Py DSL, that is, `type translation` and in constructor/extractor
     #: steps for custom containers.
@@ -163,6 +163,13 @@ class NamedCollectionType(DataType):
 
     def __str__(self) -> str:
         return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
+
+    def __iter__(self) -> Iterator[DataType | DimensionType | DeferredType]:
+        # Note: Unlike `Mapping`s, we iterate the values (not the keys) by default.
+        yield from self.types
+
+    def __len__(self) -> int:
+        return len(self.types)
 
 
 class FunctionType(CallableType):
