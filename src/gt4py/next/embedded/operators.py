@@ -110,7 +110,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
         domain = kwargs.pop("domain", None)
 
         out_domain = (
-            common.normalize_domains(domain) if domain is not None else _get_out_domain(out)
+            utils.tree_map(common.domain)(domain) if domain is not None else _get_out_domain(out)
         )
 
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)

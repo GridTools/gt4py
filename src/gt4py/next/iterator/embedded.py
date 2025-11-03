@@ -45,7 +45,7 @@ from gt4py.eve.extended_typing import (
     overload,
     runtime_checkable,
 )
-from gt4py.next import common, field_utils
+from gt4py.next import common, field_utils, utils
 from gt4py.next.embedded import (
     context as embedded_context,
     exceptions as embedded_exceptions,
@@ -1634,8 +1634,8 @@ def set_at(
     domain: xtyping.MaybeNestedInTuple[common.DomainLike],
     target: common.MutableField,
 ) -> None:
-    domain = common.normalize_domains(domain)
-    operators._tuple_assign_field(target, expr, domain)
+    domain_ = utils.tree_map(common.domain)(domain)
+    operators._tuple_assign_field(target, expr, domain_)
 
 
 @runtime.get_domain_range.register(EMBEDDED)
