@@ -63,15 +63,15 @@ def gt_change_transient_strides(
         return sdfg
 
     for nsdfg in sdfg.all_sdfgs_recursive():
-        _gt_change_transient_strides_non_recursive_impl(nsdfg)
+        _gt_change_strides_non_recursive_impl(nsdfg)
 
 
-def _gt_change_transient_strides_non_recursive_impl(
+def _gt_change_strides_non_recursive_impl(
     sdfg: dace.SDFG,
 ) -> None:
-    """Set optimal strides of all transients in the SDFG.
+    """Set optimal strides of all access nodes in the SDFG.
 
-    The function will look for all top level transients, see `_gt_find_toplevel_data_accesses()`
+    The function will look for all top level access node, see `_gt_find_toplevel_data_accesses()`
     and set their strides such that the access is optimal, see Note. The function
     will also run `gt_propagate_strides_of()` to propagate the strides into nested SDFGs.
 
@@ -80,19 +80,19 @@ def _gt_change_transient_strides_non_recursive_impl(
 
     Note:
         Currently the function just reverses the strides of the data descriptor
-        it processes. Since DaCe generates `C` order by default this lead to
-        FORTRAN order, which is (for now) sufficient to optimize the memory
+        of transient access nodes it processes. Since DaCe generates `C` order by default
+        this lead to FORTRAN order, which is (for now) sufficient to optimize the memory
         layout to GPU.
 
     Todo:
         Make this function more intelligent to analyse the access pattern and then
         figuring out the best order.
     """
-    # NOTE: Processing the transient here is enough. If we are inside a
+    # NOTE: We have to process all access nodes (transient and globals). If we are inside a
     #   NestedSDFG then they were handled before on the level above us.
     top_level_transients_and_their_accesses = _gt_find_toplevel_data_accesses(
         sdfg=sdfg,
-        only_transients=True,
+        only_transients=False,
         only_arrays=True,
     )
     for top_level_transient, accesses in top_level_transients_and_their_accesses.items():
@@ -104,19 +104,20 @@ def _gt_change_transient_strides_non_recursive_impl(
             continue
 
         # We assume that everything is in C order initially, to get FORTRAN order
-        #  we simply have to reverse the order.
+        #  we simply have to reverse the order. This is necessary only for transient
+        #  access nodes because the non-transients come from outside and have their
+        #  own strides.
         # TODO(phimuell): Improve this.
-        new_stride_order = list(range(ndim))
-        desc.set_strides_from_layout(*new_stride_order)
+        if desc.transient:
+            new_stride_order = list(range(ndim))
+            desc.set_strides_from_layout(*new_stride_order)
 
         # Now we have to propagate the changed strides. Because we already have
         #  collected all the AccessNodes we are using the
         #  `gt_propagate_strides_from_access_node()` function, but we have to
         #  create `processed_nsdfg` set already outside here.
-        #  Furthermore, the same comment as above applies here, we do not have to
-        #  propagate the non-transients, because they either come from outside,
-        #  or they were already handled in the levels above, where they were
-        #  defined and then propagated down.
+        #  While global access nodes in top level SDFGs should have the correct strides,
+        #  we need to propagate those strides into the nested SDFGs that use them.
         # TODO(phimuell): Updated the functions such that only one scan is needed.
         processed_nsdfgs: set[dace_nodes.NestedSDFG] = set()
         for state, access_node in accesses:
