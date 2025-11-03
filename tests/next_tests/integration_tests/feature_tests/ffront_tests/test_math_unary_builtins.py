@@ -75,7 +75,9 @@ def test_mod(cartesian_case):
     def mod_fieldop(inp1: cases.IField) -> cases.IField:
         return inp1 % 2
 
-    inp1 = cartesian_case.as_field([IDim], np.asarray(range(10), dtype=int32) - 5)
+    inp1 = cartesian_case.as_field(
+        [IDim], np.asarray(range(cartesian_case.default_sizes[IDim]), dtype=int32) - 5
+    )
     out = cases.allocate(cartesian_case, mod_fieldop, cases.RETURN)()
 
     cases.verify(cartesian_case, mod_fieldop, inp1, out=out, ref=inp1 % 2)
