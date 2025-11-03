@@ -92,7 +92,7 @@ def _create_scan_field_operator_impl(
     output_edge: gtir_dataflow.DataflowOutputEdge | None,
     output_domain: infer_domain.NonTupleDomainAccess,
     output_type: ts.FieldType,
-    map_exit: dace.nodes.MapExit,
+    map_exit: dace.nodes.MapExit | None,
 ) -> gtir_to_sdfg_types.FieldopData | None:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -165,25 +165,37 @@ def _create_scan_field_operator_impl(
     #  Up to now the nested SDFG is writing into a transient data container that
     #  has the size to hold one column. The function below, that does the connection,
     #  will remove that data container.
-    output_edge.connect(map_exit, field_node, field_subset)
+    inner_map_output_temporary_removed = output_edge.connect(map_exit, field_node, field_subset)
     assert ctx.state.in_degree(field_node) == 1
 
     field_node_path = ctx.state.memlet_path(next(iter(ctx.state.in_edges(field_node))))
     assert field_node_path[-1].dst is field_node
 
-    # The original output of the nested SDFG, the one that would be inside the Map,
-    #  has been deleted and the nested SDFG writes directly into the output.
-    #  In this case we have to adapt the stride of the array inside the nested SDFG.
-    nsdfg_scan = field_node_path[0].src
-    assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
-    inner_output_name = field_node_path[0].src_conn
-    inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
-    assert len(inner_output_desc.shape) == 1
+    if len(field_dims) == 1:
+        # The scan column corresponds to the full shape of the result field.
+        assert not inner_map_output_temporary_removed
+    else:
+        # The nested SDFG in the map scope produces the scan column for each point
+        # in the horizontal grid. We have to setup an edge from the nested SDFG
+        # through the MapExit node to write to the result field.
+        # The temporary node inside the map scope, which the nested SDFG was writing to,
+        # has been deleted, and the nested SDFG will write directly to the result
+        # field outside the map scope. Thus, we have to modify the stride of the
+        # scan column array inside the nested SDFG to match the strides outside.
+        assert inner_map_output_temporary_removed
 
-    outside_output_stride = field_desc.strides[scan_dim_index]
-    assert str(outside_output_stride).isdigit()
-    # The stride of the temporary array is constant, so we can just set it on the inside.
-    inner_output_desc.set_shape(new_shape=inner_output_desc.shape, strides=(outside_output_stride,))
+        nsdfg_scan = field_node_path[0].src
+        assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
+        inner_output_name = field_node_path[0].src_conn
+        inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
+        assert len(inner_output_desc.shape) == 1
+
+        outside_output_stride = field_desc.strides[scan_dim_index]
+        assert str(outside_output_stride).isdigit()
+        # The stride of the temporary array is constant, so we can just set it on the inside.
+        inner_output_desc.set_shape(
+            new_shape=inner_output_desc.shape, strides=(outside_output_stride,)
+        )
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)

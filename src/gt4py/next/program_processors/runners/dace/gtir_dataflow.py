@@ -269,16 +269,26 @@ class DataflowOutputEdge:
         map_exit: Optional[dace.nodes.MapExit],
         dest: dace.nodes.AccessNode,
         dest_subset: dace_subsets.Range,
-    ) -> None:
-        """Create the connection to write the dataflow result."""
+    ) -> bool:
+        """Create the connection.
+
+        Might remove the last data container. Returns `True` if it was removed,
+        `False` if kept.
+        """
         write_edge = self.state.in_edges(self.result.dc_node)[0]
 
         # check the kind of node which writes the result
-        remove_last_node = (
-            True
-            if isinstance(write_edge.src, (dace.nodes.Tasklet, dace.nodes.NestedSDFG))
-            else False
-        )
+        if isinstance(write_edge.src, dace.nodes.Tasklet):
+            # The temporary data written by a tasklet can be safely deleted
+            assert map_exit is not None
+            remove_last_node = True
+        elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
+            if map_exit is not None and write_edge.src.label.startswith("scan_"):
+                remove_last_node = True
+            else:
+                remove_last_node = False
+        else:
+            remove_last_node = False
 
         if remove_last_node:
             src_node = write_edge.src
@@ -306,6 +316,8 @@ class DataflowOutputEdge:
                 src_conn=src_node_connector,
                 memlet=dace.Memlet(data=dest.data, subset=dest_subset, other_subset=src_subset),
             )
+
+        return remove_last_node
 
 
 DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
