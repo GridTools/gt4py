@@ -14,7 +14,7 @@ that explains the general structure and requirements on the SDFGs.
 
 from . import constants, splitting_tools
 from .auto_optimize import GT4PyAutoOptHook, GT4PyAutoOptHookFun, gt_auto_optimize
-from .dead_dataflow_elimination import gt_eliminate_dead_dataflow
+from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
 from .gpu_utils import (
     GPUSetBlockSize,
     gt_gpu_transform_non_standard_memlet,
@@ -38,6 +38,7 @@ from .map_fusion_extended import (
 )
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import MapPromoter, MapPromotionCallBack
+from .map_splitter import MapSplitter
 from .map_to_copy import MapToCopy
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
 from .multi_state_global_self_copy_elimination import (
@@ -88,6 +89,7 @@ __all__ = [
     "MapIterationOrder",
     "MapPromoter",
     "MapPromotionCallBack",
+    "MapSplitter",
     "MapToCopy",
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
@@ -117,6 +119,7 @@ __all__ = [
     "gt_propagate_strides_of",
     "gt_reduce_distributed_buffering",
     "gt_remove_copy_chain",
+    "gt_remove_map",
     "gt_set_gpu_blocksize",
     "gt_set_iteration_order",
     "gt_simplify",

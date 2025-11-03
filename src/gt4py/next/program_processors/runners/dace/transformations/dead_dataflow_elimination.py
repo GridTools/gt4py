@@ -136,34 +136,97 @@ class DeadMapElimination(dace_transformation.SingleStateTransformation):
         graph: dace.SDFGState,
         sdfg: dace.SDFG,
     ) -> None:
-        map_entry: dace_nodes.MapEntry = self.map_entry
-        map_exit: dace_nodes.MapExit = graph.exit_node(map_entry)
-        map_scope = graph.scope_subgraph(map_entry, include_exit=True, include_entry=True)
+        gt_remove_map(
+            sdfg=sdfg,
+            state=graph,
+            map_entry=self.map_entry,
+            remove_unused_data=(self._single_use_data is not None),
+            single_use_data=self._single_use_data,
+        )
 
-        # Now find all notes that are producer or consumer of the Map, after we removed
-        #  the nodes of the Maps we need to check if they have become isolated.
-        # NOTE: Needs to be a `set` to handle multiple connections with the MapEntry node.
-        adjacent_nodes: set[dace_nodes.AccessNode] = {
-            iedge.src for iedge in graph.in_edges(map_entry)
-        }
-        adjacent_nodes.update(oedge.dst for oedge in graph.out_edges(map_exit))
 
-        # Now we delete all nodes that constitute the Map scope.
-        graph.remove_nodes_from(map_scope.nodes())
+def gt_remove_map(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    map_entry: dace_nodes.MapEntry,
+    remove_unused_data: bool = False,
+    single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+) -> int:
+    """Remove the Map denoted by `map_entry` _unconditionally_.
 
-        # Remove the nodes that have become isolated.
-        removed_data_names: set[str] = set()
-        for adjacent_node in adjacent_nodes:
-            if graph.degree(adjacent_node) == 0:
-                graph.remove_node(adjacent_node)
-                if adjacent_node.desc(sdfg).transient:
-                    removed_data_names.add(adjacent_node.data)
+    The function can only operate on top level Maps, nested Maps are not supported.
+    Furthermore, adjacent nodes that have become isolated by the Map removal will
+    also be removed.
+    If `remove_unused_data` is specified, then the function will also remove data
+    descriptors that were referenced by the Map and are no longer used.
 
-        if self._single_use_data is not None:
-            single_use_data = self._single_use_data[sdfg]
-            for removed_data in removed_data_names:
-                if removed_data in single_use_data:
-                    sdfg.remove_data(removed_data, validate=False)
+    Note, it is the user's responsibility to ensure that the removal of the Map is
+    valid as no checks are performed.
+
+    The function returns the number of nodes that were removed.
+
+    Args:
+        sdfg: The SDFG on which we operate.
+        state: The state that contains the Map.
+        map_entry: The entry node of the Map that is removed.
+        remove_unused_data: Remove data descriptors that were referred inside the
+            Map and are no longer needed.
+        single_use_data: Single use data, see `dace.FindSingleUseData()`. Only
+            needed if `remove_unused_data` is set.
+    """
+
+    if state.scope_dict()[map_entry] is not None:
+        raise ValueError("Can only remove Map-Scopes on the top level.")
+
+    if single_use_data is None and remove_unused_data:
+        # We have to do it here, because data that is not referred anywhere in the
+        #  SDFG is classified as "not single use data".
+        find_single_use_data = dace_analysis.FindSingleUseData()
+        single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    map_exit: dace_nodes.MapExit = state.exit_node(map_entry)
+    map_scope = state.scope_subgraph(map_entry, include_exit=True, include_entry=True)
+
+    # Now find all notes that are producer or consumer of the Map, after we removed
+    #  the nodes of the Maps we need to check if they have become isolated.
+    # NOTE: Needs to be a `set` to handle multiple connections with the MapEntry node.
+    adjacent_nodes: set[dace_nodes.AccessNode] = {iedge.src for iedge in state.in_edges(map_entry)}
+    adjacent_nodes.update(oedge.dst for oedge in state.out_edges(map_exit))
+
+    if not all(isinstance(ac, dace_nodes.AccessNode) for ac in adjacent_nodes):
+        raise ValueError(
+            f"Expected that all adjacent nodes of '{map_entry.map.label}' are AccessNode"
+        )
+
+    # Find all the data that is accessed inside the Map scope.
+    map_scope_datas: set[str] = (
+        {ac.data for ac in map_scope.data_nodes()} if remove_unused_data else set()
+    )
+
+    # Now remove the nodes of the scope.
+    removed_number_nodes = map_scope.number_of_nodes()
+    state.remove_nodes_from(map_scope.nodes())
+
+    # Now check for potentially isolated nodes.
+    #  Process them in deterministic order.
+    for adjacent_node in sorted(adjacent_nodes, key=lambda ac: ac.data):
+        if state.degree(adjacent_node) == 0:
+            map_scope_datas.add(adjacent_node.data)
+            state.remove_node(adjacent_node)
+            removed_number_nodes += 1
+
+    if not remove_unused_data:
+        return removed_number_nodes
+
+    # If requested remove the data that is no longer referenced.
+    single_use_data_sdfg = single_use_data[sdfg]  # type: ignore[index]  # Guaranteed to be not None.
+    for map_scope_data in map_scope_datas:
+        if not sdfg.arrays[map_scope_data].transient:
+            continue
+        if map_scope_data in single_use_data_sdfg:
+            sdfg.remove_data(map_scope_data, validate=False)
+
+    return removed_number_nodes
 
 
 def gt_dead_memlet_elimination(

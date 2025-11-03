@@ -11,6 +11,7 @@
 import collections
 import copy
 import uuid
+import warnings
 from typing import Any, Iterable, Optional, TypeAlias
 
 import dace
@@ -63,6 +64,7 @@ def gt_simplify(
     - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
         which removes more dead dataflow than the native DaCe version.
     - `MapToCopy`: Called to remove some slices.
+    - `TrivialTaskletElimination`: Removing trivial copies.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -169,6 +171,19 @@ def gt_simplify(
                 if "GT4PyDeadDataflowElimination" not in result:
                     result["GT4PyDeadDataflowElimination"] = 0
                 result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
+
+        if "TrivialTaskletElimination" not in skip:
+            eliminated_trivial_tasklets = sdfg.apply_transformations_once_everywhere(
+                dace.transformation.dataflow.TrivialTaskletElimination(),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if eliminated_trivial_tasklets:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "TrivialTaskletElimination" not in result:
+                    result["TrivialTaskletElimination"] = 0
+                result["TrivialTaskletElimination"] += eliminated_trivial_tasklets
 
         if "CopyChainRemover" not in skip:
             copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
@@ -301,6 +316,12 @@ def gt_inline_nested_sdfg(
         if multi_state_inliner.can_be_applied(parent_state, 0, parent_sdfg, permissive=permissive):
             multi_state_inliner.apply(parent_state, parent_sdfg)
             nb_inlines_total += 1
+            if nsdfg_node.label.startswith("scan_"):
+                # See `gtir_to_sdfg_scan.py::translate_scan()` for more information.
+                warnings.warn(
+                    f"Inlined '{nsdfg_node.label}' which might be a scan, this might leads to errors during simplification.",
+                    stacklevel=0,
+                )
 
     result: dict[str, int] = {}
     if nb_inlines_total != 0:
@@ -461,6 +482,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             transient this is okay, as our rule guarantees this.
 
     Todo:
+        - Completely remove `temp_storage`, i.e. write directly into `dest_storage`.
         - Allow that `dest_storage` can also be transient.
         - Allow that `dest_storage` does not need to be a sink node, this is most
             likely most relevant if it is transient.
@@ -522,6 +544,8 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             final_dest_name: str = wb_edge.dst.data
 
             for def_an, def_state in def_locations:
+                # TODO(phimuell): Do not create a copy from `temp_storage` to the newly
+                #   created `dest_storage`. Instead bypass `temp_storage` fully.
                 def_state.add_edge(
                     def_an,
                     wb_edge.src_conn,
