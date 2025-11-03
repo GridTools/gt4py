@@ -43,21 +43,6 @@ def exec_alloc_descriptor(request):
 
 
 @pytest.fixture
-def cartesian(request, gtir_dace_backend):
-    yield cases.Case(
-        backend=gtir_dace_backend,
-        offset_provider={
-            "Ioff": IDim,
-            "Joff": JDim,
-            "Koff": KDim,
-        },
-        default_sizes={IDim: 10, JDim: 10, KDim: 10},
-        grid_type=common.GridType.CARTESIAN,
-        allocator=gtir_dace_backend.allocator,
-    )
-
-
-@pytest.fixture
 def unstructured(request, exec_alloc_descriptor, mesh_descriptor):  # noqa: F811
     yield cases.Case(
         backend=exec_alloc_descriptor,
@@ -66,7 +51,6 @@ def unstructured(request, exec_alloc_descriptor, mesh_descriptor):  # noqa: F811
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
             Cell: mesh_descriptor.num_cells,
-            KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,

@@ -154,7 +154,7 @@ def test_domain_exception_1(identity_def):
     assert exc_info.match("Invalid call to 'domain_format_1'")
 
     assert (
-        re.search("Only Dictionaries allowed in 'domain'", exc_info.value.__cause__.args[0])
+        re.search("Tuple domain requires tuple output", exc_info.value.__cause__.args[0])
         is not None
     )
 

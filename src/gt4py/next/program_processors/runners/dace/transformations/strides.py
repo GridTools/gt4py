@@ -703,6 +703,7 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
         evaluate if this function is still needed.
     """
     for state in sdfg.states():
+        scope_dict = state.scope_dict()
         propagation_record: set[PropagatedStrideRecord] = set()
         for view_node in state.data_nodes():
             view_desc = view_node.desc(sdfg)
@@ -716,6 +717,14 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
                 raise NotImplementedError(
                     f"Can not handle the view '{view_node.data}' that views view '{viewed_node.data}'"
                 )
+
+            # If both the View and the viewed node are not on the top level then do
+            #  nothing. Why? The answer is that this function is only called by
+            #  `_gt_change_transient_strides_non_recursive_impl()` which only
+            #  manipulates the strides of transients at the top level and leaves the
+            #  one inside a Map alone. Thus there was no modification and no change.
+            if scope_dict[viewed_node] is not None and scope_dict[view_node] is not None:
+                continue
 
             # If the viewed data is global data, then we do not modify the strides because
             #  we assume that it was set correctly from the beginning and the viewed strides
@@ -739,7 +748,17 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
                     f"Can not handle the change from {len(viewed_desc.shape)} ({viewed_node.data}) to {len(view_desc.shape)} ({view_node.data})."
                 )
 
-            # In case the dimensions are the same, we can simply copy the strides.
+            # Even if they have the same dimensionality, we can not simply copy the strides.
+            #  Consider the case were `viewed_desc` is a 2D array with the following shape
+            #  `(N, M)`. `view_desc` is a vertical slice, but for some reasons has an
+            #  additional dummy dimension, i.e. its shape is either `(N, 1)` or `(1, N)`.
+            #  So copying the strides around is not gonna work.
+            if view_desc.shape != viewed_desc.shape:
+                raise NotImplementedError(
+                    f"Can not change from shape `{viewed_desc.shape}` ({viewed_node.data})to shape `{view_desc.shape}` ({view_node.data})."
+                )
+
+            # In case they have the same shape we are fine.
             view_desc.strides = viewed_desc.strides
             gt_propagate_strides_from_access_node(
                 sdfg=sdfg,
