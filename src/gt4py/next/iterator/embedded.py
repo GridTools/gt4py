@@ -1631,11 +1631,11 @@ def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProvider
 @runtime.set_at.register(EMBEDDED)
 def set_at(
     expr: common.Field,
-    domain: xtyping.MaybeNestedInTuple[common.DomainLike],
+    domain_like: xtyping.MaybeNestedInTuple[common.DomainLike],
     target: common.MutableField,
 ) -> None:
-    domain_ = utils.tree_map(common.domain)(domain)
-    operators._tuple_assign_field(target, expr, domain_)
+    domain = utils.tree_map(common.domain)(domain_like)
+    operators._tuple_assign_field(target, expr, domain)
 
 
 @runtime.get_domain_range.register(EMBEDDED)
