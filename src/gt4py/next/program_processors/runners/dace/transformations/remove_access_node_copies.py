@@ -227,8 +227,8 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         scope_dict = graph.scope_dict()
         for node in graph.nodes():
             if isinstance(node, (dace_nodes.EntryNode)) and scope_dict[node] is None:
-                dace.sdfg.utils.canonicalize_memlet_trees_for_scope(graph, node)
-                dace.sdfg.utils.canonicalize_memlet_trees_for_scope(graph, graph.exit_node(node))
+                dace.sdfg.utils.canonicalize_memlet_trees_for_map(graph, node)
+                dace.sdfg.utils.canonicalize_memlet_trees_for_map(graph, graph.exit_node(node))
 
         # Update all edges with the correct subsets that match the first node range
         for edge in graph.edges():
