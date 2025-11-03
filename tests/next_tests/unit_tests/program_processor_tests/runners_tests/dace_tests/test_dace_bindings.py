@@ -33,15 +33,11 @@ import ctypes
 from gt4py.next import common as gtx_common, field_utils
 
 
-def _get_stride(ndarray, dim_index):
-    return ndarray.strides[dim_index] // ndarray.itemsize
-
-
 """
 
 
 def _binding_source(use_metrics: bool) -> str:
-    # In this SDFG 'last_call_args[2]' is used to collect the stencil compute time.
+    # In this SDFG 'sdfg_call_args[2]' is used to collect the stencil compute time.
     # Note that the position of 'gt_compute_time' in the SDFG arguments list is
     # defined by dace, based on alphabetical order from index 0 ('a', 'b', 'gt_compute_time').
     metrics_arg_index = 2
@@ -51,7 +47,7 @@ def _binding_source(use_metrics: bool) -> str:
     return (
         _bind_header
         + f"""\
-def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
+def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args):
     (
         args_0,
         args_1,
@@ -64,46 +60,49 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
         args_0_0,
         args_0_1,
     ) = args_0
-    last_call_args[{idx[0]}] = ctypes.c_int(args_0_0)
+    sdfg_call_args[{idx[0]}] = ctypes.c_int(args_0_0)
     (
         args_0_1_0,
         args_0_1_1,
         args_0_1_2,
     ) = args_0_1
-    last_call_args[{idx[1]}] = ctypes.c_int(args_0_1_0)
-    last_call_args[{idx[2]}].value = args_0_1_1._data_buffer_ptr_
-    last_call_args[{idx[3]}] = ctypes.c_int(args_0_1_1.domain.ranges[0].start)
-    last_call_args[{idx[4]}] = ctypes.c_int(args_0_1_1.domain.ranges[1].start)
-    last_call_args[{idx[5]}] = ctypes.c_int(args_0_1_1.domain.ranges[2].start)
-    last_call_args[{idx[6]}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 0))
-    last_call_args[{idx[7]}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 1))
-    last_call_args[{idx[8]}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 2))
+    sdfg_call_args[{idx[1]}] = ctypes.c_int(args_0_1_0)
+    args_0_1_1_buffer_info = args_0_1_1.__gt_buffer_info__
+    sdfg_call_args[{idx[2]}].value = args_0_1_1_buffer_info.data_ptr
+    sdfg_call_args[{idx[3]}] = ctypes.c_int(args_0_1_1.domain.ranges[0].start)
+    sdfg_call_args[{idx[4]}] = ctypes.c_int(args_0_1_1.domain.ranges[1].start)
+    sdfg_call_args[{idx[5]}] = ctypes.c_int(args_0_1_1.domain.ranges[2].start)
+    sdfg_call_args[{idx[6]}] = ctypes.c_int(args_0_1_1_buffer_info.elem_strides[0])
+    sdfg_call_args[{idx[7]}] = ctypes.c_int(args_0_1_1_buffer_info.elem_strides[1])
+    sdfg_call_args[{idx[8]}] = ctypes.c_int(args_0_1_1_buffer_info.elem_strides[2])
     (
         args_1_0,
         args_1_1,
     ) = args_1
     (args_1_0_0,) = args_1_0
-    last_call_args[{idx[9]}].value = args_1_0_0._data_buffer_ptr_
-    last_call_args[{idx[10]}] = ctypes.c_int(args_1_0_0.domain.ranges[0].start)
-    last_call_args[{idx[11]}] = ctypes.c_int(args_1_0_0.domain.ranges[1].start)
-    last_call_args[{idx[12]}] = ctypes.c_int(args_1_0_0.domain.ranges[2].start)
-    last_call_args[{idx[13]}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 0))
-    last_call_args[{idx[14]}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 1))
-    last_call_args[{idx[15]}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 2))
-    last_call_args[{idx[16]}] = ctypes.c_int(args_1_1)
-    last_call_args[{idx[17]}].value = args_5._data_buffer_ptr_
-    last_call_args[{idx[18]}] = ctypes.c_int(args_5.domain.ranges[0].start)
-    last_call_args[{idx[19]}] = ctypes.c_int(args_5.domain.ranges[1].start)
-    last_call_args[{idx[20]}] = ctypes.c_int(args_5.domain.ranges[2].start)
-    last_call_args[{idx[21]}] = ctypes.c_int(_get_stride(args_5.ndarray, 0))
-    last_call_args[{idx[22]}] = ctypes.c_int(_get_stride(args_5.ndarray, 1))
-    last_call_args[{idx[23]}] = ctypes.c_int(_get_stride(args_5.ndarray, 2))\
+    args_1_0_0_buffer_info = args_1_0_0.__gt_buffer_info__
+    sdfg_call_args[{idx[9]}].value = args_1_0_0_buffer_info.data_ptr
+    sdfg_call_args[{idx[10]}] = ctypes.c_int(args_1_0_0.domain.ranges[0].start)
+    sdfg_call_args[{idx[11]}] = ctypes.c_int(args_1_0_0.domain.ranges[1].start)
+    sdfg_call_args[{idx[12]}] = ctypes.c_int(args_1_0_0.domain.ranges[2].start)
+    sdfg_call_args[{idx[13]}] = ctypes.c_int(args_1_0_0_buffer_info.elem_strides[0])
+    sdfg_call_args[{idx[14]}] = ctypes.c_int(args_1_0_0_buffer_info.elem_strides[1])
+    sdfg_call_args[{idx[15]}] = ctypes.c_int(args_1_0_0_buffer_info.elem_strides[2])
+    sdfg_call_args[{idx[16]}] = ctypes.c_int(args_1_1)
+    args_5_buffer_info = args_5.__gt_buffer_info__
+    sdfg_call_args[{idx[17]}].value = args_5_buffer_info.data_ptr
+    sdfg_call_args[{idx[18]}] = ctypes.c_int(args_5.domain.ranges[0].start)
+    sdfg_call_args[{idx[19]}] = ctypes.c_int(args_5.domain.ranges[1].start)
+    sdfg_call_args[{idx[20]}] = ctypes.c_int(args_5.domain.ranges[2].start)
+    sdfg_call_args[{idx[21]}] = ctypes.c_int(args_5_buffer_info.elem_strides[0])
+    sdfg_call_args[{idx[22]}] = ctypes.c_int(args_5_buffer_info.elem_strides[1])
+    sdfg_call_args[{idx[23]}] = ctypes.c_int(args_5_buffer_info.elem_strides[2])\
 """
     )
 
 
 def _binding_source_with_zero_origin(use_metrics: bool) -> str:
-    # In this SDFG 'last_call_args[2]' is used to collect the stencil compute time.
+    # In this SDFG 'sdfg_call_args[2]' is used to collect the stencil compute time.
     # Note that the position of 'gt_compute_time' in the SDFG arguments list is
     # defined by dace, based on alphabetical order from index 0 ('a', 'b', 'gt_compute_time').
     metrics_arg_index = 2
@@ -113,7 +112,7 @@ def _binding_source_with_zero_origin(use_metrics: bool) -> str:
     return (
         _bind_header
         + f"""\
-def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
+def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args):
     (
         args_0,
         args_1,
@@ -126,31 +125,34 @@ def {_bind_func_name}(device, sdfg_argtypes, args, last_call_args):
         args_0_0,
         args_0_1,
     ) = args_0
-    last_call_args[{idx[0]}] = ctypes.c_int(args_0_0)
+    sdfg_call_args[{idx[0]}] = ctypes.c_int(args_0_0)
     (
         args_0_1_0,
         args_0_1_1,
         args_0_1_2,
     ) = args_0_1
-    last_call_args[{idx[1]}] = ctypes.c_int(args_0_1_0)
-    last_call_args[{idx[2]}].value = args_0_1_1._data_buffer_ptr_
-    last_call_args[{idx[3]}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 0))
-    last_call_args[{idx[4]}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 1))
-    last_call_args[{idx[5]}] = ctypes.c_int(_get_stride(args_0_1_1.ndarray, 2))
+    sdfg_call_args[{idx[1]}] = ctypes.c_int(args_0_1_0)
+    args_0_1_1_buffer_info = args_0_1_1.__gt_buffer_info__
+    sdfg_call_args[{idx[2]}].value = args_0_1_1_buffer_info.data_ptr
+    sdfg_call_args[{idx[3]}] = ctypes.c_int(args_0_1_1_buffer_info.elem_strides[0])
+    sdfg_call_args[{idx[4]}] = ctypes.c_int(args_0_1_1_buffer_info.elem_strides[1])
+    sdfg_call_args[{idx[5]}] = ctypes.c_int(args_0_1_1_buffer_info.elem_strides[2])
     (
         args_1_0,
         args_1_1,
     ) = args_1
     (args_1_0_0,) = args_1_0
-    last_call_args[{idx[6]}].value = args_1_0_0._data_buffer_ptr_
-    last_call_args[{idx[7]}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 0))
-    last_call_args[{idx[8]}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 1))
-    last_call_args[{idx[9]}] = ctypes.c_int(_get_stride(args_1_0_0.ndarray, 2))
-    last_call_args[{idx[10]}] = ctypes.c_int(args_1_1)
-    last_call_args[{idx[11]}].value = args_5._data_buffer_ptr_
-    last_call_args[{idx[12]}] = ctypes.c_int(_get_stride(args_5.ndarray, 0))
-    last_call_args[{idx[13]}] = ctypes.c_int(_get_stride(args_5.ndarray, 1))
-    last_call_args[{idx[14]}] = ctypes.c_int(_get_stride(args_5.ndarray, 2))\
+    args_1_0_0_buffer_info = args_1_0_0.__gt_buffer_info__
+    sdfg_call_args[{idx[6]}].value = args_1_0_0_buffer_info.data_ptr
+    sdfg_call_args[{idx[7]}] = ctypes.c_int(args_1_0_0_buffer_info.elem_strides[0])
+    sdfg_call_args[{idx[8]}] = ctypes.c_int(args_1_0_0_buffer_info.elem_strides[1])
+    sdfg_call_args[{idx[9]}] = ctypes.c_int(args_1_0_0_buffer_info.elem_strides[2])
+    sdfg_call_args[{idx[10]}] = ctypes.c_int(args_1_1)
+    args_5_buffer_info = args_5.__gt_buffer_info__
+    sdfg_call_args[{idx[11]}].value = args_5_buffer_info.data_ptr
+    sdfg_call_args[{idx[12]}] = ctypes.c_int(args_5_buffer_info.elem_strides[0])
+    sdfg_call_args[{idx[13]}] = ctypes.c_int(args_5_buffer_info.elem_strides[1])
+    sdfg_call_args[{idx[14]}] = ctypes.c_int(args_5_buffer_info.elem_strides[2])\
 """
     )
 
