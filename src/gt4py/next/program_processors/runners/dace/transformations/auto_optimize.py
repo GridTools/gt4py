@@ -14,7 +14,7 @@ from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 
 import dace
 from dace import data as dace_data
-from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
+from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sdutils
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -332,6 +332,32 @@ def gt_auto_optimize(
         if gpu_block_size_3d is not None:
             gpu_block_size_spec["block_size_3d"] = gpu_block_size_3d
 
+        # We now turn the demoted fields back into globals if possible, for ABI compatibility.
+        #  We have to do it here, because we need to know later if something is a transient
+        #  or not.
+        for demoted_field, original_field_desc in original_demoted_descriptors.items():
+            if demoted_field not in sdfg.arrays:
+                # The demoted field is not inside the SDFG anymore, just insert it.
+                sdfg.add_datadesc(demoted_field, original_field_desc)
+
+            elif original_field_desc.is_equivalent(sdfg.arrays[demoted_field]) and all(
+                (ostride == cstride) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                for ostride, cstride in zip(
+                    sdfg.arrays[demoted_field].strides, original_field_desc.strides
+                )
+            ):
+                # The demoted field is still inside the SDFG, we only add it back if it
+                #  still has the same layout as before.
+                # NOTE: Technically we could ignore the strides, the problem are nested
+                #   SDFG, where they might be mapped into.
+                sdfg.arrays[demoted_field].transient = False
+
+            else:
+                warnings.warn(
+                    f"Could not restore the demoted field '{demoted_field}' back to a global.",
+                    stacklevel=0,
+                )
+
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
             gpu=gpu,
@@ -360,30 +386,6 @@ def gt_auto_optimize(
 
         # Set the implementation of the library nodes.
         dace_aoptimize.set_fast_implementations(sdfg, device)
-
-        # We now turn the demoted fields back into globals if possible, for ABI compatibility.
-        for demoted_field, original_field_desc in original_demoted_descriptors.items():
-            if demoted_field not in sdfg.arrays:
-                # The demoted field is not inside the SDFG anymore, just insert it.
-                sdfg.add_datadesc(demoted_field, original_field_desc)
-
-            elif original_field_desc.is_equivalent(sdfg.arrays[demoted_field]) and all(
-                (ostride == cstride) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
-                for ostride, cstride in zip(
-                    sdfg.arrays[demoted_field].strides, original_field_desc.strides
-                )
-            ):
-                # The demoted field is still inside the SDFG, we only add it back if it
-                #  still has the same layout as before.
-                # NOTE: Technically we could ignore the strides, the problem are nested
-                #   SDFG, where they might be mapped into.
-                sdfg.arrays[demoted_field].transient = False
-
-            else:
-                warnings.warn(
-                    f"Could not restore the demoted field '{demoted_field}' back to a global.",
-                    stacklevel=0,
-                )
 
         if validate:
             sdfg.validate()
@@ -518,8 +520,9 @@ def _gt_auto_process_top_level_maps(
         )
 
         if not disable_splitting:
-            # TODO(phimuell): Find out how to skip the propagation and integrating it
-            #   into the split transformation.
+            # TODO(phimuell): Implement a data cleaner.
+            dace_sdutils.canonicalize_memlet_trees(sdfg)
+            dace_propagation.propagate_memlets_sdfg(sdfg)
             sdfg.apply_transformations_repeated(
                 [
                     gtx_transformations.MapSplitter(
@@ -531,7 +534,9 @@ def _gt_auto_process_top_level_maps(
                 validate=False,
                 validate_all=validate_all,
             )
-            # TODO(phimuell): Implement a data cleaner.
+            # TODO(phimuell): Find out how to skip the propagation and integrating it
+            #   into the split transformation.
+            dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
 
             sdfg.apply_transformations_repeated(

@@ -130,13 +130,13 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         self.body.dedent()
         self.body.dedent()
 
-    def visit_While(self, while_node: gtc_common.While, **_) -> None:
-        while_condition = self.visit(while_node.cond)
+    def visit_While(self, while_node: gtc_common.While, **kwargs) -> None:
+        while_condition = self.visit(while_node.cond, **kwargs)
         while_code = f"while {while_condition}:"
         self.body.append(while_code)
         with self.body.indented():
             for statement in while_node.body:
-                self.visit(statement)
+                self.visit(statement, **kwargs)
 
     def visit_HorizontalExecution(
         self, horizontal_execution: oir.HorizontalExecution, **kwargs

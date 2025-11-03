@@ -11,6 +11,7 @@
 import collections
 import copy
 import uuid
+import warnings
 from typing import Any, Iterable, Optional, TypeAlias
 
 import dace
@@ -21,7 +22,7 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.cli import progress as dace_cliprogress
-from dace.sdfg import nodes as dace_nodes
+from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 from dace.transformation import (
     dataflow as dace_dataflow,
     interstate as dace_interstate,
@@ -63,6 +64,9 @@ def gt_simplify(
     - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
         which removes more dead dataflow than the native DaCe version.
     - `MapToCopy`: Called to remove some slices.
+    - `canonicalize_memlet_trees()`: A free function that will canonicalize all Memlets.
+        It is run after the inlining and can not be disabled.
+    - `TrivialTaskletElimination`: Removing trivial copies.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -109,6 +113,14 @@ def gt_simplify(
                 at_least_one_xtrans_run = True
                 result = result or {}
                 result.update(inline_res)
+
+        # Ensure that we have canonical Memelts.
+        canoncialize_memlet_result = dace_sdutils.canonicalize_memlet_trees(sdfg)
+        if canoncialize_memlet_result:
+            result = result or {}
+            if "canonicalize_memlet_trees" not in result:
+                result["canonicalize_memlet_trees"] = 0
+            result["canonicalize_memlet_trees"] += canoncialize_memlet_result
 
         simplify_res = dace_passes.SimplifyPass(
             validate=False,
@@ -169,6 +181,19 @@ def gt_simplify(
                 if "GT4PyDeadDataflowElimination" not in result:
                     result["GT4PyDeadDataflowElimination"] = 0
                 result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
+
+        if "TrivialTaskletElimination" not in skip:
+            eliminated_trivial_tasklets = sdfg.apply_transformations_once_everywhere(
+                dace.transformation.dataflow.TrivialTaskletElimination(),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if eliminated_trivial_tasklets:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "TrivialTaskletElimination" not in result:
+                    result["TrivialTaskletElimination"] = 0
+                result["TrivialTaskletElimination"] += eliminated_trivial_tasklets
 
         if "CopyChainRemover" not in skip:
             copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
@@ -301,6 +326,12 @@ def gt_inline_nested_sdfg(
         if multi_state_inliner.can_be_applied(parent_state, 0, parent_sdfg, permissive=permissive):
             multi_state_inliner.apply(parent_state, parent_sdfg)
             nb_inlines_total += 1
+            if nsdfg_node.label.startswith("scan_"):
+                # See `gtir_to_sdfg_scan.py::translate_scan()` for more information.
+                warnings.warn(
+                    f"Inlined '{nsdfg_node.label}' which might be a scan, this might leads to errors during simplification.",
+                    stacklevel=0,
+                )
 
     result: dict[str, int] = {}
     if nb_inlines_total != 0:
@@ -388,6 +419,8 @@ def gt_substitute_compiletime_symbols(
             validate=False,
             validate_all=validate_all,
         )
+    else:
+        dace_sdutils.canonicalize_memlet_trees(sdfg)
     dace.sdfg.propagation.propagate_memlets_sdfg(sdfg)
 
     if validate:

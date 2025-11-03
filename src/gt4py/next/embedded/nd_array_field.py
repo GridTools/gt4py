@@ -13,7 +13,6 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any
 
 import numpy as np
 from numpy import typing as npt
@@ -118,61 +117,6 @@ class NdArrayField(
     _ndarray: core_defs.NDArrayObject
 
     array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
-    array_byte_bounds: ClassVar[  # TODO(egparedes): make this part of the previous protocol
-        Callable[[npt.NDArray], tuple[int, int]]
-        | Callable[[core_defs.NDArrayObject], tuple[int, int]]
-    ]
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        if hasattr(cls, "array_ns") and not hasattr(cls, "array_byte_bounds"):
-            # This is needed to initialize `array_byte_bounds` only once per subclass
-            try:
-                cls.array_byte_bounds = staticmethod(
-                    getattr(cls.array_ns, "byte_bounds", None)
-                    or cls.array_ns.lib.array_utils.byte_bounds
-                )
-            except AttributeError:
-                pass
-
-    @property
-    def domain(self) -> common.Domain:
-        return self._domain
-
-    @property
-    def shape(self) -> tuple[int, ...]:
-        return self._ndarray.shape
-
-    @functools.cached_property
-    def __gt_origin__(self) -> tuple[int, ...]:
-        assert common.Domain.is_finite(self._domain)
-        return tuple(-r.start for r in self._domain.ranges)
-
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        return self._ndarray
-
-    def asnumpy(self) -> np.ndarray:
-        if self.array_ns == cp:
-            return cp.asnumpy(self._ndarray)
-        else:
-            return np.asarray(self._ndarray)
-
-    def as_scalar(self) -> core_defs.ScalarT:
-        if self.domain.ndim != 0:
-            raise ValueError(
-                f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
-            )
-        # note: `.item()` will return a Python type, therefore we use indexing with an empty tuple
-        return self.asnumpy()[()]  # type: ignore[return-value] # should be ensured by the 0-d check
-
-    @property
-    def codomain(self) -> type[core_defs.ScalarT]:
-        return self.dtype.scalar_type
-
-    @functools.cached_property
-    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        return core_defs.dtype(self._ndarray.dtype.type)
 
     @classmethod
     def from_array(
@@ -201,6 +145,59 @@ class NdArrayField(
         assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
+
+    @functools.cached_property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        assert common.Domain.is_finite(self.domain)
+        return tuple(-r.start for r in self.domain.ranges)
+
+    @functools.cached_property
+    def __gt_buffer_info__(self) -> common.BufferInfo:
+        """
+        Interface to retrieve the low-level description of a Field buffer.
+
+        Since by default NdArrayFields are implemented as frozen dataclasses,
+        and therefore the backing ndarray cannot be replaced after creation,
+        this is implemented as a cached property for performance reasons.
+
+        NDArrayField subclasses where the backing ndarray can be replaced
+        should override this and make it a regular property.
+        """
+        return common.BufferInfo.from_ndarray(self.ndarray)
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self._ndarray.shape
+
+    @property
+    def domain(self) -> common.Domain:
+        return self._domain
+
+    @property
+    def codomain(self) -> type[core_defs.ScalarT]:
+        return self.dtype.scalar_type
+
+    @functools.cached_property
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
+        return core_defs.dtype(self._ndarray.dtype.type)
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        return self._ndarray
+
+    def asnumpy(self) -> np.ndarray:
+        if self.array_ns == cp:
+            return cp.asnumpy(self._ndarray)
+        else:
+            return np.asarray(self._ndarray)
+
+    def as_scalar(self) -> core_defs.ScalarT:
+        if self.domain.ndim != 0:
+            raise ValueError(
+                f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        # note: `.item()` will return a Python type, therefore we use indexing with an empty tuple
+        return self.asnumpy()[()]  # type: ignore[return-value] # should be ensured by the 0-d check
 
     def premap(
         self: NdArrayField,
@@ -444,24 +441,10 @@ class NdArrayField(
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
 
-    @property
-    def _data_buffer_ptr_(self) -> int:
-        """
-        Returns the pointer of the underlying data buffer.
-
-        Subclasses should redefine this property with the fastest possible
-        implementation.
-
-        This is mainly needed to interface with high-performance code generated by
-        gt4py backends. Therefore, this is considered for now an internal attribute
-        and it should not be accessed directly by users.
-        """
-        return self.array_byte_bounds(self._ndarray)[0]  # type: ignore[call-arg,misc] # array_byte_bounds is a staticmethod
-
     if dace:
 
         def _dace_data_ptr(self) -> int:
-            return self._data_buffer_ptr_
+            return self.__gt_buffer_info__.data_ptr
 
         def _dace_descriptor(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.ndarray)
@@ -482,7 +465,7 @@ class NdArrayField(
     """
     Returns the pointer of the underlying data buffer.
 
-    Fully equivalent to `self._data_buffer_ptr_`. It is only defined to emulate the
+    Fully equivalent to `self.__gt_buffer_info__.data_ptr`. It is only defined to emulate the
     PyTorch API for DaCe interoperability.
 
     Note:
@@ -1075,13 +1058,6 @@ _nd_array_implementations = [np]
 class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
-    # It is only possible to cache the data buffer pointer in this way
-    # because the backing np.ndarray is never replaced after creation,
-    # since this is a frozen dataclass.
-    @functools.cached_property
-    def _data_buffer_ptr_(self) -> int:
-        return self._ndarray.ctypes.data  # type: ignore[attr-defined]  # np.ndarray has `ctypes` attribute
-
 
 common._field.register(np.ndarray, NumPyArrayField.from_array)
 
@@ -1090,8 +1066,6 @@ common._field.register(np.ndarray, NumPyArrayField.from_array)
 class NumPyArrayConnectivityField(NdArrayConnectivityField):
     array_ns: ClassVar[ModuleType] = np
 
-    _data_buffer_ptr_ = functools.cached_property(NumPyArrayField._data_buffer_ptr_.func)  # type: ignore[attr-defined]  # cached_property has `func` attribute
-
 
 common._connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
 
@@ -1099,25 +1073,15 @@ common._connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array
 if cp:
     _nd_array_implementations.append(cp)
 
-    # Same as in the NumPy case:
-    # It is only possible to cache the data buffer pointer in this way
-    # because the backing np.ndarray is never replaced after creation
-    # since this is a frozen dataclass.
     @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
-
-        @functools.cached_property
-        def _data_buffer_ptr_(self) -> int:
-            return self._ndarray.data.ptr  # type: ignore[attr-defined]  # cp.ndarray has `data` attribute
 
     common._field.register(cp.ndarray, CuPyArrayField.from_array)
 
     @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayConnectivityField(NdArrayConnectivityField):
         array_ns: ClassVar[ModuleType] = cp
-
-        _data_buffer_ptr_ = functools.cached_property(CuPyArrayField._data_buffer_ptr_.func)  # type: ignore[attr-defined]  # cached_property has `func` attribute
 
     common._connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
 
@@ -1128,6 +1092,10 @@ if jnp:
     @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
+
+        @property
+        def __gt_buffer_info__(self) -> common.BufferInfo:
+            raise NotImplementedError("'__gt_buffer_info__' for JaxArrayField not yet implemented.")
 
         def __setitem__(
             self,
