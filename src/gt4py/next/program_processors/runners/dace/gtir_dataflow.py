@@ -275,18 +275,24 @@ class DataflowOutputEdge:
         Might remove the last data container. Returns `True` if it was removed,
         `False` if kept.
         """
+        dest_desc = self.result.dc_node.desc(self.state)
         write_edge = self.state.in_edges(self.result.dc_node)[0]
 
-        # check the kind of node which writes the result
+        # Check the kind of node which writes the result
         if isinstance(write_edge.src, dace.nodes.Tasklet):
-            # The temporary data written by a tasklet can be safely deleted
+            # The temporary data written by a tasklet can be safely deleted.
+            assert isinstance(dest_desc, dace.data.Scalar)
             assert map_exit is not None
             remove_last_node = True
         elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
-            if map_exit is not None and write_edge.src.label.startswith("scan_"):
-                remove_last_node = True
-            else:
+            if isinstance(dest_desc, dace.data.Scalar):
+                # This scalar is needed for nested SDFGs implementing reduction
+                # with WCR memlet on the output connection.
                 remove_last_node = False
+            else:
+                # We remove the transient array on the output connection of a nested
+                # SDFG and write directly to the destination node.
+                remove_last_node = True
         else:
             remove_last_node = False
 
