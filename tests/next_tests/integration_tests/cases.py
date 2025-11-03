@@ -593,8 +593,8 @@ def _allocate_from_type(
             )
         case ts.ScalarType(kind=kind):
             return strategy.scalar(dtype=dtype or kind.name.lower())
-        case ts.TupleType(types=types) as arg_tuple_type_spec:
-            allocated_tuple = tuple(
+        case ts.TupleType(types=types):
+            return tuple(
                 (
                     _allocate_from_type(
                         case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
@@ -602,13 +602,20 @@ def _allocate_from_type(
                     for t in types
                 )
             )
-            # TODO move this outside
-            if isinstance(arg_tuple_type_spec, ts.NamedCollectionType):
-                container_constructor = containers.make_container_constructor_from_type_spec(
-                    arg_tuple_type_spec, nested=False
+        case ts.NamedCollectionType(types=types) as named_collection_type_spec:
+            container_constructor = containers.make_container_constructor_from_type_spec(
+                named_collection_type_spec, nested=False
+            )
+            return container_constructor(
+                tuple(
+                    (
+                        _allocate_from_type(
+                            case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
+                        )
+                        for t in types
+                    )
                 )
-                allocated_tuple = container_constructor(allocated_tuple)
-            return allocated_tuple
+            )
         case _:
             raise TypeError(
                 f"Can not allocate for type '{arg_type}' with initializer '{strategy or 'default'}'."
