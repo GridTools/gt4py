@@ -210,10 +210,8 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         inputs={},
         outputs={"time"},
         code="""\
-time = static_cast<double>(
-    std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
-) / 1e9;
+time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
         """,
         language=dace.dtypes.Language.CPP,
     )
@@ -243,10 +241,8 @@ time = static_cast<double>(
         outputs={"duration"},
         code=sync_code
         + """
-double run_cpp_end_time = static_cast<double>(
-    std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
-) / 1e9;
+double run_cpp_end_time =std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 duration = run_cpp_end_time - run_cpp_start_time;
         """,
         language=dace.dtypes.Language.CPP,

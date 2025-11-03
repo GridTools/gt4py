@@ -84,8 +84,8 @@ class Metric:
     def __str__(self) -> str:
         return f"{self.mean:.5e} +/- {self.std:.5e}"
 
-    def add_sample(self, sample: float) -> None:
-        self.samples.append(sample)
+    def add_sample(self, sample: int) -> None:
+        self.samples.append(sample * 1.0e9)  # TODO
 
 
 class MetricsCollection(utils.CustomDefaultDictBase[str, Metric]):

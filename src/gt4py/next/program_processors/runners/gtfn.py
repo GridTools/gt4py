@@ -60,7 +60,7 @@ def convert_args(
         if collect_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE):
             # If we are collecting metrics, we need to add the `exec_info` argument
             # to the `inp` call, which will be used to collect performance metrics.
-            exec_info: dict[str, float] = {}
+            exec_info: dict[str, int] = {}
             opt_kwargs["exec_info"] = exec_info
 
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
