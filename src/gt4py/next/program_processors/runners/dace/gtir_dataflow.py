@@ -281,7 +281,6 @@ class DataflowOutputEdge:
         # Check the kind of node which writes the result
         if isinstance(write_edge.src, dace.nodes.Tasklet):
             # The temporary data written by a tasklet can be safely deleted.
-            assert isinstance(dest_desc, dace.data.Scalar)
             assert map_exit is not None
             remove_last_node = True
         elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
