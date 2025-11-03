@@ -721,7 +721,7 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
             # If both the View and the viewed node are not on the top level then do
             #  nothing. Why? The answer is that this function is only called by
             #  `_gt_change_transient_strides_non_recursive_impl()` which only
-            #  manipulate the strides of transients at the top level and leaves the
+            #  manipulates the strides of transients at the top level and leaves the
             #  one inside a Map alone. Thus there was no modification and no change.
             if scope_dict[viewed_node] is not None and scope_dict[view_node] is not None:
                 continue
@@ -758,7 +758,7 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
                     f"Can not change from shape `{viewed_desc.shape}` ({viewed_node.data})to shape `{view_desc.shape}` ({view_node.data})."
                 )
 
-            # In case they have the same shape we are find.
+            # In case they have the same shape we are fine.
             view_desc.strides = viewed_desc.strides
             gt_propagate_strides_from_access_node(
                 sdfg=sdfg,
