@@ -17,7 +17,6 @@ import importlib.util
 import itertools
 import json
 import os
-import pathlib
 import string
 import sys
 import time
@@ -458,11 +457,6 @@ def warn_experimental_feature(*, feature: str, ADR: str) -> None:
 
     # be nice and remove a potential `/` prefixed
     ADR = ADR.removeprefix("/")
-
-    repo_root = pathlib.Path(__file__).parent.parent.parent.parent.parent
-    adr_location = repo_root / "docs" / "development" / "ADRs" / "cartesian" / ADR
-    if not adr_location.exists():
-        raise ValueError(f"Could not find ADR for '{feature}' in. Looked in `{adr_location}`.")
 
     warnings.warn(
         f"{feature} is an experimental feature. Please read "

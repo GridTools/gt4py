@@ -131,7 +131,7 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
 
     state.add_edge(task4, "__out0", small_map_exit, "IN_tmp4", dace.Memlet("tmp4[0]"))
     state.add_edge(small_map_exit, "OUT_tmp4", tmp4, None, dace.Memlet("tmp4[0]"))
-    state.add_edge(tmp4, None, mexit, "IN_out1", dace.Memlet("tmp4[0]"))
+    state.add_edge(tmp4, None, mexit, "IN_out1", dace.Memlet("tmp4[0] -> [i, j]"))
 
     state.add_edge(a, None, mentry, "IN_a", sdfg.make_array_memlet("a"))
     state.add_edge(b, None, mentry, "IN_b", sdfg.make_array_memlet("b"))
