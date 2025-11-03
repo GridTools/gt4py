@@ -1435,3 +1435,22 @@ def test_2d_temporaries_raises(backend):
 
         with computation(FORWARD), interval(...):
             out_field = tmp_2D
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_upcasting_both_sides_of_assignment(backend: str) -> None:
+    domain = (5, 5, 5)
+
+    input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    index_array = gt_storage.ones(backend=backend, shape=(domain[0], domain[1]), dtype=np.int32)
+
+    @gtscript.stencil(backend=backend)
+    def test_upcasting_stencil(
+        in_field: Field[np.float64], index_field: Field[IJ, np.int32], out_field: Field[np.float64]
+    ) -> None:
+        with computation(FORWARD), interval(...):
+            out_field[0, 0, index_field - 1] = in_field
+
+    test_upcasting_stencil(input, index_array, output)
+    assert (input == output).all()
