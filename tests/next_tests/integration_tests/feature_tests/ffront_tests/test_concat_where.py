@@ -234,7 +234,7 @@ def test_dimension_two_conditions_no_nesting(cartesian_case):
             ((KDim >= 5), boundary),
             # ((KDim >= 6), boundary),
             interior,
-        )  # TODO or a number which will be broadcast
+        )
 
     interior = cases.allocate(cartesian_case, testee, "interior")()
     boundary = cases.allocate(cartesian_case, testee, "boundary")()
