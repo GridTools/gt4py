@@ -28,7 +28,7 @@ inside the NestedSDFG.
 """
 
 
-def gt_change_transient_strides(
+def gt_change_strides(
     sdfg: dace.SDFG,
     gpu: bool,
 ) -> dace.SDFG:
@@ -63,36 +63,35 @@ def gt_change_transient_strides(
         return sdfg
 
     for nsdfg in sdfg.all_sdfgs_recursive():
-        _gt_change_transient_strides_non_recursive_impl(nsdfg)
+        _gt_change_strides_non_recursive_impl(nsdfg)
 
 
-def _gt_change_transient_strides_non_recursive_impl(
+def _gt_change_strides_non_recursive_impl(
     sdfg: dace.SDFG,
 ) -> None:
-    """Set optimal strides of all transients in the SDFG.
+    """Set optimal strides of all access nodes in the SDFG.
 
-    The function will look for all top level transients, see `_gt_find_toplevel_data_accesses()`
+    The function will look for all top level access node, see `_gt_find_toplevel_data_accesses()`
     and set their strides such that the access is optimal, see Note. The function
     will also run `gt_propagate_strides_of()` to propagate the strides into nested SDFGs.
 
-    This function should never be called directly but always through
-    `gt_change_transient_strides()`!
+    This function should never be called directly but always through `gt_change_strides()`!
 
     Note:
         Currently the function just reverses the strides of the data descriptor
-        it processes. Since DaCe generates `C` order by default this lead to
-        FORTRAN order, which is (for now) sufficient to optimize the memory
+        of transient access nodes it processes. Since DaCe generates `C` order by default
+        this lead to FORTRAN order, which is (for now) sufficient to optimize the memory
         layout to GPU.
 
     Todo:
         Make this function more intelligent to analyse the access pattern and then
         figuring out the best order.
     """
-    # NOTE: Processing the transient here is enough. If we are inside a
+    # NOTE: We have to process all access nodes (transient and globals). If we are inside a
     #   NestedSDFG then they were handled before on the level above us.
     top_level_transients_and_their_accesses = _gt_find_toplevel_data_accesses(
         sdfg=sdfg,
-        only_transients=True,
+        only_transients=False,
         only_arrays=True,
     )
     for top_level_transient, accesses in top_level_transients_and_their_accesses.items():
@@ -104,19 +103,20 @@ def _gt_change_transient_strides_non_recursive_impl(
             continue
 
         # We assume that everything is in C order initially, to get FORTRAN order
-        #  we simply have to reverse the order.
-        # TODO(phimuell): Improve this.
-        new_stride_order = list(range(ndim))
-        desc.set_strides_from_layout(*new_stride_order)
+        #  we simply have to reverse the order. This is necessary only for transient
+        #  access nodes because the non-transients come from outside and have their
+        #  own strides.
+        # TODO(phimuell): Set the stride based on the actual access pattern.
+        if desc.transient:
+            new_stride_order = list(range(ndim))
+            desc.set_strides_from_layout(*new_stride_order)
 
         # Now we have to propagate the changed strides. Because we already have
         #  collected all the AccessNodes we are using the
         #  `gt_propagate_strides_from_access_node()` function, but we have to
         #  create `processed_nsdfg` set already outside here.
-        #  Furthermore, the same comment as above applies here, we do not have to
-        #  propagate the non-transients, because they either come from outside,
-        #  or they were already handled in the levels above, where they were
-        #  defined and then propagated down.
+        #  While global access nodes in top level SDFGs should have the correct strides,
+        #  we need to propagate those strides into the nested SDFGs that use them.
         # TODO(phimuell): Updated the functions such that only one scan is needed.
         processed_nsdfgs: set[dace_nodes.NestedSDFG] = set()
         for state, access_node in accesses:
@@ -695,7 +695,7 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
     """The function determines the strides of Views.
 
     The function should not be called directly, instead it is called by
-    `gt_change_transient_strides()` directly if needed. The function will recursively
+    `gt_change_strides()` directly if needed. The function will recursively
     process the SDFG and modifies the strides.
 
     Todo:
@@ -703,6 +703,7 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
         evaluate if this function is still needed.
     """
     for state in sdfg.states():
+        scope_dict = state.scope_dict()
         propagation_record: set[PropagatedStrideRecord] = set()
         for view_node in state.data_nodes():
             view_desc = view_node.desc(sdfg)
@@ -716,6 +717,14 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
                 raise NotImplementedError(
                     f"Can not handle the view '{view_node.data}' that views view '{viewed_node.data}'"
                 )
+
+            # If both the View and the viewed node are not on the top level then do
+            #  nothing. Why? The answer is that this function is only called by
+            #  `_gt_change_strides_non_recursive_impl()` which only manipulates
+            #  the strides of transients at the top level and leaves the one inside
+            #  a Map alone. Thus there was no modification and no change.
+            if scope_dict[viewed_node] is not None and scope_dict[view_node] is not None:
+                continue
 
             # If the viewed data is global data, then we do not modify the strides because
             #  we assume that it was set correctly from the beginning and the viewed strides
@@ -739,7 +748,17 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
                     f"Can not handle the change from {len(viewed_desc.shape)} ({viewed_node.data}) to {len(view_desc.shape)} ({view_node.data})."
                 )
 
-            # In case the dimensions are the same, we can simply copy the strides.
+            # Even if they have the same dimensionality, we can not simply copy the strides.
+            #  Consider the case were `viewed_desc` is a 2D array with the following shape
+            #  `(N, M)`. `view_desc` is a vertical slice, but for some reasons has an
+            #  additional dummy dimension, i.e. its shape is either `(N, 1)` or `(1, N)`.
+            #  So copying the strides around is not gonna work.
+            if view_desc.shape != viewed_desc.shape:
+                raise NotImplementedError(
+                    f"Can not change from shape `{viewed_desc.shape}` ({viewed_node.data})to shape `{view_desc.shape}` ({view_node.data})."
+                )
+
+            # In case they have the same shape we are fine.
             view_desc.strides = viewed_desc.strides
             gt_propagate_strides_from_access_node(
                 sdfg=sdfg,

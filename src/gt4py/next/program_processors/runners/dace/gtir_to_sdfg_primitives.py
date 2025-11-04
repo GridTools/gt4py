@@ -426,12 +426,8 @@ def translate_if(
     false_br_result = sdfg_builder.visit(false_expr, ctx=fbranch_ctx)
 
     node_output = gtx_utils.tree_map(
-        lambda domain,
-        true_br,
-        false_br,
-        _ctx=ctx,
-        sdfg_builder=sdfg_builder: _construct_if_branch_output(
-            ctx=_ctx,
+        lambda domain, true_br, false_br: _construct_if_branch_output(
+            ctx=ctx,
             sdfg_builder=sdfg_builder,
             field_domain=gtir_domain.get_field_domain(domain),
             true_br=true_br,
@@ -442,10 +438,10 @@ def translate_if(
         true_br_result,
         false_br_result,
     )
-    gtx_utils.tree_map(lambda src, dst, _ctx=tbranch_ctx: _write_if_branch_output(_ctx, src, dst))(
+    gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(tbranch_ctx, src, dst))(
         true_br_result, node_output
     )
-    gtx_utils.tree_map(lambda src, dst, _ctx=fbranch_ctx: _write_if_branch_output(_ctx, src, dst))(
+    gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(fbranch_ctx, src, dst))(
         false_br_result, node_output
     )
 
@@ -600,9 +596,21 @@ def translate_tuple_get(
     data_nodes = sdfg_builder.visit(node.args[1], ctx=ctx)
     if isinstance(data_nodes, gtir_to_sdfg_types.FieldopData):
         raise ValueError(f"Invalid tuple expression {node}")
-    unused_arg_nodes: Iterable[gtir_to_sdfg_types.FieldopData] = gtx_utils.flatten_nested_tuple(
+    # Now we remove the tuple fields that are not used, to avoid an SDFG validation
+    # error because of isolated access nodes.
+    unused_arg_nodes = gtx_utils.flatten_nested_tuple(
         tuple(arg for i, arg in enumerate(data_nodes) if i != index)
     )
+    # However, for temporary fields inside the tuple (non-globals and non-scalar
+    # values, supposed to contain the result of some field operator) the gt4py
+    # domain inference should have already set an empty domain, so the corresponding
+    # `arg` is expected to be None and can be ignored.
+    assert all(
+        not arg.dc_node.desc(ctx.sdfg).transient or isinstance(arg.gt_type, ts.ScalarType)
+        for arg in unused_arg_nodes
+        if arg is not None
+    )
+    unused_arg_nodes = tuple(arg for arg in unused_arg_nodes if arg is not None)
     ctx.state.remove_nodes_from(
         [arg.dc_node for arg in unused_arg_nodes if ctx.state.degree(arg.dc_node) == 0]
     )
