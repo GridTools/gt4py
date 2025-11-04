@@ -57,7 +57,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
         self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
 
     def __del__(self):
-        # We lock the SDFG folder in order to avoid raise conditions in case another
+        # We lock the SDFG folder in order to avoid race conditions in case another
         # process (e.g. another pytest runner) is trying to load the same compiled SDFG.
         sdfg_build_folder = self.sdfg_program.sdfg.build_folder
         with locking.lock(sdfg_build_folder):
