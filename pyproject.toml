@@ -11,7 +11,7 @@ dace-cartesian = [
   'dace>=1.0.2,<2'  # renfined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace==2025.05.35'  # refined in [tool.uv.sources] and I like that book.
+  'dace==2025.11.04'  # refined in [tool.uv.sources] and I like that book.
 ]
 dev = [
   {include-group = 'build'},
@@ -453,7 +453,7 @@ url = 'https://test.pypi.org/simple'
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-roundtrip", group = "dace-cartesian"},
-  {git = "https://github.com/philip-paul-mueller/dace", branch = "__phimuell_test_new_calling_convention_pr2353", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_11_04", group = "dace-next"}
 ]
 
 # -- versioningit --
