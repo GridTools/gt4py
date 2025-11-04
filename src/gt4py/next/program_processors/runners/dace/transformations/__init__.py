@@ -65,7 +65,7 @@ from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
 from .split_memlet import SplitConsumerMemlet
 from .state_fusion import GT4PyStateFusion
 from .strides import (
-    gt_change_transient_strides,
+    gt_change_strides,
     gt_map_strides_to_dst_nested_sdfg,
     gt_map_strides_to_src_nested_sdfg,
     gt_propagate_strides_from_access_node,
@@ -105,7 +105,7 @@ __all__ = [
     "VerticalMapSplitCallback",
     "constants",
     "gt_auto_optimize",
-    "gt_change_transient_strides",
+    "gt_change_strides",
     "gt_create_local_double_buffering",
     "gt_eliminate_dead_dataflow",
     "gt_find_constant_arguments",
