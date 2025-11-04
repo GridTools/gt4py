@@ -58,9 +58,8 @@ def set_dace_config(
     if config.BUILD_CACHE_LIFETIME == config.BuildCacheLifetime.PERSISTENT:
         dace.Config.set("compiler.use_cache", value=True)
     else:
-        # Additional note: we have observed segfault errors in pytest sessions,
-        # during loading of compiled SDFG from .so file, so we disable the dace
-        # cache as a workaround.
+        # We have observed segfault errors in pytest sessions, during loading of
+        # compiled SDFG from .so file, so we disable the dace cache as a workaround.
         dace.Config.set("compiler.use_cache", value=("pytest" not in sys.modules))
 
     # We rely on gt4py function `get_cache_folder` to get a unique build folder
