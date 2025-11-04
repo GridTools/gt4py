@@ -266,7 +266,7 @@ class Program:
 
         with metrics.collect() as metrics_source:
             if collect_info_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO):
-                start = time.time_ns()
+                start = time.perf_counter()
 
             if __debug__:
                 # TODO: remove or make dependency on self.past_stage optional
@@ -300,9 +300,7 @@ class Program:
 
             if collect_info_metrics:
                 assert metrics_source is not None
-                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(
-                    time.time_ns() - start, metrics.ScalePrefix.NANO
-                )
+                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.perf_counter() - start)
 
     def compile(
         self,

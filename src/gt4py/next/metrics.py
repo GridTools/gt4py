@@ -81,13 +81,13 @@ class Metric:
     A class to collect and analyze samples of a metric.
 
     Examples:
-        >>> metric = Metric(name="execution_time", unit="seconds")
+        >>> metric = Metric(name="execution_time", unit="second")
         >>> metric.add_sample(0.1)
         >>> metric.add_sample(200, unit_prefix=UnitPrefix.MILLI)
         >>> print(f"{metric.mean:.2}")
         0.15
         >>> print(metric)
-        1.50000e-01 seconds +/- 7.07107e-02
+        1.50000e-01 +/- 7.07107e-02
     """
 
     name: str
