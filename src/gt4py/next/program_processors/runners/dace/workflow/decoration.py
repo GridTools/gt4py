@@ -45,14 +45,16 @@ def convert_args(
 
         try:
             # Not the first call.
-            #  We will only update the first argument vector (arguments for the normal call).
+            #  We will only update the argument vector  for the normal call.
             # NOTE: If this is the first time then we will generate an exception because
             #   `fun.csdfg_args` is `None`
-            update_sdfg_call_args(args, fun.csdfg_args[0])  # type: ignore[index]  # Will error out in first call.
+            # TODO(phimuell, edopao): Think about refactor the code such that the update
+            #   of the argument vector is a Method of the `CompiledDaceProgram`.
+            update_sdfg_call_args(args, fun.csdfg_argv)  # type: ignore[arg-type]  # Will error out in first call.
 
         except TypeError:
             # First call. Construct the initial argument vector of the `CompiledDaceProgram`.
-            assert fun.csdfg_args is None
+            assert fun.csdfg_argv is None and fun.csdfg_init_argv is None
             flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
             this_call_args = sdfg_callable.get_sdfg_args(
                 fun.sdfg_program.sdfg,
@@ -64,7 +66,7 @@ def convert_args(
                 gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
-            fun.prepare_arguments(**this_call_args)
+            fun.construct_arguments(**this_call_args)
 
         # Perform the call to the SDFG.
         fun.fast_call()

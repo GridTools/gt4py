@@ -38,11 +38,12 @@ class CompiledDaceProgram(stages.CompiledProgram):
     ]
 
     # Processed argument vectors that are passed to `CompiledSDFG.fast_call()`. `None`
-    #  means that it has not been initialized, i.e. no call was ever performed. The
-    #  first argument vector is used in normal calls and will get updated, to avoid
-    #  full argument reprocessing. The second argument vector is only needed for
-    #  initialization and will never be updated.
-    csdfg_args: tuple[list[Any], Sequence[Any]] | None
+    #  means that it has not been initialized, i.e. no call was ever performed.
+    #  - csdfg_argv: Arguments used for calling the actual compiled SDFG, will be updated.
+    #  - csdfg_init_argv: Arguments used for initialization; used only the first time and
+    #       never updated.
+    csdfg_argv: MutableSequence[Any] | None
+    csdfg_init_argv: Sequence[Any] | None
 
     def __init__(
         self,
@@ -64,26 +65,28 @@ class CompiledDaceProgram(stages.CompiledProgram):
         # For debug purpose, we set a unique module name on the compiled function.
         self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
 
-        # Since the sdfg program hasn't been called yet.
-        self.csdfg_args = None
+        # Since the SDFG hasn't been called yet.
+        self.csdfg_argv = None
+        self.csdfg_init_argv = None
 
-    def prepare_arguments(self, **kwargs: Any) -> None:
+    def construct_arguments(self, **kwargs: Any) -> None:
         """
         This function will process the arguments and store the processed values in `self.csdfg_args`,
         to call them use `self.fast_call()`.
         """
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-            csdfg_agrv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
-        # Note we only care about the first argument vector, that is used in normal call.
-        #  Since we update it, we ensure that it is a `list`.
-        self.csdfg_args = ([*csdfg_agrv], csdfg_init_argv)
+            csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
+        # Note we only care about `csdfg_argv` (normal call), since we have to update it,
+        #  we ensure that it is a `list`.
+        self.csdfg_argv = [*csdfg_argv]
+        self.csdfg_init_argv = csdfg_init_argv
 
     def fast_call(self) -> None:
         """Perform a call to the compiled SDFG using the processed arguments, see `self.prepare_arguments()`."""
-        assert isinstance(self.csdfg_args, tuple) and len(self.csdfg_args) == 2, (
+        assert self.csdfg_argv is not None and self.csdfg_init_argv is not None, (
             "Argument vector was not set properly."
         )
-        self.sdfg_program.fast_call(*self.csdfg_args)
+        self.sdfg_program.fast_call(self.csdfg_argv, self.csdfg_init_argv, do_gpu_check=False)
 
     def __call__(self, **kwargs: Any) -> None:
         warnings.warn(
