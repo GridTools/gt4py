@@ -161,29 +161,33 @@ def _create_scan_field_operator_impl(
     )
     field_node = ctx.state.add_access(field_name)
 
-    # Now connect the output connector on the nested SDFG with the result field.
+    # Now connect the output connector on the nested SDFG with the result field
+    #  outside the scan map scope. For 1D domain, containing only the column dimension,
+    #  there is no map scope, since the map range is only on the horizontal domain.
     #  Up to now the nested SDFG is writing into a transient data container that
     #  has the size to hold one column. The function below, that does the connection,
     #  will remove that transient and write directly to the result field.
     inner_map_output_temporary_removed = output_edge.connect(map_exit, field_node, field_subset)
-    assert inner_map_output_temporary_removed
+    if not inner_map_output_temporary_removed:
+        raise ValueError("The scan nested SDFG is expected to write directly to the result field.")
 
     assert ctx.state.in_degree(field_node) == 1
     field_node_path = ctx.state.memlet_path(next(iter(ctx.state.in_edges(field_node))))
     assert field_node_path[-1].dst is field_node
 
     # The temporary node which the nested SDFG was writing to has been deleted,
-    # and the nested SDFG will write directly to the result field outside. Thus,
-    # we have to modify the stride of the scan column array inside the nested SDFG
-    # to match the strides outside.
+    #  and the nested SDFG will write directly to the result field. Thus, we have
+    #  to modify the stride of the scan column array inside the nested SDFG to match
+    #  the strides outside.
     nsdfg_scan = field_node_path[0].src
     assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
     inner_output_name = field_node_path[0].src_conn
     inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
     assert len(inner_output_desc.shape) == 1
 
-    # The result field on the outside is a transient array, so its stride is constant.
-    # We just need to set it on the inside array, without symbol mapping.
+    # The result field on the outside is a transient array, allocated inside this
+    # function, so we know that its stride is constant. We just need to set it on
+    # the inside array, and we do not need to map any stride symbol.
     outside_output_stride = field_desc.strides[scan_dim_index]
     assert str(outside_output_stride).isdigit()
     inner_output_desc.set_shape(new_shape=inner_output_desc.shape, strides=(outside_output_stride,))

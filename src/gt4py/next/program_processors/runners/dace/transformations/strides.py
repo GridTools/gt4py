@@ -28,7 +28,7 @@ inside the NestedSDFG.
 """
 
 
-def gt_change_transient_strides(
+def gt_change_strides(
     sdfg: dace.SDFG,
     gpu: bool,
 ) -> dace.SDFG:
@@ -75,8 +75,7 @@ def _gt_change_strides_non_recursive_impl(
     and set their strides such that the access is optimal, see Note. The function
     will also run `gt_propagate_strides_of()` to propagate the strides into nested SDFGs.
 
-    This function should never be called directly but always through
-    `gt_change_transient_strides()`!
+    This function should never be called directly but always through `gt_change_strides()`!
 
     Note:
         Currently the function just reverses the strides of the data descriptor
@@ -107,7 +106,7 @@ def _gt_change_strides_non_recursive_impl(
         #  we simply have to reverse the order. This is necessary only for transient
         #  access nodes because the non-transients come from outside and have their
         #  own strides.
-        # TODO(phimuell): Improve this.
+        # TODO(phimuell): Set the stride based on the actual access pattern.
         if desc.transient:
             new_stride_order = list(range(ndim))
             desc.set_strides_from_layout(*new_stride_order)
@@ -696,7 +695,7 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
     """The function determines the strides of Views.
 
     The function should not be called directly, instead it is called by
-    `gt_change_transient_strides()` directly if needed. The function will recursively
+    `gt_change_strides()` directly if needed. The function will recursively
     process the SDFG and modifies the strides.
 
     Todo:
@@ -721,9 +720,9 @@ def _gt_modify_strides_of_views_non_recursive(sdfg: dace.SDFG) -> None:
 
             # If both the View and the viewed node are not on the top level then do
             #  nothing. Why? The answer is that this function is only called by
-            #  `_gt_change_transient_strides_non_recursive_impl()` which only
-            #  manipulates the strides of transients at the top level and leaves the
-            #  one inside a Map alone. Thus there was no modification and no change.
+            #  `_gt_change_strides_non_recursive_impl()` which only manipulates
+            #  the strides of transients at the top level and leaves the one inside
+            #  a Map alone. Thus there was no modification and no change.
             if scope_dict[viewed_node] is not None and scope_dict[view_node] is not None:
                 continue
 
