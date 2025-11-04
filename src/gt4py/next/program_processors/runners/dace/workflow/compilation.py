@@ -61,7 +61,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
         # process (e.g. a pytest runner) is trying to load the same compiled SDFG.
         sdfg_build_folder = self.sdfg_program.sdfg.build_folder
         with locking.lock(sdfg_build_folder):
-            self.sdfg_program.unload()
+            self.sdfg_program._lib.unload()
 
     def __call__(self, **kwargs: Any) -> None:
         result = self.sdfg_program(**kwargs)
