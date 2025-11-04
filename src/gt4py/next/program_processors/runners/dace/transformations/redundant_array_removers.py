@@ -530,6 +530,8 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             return False
         if inner_producer_edge.data.wcr is not None:
             return False
+        # TODO(phimuell): Due to the special meaning of `dynamic` Memlets in GT4Py,
+        #   we should probably lift this restriction.
         if inner_producer_edge.data.dynamic:
             return False
 
@@ -597,8 +599,8 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                 )
             )
         )
-
         write_back_subset = inner_producer_edge.data.get_src_subset(inner_producer_edge, graph)
+        parameter_mapping = self._map_params_to_dimensions(write_back_subset, map_exit.map.params)
 
         # NOTE: After this line `inner_producer_edge` is no longer valid.
         if isinstance(inner_producer_edge.src, dace_nodes.AccessNode):
@@ -628,11 +630,73 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                 ),
             )
 
+        for consumer_edge in graph.out_edges(temp_node):
+            assert isinstance(consumer_edge.dst, dace_nodes.AccessNode)
+            dst_desc = consumer_edge.dst.desc(sdfg)
+            dim_mapping, src_drop, dst_drop = gtx_transformations.utils.associate_dimmensions(
+                    consumer_edge.data.src_subset, consumer_edge.data.dst_subset
+            )
+            assert dim_mapping.keys() == parameter_mapping.keys()
+
+            # Now compose the subset
+            inner_map_output_subset: list[tuple[Any, Any, int]] = []
+            for dim in range(len(dst_subset.shape)):
+                if dim in
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def _map_params_to_dimensions(
         self,
         write_back_subset: dace_sbs.Range,
         map_params: Sequence[str],
-    ) -> dict[str, int]:
+    ) -> dict[int, str]:
         """Determine in which subset dimension a parameter writes."""
         unused_parameters: set[str] = set(map_params)
         dimension_assignment: dict[str, int] = {}
@@ -643,7 +707,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             used_parameters = unused_parameters.intersection(sbs_free_symbols)
             if len(used_parameters) != 1:
                 used_parameter: str = next(used_parameters)
-                dimension_assignment[used_parameter] = dim
+                dimension_assignment[dim] = used_parameter
                 unused_parameters.discard(used_parameter)
             elif len(used_parameters) == 0:
                 raise ValueError(
