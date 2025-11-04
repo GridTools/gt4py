@@ -270,40 +270,33 @@ class DataflowOutputEdge:
         dest: dace.nodes.AccessNode,
         dest_subset: dace_subsets.Range,
     ) -> bool:
-        """Create the connection.
+        """Create a connection to the `dest` node, writing the given `dest_subset`.
 
         Might remove the last data container. Returns `True` if it was removed,
-        `False` if kept.
+        `False` if kept. For edges writing data from a nested SDFG, in case the
+        outside data container is removed, the caller is responsible to propagate
+        the strides of the destination array to the array inside the nested SDFG.
         """
+        dest_desc = self.result.dc_node.desc(self.state)
         write_edge = self.state.in_edges(self.result.dc_node)[0]
-        write_size = (
-            dace.symbolic.SymExpr(1)  # subset `None` not expected, but it can appear for scalars
-            if write_edge.data.dst_subset is None
-            else write_edge.data.dst_subset.num_elements()
-        )
-        # check the kind of node which writes the result
+
+        # Check the kind of node which writes the result
         if isinstance(write_edge.src, dace.nodes.Tasklet):
-            # The temporary data written by a tasklet can be safely deleted
-            assert isinstance(write_size, int) or str(write_size).isdigit()
+            # The temporary data written by a tasklet can be safely deleted.
+            assert map_exit is not None
             remove_last_node = True
         elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
-            # TODO(phimuell, edopao): We need a better justification here, best would
-            #   be a reference to a DaCe/GT4Py issue on GH.
-            if isinstance(write_size, int) or str(write_size).isdigit():
-                # Temporary data with compile-time size is allocated on the stack
-                # and therefore is safe to keep. We decide to keep it as a workaround
-                # for a dace issue with memlet propagation in combination with
-                # nested SDFGs containing conditional blocks. The output memlet
-                # of such blocks will be marked as dynamic because dace is not able
-                # to detect the exact size of a conditional branch dataflow, even
-                # in case of if-else expressions with exact same output data.
+            if isinstance(dest_desc, dace.data.Scalar):
+                # We keep scalar temporary storage, as a general rule, since it
+                # does not affect performance of the generated code. This scalar
+                # is only required in some cases, e.g. for nested SDFGs implementing
+                # reduction, which use a WCR memlet for the reduction operation.
                 remove_last_node = False
             else:
-                # In case the output data has runtime size it is necessary to remove
-                # it in order to avoid dynamic memory allocation inside a parallel
-                # map scope. Otherwise, the memory allocation will for sure lead
-                # to performance degradation, and eventually illegal memory issues
-                # when the gpu runs out of local memory.
+                # We remove the transient array on the output connection of a nested
+                # SDFG and write directly to the destination node.
+                # The caller is responsible to propagate the strides of the destination
+                # array to the array inside the nested SDFG.
                 remove_last_node = True
         else:
             remove_last_node = False
