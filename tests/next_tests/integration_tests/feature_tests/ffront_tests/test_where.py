@@ -11,6 +11,7 @@ from typing import Tuple
 import pytest
 from next_tests.integration_tests.cases import IDim, JDim, KDim, Koff, cartesian_case
 from gt4py import next as gtx
+from gt4py.next import int32
 from gt4py.next.ffront.fbuiltins import where, broadcast
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -27,8 +28,14 @@ def test_where_k_offset(cartesian_case):
         return where(k_index > 0, inp(Koff[-1]), 2)
 
     @gtx.program
-    def prog(inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType], out: cases.IKField):
-        fieldop_where_k_offset(inp, k_index, out=out, domain={IDim: (0, 10), KDim: (1, 10)})
+    def prog(
+        inp: cases.IKField,
+        k_index: gtx.Field[[KDim], gtx.IndexType],
+        isize: int32,
+        ksize: int32,
+        out: cases.IKField,
+    ):
+        fieldop_where_k_offset(inp, k_index, out=out, domain={IDim: (0, isize), KDim: (1, ksize)})
 
     inp = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
     k_index = cases.allocate(
@@ -37,8 +44,9 @@ def test_where_k_offset(cartesian_case):
     out = cases.allocate(cartesian_case, fieldop_where_k_offset, cases.RETURN)()
 
     ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), out.asnumpy())
-
-    cases.verify(cartesian_case, prog, inp, k_index, out=out, ref=ref)
+    isize = cartesian_case.default_sizes[IDim]
+    ksize = cartesian_case.default_sizes[KDim]
+    cases.verify(cartesian_case, prog, inp, k_index, isize, ksize, out=out, ref=ref)
 
 
 def test_same_size_fields(cartesian_case):
