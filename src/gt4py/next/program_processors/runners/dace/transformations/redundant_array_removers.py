@@ -11,6 +11,7 @@ from typing import Any, Optional, Sequence
 
 import dace
 from dace import (
+    data as dace_data,
     properties as dace_properties,
     subsets as dace_sbs,
     symbolic as dace_sym,
@@ -418,3 +419,174 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             return CopyChainRemoverMode.PUSH
 
         return CopyChainRemoverMode.NONE
+
+
+@dace_properties.make_properties
+class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
+    """
+
+    The transformation matches the following patter:
+    ```
+        MapExit -----> (Temp) -----> (Data)
+    ```
+    However, this is for speeding up things, the most important match are the first
+    two elements, i.e. the `MapExit` and the first AccessNode. If that Node refers
+    to a single use transient, then it is eliminated and the Map writes directly
+    into the second AccessNode.
+    It is important to note, that this transformation is designed to handle the
+    cases:
+    - Where there are multiple consumer of `Temp`, but all must be AccessNodes.
+    - There might be multiple connections between `Temp` and `Data`.
+    - The dimensions is different.
+
+    However, a restriction is that everything the Map writes is also consumed.
+
+    Args:
+        single_use_data: List of data containers that are used only at one place.
+            Will be stored internally and not updated.
+
+    Todo:
+        - Extend such that not the full array must be read.
+        - Try to allow more than one connection between `A1` and `A2`.
+    """
+
+    map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
+    temp_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    other_consumer_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+
+    # Name of all data that is used at only one place. Is computed by the
+    #  `FindSingleUseData` pass and be passed at construction time. Needed until
+    #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
+    _single_use_data: dict[dace.SDFG, set[str]]
+
+    def __init__(
+        self,
+        *args: Any,
+        single_use_data: dict[dace.SDFG, set[str]],
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._single_use_data = single_use_data
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [
+            dace.sdfg.utils.node_path_graph(
+                cls.map_exit,
+                cls.temp_node,
+                cls.other_consumer_node,
+            )
+        ]
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        map_exit: dace_nodes.MapExit = self.map_exit
+        temp_node: dace_nodes.AccessNode = self.temp_node
+        temp_desc = temp_node.desc(sdfg)
+
+        # Only the Map can produce data.
+        if graph.in_degree(temp_node) != 1:
+            return False
+
+        producer_edge = next(iter(graph.in_edges(temp_node)))
+        produced_sbs: dace_sbs.Range = producer_edge.data.get_dst_subset(producer_edge, graph)
+        if produced_sbs is None:
+            return False
+
+        # To simplify implementation we only allow that there is one producer inside the Map.
+        assert producer_edge.src_conn.startswith("OUT_")
+        if (
+            len(
+                [
+                    inner_map_edge
+                    for inner_map_edge in graph.in_edges_by_connector(
+                        map_exit, "IN_" + producer_edge.src_conn[4:]
+                    )
+                ]
+            )
+            != 1
+        ):
+            return False
+
+        # To simplify implementation, ensures that `temp_node` does not have any "dummy"
+        #  dimensions, i.e. dimensions of size 1. Or differently, that every Map parameter
+        #  is used in indexing.
+        # TODO(phimuell): Lift this limitation.
+        # TODO(phimuell): Is this check strong enough.
+        if len(map_exit.map.params) != produced_sbs.dims():
+            return False
+
+        # We only allow arrays that are transients.
+        if not isinstance(temp_desc, dace_data.Array):
+            return False
+        if isinstance(temp_desc, dace_data.View):
+            return False
+        if not temp_desc.transient:
+            return False
+
+        # Check the consumer
+        for consumer_edge in graph.out_edges(temp_node):
+            consumer_sbs: dace_sbs.Range = consumer_edge.data.get_src_subset(consumer_edge, graph)
+            if consumer_sbs is None:
+                return False
+
+            # What is produced must be consumed.
+            if consumer_sbs != produced_sbs:
+                return False
+
+            # Since `temp_node` is eliminated, the consumer must be another AccessNode.
+            consumer_node = consumer_edge.dst
+            if not isinstance(consumer_node, dace_nodes.AccessNode):
+                return False
+
+            consumer_desc = consumer_node.desc(sdfg)
+            if not isinstance(consumer_desc, dace_data.Array):
+                return False
+            if isinstance(consumer_desc, dace_data.View):
+                return False
+
+        # `temp_node` will be removed this means it must be single use.
+        if self._single_use_data is None:
+            find_single_use_data = dace_analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+        else:
+            single_use_data = self._single_use_data
+        if temp_node.data not in single_use_data[sdfg]:
+            return False
+
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        map_exit: dace_nodes.MapExit = self.map_exit
+        temp_node: dace_nodes.AccessNode = self.temp_node
+        temp_desc = temp_node.desc(sdfg)
+
+        producer_edge = next(iter(graph.in_edges(temp_node)))
+        produced_sbs: dace_sbs.Range = producer_edge.data.get_dst_subset(producer_edge, graph)
+        if produced_sbs is None:
+            return False
+
+        # Now we look for the producer inside the map.
+
+        # To simplify implementation we only allow that there is one producer inside the Map.
+        assert producer_edge.src_conn.startswith("OUT_")
+        if (
+            len(
+                [
+                    inner_map_edge
+                    for inner_map_edge in graph.in_edges_by_connector(
+                        map_exit, "IN_" + producer_edge.src_conn[4:]
+                    )
+                ]
+            )
+            != 1
+        ):
+            return False
