@@ -499,18 +499,15 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
 
         # To simplify implementation we only allow that there is one producer inside the Map.
         assert producer_edge.src_conn.startswith("OUT_")
-        if (
-            len(
-                [
-                    inner_map_edge
-                    for inner_map_edge in graph.in_edges_by_connector(
-                        map_exit, "IN_" + producer_edge.src_conn[4:]
-                    )
-                ]
+        inner_producer_edges = [
+            inner_map_edge
+            for inner_map_edge in graph.in_edges_by_connector(
+                map_exit, "IN_" + producer_edge.src_conn[4:]
             )
-            != 1
-        ):
+        ]
+        if len(inner_producer_edges) != 1:
             return False
+        inner_producer_edge = inner_producer_edges[0]
 
         # To simplify implementation, ensures that `temp_node` does not have any "dummy"
         #  dimensions, i.e. dimensions of size 1. Or differently, that every Map parameter
@@ -518,6 +515,22 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): Lift this limitation.
         # TODO(phimuell): Is this check strong enough.
         if len(map_exit.map.params) != produced_sbs.dims():
+            return False
+
+        # To further simplify, we require that the Memlet is "simple" and that only a
+        #  scalar is moved around.
+        inner_production_sbs = inner_producer_edge.data.get_dst_subset(
+            inner_producer_edge[0], graph
+        )
+        if inner_production_sbs.num_elements() != 1:
+            return False
+        if inner_producer_edge.data.allow_oob:
+            return False
+        if inner_producer_edge.data.is_empty():
+            return False
+        if inner_producer_edge.data.wcr is not None:
+            return False
+        if inner_producer_edge.data.dynamic:
             return False
 
         # We only allow arrays that are transients.
@@ -575,18 +588,73 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             return False
 
         # Now we look for the producer inside the map.
-
-        # To simplify implementation we only allow that there is one producer inside the Map.
         assert producer_edge.src_conn.startswith("OUT_")
-        if (
-            len(
-                [
-                    inner_map_edge
-                    for inner_map_edge in graph.in_edges_by_connector(
-                        map_exit, "IN_" + producer_edge.src_conn[4:]
-                    )
-                ]
+        inner_producer_edge = next(
+            iter(
+                inner_map_edge
+                for inner_map_edge in graph.in_edges_by_connector(
+                    map_exit, "IN_" + producer_edge.src_conn[4:]
+                )
             )
-            != 1
-        ):
-            return False
+        )
+
+        write_back_subset = inner_producer_edge.data.get_src_subset(inner_producer_edge, graph)
+
+        # NOTE: After this line `inner_producer_edge` is no longer valid.
+        if isinstance(inner_producer_edge.src, dace_nodes.AccessNode):
+            distribution_node: dace_nodes.AccessNode = inner_producer_edge.src
+            assert isinstance(distribution_node.desc(sdfg), dace_data.Scalar)
+            assert not isinstance(distribution_node.desc(sdfg), dace_data.View)
+            assert inner_producer_edge.src_conn is None
+        else:
+            assert inner_producer_edge.data.dst_subset.num_elements() == 1
+            distribution_data, _ = sdfg.add_scalar(
+                "__gtx_double_write_remover_inner_distribution_node",
+                dtype=temp_desc.dtype,
+                storage=dace.dtypes.StorageType.Register,
+                transient=True,
+                find_new_name=True,
+            )
+            distribution_node = graph.add_access(distribution_data)
+            graph.add_edge(
+                inner_producer_edge.src,
+                inner_producer_edge.src_conn,
+                distribution_node,
+                None,
+                dace.Memlet(
+                    data=distribution_data,
+                    subset="0",
+                    other_subset=inner_producer_edge.data.src_subset,
+                ),
+            )
+
+    def _map_params_to_dimensions(
+        self,
+        write_back_subset: dace_sbs.Range,
+        map_params: Sequence[str],
+    ) -> dict[str, int]:
+        """Determine in which subset dimension a parameter writes."""
+        unused_parameters: set[str] = set(map_params)
+        dimension_assignment: dict[str, int] = {}
+        for dim, sbs in enumerate(write_back_subset):
+            start, stop, step = sbs
+            assert step == 1 and start == stop
+            sbs_free_symbols = start.free_symbols
+            used_parameters = unused_parameters.intersection(sbs_free_symbols)
+            if len(used_parameters) != 1:
+                used_parameter: str = next(used_parameters)
+                dimension_assignment[used_parameter] = dim
+                unused_parameters.discard(used_parameter)
+            elif len(used_parameters) == 0:
+                raise ValueError(
+                    f"Expected that exactly one parameter of '{unused_parameters}' was used, but bit was by '{start}'."
+                )
+            else:
+                raise ValueError(
+                    f"Expected that exactly one parameter of '{unused_parameters}' but not '{used_parameters}'."
+                )
+
+        if unused_parameters:
+            raise ValueError(f"Unable to assign parameters: '{unused_parameters}'")
+
+        return dimension_assignment
