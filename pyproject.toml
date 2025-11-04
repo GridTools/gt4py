@@ -11,7 +11,7 @@ dace-cartesian = [
   'dace>=1.0.2,<2'  # renfined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace==2025.11.04'  # refined in [tool.uv.sources] and I like that book.
+  'dace==2025.11.04'  # refined in [tool.uv.sources]
 ]
 dev = [
   {include-group = 'build'},
@@ -239,11 +239,6 @@ warn_unused_ignores = false
 disallow_incomplete_defs = false
 disallow_untyped_defs = false
 module = 'gt4py.next.iterator.*'
-
-[[tool.mypy.overrides]]
-disallow_incomplete_defs = false
-disallow_untyped_defs = false
-module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
