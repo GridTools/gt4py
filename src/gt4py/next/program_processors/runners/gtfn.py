@@ -72,7 +72,9 @@ def convert_args(
 
         if collect_metrics:
             value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
-            metrics.get_current_source().metrics[metrics.COMPUTE_METRIC].add_sample(value)
+            metrics.get_current_source().metrics[metrics.COMPUTE_METRIC].add_sample(
+                value, metrics.ScalePrefix.NANO
+            )
 
     return decorated_program
 

@@ -12,6 +12,7 @@ import collections
 import contextlib
 import contextvars
 import dataclasses
+import enum
 import functools
 import itertools
 import json
@@ -25,14 +26,9 @@ from collections.abc import Mapping
 import numpy as np
 
 from gt4py.eve import extended_typing as xtyping, utils
-from gt4py.eve.extended_typing import Any, Final
+from gt4py.eve.extended_typing import Any, Final, TypeAlias
 from gt4py.next import config
 from gt4py.next.otf import arguments
-
-
-# Common metric names
-COMPUTE_METRIC: Final[str] = sys.intern("compute")
-TOTAL_METRIC: Final[str] = sys.intern("total")
 
 
 # Metric collection levels
@@ -44,27 +40,60 @@ VERBOSE: Final[int] = 50
 ALL: Final[int] = 100
 
 
+class ScalePrefix(float, enum.Enum):
+    """Metric scale prefixes based on powers of ten."""
+
+    PICO = 1.0e-12
+    NANO = 1.0e-9
+    MICRO = 1.0e-6
+    MILLI = 1.0e-3
+    CENTI = 1.0e-2
+    DECI = 1.0e-1
+    NONE = 1.0e0
+    DECA = 1.0e1
+    HECTO = 1.0e2
+    KILO = 1.0e3
+    MEGA = 1.0e6
+    GIGA = 1.0e9
+    TERA = 1.0e12
+
+
+# Common metric names
+COMPUTE_METRIC: Final[str] = sys.intern("compute")
+TOTAL_METRIC: Final[str] = sys.intern("total")
+
+#: Default units for common metrics
+METRIC_DEFAULT_UNITS: Final[Mapping[str, tuple[str, ScalePrefix]]] = collections.defaultdict(
+    lambda: ("", ScalePrefix.NONE),
+    **{
+        COMPUTE_METRIC: ("seconds", ScalePrefix.NONE),
+        TOTAL_METRIC: ("seconds", ScalePrefix.NONE),
+    },
+)
+
+
+ScalarMetricValue: TypeAlias = int | float
+
+
 @dataclasses.dataclass(frozen=True)
 class Metric:
     """
     A class to collect and analyze samples of a metric.
 
     Examples:
-        >>> metric = Metric(name="execution_time")
+        >>> metric = Metric(name="execution_time", unit="seconds")
         >>> metric.add_sample(0.1)
-        >>> metric.add_sample(0.2)
+        >>> metric.add_sample(200, unit_prefix=UnitPrefix.MILLI)
         >>> print(f"{metric.mean:.2}")
         0.15
         >>> print(metric)
-        1.50000e-01 +/- 7.07107e-02
+        1.50000e-01 seconds +/- 7.07107e-02
     """
 
-    name: str | None = None
-    samples: list[float] = dataclasses.field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        if self.name:
-            object.__setattr__(self, "name", sys.intern(self.name))
+    name: str
+    unit: str = ""
+    scale_prefix: ScalePrefix = ScalePrefix.NONE
+    samples: list[ScalarMetricValue] = dataclasses.field(default_factory=list)
 
     @property
     def mean(self) -> np.floating:
@@ -84,8 +113,25 @@ class Metric:
     def __str__(self) -> str:
         return f"{self.mean:.5e} +/- {self.std:.5e}"
 
-    def add_sample(self, sample: int) -> None:
-        self.samples.append(sample * 1.0e9)  # TODO
+    def add_sample(
+        self, sample: ScalarMetricValue, scale_prefix: ScalePrefix = ScalePrefix.NONE
+    ) -> None:
+        if scale_prefix != self.scale_prefix:
+            sample *= scale_prefix / self.scale_prefix
+        self.samples.append(sample)
+
+    def to_scale(self, new_scale: ScalePrefix) -> Metric:
+        if self.scale_prefix == new_scale:
+            new_samples = self.samples.copy()
+        else:
+            conversion_factor = self.scale_prefix / new_scale
+            new_samples = [sample * conversion_factor for sample in self.samples]
+        return Metric(
+            name=self.name,
+            unit=self.unit,
+            scale_prefix=new_scale,
+            samples=new_samples,
+        )
 
 
 class MetricsCollection(utils.CustomDefaultDictBase[str, Metric]):
@@ -108,12 +154,21 @@ class MetricsCollection(utils.CustomDefaultDictBase[str, Metric]):
         return Metric(name=key)
 
 
+class DefaultMetricsCollection(MetricsCollection):
+    """A collection of metrics using default units for common metrics."""
+
+    def value_factory(self, key: str) -> Metric:
+        assert isinstance(key, str)
+        unit, unit_prefix = METRIC_DEFAULT_UNITS[key]
+        return Metric(key, unit, unit_prefix)
+
+
 @dataclasses.dataclass
 class Source:
     """A source of metrics, typically associated with a program."""
 
     metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
-    metrics: MetricsCollection = dataclasses.field(default_factory=MetricsCollection)
+    metrics: MetricsCollection = dataclasses.field(default_factory=DefaultMetricsCollection)
 
 
 #: Global store for all measurements.
@@ -139,20 +194,20 @@ class SourceHandler:
         return self.__dict__.get("_key", None)
 
     @key.setter
-    def key(self, value: str) -> None:
+    def key(self, key_value: str) -> None:
         # The key can only be set once, and if it matches an existing source
         # in the global store, it must be the same object.
-        if self.key is not None and self.key != value:
+        if self.key is not None and self.key != key_value:
             raise RuntimeError("Metrics source key is already set.")
 
-        if value not in sources:
-            sources[value] = self.source
+        if key_value not in sources:
+            sources[key_value] = self.source
         else:
-            source_in_store = sources[value]
+            source_in_store = sources[key_value]
             if self.__dict__.setdefault("source", source_in_store) is not source_in_store:
                 raise RuntimeError("Conflicting metrics source data found in the global store.")
 
-        self._key = value
+        self._key = key_value
 
     # The following attributes are implemented as `cached_properties`
     # for efficiency and to be able to initialize them lazily when needed,
@@ -314,7 +369,13 @@ def dumps_json(metric_sources: Mapping[str, Source] | None = None) -> str:
         {
             source_key: {
                 'metadata': {'key': value},
-                'metrics': {'metric_name': [samples]}
+                'metrics': {
+                    'metric_name': {
+                        'unit': unit,
+                        'scale_prefix': scale_prefix,
+                        'samples': [1.0, 2.0, 3.0]
+                    }
+                }
             }
         }
         ```
@@ -328,7 +389,14 @@ def dumps_json(metric_sources: Mapping[str, Source] | None = None) -> str:
             case Source() as src:
                 return {
                     "metadata": src.metadata,
-                    "metrics": {name: metric.samples for name, metric in src.metrics.items()},
+                    "metrics": {
+                        name: {
+                            "unit": metric.unit,
+                            "scale": metric.scale_prefix,
+                            "samples": metric.samples,
+                        }
+                        for name, metric in src.metrics.items()
+                    },
                 }
             case arguments.StaticArg() as arg:
                 return arg.value

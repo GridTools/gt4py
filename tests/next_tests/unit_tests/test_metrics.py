@@ -28,11 +28,7 @@ def sample_source_metadata() -> dict[str, Any]:
 
     return {
         f"""{
-            utils.CaseStyleConverter.convert(
-                arguments.StaticArg.__name__,
-                utils.CaseStyleConverter.CASE_STYLE.PASCAL,
-                utils.CaseStyleConverter.CASE_STYLE.SNAKE,
-            )
+            utils.CaseStyleConverter.convert(arguments.StaticArg.__name__, "pascal", "snake")
         }s""": {
             "horizontal_start": arguments.StaticArg(value=7701),
             "horizontal_end": arguments.StaticArg(value=67096),
@@ -52,19 +48,27 @@ def sample_source_metrics(sample_source_metadata: dict[str, Any]) -> Mapping[str
     return {
         "program1": metrics.Source(
             metadata={"description": "Test program 1", **sample_source_metadata},
-            metrics=metrics.MetricsCollection(
+            metrics=metrics.DefaultMetricsCollection(
                 **{
-                    metrics.COMPUTE_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
-                    metrics.TOTAL_METRIC: metrics.Metric(samples=[4.0, 5.0, 6.0]),
+                    metrics.COMPUTE_METRIC: metrics.Metric(
+                        name=metrics.COMPUTE_METRIC, samples=[1.0, 2.0, 3.0]
+                    ),
+                    metrics.TOTAL_METRIC: metrics.Metric(
+                        name=metrics.TOTAL_METRIC, samples=[4.0, 5.0, 6.0]
+                    ),
                 }
             ),
         ),
         "program2": metrics.Source(
             metadata={"description": "Test program 2", **sample_source_metadata},
-            metrics=metrics.MetricsCollection(
+            metrics=metrics.DefaultMetricsCollection(
                 **{
-                    metrics.COMPUTE_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
-                    metrics.TOTAL_METRIC: metrics.Metric(samples=[40.0, 50.0, 60.0]),
+                    metrics.COMPUTE_METRIC: metrics.Metric(
+                        name=metrics.COMPUTE_METRIC, samples=[10.0, 20.0, 30.0]
+                    ),
+                    metrics.TOTAL_METRIC: metrics.Metric(
+                        name=metrics.TOTAL_METRIC, samples=[40.0, 50.0, 60.0]
+                    ),
                 }
             ),
         ),
@@ -165,7 +169,8 @@ def test_dumps_json(sample_source_metrics: Mapping[str, metrics.Source]):
         )
         assert data[source_id]["metrics"].keys() == sample_source_metrics[source_id].metrics.keys()
         assert list(data[source_id]["metrics"].values()) == [
-            metric.samples for metric in sample_source_metrics[source_id].metrics.values()
+            {"unit": metric.unit, "scale": metric.scale_prefix, "samples": metric.samples}
+            for metric in sample_source_metrics[source_id].metrics.values()
         ]
 
 
@@ -191,5 +196,6 @@ def test_dump_json(sample_source_metrics: Mapping[str, metrics.Source], tmp_path
         )
         assert data[source_id]["metrics"].keys() == sample_source_metrics[source_id].metrics.keys()
         assert list(data[source_id]["metrics"].values()) == [
-            metric.samples for metric in sample_source_metrics[source_id].metrics.values()
+            {"unit": metric.unit, "scale": metric.scale_prefix, "samples": metric.samples}
+            for metric in sample_source_metrics[source_id].metrics.values()
         ]
