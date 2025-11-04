@@ -247,7 +247,7 @@ auto now = std::chrono::high_resolution_clock::now();
 auto run_cpp_end_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
     ).count();
-duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) / 1.e9;
+duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         """,
         language=dace.dtypes.Language.CPP,
         side_effects=has_side_effects,
