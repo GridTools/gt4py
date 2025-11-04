@@ -8,6 +8,7 @@
 
 import contextlib
 import os
+import sys
 from typing import Any, Final, Generator, Optional
 
 import dace
@@ -54,7 +55,9 @@ def set_dace_config(
     #   is translating from `CompilableProgram` (ITIR.Program + CompileTimeArgs)
     #   to `ProgramSource`, so this step is storing in cache only the result
     #   of the SDFG transformations, not the compiled program binary.
-    dace.Config.set("compiler.use_cache", value=True)
+    #   Additional note: we have observed segfault errors in pytest sessions,
+    #   during loading of compiled SDFG from .so file, so we disable the cache.
+    dace.Config.set("compiler.use_cache", value=("pytest" not in sys.modules))
 
     # We rely on gt4py function `get_cache_folder` to get a unique build folder
     #   for each program. Within this folder, by setting 'cache=single', dace will
