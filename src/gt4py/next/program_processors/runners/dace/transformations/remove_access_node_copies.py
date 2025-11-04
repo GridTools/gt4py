@@ -6,6 +6,14 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+# TODO(iomaganaris): This transformation is very specific to a pattern in the vertically_implicit_solver of ICON4Py.
+# The transformation should be generalized or moved to ICON4Py.
+# One idea to generalize this transformation is: in case we have a chain of 4 AccessNodes which are
+# connected sequentially with memlets (first_node -> second_node -> third_node -> fourth_node),
+# we can split the middle access nodes (second and third) based on their input and output memlets' subsets and those can later
+# be removed because the same data are copied from the first all the way to fourth node.
+# The split should be done using SplitAccessNode transformation.
+
 import warnings
 from typing import Any, Optional
 
