@@ -518,7 +518,7 @@ def _get_data_nodes(
     elif isinstance(data_type, ts.TupleType):
         symbol_tree = gtir_to_sdfg_utils.make_symbol_tree(data_name, data_type)
         return gtx_utils.tree_map(
-            lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, sym.id, sym.type)
+            lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, str(sym.id), sym.type)
         )(symbol_tree)
 
     else:

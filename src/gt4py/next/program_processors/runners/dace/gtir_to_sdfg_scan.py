@@ -22,7 +22,7 @@ This is likely to change in the future, to enable GTIR optimizations for scan.
 
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import dace
 from dace import subsets as dace_subsets
@@ -295,7 +295,7 @@ def _lower_lambda_to_nested_sdfg(
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     field_domain: gtir_domain.FieldopDomain,
     init_data: gtir_to_sdfg_types.FieldopResult,
-    lambda_symbols: dict[str, ts.DataType],
+    lambda_params: Sequence[gtir.Sym],
     scan_forward: bool,
     scan_carry_symbol: gtir.Sym,
 ) -> tuple[gtir_to_sdfg.SubgraphContext, gtir_to_sdfg_types.FieldopResult]:
@@ -314,13 +314,13 @@ def _lower_lambda_to_nested_sdfg(
     mapped by the caller to the horizontal domain in the field operator context.
 
     Args:
-        lambda_node: The lambda representing the stencil expression on the horizontal level.
+        lambda_node: The lambda representing the stencil expression on the scan dimension.
         ctx: The SDFG context where the scan field operator is translated.
         sdfg_builder: The SDFG builder object to access the field operator context.
         field_domain: The field operator domain, with all horizontal and vertical dimensions.
         init_data: The data produced in the field operator context that is used
             to initialize the scan carry value.
-        lambda_symbols: List of symbols used as parameters of the stencil expressions.
+        lambda_params: List of symbols used as parameters of the lambda expression.
         scan_forward: When True, the loop should range starting from the origin;
             when False, traverse towards origin.
         scan_carry_symbol: The symbol used in the stencil expression to carry the
@@ -348,7 +348,12 @@ def _lower_lambda_to_nested_sdfg(
     )
     # the lambda expression, i.e. body of the scan, will be created inside a nested SDFG.
     lambda_translator, lambda_ctx = sdfg_builder.setup_nested_context(
-        lambda_node, "scan", ctx, lambda_symbols, symbolic_inputs=set()
+        lambda_node,
+        "scan",
+        ctx,
+        lambda_params,
+        symbolic_inputs=set(),
+        capture_scope_symbols=False,
     )
 
     # We set `using_explicit_control_flow=True` because the vertical scan is lowered to a `LoopRegion`.
@@ -477,7 +482,10 @@ def _lower_lambda_to_nested_sdfg(
         # `sym` represents the global output data, that is the nested-SDFG output connector
         scan_carry_data = str(scan_carry_sym.id)
         output = _scan_output_name(scan_carry_data)
-        lambda_ctx.sdfg.add_array(output, scan_output_shape, scan_result_desc.dtype)
+        # Note that we set `transient=True` because the lowering expects the dataflow
+        # of nested SDDFG to write to some internal temporary nodes. These data elements
+        # should be turned into globals by the caller and handled as output connections.
+        lambda_ctx.sdfg.add_array(output, scan_output_shape, scan_result_desc.dtype, transient=True)
         output_node = compute_state.add_access(output)
 
         # in the 'compute' state, we write the current vertical level data to the output field
@@ -523,41 +531,6 @@ def _lower_lambda_to_nested_sdfg(
     return lambda_ctx, lambda_output
 
 
-def _connect_nested_sdfg_output_to_temporaries(
-    inner_ctx: gtir_to_sdfg.SubgraphContext,
-    outer_ctx: gtir_to_sdfg.SubgraphContext,
-    nsdfg_node: dace.nodes.NestedSDFG,
-    inner_data: gtir_to_sdfg_types.FieldopData,
-) -> gtir_dataflow.DataflowOutputEdge:
-    """
-    Helper function to create the edges to write output data from the nested SDFG
-    to temporary arrays in the parent SDFG, denoted as outer context.
-
-    Args:
-        inner_ctx: The inner SDFG context, where the scan `LoopRegion` is translated.
-        outer_ctx: The outer SDFG context, where the field operator is translated.
-        nsdfg_node: The nested SDFG node in the outer context.
-        inner_data: The data produced by the scan `LoopRegion` in the inner context.
-
-    Returns:
-        An object representing the output data connection of this field operator.
-    """
-    assert isinstance(inner_data.gt_type, ts.FieldType)
-    inner_dataname = inner_data.dc_node.data
-    inner_desc = inner_ctx.sdfg.data(inner_dataname)
-    outer_dataname, outer_desc = outer_ctx.sdfg.add_temp_transient_like(inner_desc)
-    outer_node = outer_ctx.state.add_access(outer_dataname)
-    outer_ctx.state.add_edge(
-        nsdfg_node,
-        inner_dataname,
-        outer_node,
-        None,
-        dace.Memlet.from_array(outer_dataname, outer_desc),
-    )
-    output_expr = gtir_dataflow.ValueExpr(outer_node, inner_data.gt_type.dtype)
-    return gtir_dataflow.DataflowOutputEdge(outer_ctx.state, output_expr)
-
-
 def _handle_dataflow_result_of_nested_sdfg(
     nsdfg_node: dace.nodes.NestedSDFG,
     inner_ctx: gtir_to_sdfg.SubgraphContext,
@@ -565,19 +538,32 @@ def _handle_dataflow_result_of_nested_sdfg(
     inner_data: gtir_to_sdfg_types.FieldopData,
     field_domain: infer_domain.NonTupleDomainAccess,
 ) -> gtir_dataflow.DataflowOutputEdge | None:
+    assert isinstance(inner_data.gt_type, ts.FieldType)
+    inner_dataname = inner_data.dc_node.data
+    inner_desc = inner_ctx.sdfg.data(inner_dataname)
+    assert inner_desc.transient
+
     if isinstance(field_domain, domain_utils.SymbolicDomain):
         # The field is used outside the nested SDFG, therefore it needs to be copied
         # to a temporary array in the parent SDFG (outer context).
-        return _connect_nested_sdfg_output_to_temporaries(
-            inner_ctx, outer_ctx, nsdfg_node, inner_data
+        inner_desc.transient = False
+        outer_dataname, outer_desc = outer_ctx.sdfg.add_temp_transient_like(inner_desc)
+        outer_node = outer_ctx.state.add_access(outer_dataname)
+        outer_ctx.state.add_edge(
+            nsdfg_node,
+            inner_dataname,
+            outer_node,
+            None,
+            dace.Memlet.from_array(outer_dataname, outer_desc),
         )
+        output_expr = gtir_dataflow.ValueExpr(outer_node, inner_data.gt_type.dtype)
+        return gtir_dataflow.DataflowOutputEdge(outer_ctx.state, output_expr)
     else:
         # The field is not used outside the nested SDFG. It is likely just storage
         # for some internal state, accessed during column scan, and can be turned
         # into a transient array inside the nested SDFG.
         assert field_domain == infer_domain.DomainAccessDescriptor.NEVER
-        inner_data.dc_node.desc(inner_ctx.sdfg).transient = True
-        nsdfg_node.out_connectors.pop(inner_data.dc_node.data)
+        nsdfg_node.out_connectors.pop(inner_dataname)
         return None
 
 
@@ -632,15 +618,15 @@ def translate_scan(
     # visit the initialization value of the scan expression
     init_data = sdfg_builder.visit(init_expr, ctx=ctx)
 
-    # define the set of symbols available in the lambda context, which consists of
-    # the carry argument and all lambda function arguments
+    # define the symbols passed as parameter to the lambda expression, which consists
+    # of the carry argument and all lambda function arguments
     lambda_arg_types: list[ts.DataType] = [scan_carry_type] + [
         arg.type for arg in node.args if isinstance(arg.type, ts.DataType)
     ]
-    lambda_symbols: dict[str, ts.DataType] = {
-        str(p.id): arg_type
+    lambda_params = [
+        im.sym(p.id, arg_type)
         for p, arg_type in zip(stencil_expr.params, lambda_arg_types, strict=True)
-    }
+    ]
 
     # lower the scan stencil expression in a separate SDFG context
     lambda_ctx, lambda_output = _lower_lambda_to_nested_sdfg(
@@ -649,7 +635,7 @@ def translate_scan(
         sdfg_builder,
         field_domain,
         init_data,
-        lambda_symbols,
+        lambda_params,
         scan_forward,
         im.sym(scan_carry, scan_carry_type),
     )
@@ -674,9 +660,9 @@ def translate_scan(
             symbolic_args[gt_symbol_name] = arg
         elif arg is not None:
             lambda_arg_nodes |= {
-                str(nested_param.id): nested_arg
-                for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(gt_symbol, arg)
-                if nested_arg is not None
+                str(gt_symbol_.id): arg_
+                for gt_symbol_, arg_ in gtir_to_sdfg_types.flatten_tuple(gt_symbol, arg)
+                if arg_ is not None
             }
 
     nsdfg_node, input_memlets = sdfg_builder.add_nested_sdfg(
