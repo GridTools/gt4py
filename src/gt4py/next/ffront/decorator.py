@@ -164,7 +164,6 @@ class Program(CompiledProgramMixin):
             compilation_options=options.CompilationOptions(**compilation_options),
         )
 
-    @functools.cached_property
     def __gt_type__(self):
         return self.past_stage.past_node.type
 
