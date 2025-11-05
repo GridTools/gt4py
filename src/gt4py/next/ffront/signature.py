@@ -5,7 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+# TODO: delete this file
 # TODO(ricoh): This overlaps with `canonicalize_arguments`, solutions:
 # - merge the two
 # - extract the signature gathering functionality from canonicalize_arguments

@@ -5,13 +5,14 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+import inspect
+import itertools
 from functools import reduce
 from typing import Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.type_system import type_info
 
 
@@ -306,4 +307,49 @@ def return_type_scanop(
     )
     return type_info.apply_to_primitive_constituents(
         lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)), carry_dtype
+    )
+
+
+def _signature_from_callable_in_program_context(callable_type: ts.CallableType):
+    if isinstance(callable_type, ts_ffront.ProgramType):
+        _signature_from_callable_in_program_context(callable_type.definition)
+    elif isinstance(callable_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType):
+        operator_signature = _signature_from_callable_in_program_context(callable_type.definition)
+        return inspect.Signature(
+            parameters=itertools.chain(
+                operator_signature.parameters.values(),
+                [inspect.Parameter("out", inspect.Parameter.KEYWORD_ONLY)],
+            ),
+            return_annotation=inspect.Signature.empty,
+        )
+    assert isinstance(callable_type, ts.FunctionType)
+    return inspect.Signature(
+        parameters=(
+            [
+                inspect.Parameter(name=str(i), kind=inspect.Parameter.POSITIONAL_ONLY)
+                for i, type_ in enumerate(callable_type.pos_only_args)
+            ]
+            + [
+                inspect.Parameter(name=name, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                for name, type_ in callable_type.pos_or_kw_args.items()
+            ]
+            + [
+                inspect.Parameter(name=name, kind=inspect.Parameter.KEYWORD_ONLY)
+                for name, type_ in callable_type.kw_only_args.items()
+            ]
+        ),
+        return_annotation=callable_type.returns,
+    )
+
+
+def make_args_canonicalizer(
+    callable_type: ts.CallableType, **kwargs
+) -> utils.CallArgsCanonicalizer:
+    """
+    Create a call arguments canonicalizer function from a given signature.
+
+    See :ref:`utils.make_args_canonicalizer`.
+    """
+    return utils.make_args_canonicalizer(
+        _signature_from_callable_in_program_context(callable_type), **kwargs
     )

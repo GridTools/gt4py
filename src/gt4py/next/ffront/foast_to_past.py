@@ -96,13 +96,19 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
 
-        arg_types, kwarg_types = inp.args.args, inp.args.kwargs
+        # TODO(tehrengruber): This function used to be wrong. The kwarg_types here are
+        #  just ignored silently and the out argument of the field operator used to be passed here.
+        #  With the CompiledProgramPool the out argument is just the third argument (consistent
+        #  with the program definition below). So we just drop it now. In general this function
+        #  should be reworked or replaced. Decide in review.
+        arg_types, kwarg_types = inp.args.args[:-1], inp.args.kwargs
+        assert not kwarg_types
 
+        type_ = inp.data.foast_node.type
         loc = inp.data.foast_node.location
         # use a new UID generator to allow caching
         param_sym_uids = eve_utils.UIDGenerator()
 
-        type_ = inp.data.foast_node.type
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
                 id=param_sym_uids.sequential_id(prefix="__sym"),

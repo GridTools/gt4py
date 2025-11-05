@@ -11,7 +11,6 @@ from __future__ import annotations
 import concurrent.futures
 import dataclasses
 import functools
-import inspect
 import itertools
 from collections.abc import Callable, Hashable, Sequence
 from typing import Any, TypeAlias, TypeVar
@@ -19,7 +18,11 @@ from typing import Any, TypeAlias, TypeVar
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, config, errors, metrics, utils as gtx_utils
-from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
+from gt4py.next.ffront import (
+    stages as ffront_stages,
+    type_info as ffront_type_info,
+    type_specifications as ts_ffront,
+)
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -216,12 +219,32 @@ class CompiledProgramsPool:
     """
 
     backend: gtx_backend.Backend
-    definition_stage: ffront_stages.ProgramDefinition
-    program_type: ts_ffront.ProgramType
+    definition_stage: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition
+    callable_type: ts_ffront.ProgramType | ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType
     #: mapping from an argument descriptor type to a list of parameters or expression thereof
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
+
+    @functools.cached_property
+    def program_type(self):
+        # TODO: use a signature object everywhere instead
+        if isinstance(
+            operator_type := self.callable_type,
+            ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType,
+        ):
+            # TODO: this is wrong for the scan operator
+            fun_type: ts.FunctionType = operator_type.definition
+            return ts_ffront.ProgramType(
+                definition=ts.FunctionType(
+                    pos_only_args=fun_type.pos_only_args,
+                    pos_or_kw_args={**fun_type.pos_or_kw_args, "out": fun_type.returns},
+                    kw_only_args=fun_type.kw_only_args,
+                    returns=fun_type.returns,
+                )
+            )
+        assert isinstance(self.callable_type, ts_ffront.ProgramType)
+        return self.callable_type
 
     # cache the compiled programs
     compiled_programs: dict[
@@ -284,9 +307,8 @@ class CompiledProgramsPool:
 
     @functools.cached_property
     def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
-        signature = inspect.signature(self.definition_stage.definition)
-        return gtx_utils.make_args_canonicalizer(
-            signature, name=self.definition_stage.definition.__name__
+        return ffront_type_info.make_args_canonicalizer(
+            self.callable_type, name=self.definition_stage.definition.__name__
         )
 
     @functools.cached_property

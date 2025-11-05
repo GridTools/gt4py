@@ -24,7 +24,7 @@ from typing import Any, Generic, Optional, TypeVar
 from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import Self, override
+from gt4py.eve.extended_typing import Self, Unpack, override
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
@@ -47,17 +47,85 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, compiled_program, stages, toolchain
+from gt4py.next.otf import arguments, compiled_program, options, stages, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
+class CompiledProgramMixin:
+    @functools.cached_property
+    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
+        if self.backend is None or self.backend == eve.NOTHING:
+            raise RuntimeError("Cannot compile a program without backend.")
+
+        if self.compilation_options.static_params is None:
+            object.__setattr__(self.compilation_options, "static_params", ())
+
+        argument_descriptor_mapping = {
+            arguments.StaticArg: self.compilation_options.static_params,
+        }
+
+        return compiled_program.CompiledProgramsPool(
+            backend=self.backend,
+            definition_stage=self.definition_stage,
+            callable_type=self.__gt_type__(),
+            argument_descriptor_mapping=argument_descriptor_mapping,
+            # type: ignore[arg-type]  # covariant `type[T]` not possible
+        )
+
+    def compile(
+        self,
+        offset_provider: common.OffsetProviderType
+        | common.OffsetProvider
+        | list[common.OffsetProviderType | common.OffsetProvider]
+        | None = None,
+        enable_jit: bool | None = None,
+        **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
+    ) -> Self:
+        """
+        Compiles the program for the given combination of static arguments and offset provider type.
+
+        Note: Unlike `with_...` methods, this method does not return a new instance of the program,
+        but adds the compiled variants to the current program instance.
+        """
+        # TODO(havogt): we should reconsider if we want to return a new program on `compile` (and
+        # rename to `with_static_args` or similar) once we have a better understanding of the
+        # use-cases.
+
+        if enable_jit is not None:
+            object.__setattr__(self.compilation_options, "enable_jit", enable_jit)
+        if self.compilation_options.static_params is None:
+            object.__setattr__(self.compilation_options, "static_params", tuple(static_args.keys()))
+        if self.compilation_options.connectivities is None and offset_provider is None:
+            raise ValueError(
+                "Cannot compile a program without connectivities / OffsetProviderType."
+            )
+        if not all(isinstance(v, list) for v in static_args.values()):
+            raise TypeError(
+                "Please provide the static arguments as lists."
+            )  # To avoid confusion with tuple args
+
+        offset_provider = (
+            self.compilation_options.connectivities if offset_provider is None else offset_provider
+        )
+        if not isinstance(offset_provider, list):
+            offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
+
+        assert all(
+            common.is_offset_provider(op) or common.is_offset_provider_type(op)
+            for op in offset_provider
+        )
+
+        self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
+        return self
+
+
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
-class Program:
+class Program(CompiledProgramMixin):
     """
     Construct a program object from a PAST node.
 
@@ -79,13 +147,7 @@ class Program:
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
-    connectivities: Optional[
-        common.OffsetProvider
-    ]  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
-    enable_jit: bool | None
-    static_params: (
-        Sequence[str] | None
-    )  # if the user requests static params, they will be used later to initialize CompiledPrograms
+    compilation_options: options.CompilationOptions
 
     @classmethod
     def from_function(
@@ -93,20 +155,18 @@ class Program:
         definition: types.FunctionType,
         backend: next_backend.Backend | None,
         grid_type: common.GridType | None = None,
-        enable_jit: bool | None = None,
-        static_params: Sequence[str] | None = None,
-        connectivities: Optional[
-            common.OffsetProvider
-        ] = None,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+        **compilation_options: Unpack[options.CompilationOptionsArgs],
     ) -> Program:
         program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
         return cls(
             definition_stage=program_def,
             backend=backend,
-            connectivities=connectivities,
-            enable_jit=enable_jit,
-            static_params=static_params,
+            compilation_options=options.CompilationOptions(**compilation_options),
         )
+
+    @functools.cached_property
+    def __gt_type__(self):
+        return self.past_stage.past_node.type
 
     # needed in testing
     @property
@@ -229,27 +289,6 @@ class Program:
         )
         return self._frontend_transforms.past_to_itir(no_args_past).data
 
-    @functools.cached_property
-    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
-        if self.backend is None or self.backend == eve.NOTHING:
-            raise RuntimeError("Cannot compile a program without backend.")
-
-        if self.static_params is None:
-            object.__setattr__(self, "static_params", ())
-
-        argument_descriptor_mapping = {
-            arguments.StaticArg: self.static_params,
-        }
-
-        program_type = self.past_stage.past_node.type
-        assert isinstance(program_type, ts_ffront.ProgramType)
-        return compiled_program.CompiledProgramsPool(
-            backend=self.backend,
-            definition_stage=self.definition_stage,
-            program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
-        )
-
     def __call__(
         self,
         *args: Any,
@@ -259,10 +298,7 @@ class Program:
     ) -> None:
         if offset_provider is None:
             offset_provider = {}
-        if enable_jit is None:
-            enable_jit = (
-                self.enable_jit if self.enable_jit is not None else config.ENABLE_JIT_DEFAULT
-            )
+        enable_jit = self.compilation_options.enable_jit if enable_jit is None else enable_jit
 
         with metrics.collect() as metrics_source:
             if collect_info_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO):
@@ -301,50 +337,6 @@ class Program:
             if collect_info_metrics:
                 assert metrics_source is not None
                 metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.time() - start)
-
-    def compile(
-        self,
-        offset_provider: common.OffsetProviderType
-        | common.OffsetProvider
-        | list[common.OffsetProviderType | common.OffsetProvider]
-        | None = None,
-        enable_jit: bool | None = None,
-        **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
-    ) -> Self:
-        """
-        Compiles the program for the given combination of static arguments and offset provider type.
-
-        Note: Unlike `with_...` methods, this method does not return a new instance of the program,
-        but adds the compiled variants to the current program instance.
-        """
-        # TODO(havogt): we should reconsider if we want to return a new program on `compile` (and
-        # rename to `with_static_args` or similar) once we have a better understanding of the
-        # use-cases.
-
-        if enable_jit is not None:
-            object.__setattr__(self, "enable_jit", enable_jit)
-        if self.static_params is None:
-            object.__setattr__(self, "static_params", tuple(static_args.keys()))
-        if self.connectivities is None and offset_provider is None:
-            raise ValueError(
-                "Cannot compile a program without connectivities / OffsetProviderType."
-            )
-        if not all(isinstance(v, list) for v in static_args.values()):
-            raise TypeError(
-                "Please provide the static arguments as lists."
-            )  # To avoid confusion with tuple args
-
-        offset_provider = self.connectivities if offset_provider is None else offset_provider
-        if not isinstance(offset_provider, list):
-            offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
-
-        assert all(
-            common.is_offset_provider(op) or common.is_offset_provider_type(op)
-            for op in offset_provider
-        )
-
-        self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
-        return self
 
     def freeze(self) -> FrozenProgram:
         if self.backend is None:
@@ -540,9 +532,8 @@ def program(
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
-    enable_jit: bool | None = None,  # only relevant if static_params are set
-    static_params: Sequence[str] | None = None,
     frozen: bool = False,
+    **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:
     """
     Generate an implementation of a program from a Python function object.
@@ -569,8 +560,7 @@ def program(
                 next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
             ),
             grid_type=grid_type,
-            enable_jit=enable_jit,
-            static_params=static_params,
+            **compilation_options,
         )
         if frozen:
             return program.freeze()  # type: ignore[return-value] # TODO(havogt): Should `FrozenProgram` be a `Program`?
@@ -583,7 +573,7 @@ OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldOperator(GTCallable, Generic[OperatorNodeT]):
+class FieldOperator(CompiledProgramMixin, GTCallable, Generic[OperatorNodeT]):
     """
     Construct a field operator object from a FOAST node.
 
@@ -606,6 +596,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     definition_stage: ffront_stages.FieldOperatorDefinition
     backend: Optional[next_backend.Backend]
+    compilation_options: options.CompilationOptions
     _program_cache: dict = dataclasses.field(
         init=False, default_factory=dict
     )  # init=False ensure the cache is not copied in calls to replace
@@ -619,6 +610,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,  # type: ignore[assignment] # TODO(ricoh): understand why mypy complains
         operator_attributes: Optional[dict[str, Any]] = None,
+        **compilation_options: Unpack[options.CompilationOptionsArgs],
     ) -> FieldOperator[OperatorNodeT]:
         return cls(
             definition_stage=ffront_stages.FieldOperatorDefinition(
@@ -628,6 +620,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 attributes=operator_attributes or {},
             ),
             backend=backend,
+            compilation_options=options.CompilationOptions(**compilation_options),
         )
 
     # TODO(ricoh): linting should become optional, up to the backend.
@@ -701,12 +694,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition_stage=None,  # type: ignore[arg-type] # ProgramFromPast needs to be fixed
             past_stage=past_stage,
             backend=self.backend,
-            connectivities=None,
-            enable_jit=False,  # TODO(havogt): revisit ProgramFromPast
-            static_params=None,  # TODO(havogt): revisit ProgramFromPast
+            compilation_options=self.compilation_options,
         )
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(
+        self, *args: Any, enable_jit: bool = options.CompilationOptions.enable_jit, **kwargs: Any
+    ) -> Any:
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
             offset_provider = {**kwargs.pop("offset_provider", {})}
@@ -719,15 +712,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     domain = utils.tree_map(lambda _: domain)(out)
                 out = utils.tree_map(lambda f, dom: f[dom])(out, domain)
 
-            args, kwargs = type_info.canonicalize_arguments(
-                self.foast_stage.foast_node.type, args, kwargs
-            )
-            return self.backend(
-                self.definition_stage,
-                *args,
-                out=out,
-                offset_provider=offset_provider,
-                **kwargs,
+            return self._compiled_programs(
+                *args, **kwargs, out=out, offset_provider=offset_provider, enable_jit=enable_jit
             )
         else:
             if not next_embedded.context.within_valid_context():
