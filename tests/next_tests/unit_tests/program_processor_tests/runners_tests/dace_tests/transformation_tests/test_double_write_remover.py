@@ -20,7 +20,9 @@ from . import util
 import dace
 
 
-def _make_simple_double_write_sdfg() -> tuple[
+def _make_simple_double_write_sdfg(
+    slice_to_second: bool,
+) -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode, dace_nodes.MapExit
 ]:
     sdfg = dace.SDFG(util.unique_name("double_write_elimination_1"))
@@ -40,7 +42,7 @@ def _make_simple_double_write_sdfg() -> tuple[
     )
     sdfg.add_array(
         "c",
-        shape=(10, 4),
+        shape=((10, 4) if slice_to_second else (4, 10)),
         dtype=dace.float64,
         transient=False,
     )
@@ -57,15 +59,20 @@ def _make_simple_double_write_sdfg() -> tuple[
         output_nodes={b},
     )
 
-    state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 0]"))
-    state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 2]"))
+    if slice_to_second:
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 0]"))
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 2]"))
+    else:
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0, 0:10]"))
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [2, 0:10]"))
 
     sdfg.validate()
     return sdfg, state, b, c, mx
 
 
-def test_remove_double_write1():
-    sdfg, state, b, c, mx = _make_simple_double_write_sdfg()
+@pytest.mark.parametrize("slice_to_second", [True, False])
+def test_remove_double_write1(slice_to_second: bool):
+    sdfg, state, b, c, mx = _make_simple_double_write_sdfg(slice_to_second)
 
     pre_ac = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
     assert len(pre_ac) == 3
