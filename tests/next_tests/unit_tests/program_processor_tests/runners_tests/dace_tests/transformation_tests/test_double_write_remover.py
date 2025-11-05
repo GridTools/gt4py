@@ -57,9 +57,10 @@ def _make_simple_double_write_sdfg() -> tuple[
         output_nodes={b},
     )
 
-    state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0, 0:10]"))
-    state.add_nedge(b, c, dace.Memlet("b[0:10] -> [2, 0:10]"))
+    state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 0]"))
+    state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 2]"))
 
+    sdfg.validate()
     return sdfg, state, b, c, mx
 
 

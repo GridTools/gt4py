@@ -481,6 +481,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
     def can_be_applied(
         self,
         graph: dace.SDFGState,
+        expr_index: int,
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
@@ -519,9 +520,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
 
         # To further simplify, we require that the Memlet is "simple" and that only a
         #  scalar is moved around.
-        inner_production_sbs = inner_producer_edge.data.get_dst_subset(
-            inner_producer_edge[0], graph
-        )
+        inner_production_sbs = inner_producer_edge.data.get_dst_subset(inner_producer_edge, graph)
         if inner_production_sbs.num_elements() != 1:
             return False
         if inner_producer_edge.data.allow_oob:
@@ -596,9 +595,11 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                 for inner_map_edge in graph.in_edges_by_connector(
                     map_exit, "IN_" + producer_edge.src_conn[4:]
                 )
-            )
+            ),
+            None,
         )
-        write_back_subset = inner_producer_edge.data.get_src_subset(inner_producer_edge, graph)
+        assert inner_producer_edge is not None
+        write_back_subset = inner_producer_edge.data.get_dst_subset(inner_producer_edge, graph)
         parameter_mapping = self._map_params_to_dimensions(write_back_subset, map_exit.map.params)
 
         # NOTE: After this line `inner_producer_edge` is no longer valid.
@@ -639,7 +640,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                 sbs1=consumer_edge.data.dst_subset,
                 sbs2=consumer_edge.data.src_subset,
             )
-            assert dst_mapping.values() == parameter_mapping.keys()
+            assert set(dst_mapping.values()) == set(parameter_mapping.keys())
             assert len(src_drop) == 0
 
             # Now compose the subset
@@ -705,9 +706,9 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
         for dim, sbs in enumerate(write_back_subset):
             start, stop, step = sbs
             assert step == 1 and start == stop
-            sbs_free_symbols = start.free_symbols
+            sbs_free_symbols = {str(fs) for fs in start.free_symbols}
             used_parameters = unused_parameters.intersection(sbs_free_symbols)
-            if len(used_parameters) != 1:
+            if len(used_parameters) == 1:
                 used_parameter: str = next(iter(used_parameters))
                 dimension_assignment[dim] = used_parameter
                 unused_parameters.discard(used_parameter)
