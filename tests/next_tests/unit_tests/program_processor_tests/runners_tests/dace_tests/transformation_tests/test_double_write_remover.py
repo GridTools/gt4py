@@ -50,10 +50,10 @@ def _make_double_write_single_consumer(
 
     _, _, mx = state.add_mapped_tasklet(
         "computation",
-        map_ranges={"__i": "0:10"},
-        inputs={"__in": dace.Memlet("a[__i]")},
+        map_ranges={"__i": "3:13"},
+        inputs={"__in": dace.Memlet("a[__i - 3]")},
         code="__out = __in + 1.0",
-        outputs={"__out": dace.Memlet("b[__i]")},
+        outputs={"__out": dace.Memlet("b[__i - 3]")},
         external_edges=True,
         input_nodes={a},
         output_nodes={b},
