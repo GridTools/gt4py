@@ -681,9 +681,9 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
 
 
 def associate_dimmensions(
-        sbs1: dace_sbs.Range,
-        sbs2: dace_sbs.Range,
-        allow_trivail_dimensions: bool = True,
+    sbs1: dace_sbs.Range,
+    sbs2: dace_sbs.Range,
+    allow_trivail_dimensions: bool = True,
 ) -> tuple[dict[int, int], list[int], list[int]]:
     """Computes the association between dimensions of two subsets.
 
@@ -702,7 +702,7 @@ def associate_dimmensions(
 
     Returns:
         The function returns a tuple with three elements. The first element is
-        a `dict` it Maps each dimension of `sbs1` to a dimensions `sbs2`.
+        a `dict` that maps each dimension of `sbs1` to a dimensions `sbs2`.
         The second element is a `list` containing all dimensions that were dropped
         from `sbs1`, because they where trivial. The third element is the same
         as the second element, but for `sbs2`.
@@ -731,7 +731,9 @@ def associate_dimmensions(
             #  of the second subset must be dropped/trivial.
             size2 = sizes2[idx2]
             if (size2 == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-                raise ValueError(f"Expected that dimension {idx2} of the second subset is a trivial dimension, but its size was {size2}.")
+                raise ValueError(
+                    f"Expected that dimension {idx2} of the second subset is a trivial dimension, but its size was {size2}."
+                )
             drop2.append(idx2)
             idx2 += 1
 
@@ -740,13 +742,17 @@ def associate_dimmensions(
             #  of the first subset must be dropped/trivial.
             size1 = sizes1[idx1]
             if (size1 == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-                raise ValueError(f"Expected that dimension {idx1} of the first subset is a trivial dimension, but its size was {size1}.")
+                raise ValueError(
+                    f"Expected that dimension {idx1} of the first subset is a trivial dimension, but its size was {size1}."
+                )
             drop1.append(idx1)
             idx1 += 1
 
         elif (
-                (sizes1[idx1] == sizes2[idx2]) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
-                and (allow_trivail_dimensions or (
+            (sizes1[idx1] == sizes2[idx2]) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            and (
+                allow_trivail_dimensions
+                or (
                     (sizes1[idx1] == 1) == False  # noqa: E712 [true-false-comparison]  # SymPy comparison
                     and (sizes2[idx2] == 1) == False  # noqa: E712 [true-false-comparison]  # SymPy comparison
                 )
@@ -760,12 +766,12 @@ def associate_dimmensions(
             idx1 += 1
             idx2 += 1
 
-        elif (sizes1[idx1] == 1) == True: # noqa: E712 [true-false-comparison]  # SymPy comparison
+        elif (sizes1[idx1] == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             # `sbs1` has a trivial dimension at `idx1`: Drop it.
             drop1.append(idx1)
             idx1 += 1
 
-        elif (sizes2[idx2] == 1) == True: # noqa: E712 [true-false-comparison]  # SymPy comparison
+        elif (sizes2[idx2] == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             # `sbs2` has a trivial dimension at `idx2`, drop it.
             drop2.append(idx2)
             idx2 += 1

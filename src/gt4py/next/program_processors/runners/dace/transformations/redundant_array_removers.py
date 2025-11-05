@@ -586,8 +586,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
 
         producer_edge = next(iter(graph.in_edges(temp_node)))
         produced_sbs: dace_sbs.Range = producer_edge.data.get_dst_subset(producer_edge, graph)
-        if produced_sbs is None:
-            return False
+        assert produced_sbs is not None
 
         # Now we look for the producer inside the map.
         assert producer_edge.src_conn.startswith("OUT_")
@@ -630,67 +629,70 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                 ),
             )
 
-        for consumer_edge in graph.out_edges(temp_node):
+        for consumer_edge in list(graph.out_edges(temp_node)):
             assert isinstance(consumer_edge.dst, dace_nodes.AccessNode)
             dst_desc = consumer_edge.dst.desc(sdfg)
-            dim_mapping, src_drop, dst_drop = gtx_transformations.utils.associate_dimmensions(
-                    consumer_edge.data.src_subset, consumer_edge.data.dst_subset
+
+            # Since we want to understand how the destination is written we have to
+            #  pass `dst_subset` as `sbs1`.
+            dst_mapping, dst_drop, src_drop = gtx_transformations.utils.associate_dimmensions(
+                sbs1=consumer_edge.data.dst_subset,
+                sbs2=consumer_edge.data.src_subset,
             )
-            assert dim_mapping.keys() == parameter_mapping.keys()
+            assert dst_mapping.values() == parameter_mapping.keys()
+            assert len(src_drop) == 0
 
             # Now compose the subset
             inner_map_output_subset: list[tuple[Any, Any, int]] = []
-            for dim in range(len(dst_subset.shape)):
-                if dim in
+            consumer_dst_subset = consumer_edge.data.dst_subset
+            for dim in range(len(dst_desc.shape)):
+                if dim in dst_mapping:
+                    # The dimension is written to by a parameter.
+                    inner_map_output_subset.append(
+                        (parameter_mapping[dim], parameter_mapping[dim], 1)
+                    )
+                else:
+                    # The dimension is not written to by a parameter, this means it
+                    #  must be a drop dimension, and is a constant.
+                    assert dim in dst_drop
+                    inner_map_output_subset.append(consumer_dst_subset[dim])
 
+            new_inner_dst_subset = dace_sbs.Range(inner_map_output_subset)
 
+            connector_name = map_exit.next_connector()
+            graph.add_edge(
+                distribution_node,
+                None,
+                map_exit,
+                "IN_" + connector_name,
+                dace.Memlet(
+                    data=consumer_edge.dst.data,
+                    subset=new_inner_dst_subset,
+                    other_subset=dace_sbs.Range.from_string("0"),
+                ),
+            )
+            graph.add_edge(
+                map_exit,
+                "OUT_" + connector_name,
+                consumer_edge.dst,
+                consumer_edge.dst_conn,
+                dace.Memlet(
+                    data=consumer_edge.dst.data,
+                    subset=consumer_edge.data.dst_subset,
+                    other_subset=consumer_edge.data.src_subset,
+                ),
+            )
+            map_exit.add_scope_connectors(connector_name)
+            graph.remove_edge(consumer_edge)
+        assert graph.out_degree(temp_node) == 0
 
+        for old_writer_edge_to_remove in list(graph.in_edges(temp_node)):
+            dace.sdfg.utils.remove_edge_and_dangling_path(graph, old_writer_edge_to_remove)
+        assert graph.in_degree(temp_node) == 0
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        # Now remove the node and because it is single use data, we can also remove the descriptor.
+        graph.remove_node(temp_node)
+        sdfg.remove_data(temp_node.data, validate=False)
 
     def _map_params_to_dimensions(
         self,
@@ -699,14 +701,14 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
     ) -> dict[int, str]:
         """Determine in which subset dimension a parameter writes."""
         unused_parameters: set[str] = set(map_params)
-        dimension_assignment: dict[str, int] = {}
+        dimension_assignment: dict[int, str] = {}
         for dim, sbs in enumerate(write_back_subset):
             start, stop, step = sbs
             assert step == 1 and start == stop
             sbs_free_symbols = start.free_symbols
             used_parameters = unused_parameters.intersection(sbs_free_symbols)
             if len(used_parameters) != 1:
-                used_parameter: str = next(used_parameters)
+                used_parameter: str = next(iter(used_parameters))
                 dimension_assignment[dim] = used_parameter
                 unused_parameters.discard(used_parameter)
             elif len(used_parameters) == 0:
