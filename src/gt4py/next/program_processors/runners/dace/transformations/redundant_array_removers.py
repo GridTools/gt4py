@@ -653,32 +653,34 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             # Since we want to understand how the destination is written we have to
             #  pass `dst_subset` as `sbs1` and `src_subset`, which reads from
             #  `temp_node` as `sbs2`.
-            dst_mapping, dst_drop, src_drop = gtx_transformations.utils.associate_dimmensions(
-                sbs1=consumer_edge.data.dst_subset,
-                sbs2=consumer_edge.data.src_subset,
+            consumer_to_temp_mapping, consumer_drop, temp_drop = (
+                gtx_transformations.utils.associate_dimmensions(
+                    sbs1=consumer_edge.data.dst_subset,
+                    sbs2=consumer_edge.data.src_subset,
+                )
             )
-            assert set(dst_mapping.values()) == set(parameter_mapping.keys())
-            assert len(src_drop) == 0
+            assert set(consumer_to_temp_mapping.values()) == set(parameter_mapping.keys())
+            assert len(temp_drop) == 0
 
             # Now compose the subset (on the inside of the Map) that is used to write
             #  into `consumer_node`.
             inner_map_output_subset: list[tuple[Any, Any, int]] = []
             consumer_dst_subset = consumer_edge.data.dst_subset
             for consumer_dim in range(consumer_dst_subset.dims()):
-                if consumer_dim in dst_mapping:
+                if consumer_dim in consumer_to_temp_mapping:
                     # This dimension is copied from `temp_node` into `consumer_node`.
                     #  Thus a Map parameter must be used to write it. First we have to
                     #  figuring out to which dimension `consumer_dim` is associated to
                     #  on `temp_node` which will then give us the information which
                     #  Map parameter must be used.
-                    temp_node_dim = dst_mapping[consumer_dim]
+                    temp_node_dim = consumer_to_temp_mapping[consumer_dim]
                     map_parameter = parameter_mapping[temp_node_dim]
                     inner_map_output_subset.append((map_parameter, map_parameter, 1))
                 else:
                     # The dimension is not written to by a Map parameter, which means
                     #  that it is some dummy dimension, such as an offset. Thus we use
                     #  the original subset.
-                    assert consumer_dim in dst_drop
+                    assert consumer_dim in consumer_drop
                     inner_map_output_subset.append(consumer_dst_subset[consumer_dim])
             new_inner_dst_subset = dace_sbs.Range(inner_map_output_subset)
 
