@@ -408,27 +408,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         data_args: Mapping[str, gtir_to_sdfg_types.FieldopData],
         inner_result: gtir_to_sdfg_types.FieldopResult,
     ) -> tuple[dace.nodes.NestedSDFG, Mapping[str, dace.Memlet]]:
-        # The output arguments do not really exist, so they are not allocated before
-        # visiting the lambda expression. Therefore, the result appears inside the
-        # nested SDFG as transient array/scalar storage. The exception is given by
-        # input arguments that are just passed through and returned by the lambda,
-        # e.g. when the lambda is constructing a tuple: in this case, the result
-        # data is non-transient, because it corresponds to an input node.
-        # The transient storage of the lambda result in nested-SDFG is corrected
-        # below by the call to `make_temps()`: this function ensures that the result
-        # transient nodes are changed to non-transient and the corresponding output
-        # connecters on the nested SDFG are connected to new data nodes in parent SDFG.
-        #
         lambda_output_data = (
             gtx_utils.flatten_nested_tuple(inner_result)
             if isinstance(inner_result, tuple)
             else [inner_result]
         )
         # The output connectors only need to be setup for the actual result of the
-        # internal dataflow that writes to transient nodes.
-        # We filter out the non-transient nodes because they are already available
-        # in the current context. Later these nodes will eventually be removed
-        # from the nested SDFG because they are isolated (see `make_temps()`).
+        # internal dataflow that writes to some sink data nodes.
+        # We filter out the data nodes that are passed as input arguments, because
+        # they are already available in the parent context. These nodes may appear
+        # as output in case the lambda expression is constructing a tuple.
         lambda_outputs = {
             data
             for output in lambda_output_data
@@ -458,13 +447,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         input_memlets = {}
         unused_data = set()
         for nsdfg_dataname, nsdfg_datadesc in inner_ctx.sdfg.arrays.items():
-            if nsdfg_datadesc.transient:
+            if nsdfg_dataname in lambda_outputs or nsdfg_datadesc.transient:
                 pass  # nothing to do here
             elif nsdfg_dataname in data_args:
                 arg_node = data_args[nsdfg_dataname]
                 source_data = arg_node.dc_node.data
                 input_memlets[nsdfg_dataname] = outer_ctx.sdfg.make_array_memlet(source_data)
             elif nsdfg_dataname in outer_ctx.sdfg.arrays:
+                # include fields from the parent scope
                 source_data = nsdfg_dataname
                 # ensure that connectivity tables are non-transient arrays in parent SDFG
                 if source_data in connectivity_arrays:
@@ -481,8 +471,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         nsdfg_node = outer_ctx.state.add_nested_sdfg(
             inner_ctx.sdfg,
-            inputs=set(input_memlets.keys()),
-            outputs=set(lambda_outputs),
+            inputs=input_memlets.keys(),
+            outputs=lambda_outputs,
             symbol_mapping=nsdfg_symbols_mapping,
             debuginfo=gtir_to_sdfg_utils.debug_info(node, default=outer_ctx.sdfg.debuginfo),
         )
