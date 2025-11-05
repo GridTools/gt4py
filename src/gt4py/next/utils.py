@@ -20,6 +20,7 @@ from typing import (
     Optional,
     ParamSpec,
     Protocol,
+    Sequence,
     TypeGuard,
     TypeVar,
     cast,
@@ -90,6 +91,8 @@ def tree_map(
     *,
     collection_type: type | tuple[type, ...] = tuple,
     result_collection_constructor: Optional[Callable] = None,
+    unpack: bool = False,
+    with_path_arg: bool = False,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
 
 
@@ -98,6 +101,8 @@ def tree_map(
     *,
     collection_type: type | tuple[type, ...] = tuple,
     result_collection_constructor: Optional[Callable] = None,
+    unpack: bool = False,
+    with_path_arg: bool = False,
 ) -> Callable[
     [Callable[_P, _R]], Callable[..., Any]
 ]: ...  # TODO(havogt): typing of `result_collection_constructor` is too weak here
@@ -108,6 +113,8 @@ def tree_map(
     *,
     collection_type: type | tuple[type, ...] = tuple,
     result_collection_constructor: Optional[Callable] = None,
+    unpack: bool = False,
+    with_path_arg: bool = False,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
     """
     Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
@@ -116,7 +123,9 @@ def tree_map(
         fun: Function to apply to each entry of the collection.
         collection_type: Type of the collection to be traversed. Can be a single type or a tuple of types.
         result_collection_constructor: Type of the collection to be returned. If `None` the same type as `collection_type` is used.
-
+        unpack: Replicate tuple structure returned from `fun` to the mapped result, i.e. return
+          tuple of result collections instead of result collections of tuples.
+        with_path_arg: Pass the path to access the current element to `fun`.
     Examples:
         >>> tree_map(lambda x: x + 1)(((1, 2), 3))
         ((2, 3), 4)
@@ -140,10 +149,32 @@ def tree_map(
         ...     return x + 1
         >>> impl(((1, 2), 3))
         ((2, 3), 4)
+
+        >>> @tree_map(with_path_arg=True)
+        ... def impl(x, path: tuple[int, ...]):
+        ...     path_str = "".join(f"[{i}]" for i in path)
+        ...     return f"t{path_str} = {x}"
+        >>> t = impl(((1, 2), 3))
+        >>> t[0][0]
+        't[0][0] = 1'
+        >>> t[0][1]
+        't[0][1] = 2'
+        >>> t[1]
+        't[1] = 3'
+
+        >>> @tree_map(unpack=True)
+        ... def impl(x):
+        ...     return (x, x**2)
+        >>> identity, squared = impl(((2, 3), 4))
+        >>> identity
+        ((2, 3), 4)
+        >>> squared
+        ((4, 9), 16)
     """
 
     if result_collection_constructor is None:
         if isinstance(collection_type, tuple):
+            # Note: that doesn't mean `collection_type=tuple`, but e.g. `collection_type=(list, tuple)`
             raise TypeError(
                 "tree_map() requires `result_collection_constructor` when `collection_type` is a tuple of types."
             )
@@ -154,22 +185,41 @@ def tree_map(
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
             if isinstance(args[0], collection_type):
+                non_path_args: Sequence[Any]
+                if with_path_arg:
+                    *non_path_args, path = args
+                    args = (*non_path_args, tuple((*path, i) for i in range(len(args[0]))))
+                else:
+                    non_path_args = args
+
                 assert all(
-                    isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
+                    isinstance(arg, collection_type) and len(args[0]) == len(arg)
+                    for arg in non_path_args
                 )
                 assert result_collection_constructor is not None
-                return result_collection_constructor(args[0], (impl(*arg) for arg in zip(*args)))
+                ctor = functools.partial(result_collection_constructor, args[0])
+
+                mapped = [impl(*arg) for arg in zip(*args)]
+                if unpack:
+                    return tuple(map(ctor, zip(*mapped)))
+                else:
+                    return ctor(mapped)
 
             return fun(  # type: ignore[call-arg]
-                *cast(_P.args, args)  # type: ignore[valid-type]
+                *cast(_P.args, args),  # type: ignore[valid-type]
             )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
-        return impl
+        if with_path_arg:
+            return lambda *args: impl(*args, ())
+        else:
+            return impl
     else:
         return functools.partial(
             tree_map,
             collection_type=collection_type,
             result_collection_constructor=result_collection_constructor,
+            unpack=unpack,
+            with_path_arg=with_path_arg,
         )
 
 

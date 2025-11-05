@@ -67,8 +67,6 @@ def _numpy_ufunc_upcasting_rule(*dtypes, ufunc: np.ufunc):
     # but it seems we don't have any of these functions anyway
     return matched[min(matched.keys())]
 
-    raise ValueError(f"No implementation found for dtypes {dtypes} and ufunc {ufunc}")
-
 
 def _common_upcasting_rule(*dtypes):
     """Look up upcasting behavior according to C++ casting rules."""
@@ -122,6 +120,7 @@ class _GTIRUpcasting(eve.NodeTranslator):
             common.NativeFunction.FLOAT64,
         ]:
             return node
+
         upcasting_rule = functools.partial(
             _numpy_ufunc_upcasting_rule, ufunc=common.op_to_ufunc(node.func)
         )
@@ -134,8 +133,10 @@ class _GTIRUpcasting(eve.NodeTranslator):
         def upcasting_rule(*dtypes):
             return [node.left.dtype] * len(dtypes)
 
-        _, right = _upcast_nodes(node.left, self.visit(node.right), upcasting_rule=upcasting_rule)
-        return _update_node(node, {"right": right})
+        left, right = _upcast_nodes(
+            self.visit(node.left), self.visit(node.right), upcasting_rule=upcasting_rule
+        )
+        return _update_node(node, {"left": left, "right": right})
 
 
 def upcast(node: gtir.Stencil) -> gtir.Stencil:

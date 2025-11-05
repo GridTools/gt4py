@@ -14,7 +14,7 @@ from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 
 import dace
 from dace import data as dace_data
-from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
+from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sdutils
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -534,8 +534,9 @@ def _gt_auto_process_top_level_maps(
         )
 
         if not disable_splitting:
-            # TODO(phimuell): Find out how to skip the propagation and integrating it
-            #   into the split transformation.
+            # TODO(phimuell): Implement a data cleaner.
+            dace_sdutils.canonicalize_memlet_trees(sdfg)
+            dace_propagation.propagate_memlets_sdfg(sdfg)
             sdfg.apply_transformations_repeated(
                 [
                     gtx_transformations.MapSplitter(
@@ -547,7 +548,9 @@ def _gt_auto_process_top_level_maps(
                 validate=False,
                 validate_all=validate_all,
             )
-            # TODO(phimuell): Implement a data cleaner.
+            # TODO(phimuell): Find out how to skip the propagation and integrating it
+            #   into the split transformation.
+            dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
 
             sdfg.apply_transformations_repeated(
@@ -759,7 +762,7 @@ def _gt_auto_configure_maps_and_strides(
     #   bad thing is to set the strides of the transients here. The main downside
     #   is that this and the `_gt_auto_post_processing()` function has these weird
     #   names.
-    gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
+    gtx_transformations.gt_change_strides(sdfg, gpu=gpu)
 
     if gpu:
         # TODO(phimuell): The GPU function might modify the map iteration order.
