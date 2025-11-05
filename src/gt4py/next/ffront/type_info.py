@@ -312,7 +312,7 @@ def return_type_scanop(
 
 def _signature_from_callable_in_program_context(callable_type: ts.CallableType):
     if isinstance(callable_type, ts_ffront.ProgramType):
-        _signature_from_callable_in_program_context(callable_type.definition)
+        return _signature_from_callable_in_program_context(callable_type.definition)
     elif isinstance(callable_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType):
         operator_signature = _signature_from_callable_in_program_context(callable_type.definition)
         return inspect.Signature(
