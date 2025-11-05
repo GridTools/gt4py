@@ -689,10 +689,13 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
 
         for old_writer_edge_to_remove in list(graph.in_edges(temp_node)):
             dace.sdfg.utils.remove_edge_and_dangling_path(graph, old_writer_edge_to_remove)
-        assert graph.in_degree(temp_node) == 0
 
-        # Now remove the node and because it is single use data, we can also remove the descriptor.
-        graph.remove_node(temp_node)
+        # We should actually test if the input degree of `temp_node` is zero, but
+        #  `remove_edge_and_dangling_path()` has removed it already, and it is thus
+        #  a bit hard to test.
+        assert all(temp_node.data != dnode.data for dnode in graph.data_nodes())
+
+        # Remove the data.
         sdfg.remove_data(temp_node.data, validate=False)
 
     def _map_params_to_dimensions(
