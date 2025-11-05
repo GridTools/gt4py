@@ -779,4 +779,7 @@ def associate_dimmensions(
         else:
             raise ValueError(f"Failed to associating the dimensions of '{sbs1}' with '{sbs2}'.")
 
+    assert len(dim_mapping) + len(drop1) == sbs1.dims()
+    assert len(dim_mapping) + len(drop2) == sbs2.dims()
+
     return dim_mapping, drop1, drop2
