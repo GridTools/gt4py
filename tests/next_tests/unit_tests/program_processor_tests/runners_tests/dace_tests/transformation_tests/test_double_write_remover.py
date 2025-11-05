@@ -42,7 +42,7 @@ def _make_double_write_single_consumer(
     )
     sdfg.add_array(
         "c",
-        shape=((10, 4) if slice_to_second else (4, 10)),
+        shape=((15, 4) if slice_to_second else (4, 15)),
         dtype=dace.float64,
         transient=False,
     )
@@ -61,10 +61,10 @@ def _make_double_write_single_consumer(
 
     if slice_to_second:
         state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 0]"))
-        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 2]"))
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [1:11, 2]"))
     else:
         state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0, 0:10]"))
-        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [2, 0:10]"))
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [2, 1:11]"))
 
     sdfg.validate()
     return sdfg, state, b, c, mx
@@ -246,7 +246,7 @@ def _make_double_write_multi_producer_map(
     )
     sdfg.add_array(
         "c",
-        shape=((10, 4) if slice_to_second else (4, 10)),
+        shape=((15, 4) if slice_to_second else (4, 15)),
         dtype=dace.float64,
         transient=False,
     )
@@ -285,10 +285,10 @@ def _make_double_write_multi_producer_map(
     mx.add_scope_connectors("c")
 
     if slice_to_second:
-        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 0]"))
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [1:11, 0]"))
         state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 2]"))
     else:
-        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0, 0:10]"))
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0, 1:11]"))
         state.add_nedge(b, c, dace.Memlet("b[0:10] -> [2, 0:10]"))
 
     sdfg.validate()
