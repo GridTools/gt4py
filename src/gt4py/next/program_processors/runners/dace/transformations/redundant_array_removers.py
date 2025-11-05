@@ -423,23 +423,27 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
 
 @dace_properties.make_properties
 class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
-    """
+    """Removes Redundant writes that are related to slices.
 
-    The transformation matches the following patter:
+    Consider the following code:
+    ```python
+    for i in range(N):
+        temp[i] = ...
+    A[:, slice1] = temp
+    A[:, slice2] = temp
     ```
-        MapExit -----> (Temp) -----> (Data)
+    The function will transform it into the following:
+    ```python
+    for i in range(N):
+        temp_scalar = ...
+        A[i, slice1] = temp_scalar
+        A[i, slice2] = temp_scalar
     ```
-    However, this is for speeding up things, the most important match are the first
-    two elements, i.e. the `MapExit` and the first AccessNode. If that Node refers
-    to a single use transient, then it is eliminated and the Map writes directly
-    into the second AccessNode.
-    It is important to note, that this transformation is designed to handle the
-    cases:
-    - Where there are multiple consumer of `Temp`, but all must be AccessNodes.
-    - There might be multiple connections between `Temp` and `Data`.
-    - The dimensions is different.
 
-    However, a restriction is that everything the Map writes is also consumed.
+    The transformation will only apply if:
+    - `temp` is single use data.
+    - `temp` is only consumed by other AccessNodes and not Maps.
+    - `temp` must be fully copied into its destination, i.e. not partially.
 
     Args:
         single_use_data: List of data containers that are used only at one place.
@@ -447,12 +451,10 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
 
     Todo:
         - Extend such that not the full array must be read.
-        - Try to allow more than one connection between `A1` and `A2`.
     """
 
     map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
     temp_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
-    other_consumer_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
@@ -474,7 +476,6 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             dace.sdfg.utils.node_path_graph(
                 cls.map_exit,
                 cls.temp_node,
-                cls.other_consumer_node,
             )
         ]
 
