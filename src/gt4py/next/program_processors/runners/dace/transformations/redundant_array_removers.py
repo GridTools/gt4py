@@ -588,6 +588,8 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
         #  look at the subset of the inner edge that writes into the node.
         assert graph.in_degree(temp_node) == 1
         outer_producer_edge = next(iter(graph.in_edges(temp_node)))
+        outer_producer_subset = outer_producer_edge.data.get_dst_subset(outer_producer_edge, graph)
+        assert outer_producer_subset is not None
         assert outer_producer_edge.src_conn.startswith("OUT_")
         inner_producer_edge = next(
             iter(
@@ -669,11 +671,13 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                     #  original `temp_node` thing.
                     temp_node_dim = consumer_to_temp_mapping[consumer_dim]
 
-                    # Apply the correction for the case that we do not start to write
-                    #  into `consumer_node` starting at zero.
-                    correction = consumer_destination[consumer_dim][0]
-                    inner_producer_idx = inner_producer_subset[temp_node_dim]
+                    # Compute the correction.
+                    consumer_correction = consumer_destination[consumer_dim][0]
+                    temp_correction = outer_producer_subset[temp_node_dim][0]
+                    correction = consumer_correction - temp_correction
 
+                    # Compose the final subset.
+                    inner_producer_idx = inner_producer_subset[temp_node_dim]
                     inner_map_output_subset.append(
                         (inner_producer_idx[0] + correction, inner_producer_idx[1] + correction, 1)
                     )
@@ -681,6 +685,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                     # The dimension is not written to by a Map parameter, which means
                     #  that it is some dummy dimension, such as an offset. Thus we use
                     #  the original subset.
+                    #  There is no correction needed here.
                     assert consumer_dim in consumer_drop
                     inner_map_output_subset.append(consumer_dst_subset[consumer_dim])
             new_inner_dst_subset = dace_sbs.Range(inner_map_output_subset)
