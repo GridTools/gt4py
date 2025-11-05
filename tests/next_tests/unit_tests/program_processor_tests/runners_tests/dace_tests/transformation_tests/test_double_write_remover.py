@@ -20,7 +20,7 @@ from . import util
 import dace
 
 
-def _make_simple_double_write_sdfg(
+def _make_double_write_sdfg(
     slice_to_second: bool,
 ) -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode, dace_nodes.MapExit
@@ -72,7 +72,7 @@ def _make_simple_double_write_sdfg(
 
 @pytest.mark.parametrize("slice_to_second", [True, False])
 def test_remove_double_write1(slice_to_second: bool):
-    sdfg, state, b, c, mx = _make_simple_double_write_sdfg(slice_to_second)
+    sdfg, state, b, c, mx = _make_double_write_sdfg(slice_to_second)
 
     pre_ac = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
     assert len(pre_ac) == 3
@@ -106,6 +106,119 @@ def test_remove_double_write1(slice_to_second: bool):
     assert util.count_nodes(sdfg, dace_nodes.MapExit) == 1
     assert state.out_degree(mx) == 2
     assert all(oedge.dst is c for oedge in state.out_edges(mx))
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_double_write_multi_consumer(
+    slice_to_second1: bool,
+    slice_to_second2: bool,
+) -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+    dace_nodes.MapExit,
+]:
+    sdfg = dace.SDFG(util.unique_name("double_write_elimination_2"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        "a",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "b",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=True,
+    )
+    sdfg.add_array(
+        "c",
+        shape=((10, 4) if slice_to_second1 else (4, 10)),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "d",
+        shape=((10, 3) if slice_to_second2 else (3, 10)),
+        dtype=dace.float64,
+        transient=False,
+    )
+    a, b, c, d = (state.add_access(name) for name in "abcd")
+
+    _, _, mx = state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("b[__i]")},
+        external_edges=True,
+        input_nodes={a},
+        output_nodes={b},
+    )
+
+    if slice_to_second1:
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 0]"))
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 2]"))
+    else:
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0, 0:10]"))
+        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [2, 0:10]"))
+    if slice_to_second2:
+        state.add_nedge(b, d, dace.Memlet("b[0:10] -> [0:10, 1]"))
+    else:
+        state.add_nedge(b, d, dace.Memlet("b[0:10] -> [1, 0:10]"))
+
+    sdfg.validate()
+    return sdfg, state, b, c, d, mx
+
+
+@pytest.mark.parametrize("slice_to_second1", [True, False])
+@pytest.mark.parametrize("slice_to_second2", [True, False])
+def test_remove_double_write_multi_consumer(
+    slice_to_second1: bool,
+    slice_to_second2: bool,
+):
+    sdfg, state, b, c, d, mx = _make_double_write_multi_consumer(
+        slice_to_second1=slice_to_second1,
+        slice_to_second2=slice_to_second2,
+    )
+
+    pre_ac = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(pre_ac) == 4
+    assert b in pre_ac
+    assert b.data in sdfg.arrays
+    assert util.count_nodes(sdfg, dace_nodes.MapExit) == 1
+    assert state.out_degree(mx) == 1
+    assert state.out_degree(b) == 3
+    assert state.in_degree(b) == 1
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    nb_applied = sdfg.apply_transformations_repeated(
+        gtx_transformations.DoubleWriteRemover(
+            single_use_data=None,
+        ),
+        validate_all=True,
+        validate=True,
+    )
+    assert nb_applied == 1
+
+    after_ac = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert b not in after_ac
+    assert b.data not in sdfg.arrays
+    assert len(after_ac) == 4
+
+    assert util.count_nodes(sdfg, dace_nodes.MapExit) == 1
+    assert state.out_degree(mx) == 3
+    assert all(oedge.dst in [c, d] for oedge in state.out_edges(mx))
+    assert state.in_degree(c) == 2
+    assert state.in_degree(d) == 1
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
