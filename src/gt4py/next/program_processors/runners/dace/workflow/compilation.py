@@ -86,7 +86,9 @@ class CompiledDaceProgram(stages.CompiledProgram):
         assert self.csdfg_argv is not None and self.csdfg_init_argv is not None, (
             "Argument vector was not set properly."
         )
-        self.sdfg_program.fast_call(self.csdfg_argv, self.csdfg_init_argv, do_gpu_check=False)
+        self.sdfg_program.fast_call(
+            self.csdfg_argv, self.csdfg_init_argv, do_gpu_check=config.DEBUG
+        )
 
     def __call__(self, **kwargs: Any) -> None:
         warnings.warn(
