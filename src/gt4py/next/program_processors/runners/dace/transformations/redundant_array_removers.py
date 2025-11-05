@@ -457,12 +457,12 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
     #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
-    _single_use_data: dict[dace.SDFG, set[str]]
+    _single_use_data: Optional[dict[dace.SDFG, set[str]]]
 
     def __init__(
         self,
         *args: Any,
-        single_use_data: dict[dace.SDFG, set[str]],
+        single_use_data: Optional[dict[dace.SDFG, set[str]]],
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)

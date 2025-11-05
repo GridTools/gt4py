@@ -46,7 +46,7 @@ from .multi_state_global_self_copy_elimination import (
     MultiStateGlobalSelfCopyElimination2,
     gt_multi_state_global_self_copy_elimination,
 )
-from .redundant_array_removers import CopyChainRemover, gt_remove_copy_chain
+from .redundant_array_removers import CopyChainRemover, DoubleWriteRemover, gt_remove_copy_chain
 from .remove_views import RemovePointwiseViews
 from .simplify import (
     GT4PyMapBufferElimination,
@@ -75,6 +75,7 @@ from .utils import gt_find_constant_arguments, gt_make_transients_persistent
 
 __all__ = [
     "CopyChainRemover",
+    "DoubleWriteRemover",
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
