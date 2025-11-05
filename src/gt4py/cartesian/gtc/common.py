@@ -291,23 +291,23 @@ def verify_and_get_common_dtype(
         if strict:
             if all(dt == dtype for dt in dtypes):
                 return dtype
-            else:
-                raise ValueError(
-                    f"Type mismatch in `{node_cls.__name__}`. Types are "
-                    + ", ".join(dt.name for dt in dtypes)
-                )
-        else:
-            # upcasting
-            return max(dt for dt in dtypes)
-    else:
-        return None
+
+            raise ValueError(
+                f"Type mismatch in `{node_cls.__name__}`. Types are "
+                + ", ".join(dt.name for dt in dtypes)
+            )
+
+        # upcasting
+        return max(dt for dt in dtypes)
+
+    return None
 
 
 def compute_kind(*values: Expr) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
         return ExprKind.FIELD
-    else:
-        return ExprKind.SCALAR
+
+    return ExprKind.SCALAR
 
 
 class Literal(eve.Node):

@@ -748,7 +748,7 @@ def _gt_auto_configure_maps_and_strides(
     #   bad thing is to set the strides of the transients here. The main downside
     #   is that this and the `_gt_auto_post_processing()` function has these weird
     #   names.
-    gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
+    gtx_transformations.gt_change_strides(sdfg, gpu=gpu)
 
     if gpu:
         # TODO(phimuell): The GPU function might modify the map iteration order.
