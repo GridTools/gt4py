@@ -723,7 +723,7 @@ def associate_dimmensions(
 
     idx1 = 0
     idx2 = 0
-    while idx1 != sbs1.dims() and idx2 != sbs2.dims():
+    while idx1 != sbs1.dims() or idx2 != sbs2.dims():
         # TODO(phimuell): Handle symbolic sizes better.
 
         if idx1 == sbs1.dims():
