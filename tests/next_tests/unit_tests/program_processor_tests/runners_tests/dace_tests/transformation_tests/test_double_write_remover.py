@@ -36,7 +36,7 @@ def _make_double_write_single_consumer(
     )
     sdfg.add_array(
         "b",
-        shape=(10,),
+        shape=(11,),
         dtype=dace.float64,
         transient=True,
     )
@@ -53,18 +53,18 @@ def _make_double_write_single_consumer(
         map_ranges={"__i": "3:13"},
         inputs={"__in": dace.Memlet("a[__i - 3]")},
         code="__out = __in + 1.0",
-        outputs={"__out": dace.Memlet("b[__i - 3]")},
+        outputs={"__out": dace.Memlet("b[__i - 2]")},
         external_edges=True,
         input_nodes={a},
         output_nodes={b},
     )
 
     if slice_to_second:
-        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0:10, 0]"))
-        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [1:11, 2]"))
+        state.add_nedge(b, c, dace.Memlet("b[1:11] -> [0:10, 0]"))
+        state.add_nedge(b, c, dace.Memlet("b[1:11] -> [1:11, 2]"))
     else:
-        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [0, 0:10]"))
-        state.add_nedge(b, c, dace.Memlet("b[0:10] -> [2, 1:11]"))
+        state.add_nedge(b, c, dace.Memlet("b[1:11] -> [0, 0:10]"))
+        state.add_nedge(b, c, dace.Memlet("b[1:11] -> [2, 1:11]"))
 
     sdfg.validate()
     return sdfg, state, b, c, mx
