@@ -644,6 +644,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
         #  them from the Map. To be precise use the `inner_distribution_node`.
         for consumer_edge in list(graph.out_edges(temp_node)):
             consumer_node = consumer_edge.dst
+            consumer_destination = consumer_edge.data.dst_subset
             assert isinstance(consumer_node, dace_nodes.AccessNode)
 
             # Since we want to understand how the destination is written we have to
@@ -667,7 +668,15 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                     #  Thus we have to use same subset that was used to write the
                     #  original `temp_node` thing.
                     temp_node_dim = consumer_to_temp_mapping[consumer_dim]
-                    inner_map_output_subset.append(inner_producer_subset[temp_node_dim])
+
+                    # Apply the correction for the case that we do not start to write
+                    #  into `consumer_node` starting at zero.
+                    correction = consumer_destination[consumer_dim][0]
+                    inner_producer_idx = inner_producer_subset[temp_node_dim]
+
+                    inner_map_output_subset.append(
+                        (inner_producer_idx[0] + correction, inner_producer_idx[1] + correction, 1)
+                    )
                 else:
                     # The dimension is not written to by a Map parameter, which means
                     #  that it is some dummy dimension, such as an offset. Thus we use
