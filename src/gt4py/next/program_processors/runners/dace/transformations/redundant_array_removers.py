@@ -646,7 +646,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
         #  them from the Map. To be precise use the `inner_distribution_node`.
         for consumer_edge in list(graph.out_edges(temp_node)):
             consumer_node = consumer_edge.dst
-            consumer_destination = consumer_edge.data.dst_subset
+            consumer_destination = consumer_edge.data.get_dst_subset(consumer_edge, graph)
             assert isinstance(consumer_node, dace_nodes.AccessNode)
 
             # Since we want to understand how the destination is written we have to
