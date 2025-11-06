@@ -1671,9 +1671,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         return IteratorExpr(it.field, it.gt_dtype, it.field_domain, shifted_indices)
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
-        index_builtin_dtype: Final = ts.ScalarType(
-            kind=getattr(ts.ScalarKind, gtir_builtins.INTEGER_INDEX_BUILTIN.upper())
-        )
         assert isinstance(node.fun, gtir.FunCall)
         # the iterator to be shifted is the node argument, while the shift arguments
         # are provided by the nested function call; the shift arguments consist of
@@ -1689,7 +1686,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr = (
-            SymbolExpr(offset_value_arg.value, gtx_dace_utils.as_dace_type(index_builtin_dtype))
+            SymbolExpr(offset_value_arg.value, gtir_builtins.INTEGER_INDEX_BUILTIN)
             if isinstance(offset_value_arg, gtir.OffsetLiteral)
             else self.visit(offset_value_arg)
         )
