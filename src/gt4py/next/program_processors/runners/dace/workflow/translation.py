@@ -168,10 +168,10 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     time, it does not include the overhead of calling the SDFG from Python.
 
     The execution time is measured in seconds and represented as a 'float64' value.
-    It is returned from the SDFG as a one-element array in the '__return' data node.
+    It is written to the global array 'SDFG_ARG_METRIC_COMPUTE_TIME'.
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
-    start_time, _ = sdfg.add_scalar("gt_start_time", dace.float64, transient=True)
+    start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
 
     #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
@@ -210,10 +210,10 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         inputs={},
         outputs={"time"},
         code="""\
-time = static_cast<double>(
-    std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
-) / 1e9;
+auto now = std::chrono::high_resolution_clock::now();
+time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()
+    ).count();
         """,
         language=dace.dtypes.Language.CPP,
     )
@@ -243,11 +243,11 @@ time = static_cast<double>(
         outputs={"duration"},
         code=sync_code
         + """
-double run_cpp_end_time = static_cast<double>(
-    std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
-) / 1e9;
-duration = run_cpp_end_time - run_cpp_start_time;
+auto now = std::chrono::high_resolution_clock::now();
+auto run_cpp_end_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()
+    ).count();
+duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         """,
         language=dace.dtypes.Language.CPP,
         side_effects=has_side_effects,

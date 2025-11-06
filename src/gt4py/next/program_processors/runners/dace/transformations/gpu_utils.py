@@ -531,9 +531,6 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     Note there are some special rules:
     - If a Map with (at most 3 dimension) has only one non trivial dimension, i.e.
         > 1, then the Map is handled as a 1D Map.
-    - If there is a 1D Map that contains a nested SDFG whose label starts with `scan_`
-        and `launch_bounds_1d` was not specified, then a value of 512 is assumed to
-        limit register usage.
 
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
@@ -724,14 +721,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             else:
                 block_size = list(self.block_size_1d)
 
-            # Launchbounds, if we have a scan and it is not specified use a special launch bound.
             launch_bounds = self.launch_bounds_1d
-            if launch_bounds is None:
-                for node in graph.scope_subgraph(
-                    self.map_entry, include_entry=False, include_exit=False
-                ):
-                    if isinstance(node, dace_nodes.NestedSDFG) and node.label.startswith("scan_"):
-                        launch_bounds = "512"  # Use high launch bound in case of scans to limit register usage and increase occupancy
 
         elif num_map_params == 2:
             block_size = list(self.block_size_2d)

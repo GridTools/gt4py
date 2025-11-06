@@ -1223,6 +1223,7 @@ def test_absolute_K_index(backend):
 
     in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     idx_arr = gt_storage.zeros(backend=backend, shape=(domain[0], domain[1]), dtype=np.int64)
+    idx_arr_32 = gt_storage.zeros(backend=backend, shape=(domain[0], domain[1]), dtype=np.int32)
     k_arr = gt_storage.zeros(backend=backend, shape=(domain[2],), dtype=np.float64)
     out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
 
@@ -1278,6 +1279,20 @@ def test_absolute_K_index(backend):
     assert (out_arr[:, :, :] == 42.42).all()
 
     @gtscript.stencil(backend=backend)
+    def test_field_access_computation(
+        in_field: Field[np.float64], index_field: Field[IJ, np.int32], out_field: Field[np.float64]
+    ) -> None:
+        with computation(PARALLEL), interval(...):
+            out_field = in_field.at(K=index_field - 1)
+
+    in_arr[:, :, :] = 1
+    in_arr[:, :, 1] = 42.42
+    idx_arr_32[:, :] = 2
+    out_arr[:, :, :] = 0
+    test_field_access_computation(in_arr, idx_arr_32, out_arr)
+    assert (out_arr[:, :, :] == 42.42).all()
+
+    @gtscript.stencil(backend=backend)
     def test_lower_dim_field(
         k_field: Field[K, np.float64],
         out_field: Field[np.float64],
@@ -1318,15 +1333,18 @@ def test_iterator_access(backend: str) -> None:
 
     field_A = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
     field_B = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    offsets = gt_storage.zeros(backend=backend, shape=(domain[2],), dtype=np.int32)
 
     @gtscript.stencil(backend=backend)
-    def test_all_valid_usage(field_A: Field[np.float64], field_B: Field[np.float64]) -> None:
+    def test_all_valid_usage(
+        field_A: Field[np.float64], field_B: Field[np.float64], offsets: Field[K, np.int32]
+    ) -> None:
         with computation(PARALLEL), interval(...):
             if K == 2:
                 field_A = 20.20
-            field_B = K
+            field_B = float(K + offsets)
 
-    test_all_valid_usage(field_A, field_B)
+    test_all_valid_usage(field_A, field_B, offsets)
     assert field_A[0, 0, 1] == 0
     assert field_A[0, 0, 2] == 20.20
     for _k in range(domain[2]):
@@ -1435,3 +1453,22 @@ def test_2d_temporaries_raises(backend):
 
         with computation(FORWARD), interval(...):
             out_field = tmp_2D
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_upcasting_both_sides_of_assignment(backend: str) -> None:
+    domain = (5, 5, 5)
+
+    input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    index_array = gt_storage.ones(backend=backend, shape=(domain[0], domain[1]), dtype=np.int32)
+
+    @gtscript.stencil(backend=backend)
+    def test_upcasting_stencil(
+        in_field: Field[np.float64], index_field: Field[IJ, np.int32], out_field: Field[np.float64]
+    ) -> None:
+        with computation(FORWARD), interval(...):
+            out_field[0, 0, index_field - 1] = in_field
+
+    test_upcasting_stencil(input, index_array, output)
+    assert (input == output).all()
