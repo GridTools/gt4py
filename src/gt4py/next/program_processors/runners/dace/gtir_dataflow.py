@@ -31,12 +31,13 @@ from dace import subsets as dace_subsets
 from gt4py import eve
 from gt4py.eve.extended_typing import MaybeNestedInTuple, NestedTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
-from gt4py.next.iterator import builtins as gtir_builtins, ir as gtir
+from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.program_processors.runners.dace import (
     gtir_python_codegen,
     gtir_to_sdfg,
+    gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
     utils as gtx_dace_utils,
 )
@@ -1686,7 +1687,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr = (
-            SymbolExpr(offset_value_arg.value, gtir_builtins.INTEGER_INDEX_BUILTIN)
+            SymbolExpr(offset_value_arg.value, gtir_to_sdfg_types.INDEX_DTYPE)
             if isinstance(offset_value_arg, gtir.OffsetLiteral)
             else self.visit(offset_value_arg)
         )
