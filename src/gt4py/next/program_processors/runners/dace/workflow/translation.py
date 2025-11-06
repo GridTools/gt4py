@@ -52,20 +52,18 @@ def find_constant_symbols(
                     raise NotImplementedError(
                         f"Unsupported field with multiple horizontal dimensions '{p}'."
                     )
-                if isinstance(p.type.dtype, ts.ListType):
-                    assert p.type.dtype.offset_type is not None
-                    full_dims = common.order_dimensions([*p.type.dims, p.type.dtype.offset_type])
-                    dim_index = full_dims.index(dim)
-                else:
-                    dim_index = p.type.dims.index(dim)
-                stride_name = gtx_dace_utils.field_stride_symbol_name(p.id, dim_index)
-                constant_symbols[stride_name] = 1
+                stride_symbol = gtx_dace_utils.field_stride_symbol(p.id, dim)
+                constant_symbols[stride_symbol.name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
         for conn, desc in sdfg.arrays.items():
             if gtx_dace_utils.is_connectivity_identifier(conn, offset_provider_type):
+                connectivity_type = offset_provider_type[conn]
+                assert isinstance(connectivity_type, common.NeighborConnectivityType)
                 assert not desc.transient
-                stride_name = gtx_dace_utils.field_stride_symbol_name(conn, 0)
-                constant_symbols[stride_name] = 1
+                stride_symbol = gtx_dace_utils.field_stride_symbol(
+                    conn, connectivity_type.source_dim
+                )
+                constant_symbols[stride_symbol.name] = 1
 
     if disable_field_origin_on_program_arguments:
         # collect symbols used as range start for all program arguments
@@ -88,7 +86,8 @@ def find_constant_symbols(
                 dataname = str(psymbol.id)
                 # set all range start symbols to constant value 0
                 constant_symbols |= {
-                    gtx_dace_utils.range_start_symbol(dataname, dim): 0 for dim in psymbol.type.dims
+                    gtx_dace_utils.field_origin_symbol(dataname, dim): 0
+                    for dim in psymbol.type.dims
                 }
 
     return constant_symbols

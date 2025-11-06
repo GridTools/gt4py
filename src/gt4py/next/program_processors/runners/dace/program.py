@@ -166,7 +166,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             name_axis = list(itertools.product(in_arrays, [0, 1]))
 
             def size_symbol_name(name: str, axis: int) -> str:
-                return gtx_dace_utils.field_size_symbol_name(
+                return gtx_dace_utils.field_size_symbol(
                     gtx_dace_utils.connectivity_identifier(name), axis
                 )
 
@@ -176,7 +176,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             }
 
             def stride_symbol_name(name: str, axis: int) -> str:
-                return gtx_dace_utils.field_stride_symbol_name(
+                return gtx_dace_utils.field_stride_symbol(
                     gtx_dace_utils.connectivity_identifier(name), axis
                 )
 
@@ -203,12 +203,12 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                     self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                         dtype=dace.dtypes.dtype_to_typeclass(conn.dtype.dtype.type),
                         shape=[
-                            symbols[gtx_dace_utils.field_size_symbol_name(conn_id, 0)],
-                            symbols[gtx_dace_utils.field_size_symbol_name(conn_id, 1)],
+                            symbols[gtx_dace_utils.field_size_symbol(conn_id, 0)],
+                            symbols[gtx_dace_utils.field_size_symbol(conn_id, 1)],
                         ],
                         strides=[
-                            symbols[gtx_dace_utils.field_stride_symbol_name(conn_id, 0)],
-                            symbols[gtx_dace_utils.field_stride_symbol_name(conn_id, 1)],
+                            symbols[gtx_dace_utils.field_stride_symbol(conn_id, 0)],
+                            symbols[gtx_dace_utils.field_stride_symbol(conn_id, 1)],
                         ],
                         storage=Program.connectivity_tables_data_descriptors["storage"],
                     )

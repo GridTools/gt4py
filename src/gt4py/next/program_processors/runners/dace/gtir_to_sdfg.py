@@ -290,8 +290,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 "Fields with more than one local dimension are not supported."
             )
         field_origin = tuple(
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, dim))
-            for dim in field_type.dims
+            gtx_dace_utils.field_origin_symbol(data_node.data, dim) for dim in field_type.dims
         )
         return gtir_to_sdfg_types.FieldopData(data_node, field_type, field_origin)
 
@@ -378,9 +377,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def unique_tasklet_name(self, name: str) -> str:
         return f"{self.tasklet_uids.sequential_id()}_{name}"
 
-    def _make_array_shape_and_strides(
+    def _make_array_layout(
         self, name: str, dims: Sequence[gtx_common.Dimension]
-    ) -> tuple[list[dace.symbolic.SymbolicType], list[dace.symbolic.SymbolicType]]:
+    ) -> tuple[
+        list[dace.symbolic.SymbolicType],
+        list[dace.symbolic.SymbolicType],
+        list[dace.symbolic.SymbolicType],
+    ]:
         """
         Parse field dimensions and allocate symbols for array shape and strides.
 
@@ -393,35 +396,19 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         one) and might be changed during optimization.
 
         Returns:
-            Two lists of symbols, one for the shape and the other for the strides of the array.
+            Three lists of symbols, for the origin, shape and strides of the array.
         """
         neighbor_table_types = gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
-        shape = []
-        for i, dim in enumerate(dims):
-            if dim.kind == gtx_common.DimensionKind.LOCAL:
-                # for local dimension, the size is taken from the associated connectivity type
-                shape.append(neighbor_table_types[dim.value].max_neighbors)
-            elif gtx_dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
-                # we use symbolic size for the global dimension of a connectivity
-                shape.append(
-                    dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_size_symbol_name(name, i))
-                )
-            else:
-                # the size of global dimensions for a regular field is the symbolic
-                # expression of domain range 'stop - start'
-                shape.append(
-                    dace.symbolic.pystr_to_symbolic(
-                        "{} - {}".format(
-                            gtx_dace_utils.range_stop_symbol(name, dim),
-                            gtx_dace_utils.range_start_symbol(name, dim),
-                        )
-                    )
-                )
-        strides = [
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_stride_symbol_name(name, i))
-            for i in range(len(dims))
+        origin = [gtx_dace_utils.field_origin_symbol(name, dim) for dim in dims]
+        shape = [
+            # for local dimension, the size is taken from the associated connectivity type
+            dace.symbolic.SymExpr(neighbor_table_types[dim.value].max_neighbors)
+            if dim.kind == gtx_common.DimensionKind.LOCAL
+            else gtx_dace_utils.field_size_symbol(name, dim)
+            for dim in dims
         ]
-        return shape, strides
+        strides = [gtx_dace_utils.field_stride_symbol(name, dim) for dim in dims]
+        return origin, shape, strides
 
     def _add_storage(
         self,
@@ -500,8 +487,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 raise ValueError("Unexpected local dimension in temporary field domain.")
             # Use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, dims)
+            sym_origin, sym_shape, sym_strides = self._make_array_layout(name, dims)
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
+            # Add the origin symbols to the SDFG, so they can be used in memlet subset
+            for dim, sym in zip(dims, sym_origin, strict=True):
+                if dim in gt_type.dims:  # do not add origin symbol for the local dimension
+                    sdfg.add_symbol(sym.name, sym.dtype)
             return [(name, gt_type)]
 
         elif isinstance(gt_type, ts.ScalarType):

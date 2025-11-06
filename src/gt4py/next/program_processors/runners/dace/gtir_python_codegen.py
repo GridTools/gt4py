@@ -15,6 +15,7 @@ import sympy
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
+from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
@@ -76,28 +77,20 @@ MATH_BUILTINS_MAPPING = {
 }
 
 
-def builtin_cast(val: str, target_type: str) -> str:
+def _builtin_cast(val: str, target_type: str) -> str:
     assert target_type in builtins.TYPE_BUILTINS
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
-def builtin_get_domain_range(field: str, axis: str) -> str:
-    # The builtin function returns a tuple of two values, the range start and stop.
-    # Here we return part of the symbol name: the full name also contains an
-    # additional suffix '_0' for range start or '_1' for stop, which is obtained
-    # from to the `tuple_get` index.
-    return gtx_dace_utils.range_symbol(field, axis)
-
-
-def builtin_if(cond: str, true_val: str, false_val: str) -> str:
+def _builtin_if(cond: str, true_val: str, false_val: str) -> str:
     return f"{true_val} if {cond} else {false_val}"
 
 
-def builtin_tuple_get(index: str, tuple_name: str) -> str:
+def _builtin_tuple_get(index: str, tuple_name: str) -> str:
     return f"{tuple_name}_{index}"
 
 
-def make_const_list(arg: str) -> str:
+def _make_const_list(arg: str) -> str:
     """
     Takes a single scalar argument and broadcasts this value on the local dimension
     of map expression. In a dataflow, we represent it as a tasklet that writes
@@ -107,11 +100,10 @@ def make_const_list(arg: str) -> str:
 
 
 GENERAL_BUILTIN_MAPPING: dict[str, Callable[..., str]] = {
-    "cast_": builtin_cast,
-    "get_domain_range": builtin_get_domain_range,
-    "if_": builtin_if,
-    "make_const_list": make_const_list,
-    "tuple_get": builtin_tuple_get,
+    "cast_": _builtin_cast,
+    "if_": _builtin_if,
+    "make_const_list": _make_const_list,
+    "tuple_get": _builtin_tuple_get,
 }
 
 
@@ -135,8 +127,28 @@ class PythonCodegen(codegen.TemplatedGenerator):
 
     Literal = as_fmt("{value}")
 
-    def visit_AxisLiteral(self, node: gtir.AxisLiteral, **kwargs: Any) -> str:
-        return node.value
+    def _visit_access_to_domain_range(
+        self, node: gtir.FunCall, args_map: dict[str, gtir.Node]
+    ) -> str:
+        assert cpm.is_call_to(node, "tuple_get")
+        index, tuple_ = node.args
+        assert isinstance(index, gtir.Literal)
+        assert cpm.is_call_to(tuple_, "get_domain_range")
+        field, axis = tuple_.args
+        assert isinstance(axis, gtir.AxisLiteral)
+        dim = gtx_common.Dimension(axis.value)
+        field_name = self.visit(field, args_map=args_map)
+        # The 'get_domain_range' builtin function returns a tuple of two values, the
+        # range start and stop. Combined with 'tuple_get', this function will build
+        # the symbolic expression to retrieve of the two values.
+        origin = gtx_dace_utils.field_origin_symbol(field_name, dim)
+        size = gtx_dace_utils.field_size_symbol(field_name, dim)
+        if index.value == "0":
+            return origin.name
+        elif index.value == "1":
+            return f"{origin.name} + {size.name}"
+        else:
+            raise ValueError(f"Unxpect 'tuple_get' on domain range with index '{index.value}'.")
 
     def visit_FunCall(self, node: gtir.FunCall, args_map: dict[str, gtir.Node]) -> str:
         if isinstance(node.fun, gtir.Lambda):
@@ -151,9 +163,13 @@ class PythonCodegen(codegen.TemplatedGenerator):
                 # shift expressions are not expected in this visitor context
                 raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
             return self.visit(node.args[0], args_map=args_map)
+        elif cpm.is_call_to(node, "tuple_get") and cpm.is_call_to(node.args[1], "get_domain_range"):
+            # special handling is needed to retrieve the SDFG symbols corresponding to field range
+
+            return self._visit_access_to_domain_range(node, args_map=args_map)
         elif isinstance(node.fun, gtir.SymRef):
-            args = self.visit(node.args, args_map=args_map)
             builtin_name = str(node.fun.id)
+            args = self.visit(node.args, args_map=args_map)
             return format_builtin(builtin_name, *args)
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
 

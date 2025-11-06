@@ -14,6 +14,7 @@ from typing import Final, Literal, Mapping, Optional, Union
 import dace
 
 from gt4py.next import common as gtx_common
+from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_types
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -21,8 +22,8 @@ from gt4py.next.type_system import type_specifications as ts
 CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "gt_conn_"
 CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^gt_conn_(\S+)$")
 
-# regex for domain range symbols
-RANGE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_(\S+)_range_[01]$")
+# element data type for field origin/size/stride symbols
+FIELD_SYMBOL_DTYPE: Final[dace.dtypes.typeclass] = gtir_to_sdfg_types.INDEX_DTYPE
 
 # regex for field stride symbols
 SIZE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_size_\d+$")
@@ -80,35 +81,23 @@ def is_connectivity_symbol(name: str, offset_provider_type: gtx_common.OffsetPro
     return gtx_common.has_offset(offset_provider_type, m[1])
 
 
-def field_symbol_name(field_name: str, axis: int, sym: Literal["size", "stride"]) -> str:
-    return f"__{field_name}_{sym}_{axis}"
+def field_symbol(
+    field_name: str, dim: gtx_common.Dimension, sym: Literal["origin", "size", "stride"]
+) -> dace.symbol:
+    name = f"__{field_name}_{dim.value}_{sym}"
+    return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
-def field_size_symbol_name(field_name: str, axis: int) -> str:
-    return field_symbol_name(field_name, axis, "size")
+def field_origin_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
+    return field_symbol(field_name, dim, "origin")
 
 
-def field_stride_symbol_name(field_name: str, axis: int) -> str:
-    return field_symbol_name(field_name, axis, "stride")
+def field_size_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
+    return field_symbol(field_name, dim, "size")
 
 
-def range_symbol(field_name: str, axis: str) -> str:
-    """Common part of the name for the range start/stop symbols."""
-    return f"__{field_name}_{axis}_range"
-
-
-def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> str:
-    """Format name of the start symbol for domain range."""
-    return f"{range_symbol(field_name, dim.value)}_0"
-
-
-def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> str:
-    """Format name of the stop symbol for domain range."""
-    return f"{range_symbol(field_name, dim.value)}_1"
-
-
-def is_range_symbol(name: str) -> bool:
-    return RANGE_SYMBOL_RE.match(name) is not None
+def field_stride_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
+    return field_symbol(field_name, dim, "stride")
 
 
 def is_size_symbol(name: str) -> bool:
