@@ -554,6 +554,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                 return False
 
             # Since `temp_node` is eliminated, the consumer must be another AccessNode.
+            # TODO(phimuell): Think of allowing that _some_ consumer are Maps.
             consumer_node = consumer_edge.dst
             if not isinstance(consumer_node, dace_nodes.AccessNode):
                 return False
