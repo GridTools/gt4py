@@ -683,7 +683,7 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
 def associate_dimmensions(
     sbs1: dace_sbs.Range,
     sbs2: dace_sbs.Range,
-    allow_trivail_dimensions: bool = True,
+    allow_trivial_dimensions: bool = True,
 ) -> tuple[dict[int, int], list[int], list[int]]:
     """Computes the association between dimensions of two subsets.
 
@@ -751,7 +751,7 @@ def associate_dimmensions(
         elif (
             (sizes1[idx1] == sizes2[idx2]) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
             and (
-                allow_trivail_dimensions
+                allow_trivial_dimensions
                 or (
                     (sizes1[idx1] == 1) == False  # noqa: E712 [true-false-comparison]  # SymPy comparison
                     and (sizes2[idx2] == 1) == False  # noqa: E712 [true-false-comparison]  # SymPy comparison

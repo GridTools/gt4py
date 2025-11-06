@@ -27,7 +27,7 @@ def _perform_test(
     dmap: dict[int, int],
     drop1: Sequence[int],
     drop2: Sequence[int],
-    allow_trivail_dimensions: bool = True,
+    allow_trivial_dimensions: bool = True,
     expect_to_fail: Literal[False] = False,
 ) -> None: ...
 
@@ -49,14 +49,14 @@ def _perform_test(
     dmap: dict[int, int],
     drop1: Sequence[int],
     drop2: Sequence[int],
-    allow_trivail_dimensions: bool = True,
+    allow_trivial_dimensions: bool = True,
     expect_to_fail: bool = False,
 ) -> None:
     try:
         res_dmap, res_drop1, res_drop2 = gtx_transformations.utils.associate_dimmensions(
             sbs1=dace_sbs.Range.from_string(sbs1),
             sbs2=dace_sbs.Range.from_string(sbs2),
-            allow_trivail_dimensions=allow_trivail_dimensions,
+            allow_trivial_dimensions=allow_trivial_dimensions,
         )
 
     except ValueError:
@@ -119,7 +119,7 @@ def test_associate_dim_5():
         dmap={0: 0, 1: 1, 3: 2},
         drop1=[2],
         drop2=[3, 4],
-        allow_trivail_dimensions=True,
+        allow_trivial_dimensions=True,
     )
 
 
@@ -130,7 +130,7 @@ def test_associate_dim_6():
         dmap={1: 1, 3: 2},
         drop1=[0, 2],
         drop2=[0, 3, 4],
-        allow_trivail_dimensions=False,
+        allow_trivial_dimensions=False,
     )
 
 

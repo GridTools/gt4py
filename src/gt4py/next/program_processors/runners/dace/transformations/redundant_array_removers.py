@@ -496,7 +496,12 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
 
         producer_edge = next(iter(graph.in_edges(temp_node)))
         produced_sbs: dace_sbs.Range = producer_edge.data.get_dst_subset(producer_edge, graph)
-        if produced_sbs is None:
+        assert produced_sbs is not None
+
+        # Only step 1 is allowed.
+        if any(step != 1 for _, _, step in map_exit.map.range):
+            return False
+        if any(step != 1 for _, _, step in produced_sbs):
             return False
 
         # To simplify implementation we only allow that there is one producer inside the Map.
@@ -552,6 +557,8 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             # What is produced must be consumed.
             if consumer_sbs != produced_sbs:
                 return False
+            if any(step != 1 for _, _, step in consumer_sbs):
+                return False
 
             # Since `temp_node` is eliminated, the consumer must be another AccessNode.
             # TODO(phimuell): Think of allowing that _some_ consumer are Maps.
@@ -604,7 +611,7 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
 
         # Because we distribute to multiple consumers, we need some temporary storage
         #  inside the Map scope, aka. AccessNode. We will first check if there is
-        #  already am AccessNode that can be used or if we have to create a new one.
+        #  already an AccessNode that can be used or if we have to create a new one.
         current_inner_producer_node = inner_producer_edge.src
         if not isinstance(current_inner_producer_node, dace_nodes.AccessNode):
             reuse_inner_producer_node = False

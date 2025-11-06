@@ -295,10 +295,9 @@ def _make_double_write_multi_producer_map(
     return sdfg, state, b, c, mx
 
 
-# @pytest.mark.parametrize("slice_to_second", [True, False])
-def test_remove_double_write_multi_producer():  # slice_to_second: bool):
-    slice_to_second = True
-    sdfg, state, b, c, mx = _make_double_write_multi_producer_map(slice_to_second)
+@pytest.mark.parametrize("slice_to_second", [True, False])
+def test_remove_double_write_multi_producer(slice_to_second: bool):
+    sdfg, state, b, c, mx = _make_double_write_multi_producer_map(slice_to_second=slice_to_second)
 
     pre_ac = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
     assert len(pre_ac) == 3
