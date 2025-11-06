@@ -535,10 +535,6 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             return False
         if inner_producer_edge.data.wcr is not None:
             return False
-        # TODO(phimuell): Due to the special meaning of `dynamic` Memlets in GT4Py,
-        #   we should probably lift this restriction.
-        if inner_producer_edge.data.dynamic:
-            return False
 
         # We only allow arrays that are transients.
         if not isinstance(temp_desc, dace_data.Array):
@@ -561,7 +557,8 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
                 return False
 
             # Since `temp_node` is eliminated, the consumer must be another AccessNode.
-            # TODO(phimuell): Think of allowing that _some_ consumer are Maps.
+            # TODO(phimuell): Allow the consumer to be a Map, in which case `temp_node`
+            #   should not be removed.`
             consumer_node = consumer_edge.dst
             if not isinstance(consumer_node, dace_nodes.AccessNode):
                 return False
