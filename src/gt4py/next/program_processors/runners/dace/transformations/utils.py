@@ -707,6 +707,20 @@ def associate_dimmensions(
         from `sbs1`, because they where trivial. The third element is the same
         as the second element, but for `sbs2`.
 
+    Example:
+        >>> from dace import subset as dace_sbs
+        >>> associate_dimmensions(
+        ...     sbs1=dace_sbs.Range.from_string("3, 0:10, 1"),
+        ...     sbs2=dace_sbs.Range.from_string("0:10, 4"),
+        ... )
+        ({1: 0, 2: 1}, [0], [])
+        >>> associate_dimmensions(
+        ...     sbs1=dace_sbs.Range.from_string("3, 0:10, 1"),
+        ...     sbs2=dace_sbs.Range.from_string("0:10, 4"),
+        ...     allow_trivial_dimensions=False,
+        ... )
+        ({1: 0}, [0, 2], [])
+
     Note:
         This function can not perform arbitrary reshapes, such as flatten a multi
         dimensional array.
