@@ -473,13 +473,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
             if isinstance(gt_type.dtype, ts.ScalarType):
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype)
-                dims = gt_type.dims
+                full_dims = gt_type.dims
             elif not transient:  # 'ts.ListType': use 'offset_type' as local dimension
                 assert gt_type.dtype.offset_type is not None
                 assert gt_type.dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
                 assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype.element_type)
-                dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
+                full_dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
             else:
                 # By design, the domain of temporary fields used by SDFG lowering
                 # contains only the global dimensions. The local dimension is extracted,
@@ -487,11 +487,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 raise ValueError("Unexpected local dimension in temporary field domain.")
             # Use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_origin, sym_shape, sym_strides = self._make_array_layout(name, dims)
+            sym_origin, sym_shape, sym_strides = self._make_array_layout(name, full_dims)
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
             # Add the origin symbols to the SDFG, so they can be used in memlet subset
-            for dim, sym in zip(dims, sym_origin, strict=True):
-                if dim in gt_type.dims:  # do not add origin symbol for the local dimension
+            for dim, sym in zip(full_dims, sym_origin, strict=True):
+                if dim in gt_type.dims:  # do not add origin symbol for the 'offset_type' dimension
                     sdfg.add_symbol(sym.name, sym.dtype)
             return [(name, gt_type)]
 
