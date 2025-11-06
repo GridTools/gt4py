@@ -778,6 +778,7 @@ def field_operator(
     *,
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
+    **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> (
     FieldOperator[foast.FieldOperator]
     | Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]
@@ -805,6 +806,7 @@ def field_operator(
                 next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
             ),
             grid_type,
+            **compilation_options
         )
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
