@@ -143,9 +143,9 @@ class PythonCodegen(codegen.TemplatedGenerator):
         # the symbolic expression to retrieve of the two values.
         origin = gtx_dace_utils.field_origin_symbol(field_name, dim)
         size = gtx_dace_utils.field_size_symbol(field_name, dim)
-        if index.value == "0":
+        if index.value == "0":  # range start
             return origin.name
-        elif index.value == "1":
+        elif index.value == "1":  # range stop
             return f"{origin.name} + {size.name}"
         else:
             raise ValueError(f"Unxpect 'tuple_get' on domain range with index '{index.value}'.")

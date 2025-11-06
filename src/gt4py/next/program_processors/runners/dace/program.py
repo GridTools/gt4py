@@ -8,14 +8,13 @@
 
 import collections
 import dataclasses
-import itertools
 import typing
 from typing import Any, ClassVar, Optional, Sequence
 
 import dace
 import numpy as np
 
-from gt4py.next import backend as next_backend, common
+from gt4py.next import backend as gtx_backend, common as gtx_common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
@@ -40,11 +39,11 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         if (self.backend is None) or "dace" not in self.backend.name.lower():
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
-        offset_provider: common.OffsetProvider = self.connectivities or {}
+        offset_provider: gtx_common.OffsetProvider = self.connectivities or {}
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.
-        gtir_stage = typing.cast(next_backend.Transforms, self.backend.transforms).past_to_itir(
+        gtir_stage = typing.cast(gtx_backend.Transforms, self.backend.transforms).past_to_itir(
             toolchain.CompilableProgram(
                 data=self.past_stage,
                 args=arguments.CompileTimeArgs(
@@ -109,11 +108,13 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         def single_horizontal_dim_per_field(
             fields: typing.Iterable[itir.Sym],
-        ) -> typing.Iterator[tuple[str, common.Dimension]]:
+        ) -> typing.Iterator[tuple[str, gtx_common.Dimension]]:
             for field in fields:
                 assert isinstance(field.type, ts.FieldType)
                 horizontal_dims = [
-                    dim for dim in field.type.dims if dim.kind is common.DimensionKind.HORIZONTAL
+                    dim
+                    for dim in field.type.dims
+                    if dim.kind is gtx_common.DimensionKind.HORIZONTAL
                 ]
                 # do nothing for fields with multiple horizontal dimensions
                 # or without horizontal dimensions
@@ -152,63 +153,34 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         closure_dict: dict[str, Any] = {}
 
         if self.connectivities:
-            symbols = {}
-            with_table = [
-                name for name, conn in self.connectivities.items() if common.is_neighbor_table(conn)
-            ]
-            in_arrays_with_id = [
-                (name, conn_id)
-                for name in with_table
-                if (conn_id := gtx_dace_utils.connectivity_identifier(name))
+            used_connectivities: dict[str, gtx_common.NeighborConnectivity] = {
+                conn_id: conn
+                for offset, conn in self.connectivities.items()
+                if gtx_common.is_neighbor_table(conn)
+                and (conn_id := gtx_dace_utils.connectivity_identifier(offset))
                 in self.sdfg_closure_cache["arrays"]
-            ]
-            in_arrays = (name for name, _ in in_arrays_with_id)
-            name_axis = list(itertools.product(in_arrays, [0, 1]))
-
-            def size_symbol_name(name: str, axis: int) -> str:
-                return gtx_dace_utils.field_size_symbol(
-                    gtx_dace_utils.connectivity_identifier(name), axis
-                )
-
-            connectivity_tables_size_symbols = {
-                (sname := size_symbol_name(name, axis)): dace.symbol(sname)
-                for name, axis in name_axis
             }
-
-            def stride_symbol_name(name: str, axis: int) -> str:
-                return gtx_dace_utils.field_stride_symbol(
-                    gtx_dace_utils.connectivity_identifier(name), axis
-                )
-
-            connectivity_table_stride_symbols = {
-                (sname := stride_symbol_name(name, axis)): dace.symbol(sname)
-                for name, axis in name_axis
-            }
-
-            symbols = connectivity_tables_size_symbols | connectivity_table_stride_symbols
 
             # Define the storage location (e.g. CPU, GPU) of the connectivity tables
             if "storage" not in self.connectivity_tables_data_descriptors:
-                for _, conn_id in in_arrays_with_id:
+                for conn_id in used_connectivities.keys():
                     self.connectivity_tables_data_descriptors["storage"] = self.sdfg_closure_cache[
                         "arrays"
                     ][conn_id].storage
                     break
 
             # Build the closure dictionary
-            for name, conn_id in in_arrays_with_id:
+            for conn_id, conn in used_connectivities.items():
                 if conn_id not in self.connectivity_tables_data_descriptors:
-                    conn = self.connectivities[name]
-                    assert common.is_neighbor_table(conn)
                     self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                         dtype=dace.dtypes.dtype_to_typeclass(conn.dtype.dtype.type),
                         shape=[
-                            symbols[gtx_dace_utils.field_size_symbol(conn_id, 0)],
-                            symbols[gtx_dace_utils.field_size_symbol(conn_id, 1)],
+                            gtx_dace_utils.field_size_symbol(conn_id, conn.domain.dims[0]),
+                            gtx_dace_utils.field_size_symbol(conn_id, conn.domain.dims[1]),
                         ],
                         strides=[
-                            symbols[gtx_dace_utils.field_stride_symbol(conn_id, 0)],
-                            symbols[gtx_dace_utils.field_stride_symbol(conn_id, 1)],
+                            gtx_dace_utils.field_stride_symbol(conn_id, conn.domain.dims[0]),
+                            gtx_dace_utils.field_stride_symbol(conn_id, conn.domain.dims[1]),
                         ],
                         storage=Program.connectivity_tables_data_descriptors["storage"],
                     )

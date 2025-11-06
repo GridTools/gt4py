@@ -83,12 +83,12 @@ def find_constant_symbols(
                 if len(psymbol.type.dims) == 0:
                     # zero-dimensional field
                     continue
-                dataname = str(psymbol.id)
                 # set all range start symbols to constant value 0
-                constant_symbols |= {
-                    gtx_dace_utils.field_origin_symbol(dataname, dim): 0
+                origin_symbols = (
+                    gtx_dace_utils.field_origin_symbol(str(psymbol.id), dim)
                     for dim in psymbol.type.dims
-                }
+                )
+                constant_symbols |= {dc_symbol.name: 0 for dc_symbol in origin_symbols}
 
     return constant_symbols
 
