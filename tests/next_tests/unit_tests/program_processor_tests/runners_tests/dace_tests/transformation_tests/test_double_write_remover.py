@@ -107,6 +107,32 @@ def test_remove_double_write_single_consumer(slice_to_second: bool):
     assert state.out_degree(mx) == 2
     assert all(oedge.dst is c for oedge in state.out_edges(mx))
 
+    # Check if Memlet propagation as worked.
+    for iedge in state.in_edges(c):
+        isbs = iedge.data.get_dst_subset(iedge, state)
+        if slice_to_second:
+            if isbs[1][0] == 0:
+                assert isbs[1][1] == 0
+                assert isbs[0][0] == 0
+                assert isbs[0][1] == 9
+            elif isbs[1][0] == 2:
+                assert isbs[1][1] == 2
+                assert isbs[0][0] == 1
+                assert isbs[0][1] == 10
+            else:
+                assert False, f"Unknown second index '{isbs[1][0]}'."
+        else:
+            if isbs[0][0] == 0:
+                assert isbs[0][1] == 0
+                assert isbs[1][0] == 0
+                assert isbs[1][1] == 9
+            elif isbs[0][0] == 2:
+                assert isbs[0][1] == 2
+                assert isbs[1][0] == 1
+                assert isbs[1][1] == 10
+            else:
+                assert False, f"Unknown first index '{isbs[1][0]}'."
+
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
 

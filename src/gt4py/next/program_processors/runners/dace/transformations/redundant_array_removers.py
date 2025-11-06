@@ -719,6 +719,9 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             #  the final consumer. For the connection from the MapExit to the consumer
             #  we essentially recycle the Memlet, but create a new one, to ensure that
             #  it has the canonical format.
+            # TODO: We can not use `graph.add_memlet_path()` because sometimes Memlet
+            #   propagation fails. Here we are reusing the subsets that were already
+            #   there. Which assumes that they are correct.
             connector_name = map_exit.next_connector()
             graph.add_edge(
                 inner_distribution_node,
