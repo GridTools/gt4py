@@ -22,6 +22,7 @@ from gt4py.next.ffront import (
     program_ast as past,
     stages as ffront_stages,
     transform_utils,
+    type_info as ffront_ti,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.stages import AOT_PRG
@@ -483,7 +484,11 @@ class ProgramLowering(
         return itir.SymRef(id=node.id, location=node.location)
 
     def visit_Symbol(self, node: past.Symbol, **kwargs: Any) -> itir.Sym:
-        return itir.Sym(id=node.id, type=node.type)
+        if isinstance(node.type, ts.ANY_COLLECTION_TYPES):
+            new_symbol_type = ffront_ti.named_collections_to_tuples_typespec(node.type)
+        else:
+            new_symbol_type = node.type
+        return itir.Sym(id=node.id, type=new_symbol_type)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs: Any) -> itir.FunCall:
         return itir.FunCall(

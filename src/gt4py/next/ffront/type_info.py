@@ -46,6 +46,12 @@ tree_map_typespec = functools.partial(
     result_collection_constructor=_tree_map_typespec_constructor,
 )
 
+named_collections_to_tuples_typespec = utils.tree_map(
+    lambda x: x,
+    collection_type=(ts.TupleType, ts.NamedCollectionType),
+    result_collection_constructor=lambda _, elems: ts.TupleType(types=list(elems)),
+)
+
 
 def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
     return isinstance(field, ts.FieldType) and len(field.dims) == 0

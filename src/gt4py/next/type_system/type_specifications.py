@@ -8,9 +8,13 @@
 
 from __future__ import annotations
 
-from typing import Iterator, Optional, Sequence
+from typing import Final, Iterator, Optional, Sequence
 
-from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
+from gt4py.eve import (
+    datamodels as eve_datamodels,
+    extended_typing as xtyping,
+    type_definitions as eve_types,
+)
 from gt4py.next import common
 
 
@@ -170,6 +174,10 @@ class NamedCollectionType(DataType):
 
     def __len__(self) -> int:
         return len(self.types)
+
+
+AnyCollectionType = TupleType | NamedCollectionType
+ANY_COLLECTION_TYPES: Final[tuple[type, ...]] = xtyping.get_args(AnyCollectionType)
 
 
 class FunctionType(CallableType):
