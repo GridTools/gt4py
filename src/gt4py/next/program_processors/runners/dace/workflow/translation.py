@@ -62,7 +62,9 @@ def find_constant_symbols(
             ):
                 assert not sdfg.arrays[conn_id].transient
                 assert conn_type.source_dim.kind == common.DimensionKind.HORIZONTAL
-                stride_symbol = gtx_dace_utils.field_stride_symbol(conn_id, conn_type.source_dim)
+                stride_symbol = gtx_dace_utils.field_stride_symbol(
+                    conn_id, conn_type.source_dim, offset_provider_type
+                )
                 constant_symbols[stride_symbol.name] = 1
 
     if disable_field_origin_on_program_arguments:
@@ -84,10 +86,10 @@ def find_constant_symbols(
                     # zero-dimensional field
                     continue
                 # set all range start symbols to constant value 0
-                origin_symbols = (
+                origin_symbols = [
                     gtx_dace_utils.range_start_symbol(str(psymbol.id), dim)
                     for dim in psymbol.type.dims
-                )
+                ]
                 constant_symbols |= {sdfg_symbol.name: 0 for sdfg_symbol in origin_symbols}
 
     return constant_symbols

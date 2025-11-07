@@ -14,8 +14,9 @@ from typing import Final, Literal, Mapping, Union
 import dace
 
 from gt4py.next import common as gtx_common
+from gt4py.next.iterator import builtins as gtir_builtins
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.program_processors.runners.dace import gtir_python_codegen, gtir_to_sdfg_types
+from gt4py.next.program_processors.runners.dace import gtir_python_codegen
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -27,7 +28,7 @@ CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^gt_conn_(\S+)$")
 FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_(\S+)_(size|stride)$")
 
 # element data type for field size/stride symbols
-FIELD_SYMBOL_DTYPE: Final[dace.dtypes.typeclass] = gtir_to_sdfg_types.INDEX_DTYPE
+FIELD_SYMBOL_DTYPE: Final[dace.typeclass] = getattr(dace, gtir_builtins.INTEGER_INDEX_BUILTIN)
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
@@ -117,8 +118,9 @@ def field_stride_symbol(
 
 def _range_symbol_name(field_name: str, axis: str) -> str:
     """Common part of the name for the range start/stop symbols."""
-    symref = im.ref(field_name)
-    return gtir_python_codegen.get_source(symref)
+    dim = gtx_common.Dimension(axis)
+    field_range = im.call("get_domain_range")(field_name, dim)
+    return gtir_python_codegen.get_source(field_range)
 
 
 def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:

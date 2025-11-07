@@ -18,8 +18,7 @@ from dace import subsets as dace_subsets
 
 from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
-from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
-from gt4py.next.iterator import ir as gtir
+from gt4py.next.iterator import builtins as gtir_builtins, ir as gtir
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
@@ -197,7 +196,7 @@ class SymbolicData:
     value: dace.symbolic.SymbolicType
 
 
-INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
+INDEX_DTYPE: Final[dace.typeclass] = getattr(dace, gtir_builtins.INTEGER_INDEX_BUILTIN)
 """Data type used for field indexing."""
 
 
