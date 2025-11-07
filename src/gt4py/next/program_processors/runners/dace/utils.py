@@ -88,8 +88,8 @@ def _field_symbol(
         name = f"__{field_name}_{dim.value}_{sym}"
     else:  # a connectivity field
         assert offset_provider_type is not None
+        assert m[1] in offset_provider_type
         offset = m[1]
-        assert offset in offset_provider_type
         conn_type = offset_provider_type[offset]
         if dim == conn_type.source_dim:
             name = f"__{field_name}_source_{sym}"
