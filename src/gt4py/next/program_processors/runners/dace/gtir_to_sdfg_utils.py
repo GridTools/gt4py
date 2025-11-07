@@ -117,20 +117,21 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
     if not all(dace.dtypes.validate_name(str(sym.id)) for sym in ir.params):
         raise ValueError("Invalid symbol in program parameters.")
 
-    ir_sym_ids = {str(sym.id) for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()}
-    ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_tmp")
+    ir_sym_ids = eve.walk_values(ir).if_isinstance(gtir.Sym).map(lambda x: str(x.id)).to_list()
+    ir_invalid_sym_ids = [sym_id for sym_id in ir_sym_ids if not dace.dtypes.validate_name(sym_id)]
+    if len(ir_invalid_sym_ids) == 0:
+        return ir
+    # invalid symbols should only be used for SSA-variables created by gt4py
+    assert len(ir_invalid_sym_ids) == len(set(ir_invalid_sym_ids))
 
+    ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_tmp")
     # note: traverse in alphabetical order to generate UIDs in deterministic way
     invalid_symbols_mapping = {
-        sym_id: ir_ssa_uuid.sequential_id()
-        for sym_id in sorted(ir_sym_ids)
-        if not dace.dtypes.validate_name(sym_id)
+        sym_id: ir_ssa_uuid.sequential_id() for sym_id in sorted(ir_invalid_sym_ids)
     }
-    if len(invalid_symbols_mapping) == 0:
-        return ir
-
     # assert that the new symbol names are not used in the IR
-    assert ir_sym_ids.isdisjoint(invalid_symbols_mapping.values())
+    assert set(ir_sym_ids).isdisjoint(invalid_symbols_mapping.values())
+
     return ReplaceSymbols().visit(ir, symtable=invalid_symbols_mapping)
 
 
