@@ -150,52 +150,53 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         the offset providers are not part of GT4Py Program's arguments.
         Keep in mind, that `__sdfg_closure__` is called after `__sdfg__` method.
         """
-        closure_dict: dict[str, Any] = {}
+        if not self.connectivities:
+            return {}
 
-        if self.connectivities:
-            connectivity_types = gtx_dace_utils.filter_connectivity_types(
-                gtx_common.offset_provider_to_type(self.connectivities)
-            )
-            used_connectivities: dict[str, gtx_common.NeighborConnectivity] = {
-                conn_id: conn
-                for offset, conn in self.connectivities.items()
-                if gtx_common.is_neighbor_table(conn)
-                and (conn_id := gtx_dace_utils.connectivity_identifier(offset))
-                in self.sdfg_closure_cache["arrays"]
-            }
+        used_connectivities: dict[str, gtx_common.NeighborConnectivity] = {
+            conn_id: conn
+            for offset, conn in self.connectivities.items()
+            if gtx_common.is_neighbor_table(conn)
+            and (conn_id := gtx_dace_utils.connectivity_identifier(offset))
+            in self.sdfg_closure_cache["arrays"]
+        }
 
-            # Define the storage location (e.g. CPU, GPU) of the connectivity tables
-            if "storage" not in self.connectivity_tables_data_descriptors:
-                for conn_id in used_connectivities.keys():
-                    self.connectivity_tables_data_descriptors["storage"] = self.sdfg_closure_cache[
-                        "arrays"
-                    ][conn_id].storage
-                    break
+        # Define the storage location (e.g. CPU, GPU) of the connectivity tables
+        if "storage" not in self.connectivity_tables_data_descriptors:
+            for conn_id in used_connectivities.keys():
+                self.connectivity_tables_data_descriptors["storage"] = self.sdfg_closure_cache[
+                    "arrays"
+                ][conn_id].storage
+                break
 
-            # Build the closure dictionary
-            for conn_id, conn in used_connectivities.items():
-                if conn_id not in self.connectivity_tables_data_descriptors:
-                    self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
-                        dtype=dace.dtypes.dtype_to_typeclass(conn.dtype.dtype.type),
-                        shape=[
-                            gtx_dace_utils.field_size_symbol(
-                                conn_id, conn.domain.dims[0], connectivity_types
-                            ),
-                            gtx_dace_utils.field_size_symbol(
-                                conn_id, conn.domain.dims[1], connectivity_types
-                            ),
-                        ],
-                        strides=[
-                            gtx_dace_utils.field_stride_symbol(
-                                conn_id, conn.domain.dims[0], connectivity_types
-                            ),
-                            gtx_dace_utils.field_stride_symbol(
-                                conn_id, conn.domain.dims[1], connectivity_types
-                            ),
-                        ],
-                        storage=Program.connectivity_tables_data_descriptors["storage"],
-                    )
-                closure_dict[conn_id] = self.connectivity_tables_data_descriptors[conn_id]
+        # Build the closure dictionary
+        closure_dict: dict[str, dace.data.Array] = {}
+        connectivity_types = gtx_dace_utils.filter_connectivity_types(
+            gtx_common.offset_provider_to_type(self.connectivities)
+        )
+        for conn_id, conn in used_connectivities.items():
+            if conn_id not in self.connectivity_tables_data_descriptors:
+                self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
+                    dtype=dace.dtypes.dtype_to_typeclass(conn.dtype.dtype.type),
+                    shape=[
+                        gtx_dace_utils.field_size_symbol(
+                            conn_id, conn.domain.dims[0], connectivity_types
+                        ),
+                        gtx_dace_utils.field_size_symbol(
+                            conn_id, conn.domain.dims[1], connectivity_types
+                        ),
+                    ],
+                    strides=[
+                        gtx_dace_utils.field_stride_symbol(
+                            conn_id, conn.domain.dims[0], connectivity_types
+                        ),
+                        gtx_dace_utils.field_stride_symbol(
+                            conn_id, conn.domain.dims[1], connectivity_types
+                        ),
+                    ],
+                    storage=Program.connectivity_tables_data_descriptors["storage"],
+                )
+            closure_dict[conn_id] = self.connectivity_tables_data_descriptors[conn_id]
 
         return closure_dict
 

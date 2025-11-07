@@ -158,14 +158,14 @@ class FieldopData:
         if isinstance(self.gt_type.dtype, ts.ListType):
             local_dim = self.gt_type.dtype.offset_type
             assert local_dim is not None
-            full_dims = gtx_common.order_dimensions([*self.gt_type.dims, local_dim])
+            all_dims = gtx_common.order_dimensions([*self.gt_type.dims, local_dim])
             globals_size = [
                 size
-                for dim, size in zip(full_dims, outer_desc.shape, strict=True)
+                for dim, size in zip(all_dims, outer_desc.shape, strict=True)
                 if dim != local_dim
             ]
         else:
-            full_dims = self.gt_type.dims
+            all_dims = self.gt_type.dims
             globals_size = outer_desc.shape
 
         symbol_mapping: dict[str, dace.symbolic.SymbolicType] = {}
@@ -174,7 +174,7 @@ class FieldopData:
                 gtx_dace_utils.range_start_symbol(dataname, dim): origin,
                 gtx_dace_utils.range_stop_symbol(dataname, dim): (origin + size),
             }
-        for dim, stride in zip(full_dims, outer_desc.strides, strict=True):
+        for dim, stride in zip(all_dims, outer_desc.strides, strict=True):
             symbol_mapping |= {
                 gtx_dace_utils.field_stride_symbol(dataname, dim): stride,
             }

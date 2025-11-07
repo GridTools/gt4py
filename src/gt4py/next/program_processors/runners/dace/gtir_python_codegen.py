@@ -17,7 +17,6 @@ from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
 from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 
 
 MATH_BUILTINS_MAPPING = {
@@ -86,7 +85,7 @@ def _builtin_get_domain_range(field: str, axis: str) -> str:
     # Here we return part of the symbol name: the full name also contains an
     # additional suffix '_0' for range start or '_1' for stop, which is obtained
     # from to the `tuple_get` index.
-    return gtx_dace_utils.range_symbol_name(field, axis)
+    return f"__{field}_{axis}_range"
 
 
 def _builtin_if(cond: str, true_val: str, false_val: str) -> str:
@@ -97,7 +96,7 @@ def _builtin_tuple_get(index: str, tuple_name: str) -> str:
     return f"{tuple_name}_{index}"
 
 
-def _make_const_list(arg: str) -> str:
+def _builtin_make_const_list(arg: str) -> str:
     """
     Takes a single scalar argument and broadcasts this value on the local dimension
     of map expression. In a dataflow, we represent it as a tasklet that writes
@@ -110,7 +109,7 @@ GENERAL_BUILTIN_MAPPING: dict[str, Callable[..., str]] = {
     "cast_": _builtin_cast,
     "get_domain_range": _builtin_get_domain_range,
     "if_": _builtin_if,
-    "make_const_list": _make_const_list,
+    "make_const_list": _builtin_make_const_list,
     "tuple_get": _builtin_tuple_get,
 }
 
@@ -152,8 +151,8 @@ class PythonCodegen(codegen.TemplatedGenerator):
                 raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
             return self.visit(node.args[0], args_map=args_map)
         elif isinstance(node.fun, gtir.SymRef):
-            builtin_name = str(node.fun.id)
             args = self.visit(node.args, args_map=args_map)
+            builtin_name = str(node.fun.id)
             return format_builtin(builtin_name, *args)
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
 

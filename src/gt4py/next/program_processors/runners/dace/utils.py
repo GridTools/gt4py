@@ -14,13 +14,17 @@ from typing import Final, Literal, Mapping, Union
 import dace
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_types
+from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.program_processors.runners.dace import gtir_python_codegen, gtir_to_sdfg_types
 from gt4py.next.type_system import type_specifications as ts
 
 
 # arrays for connectivity tables use the following prefix
 CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "gt_conn_"
 CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^gt_conn_(\S+)$")
+
+# regex for field size/stride symbol name
+FIELD_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_(\S+)_(size|stride)$")
 
 # element data type for field size/stride symbols
 FIELD_SYMBOL_DTYPE: Final[dace.dtypes.typeclass] = gtir_to_sdfg_types.INDEX_DTYPE
@@ -66,8 +70,7 @@ def is_connectivity_identifier(
 
 
 def is_connectivity_symbol(name: str, offset_provider_type: gtx_common.OffsetProviderType) -> bool:
-    SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_(\S+)_(size|stride)$")
-    if (m_symbol := SYMBOL_RE.match(name)) is None:
+    if (m_symbol := FIELD_SYMBOL_RE.match(name)) is None:
         return False
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(m_symbol[1])) is None:
         return False
@@ -83,8 +86,9 @@ def _field_symbol(
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
         name = f"__{field_name}_{dim.value}_{sym}"
     else:  # a connectivity field
-        offset = m[1]
         assert offset_provider_type is not None
+        offset = m[1]
+        assert offset in offset_provider_type
         conn_type = offset_provider_type[offset]
         if dim == conn_type.source_dim:
             name = f"__{field_name}_source_{sym}"
@@ -111,20 +115,21 @@ def field_stride_symbol(
     return _field_symbol(field_name, dim, "stride", offset_provider_type)
 
 
-def range_symbol_name(field_name: str, axis: str) -> str:
+def _range_symbol_name(field_name: str, axis: str) -> str:
     """Common part of the name for the range start/stop symbols."""
-    return f"__{field_name}_{axis}_range"
+    symref = im.ref(field_name)
+    return gtir_python_codegen.get_source(symref)
 
 
 def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
     """Format name of the start symbol for domain range."""
-    name = f"{range_symbol_name(field_name, dim.value)}_0"
+    name = f"{_range_symbol_name(field_name, dim.value)}_0"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
 def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
     """Format name of the stop symbol for domain range."""
-    name = f"{range_symbol_name(field_name, dim.value)}_1"
+    name = f"{_range_symbol_name(field_name, dim.value)}_1"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
