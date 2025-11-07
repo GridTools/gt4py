@@ -142,10 +142,10 @@ def _parse_gt_param(
                         arg_range = f"{arg}.domain.ranges[{i}]"
                         rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
                         rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
-                        for suffix, sdfg_symbol in [("start", rstart), ("stop", rstop)]:
+                        for suffix, sdfg_range_symbol in [("start", rstart), ("stop", rstop)]:
                             _parse_gt_param(
-                                param_name=sdfg_symbol.name,
-                                param_type=gtx_dace_utils.as_itir_type(sdfg_symbol.dtype),
+                                param_name=sdfg_range_symbol.name,
+                                param_type=gtx_dace_utils.as_itir_type(sdfg_range_symbol.dtype),
                                 arg=f"{arg_range}.{suffix}",
                                 code=code,
                                 sdfg_arglist=sdfg_arglist,
@@ -160,13 +160,13 @@ def _parse_gt_param(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {arg_stride}"
                         )
                     else:
-                        stride_symbol = gtx_dace_utils.field_stride_symbol(param_name, dim)
-                        assert array_stride == stride_symbol
+                        sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(param_name, dim)
+                        assert array_stride == sdfg_stride_symbol
                         # The strides of a global array are defined by a sequence
                         # of SDFG symbols.
                         _parse_gt_param(
-                            param_name=stride_symbol.name,
-                            param_type=gtx_dace_utils.as_itir_type(stride_symbol.dtype),
+                            param_name=sdfg_stride_symbol.name,
+                            param_type=gtx_dace_utils.as_itir_type(sdfg_stride_symbol.dtype),
                             arg=arg_stride,
                             code=code,
                             sdfg_arglist=sdfg_arglist,

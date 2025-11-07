@@ -52,18 +52,18 @@ def find_constant_symbols(
                     raise NotImplementedError(
                         f"Unsupported field with multiple horizontal dimensions '{p}'."
                     )
-                stride_symbol = gtx_dace_utils.field_stride_symbol(str(p.id), dim)
-                constant_symbols[stride_symbol.name] = 1
+                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(str(p.id), dim)
+                constant_symbols[sdfg_stride_symbol.name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
         connectivity_types = gtx_dace_utils.filter_connectivity_types(offset_provider_type)
         for offset, conn_type in connectivity_types.items():
             if (conn_id := gtx_dace_utils.connectivity_identifier(offset)) in sdfg.arrays:
                 assert not sdfg.arrays[conn_id].transient
                 assert conn_type.source_dim.kind == common.DimensionKind.HORIZONTAL
-                stride_symbol = gtx_dace_utils.field_stride_symbol(
+                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(
                     conn_id, conn_type.source_dim, connectivity_types
                 )
-                constant_symbols[stride_symbol.name] = 1
+                constant_symbols[sdfg_stride_symbol.name] = 1
 
     if disable_field_origin_on_program_arguments:
         # collect symbols used as range start for all program arguments
@@ -84,11 +84,11 @@ def find_constant_symbols(
                     # zero-dimensional field
                     continue
                 # set all range start symbols to constant value 0
-                origin_symbols = [
+                sdfg_origin_symbols = [
                     gtx_dace_utils.range_start_symbol(str(psymbol.id), dim)
                     for dim in psymbol.type.dims
                 ]
-                constant_symbols |= {sdfg_symbol.name: 0 for sdfg_symbol in origin_symbols}
+                constant_symbols |= {sdfg_symbol.name: 0 for sdfg_symbol in sdfg_origin_symbols}
 
     return constant_symbols
 
