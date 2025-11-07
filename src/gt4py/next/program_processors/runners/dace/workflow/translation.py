@@ -55,14 +55,13 @@ def find_constant_symbols(
                 stride_symbol = gtx_dace_utils.field_stride_symbol(p.id, dim)
                 constant_symbols[stride_symbol.name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
-        for conn, desc in sdfg.arrays.items():
-            if gtx_dace_utils.is_connectivity_identifier(conn, offset_provider_type):
-                connectivity_type = offset_provider_type[conn]
-                assert isinstance(connectivity_type, common.NeighborConnectivityType)
-                assert not desc.transient
-                stride_symbol = gtx_dace_utils.field_stride_symbol(
-                    conn, connectivity_type.source_dim
-                )
+        for offset, conn_type in offset_provider_type.items():
+            if (
+                isinstance(conn_type, common.NeighborConnectivityType)
+                and (conn_id := gtx_dace_utils.connectivity_identifier(offset)) in sdfg.arrays
+            ):
+                assert not sdfg.arrays[conn_id].transient
+                stride_symbol = gtx_dace_utils.field_stride_symbol(conn_id, conn_type.source_dim)
                 constant_symbols[stride_symbol.name] = 1
 
     if disable_field_origin_on_program_arguments:
