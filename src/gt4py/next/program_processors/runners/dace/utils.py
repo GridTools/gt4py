@@ -82,7 +82,7 @@ def _field_symbol(
     field_name: str,
     dim: gtx_common.Dimension,
     sym: Literal["size", "stride"],
-    offset_provider_type: dict[str, gtx_common.NeighborConnectivityType] | None,
+    offset_provider_type: Mapping[str, gtx_common.NeighborConnectivityType] | None,
 ) -> dace.symbol:
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
         name = f"__{field_name}_{dim.value}_{sym}"
@@ -103,7 +103,7 @@ def _field_symbol(
 def field_size_symbol(
     field_name: str,
     dim: gtx_common.Dimension,
-    offset_provider_type: dict[str, gtx_common.NeighborConnectivityType],
+    offset_provider_type: Mapping[str, gtx_common.NeighborConnectivityType],
 ) -> dace.symbol:
     return _field_symbol(field_name, dim, "size", offset_provider_type)
 
@@ -111,7 +111,7 @@ def field_size_symbol(
 def field_stride_symbol(
     field_name: str,
     dim: gtx_common.Dimension,
-    offset_provider_type: dict[str, gtx_common.NeighborConnectivityType] | None = None,
+    offset_provider_type: Mapping[str, gtx_common.NeighborConnectivityType] | None = None,
 ) -> dace.symbol:
     return _field_symbol(field_name, dim, "stride", offset_provider_type)
 
