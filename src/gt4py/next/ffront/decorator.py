@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import inspect
 import time
 import types
 import typing
@@ -86,6 +87,78 @@ class Program:
     static_params: (
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Program:
+        try:
+            definition_stage: ffront_stages.ProgramDefinition = kwargs.get("definition_stage", None)
+            definition_stage = definition_stage or args[0]
+            if not isinstance(definition_stage, ffront_stages.ProgramDefinition):
+                raise AssertionError()
+            definition_signature = inspect.signature(definition_stage.definition)
+        except Exception:
+            return super().__new__(cls, *args, **kwargs)
+
+        passed_by_pos_args = []
+        passed_by_key_args = []
+        custom_pos_parameters = [
+            inspect.Parameter(name="self", kind=inspect.Parameter.POSITIONAL_ONLY)
+        ]
+        custom_var_pos_param = inspect.Parameter(name="args", kind=inspect.Parameter.VAR_POSITIONAL)
+        custom_key_parameters = []
+        custom_var_key_param = inspect.Parameter(name="kwargs", kind=inspect.Parameter.VAR_KEYWORD)
+        for name, param in definition_signature.parameters.items():
+            match param.kind:
+                case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
+                    custom_pos_parameters.append(param)
+                    passed_by_pos_args.append(f"{name}")
+                case inspect.Parameter.VAR_POSITIONAL:
+                    custom_var_pos_param = param
+                    passed_by_pos_args.append(f"*{name}")
+                case inspect.Parameter.KEYWORD_ONLY:
+                    custom_key_parameters.append(param)
+                    passed_by_key_args.append(f"{name}={name}")
+                case inspect.Parameter.VAR_KEYWORD:
+                    custom_var_key_param = param
+                    passed_by_key_args.append(f"**{name}")
+
+        custom_call_signature = inspect.Signature(
+            parameters=[
+                *custom_pos_parameters,
+                custom_var_pos_param,
+                *custom_key_parameters,
+                inspect.Parameter(
+                    name="offset_provider",
+                    kind=inspect.Parameter.KEYWORD_ONLY,
+                    annotation=common.OffsetProvider | None,
+                    default=None,
+                ),
+                inspect.Parameter(
+                    name="enable_jit",
+                    kind=inspect.Parameter.KEYWORD_ONLY,
+                    annotation=bool | None,
+                    default=None,
+                ),
+                custom_var_key_param,
+            ],
+            return_annotation=None,
+        )
+
+        custom_program_src = f"""
+class _CustomProgram(Program):
+    def __call__{custom_call_signature!s}:
+        return super().__call__(        
+            {str.join(", ", passed_by_pos_args)}{", " if passed_by_pos_args else ""}
+            offset_provider=offset_provider,
+            enable_jit=enable_jit,
+            {str.join(", ", passed_by_key_args)}
+    )
+"""
+        exec(custom_program_src, ns := {"Program": Program, "__name__": __name__})
+        _CustomProgram = ns["_CustomProgram"]
+
+        instance = object.__new__(_CustomProgram)
+        instance.__init__(*args, **kwargs)
+        return instance
 
     @classmethod
     def from_function(
@@ -257,6 +330,7 @@ class Program:
         enable_jit: bool | None = None,
         **kwargs: Any,
     ) -> None:
+        # args and kwargs are already canonicalized in the custom __call__ method generated in __new__
         if offset_provider is None:
             offset_provider = {}
         if enable_jit is None:
