@@ -156,9 +156,9 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         #   extract values from the correct container types, not from ANY container,
         #   but that would require a larger refactoring and anyway this Backend class
         #   should be removed in the future.
-        args = tuple(arguments.extract(a) for a in args)
-        kwargs = {k: arguments.extract(v) for k, v in kwargs.items()}
-        self.jit(program, *args, **kwargs)(*args, **kwargs)
+        extracted_args = tuple(arguments.extract(a) for a in args)
+        extracted_kwargs = {k: arguments.extract(v) for k, v in kwargs.items()}
+        self.jit(program, *args, **kwargs)(*extracted_args, **extracted_kwargs)
 
     def jit(self, program: IRDefinitionForm, *args: Any, **kwargs: Any) -> stages.CompiledProgram:
         if not isinstance(program, itir.Program):

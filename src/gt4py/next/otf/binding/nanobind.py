@@ -89,7 +89,7 @@ class BindingFile(eve.Node):
 
 
 def _type_string(type_: ts.TypeSpec) -> str:
-    if isinstance(type_, ts.TupleType):
+    if isinstance(type_, (ts.TupleType, ts.NamedCollectionType)):
         return f"std::tuple<{','.join(_type_string(t) for t in type_.types)}>"
     elif isinstance(type_, ts.FieldType):
         ndims = len(type_.dims)
@@ -218,7 +218,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
             ],
             scalar_type=type_.dtype,
         )
-    elif isinstance(type_, ts.TupleType):
+    elif isinstance(type_, (ts.TupleType, ts.NamedCollectionType)):
         elements = [make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
         return Tuple(elems=elements)
     elif isinstance(type_, ts.ScalarType):
