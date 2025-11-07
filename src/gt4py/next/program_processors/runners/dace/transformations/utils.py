@@ -708,8 +708,7 @@ def associate_dimmensions(
         as the second element, but for `sbs2`.
 
     Example:
-        >>> import dace
-        >>> from dace import subset as dace_sbs
+        >>> from dace import subsets as dace_sbs
         >>> associate_dimmensions(
         ...     sbs1=dace_sbs.Range.from_string("3, 0:10, 1"),
         ...     sbs2=dace_sbs.Range.from_string("0:10, 4"),
