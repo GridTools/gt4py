@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Final, Iterator, Optional, Sequence
+from typing import Final, Iterator, Optional, Sequence, TypeVar
 
 from gt4py.eve import (
     datamodels as eve_datamodels,
@@ -176,8 +176,9 @@ class NamedCollectionType(DataType):
         return len(self.types)
 
 
-AnyCollectionType = TupleType | NamedCollectionType
-ANY_COLLECTION_TYPES: Final[tuple[type, ...]] = xtyping.get_args(AnyCollectionType)
+CollectionTypeSpecT = TypeVar("CollectionTypeSpecT", TupleType, NamedCollectionType)
+CollectionTypeSpec = TupleType | NamedCollectionType
+COLLECTION_TYPE_SPECS: Final[tuple[type, ...]] = xtyping.get_args(CollectionTypeSpec)
 
 
 class FunctionType(CallableType):

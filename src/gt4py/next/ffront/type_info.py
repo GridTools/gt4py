@@ -7,30 +7,19 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-from typing import Callable, Iterator, Sequence, overload
+from typing import Callable, Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
+from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common, utils
 from gt4py.next.type_system import type_info
 
 
-@overload
 def _tree_map_typespec_constructor(
-    func: Callable[..., ts.TupleType],
-) -> Callable[..., ts.TupleType]: ...
-
-
-@overload
-def _tree_map_typespec_constructor(
-    func: Callable[..., ts.NamedCollectionType],
-) -> Callable[..., ts.NamedCollectionType]: ...
-
-
-def _tree_map_typespec_constructor(
-    value: ts.NamedCollectionType | ts.TupleType,
-    elems: ts.DataType,
-) -> Callable[..., ts.NamedCollectionType] | Callable[..., ts.TupleType]:
+    value: ts.CollectionTypeSpecT,
+    elems: NestedTuple[ts.DataType],
+) -> Callable[..., ts.CollectionTypeSpecT]:
     return (
         ts.NamedCollectionType(
             keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
@@ -342,4 +331,7 @@ def return_type_scanop(
         #  field
         [callable_type.axis],
     )
-    return tree_map_typespec(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype)
+    return cast(
+        ts.TypeSpec,
+        tree_map_typespec(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype),
+    )

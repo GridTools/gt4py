@@ -7,11 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from types import ModuleType
-from typing import Callable
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common, containers, utils
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -28,13 +28,13 @@ def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
 
 
 def field_from_typespec(
-    type_: ts.TupleType | ts.ScalarType, domain: common.Domain, xp: ModuleType
+    type_: ts.CollectionTypeSpec | ts.ScalarType, domain: common.Domain, xp: ModuleType
 ) -> common.MutableField | tuple[common.MutableField | tuple, ...]:
     """
     Allocate a field or (arbitrarily nested) tuple(s) of fields.
 
     The tuple structure and dtype is taken from a type_specifications.DataType,
-    which is either ScalarType or TupleType of ScalarType (possibly nested).
+    which is either ScalarType or a CollectionTypeSpec of ScalarType (possibly nested).
 
     >>> field_from_typespec(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({common.Dimension("I"): 1}), np
@@ -54,14 +54,15 @@ def field_from_typespec(
     """
 
     def _constructor(
-        type_: ts.TupleType, elems: ts.DataType
-    ) -> Callable[..., containers.Container]:
+        type_: ts.CollectionTypeSpec,
+        elems: NestedTuple[common.NumericValue],
+    ) -> containers.Container:
         if isinstance(type_, ts.NamedCollectionType):
             return containers.make_container_constructor_from_type_spec(type_)(elems)
         return tuple(elems)
 
     @utils.tree_map(
-        collection_type=(ts.TupleType, ts.NamedCollectionType),
+        collection_type=ts.COLLECTION_TYPE_SPECS,
         result_collection_constructor=_constructor,
     )
     def impl(type_: ts.ScalarType) -> common.MutableField:
