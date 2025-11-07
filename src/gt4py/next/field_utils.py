@@ -62,7 +62,7 @@ def field_from_typespec(
 
     @utils.tree_map(
         collection_type=(ts.TupleType, ts.NamedCollectionType),
-        result_collection_constructor=lambda _, elts: tuple(elts),
+        result_collection_constructor=_constructor,
     )
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(

@@ -61,7 +61,7 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
 
         xp = get_array_ns(*all_args)
         init_type = type_translation.from_value(self.init)
-        assert isinstance(init_type, ts.TupleType | ts.ScalarType)
+        assert isinstance(init_type, ts.TupleType | ts.ScalarType | ts.NamedCollectionType)
         res = field_utils.field_from_typespec(init_type, out_domain, xp)
 
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
