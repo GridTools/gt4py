@@ -52,7 +52,7 @@ def find_constant_symbols(
                     raise NotImplementedError(
                         f"Unsupported field with multiple horizontal dimensions '{p}'."
                     )
-                stride_symbol = gtx_dace_utils.field_stride_symbol(p.id, dim)
+                stride_symbol = gtx_dace_utils.field_stride_symbol(str(p.id), dim)
                 constant_symbols[stride_symbol.name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
         for offset, conn_type in offset_provider_type.items():
