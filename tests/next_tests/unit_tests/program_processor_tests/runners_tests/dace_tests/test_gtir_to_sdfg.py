@@ -71,17 +71,17 @@ SIMPLE_MESH: MeshDescriptor = simple_mesh(None)
 SKIP_VALUE_MESH: MeshDescriptor = skip_value_mesh(None)
 SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 FSYMBOLS = dict(
-    __w_IDim_origin=0,
-    __w_IDim_size=N,
+    __w_IDim_range_0=0,
+    __w_IDim_range_1=N,
     __w_IDim_stride=1,
-    __x_IDim_origin=0,
-    __x_IDim_size=N,
+    __x_IDim_range_0=0,
+    __x_IDim_range_1=N,
     __x_IDim_stride=1,
-    __y_IDim_origin=0,
-    __y_IDim_size=N,
+    __y_IDim_range_0=0,
+    __y_IDim_range_1=N,
     __y_IDim_stride=1,
-    __z_IDim_origin=0,
-    __z_IDim_size=N,
+    __z_IDim_range_0=0,
+    __z_IDim_range_1=N,
     __z_IDim_stride=1,
 )
 
@@ -92,27 +92,27 @@ def make_mesh_symbols(mesh: MeshDescriptor):
     e2v_ndarray = mesh.offset_provider["E2V"].ndarray
     v2e_ndarray = mesh.offset_provider["V2E"].ndarray
     return dict(
-        __cells_Cell_origin=0,
-        __cells_Cell_size=mesh.num_cells,
+        __cells_Cell_range_0=0,
+        __cells_Cell_range_1=mesh.num_cells,
         __cells_Cell_stride=1,
-        __edges_Edge_origin=0,
-        __edges_Edge_size=mesh.num_edges,
+        __edges_Edge_range_0=0,
+        __edges_Edge_range_1=mesh.num_edges,
         __edges_Edge_stride=1,
-        __vertices_Vertex_origin=0,
-        __vertices_Vertex_size=mesh.num_vertices,
+        __vertices_Vertex_range_0=0,
+        __vertices_Vertex_range_1=mesh.num_vertices,
         __vertices_Vertex_stride=1,
-        __gt_conn_C2E_Cell_size=c2e_ndarray.shape[0],
-        __gt_conn_C2E_Cell_stride=c2e_ndarray.strides[0] // c2e_ndarray.itemsize,
-        __gt_conn_C2E_C2E_stride=c2e_ndarray.strides[1] // c2e_ndarray.itemsize,
-        __gt_conn_C2V_Cell_size=c2v_ndarray.shape[0],
-        __gt_conn_C2V_Cell_stride=c2v_ndarray.strides[0] // c2v_ndarray.itemsize,
-        __gt_conn_C2V_C2V_stride=c2v_ndarray.strides[1] // c2v_ndarray.itemsize,
-        __gt_conn_E2V_Edge_size=e2v_ndarray.shape[0],
-        __gt_conn_E2V_Edge_stride=e2v_ndarray.strides[0] // e2v_ndarray.itemsize,
-        __gt_conn_E2V_E2V_stride=e2v_ndarray.strides[1] // e2v_ndarray.itemsize,
-        __gt_conn_V2E_Vertex_size=v2e_ndarray.shape[0],
-        __gt_conn_V2E_Vertex_stride=v2e_ndarray.strides[0] // v2e_ndarray.itemsize,
-        __gt_conn_V2E_V2E_stride=v2e_ndarray.strides[1] // v2e_ndarray.itemsize,
+        __gt_conn_C2E_source_size=c2e_ndarray.shape[0],
+        __gt_conn_C2E_source_stride=c2e_ndarray.strides[0] // c2e_ndarray.itemsize,
+        __gt_conn_C2E_neighbor_stride=c2e_ndarray.strides[1] // c2e_ndarray.itemsize,
+        __gt_conn_C2V_source_size=c2v_ndarray.shape[0],
+        __gt_conn_C2V_source_stride=c2v_ndarray.strides[0] // c2v_ndarray.itemsize,
+        __gt_conn_C2V_neighbor_stride=c2v_ndarray.strides[1] // c2v_ndarray.itemsize,
+        __gt_conn_E2V_source_size=e2v_ndarray.shape[0],
+        __gt_conn_E2V_source_stride=e2v_ndarray.strides[0] // e2v_ndarray.itemsize,
+        __gt_conn_E2V_neighbor_stride=e2v_ndarray.strides[1] // e2v_ndarray.itemsize,
+        __gt_conn_V2E_source_size=v2e_ndarray.shape[0],
+        __gt_conn_V2E_source_stride=v2e_ndarray.strides[0] // v2e_ndarray.itemsize,
+        __gt_conn_V2E_neighbor_stride=v2e_ndarray.strides[1] // v2e_ndarray.itemsize,
     )
 
 
@@ -303,14 +303,14 @@ def test_gtir_tuple_args():
     x_fields = (a, a, b)
 
     tuple_symbols = {
-        "__x_0_IDim_origin": 0,
-        "__x_0_IDim_size": N,
+        "__x_0_IDim_range_0": 0,
+        "__x_0_IDim_range_1": N,
         "__x_0_IDim_stride": 1,
-        "__x_1_0_IDim_origin": 0,
-        "__x_1_0_IDim_size": N,
+        "__x_1_0_IDim_range_0": 0,
+        "__x_1_0_IDim_range_1": N,
         "__x_1_0_IDim_stride": 1,
-        "__x_1_1_IDim_origin": 0,
-        "__x_1_1_IDim_size": N,
+        "__x_1_1_IDim_range_0": 0,
+        "__x_1_1_IDim_range_1": N,
         "__x_1_1_IDim_stride": 1,
     }
 
@@ -488,14 +488,14 @@ def test_gtir_tuple_return():
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
 
     tuple_symbols = {
-        "__z_0_0_IDim_origin": 0,
-        "__z_0_0_IDim_size": N,
+        "__z_0_0_IDim_range_0": 0,
+        "__z_0_0_IDim_range_1": N,
         "__z_0_0_IDim_stride": 1,
-        "__z_0_1_IDim_origin": 0,
-        "__z_0_1_IDim_size": N,
+        "__z_0_1_IDim_range_0": 0,
+        "__z_0_1_IDim_range_1": N,
         "__z_0_1_IDim_stride": 1,
-        "__z_1_IDim_origin": 0,
-        "__z_1_IDim_size": N,
+        "__z_1_IDim_range_0": 0,
+        "__z_1_IDim_range_1": N,
         "__z_1_IDim_stride": 1,
     }
 
@@ -744,11 +744,11 @@ def test_gtir_cond_with_tuple_return():
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     tuple_symbols = {
-        "__z_0_IDim_origin": 0,
-        "__z_0_IDim_size": N,
+        "__z_0_IDim_range_0": 0,
+        "__z_0_IDim_range_1": N,
         "__z_0_IDim_stride": 1,
-        "__z_1_IDim_size": 0,
-        "__z_1_IDim_size": N,
+        "__z_1_IDim_range_0": 0,
+        "__z_1_IDim_range_1": N,
         "__z_1_IDim_stride": 1,
     }
 
@@ -880,8 +880,8 @@ def test_gtir_cartesian_shift_left():
         sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
         symbols = FSYMBOLS | {
-            "__x_offset_IDim_origin": 0,
-            "__x_offset_IDim_size": N,
+            "__x_offset_IDim_range_0": 0,
+            "__x_offset_IDim_range_1": N,
             "__x_offset_IDim_stride": 1,
         }
 
@@ -971,8 +971,8 @@ def test_gtir_cartesian_shift_right():
         sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
         symbols = FSYMBOLS | {
-            "__x_offset_IDim_origin": 0,
-            "__x_offset_IDim_size": N,
+            "__x_offset_IDim_range_0": 0,
+            "__x_offset_IDim_range_1": N,
             "__x_offset_IDim_stride": 1,
         }
 
@@ -1104,23 +1104,23 @@ def test_gtir_connectivity_shift():
             gt_conn_E2V=connectivity_E2V.ndarray,
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
-            __ce_field_Cell_origin=0,
-            __ce_field_Cell_size=SIMPLE_MESH.num_cells,
+            __ce_field_Cell_range_0=0,
+            __ce_field_Cell_range_1=SIMPLE_MESH.num_cells,
             __ce_field_Cell_stride=SIMPLE_MESH.num_edges,
-            __ce_field_Edge_origin=0,
-            __ce_field_Edge_size=SIMPLE_MESH.num_edges,
+            __ce_field_Edge_range_0=0,
+            __ce_field_Edge_range_1=SIMPLE_MESH.num_edges,
             __ce_field_Edge_stride=1,
-            __ev_field_Edge_origin=0,
-            __ev_field_Edge_size=SIMPLE_MESH.num_edges,
+            __ev_field_Edge_range_0=0,
+            __ev_field_Edge_range_1=SIMPLE_MESH.num_edges,
             __ev_field_Edge_stride=SIMPLE_MESH.num_vertices,
-            __ev_field_Vertex_origin=0,
-            __ev_field_Vertex_size=SIMPLE_MESH.num_vertices,
+            __ev_field_Vertex_range_0=0,
+            __ev_field_Vertex_range_1=SIMPLE_MESH.num_vertices,
             __ev_field_Vertex_stride=1,
-            __c2e_offset_Cell_origin=0,
-            __c2e_offset_Cell_size=SIMPLE_MESH.num_cells,
+            __c2e_offset_Cell_range_0=0,
+            __c2e_offset_Cell_range_1=SIMPLE_MESH.num_cells,
             __c2e_offset_Cell_stride=1,
-            __e2v_offset_Edge_origin=0,
-            __e2v_offset_Edge_size=SIMPLE_MESH.num_edges,
+            __e2v_offset_Edge_range_0=0,
+            __e2v_offset_Edge_range_1=SIMPLE_MESH.num_edges,
             __e2v_offset_Edge_stride=1,
         )
         assert np.allclose(ce, ref)
@@ -1181,8 +1181,8 @@ def test_gtir_connectivity_shift_chain():
         gt_conn_V2E=connectivity_V2E.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
-        __edges_out_Edge_origin=0,
-        __edges_out_Edge_size=SIMPLE_MESH.num_edges,
+        __edges_out_Edge_range_0=0,
+        __edges_out_Edge_range_1=SIMPLE_MESH.num_edges,
         __edges_out_Edge_stride=1,
     )
     assert np.allclose(e_out, ref)
@@ -1257,22 +1257,22 @@ def test_gtir_neighbors_as_input():
 
     symbols = make_mesh_symbols(SIMPLE_MESH) | {
         # override SDFG symbols for array shape and strides because of extra K-dimension
-        "__edges_KDim_origin": 0,
-        "__edges_KDim_size": e.shape[1],
+        "__edges_KDim_range_0": 0,
+        "__edges_KDim_range_1": e.shape[1],
         "__edges_Edge_stride": e.strides[0] // e.itemsize,
         "__edges_KDim_stride": e.strides[1] // e.itemsize,
-        "__vertices_KDim_origin": 0,
-        "__vertices_KDim_size": v.shape[1],
+        "__vertices_KDim_range_0": 0,
+        "__vertices_KDim_range_1": v.shape[1],
         "__vertices_Vertex_stride": v.strides[0] // v.itemsize,
         "__vertices_KDim_stride": v.strides[1] // v.itemsize,
-        "__v2e_field_Vertex_origin": 0,
-        "__v2e_field_Vertex_size": v2e_field.shape[0],
+        "__v2e_field_Vertex_range_0": 0,
+        "__v2e_field_Vertex_range_1": v2e_field.shape[0],
         "__v2e_field_Vertex_stride": v2e_field.strides[0] // v2e_field.itemsize,
-        "__v2e_field_V2E_origin": 0,
-        "__v2e_field_V2E_size": v2e_field.shape[1],
+        "__v2e_field_V2E_range_0": 0,
+        "__v2e_field_V2E_range_1": v2e_field.shape[1],
         "__v2e_field_V2E_stride": v2e_field.strides[1] // v2e_field.itemsize,
-        "__v2e_field_KDim_origin": 0,
-        "__v2e_field_KDim_size": v2e_field.shape[2],
+        "__v2e_field_KDim_range_0": 0,
+        "__v2e_field_KDim_range_1": v2e_field.shape[2],
         "__v2e_field_KDim_stride": v2e_field.strides[2] // v2e_field.itemsize,
     }
 
@@ -1450,8 +1450,8 @@ def test_gtir_reduce_dot_product():
         v,
         gt_conn_V2E=connectivity_V2E.ndarray,
         **make_mesh_symbols(SKIP_VALUE_MESH),
-        __v2e_field_Vertex_origin=0,
-        __v2e_field_Vertex_size=SKIP_VALUE_MESH.num_vertices,
+        __v2e_field_Vertex_range_0=0,
+        __v2e_field_Vertex_range_1=SKIP_VALUE_MESH.num_vertices,
         __v2e_field_Vertex_stride=connectivity_V2E.shape[1],
         __v2e_field_V2E_stride=1,
     )
@@ -1522,8 +1522,8 @@ def test_gtir_reduce_with_cond_neighbors(use_sparse):
         gt_conn_V2E=connectivity_V2E.ndarray,
         **FSYMBOLS,
         **make_mesh_symbols(SKIP_VALUE_MESH),
-        __v2e_field_Vertex_origin=0,
-        __v2e_field_Vertex_size=SKIP_VALUE_MESH.num_vertices,
+        __v2e_field_Vertex_range_0=0,
+        __v2e_field_Vertex_range_1=SKIP_VALUE_MESH.num_vertices,
         __v2e_field_Vertex_stride=connectivity_V2E.shape[1],
         __v2e_field_V2E_stride=1,
     )
@@ -1693,7 +1693,7 @@ def test_gtir_let_lambda_scalar_expression():
     # to the symbol `inner_size` is preserved, for which we want to test the lowering.
     sdfg = build_dace_sdfg(testee, offset_provider=CARTESIAN_OFFSETS, skip_domain_inference=True)
 
-    sdfg(a, b, c, d, **(FSYMBOLS | {"__x_0_size": N + 1}))
+    sdfg(a, b, c, d, **(FSYMBOLS | {"__x_0_range_1": N + 1}))
     assert np.allclose(d, (a * a * b * b * c[1 : N + 1]))
 
 
@@ -1798,12 +1798,12 @@ def test_gtir_let_lambda_with_origin():
     )
 
     symbols = make_mesh_symbols(SIMPLE_MESH) | {
-        "__cells_KDim_origin": 0,
-        "__cells_KDim_size": MESH_NUM_LEVELS,
+        "__cells_KDim_range_0": 0,
+        "__cells_KDim_range_1": MESH_NUM_LEVELS,
         "__cells_Cell_stride": c.strides[0] // c.itemsize,
         "__cells_KDim_stride": c.strides[1] // c.itemsize,
-        "__edges_KDim_origin": 0,
-        "__edges_KDim_size": MESH_NUM_LEVELS,
+        "__edges_KDim_range_0": 0,
+        "__edges_KDim_range_1": MESH_NUM_LEVELS,
         "__edges_Edge_stride": e.strides[0] // e.itemsize,
         "__edges_KDim_stride": e.strides[1] // e.itemsize,
     }
@@ -1894,11 +1894,11 @@ def test_gtir_let_lambda_with_tuple1():
     b_ref = np.concatenate((z_fields[1][:1], b[1 : N - 1], z_fields[1][N - 1 :]))
 
     tuple_symbols = {
-        "__z_0_IDim_origin": 1,
-        "__z_0_IDim_size": N - 2,
+        "__z_0_IDim_range_0": 1,
+        "__z_0_IDim_range_1": N - 1,
         "__z_0_IDim_stride": 1,
-        "__z_1_IDim_origin": 1,
-        "__z_1_IDim_size": N - 2,
+        "__z_1_IDim_range_0": 1,
+        "__z_1_IDim_range_1": N - 1,
         "__z_1_IDim_stride": 1,
     }
 
@@ -1952,14 +1952,14 @@ def test_gtir_let_lambda_with_tuple2():
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
 
     tuple_symbols = {
-        "__z_0_IDim_origin": 0,
-        "__z_0_IDim_size": N,
+        "__z_0_IDim_range_0": 0,
+        "__z_0_IDim_range_1": N,
         "__z_0_IDim_stride": 1,
-        "__z_1_IDim_origin": 0,
-        "__z_1_IDim_size": N,
+        "__z_1_IDim_range_0": 0,
+        "__z_1_IDim_range_1": N,
         "__z_1_IDim_stride": 1,
-        "__z_2_IDim_origin": 0,
-        "__z_2_IDim_size": N,
+        "__z_2_IDim_range_0": 0,
+        "__z_2_IDim_range_1": N,
         "__z_2_IDim_stride": 1,
     }
 
@@ -2015,14 +2015,14 @@ def test_gtir_if_scalars(s):
     sdfg = build_dace_sdfg(testee, {})
 
     tuple_symbols = {
-        "__x_0_IDim_origin": 0,
-        "__x_0_IDim_size": N,
+        "__x_0_IDim_range_0": 0,
+        "__x_0_IDim_range_1": N,
         "__x_0_IDim_stride": 1,
-        "__x_1_0_IDim_origin": 0,
-        "__x_1_0_IDim_size": N,
+        "__x_1_0_IDim_range_0": 0,
+        "__x_1_0_IDim_range_1": N,
         "__x_1_0_IDim_stride": 1,
-        "__x_1_1_IDim_origin": 0,
-        "__x_1_1_IDim_size": N,
+        "__x_1_1_IDim_range_0": 0,
+        "__x_1_1_IDim_range_1": N,
         "__x_1_1_IDim_stride": 1,
     }
 
@@ -2199,28 +2199,28 @@ def test_gtir_concat_where_two_dimensions():
     )
 
     field_symbols = {
-        "__x_IDim_origin": 0,
-        "__x_JDim_origin": 0,
-        "__x_IDim_size": a.shape[0],
-        "__x_JDim_size": a.shape[1],
+        "__x_IDim_range_0": 0,
+        "__x_IDim_range_1": a.shape[0],
+        "__x_JDim_range_0": 0,
+        "__x_JDim_range_1": a.shape[1],
         "__x_IDim_stride": a.strides[0] // a.itemsize,
         "__x_JDim_stride": a.strides[1] // a.itemsize,
-        "__y_IDim_origin": 0,
-        "__y_JDim_origin": 0,
-        "__y_IDim_size": b.shape[0],
-        "__y_JDim_size": b.shape[1],
+        "__y_IDim_range_0": 0,
+        "__y_IDim_range_1": b.shape[0],
+        "__y_JDim_range_0": 0,
+        "__y_JDim_range_1": b.shape[1],
         "__y_IDim_stride": b.strides[0] // b.itemsize,
         "__y_JDim_stride": b.strides[1] // b.itemsize,
-        "__w_IDim_origin": 0,
-        "__w_JDim_origin": 0,
-        "__w_IDim_size": c.shape[0],
-        "__w_JDim_size": c.shape[1],
+        "__w_IDim_range_0": 0,
+        "__w_IDim_range_1": c.shape[0],
+        "__w_JDim_range_0": 0,
+        "__w_JDim_range_1": c.shape[1],
         "__w_IDim_stride": c.strides[0] // c.itemsize,
         "__w_JDim_stride": c.strides[1] // c.itemsize,
-        "__z_IDim_origin": 0,
-        "__z_JDim_origin": 0,
-        "__z_IDim_size": d.shape[0],
-        "__z_JDim_size": d.shape[1],
+        "__z_IDim_range_0": 0,
+        "__z_IDim_range_1": d.shape[0],
+        "__z_JDim_range_0": 0,
+        "__z_JDim_range_1": d.shape[1],
         "__z_IDim_stride": d.strides[0] // d.itemsize,
         "__z_JDim_stride": d.strides[1] // d.itemsize,
     }
@@ -2293,16 +2293,16 @@ def test_gtir_scan(id, use_symbolic_column_size):
     ref = np.add.accumulate(a, axis=1) + VAL
 
     symbols = FSYMBOLS | {
-        "__x_KDim_origin": 0,
-        "__x_KDim_size": a.shape[1],
+        "__x_KDim_range_0": 0,
+        "__x_KDim_range_1": a.shape[1],
         "__x_IDim_stride": a.strides[0] // a.itemsize,
         "__x_KDim_stride": a.strides[1] // a.itemsize,
-        "__y_KDim_origin": 0,
-        "__y_KDim_size": b.shape[1],
+        "__y_KDim_range_0": 0,
+        "__y_KDim_range_1": b.shape[1],
         "__y_IDim_stride": b.strides[0] // b.itemsize,
         "__y_KDim_stride": b.strides[1] // b.itemsize,
-        "__z_KDim_origin": 0,
-        "__z_KDim_size": z.shape[1],
+        "__z_KDim_range_0": 0,
+        "__z_KDim_range_1": z.shape[1],
         "__z_IDim_stride": z.strides[0] // z.itemsize,
         "__z_KDim_stride": z.strides[1] // z.itemsize,
     }

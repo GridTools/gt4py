@@ -171,8 +171,8 @@ class FieldopData:
         symbol_mapping: dict[str, dace.symbolic.SymbolicType] = {}
         for dim, origin, size in zip(self.gt_type.dims, self.origin, globals_size, strict=True):
             symbol_mapping |= {
-                gtx_dace_utils.field_origin_symbol(dataname, dim): origin,
-                gtx_dace_utils.field_size_symbol(dataname, dim): size,
+                gtx_dace_utils.range_start_symbol(dataname, dim): origin,
+                gtx_dace_utils.range_stop_symbol(dataname, dim): (origin + size),
             }
         for dim, stride in zip(full_dims, outer_desc.strides, strict=True):
             symbol_mapping |= {

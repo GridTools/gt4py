@@ -153,6 +153,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         closure_dict: dict[str, Any] = {}
 
         if self.connectivities:
+            connectivity_types = gtx_dace_utils.filter_connectivity_types(
+                gtx_common.offset_provider_to_type(self.connectivities)
+            )
             used_connectivities: dict[str, gtx_common.NeighborConnectivity] = {
                 conn_id: conn
                 for offset, conn in self.connectivities.items()
@@ -175,12 +178,20 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                     self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                         dtype=dace.dtypes.dtype_to_typeclass(conn.dtype.dtype.type),
                         shape=[
-                            gtx_dace_utils.field_size_symbol(conn_id, conn.domain.dims[0]),
-                            gtx_dace_utils.field_size_symbol(conn_id, conn.domain.dims[1]),
+                            gtx_dace_utils.field_size_symbol(
+                                conn_id, conn.domain.dims[0], connectivity_types
+                            ),
+                            gtx_dace_utils.field_size_symbol(
+                                conn_id, conn.domain.dims[1], connectivity_types
+                            ),
                         ],
                         strides=[
-                            gtx_dace_utils.field_stride_symbol(conn_id, conn.domain.dims[0]),
-                            gtx_dace_utils.field_stride_symbol(conn_id, conn.domain.dims[1]),
+                            gtx_dace_utils.field_stride_symbol(
+                                conn_id, conn.domain.dims[0], connectivity_types
+                            ),
+                            gtx_dace_utils.field_stride_symbol(
+                                conn_id, conn.domain.dims[1], connectivity_types
+                            ),
                         ],
                         storage=Program.connectivity_tables_data_descriptors["storage"],
                     )

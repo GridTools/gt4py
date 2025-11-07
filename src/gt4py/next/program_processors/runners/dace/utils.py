@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal, Mapping, Optional, Union
+from typing import Final, Literal, Mapping, Union
 
 import dace
 
@@ -22,14 +22,8 @@ from gt4py.next.type_system import type_specifications as ts
 CONNECTIVITY_INDENTIFIER_PREFIX: Final[str] = "gt_conn_"
 CONNECTIVITY_INDENTIFIER_RE: Final[re.Pattern] = re.compile(r"^gt_conn_(\S+)$")
 
-# element data type for field origin/size/stride symbols
+# element data type for field size/stride symbols
 FIELD_SYMBOL_DTYPE: Final[dace.dtypes.typeclass] = gtir_to_sdfg_types.INDEX_DTYPE
-
-# regex for field stride symbols
-SIZE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_size_\d+$")
-
-# regex for field stride symbols
-STRIDE_SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_stride_\d+$")
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
@@ -59,7 +53,7 @@ def connectivity_identifier(name: str) -> str:
 
 
 def is_connectivity_identifier(
-    name: str, offset_provider_type: Optional[gtx_common.OffsetProviderType] = None
+    name: str, offset_provider_type: gtx_common.OffsetProviderType | None = None
 ) -> bool:
     m = CONNECTIVITY_INDENTIFIER_RE.match(name)
     if m is None:
@@ -72,40 +66,66 @@ def is_connectivity_identifier(
 
 
 def is_connectivity_symbol(name: str, offset_provider_type: gtx_common.OffsetProviderType) -> bool:
-    m = SIZE_SYMBOL_RE.match(name) or STRIDE_SYMBOL_RE.match(name)
-    if m is None:
+    SYMBOL_RE: Final[re.Pattern] = re.compile(r"^__(\S+)_(\S+)_(size|stride)$")
+    if (m_symbol := SYMBOL_RE.match(name)) is None:
         return False
-    m = CONNECTIVITY_INDENTIFIER_RE.match(m[1])
-    if m is None:
+    if (m := CONNECTIVITY_INDENTIFIER_RE.match(m_symbol[1])) is None:
         return False
     return gtx_common.has_offset(offset_provider_type, m[1])
 
 
-def field_symbol(
-    field_name: str, dim: gtx_common.Dimension, sym: Literal["origin", "size", "stride"]
+def _field_symbol(
+    field_name: str,
+    dim: gtx_common.Dimension,
+    sym: Literal["size", "stride"],
+    offset_provider_type: dict[str, gtx_common.NeighborConnectivityType] | None,
 ) -> dace.symbol:
-    name = f"__{field_name}_{dim.value}_{sym}"
+    if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
+        name = f"__{field_name}_{dim.value}_{sym}"
+    else:  # a connectivity field
+        offset = m[1]
+        assert offset_provider_type is not None
+        conn_type = offset_provider_type[offset]
+        if dim == conn_type.source_dim:
+            name = f"__{field_name}_source_{sym}"
+        elif dim == conn_type.neighbor_dim:
+            name = f"__{field_name}_neighbor_{sym}"
+        else:
+            raise ValueError(f"Unexpect dimension '{dim}' for '{offset}' connectivity.")
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
-def field_origin_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
-    return field_symbol(field_name, dim, "origin")
+def field_size_symbol(
+    field_name: str,
+    dim: gtx_common.Dimension,
+    offset_provider_type: dict[str, gtx_common.NeighborConnectivityType],
+) -> dace.symbol:
+    return _field_symbol(field_name, dim, "size", offset_provider_type)
 
 
-def field_size_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
-    return field_symbol(field_name, dim, "size")
+def field_stride_symbol(
+    field_name: str,
+    dim: gtx_common.Dimension,
+    offset_provider_type: dict[str, gtx_common.NeighborConnectivityType] | None = None,
+) -> dace.symbol:
+    return _field_symbol(field_name, dim, "stride", offset_provider_type)
 
 
-def field_stride_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
-    return field_symbol(field_name, dim, "stride")
+def range_symbol_name(field_name: str, axis: str) -> str:
+    """Common part of the name for the range start/stop symbols."""
+    return f"__{field_name}_{axis}_range"
 
 
-def is_size_symbol(name: str) -> bool:
-    return SIZE_SYMBOL_RE.match(name) is not None
+def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
+    """Format name of the start symbol for domain range."""
+    name = f"{range_symbol_name(field_name, dim.value)}_0"
+    return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
-def is_stride_symbol(name: str) -> bool:
-    return STRIDE_SYMBOL_RE.match(name) is not None
+def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
+    """Format name of the stop symbol for domain range."""
+    name = f"{range_symbol_name(field_name, dim.value)}_1"
+    return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
 def filter_connectivity_types(

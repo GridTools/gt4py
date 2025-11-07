@@ -61,6 +61,7 @@ def find_constant_symbols(
                 and (conn_id := gtx_dace_utils.connectivity_identifier(offset)) in sdfg.arrays
             ):
                 assert not sdfg.arrays[conn_id].transient
+                assert conn_type.source_dim.kind == common.DimensionKind.HORIZONTAL
                 stride_symbol = gtx_dace_utils.field_stride_symbol(conn_id, conn_type.source_dim)
                 constant_symbols[stride_symbol.name] = 1
 
@@ -84,10 +85,10 @@ def find_constant_symbols(
                     continue
                 # set all range start symbols to constant value 0
                 origin_symbols = (
-                    gtx_dace_utils.field_origin_symbol(str(psymbol.id), dim)
+                    gtx_dace_utils.range_start_symbol(str(psymbol.id), dim)
                     for dim in psymbol.type.dims
                 )
-                constant_symbols |= {dc_symbol.name: 0 for dc_symbol in origin_symbols}
+                constant_symbols |= {sdfg_symbol.name: 0 for sdfg_symbol in origin_symbols}
 
     return constant_symbols
 

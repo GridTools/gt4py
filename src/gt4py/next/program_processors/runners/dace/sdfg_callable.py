@@ -22,10 +22,10 @@ from . import utils as gtx_dace_utils
 def get_field_domain_symbols(name: str, domain: gtx_common.Domain) -> dict[str, int]:
     assert gtx_common.Domain.is_finite(domain)
     return {
-        gtx_dace_utils.field_origin_symbol(name, dim).name: r.start
+        gtx_dace_utils.range_start_symbol(name, dim).name: r.start
         for dim, r in zip(domain.dims, domain.ranges, strict=True)
     } | {
-        gtx_dace_utils.field_size_symbol(name, dim).name: r.stop - r.start
+        gtx_dace_utils.range_stop_symbol(name, dim).name: r.stop
         for dim, r in zip(domain.dims, domain.ranges, strict=True)
     }
 

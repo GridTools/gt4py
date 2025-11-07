@@ -136,24 +136,20 @@ def _parse_gt_param(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}_buffer_info.shape[{i}]"
                         )
                     else:
-                        # We convert the range information into origin an size.
+                        # The array shape is defined as a sequence of expressions
+                        # like 'range_stop - range_start', where 'range_start' and
+                        # 'range_stop' are the SDFG symbols for the domain range.
                         arg_range = f"{arg}.domain.ranges[{i}]"
-                        origin_symbol = gtx_dace_utils.field_origin_symbol(param_name, dim)
-                        _parse_gt_param(
-                            param_name=origin_symbol.name,
-                            param_type=gtx_dace_utils.as_itir_type(origin_symbol.dtype),
-                            arg=f"{arg_range}.start",
-                            code=code,
-                            sdfg_arglist=sdfg_arglist,
-                        )
-                        size_symbol = gtx_dace_utils.field_size_symbol(param_name, dim)
-                        _parse_gt_param(
-                            param_name=size_symbol.name,
-                            param_type=gtx_dace_utils.as_itir_type(size_symbol.dtype),
-                            arg=f"{arg_range}.stop - {arg_range}.start",
-                            code=code,
-                            sdfg_arglist=sdfg_arglist,
-                        )
+                        rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
+                        rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
+                        for suffix, sdfg_symbol in [("start", rstart), ("stop", rstop)]:
+                            _parse_gt_param(
+                                param_name=sdfg_symbol.name,
+                                param_type=gtx_dace_utils.as_itir_type(sdfg_symbol.dtype),
+                                arg=f"{arg_range}.{suffix}",
+                                code=code,
+                                sdfg_arglist=sdfg_arglist,
+                            )
                 for i, (dim, array_stride) in enumerate(
                     zip(param_type.dims, sdfg_arg_desc.strides, strict=True)
                 ):
