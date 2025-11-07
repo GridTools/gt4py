@@ -719,7 +719,7 @@ def associate_dimmensions(
         ...     sbs2=dace_sbs.Range.from_string("0:10, 4"),
         ...     allow_trivial_dimensions=False,
         ... )
-        ({1: 0}, [0, 2], [])
+        ({1: 0}, [0, 2], [1])
 
     Note:
         This function can not perform arbitrary reshapes, such as flatten a multi
