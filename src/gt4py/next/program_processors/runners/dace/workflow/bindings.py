@@ -13,15 +13,12 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
-from gt4py.next.iterator import builtins as itir_builtins
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 from gt4py.next.type_system import type_specifications as ts
 
 
-FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(
-    kind=getattr(ts.ScalarKind, itir_builtins.INTEGER_INDEX_BUILTIN.upper())
-)
+FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(kind=ts.ScalarKind.UINT32)
 
 _cb_args: Final[str] = "args"
 _cb_device: Final[str] = "device"
