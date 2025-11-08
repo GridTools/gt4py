@@ -113,9 +113,9 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     expected = {}
     if has_unit_stride:
         expected |= {
-            "__x_stride_0": 1,
-            "__y_stride_0": 1,
-            "__gt_conn_V2E_stride_0": 1,
+            "__x_Edge_stride": 1,
+            "__y_Vertex_stride": 1,
+            "__gt_conn_V2E_source_stride": 1,
         }
     if disable_field_origin:
         expected |= {

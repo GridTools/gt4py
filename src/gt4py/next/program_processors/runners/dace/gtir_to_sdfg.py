@@ -342,8 +342,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 "Fields with more than one local dimension are not supported."
             )
         field_origin = tuple(
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, dim))
-            for dim in field_type.dims
+            gtx_dace_utils.range_start_symbol(data_node.data, dim) for dim in field_type.dims
         )
         return gtir_to_sdfg_types.FieldopData(data_node, field_type, field_origin)
 
@@ -551,15 +550,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
         neighbor_table_types = gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
         shape = []
-        for i, dim in enumerate(dims):
+        for dim in dims:
             if dim.kind == gtx_common.DimensionKind.LOCAL:
                 # for local dimension, the size is taken from the associated connectivity type
                 shape.append(neighbor_table_types[dim.value].max_neighbors)
             elif gtx_dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
                 # we use symbolic size for the global dimension of a connectivity
-                shape.append(
-                    dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_size_symbol_name(name, i))
-                )
+                shape.append(gtx_dace_utils.field_size_symbol(name, dim, neighbor_table_types))
             else:
                 # the size of global dimensions for a regular field is the symbolic
                 # expression of domain range 'stop - start'
@@ -572,8 +569,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     )
                 )
         strides = [
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_stride_symbol_name(name, i))
-            for i in range(len(dims))
+            gtx_dace_utils.field_stride_symbol(name, dim, neighbor_table_types) for dim in dims
         ]
         return shape, strides
 
@@ -640,13 +636,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
             if isinstance(gt_type.dtype, ts.ScalarType):
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype)
-                dims = gt_type.dims
+                all_dims = gt_type.dims
             elif not transient:  # 'ts.ListType': use 'offset_type' as local dimension
                 assert gt_type.dtype.offset_type is not None
                 assert gt_type.dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
                 assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype.element_type)
-                dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
+                all_dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
             else:
                 # By design, the domain of temporary fields used by SDFG lowering
                 # contains only the global dimensions. The local dimension is extracted,
@@ -654,7 +650,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 raise ValueError("Unexpected local dimension in temporary field domain.")
             # Use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, dims)
+            sym_shape, sym_strides = self._make_array_shape_and_strides(name, all_dims)
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
             return [(name, gt_type)]
 
