@@ -107,6 +107,8 @@ class Program:
         custom_key_parameters = []
         custom_var_key_param = inspect.Parameter(name="kwargs", kind=inspect.Parameter.VAR_KEYWORD)
         for name, param in definition_signature.parameters.items():
+            # remove annotations to avoid issues
+            param = param.replace(annotation=param.empty)
             match param.kind:
                 case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
                     custom_pos_parameters.append(param)
@@ -154,10 +156,9 @@ class _CustomProgram(Program):
     )
 """
         exec(custom_program_src, ns := {"Program": Program, "__name__": __name__})
-        _CustomProgram = ns["_CustomProgram"]
-
-        instance = object.__new__(_CustomProgram)
+        instance = object.__new__(ns["_CustomProgram"])
         instance.__init__(*args, **kwargs)
+
         return instance
 
     @classmethod
