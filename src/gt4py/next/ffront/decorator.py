@@ -20,7 +20,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Sequence
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar, cast
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -90,7 +90,7 @@ class Program:
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Program:
         try:
-            definition_stage: ffront_stages.ProgramDefinition = kwargs.get("definition_stage", None)
+            definition_stage = kwargs.get("definition_stage", None)
             definition_stage = definition_stage or args[0]
             if not isinstance(definition_stage, ffront_stages.ProgramDefinition):
                 raise AssertionError()
@@ -156,8 +156,8 @@ class _CustomProgram(Program):
     )
 """
         exec(custom_program_src, ns := {"Program": Program, "__name__": __name__})
-        instance = object.__new__(ns["_CustomProgram"])
-        instance.__init__(*args, **kwargs)
+        instance: Program = object.__new__(cast(type[Program], ns["_CustomProgram"]))
+        instance.__init__(*args, **kwargs)  # type: ignore[misc]  # it's safe to call __init__
 
         return instance
 
