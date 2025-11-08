@@ -230,17 +230,19 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ...
 
 
-def _flatten_tuple_symbols(symbols: Iterable[gtir.Sym]) -> set[gtir.Sym]:
+def _flatten_tuple_symbols(symbols: Iterable[gtir.Sym]) -> list[gtir.Sym]:
     """
     Helper function to flatten tuple symbols, recursively in case of nested tuples,
     and extract all scalar symbols.
     """
-    flat_symbols: set[gtir.Sym] = set()
+    flat_symbols: list[gtir.Sym] = []
     for sym in symbols:
         if isinstance(sym.type, ts.TupleType):
-            flat_symbols |= {f for f in gtir_to_sdfg_utils.flatten_tuple_fields(sym.id, sym.type)}
+            flat_symbols.extend(
+                f for f in gtir_to_sdfg_utils.flatten_tuple_fields(sym.id, sym.type)
+            )
         else:
-            flat_symbols.add(sym)
+            flat_symbols.append(sym)
     return flat_symbols
 
 
