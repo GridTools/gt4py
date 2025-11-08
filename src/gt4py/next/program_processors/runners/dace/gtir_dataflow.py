@@ -1119,8 +1119,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert len(src_desc.shape) == len(src_arg.subset)
             src_subset = src_arg.subset
             local_dim = src_arg.gt_dtype.offset_type
-            full_dims = gtx_common.order_dimensions([*src_arg.gt_field.dims, local_dim])  # type: ignore[list-item]  # checked in MemletExpr.__post_init__
-            local_dim_index = full_dims.index(local_dim)  # type: ignore[arg-type]  # checked in MemletExpr.__post_init__
+            all_dims = gtx_common.order_dimensions([*src_arg.gt_field.dims, local_dim])  # type: ignore[list-item]  # checked in MemletExpr.__post_init__
+            local_dim_index = all_dims.index(local_dim)  # type: ignore[arg-type]  # checked in MemletExpr.__post_init__
         elif isinstance(src_arg, ValueExpr):
             assert len(src_desc.shape) == 1
             src_subset = dace_subsets.Range.from_array(src_desc)
