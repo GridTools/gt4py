@@ -53,7 +53,8 @@ def get_tasklet_connector(name: str) -> str:
     """
     Format tasklet connector name based on the naming convention to avoid conflicts with GTIR program symbols.
     """
-    return f"{_TASKLET_CONNECTOR_PREFIX}{name}"
+    assert _TASKLET_CONNECTOR_PREFIX.startswith("__")
+    return f"{_TASKLET_CONNECTOR_PREFIX}{name.lstrip('_')}"
 
 
 def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> NestedTuple[gtir.Sym]:
@@ -130,10 +131,12 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
 
     # check there are no conflicts with the connctor names generated in the lowering
     if any(str(sym.id).startswith(_TASKLET_CONNECTOR_PREFIX) for sym in ir.params):
-        raise ValueError(f"Unexpectd symbol containing prefix '{_TASKLET_CONNECTOR_PREFIX}'.")
+        raise ValueError(
+            f"Unexpectd symbol with prefix '{_TASKLET_CONNECTOR_PREFIX}' in program parameters."
+        )
 
     ir_sym_ids = {str(sym.id) for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()}
-    ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_tmp")
+    ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_var")
 
     invalid_symbols_mapping = {
         sym_id: ir_ssa_uuid.sequential_id()

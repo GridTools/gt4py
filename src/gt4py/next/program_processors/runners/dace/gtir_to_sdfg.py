@@ -124,7 +124,7 @@ class DataflowBuilder(Protocol):
             assert inputs.isdisjoint(outputs)
 
         connector_mapping = {
-            conn: f"{gtir_to_sdfg_utils.get_tasklet_connector}{conn}" for conn in (inputs | outputs)
+            conn: gtir_to_sdfg_utils.get_tasklet_connector(conn) for conn in (inputs | outputs)
         }
         new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
 
@@ -163,7 +163,7 @@ class DataflowBuilder(Protocol):
             assert inputs.keys().isdisjoint(outputs.keys())
 
         connector_mapping = {
-            conn: f"{gtir_to_sdfg_utils.get_tasklet_connector}{conn}"
+            conn: gtir_to_sdfg_utils.get_tasklet_connector(conn)
             for conn in (inputs.keys() | outputs.keys())
         }
         new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
