@@ -109,12 +109,11 @@ class DataflowBuilder(Protocol):
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
-        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name.
+        """Wrapper of `dace.SDFGState.add_tasklet` that modifies the connector names.
 
-        It also ensures that the tasklet connectors receive a unique name, different
-        from any other tasklet connector or data entity in the SDFG. Therefore,
-        this fuction returns the mapping from the given connector names, as they
-        appear in `inputs` and `outputs` arguments, to the new unique names.
+        It modifies the tasklet connectors by adding a prefix string (see
+        `gtir_to_sdfg_utils.get_tasklet_connector()`), in order to avoid name conflicts
+        with SDFG data. Otherwise, SDFG validation would detect such conflicts and fail.
         """
         unique_name = self.unique_tasklet_name(name)
 
@@ -148,12 +147,9 @@ class DataflowBuilder(Protocol):
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
-        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name.
+        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that modifies the connector names.
 
-        It also ensures that the tasklet connectors receive a unique name, different
-        from any other tasklet connector or data entity in the SDFG. Therefore,
-        this fuction returns the mapping from the given connector names, as they
-        appear in `inputs` and `outputs` arguments, to the new unique names.
+        For information about modification of the tasklet connector names, see `add_tasklet()`.
         """
         unique_name = self.unique_tasklet_name(name)
 
