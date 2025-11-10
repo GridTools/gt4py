@@ -1333,15 +1333,18 @@ def test_iterator_access(backend: str) -> None:
 
     field_A = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
     field_B = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    offsets = gt_storage.zeros(backend=backend, shape=(domain[2],), dtype=np.int32)
 
     @gtscript.stencil(backend=backend)
-    def test_all_valid_usage(field_A: Field[np.float64], field_B: Field[np.float64]) -> None:
+    def test_all_valid_usage(
+        field_A: Field[np.float64], field_B: Field[np.float64], offsets: Field[K, np.int32]
+    ) -> None:
         with computation(PARALLEL), interval(...):
             if K == 2:
                 field_A = 20.20
-            field_B = K
+            field_B = float(K + offsets)
 
-    test_all_valid_usage(field_A, field_B)
+    test_all_valid_usage(field_A, field_B, offsets)
     assert field_A[0, 0, 1] == 0
     assert field_A[0, 0, 2] == 20.20
     for _k in range(domain[2]):
