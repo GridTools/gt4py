@@ -103,8 +103,8 @@ class DataflowBuilder(Protocol):
         name: str,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        inputs: set[str] | dict[str, dace.dtypes.typeclass],
-        outputs: set[str] | dict[str, dace.dtypes.typeclass],
+        inputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
+        outputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
         code: str,
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
@@ -116,9 +116,9 @@ class DataflowBuilder(Protocol):
         with SDFG data. Otherwise, SDFG validation would detect such conflicts and fail.
         """
         if isinstance(inputs, set):
-            inputs = {k: None for k in inputs}
+            inputs = {k: None for k in sorted(inputs)}
         if isinstance(outputs, set):
-            outputs = {k: None for k in outputs}
+            outputs = {k: None for k in sorted(outputs)}
         assert inputs.keys().isdisjoint(outputs.keys())
 
         connector_mapping = {

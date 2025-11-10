@@ -267,10 +267,10 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         dace.Memlet(f"{output}[0]"),
     )
     # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
-    # the wrapper provided by `DataflowBuilder`, that modifies the tasklet connectors
-    # to avoid name conflicts with program symbols. However, this method is not
-    # available here, so we have to call the underlying DaCe function directly.
-    # We now run `validate()` to make sure that no name conflict was introduced.
+    #  the wrapper provided by `DataflowBuilder`, that modifies the tasklet connectors
+    #  to avoid name conflicts with program symbols. However, this method is not
+    #  available here, so we have to call the underlying DaCe function directly.
+    #  We now run `validate()` to make sure that no name conflict was introduced.
     sdfg.validate()
 
 

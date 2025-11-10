@@ -54,6 +54,7 @@ def get_tasklet_connector(name: str) -> str:
     Format tasklet connector name based on the naming convention to avoid conflicts with GTIR program symbols.
     """
     assert _TASKLET_CONNECTOR_PREFIX.startswith("__")
+    assert not name.startswith(_TASKLET_CONNECTOR_PREFIX)
     return f"{_TASKLET_CONNECTOR_PREFIX}{name.lstrip('_')}"
 
 

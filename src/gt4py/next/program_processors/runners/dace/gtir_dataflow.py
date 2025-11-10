@@ -16,6 +16,7 @@ from typing import (
     Final,
     Iterable,
     List,
+    Mapping,
     Optional,
     Protocol,
     Sequence,
@@ -450,8 +451,8 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_tasklet(
         self,
         name: str,
-        inputs: set[str] | dict[str, dace.dtypes.typeclass],
-        outputs: set[str] | dict[str, dace.dtypes.typeclass],
+        inputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
+        outputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
         code: str,
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dict[str, str]]:
@@ -476,10 +477,10 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_mapped_tasklet(
         self,
         name: str,
-        map_ranges: dict[str, str | dace.subsets.Subset],
-        inputs: dict[str, dace.Memlet],
+        map_ranges: Mapping[str, str | dace.subsets.Subset],
+        inputs: Mapping[str, dace.Memlet],
         code: str,
-        outputs: dict[str, dace.Memlet],
+        outputs: Mapping[str, dace.Memlet],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
         """
