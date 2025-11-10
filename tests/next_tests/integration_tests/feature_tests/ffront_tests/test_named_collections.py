@@ -27,26 +27,26 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 @dataclasses.dataclass
-class DataclassContainer:
+class DataclassNamedCollection:
     u: gtx.Field[[IDim, JDim], gtx.float32]
     v: gtx.Field[[IDim, JDim], gtx.float32]
 
 
-class NamedTupleContainer(NamedTuple):
+class NamedTupleNamedCollection(NamedTuple):
     u: gtx.Field[[IDim, JDim], gtx.float32]
     v: gtx.Field[[IDim, JDim], gtx.float32]
 
 
 @gtx.field_operator
 def constructed_outside_named_tuple(
-    vel: NamedTupleContainer,
+    vel: NamedTupleNamedCollection,
 ) -> gtx.Field[[IDim, JDim], gtx.float32]:
     return vel.u + vel.v
 
 
 @gtx.program
 def constructed_outside_named_tuple_program(
-    vel: NamedTupleContainer,
+    vel: NamedTupleNamedCollection,
     out: gtx.Field[[IDim, JDim], gtx.float32],
 ):
     constructed_outside_named_tuple(vel, out=out)
@@ -54,14 +54,14 @@ def constructed_outside_named_tuple_program(
 
 @gtx.field_operator
 def constructed_outside_dataclass(
-    vel: DataclassContainer,
+    vel: DataclassNamedCollection,
 ) -> gtx.Field[[IDim, JDim], gtx.float32]:
     return vel.u + vel.v
 
 
 @gtx.program
 def constructed_outside_dataclass_program(
-    vel: DataclassContainer,
+    vel: DataclassNamedCollection,
     out: gtx.Field[[IDim, JDim], gtx.float32],
 ):
     constructed_outside_dataclass(vel, out=out)
@@ -94,8 +94,8 @@ def test_named_tuple_like_constructed_outside(cartesian_case, testee):
 @gtx.field_operator
 def constructed_inside_named_tuple(
     vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
-) -> NamedTupleContainer:
-    return NamedTupleContainer(
+) -> NamedTupleNamedCollection:
+    return NamedTupleNamedCollection(
         v=vel[0] - vel[1], u=vel[0] + vel[1]
     )  # order swapped to show kwargs work
 
@@ -103,7 +103,7 @@ def constructed_inside_named_tuple(
 @gtx.program
 def constructed_inside_named_tuple_program(
     vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
-    out: NamedTupleContainer,
+    out: NamedTupleNamedCollection,
 ):
     constructed_inside_named_tuple(vel, out=out)
 
@@ -111,8 +111,8 @@ def constructed_inside_named_tuple_program(
 @gtx.field_operator
 def constructed_inside_dataclass(
     vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
-) -> DataclassContainer:
-    return DataclassContainer(
+) -> DataclassNamedCollection:
+    return DataclassNamedCollection(
         v=vel[0] - vel[1], u=vel[0] + vel[1]
     )  # order swapped to show kwargs work
 
@@ -120,7 +120,7 @@ def constructed_inside_dataclass(
 @gtx.program
 def constructed_inside_dataclass_program(
     vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
-    out: DataclassContainer,
+    out: DataclassNamedCollection,
 ):
     constructed_inside_dataclass(vel, out=out)
 
@@ -150,48 +150,48 @@ def test_named_tuple_like_constructed_inside(cartesian_case, testee):
 
 
 @dataclasses.dataclass
-class NestedContainer:
-    a: tuple[gtx.Field[[IDim, JDim], gtx.float32], NamedTupleContainer]
-    b: tuple[DataclassContainer, gtx.Field[[IDim, JDim], gtx.float32]]
+class NestedNamedCollection:
+    a: tuple[gtx.Field[[IDim, JDim], gtx.float32], NamedTupleNamedCollection]
+    b: tuple[DataclassNamedCollection, gtx.Field[[IDim, JDim], gtx.float32]]
 
 
 @gtx.field_operator
-def nested_mixed_containers(
-    inp: tuple[NestedContainer, gtx.Field[[IDim, JDim], gtx.float32]],
-) -> tuple[gtx.Field[[IDim, JDim], gtx.float32], NestedContainer]:
-    # swap the single fields and the elements of the containers between a and b
+def nested_mixed_named_collections(
+    inp: tuple[NestedNamedCollection, gtx.Field[[IDim, JDim], gtx.float32]],
+) -> tuple[gtx.Field[[IDim, JDim], gtx.float32], NestedNamedCollection]:
+    # swap the single fields and the elements of the named collections between a and b
     old_dataclass = inp[0].b[0]
     old_named_tuple = inp[0].a[1]
-    new_named_tuple = NamedTupleContainer(u=old_dataclass.u, v=old_dataclass.v)
-    new_dataclass = DataclassContainer(u=old_named_tuple.u, v=old_named_tuple.v)
-    new_nested_container = NestedContainer(
+    new_named_tuple = NamedTupleNamedCollection(u=old_dataclass.u, v=old_dataclass.v)
+    new_dataclass = DataclassNamedCollection(u=old_named_tuple.u, v=old_named_tuple.v)
+    new_nested_named_collection = NestedNamedCollection(
         a=(inp[0].b[1], new_named_tuple), b=(new_dataclass, inp[0].a[0])
     )
-    return (inp[1], new_nested_container)
+    return (inp[1], new_nested_named_collection)
 
 
 @gtx.program
-def nested_mixed_containers_program(
-    inp: tuple[NestedContainer, gtx.Field[[IDim, JDim], gtx.float32]],
-    out: tuple[gtx.Field[[IDim, JDim], gtx.float32], NestedContainer],
+def nested_mixed_named_collections_program(
+    inp: tuple[NestedNamedCollection, gtx.Field[[IDim, JDim], gtx.float32]],
+    out: tuple[gtx.Field[[IDim, JDim], gtx.float32], NestedNamedCollection],
 ):
-    nested_mixed_containers(inp, out=out)
+    nested_mixed_named_collections(inp, out=out)
 
 
-def test_nested_mixed_containers(cartesian_case):
-    inp = cases.allocate(cartesian_case, nested_mixed_containers_program, "inp")()
-    out = cases.allocate(cartesian_case, nested_mixed_containers_program, "out")()
+def test_nested_mixed_named_collections(cartesian_case):
+    inp = cases.allocate(cartesian_case, nested_mixed_named_collections_program, "inp")()
+    out = cases.allocate(cartesian_case, nested_mixed_named_collections_program, "out")()
 
     cases.verify(
         cartesian_case,
-        nested_mixed_containers,
+        nested_mixed_named_collections,
         inp,
         out=out,
         ref=(
             inp[1],
-            NestedContainer(
-                a=(inp[0].b[1], NamedTupleContainer(u=inp[0].b[0].u, v=inp[0].b[0].v)),
-                b=(DataclassContainer(u=inp[0].a[1].u, v=inp[0].a[1].v), inp[0].a[0]),
+            NestedNamedCollection(
+                a=(inp[0].b[1], NamedTupleNamedCollection(u=inp[0].b[0].u, v=inp[0].b[0].v)),
+                b=(DataclassNamedCollection(u=inp[0].a[1].u, v=inp[0].a[1].v), inp[0].a[0]),
             ),
         ),
     )
@@ -256,18 +256,18 @@ def test_scan(cartesian_case, testee):
 @pytest.mark.xfail(
     reason="We store the qualified name to the actual Python type in the `NamedTupleType`."
 )
-def test_locally_defined_container(cartesian_case):
+def test_locally_defined_named_collection(cartesian_case):
     # We could fix this pattern by storing the actual type (instead of a the qualified name).
     @dataclasses.dataclass
-    class LocalContainer:  # not at global scope!
+    class LocalNamedCollection:  # not at global scope!
         u: gtx.Field[[IDim, JDim], gtx.float32]
         v: gtx.Field[[IDim, JDim], gtx.float32]
 
     @gtx.field_operator
     def testee(
         vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
-    ) -> DataclassContainer:
-        return LocalContainer(v=vel[0] - vel[1], u=vel[0] + vel[1])
+    ) -> DataclassNamedCollection:
+        return LocalNamedCollection(v=vel[0] - vel[1], u=vel[0] + vel[1])
 
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -279,5 +279,5 @@ def test_locally_defined_container(cartesian_case):
         testee,
         vel,
         out=out,
-        ref=DataclassContainer(u=vel[0] + vel[1], v=vel[0] - vel[1]),
+        ref=DataclassNamedCollection(u=vel[0] + vel[1], v=vel[0] - vel[1]),
     )

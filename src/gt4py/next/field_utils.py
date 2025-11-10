@@ -12,7 +12,7 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import NestedTuple
-from gt4py.next import common, containers, utils
+from gt4py.next import common, named_collections, utils
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -56,9 +56,9 @@ def field_from_typespec(
     def _constructor(
         type_: ts.CollectionTypeSpec,
         elems: NestedTuple[common.NumericValue],
-    ) -> containers.Container:
+    ) -> named_collections.NamedCollection:
         if isinstance(type_, ts.NamedCollectionType):
-            return containers.make_container_constructor_from_type_spec(type_)(elems)
+            return named_collections.make_named_collection_constructor_from_type_spec(type_)(elems)
         return tuple(elems)
 
     @utils.tree_map(

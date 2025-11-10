@@ -15,111 +15,111 @@ import dataclasses
 
 from gt4py import next as gtx
 from gt4py.eve.extended_typing import NestedTuple, Self
-from gt4py.next import common, Dimension, Field, float32, float64, Dims, containers
+from gt4py.next import common, Dimension, Field, float32, float64, Dims, named_collections
 from gt4py.next.type_system import type_specifications as ts
 
 
 TDim = Dimension("TDim")  # Meaningless dimension just for tests
 
 
-class SingleElementNamedTupleContainer(NamedTuple):
+class SingleElementNamedTupleNamedCollection(NamedTuple):
     x: Field[Dims[TDim], float32]
 
 
 @dataclasses.dataclass
-class SingleElementDataclassContainer:
+class SingleElementDataclassNamedCollection:
     x: Field[Dims[TDim], float32]
 
 
-class NamedTupleContainer(NamedTuple):
-    x: Field[Dims[TDim], float32]
-    y: Field[Dims[TDim], float32]
-
-
-@dataclasses.dataclass
-class DataclassContainer:
+class NamedTupleNamedCollection(NamedTuple):
     x: Field[Dims[TDim], float32]
     y: Field[Dims[TDim], float32]
 
 
 @dataclasses.dataclass
-class NestedDataclassContainer:
-    a: DataclassContainer
-    b: DataclassContainer
-    c: DataclassContainer
-
-
-class NestedNamedTupleDataclassContainer(NamedTuple):
-    a: DataclassContainer
-    b: DataclassContainer
-    c: DataclassContainer
+class DataclassNamedCollection:
+    x: Field[Dims[TDim], float32]
+    y: Field[Dims[TDim], float32]
 
 
 @dataclasses.dataclass
-class NestedDataclassNamedTupleContainer:
-    a: NamedTupleContainer
-    b: NamedTupleContainer
-    c: NamedTupleContainer
+class NestedDataclassNamedCollection:
+    a: DataclassNamedCollection
+    b: DataclassNamedCollection
+    c: DataclassNamedCollection
+
+
+class NestedNamedTupleDataclassNamedCollection(NamedTuple):
+    a: DataclassNamedCollection
+    b: DataclassNamedCollection
+    c: DataclassNamedCollection
 
 
 @dataclasses.dataclass
-class NestedMixedTupleContainer:
-    a: NamedTupleContainer
-    b: DataclassContainer
-    c: NamedTupleContainer
+class NestedDataclassNamedTupleNamedCollection:
+    a: NamedTupleNamedCollection
+    b: NamedTupleNamedCollection
+    c: NamedTupleNamedCollection
 
 
 @dataclasses.dataclass
-class ScalarsContainer:
+class NestedMixedTupleNamedCollection:
+    a: NamedTupleNamedCollection
+    b: DataclassNamedCollection
+    c: NamedTupleNamedCollection
+
+
+@dataclasses.dataclass
+class ScalarsNamedCollection:
     a: tuple[float32, float32]
     b: tuple[tuple[float32, float32], tuple[float64, float64]]
 
 
 @dataclasses.dataclass
-class DeeplyNestedContainer:
+class DeeplyNestedNamedCollection:
     a: tuple[float32, float32]
-    b: ScalarsContainer
-    c: tuple[tuple[NamedTupleContainer, DataclassContainer], int]
+    b: ScalarsNamedCollection
+    c: tuple[tuple[NamedTupleNamedCollection, DataclassNamedCollection], int]
 
 
 PYCONTAINERS_SAMPLES: Final[
-    dict[type[containers.CustomContainer], NestedTuple[common.NumericValue]]
+    dict[type[named_collections.CustomNamedCollection], NestedTuple[common.NumericValue]]
 ] = {
-    SingleElementNamedTupleContainer: (gtx.constructors.full({TDim: 5}, 2.0),),
-    SingleElementDataclassContainer: (gtx.constructors.full({TDim: 5}, 2.0),),
-    NamedTupleContainer: (
+    SingleElementNamedTupleNamedCollection: (gtx.constructors.full({TDim: 5}, 2.0),),
+    SingleElementDataclassNamedCollection: (gtx.constructors.full({TDim: 5}, 2.0),),
+    NamedTupleNamedCollection: (
         gtx.constructors.full({TDim: 5}, 2.0),
         gtx.constructors.full({TDim: 5}, 3.0),
     ),
-    DataclassContainer: (
+    DataclassNamedCollection: (
         gtx.constructors.full({TDim: 5}, 2.0),
         gtx.constructors.full({TDim: 5}, 3.0),
     ),
-    NestedDataclassContainer: (
+    NestedDataclassNamedCollection: (
         (gtx.constructors.full({TDim: 5}, 2.0), gtx.constructors.full({TDim: 5}, 3.0)),
         (gtx.constructors.full({TDim: 5}, 4.0), gtx.constructors.full({TDim: 5}, 5.0)),
         (gtx.constructors.full({TDim: 5}, 6.0), gtx.constructors.full({TDim: 5}, 7.0)),
     ),
-    NestedNamedTupleDataclassContainer: (
+    NestedNamedTupleDataclassNamedCollection: (
         (gtx.constructors.full({TDim: 5}, 2.0), gtx.constructors.full({TDim: 5}, 3.0)),
         (gtx.constructors.full({TDim: 5}, 4.0), gtx.constructors.full({TDim: 5}, 5.0)),
         (gtx.constructors.full({TDim: 5}, 6.0), gtx.constructors.full({TDim: 5}, 7.0)),
     ),
-    NestedDataclassNamedTupleContainer: (
+    NestedDataclassNamedTupleNamedCollection: (
         (gtx.constructors.full({TDim: 5}, 2.0), gtx.constructors.full({TDim: 5}, 3.0)),
         (gtx.constructors.full({TDim: 5}, 4.0), gtx.constructors.full({TDim: 5}, 5.0)),
         (gtx.constructors.full({TDim: 5}, 6.0), gtx.constructors.full({TDim: 5}, 7.0)),
     ),
-    NestedMixedTupleContainer: (
+    NestedMixedTupleNamedCollection: (
         (gtx.constructors.full({TDim: 5}, 2.0), gtx.constructors.full({TDim: 5}, 3.0)),
         (gtx.constructors.full({TDim: 5}, 4.0), gtx.constructors.full({TDim: 5}, 5.0)),
         (gtx.constructors.full({TDim: 5}, 6.0), gtx.constructors.full({TDim: 5}, 7.0)),
     ),
-    ScalarsContainer: (
+    ScalarsNamedCollection: (
         (1.0, 2.0),
         ((3.0, 4.0), (5.0, 6.0)),
     ),
-    DeeplyNestedContainer: (
+    DeeplyNestedNamedCollection: (
         (1.0, 2.0),
         (
             (-1.0, -2.0),
@@ -142,39 +142,41 @@ PYCONTAINERS_SAMPLES: Final[
 }
 
 
-PC = TypeVar("PC", bound=containers.CustomContainer)
+PC = TypeVar("PC", bound=named_collections.CustomNamedCollection)
 
 
-def from_nested_tuple(container_type_hint: type[PC], data: NestedTuple) -> PC:
-    """Construct a container of type `container_type_hint` from a nested tuple `data`."""
+def from_nested_tuple(named_collection_type_hint: type[PC], data: NestedTuple) -> PC:
+    """Construct a named collection of type `named_collection_type_hint` from a nested tuple `data`."""
 
-    nested_types = containers.elements_types(container_type_hint)
-    keys = containers.elements_keys(container_type_hint)
+    nested_types = named_collections.elements_types(named_collection_type_hint)
+    keys = named_collections.elements_keys(named_collection_type_hint)
     assert len(keys) == len(data), f"Expected {len(keys)} elements, got {len(data)}"
 
     nested_values = {
         key: from_nested_tuple(nested_type, value)
-        if containers.is_container_type(nested_type := nested_types[key])
+        if named_collections.is_named_collection_type(nested_type := nested_types[key])
         else value
-        for key, value in zip(containers.elements_keys(container_type_hint), data)
+        for key, value in zip(named_collections.elements_keys(named_collection_type_hint), data)
     }
 
-    container_type = containers.container_type(container_type_hint)
-    assert container_type is not None, (
-        f"Type {container_type_hint} is not a supported container type"
+    named_collection_type = named_collections.named_collection_type(named_collection_type_hint)
+    assert named_collection_type is not None, (
+        f"Type {named_collection_type_hint} is not a supported named collection type"
     )
 
     if isinstance(keys[0], int):
-        return container_type(nested_values.values())
+        return named_collection_type(nested_values.values())
     else:
-        return container_type(**nested_values)
+        return named_collection_type(**nested_values)
 
 
-def to_nested_tuple(container: containers.CustomContainer) -> NestedTuple:
-    """Convert a container into a nested tuple."""
+def to_nested_tuple(named_collection: named_collections.CustomNamedCollection) -> NestedTuple:
+    """Convert a named collection into a nested tuple."""
     return tuple(
         to_nested_tuple(value)
-        if isinstance(value := getattr(container, key), containers.CONTAINER_TYPES)
+        if isinstance(
+            value := getattr(named_collection, key), named_collections.NAMED_COLLECTION_TYPES
+        )
         else value
-        for key in containers.elements_keys(container.__class__)
+        for key in named_collections.elements_keys(named_collection.__class__)
     )

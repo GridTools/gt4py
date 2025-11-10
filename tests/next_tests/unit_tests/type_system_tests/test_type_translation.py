@@ -19,7 +19,7 @@ from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next import constructors
 
-from ...artifacts import pycontainers as pc
+from ...artifacts import custom_named_collections as cnc
 
 
 class CustomInt32DType:
@@ -119,77 +119,81 @@ def _make_type_string_for_container(cls: type) -> str:
         ),
         # Python container types
         (
-            pc.NamedTupleContainer,
-            NamedTupleContainerTypeSpec := ts.NamedCollectionType(
+            cnc.NamedTupleNamedCollection,
+            NamedTupleNamedCollectionTypeSpec := ts.NamedCollectionType(
                 types=[
-                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
-                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
                 ],
                 keys=["x", "y"],
-                original_python_type=_make_type_string_for_container(pc.NamedTupleContainer),
+                original_python_type=_make_type_string_for_container(cnc.NamedTupleNamedCollection),
             ),
         ),
         (
-            pc.DataclassContainer,
-            DataclassContainerTypeSpec := ts.NamedCollectionType(
+            cnc.DataclassNamedCollection,
+            DataclassNamedCollectionTypeSpec := ts.NamedCollectionType(
                 types=[
-                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
-                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
                 ],
                 keys=["x", "y"],
-                original_python_type=_make_type_string_for_container(pc.DataclassContainer),
+                original_python_type=_make_type_string_for_container(cnc.DataclassNamedCollection),
             ),
         ),
         (
-            pc.NestedDataclassContainer,
+            cnc.NestedDataclassNamedCollection,
             ts.NamedCollectionType(
                 types=[
-                    DataclassContainerTypeSpec,
-                    DataclassContainerTypeSpec,
-                    DataclassContainerTypeSpec,
-                ],
-                keys=["a", "b", "c"],
-                original_python_type=_make_type_string_for_container(pc.NestedDataclassContainer),
-            ),
-        ),
-        (
-            pc.NestedNamedTupleDataclassContainer,
-            ts.NamedCollectionType(
-                types=[
-                    DataclassContainerTypeSpec,
-                    DataclassContainerTypeSpec,
-                    DataclassContainerTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
                 ],
                 keys=["a", "b", "c"],
                 original_python_type=_make_type_string_for_container(
-                    pc.NestedNamedTupleDataclassContainer
+                    cnc.NestedDataclassNamedCollection
                 ),
             ),
         ),
         (
-            pc.NestedDataclassNamedTupleContainer,
+            cnc.NestedNamedTupleDataclassNamedCollection,
             ts.NamedCollectionType(
                 types=[
-                    NamedTupleContainerTypeSpec,
-                    NamedTupleContainerTypeSpec,
-                    NamedTupleContainerTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
                 ],
                 keys=["a", "b", "c"],
                 original_python_type=_make_type_string_for_container(
-                    pc.NestedDataclassNamedTupleContainer
+                    cnc.NestedNamedTupleDataclassNamedCollection
                 ),
             ),
         ),
         (
-            pc.NestedMixedTupleContainer,
+            cnc.NestedDataclassNamedTupleNamedCollection,
             ts.NamedCollectionType(
                 types=[
-                    NamedTupleContainerTypeSpec,
-                    DataclassContainerTypeSpec,
-                    NamedTupleContainerTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
                 ],
                 keys=["a", "b", "c"],
-                original_python_type=_make_type_string_for_container(pc.NestedMixedTupleContainer),
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedDataclassNamedTupleNamedCollection
+                ),
+            ),
+        ),
+        (
+            cnc.NestedMixedTupleNamedCollection,
+            ts.NamedCollectionType(
+                types=[
+                    NamedTupleNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedMixedTupleNamedCollection
+                ),
             ),
         ),
     ],
@@ -269,7 +273,7 @@ def test_as_from_dtype(dtype):
     assert type_translation.as_dtype(type_translation.from_dtype(dtype)) == dtype
 
 
-_FIELD = constructors.empty({pc.TDim: 1}, gtx.float32)
+_FIELD = constructors.empty({cnc.TDim: 1}, gtx.float32)
 
 
 @pytest.mark.parametrize(
@@ -277,101 +281,107 @@ _FIELD = constructors.empty({pc.TDim: 1}, gtx.float32)
     [
         # Python container types
         (
-            pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
-            NamedTupleContainerTypeSpec := ts.NamedCollectionType(
+            cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+            NamedTupleNamedCollectionTypeSpec := ts.NamedCollectionType(
                 types=[
-                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
-                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
                 ],
                 keys=["x", "y"],
-                original_python_type=_make_type_string_for_container(pc.NamedTupleContainer),
+                original_python_type=_make_type_string_for_container(cnc.NamedTupleNamedCollection),
             ),
         ),
         (
-            pc.DataclassContainer(x=_FIELD, y=_FIELD),
-            DataclassContainerTypeSpec := ts.NamedCollectionType(
+            cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+            DataclassNamedCollectionTypeSpec := ts.NamedCollectionType(
                 types=[
-                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
-                    ts.FieldType(dims=[pc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
                 ],
                 keys=["x", "y"],
-                original_python_type=_make_type_string_for_container(pc.DataclassContainer),
+                original_python_type=_make_type_string_for_container(cnc.DataclassNamedCollection),
             ),
         ),
         (
-            pc.NestedDataclassContainer(
-                a=pc.DataclassContainer(x=_FIELD, y=_FIELD),
-                b=pc.DataclassContainer(x=_FIELD, y=_FIELD),
-                c=pc.DataclassContainer(x=_FIELD, y=_FIELD),
+            cnc.NestedDataclassNamedCollection(
+                a=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                b=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                c=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
             ),
             ts.NamedCollectionType(
                 types=[
-                    DataclassContainerTypeSpec,
-                    DataclassContainerTypeSpec,
-                    DataclassContainerTypeSpec,
-                ],
-                keys=["a", "b", "c"],
-                original_python_type=_make_type_string_for_container(pc.NestedDataclassContainer),
-            ),
-        ),
-        (
-            pc.NestedNamedTupleDataclassContainer(
-                a=pc.DataclassContainer(x=_FIELD, y=_FIELD),
-                b=pc.DataclassContainer(x=_FIELD, y=_FIELD),
-                c=pc.DataclassContainer(x=_FIELD, y=_FIELD),
-            ),
-            ts.NamedCollectionType(
-                types=[
-                    DataclassContainerTypeSpec,
-                    DataclassContainerTypeSpec,
-                    DataclassContainerTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
                 ],
                 keys=["a", "b", "c"],
                 original_python_type=_make_type_string_for_container(
-                    pc.NestedNamedTupleDataclassContainer
+                    cnc.NestedDataclassNamedCollection
                 ),
             ),
         ),
         (
-            pc.NestedDataclassNamedTupleContainer(
-                a=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
-                b=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
-                c=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
+            cnc.NestedNamedTupleDataclassNamedCollection(
+                a=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                b=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                c=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
             ),
             ts.NamedCollectionType(
                 types=[
-                    NamedTupleContainerTypeSpec,
-                    NamedTupleContainerTypeSpec,
-                    NamedTupleContainerTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
                 ],
                 keys=["a", "b", "c"],
                 original_python_type=_make_type_string_for_container(
-                    pc.NestedDataclassNamedTupleContainer
+                    cnc.NestedNamedTupleDataclassNamedCollection
                 ),
             ),
         ),
         (
-            pc.NestedMixedTupleContainer(
-                a=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
-                b=pc.DataclassContainer(x=_FIELD, y=_FIELD),
-                c=pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
+            cnc.NestedDataclassNamedTupleNamedCollection(
+                a=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+                b=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+                c=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
             ),
             ts.NamedCollectionType(
                 types=[
-                    NamedTupleContainerTypeSpec,
-                    DataclassContainerTypeSpec,
-                    NamedTupleContainerTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
                 ],
                 keys=["a", "b", "c"],
-                original_python_type=_make_type_string_for_container(pc.NestedMixedTupleContainer),
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedDataclassNamedTupleNamedCollection
+                ),
+            ),
+        ),
+        (
+            cnc.NestedMixedTupleNamedCollection(
+                a=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+                b=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                c=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+            ),
+            ts.NamedCollectionType(
+                types=[
+                    NamedTupleNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedMixedTupleNamedCollection
+                ),
             ),
         ),
         (
             (
-                pc.NamedTupleContainer(x=_FIELD, y=_FIELD),
-                pc.DataclassContainer(x=_FIELD, y=_FIELD),
+                cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+                cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
             ),
-            ts.TupleType(types=[NamedTupleContainerTypeSpec, DataclassContainerTypeSpec]),
+            ts.TupleType(
+                types=[NamedTupleNamedCollectionTypeSpec, DataclassNamedCollectionTypeSpec]
+            ),
         ),
     ],
 )

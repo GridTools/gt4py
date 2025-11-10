@@ -25,7 +25,7 @@ import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
-from gt4py.next import common, containers
+from gt4py.next import common, named_collections
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -101,9 +101,9 @@ def make_type(type_: type) -> ts.TypeSpec:
     if issubclass(type_, (*core_defs.SCALAR_TYPES, str)):
         return ts.ScalarType(kind=get_scalar_kind(type_))
 
-    if issubclass(type_, containers.CUSTOM_CONTAINER_TYPES):
+    if issubclass(type_, named_collections.CUSTOM_NAMED_COLLECTION_TYPES):
         if issubclass(type_, xtyping.DataclassABC) and not issubclass(
-            type_, containers.CustomDataclassContainerABC
+            type_, named_collections.CustomDataclassNamedCollectionABC
         ):
             raise ValueError(
                 f"Dataclass {type_} is not a valid field container. Supported dataclasses"
@@ -111,8 +111,10 @@ def make_type(type_: type) -> ts.TypeSpec:
                 " functions, 'InitVar's or default arguments."
             )
 
-        keys = [*containers.elements_keys(type_)]
-        hints = containers.elements_types(type_, globalns=sys.modules[type_.__module__].__dict__)
+        keys = [*named_collections.elements_keys(type_)]
+        hints = named_collections.elements_types(
+            type_, globalns=sys.modules[type_.__module__].__dict__
+        )
         types = [from_type_hint(hint) for hint in hints.values()]
         return ts.NamedCollectionType(
             types=types, keys=keys, original_python_type=f"{type_.__module__}:{type_.__qualname__}"
@@ -250,7 +252,7 @@ def from_type_hint(
             return make_constructor_type(constructed_type_spec)
 
         case type():
-            # This case matches 'int', 'float', 'FooContainer' etc. used as annotations
+            # This case matches 'int', 'float', 'FooNamedCollection' etc. used as annotations
             return make_type(canonical_type)
 
     raise ValueError(f"'{type_hint}' type is not supported.")

@@ -14,9 +14,9 @@ import pytest
 
 from gt4py import next as gtx
 from gt4py.eve.extended_typing import NestedTuple
-from gt4py.next import common, Field, containers
+from gt4py.next import common, Field, named_collections
 
-from ..artifacts import pycontainers as pc
+from ..artifacts import custom_named_collections as cnc
 
 
 @dataclasses.dataclass
@@ -38,29 +38,29 @@ class DataclassWithInitVar:
 @pytest.mark.parametrize(
     "type_,is_container",
     [
-        (pc.DataclassContainer, True),
+        (cnc.DataclassNamedCollection, True),
         (DataclassWithDefaults, False),
         (DataclassWithDefaultFactory, False),
         (DataclassWithInitVar, False),
         (gtx.Field, False),
-        (pc.NamedTupleContainer, False),
+        (cnc.NamedTupleNamedCollection, False),
     ],
 )
 def test_is_dataclass_container_(type_: type, is_container: bool):
-    assert issubclass(type_, containers.CustomDataclassContainerABC) is is_container
+    assert issubclass(type_, named_collections.CustomDataclassNamedCollectionABC) is is_container
 
 
 @pytest.mark.parametrize(
     ["container", "expected_nested_tuple"],
-    [(pc.from_nested_tuple(cls, value), value) for cls, value in pc.PYCONTAINERS_SAMPLES.items()],
+    [(cnc.from_nested_tuple(cls, value), value) for cls, value in cnc.PYCONTAINERS_SAMPLES.items()],
     ids=lambda val: val.__class__.__name__,
 )
 def test_make_container_extractor(
-    container: containers.CustomContainer,
+    container: named_collections.CustomNamedCollection,
     expected_nested_tuple: NestedTuple[common.NumericValue],
 ):
     container_type = type(container)
-    extractor = containers.make_container_extractor(container_type)
+    extractor = named_collections.make_named_collection_extractor(container_type)
     extracted_tuple = extractor(container)
 
     assert isinstance(extracted_tuple, tuple)
@@ -74,14 +74,15 @@ def test_make_container_extractor(
 
 @pytest.mark.parametrize(
     ["nested_tuple", "expected_container"],
-    [(value, pc.from_nested_tuple(cls, value)) for cls, value in pc.PYCONTAINERS_SAMPLES.items()],
+    [(value, cnc.from_nested_tuple(cls, value)) for cls, value in cnc.PYCONTAINERS_SAMPLES.items()],
     ids=lambda val: val.__class__.__name__,
 )
 def test_make_container_constructor(
-    nested_tuple: NestedTuple[common.NumericValue], expected_container: containers.CustomContainer
+    nested_tuple: NestedTuple[common.NumericValue],
+    expected_container: named_collections.CustomNamedCollection,
 ):
     container_type = type(expected_container)
-    constructor = containers.make_container_constructor(container_type)
+    constructor = named_collections.make_named_collection_constructor(container_type)
     constructed_container = constructor(nested_tuple)
 
     assert isinstance(constructed_container, container_type)

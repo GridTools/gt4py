@@ -28,8 +28,8 @@ from gt4py.next import (
     backend as next_backend,
     common,
     constructors,
-    containers,
     field_utils,
+    named_collections,
     utils as gt_utils,
 )
 from gt4py.next.ffront import decorator
@@ -604,8 +604,10 @@ def _allocate_from_type(
                 )
             )
         case ts.NamedCollectionType(types=types) as named_collection_type_spec:
-            container_constructor = containers.make_container_constructor_from_type_spec(
-                named_collection_type_spec, nested=False
+            container_constructor = (
+                named_collections.make_named_collection_constructor_from_type_spec(
+                    named_collection_type_spec, nested=False
+                )
             )
             return container_constructor(
                 tuple(

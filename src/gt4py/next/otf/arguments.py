@@ -28,7 +28,7 @@ from gt4py.eve.extended_typing import (
     cast,
     final,
 )
-from gt4py.next import common, containers, errors
+from gt4py.next import common, errors, named_collections
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -178,11 +178,11 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 
 
 # This is not really accurate, just an approximation
-NeedsValueExtraction: TypeAlias = MaybeNestedInTuple[containers.CustomContainer]
+NeedsValueExtraction: TypeAlias = MaybeNestedInTuple[named_collections.CustomNamedCollection]
 
 
 def needs_value_extraction(value: object) -> TypeIs[NeedsValueExtraction]:
-    return isinstance(value, containers.CUSTOM_CONTAINER_TYPES) or (
+    return isinstance(value, named_collections.CUSTOM_NAMED_COLLECTION_TYPES) or (
         isinstance(value, tuple) and any(needs_value_extraction(v) for v in value)
     )
 
@@ -203,8 +203,8 @@ def extract(
     """
     if isinstance(value, common.NUMERIC_VALUE_TYPES):
         return cast(common.NumericValue, value)
-    if isinstance(value, containers.CUSTOM_CONTAINER_TYPES):
-        return containers.make_container_extractor(cast(Hashable, type(value)))(value)
+    if isinstance(value, named_collections.CUSTOM_NAMED_COLLECTION_TYPES):
+        return named_collections.make_named_collection_extractor(cast(Hashable, type(value)))(value)
     if isinstance(value, tuple):
         if needs_value_extraction(value):
             return tuple(extract(v, pass_through_values=pass_through_values) for v in value)  # type: ignore[union-attr]  # value is always iterable
@@ -247,7 +247,7 @@ def make_primitive_value_args_extractor(
     ):
         if type_info.needs_value_extraction(type_spec):
             num_args_to_extract += 1
-            extractor_exprs[i] = containers.make_extractor_expr_from_type_spec(
+            extractor_exprs[i] = named_collections.make_extractor_expr_from_type_spec(
                 type_spec, f"{args_param}[{i}]"
             )
         else:
@@ -256,7 +256,7 @@ def make_primitive_value_args_extractor(
     for name, type_spec in function.kw_only_args.items():
         if type_info.needs_value_extraction(type_spec):
             num_kwargs_to_extract += 1
-            extractor_exprs[name] = containers.make_extractor_expr_from_type_spec(
+            extractor_exprs[name] = named_collections.make_extractor_expr_from_type_spec(
                 type_spec, f"{kwargs_param}['{name}']"
             )
         else:

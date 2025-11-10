@@ -931,14 +931,14 @@ def test_scalar_broadcast():
 
 
 @dataclasses.dataclass
-class DataclassContainer:
+class DataclassNamedCollection:
     a: gtx.Field[[TDim], float64]
     b: gtx.Field[[TDim], float64]
 
 
-def test_containers():
-    def foo(inp: DataclassContainer) -> DataclassContainer:
-        return DataclassContainer(a=inp.a, b=inp.b)
+def test_named_collections():
+    def foo(inp: DataclassNamedCollection) -> DataclassNamedCollection:
+        return DataclassNamedCollection(a=inp.a, b=inp.b)
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)

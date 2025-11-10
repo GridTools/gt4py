@@ -71,7 +71,7 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
                 new_args = [_tuple_at(pos, arg) for arg in args]
                 new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
                 acc = self.fun(acc, *new_args, **new_kwargs)  # type: ignore[arg-type] # need to express that the first argument is the same type as the return
-                # convert Containers to plain tuples for assignment
+                # convert custom NamedCollections to plain tuples for assignment
                 acc_extracted = arguments.extract(acc)
                 res_extracted = arguments.extract(res)
                 assert xtyping.is_maybe_nested_in_tuple_of(acc_extracted, core_defs.Scalar)  # type: ignore[arg-type]  # Scalar is a Union

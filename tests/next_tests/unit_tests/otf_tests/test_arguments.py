@@ -11,11 +11,11 @@ import pytest
 
 from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common
-from gt4py.next import containers
+from gt4py.next import named_collections
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 from gt4py.next.otf import arguments
 
-from ...artifacts import pycontainers as pc
+from ...artifacts import custom_named_collections as cnc
 
 
 def test_needs_value_extraction_with_non_container():
@@ -29,13 +29,13 @@ def test_needs_value_extraction_with_non_container():
 
 def test_needs_value_extraction_with_container():
     """Test needs_value_extraction with a container argument."""
-    assert arguments.needs_value_extraction(pc.DataclassContainer(x=1, y=2))
-    assert arguments.needs_value_extraction(pc.NamedTupleContainer(x=1, y=2))
+    assert arguments.needs_value_extraction(cnc.DataclassNamedCollection(x=1, y=2))
+    assert arguments.needs_value_extraction(cnc.NamedTupleNamedCollection(x=1, y=2))
     assert arguments.needs_value_extraction(
-        pc.NestedMixedTupleContainer(
-            a=pc.DataclassContainer(x=1, y=2),
-            b=pc.NamedTupleContainer(x=1, y=2),
-            c=pc.DataclassContainer(x=1, y=2),
+        cnc.NestedMixedTupleNamedCollection(
+            a=cnc.DataclassNamedCollection(x=1, y=2),
+            b=cnc.NamedTupleNamedCollection(x=1, y=2),
+            c=cnc.DataclassNamedCollection(x=1, y=2),
         )
     )
 
@@ -58,11 +58,11 @@ def test_extract_with_non_container():
 
 @pytest.mark.parametrize(
     ["container", "expected_nested_tuple"],
-    [(pc.from_nested_tuple(cls, value), value) for cls, value in pc.PYCONTAINERS_SAMPLES.items()],
+    [(cnc.from_nested_tuple(cls, value), value) for cls, value in cnc.PYCONTAINERS_SAMPLES.items()],
     ids=lambda val: val.__class__.__name__,
 )
 def test_extract_with_container(
-    container: containers.CustomContainer,
+    container: named_collections.CustomNamedCollection,
     expected_nested_tuple: NestedTuple[common.NumericValue],
 ):
     """Test extract with a container argument."""
@@ -84,9 +84,11 @@ def test_make_primitive_value_args_extractor_no_extraction_needed():
     assert extractor is None
 
 
-@pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
+@pytest.mark.parametrize(
+    "pycontainer_type", [cnc.NamedTupleNamedCollection, cnc.DataclassNamedCollection]
+)
 def test_make_primitive_value_args_extractor_with_pos_args(
-    pycontainer_type: type[containers.CustomContainer],
+    pycontainer_type: type[named_collections.CustomNamedCollection],
 ):
     """Test make_primitive_value_args_extractor with positional arguments needing extraction."""
 
@@ -117,9 +119,11 @@ def test_make_primitive_value_args_extractor_with_pos_args(
         assert kwargs == {}
 
 
-@pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
+@pytest.mark.parametrize(
+    "pycontainer_type", [cnc.NamedTupleNamedCollection, cnc.DataclassNamedCollection]
+)
 def test_make_primitive_value_args_extractor_with_kw_args(
-    pycontainer_type: type[containers.CustomContainer],
+    pycontainer_type: type[named_collections.CustomNamedCollection],
 ):
     """Test make_primitive_value_args_extractor with keyword arguments needing extraction."""
 
@@ -141,9 +145,11 @@ def test_make_primitive_value_args_extractor_with_kw_args(
     assert kwargs == {"container_arg": (1.0, 2.0)}
 
 
-@pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
+@pytest.mark.parametrize(
+    "pycontainer_type", [cnc.NamedTupleNamedCollection, cnc.DataclassNamedCollection]
+)
 def test_make_primitive_value_args_extractor_with_tuple_args(
-    pycontainer_type: type[containers.CustomContainer],
+    pycontainer_type: type[named_collections.CustomNamedCollection],
 ):
     """Test make_primitive_value_args_extractor with tuple arguments containing containers."""
 
@@ -164,9 +170,11 @@ def test_make_primitive_value_args_extractor_with_tuple_args(
     assert kwargs == {}
 
 
-@pytest.mark.parametrize("pycontainer_type", [pc.NamedTupleContainer, pc.DataclassContainer])
+@pytest.mark.parametrize(
+    "pycontainer_type", [cnc.NamedTupleNamedCollection, cnc.DataclassNamedCollection]
+)
 def test_make_primitive_value_args_extractor_mixed_args(
-    pycontainer_type: type[containers.CustomContainer],
+    pycontainer_type: type[named_collections.CustomNamedCollection],
 ):
     """Test make_primitive_value_args_extractor with mixed positional and keyword arguments."""
 

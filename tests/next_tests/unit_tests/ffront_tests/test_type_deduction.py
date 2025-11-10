@@ -574,42 +574,42 @@ def test_unexpected_closure_var_error():
         _ = FieldOperatorParser.apply_to_function(unexpected_closure_var)
 
 
-class NamedTupleContainer(NamedTuple):
+class NamedTupleNamedCollection(NamedTuple):
     x: Field[[TDim], float32]
     y: Field[[TDim], float32]
 
 
 @dataclasses.dataclass
-class DataclassContainer:
+class DataclassNamedCollection:
     x: Field[[TDim], float32]
     y: Field[[TDim], float32]
 
 
 @dataclasses.dataclass
-class NestedDataclassContainer:
-    a: DataclassContainer
-    b: DataclassContainer
-    c: DataclassContainer
+class NestedDataclassNamedCollection:
+    a: DataclassNamedCollection
+    b: DataclassNamedCollection
+    c: DataclassNamedCollection
 
 
-class NestedNamedTupleDataclassContainer(NamedTuple):
-    a: DataclassContainer
-    b: DataclassContainer
-    c: DataclassContainer
-
-
-@dataclasses.dataclass
-class NestedDataclassNamedTupleContainer:
-    a: NamedTupleContainer
-    b: NamedTupleContainer
-    c: NamedTupleContainer
+class NestedNamedTupleDataclassNamedCollection(NamedTuple):
+    a: DataclassNamedCollection
+    b: DataclassNamedCollection
+    c: DataclassNamedCollection
 
 
 @dataclasses.dataclass
-class NestedMixedTupleContainer:
-    a: NamedTupleContainer
-    b: DataclassContainer
-    c: NamedTupleContainer
+class NestedDataclassNamedTupleNamedCollection:
+    a: NamedTupleNamedCollection
+    b: NamedTupleNamedCollection
+    c: NamedTupleNamedCollection
+
+
+@dataclasses.dataclass
+class NestedMixedTupleNamedCollection:
+    a: NamedTupleNamedCollection
+    b: DataclassNamedCollection
+    c: NamedTupleNamedCollection
 
 
 def _expected_named_tuple_type_maker(original_python_type: type) -> ts.NamedCollectionType:
@@ -636,39 +636,42 @@ def _expected_nested_named_tuple_type_maker(
 
 
 @pytest.mark.parametrize(
-    "container",
+    "named_collection",
     [
-        NamedTupleContainer,
-        DataclassContainer,
+        NamedTupleNamedCollection,
+        DataclassNamedCollection,
     ],
 )
-def test_containers(container):
-    def containers(a: container) -> container:
-        return container(x=a.x, y=a.y)
+def test_named_collections(named_collection):
+    def named_collections(a: named_collection) -> named_collection:
+        return named_collection(x=a.x, y=a.y)
 
-    parsed = FieldOperatorParser.apply_to_function(containers)
+    parsed = FieldOperatorParser.apply_to_function(named_collections)
 
-    expected = _expected_named_tuple_type_maker(container)
+    expected = _expected_named_tuple_type_maker(named_collection)
     assert parsed.params[0].type == expected
     assert parsed.body.stmts[-1].value.type == expected
 
 
 @pytest.mark.parametrize(
-    "container, nested_types",
+    "named_collection, nested_types",
     [
-        (NestedDataclassContainer, [DataclassContainer] * 3),
-        (NestedNamedTupleDataclassContainer, [DataclassContainer] * 3),
-        (NestedDataclassNamedTupleContainer, [NamedTupleContainer] * 3),
-        (NestedMixedTupleContainer, [NamedTupleContainer, DataclassContainer, NamedTupleContainer]),
+        (NestedDataclassNamedCollection, [DataclassNamedCollection] * 3),
+        (NestedNamedTupleDataclassNamedCollection, [DataclassNamedCollection] * 3),
+        (NestedDataclassNamedTupleNamedCollection, [NamedTupleNamedCollection] * 3),
+        (
+            NestedMixedTupleNamedCollection,
+            [NamedTupleNamedCollection, DataclassNamedCollection, NamedTupleNamedCollection],
+        ),
     ],
 )
-def test_nested_containers(container, nested_types):
-    def containers(cont: container) -> container:
-        return container(a=cont.a, b=cont.b, c=cont.c)
+def test_nested_named_collections(named_collection, nested_types):
+    def named_collections(cont: named_collection) -> named_collection:
+        return named_collection(a=cont.a, b=cont.b, c=cont.c)
 
-    parsed = FieldOperatorParser.apply_to_function(containers)
+    parsed = FieldOperatorParser.apply_to_function(named_collections)
 
-    expected = _expected_nested_named_tuple_type_maker(container, nested_types)
+    expected = _expected_nested_named_tuple_type_maker(named_collection, nested_types)
     assert parsed.params[0].type == expected
     assert parsed.body.stmts[-1].value.type == expected
 
