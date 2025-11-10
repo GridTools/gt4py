@@ -8,15 +8,13 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-from typing import Any, Container, Optional, Sequence, TypeVar, Union
+from typing import Optional, Sequence, TypeVar, Union
 
 import dace
 from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
-
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 
 
 _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
@@ -105,34 +103,6 @@ def gt_make_transients_persistent(
             nsdfg.arrays[aname].lifetime = dace.AllocationLifetime.Persistent
 
     return result
-
-
-def gt_find_constant_arguments(
-    call_args: dict[str, Any],
-    include: Optional[Container[str]] = None,
-) -> dict[str, Any]:
-    """Scans the calling arguments for compile time constants.
-
-    The output of this function can be used as input to
-    `gt_substitute_compiletime_symbols()`, which then removes these symbols.
-
-    By specifying `include` it is possible to force the function to include
-    additional arguments, that would not be matched otherwise. Importantly,
-    their value is not checked.
-
-    Args:
-        call_args: The full list of arguments that will be passed to the SDFG.
-        include: List of arguments that should be included.
-    """
-    if include is None:
-        include = set()
-    ret_value: dict[str, Any] = {}
-
-    for name, value in call_args.items():
-        if name in include or (gtx_dace_utils.is_stride_symbol(name) and value == 1):
-            ret_value[name] = value
-
-    return ret_value
 
 
 def is_accessed_downstream(
@@ -678,3 +648,122 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
             all_successors.extend(successor.all_states())
 
     return all_successors
+
+
+def associate_dimmensions(
+    sbs1: dace_sbs.Range,
+    sbs2: dace_sbs.Range,
+    allow_trivial_dimensions: bool = True,
+) -> tuple[dict[int, int], list[int], list[int]]:
+    """Computes the association between dimensions of two subsets.
+
+    The intention is that `sbs1` is the subset at the source and `sbs2` the
+    subset at the destination, but other combinations are implicitly possible.
+    The function computes which dimension of `sbs1` maps to which dimensions
+    in `sbs2`. The function is based on the following restrictions:
+    - The order of dimensions does not change, i.e. the Memlet does not perform
+        a transpose operation.
+    - Only trivial dimensions, i.e. size one dimensions are added or removed.
+
+    By setting `allow_trivial_dimensions` to `False` the function will assume
+    that all dimensions of size 1 are "filling dimensions", i.e. they will never
+    appear in the returned `dict`. By default it is `True`, which means that
+    dimensions of size one, might appear in the mapping.
+
+    Returns:
+        The function returns a tuple with three elements. The first element is
+        a `dict` that maps each dimension of `sbs1` to a dimensions `sbs2`.
+        The second element is a `list` containing all dimensions that were dropped
+        from `sbs1`, because they where trivial. The third element is the same
+        as the second element, but for `sbs2`.
+
+    Example:
+        >>> from dace import subsets as dace_sbs
+        >>> associate_dimmensions(
+        ...     sbs1=dace_sbs.Range.from_string("3, 0:10, 1"),
+        ...     sbs2=dace_sbs.Range.from_string("0:10, 4"),
+        ... )
+        ({1: 0, 2: 1}, [0], [])
+        >>> associate_dimmensions(
+        ...     sbs1=dace_sbs.Range.from_string("3, 0:10, 1"),
+        ...     sbs2=dace_sbs.Range.from_string("0:10, 4"),
+        ...     allow_trivial_dimensions=False,
+        ... )
+        ({1: 0}, [0, 2], [1])
+
+    Note:
+        This function can not perform arbitrary reshapes, such as flatten a multi
+        dimensional array.
+        Furthermore, currently the matching relies on the size of the subsets that
+        are copied, this means that if the sizes are not unique then the matching
+        might fail.
+    """
+    sizes1 = sbs1.size()
+    sizes2 = sbs2.size()
+
+    dim_mapping: dict[int, int] = {}
+    drop1: list[int] = []
+    drop2: list[int] = []
+
+    idx1 = 0
+    idx2 = 0
+    while idx1 != sbs1.dims() or idx2 != sbs2.dims():
+        # TODO(phimuell): Handle symbolic sizes better.
+
+        if idx1 == sbs1.dims():
+            # We have processed all dimensions of the first subset. Thus all dimensions
+            #  of the second subset must be dropped/trivial.
+            size2 = sizes2[idx2]
+            if (size2 == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                raise ValueError(
+                    f"Expected that dimension {idx2} of the second subset is a trivial dimension, but its size was {size2}."
+                )
+            drop2.append(idx2)
+            idx2 += 1
+
+        elif idx2 == sbs2.dims():
+            # We have processed all dimensions of the second subset. Thus all dimensions
+            #  of the first subset must be dropped/trivial.
+            size1 = sizes1[idx1]
+            if (size1 == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                raise ValueError(
+                    f"Expected that dimension {idx1} of the first subset is a trivial dimension, but its size was {size1}."
+                )
+            drop1.append(idx1)
+            idx1 += 1
+
+        elif (
+            (sizes1[idx1] == sizes2[idx2]) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            and (
+                allow_trivial_dimensions
+                or (
+                    (sizes1[idx1] == 1) == False  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                    and (sizes2[idx2] == 1) == False  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                )
+            )
+        ):
+            # These two dimensions have the same size, thus we consider them the same and
+            #  add them to the mapping.
+            # NOTE: This considers two dimensions of size one the same, even if they are
+            #   just trivial dimensions.
+            dim_mapping[idx1] = idx2
+            idx1 += 1
+            idx2 += 1
+
+        elif (sizes1[idx1] == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            # `sbs1` has a trivial dimension at `idx1`: Drop it.
+            drop1.append(idx1)
+            idx1 += 1
+
+        elif (sizes2[idx2] == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            # `sbs2` has a trivial dimension at `idx2`, drop it.
+            drop2.append(idx2)
+            idx2 += 1
+
+        else:
+            raise ValueError(f"Failed to associating the dimensions of '{sbs1}' with '{sbs2}'.")
+
+    assert len(dim_mapping) + len(drop1) == sbs1.dims()
+    assert len(dim_mapping) + len(drop2) == sbs2.dims()
+
+    return dim_mapping, drop1, drop2

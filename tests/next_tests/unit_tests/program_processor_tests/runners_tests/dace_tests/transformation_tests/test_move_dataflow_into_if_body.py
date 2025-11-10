@@ -12,7 +12,6 @@ import copy
 
 from typing import Optional
 
-
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 from dace import data as dace_data
