@@ -49,7 +49,7 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
-def get_tasklet_connector(name: str) -> str:
+def make_tasklet_connector_for(name: str) -> str:
     """
     Format tasklet connector name based on the naming convention to avoid conflicts with GTIR program symbols.
     """
