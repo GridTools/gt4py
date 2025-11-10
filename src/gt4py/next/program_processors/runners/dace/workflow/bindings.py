@@ -18,8 +18,6 @@ from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 from gt4py.next.type_system import type_specifications as ts
 
 
-FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(kind=ts.ScalarKind.UINT32)
-
 _cb_args: Final[str] = "args"
 _cb_device: Final[str] = "device"
 _cb_sdfg_argtypes: Final[str] = "sdfg_argtypes"
@@ -144,15 +142,17 @@ def _parse_gt_param(
                         arg_range = f"{arg}.domain.ranges[{i}]"
                         rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
                         rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
-                        for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
+                        for suffix, sdfg_range_symbol in [("start", rstart), ("stop", rstop)]:
                             _parse_gt_param(
-                                param_name=symbol_name,
-                                param_type=FIELD_SYMBOL_GT_TYPE,
+                                param_name=sdfg_range_symbol.name,
+                                param_type=gtx_dace_utils.as_itir_type(sdfg_range_symbol.dtype),
                                 arg=f"{arg_range}.{suffix}",
                                 code=code,
                                 sdfg_arglist=sdfg_arglist,
                             )
-                for i, array_stride in enumerate(sdfg_arg_desc.strides):
+                for i, (dim, array_stride) in enumerate(
+                    zip(param_type.dims, sdfg_arg_desc.strides, strict=True)
+                ):
                     arg_stride = f"{arg}_buffer_info.elem_strides[{i}]"
                     if isinstance(array_stride, int) or str(array_stride).isdigit():
                         # The array stride is set to constant value in this dimension.
@@ -160,13 +160,13 @@ def _parse_gt_param(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {arg_stride}"
                         )
                     else:
-                        symbol_name = gtx_dace_utils.field_stride_symbol_name(param_name, i)
-                        assert str(array_stride) == symbol_name
+                        sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(param_name, dim)
+                        assert array_stride == sdfg_stride_symbol
                         # The strides of a global array are defined by a sequence
                         # of SDFG symbols.
                         _parse_gt_param(
-                            param_name=symbol_name,
-                            param_type=FIELD_SYMBOL_GT_TYPE,
+                            param_name=sdfg_stride_symbol.name,
+                            param_type=gtx_dace_utils.as_itir_type(sdfg_stride_symbol.dtype),
                             arg=arg_stride,
                             code=code,
                             sdfg_arglist=sdfg_arglist,

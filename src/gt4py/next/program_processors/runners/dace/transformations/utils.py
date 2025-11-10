@@ -8,15 +8,13 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-from typing import Any, Container, Optional, Sequence, TypeVar, Union
+from typing import Optional, Sequence, TypeVar, Union
 
 import dace
 from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
-
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 
 
 _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
@@ -105,34 +103,6 @@ def gt_make_transients_persistent(
             nsdfg.arrays[aname].lifetime = dace.AllocationLifetime.Persistent
 
     return result
-
-
-def gt_find_constant_arguments(
-    call_args: dict[str, Any],
-    include: Optional[Container[str]] = None,
-) -> dict[str, Any]:
-    """Scans the calling arguments for compile time constants.
-
-    The output of this function can be used as input to
-    `gt_substitute_compiletime_symbols()`, which then removes these symbols.
-
-    By specifying `include` it is possible to force the function to include
-    additional arguments, that would not be matched otherwise. Importantly,
-    their value is not checked.
-
-    Args:
-        call_args: The full list of arguments that will be passed to the SDFG.
-        include: List of arguments that should be included.
-    """
-    if include is None:
-        include = set()
-    ret_value: dict[str, Any] = {}
-
-    for name, value in call_args.items():
-        if name in include or (gtx_dace_utils.is_stride_symbol(name) and value == 1):
-            ret_value[name] = value
-
-    return ret_value
 
 
 def is_accessed_downstream(

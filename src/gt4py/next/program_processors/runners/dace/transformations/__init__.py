@@ -71,7 +71,7 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
-from .utils import gt_find_constant_arguments, gt_make_transients_persistent
+from .utils import gt_make_transients_persistent
 
 
 __all__ = [
@@ -109,7 +109,6 @@ __all__ = [
     "gt_change_strides",
     "gt_create_local_double_buffering",
     "gt_eliminate_dead_dataflow",
-    "gt_find_constant_arguments",
     "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",
     "gt_horizontal_map_split_fusion",
