@@ -12,7 +12,6 @@ import collections
 import dataclasses
 import functools
 import hashlib
-import inspect
 import types
 import typing
 from typing import Any, Generic, Optional, TypeVar
@@ -59,45 +58,6 @@ class ProgramDefinition:
     definition: types.FunctionType
     grid_type: Optional[common.GridType] = None
     debug: bool = False
-
-    @functools.cached_property
-    def embedded_signature(self) -> inspect.Signature:
-        definition_signature = inspect.signature(self.definition)
-
-        params_by_kind: dict[inspect._ParameterKind, list[inspect.Parameter]] = {}
-        for param in definition_signature.parameters.values():
-            params_by_kind.setdefault(param.kind, []).append(param)
-
-        signature = inspect.Signature(
-            parameters=[
-                inspect.Parameter(name="self", kind=inspect.Parameter.POSITIONAL_ONLY),
-                *params_by_kind.get(inspect.Parameter.POSITIONAL_OR_KEYWORD, []),
-                *params_by_kind.get(
-                    inspect.Parameter.VAR_POSITIONAL,
-                    [inspect.Parameter(name="args", kind=inspect.Parameter.VAR_POSITIONAL)],
-                ),
-                inspect.Parameter(
-                    name="offset_provider",
-                    kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=common.OffsetProvider | None,
-                    default=None,
-                ),
-                inspect.Parameter(
-                    name="enable_jit",
-                    kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=bool | None,
-                    default=None,
-                ),
-                *params_by_kind.get(inspect.Parameter.KEYWORD_ONLY, []),
-                *params_by_kind.get(
-                    inspect.Parameter.VAR_KEYWORD,
-                    [inspect.Parameter(name="kwargs", kind=inspect.Parameter.VAR_KEYWORD)],
-                ),
-            ],
-            return_annotation=None,
-        )
-
-        return signature
 
 
 DSL_PRG: typing.TypeAlias = ProgramDefinition
