@@ -116,9 +116,9 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
                 sdfg,
                 gpu=on_gpu,
                 constant_symbols={
-                    "__a_stride_0": 1,
-                    "__b_stride_0": 1,
-                    "__out_stride_0": 1,
+                    "__a_IDim_stride": 1,
+                    "__b_IDim_stride": 1,
+                    "__out_IDim_stride": 1,
                 },
                 make_persistent=optimization_args["make_persistent"],
                 gpu_block_size=optimization_args["gpu_block_size"],
