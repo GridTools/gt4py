@@ -115,6 +115,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
                     *definition.kw_only_args.keys(),
                 ],
                 arg_types,
+                strict=True,
             )
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
