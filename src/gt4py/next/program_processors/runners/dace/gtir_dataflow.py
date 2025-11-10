@@ -465,7 +465,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         tasklet_node, connector_mapping = self.subgraph_builder.add_tasklet(
             name, self.sdfg, self.state, inputs, outputs, code, **kwargs
         )
-        if not inputs:
+        if len(inputs) == 0:
             # All nodes inside a map scope must have an in/out path that traverses
             # the entry and exit nodes. Therefore, a tasklet node with no arguments
             # still needs an (empty) input edge from map entry node.
