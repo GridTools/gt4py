@@ -14,13 +14,12 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-import inspect
 import time
 import types
 import typing
 import warnings
 from collections.abc import Callable, Sequence
-from typing import Any, Generic, Optional, TypeVar, cast
+from typing import Any, Generic, Optional, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs

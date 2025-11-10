@@ -11,7 +11,6 @@ from __future__ import annotations
 import functools
 import inspect
 import itertools
-from collections.abc import Mapping
 from typing import (
     Any,
     Callable,
@@ -350,9 +349,10 @@ def make_args_canonicalizer(
     canonicalize_func_name = f"canonicalize_args_for_{name}" if name else "canonicalize_args"
     canonicalizer_src = f"""
 def {canonicalize_func_name}{canonicalizer_signature!s}:
-    return ({str.join(", ", pos_args)}), {{ {str.join(", ", key_args)} }}
+    return ({str.join(", ", pos_args)},), {{ {str.join(", ", key_args)} }}
 """
-    exec(canonicalizer_src, namespace := {})
+    namespace: dict[str, Any] = {}
+    exec(canonicalizer_src, namespace)
     canonicalizer = namespace[canonicalize_func_name]
 
     return cast(CallArgsCanonicalizer, canonicalizer)
