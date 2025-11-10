@@ -74,6 +74,8 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
                 # convert Containers to plain tuples for assignment
                 acc_extracted = arguments.extract(acc)
                 res_extracted = arguments.extract(res)
+                assert xtyping.is_maybe_nested_in_tuple_of(acc_extracted, core_defs.Scalar)  # type: ignore[arg-type]  # Scalar is a Union
+                assert xtyping.is_maybe_nested_in_tuple_of(res_extracted, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
                 _tuple_assign_value(pos, res_extracted, acc_extracted)
 
         if len(non_scan_domain) == 0:
@@ -115,6 +117,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
         # We currently apply the extract on both the rhs (`res`) computed by the operator and the lhs (`out`, provided by the user)
         # without checking if the types are consistent. However, these errors are caught in linting if enabled.
         container_extracted_out = arguments.extract(out)
+        assert xtyping.is_maybe_nested_in_tuple_of(container_extracted_out, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
         out_domain = (
             utils.tree_map(common.domain)(domain)
             if domain is not None
@@ -125,8 +128,8 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         with embedded_context.update(**new_context_kwargs):
             res = op(*args, **kwargs)
-        container_extracted_res = arguments.extract(res)  # TODO(havogt): see notes above
-        _tuple_assign_field(container_extracted_out, container_extracted_res, domain=out_domain)
+        container_extracted_res = arguments.extract(res)  # type: ignore[arg-type] # TODO(havogt): see notes above
+        _tuple_assign_field(container_extracted_out, container_extracted_res, domain=out_domain)  # type: ignore[arg-type]
         return None
     else:
         # called from other field_operator or missing `out` argument
@@ -144,8 +147,8 @@ def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.Nothin
 
 
 def _tuple_assign_field(
-    target: tuple[common.MutableField | tuple, ...] | common.MutableField,
-    source: tuple[common.Field | tuple, ...] | common.Field,
+    target: xtyping.MaybeNestedInTuple[common.MutableField],
+    source: xtyping.MaybeNestedInTuple[common.Field],
     domain: xtyping.MaybeNestedInTuple[common.Domain],
 ) -> None:
     @utils.tree_map
@@ -162,7 +165,7 @@ def _tuple_assign_field(
 
 
 def _intersect_scan_args(
-    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
+    *args: xtyping.MaybeNestedInTuple[core_defs.Scalar | common.Field],
 ) -> common.Domain:
     return embedded_common.domain_intersection(
         *[arg.domain for arg in utils.flatten_nested_tuple(args) if isinstance(arg, common.Field)]
@@ -183,7 +186,7 @@ def _tuple_assign_value(
 
 def _tuple_at(
     pos: Sequence[common.NamedIndex],
-    field: common.Field | core_defs.Scalar | tuple[common.Field | core_defs.Scalar | tuple, ...],
+    field: xtyping.MaybeNestedInTuple[common.Field | core_defs.Scalar],
 ) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
     @utils.tree_map
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:

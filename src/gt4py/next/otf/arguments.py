@@ -207,7 +207,7 @@ def extract(
         return containers.make_container_extractor(cast(Hashable, type(value)))(value)
     if isinstance(value, tuple):
         if needs_value_extraction(value):
-            return tuple(extract(v, pass_through_values=pass_through_values) for v in value)
+            return tuple(extract(v, pass_through_values=pass_through_values) for v in value)  # type: ignore[union-attr]  # value is always iterable
         else:
             return value
     if pass_through_values:

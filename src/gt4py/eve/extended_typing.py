@@ -141,6 +141,22 @@ MaybeNestedInSequence = Union[_T_co, NestedSequence[_T_co]]
 MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
 MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
 
+
+def is_nested_tuple_of(value: object, type_: type[_T_co]) -> TypeIs[NestedTuple[_T_co]]:
+    """Check if `value` is a nested tuple of elements of type `type_`."""
+    return isinstance(value, tuple) and all(
+        isinstance(v, type_) or (isinstance(v, tuple) and is_nested_tuple_of(v, type_))
+        for v in value
+    )
+
+
+def is_maybe_nested_in_tuple_of(
+    value: object, type_: type[_T_co]
+) -> TypeIs[MaybeNestedInTuple[_T_co]]:
+    """Check if `value` is either of type `type_` or a nested tuple of elements of type `type_`."""
+    return isinstance(value, type_) or is_nested_tuple_of(value, type_)
+
+
 # -- Typing annotations --
 SingleTypeAnnotation = Union[
     Type,
