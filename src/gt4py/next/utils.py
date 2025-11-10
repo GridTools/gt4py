@@ -282,7 +282,6 @@ def equalize_tuple_structure(
     return d1, d2
 
 
-@functools.lru_cache(maxsize=256)
 def make_args_canonicalizer(
     signature: inspect.Signature,
     *,
