@@ -30,7 +30,6 @@ inside the NestedSDFG.
 
 def gt_change_strides(
     sdfg: dace.SDFG,
-    gpu: bool,
 ) -> dace.SDFG:
     """Modifies the strides of transients.
 
@@ -49,18 +48,13 @@ def gt_change_strides(
 
     Note:
         Currently the function will not scan the access pattern. Instead it will
-        either use FORTRAN order for GPU or C order (which is assumed to be the
-        default, so it is a no ops).
+        either use FORTRAN order for GPU or C order. This function needs to be called
+        for both CPU and GPU to handle strides of memlets inside nested SDFGs.
 
     Todo:
         - Implement the estimation correctly.
     """
     # TODO(phimeull): Implement this function correctly.
-
-    # We assume that by default we have C order which is already correct,
-    #  so in this case we have a no ops
-    if not gpu:
-        return sdfg
 
     for nsdfg in sdfg.all_sdfgs_recursive():
         _gt_change_strides_non_recursive_impl(nsdfg)
