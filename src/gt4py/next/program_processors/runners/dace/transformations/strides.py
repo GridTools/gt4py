@@ -30,6 +30,7 @@ inside the NestedSDFG.
 
 def gt_change_strides(
     sdfg: dace.SDFG,
+    gpu: bool = False,
 ) -> dace.SDFG:
     """Modifies the strides of transients.
 
@@ -57,11 +58,12 @@ def gt_change_strides(
     # TODO(phimeull): Implement this function correctly.
 
     for nsdfg in sdfg.all_sdfgs_recursive():
-        _gt_change_strides_non_recursive_impl(nsdfg)
+        _gt_change_strides_non_recursive_impl(nsdfg, gpu)
 
 
 def _gt_change_strides_non_recursive_impl(
     sdfg: dace.SDFG,
+    gpu: bool,
 ) -> None:
     """Set optimal strides of all access nodes in the SDFG.
 
@@ -101,7 +103,7 @@ def _gt_change_strides_non_recursive_impl(
         #  access nodes because the non-transients come from outside and have their
         #  own strides.
         # TODO(phimuell): Set the stride based on the actual access pattern.
-        if desc.transient:
+        if desc.transient and gpu:
             new_stride_order = list(range(ndim))
             desc.set_strides_from_layout(*new_stride_order)
 
