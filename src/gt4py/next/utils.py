@@ -327,24 +327,29 @@ def make_args_canonicalizer(
 
     """
 
+    params = []
     pos_args = []
     key_args = []
 
-    for name, param in signature.parameters.items():
-        param = param.replace(annotation=param.empty)  # remove annotations to avoid issues
+    for key, param in signature.parameters.items():
+        params.append(param.replace(annotation=param.empty))  # remove annotations to avoid issues
         match param.kind:
             case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
-                pos_args.append(f"{name}")
+                pos_args.append(f"{key}")
             case inspect.Parameter.VAR_POSITIONAL:
-                pos_args.append(f"*{name}")
+                pos_args.append(f"*{key}")
             case inspect.Parameter.KEYWORD_ONLY:
-                key_args.append(f"{name}={name}")
+                key_args.append(f"{key}={key}")
             case inspect.Parameter.VAR_KEYWORD:
-                key_args.append(f"**{name}")
+                key_args.append(f"**{key}")
 
-    canonicalize_func_name = f"canonicalize_args_of_{name}" if name else "canonicalize_args"
+    canonicalizer_signature = inspect.Signature(
+        parameters=params, return_annotation="tuple[tuple, dict[str, Any]]"
+    )
+
+    canonicalize_func_name = f"canonicalize_args_for_{name}" if name else "canonicalize_args"
     canonicalizer_src = f"""
-def {canonicalize_func_name}{signature!s}:
+def {canonicalize_func_name}{canonicalizer_signature!s}:
     return ({str.join(", ", pos_args)}), {{ {str.join(", ", key_args)} }}
 """
     exec(canonicalizer_src, namespace := {})

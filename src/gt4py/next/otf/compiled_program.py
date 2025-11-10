@@ -246,7 +246,7 @@ class CompiledProgramsPool:
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
-        args, kwargs = self._args_canonicalizer(args, kwargs)
+        args, kwargs = self._args_canonicalizer(args, **kwargs)
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
         key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
 
@@ -284,11 +284,11 @@ class CompiledProgramsPool:
 
     @functools.cached_property
     def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
-        signature = inspect.signature(self.definition_stage.definition)
         return gtx_utils.make_args_canonicalizer(
-            signature, name=self.definition_stage.definition.__name__
+            inspect.signature(self.definition_stage.definition),
+            name=self.definition_stage.definition.__name__,
         )
-    
+
     @functools.cached_property
     def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:
         prefix = f"{self.definition_stage.definition.__name__}<{self.backend.name}>"

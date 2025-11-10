@@ -88,79 +88,6 @@ class Program:
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
 
-#     def __new__(cls, *args: Any, **kwargs: Any) -> Program:
-#         try:
-#             definition_stage = kwargs.get("definition_stage", None)
-#             definition_stage = definition_stage or args[0]
-#             if not isinstance(definition_stage, ffront_stages.ProgramDefinition):
-#                 raise AssertionError()
-#             definition_signature = inspect.signature(definition_stage.definition)
-#         except Exception:
-#             return super().__new__(cls, *args, **kwargs)
-
-#         passed_by_pos_args = []
-#         passed_by_key_args = []
-#         custom_pos_parameters = [
-#             inspect.Parameter(name="self", kind=inspect.Parameter.POSITIONAL_ONLY)
-#         ]
-#         custom_var_pos_param = inspect.Parameter(name="args", kind=inspect.Parameter.VAR_POSITIONAL)
-#         custom_key_parameters = []
-#         custom_var_key_param = inspect.Parameter(name="kwargs", kind=inspect.Parameter.VAR_KEYWORD)
-#         for name, param in definition_signature.parameters.items():
-#             # remove annotations to avoid issues
-#             param = param.replace(annotation=param.empty)
-#             match param.kind:
-#                 case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
-#                     custom_pos_parameters.append(param)
-#                     passed_by_pos_args.append(f"{name}")
-#                 case inspect.Parameter.VAR_POSITIONAL:
-#                     custom_var_pos_param = param
-#                     passed_by_pos_args.append(f"*{name}")
-#                 case inspect.Parameter.KEYWORD_ONLY:
-#                     custom_key_parameters.append(param)
-#                     passed_by_key_args.append(f"{name}={name}")
-#                 case inspect.Parameter.VAR_KEYWORD:
-#                     custom_var_key_param = param
-#                     passed_by_key_args.append(f"**{name}")
-
-#         custom_call_signature = inspect.Signature(
-#             parameters=[
-#                 *custom_pos_parameters,
-#                 custom_var_pos_param,
-#                 *custom_key_parameters,
-#                 inspect.Parameter(
-#                     name="offset_provider",
-#                     kind=inspect.Parameter.KEYWORD_ONLY,
-#                     annotation=common.OffsetProvider | None,
-#                     default=None,
-#                 ),
-#                 inspect.Parameter(
-#                     name="enable_jit",
-#                     kind=inspect.Parameter.KEYWORD_ONLY,
-#                     annotation=bool | None,
-#                     default=None,
-#                 ),
-#                 custom_var_key_param,
-#             ],
-#             return_annotation=None,
-#         )
-
-#         custom_program_src = f"""
-# class _CustomProgram(Program):
-#     def __call__{custom_call_signature!s}:
-#         return super().__call__(        
-#             {str.join(", ", passed_by_pos_args)}{", " if passed_by_pos_args else ""}
-#             offset_provider=offset_provider,
-#             enable_jit=enable_jit,
-#             {str.join(", ", passed_by_key_args)}
-#     )
-# """
-#         exec(custom_program_src, ns := {"Program": Program, "__name__": __name__})
-#         instance: Program = object.__new__(cast(type[Program], ns["_CustomProgram"]))
-#         instance.__init__(*args, **kwargs)  # type: ignore[misc]  # it's safe to call __init__
-
-#         return instance
-
     @classmethod
     def from_function(
         cls,
@@ -181,19 +108,6 @@ class Program:
             enable_jit=enable_jit,
             static_params=static_params,
         )
-
-    # needed in testing
-    @property
-    def definition(self) -> types.FunctionType:
-        return self.definition_stage.definition
-
-    @functools.cached_property
-    def past_stage(self) -> ffront_stages.PRG:
-        # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.CompilableProgram(
-            self.definition_stage, arguments.CompileTimeArgs.empty()
-        )
-        return self._frontend_transforms.func_to_past(no_args_def).data
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
@@ -216,6 +130,18 @@ class Program:
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
     @property
+    def definition(self) -> types.FunctionType:
+        return self.definition_stage.definition
+
+    @functools.cached_property
+    def past_stage(self) -> ffront_stages.PRG:
+        # backwards compatibility for backends that do not support the full toolchain
+        no_args_def = toolchain.CompilableProgram(
+            self.definition_stage, arguments.CompileTimeArgs.empty()
+        )
+        return self._frontend_transforms.func_to_past(no_args_def).data
+
+    @property
     def _frontend_transforms(self) -> next_backend.Transforms:
         if self.backend is None:
             return next_backend.DEFAULT_TRANSFORMS
@@ -223,6 +149,43 @@ class Program:
         #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
         assert isinstance(self.backend.transforms, next_backend.Transforms)
         return self.backend.transforms
+
+    @functools.cached_property
+    def _all_closure_vars(self) -> dict[str, Any]:
+        return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
+
+    @functools.cached_property
+    def gtir(self) -> itir.Program:
+        no_args_past = toolchain.CompilableProgram(
+            data=ffront_stages.PastProgramDefinition(
+                past_node=self.past_stage.past_node,
+                closure_vars=self.past_stage.closure_vars,
+                grid_type=self.definition_stage.grid_type,
+            ),
+            args=arguments.CompileTimeArgs.empty(),
+        )
+        return self._frontend_transforms.past_to_itir(no_args_past).data
+
+    @functools.cached_property
+    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
+        if self.backend is None or self.backend == eve.NOTHING:
+            raise RuntimeError("Cannot compile a program without backend.")
+
+        if self.static_params is None:
+            object.__setattr__(self, "static_params", ())
+
+        argument_descriptor_mapping = {
+            arguments.StaticArg: self.static_params,
+        }
+
+        program_type = self.past_stage.past_node.type
+        assert isinstance(program_type, ts_ffront.ProgramType)
+        return compiled_program.CompiledProgramsPool(
+            backend=self.backend,
+            definition_stage=self.definition_stage,
+            program_type=program_type,
+            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
+        )
 
     def with_backend(self, backend: next_backend.Backend) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -285,43 +248,6 @@ class Program:
                 for field in dataclasses.fields(self)
                 if field.init
             },
-        )
-
-    @functools.cached_property
-    def _all_closure_vars(self) -> dict[str, Any]:
-        return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
-
-    @functools.cached_property
-    def gtir(self) -> itir.Program:
-        no_args_past = toolchain.CompilableProgram(
-            data=ffront_stages.PastProgramDefinition(
-                past_node=self.past_stage.past_node,
-                closure_vars=self.past_stage.closure_vars,
-                grid_type=self.definition_stage.grid_type,
-            ),
-            args=arguments.CompileTimeArgs.empty(),
-        )
-        return self._frontend_transforms.past_to_itir(no_args_past).data
-
-    @functools.cached_property
-    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
-        if self.backend is None or self.backend == eve.NOTHING:
-            raise RuntimeError("Cannot compile a program without backend.")
-
-        if self.static_params is None:
-            object.__setattr__(self, "static_params", ())
-
-        argument_descriptor_mapping = {
-            arguments.StaticArg: self.static_params,
-        }
-
-        program_type = self.past_stage.past_node.type
-        assert isinstance(program_type, ts_ffront.ProgramType)
-        return compiled_program.CompiledProgramsPool(
-            backend=self.backend,
-            definition_stage=self.definition_stage,
-            program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
         )
 
     def __call__(
