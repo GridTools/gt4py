@@ -134,7 +134,7 @@ def constructed_inside_dataclass_program(
         constructed_inside_dataclass_program,
     ],
 )
-def test_named_tuple_like_constructed_inside(cartesian_case, testee):
+def test_named_collection_constructed_inside(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
         cartesian_case, testee, "out" if isinstance(testee, decorator.Program) else cases.RETURN
