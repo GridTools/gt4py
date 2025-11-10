@@ -103,24 +103,19 @@ class DataflowBuilder(Protocol):
         name: str,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        inputs: set[str] | None,
+        inputs: set[str],
         outputs: set[str],
         code: str,
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
-        """Wrapper of `dace.SDFGState.add_tasklet` that modifies the connector names.
+        """Wrapper of `dace.SDFGState.add_tasklet` that assigns a unique name.
 
-        It modifies the tasklet connectors by adding a prefix string (see
+        It also modifies the tasklet connectors by adding a prefix string (see
         `gtir_to_sdfg_utils.get_tasklet_connector()`), in order to avoid name conflicts
         with SDFG data. Otherwise, SDFG validation would detect such conflicts and fail.
         """
-        unique_name = self.unique_tasklet_name(name)
-
-        if inputs is None:
-            inputs = set()
-        else:
-            assert inputs.isdisjoint(outputs)
+        assert inputs.isdisjoint(outputs)
 
         connector_mapping = {
             conn: gtir_to_sdfg_utils.get_tasklet_connector(conn) for conn in (inputs | outputs)
@@ -130,6 +125,7 @@ class DataflowBuilder(Protocol):
         inputs = {connector_mapping[inp] for inp in inputs}
         outputs = {connector_mapping[out] for out in outputs}
 
+        unique_name = self.unique_tasklet_name(name)
         tasklet_node = state.add_tasklet(
             unique_name, inputs, outputs, new_code, language=language, **kwargs
         )
@@ -141,22 +137,17 @@ class DataflowBuilder(Protocol):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         map_ranges: Mapping[str, str | dace.subsets.Subset],
-        inputs: Mapping[str, dace.Memlet] | None,
+        inputs: Mapping[str, dace.Memlet],
         code: str,
         outputs: Mapping[str, dace.Memlet],
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
-        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that modifies the connector names.
+        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns a unique name.
 
-        For information about modification of the tasklet connector names, see `add_tasklet()`.
+        It also modifies the tasklet connectors, in the same way as `add_tasklet()`.
         """
-        unique_name = self.unique_tasklet_name(name)
-
-        if inputs is None:
-            inputs = {}
-        else:
-            assert inputs.keys().isdisjoint(outputs.keys())
+        assert inputs.keys().isdisjoint(outputs.keys())
 
         connector_mapping = {
             conn: gtir_to_sdfg_utils.get_tasklet_connector(conn)
@@ -167,6 +158,7 @@ class DataflowBuilder(Protocol):
         inputs = {connector_mapping[inp]: memlet for inp, memlet in inputs.items()}
         outputs = {connector_mapping[out]: memlet for out, memlet in outputs.items()}
 
+        unique_name = self.unique_tasklet_name(name)
         tasklet_node, map_entry, map_exit = state.add_mapped_tasklet(
             unique_name, map_ranges, inputs, new_code, outputs, language=language, **kwargs
         )

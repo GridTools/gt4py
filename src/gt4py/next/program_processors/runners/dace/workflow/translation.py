@@ -266,9 +266,11 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         None,
         dace.Memlet(f"{output}[0]"),
     )
-    # We normally wrap `add_tasklet()` in order to rename tasklet connectors and
-    # avoid name conflicts with program symbols, see `gtir_to_sdfg.DataflowBuilder.add_tasklet()`.
-    # Since this wrapper is not available here, we run `validate()` on the instrumented SDFG.
+    # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
+    # the wrapper provided by `DataflowBuilder`, that modifies the tasklet connectors
+    # to avoid name conflicts with program symbols. However, this method is not
+    # available here, so we have to call the underlying DaCe function directly.
+    # We now run `validate()` to make sure that no name conflict was introduced.
     sdfg.validate()
 
 
