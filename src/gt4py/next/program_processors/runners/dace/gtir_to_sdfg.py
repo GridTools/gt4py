@@ -16,21 +16,10 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
 import dace
+from dace.frontend.python import astutils as dace_astutils
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -48,6 +37,17 @@ from gt4py.next.program_processors.runners.dace import (
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+
+
+def _replace_connectors_in_code_string(
+    code: str, language: dace.dtypes.Language, connector_mapping: Mapping[str, str]
+) -> str:
+    """Helper function to replace connector names in the code of a Python tasklet."""
+    code_block = dace.properties.CodeBlock(code, language)
+    transformed_code_stmts = [
+        dace_astutils.ASTFindReplace(connector_mapping).visit(stmt) for stmt in code_block.code
+    ]
+    return dace.properties.CodeBlock(transformed_code_stmts, language).as_string
 
 
 class DataflowBuilder(Protocol):
@@ -101,30 +101,72 @@ class DataflowBuilder(Protocol):
     def add_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
+        outputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
         code: str,
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
-        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
+        """Wrapper of `dace.SDFGState.add_tasklet` that assigns a unique name.
+
+        It also modifies the tasklet connectors by adding a prefix string (see
+        `gtir_to_sdfg_utils.get_tasklet_connector()`), in order to avoid name conflicts
+        with SDFG data. Otherwise, SDFG validation would detect such conflicts and fail.
+        """
+        if isinstance(inputs, set):
+            inputs = {k: None for k in sorted(inputs)}
+        if isinstance(outputs, set):
+            outputs = {k: None for k in sorted(outputs)}
+        assert inputs.keys().isdisjoint(outputs.keys())
+
+        connector_mapping = {
+            conn: gtir_to_sdfg_utils.make_tasklet_connector_for(conn)
+            for conn in (inputs.keys() | outputs.keys())
+        }
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
+
+        inputs = {connector_mapping[k]: v for k, v in inputs.items()}
+        outputs = {connector_mapping[k]: v for k, v in outputs.items()}
+
         unique_name = self.unique_tasklet_name(name)
-        return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+        tasklet_node = state.add_tasklet(
+            unique_name, inputs, outputs, new_code, language=language, **kwargs
+        )
+        return tasklet_node, connector_mapping
 
     def add_mapped_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
-        map_ranges: Dict[str, str | dace.subsets.Subset]
-        | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Dict[str, dace.Memlet],
+        map_ranges: Mapping[str, str | dace.subsets.Subset],
+        inputs: Mapping[str, dace.Memlet],
         code: str,
-        outputs: Dict[str, dace.Memlet],
+        outputs: Mapping[str, dace.Memlet],
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
-        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
+    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
+        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns a unique name.
+
+        It also modifies the tasklet connectors, in the same way as `add_tasklet()`.
+        """
+        assert inputs.keys().isdisjoint(outputs.keys())
+
+        connector_mapping = {
+            conn: gtir_to_sdfg_utils.make_tasklet_connector_for(conn)
+            for conn in (inputs.keys() | outputs.keys())
+        }
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
+
+        inputs = {connector_mapping[k]: v for k, v in inputs.items()}
+        outputs = {connector_mapping[k]: v for k, v in outputs.items()}
         unique_name = self.unique_tasklet_name(name)
-        return state.add_mapped_tasklet(unique_name, map_ranges, inputs, code, outputs, **kwargs)
+        tasklet_node, map_entry, map_exit = state.add_mapped_tasklet(
+            unique_name, map_ranges, inputs, new_code, outputs, language=language, **kwargs
+        )
+        return tasklet_node, map_entry, map_exit, connector_mapping
 
 
 @dataclasses.dataclass(frozen=True)
