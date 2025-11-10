@@ -18,7 +18,6 @@ from typing import (
     Optional,
     ParamSpec,
     Sequence,
-    TypeAlias,
     TypeGuard,
     TypeVar,
     cast,
@@ -283,15 +282,12 @@ def equalize_tuple_structure(
     return d1, d2
 
 
-CallArgsCanonicalizer: TypeAlias = Callable[[tuple, dict[str, Any]], tuple[tuple, dict[str, Any]]]
-
-
 @functools.lru_cache(maxsize=256)
 def make_args_canonicalizer(
     signature: inspect.Signature,
     *,
     name: str | None = None,
-) -> CallArgsCanonicalizer:
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
     """
     Create a call arguments canonicalizer function from a given signature.
 
@@ -336,7 +332,7 @@ def {canonicalize_func_name}{canonicalizer_signature!s}:
     exec(canonicalizer_src, namespace)
     canonicalizer = namespace[canonicalize_func_name]
 
-    return cast(CallArgsCanonicalizer, canonicalizer)
+    return cast(Callable[..., tuple[tuple, dict[str, Any]]], canonicalizer)
 
 
 def canonicalize_call_args(

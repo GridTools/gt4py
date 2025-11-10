@@ -77,22 +77,24 @@ class TestArgsCanonicalizer:
         args, kwargs = (1, 2), {"c": 3, "d": 4}
         bound_args = self.func_signature.bind(*args, **kwargs)
         canonical_form = bound_args.args, bound_args.kwargs
-        assert self.canonicalizer(args, kwargs) == canonical_form
+        assert self.canonicalizer(*args, **kwargs) == canonical_form
 
         args, kwargs = (1,), {"c": 3, "d": 4, "b": 2}
         bound_args = self.func_signature.bind(*args, **kwargs)
         canonical_form = bound_args.args, bound_args.kwargs
-        assert self.canonicalizer(args, kwargs) == canonical_form
+        assert self.canonicalizer(*args, **kwargs) == canonical_form
 
     def test_wrong_input(self):
-        with pytest.raises(ValueError, match="Missing keyword arguments: {'c'}"):
-            self.canonicalizer((1, 2), {"d": 4})
+        with pytest.raises(TypeError, match="missing 1 required keyword-only argument: 'c'"):
+            self.canonicalizer(*(1, 2), **{"d": 4})
 
-        with pytest.raises(ValueError, match="Got unexpected keyword arguments: {'foo'}"):
-            self.canonicalizer((1, 2), {"d": 4, "foo": 5})
+        with pytest.raises(TypeError, match="got an unexpected keyword argument 'foo'"):
+            self.canonicalizer(*(1, 2), **{"d": 4, "foo": 5})
 
-        with pytest.raises(ValueError, match="Got unexpected keyword arguments: {'a'}"):
-            self.canonicalizer((2,), {"a": 1, "c": 3, "d": 4})
+        with pytest.raises(
+            TypeError, match="got some positional-only arguments passed as keyword arguments: 'a'"
+        ):
+            self.canonicalizer(*(2,), **{"a": 1, "c": 3, "d": 4})
 
-        with pytest.raises(ValueError, match="Too many positional arguments"):
-            self.canonicalizer((1, 2, 3, 4, 5), {})  # too many positional arguments
+        with pytest.raises(TypeError, match="takes 2 positional arguments but 5 were given"):
+            self.canonicalizer(*(1, 2, 3, 4, 5), **{})
