@@ -89,27 +89,28 @@ def _apply_split_access_node_non_recursive(
     # Since the transformation only applies to single use data, the order in which the
     #  states are processed is irrelevant. Furthermore, the fragments generated through
     #  a node that was split, should never be split (as long as this function runs),
-    #  because otherwise the split should have been done in the initial split.
+    #  because otherwise that split should have been done in the initial split.
     for state in sdfg.states():
         state_cfg_id = state.parent_graph.cfg_id
         state_id = state.block_id
-
         scope_dict = state.scope_dict()
 
         # Now find all single use data, located at the top level in this state.
         #  Note single use data is classified by having only one node that is
         #  referring to it, thus a `set` is safe.
         access_nodes_to_process = sorted(
-            {
+            (
                 dnode
                 for dnode in state.data_nodes()
                 if dnode.data in single_use_data and scope_dict[dnode] is None
-            },
+            ),
             key=lambda dnode: dnode.data,
         )
+        assert len(access_nodes_to_process) == len(set(access_nodes_to_process))
 
         if len(access_nodes_to_process) == 0:
-            break
+            # Nothing to process in this state, continue.
+            continue
 
         # Now try to split all candidates that we have found.
         for access_node_to_process in access_nodes_to_process:
