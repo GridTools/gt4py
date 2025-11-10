@@ -16,7 +16,7 @@ include:
 #   block-name-with-dashes      -> defined in remote cscs-ci ext include
 #   block_name_with_underscores -> defined in this file or other file in this repo
 
-variables:  # Default values for base variables (can be overriden in jobs definitions)
+variables:  # Default values for base variables (can be overridden in jobs definitions)
   CUDA_VERSION: '12.6.2'
   ROCM_VERSION: '6.2.4'
   UBUNTU_VERSION: '24.04'
@@ -145,6 +145,9 @@ test_cscs_gh200:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
         SLURM_TIMELIMIT: "00:15:00"
+    - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'cuda12'
+      variables:
+        SLURM_TIMELIMIT: "00:10:00"
     - when: on_success
 
 test_cscs_amd_rocm:

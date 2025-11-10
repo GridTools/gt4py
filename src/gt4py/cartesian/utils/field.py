@@ -28,8 +28,8 @@ class Field:
         self.offsets = offsets
 
     @classmethod
-    def empty(cls, shape, dtype, offset):
-        return cls(np.empty(shape, dtype=dtype), offset, (True, True, True))
+    def empty(cls, shape, dtype, offset, dims: tuple[bool, bool, bool]):
+        return cls(np.empty(shape, dtype=dtype), offset, dims)
 
     def shim_key(self, key):
         new_args = []

@@ -133,19 +133,18 @@ class BindingCodeGenerator(TemplatedGenerator):
             {{"\n,".join(parameters + ["std::optional<nanobind::dict> exec_info"])}}
         )
         {
-            if (exec_info.has_value()) {                
-                exec_info->operator[]("run_cpp_start_time") = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+            if (!exec_info.has_value()) {
+                {{body}}            
+                {{return_stmt}}
             }
-            {{body}}
-            if (exec_info.has_value()) {
+            else {
+                auto start = std::chrono::high_resolution_clock::now();
+                {{body}}
                 {% if _this_node.on_device %}cudaDeviceSynchronize();{% endif %}
-                exec_info->operator[]("run_cpp_end_time") = static_cast<double>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now().time_since_epoch()).count())/1e9;
+                auto stop = std::chrono::high_resolution_clock::now();
+                exec_info->operator[]("run_cpp_duration") = std::chrono::duration<double>(stop - start).count();
+                {{return_stmt}}
             }
-            {{return_stmt}}
         }\
         """
     )

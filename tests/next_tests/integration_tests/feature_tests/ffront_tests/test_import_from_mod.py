@@ -10,11 +10,11 @@ import pytest
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, astype
+from gt4py.next import broadcast, astype, int32
 
 from next_tests import integration_tests
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case
+from next_tests.integration_tests.cases import cartesian_case, IDim, KDim
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
@@ -29,27 +29,29 @@ def test_import_dims_module(cartesian_case):
         return f_i_k
 
     @gtx.program
-    def mod_prog(f: cases.IField, out: cases.IKField):
+    def mod_prog(f: cases.IField, isize: int32, ksize: int32, out: cases.IKField):
         mod_op(
             f,
             out=out,
             domain={
                 integration_tests.cases.IDim: (
                     0,
-                    8,
+                    isize,
                 ),  # Nested import done on purpose, do not change
-                cases.KDim: (0, 3),
+                cases.KDim: (0, ksize),
             },
         )
 
     f = cases.allocate(cartesian_case, mod_prog, "f")()
     out = cases.allocate(cartesian_case, mod_prog, "out")()
     expected = np.zeros_like(out.asnumpy())
-    expected[0:8, 0:3] = np.reshape(np.repeat(f.asnumpy(), out.shape[1], axis=0), out.shape)[
-        0:8, 0:3
-    ]
+    isize = cartesian_case.default_sizes[IDim] - 1
+    ksize = cartesian_case.default_sizes[KDim] - 2
+    expected[0:isize, 0:ksize] = np.reshape(
+        np.repeat(f.asnumpy(), out.shape[1], axis=0), out.shape
+    )[0:isize, 0:ksize]
 
-    cases.verify(cartesian_case, mod_prog, f, out=out, ref=expected)
+    cases.verify(cartesian_case, mod_prog, f, isize, ksize, out=out, ref=expected)
 
 
 # TODO: these set of features should be allowed as module imports in a later PR

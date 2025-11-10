@@ -61,10 +61,10 @@ def test_cartesian_half_shift_plus(cartesian_case):
     def testee(a: cases.IField) -> cases.IHalfField:
         return a(IHalfDim + 0.5)  # always pass an I-index to an IField
 
-    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
+    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (-1, 0)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, a, out=out, ref=a[1:])
+    cases.verify(cartesian_case, testee, a, out=out, ref=a)
 
 
 @pytest.mark.uses_cartesian_shift
@@ -74,7 +74,7 @@ def test_cartesian_half_shift_minus(cartesian_case):
     def testee(a: cases.IField) -> cases.IHalfField:
         return a(IHalfDim - 0.5)  # always pass an I-index to an IField
 
-    a = cases.allocate(cartesian_case, testee, "a")()
+    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, -1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(cartesian_case, testee, a, out=out, ref=a[:])

@@ -483,7 +483,7 @@ def infer_expr(
         domain,
         fill_value=DomainAccessDescriptor.NEVER,
         # el_types already has the right structure, we only want to change domain
-        bidirectional=False,
+        bidirectional=False if not isinstance(expr.type, ts.DeferredType) else True,
     )
 
     if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
@@ -519,6 +519,13 @@ def infer_expr(
     return expr, accessed_domains
 
 
+def _make_symbolic_domain_tuple(domains: itir.Node) -> DomainAccess:
+    if cpm.is_call_to(domains, "make_tuple"):
+        return tuple(_make_symbolic_domain_tuple(arg) for arg in domains.args)
+    else:
+        return SymbolicDomain.from_expr(domains)
+
+
 def _infer_stmt(
     stmt: itir.Stmt,
     **kwargs: Unpack[InferenceOptions],
@@ -528,9 +535,9 @@ def _infer_stmt(
         # between the domain stored in IR and in the annex
         domain = constant_folding.ConstantFolding.apply(stmt.domain)
 
-        transformed_call, _ = infer_expr(
-            stmt.expr, domain_utils.SymbolicDomain.from_expr(domain), **kwargs
-        )
+        symbolic_domain = _make_symbolic_domain_tuple(domain)
+
+        transformed_call, _ = infer_expr(stmt.expr, symbolic_domain, **kwargs)
 
         return itir.SetAt(
             expr=transformed_call,

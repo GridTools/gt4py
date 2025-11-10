@@ -174,11 +174,11 @@ class CartesianGridDescriptor(Protocol):
 
 
 def simple_cartesian_grid(
-    sizes: int | tuple[int, int, int, int, int, int] = 10,
+    sizes: int | tuple[int, int, int, int] = (5, 7, 9),
 ) -> CartesianGridDescriptor:
     if isinstance(sizes, int):
-        sizes = (sizes,) * 6
-    assert len(sizes) == 6, "sizes must be a tuple of three integers"
+        sizes = (sizes,) * 3
+    assert len(sizes) == 3, "sizes must be a tuple of three integers"
 
     offset_provider = {
         "Ioff": IDim,
@@ -211,9 +211,6 @@ class MeshDescriptor(Protocol):
 
     @property
     def num_edges(self) -> int: ...
-
-    @property
-    def num_levels(self) -> int: ...
 
     @property
     def offset_provider(self) -> common.OffsetProvider: ...
