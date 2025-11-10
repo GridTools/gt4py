@@ -328,22 +328,20 @@ def make_args_canonicalizer(
     )
 
     # Optimization for 0 or 1 positional arguments
-    if len(pos_args) == 0:
+    if (pos_args_len := len(pos_args)) == 0:
         pos_args_tuple = "()"
+    elif pos_args_len == 1 and var_pos_arg:
+        pos_args_tuple = var_pos_arg
     else:
-        if len(pos_args) == 1 and var_pos_arg:
-            pos_args_tuple = var_pos_arg
-        else:
-            pos_args_tuple = f"({str.join(', ', pos_args)},)"
+        pos_args_tuple = f"({str.join(', ', pos_args)},)"
 
     # Optimization for 0 or 1 keyword-only arguments
-    if len(key_args) == 0:
+    if (key_args_len := len(key_args)) == 0:
         key_args_dict = "{}"
+    elif key_args_len == 1 and var_key_arg:
+        key_args_dict = var_key_arg
     else:
-        if len(key_args) == 1 and var_key_arg:
-            key_args_dict = var_key_arg
-        else:
-            key_args_dict = f"{{ {str.join(', ', key_args)} }}"
+        key_args_dict = f"{{ {str.join(', ', key_args)} }}"
 
     canonicalize_func_name = f"canonicalize_args_for_{name}" if name else "canonicalize_args"
     canonicalizer_src = f"""
