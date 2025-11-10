@@ -16,21 +16,10 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
 import dace
+from dace.frontend.python import astutils as dace_astutils
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -48,6 +37,17 @@ from gt4py.next.program_processors.runners.dace import (
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+
+
+def _replace_connectors_in_code_string(
+    code: str, language: dace.dtypes.Language, connector_mapping: Mapping[str, str]
+) -> str:
+    """Helper function to replace connector names in the code of a Python tasklet."""
+    code_block = dace.properties.CodeBlock(code, language)
+    transformed_code_stmts = [
+        dace_astutils.ASTFindReplace(connector_mapping).visit(stmt) for stmt in code_block.code
+    ]
+    return dace.properties.CodeBlock(transformed_code_stmts, language).as_string
 
 
 class DataflowBuilder(Protocol):
@@ -101,30 +101,72 @@ class DataflowBuilder(Protocol):
     def add_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
+        outputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
         code: str,
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
-        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
+        """Wrapper of `dace.SDFGState.add_tasklet` that assigns a unique name.
+
+        It also modifies the tasklet connectors by adding a prefix string (see
+        `gtir_to_sdfg_utils.get_tasklet_connector()`), in order to avoid name conflicts
+        with SDFG data. Otherwise, SDFG validation would detect such conflicts and fail.
+        """
+        if isinstance(inputs, set):
+            inputs = {k: None for k in sorted(inputs)}
+        if isinstance(outputs, set):
+            outputs = {k: None for k in sorted(outputs)}
+        assert inputs.keys().isdisjoint(outputs.keys())
+
+        connector_mapping = {
+            conn: gtir_to_sdfg_utils.make_tasklet_connector_for(conn)
+            for conn in (inputs.keys() | outputs.keys())
+        }
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
+
+        inputs = {connector_mapping[k]: v for k, v in inputs.items()}
+        outputs = {connector_mapping[k]: v for k, v in outputs.items()}
+
         unique_name = self.unique_tasklet_name(name)
-        return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+        tasklet_node = state.add_tasklet(
+            unique_name, inputs, outputs, new_code, language=language, **kwargs
+        )
+        return tasklet_node, connector_mapping
 
     def add_mapped_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
-        map_ranges: Dict[str, str | dace.subsets.Subset]
-        | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Dict[str, dace.Memlet],
+        map_ranges: Mapping[str, str | dace.subsets.Subset],
+        inputs: Mapping[str, dace.Memlet],
         code: str,
-        outputs: Dict[str, dace.Memlet],
+        outputs: Mapping[str, dace.Memlet],
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
-        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
+    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
+        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns a unique name.
+
+        It also modifies the tasklet connectors, in the same way as `add_tasklet()`.
+        """
+        assert inputs.keys().isdisjoint(outputs.keys())
+
+        connector_mapping = {
+            conn: gtir_to_sdfg_utils.make_tasklet_connector_for(conn)
+            for conn in (inputs.keys() | outputs.keys())
+        }
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
+
+        inputs = {connector_mapping[k]: v for k, v in inputs.items()}
+        outputs = {connector_mapping[k]: v for k, v in outputs.items()}
         unique_name = self.unique_tasklet_name(name)
-        return state.add_mapped_tasklet(unique_name, map_ranges, inputs, code, outputs, **kwargs)
+        tasklet_node, map_entry, map_exit = state.add_mapped_tasklet(
+            unique_name, map_ranges, inputs, new_code, outputs, language=language, **kwargs
+        )
+        return tasklet_node, map_entry, map_exit, connector_mapping
 
 
 @dataclasses.dataclass(frozen=True)
@@ -290,8 +332,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 "Fields with more than one local dimension are not supported."
             )
         field_origin = tuple(
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, dim))
-            for dim in field_type.dims
+            gtx_dace_utils.range_start_symbol(data_node.data, dim) for dim in field_type.dims
         )
         return gtir_to_sdfg_types.FieldopData(data_node, field_type, field_origin)
 
@@ -397,15 +438,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
         neighbor_table_types = gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
         shape = []
-        for i, dim in enumerate(dims):
+        for dim in dims:
             if dim.kind == gtx_common.DimensionKind.LOCAL:
                 # for local dimension, the size is taken from the associated connectivity type
                 shape.append(neighbor_table_types[dim.value].max_neighbors)
             elif gtx_dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
                 # we use symbolic size for the global dimension of a connectivity
-                shape.append(
-                    dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_size_symbol_name(name, i))
-                )
+                shape.append(gtx_dace_utils.field_size_symbol(name, dim, neighbor_table_types))
             else:
                 # the size of global dimensions for a regular field is the symbolic
                 # expression of domain range 'stop - start'
@@ -418,8 +457,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     )
                 )
         strides = [
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_stride_symbol_name(name, i))
-            for i in range(len(dims))
+            gtx_dace_utils.field_stride_symbol(name, dim, neighbor_table_types) for dim in dims
         ]
         return shape, strides
 
@@ -486,13 +524,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
             if isinstance(gt_type.dtype, ts.ScalarType):
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype)
-                dims = gt_type.dims
+                all_dims = gt_type.dims
             elif not transient:  # 'ts.ListType': use 'offset_type' as local dimension
                 assert gt_type.dtype.offset_type is not None
                 assert gt_type.dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
                 assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype.element_type)
-                dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
+                all_dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
             else:
                 # By design, the domain of temporary fields used by SDFG lowering
                 # contains only the global dimensions. The local dimension is extracted,
@@ -500,7 +538,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 raise ValueError("Unexpected local dimension in temporary field domain.")
             # Use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, dims)
+            sym_shape, sym_strides = self._make_array_shape_and_strides(name, all_dims)
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
             return [(name, gt_type)]
 

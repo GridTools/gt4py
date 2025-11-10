@@ -301,7 +301,7 @@ class Program(CompiledProgramMixin):
 
         with metrics.collect() as metrics_source:
             if collect_info_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO):
-                start = time.time()
+                start = time.perf_counter()
 
             if __debug__:
                 # TODO: remove or make dependency on self.past_stage optional
@@ -335,7 +335,7 @@ class Program(CompiledProgramMixin):
 
             if collect_info_metrics:
                 assert metrics_source is not None
-                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.time() - start)
+                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.perf_counter() - start)
 
     def freeze(self) -> FrozenProgram:
         if self.backend is None:

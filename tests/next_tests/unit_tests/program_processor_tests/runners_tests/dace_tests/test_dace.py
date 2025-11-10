@@ -81,36 +81,44 @@ def unstructured_case(request, exec_alloc_descriptor, mesh_descriptor):
 def make_mocks(monkeypatch):
     # Wrap `compiled_sdfg.CompiledSDFG.fast_call` with mock object
     mock_fast_call = unittest.mock.MagicMock()
-    dace_fast_call = dace.codegen.compiled_sdfg.CompiledSDFG.fast_call
-
-    def mocked_fast_call(self, *args, **kwargs):
-        mock_fast_call.__call__(*args, **kwargs)
-        fast_call_result = dace_fast_call(self, *args, **kwargs)
-        # invalidate all scalar positional arguments to ensure that they are properly set
-        # next time the SDFG is executed before fast_call
-        positional_args = set(self.sdfg.arg_names)
-        sdfg_arglist = self.sdfg.arglist()
-        for i, (arg_name, arg_type) in enumerate(sdfg_arglist.items()):
-            if arg_name in positional_args and isinstance(arg_type, dace.data.Scalar):
-                assert isinstance(self._lastargs[0][i], ctypes.c_int)
-                self._lastargs[0][i].value = -1
-        return fast_call_result
-
-    monkeypatch.setattr(dace.codegen.compiled_sdfg.CompiledSDFG, "fast_call", mocked_fast_call)
-
-    # Wrap `compiled_sdfg.CompiledSDFG._construct_args` with mock object
-    mock_construct_args = unittest.mock.MagicMock()
-    dace_construct_args = dace.codegen.compiled_sdfg.CompiledSDFG._construct_args
-
-    def mocked_construct_args(self, *args, **kwargs):
-        mock_construct_args.__call__(*args, **kwargs)
-        return dace_construct_args(self, *args, **kwargs)
-
-    monkeypatch.setattr(
-        dace.codegen.compiled_sdfg.CompiledSDFG, "_construct_args", mocked_construct_args
+    gt4py_fast_call = (
+        gtx.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram.fast_call
     )
 
-    return mock_fast_call, mock_construct_args
+    def mocked_fast_call(self):
+        mock_fast_call.__call__()
+        fast_call_result = gt4py_fast_call(self)
+        # invalidate all scalar positional arguments to ensure that they are properly set
+        # next time the SDFG is executed before fast_call
+        positional_args = set(self.sdfg_program.sdfg.arg_names)
+        sdfg_arglist = self.sdfg_program.sdfg.arglist()
+        for i, (arg_name, arg_type) in enumerate(sdfg_arglist.items()):
+            if arg_name in positional_args and isinstance(arg_type, dace.data.Scalar):
+                assert isinstance(self.csdfg_argv[i], ctypes.c_int)
+                self.csdfg_argv[i].value = -1
+        return fast_call_result
+
+    monkeypatch.setattr(
+        gtx.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram,
+        "fast_call",
+        mocked_fast_call,
+    )
+
+    # Wrap `compiled_sdfg.CompiledSDFG.construct_arguments` with mock object
+    mock_construct_arguments = unittest.mock.MagicMock()
+    gt4py_construct_arguments = gtx.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram.construct_arguments
+
+    def mocked_construct_arguments(self, *args, **kwargs):
+        mock_construct_arguments.__call__(*args, **kwargs)
+        return gt4py_construct_arguments(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        gtx.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram,
+        "construct_arguments",
+        mocked_construct_arguments,
+    )
+
+    return mock_fast_call, mock_construct_arguments
 
 
 def test_dace_fastcall(cartesian_case, monkeypatch):
@@ -139,11 +147,11 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
     unused_field = cases.allocate(cartesian_case, testee, "unused_field")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    mock_fast_call, mock_construct_args = make_mocks(monkeypatch)
+    mock_fast_call, mock_construct_arguments = make_mocks(monkeypatch)
 
     # Reset mock objects and run/verify GT4Py program
     def verify_testee():
-        mock_construct_args.reset_mock()
+        mock_construct_arguments.reset_mock()
         mock_fast_call.reset_mock()
         cases.verify(
             cartesian_case,
@@ -159,24 +167,24 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
     # On first run, the SDFG arguments will have to be constructed
     verify_testee()
-    mock_construct_args.assert_called_once()
+    mock_construct_arguments.assert_called_once()
 
     # Now modify the scalar arguments, used and unused ones: reuse previous SDFG arguments
     for i in range(4):
         a_offset[i] += 1
         verify_testee()
-        mock_construct_args.assert_not_called()
+        mock_construct_arguments.assert_not_called()
 
     # Modify content of current buffer: reuse previous SDFG arguments
     for buff in (a, unused_field):
         buff[0] += 1
         verify_testee()
-        mock_construct_args.assert_not_called()
+        mock_construct_arguments.assert_not_called()
 
     # Pass a new buffer, fastcall API should still be used
     a = cases.allocate(cartesian_case, testee, "a")()
     verify_testee()
-    mock_construct_args.assert_not_called()
+    mock_construct_arguments.assert_not_called()
 
 
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
@@ -191,11 +199,11 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     (a,), kwfields = cases.get_default_data(unstructured_case, testee)
     numpy_ref = lambda a: a[connectivity_E2V[:, 0]]
 
-    mock_fast_call, mock_construct_args = make_mocks(monkeypatch)
+    mock_fast_call, mock_construct_arguments = make_mocks(monkeypatch)
 
     # Reset mock objects and run/verify GT4Py program
     def verify_testee():
-        mock_construct_args.reset_mock()
+        mock_construct_arguments.reset_mock()
         mock_fast_call.reset_mock()
         cases.verify(
             unstructured_case,
@@ -209,4 +217,4 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
 
     verify_testee()
     verify_testee()
-    mock_construct_args.assert_not_called()
+    mock_construct_arguments.assert_not_called()
