@@ -32,9 +32,9 @@ class EmbeddedOperator(Generic[_R, _P]):
 
 
 @dataclasses.dataclass(frozen=True)
-class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...], _P]):
+class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT], _P]):
     forward: bool
-    init: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...]
+    init: xtyping.MaybeNestedInTuple[core_defs.ScalarT]
     axis: common.Dimension
 
     def __call__(  # type: ignore[override]
@@ -65,7 +65,7 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
         res = field_utils.field_from_typespec(init_type, out_domain, xp)
 
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
-            acc: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...] = self.init
+            acc: xtyping.MaybeNestedInTuple[core_defs.ScalarT] = self.init
             for k in scan_range.unit_range if self.forward else reversed(scan_range.unit_range):
                 pos = (*hpos, common.NamedIndex(scan_axis, k))
                 new_args = [_tuple_at(pos, arg) for arg in args]
@@ -86,9 +86,7 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
         return res
 
 
-def _get_out_domain(
-    out: common.MutableField | tuple[common.MutableField | tuple, ...],
-) -> common.Domain:
+def _get_out_domain(out: xtyping.MaybeNestedInTuple[common.MutableField]) -> common.Domain:
     return embedded_common.domain_intersection(
         *[f.domain for f in utils.flatten_nested_tuple((out,))]
     )
@@ -173,8 +171,8 @@ def _intersect_scan_args(
 
 def _tuple_assign_value(
     pos: Sequence[common.NamedIndex],
-    target: common.MutableField | tuple[common.MutableField | tuple, ...],
-    source: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
+    target: xtyping.MaybeNestedInTuple[common.MutableField],
+    source: xtyping.MaybeNestedInTuple[core_defs.Scalar],
 ) -> None:
     @utils.tree_map
     def impl(target: common.MutableField, source: core_defs.Scalar) -> None:

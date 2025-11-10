@@ -786,14 +786,13 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
 
 #: Type alias for primitive numeric values (i.e. scalars or fields).
 NumericValue: TypeAlias = core_defs.Scalar | Field
-
+NumericValueT = TypeVar("NumericValueT", bound=NumericValue)
 NUMERIC_VALUE_TYPES: Final[tuple[type[NumericValue], ...]] = xtyping.get_represented_types(
     NumericValue
 )
 
 #: Type alias for any kind primitive value understood by GT4Py DSL.
 PrimitiveValue: TypeAlias = NumericValue  # For now, only numeric values, in the future it could include functions, enums, ...
-
 PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_represented_types(
     PrimitiveValue
 )

@@ -25,8 +25,6 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeIs,
     TypeVar,
-    TypeVarTuple,
-    Unpack,
     cast,
     final,
 )
@@ -179,12 +177,8 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
     return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
 
 
-Ts = TypeVarTuple("Ts")
-NeedsValueExtraction: TypeAlias = (  # This is not really accurate, just an approximation
-    containers.CustomContainer
-    | tuple[Unpack[Ts], "NeedsValueExtraction"]
-    | tuple["NeedsValueExtraction", Unpack[Ts]]
-)
+# This is not really accurate, just an approximation
+NeedsValueExtraction: TypeAlias = MaybeNestedInTuple[containers.CustomContainer]
 
 
 def needs_value_extraction(value: object) -> TypeIs[NeedsValueExtraction]:
@@ -197,7 +191,8 @@ T = TypeVar("T")
 
 
 def extract(
-    value: NeedsValueExtraction | common.PrimitiveValue, pass_through_values: bool = True
+    value: NeedsValueExtraction | MaybeNestedInTuple[common.PrimitiveValue],
+    pass_through_values: bool = True,
 ) -> MaybeNestedInTuple[common.PrimitiveValue]:
     """
     Extract the values from a run-time argument into a digestible value form.
@@ -207,7 +202,7 @@ def extract(
     return them as-is if `pass_through_values` is `True`, otherwise raise a `TypeError`.
     """
     if isinstance(value, common.NUMERIC_VALUE_TYPES):
-        return cast(common.PrimitiveValue, value)
+        return cast(common.NumericValue, value)
     if isinstance(value, containers.CUSTOM_CONTAINER_TYPES):
         return containers.make_container_extractor(cast(Hashable, type(value)))(value)
     if isinstance(value, tuple):
