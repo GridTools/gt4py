@@ -23,7 +23,7 @@ from gt4py.eve.extended_typing import (
     Optional,
     Self,
     TypeAlias,
-    TypeGuard,
+    TypeIs,
     TypeVar,
     TypeVarTuple,
     Unpack,
@@ -187,7 +187,7 @@ NeedsValueExtraction: TypeAlias = (  # This is not really accurate, just an appr
 )
 
 
-def needs_value_extraction(value: object) -> TypeGuard[NeedsValueExtraction]:
+def needs_value_extraction(value: object) -> TypeIs[NeedsValueExtraction]:
     return isinstance(value, containers.CUSTOM_CONTAINER_TYPES) or (
         isinstance(value, tuple) and any(needs_value_extraction(v) for v in value)
     )
@@ -197,8 +197,8 @@ T = TypeVar("T")
 
 
 def extract(
-    value: T, pass_through_values: bool = True
-) -> MaybeNestedInTuple[T | common.PrimitiveValue]:
+    value: NeedsValueExtraction | common.PrimitiveValue, pass_through_values: bool = True
+) -> MaybeNestedInTuple[common.PrimitiveValue]:
     """
     Extract the values from a run-time argument into a digestible value form.
 
@@ -207,7 +207,7 @@ def extract(
     return them as-is if `pass_through_values` is `True`, otherwise raise a `TypeError`.
     """
     if isinstance(value, common.NUMERIC_VALUE_TYPES):
-        return value
+        return cast(common.PrimitiveValue, value)
     if isinstance(value, containers.CUSTOM_CONTAINER_TYPES):
         return containers.make_container_extractor(cast(Hashable, type(value)))(value)
     if isinstance(value, tuple):
@@ -216,7 +216,7 @@ def extract(
         else:
             return value
     if pass_through_values:
-        return value
+        return cast(common.PrimitiveValue, value)
 
     raise TypeError(f"Cannot extract numeric value from {type(value)}.")
 
