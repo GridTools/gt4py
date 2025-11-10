@@ -28,6 +28,7 @@ from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace.transformations import (
     splitting_tools as gtx_dace_split,
+    strides as gtx_transformations_strides,
     utils as gtx_transformations_utils,
 )
 
@@ -257,3 +258,6 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         # Replace data of second and third node with data of first and fourth node
         second_node.data = first_node.data
         third_node.data = first_node.data
+
+        # Update strides after changing the data of access nodes
+        gtx_transformations_strides.gt_propagate_strides_of(sdfg, first_node.data)
