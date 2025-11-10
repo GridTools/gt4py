@@ -15,11 +15,10 @@ from typing import (
     Any,
     Callable,
     ClassVar,
-    NamedTuple,
     Optional,
     ParamSpec,
-    Protocol,
     Sequence,
+    TypeAlias,
     TypeGuard,
     TypeVar,
     cast,
@@ -284,28 +283,10 @@ def equalize_tuple_structure(
     return d1, d2
 
 
-class CanonicalizationOptions(NamedTuple):
-    function_name: str
-    allow_kwargs_mutation: bool
-    sort_kwargs: bool
+CallArgsCanonicalizer: TypeAlias = Callable[[tuple, dict[str, Any]], tuple[tuple, dict[str, Any]]]
 
 
-class CallArgsCanonicalizer(Protocol):
-    def __call__(self, args: tuple, kwargs: dict[str, Any]) -> tuple[tuple, dict[str, Any]]: ...
-
-    @property
-    def options(self) -> CanonicalizationOptions: ...
-
-    def cache_info(self) -> functools._CacheInfo: ...
-    def cache_clear(self) -> None: ...
-
-
-class CustomCallArgsCanonicalizerFactory(Protocol):
-    def __call__(
-        self, passed_pos_args_count: int, passed_kwargs_keys: tuple[str, ...]
-    ) -> CallArgsCanonicalizer: ...
-
-
+@functools.lru_cache(maxsize=256)
 def make_args_canonicalizer(
     signature: inspect.Signature,
     *,
@@ -338,7 +319,7 @@ def make_args_canonicalizer(
             case inspect.Parameter.VAR_POSITIONAL:
                 pos_args.append(f"*{key}")
             case inspect.Parameter.KEYWORD_ONLY:
-                key_args.append(f"{key}={key}")
+                key_args.append(f"{key!r}: {key}")
             case inspect.Parameter.VAR_KEYWORD:
                 key_args.append(f"**{key}")
 
@@ -356,3 +337,30 @@ def {canonicalize_func_name}{canonicalizer_signature!s}:
     canonicalizer = namespace[canonicalize_func_name]
 
     return cast(CallArgsCanonicalizer, canonicalizer)
+
+
+def canonicalize_call_args(
+    func: Callable,
+    /,
+    args: tuple,
+    kwargs: dict[str, Any],
+) -> tuple[tuple, dict[str, Any]]:
+    """
+    Canonicalize call arguments for a given function.
+
+    The canonicalization means that the returned arguments are as all positional
+    arguments were passed positionally, and only keyword-only arguments appear
+    in the dictionary.
+
+    Args:
+        func: The function for which to canonicalize the call arguments.
+        args: Positional arguments.
+        kwargs: Keyword arguments.
+
+    Note:
+        This is a convenience wrapper around `make_args_canonicalizer`.
+    """
+
+    signature = inspect.signature(func)
+    canonicalizer = make_args_canonicalizer(signature, name=func.__name__)
+    return canonicalizer(args, kwargs)
