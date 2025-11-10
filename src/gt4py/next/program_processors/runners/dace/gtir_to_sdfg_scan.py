@@ -654,15 +654,15 @@ def translate_scan(
 
     symbolic_args: dict[str, gtir_to_sdfg_types.SymbolicData] = {}
     lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
-    for gt_symbol, arg in lambda_args_mapping:
-        gt_symbol_name = str(gt_symbol.id)
+    for gtsym, arg in lambda_args_mapping:
+        gtsym_id = str(gtsym.id)
         if isinstance(arg, gtir_to_sdfg_types.SymbolicData):
-            symbolic_args[gt_symbol_name] = arg
+            symbolic_args[gtsym_id] = arg
         elif arg is not None:
             lambda_arg_nodes |= {
-                str(gt_symbol_.id): arg_
-                for gt_symbol_, arg_ in gtir_to_sdfg_types.flatten_tuple(gt_symbol, arg)
-                if arg_ is not None
+                str(nested_gtsym.id): nested_arg
+                for nested_gtsym, nested_arg in gtir_to_sdfg_types.flatten_tuple(gtsym, arg)
+                if nested_arg is not None
             }
 
     nsdfg_node, input_memlets = sdfg_builder.add_nested_sdfg(
