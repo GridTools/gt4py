@@ -103,8 +103,8 @@ class DataflowBuilder(Protocol):
         name: str,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        inputs: set[str],
-        outputs: set[str],
+        inputs: set[str] | dict[str, dace.dtypes.typeclass],
+        outputs: set[str] | dict[str, dace.dtypes.typeclass],
         code: str,
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
@@ -115,15 +115,20 @@ class DataflowBuilder(Protocol):
         `gtir_to_sdfg_utils.get_tasklet_connector()`), in order to avoid name conflicts
         with SDFG data. Otherwise, SDFG validation would detect such conflicts and fail.
         """
-        assert inputs.isdisjoint(outputs)
+        if isinstance(inputs, set):
+            inputs = {k: None for k in inputs}
+        if isinstance(outputs, set):
+            outputs = {k: None for k in outputs}
+        assert inputs.keys().isdisjoint(outputs.keys())
 
         connector_mapping = {
-            conn: gtir_to_sdfg_utils.get_tasklet_connector(conn) for conn in (inputs | outputs)
+            conn: gtir_to_sdfg_utils.get_tasklet_connector(conn)
+            for conn in (inputs.keys() | outputs.keys())
         }
         new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
 
-        inputs = {connector_mapping[inp] for inp in inputs}
-        outputs = {connector_mapping[out] for out in outputs}
+        inputs = {connector_mapping[k]: v for k, v in inputs.items()}
+        outputs = {connector_mapping[k]: v for k, v in outputs.items()}
 
         unique_name = self.unique_tasklet_name(name)
         tasklet_node = state.add_tasklet(
@@ -155,9 +160,8 @@ class DataflowBuilder(Protocol):
         }
         new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
 
-        inputs = {connector_mapping[inp]: memlet for inp, memlet in inputs.items()}
-        outputs = {connector_mapping[out]: memlet for out, memlet in outputs.items()}
-
+        inputs = {connector_mapping[k]: v for k, v in inputs.items()}
+        outputs = {connector_mapping[k]: v for k, v in outputs.items()}
         unique_name = self.unique_tasklet_name(name)
         tasklet_node, map_entry, map_exit = state.add_mapped_tasklet(
             unique_name, map_ranges, inputs, new_code, outputs, language=language, **kwargs

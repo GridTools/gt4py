@@ -475,7 +475,7 @@ def translate_index(
         name="index",
         sdfg=ctx.sdfg,
         state=ctx.state,
-        inputs=set(),
+        inputs={},
         outputs={"val"},
         code=f"val = {dim_index}",
     )
@@ -538,7 +538,7 @@ def _get_symbolic_value(
         name="get_value",
         sdfg=sdfg,
         state=state,
-        inputs=set(),
+        inputs={},
         outputs={"out"},
         code=f"out = {symbolic_expr}",
     )

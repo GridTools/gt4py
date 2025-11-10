@@ -16,7 +16,6 @@ from typing import (
     Final,
     Iterable,
     List,
-    Mapping,
     Optional,
     Protocol,
     Sequence,
@@ -451,8 +450,8 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_tasklet(
         self,
         name: str,
-        inputs: set[str],
-        outputs: set[str],
+        inputs: set[str] | dict[str, dace.dtypes.typeclass],
+        outputs: set[str] | dict[str, dace.dtypes.typeclass],
         code: str,
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dict[str, str]]:
@@ -477,10 +476,10 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_mapped_tasklet(
         self,
         name: str,
-        map_ranges: Mapping[str, str | dace.subsets.Subset],
-        inputs: Mapping[str, dace.Memlet],
+        map_ranges: dict[str, str | dace.subsets.Subset],
+        inputs: dict[str, dace.Memlet],
         code: str,
-        outputs: Mapping[str, dace.Memlet],
+        outputs: dict[str, dace.Memlet],
         **kwargs: Any,
     ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
         """
@@ -1402,7 +1401,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             name="init_acc",
             sdfg=self.sdfg,
             state=st_init,
-            inputs=set(),
+            inputs={},
             outputs={"val"},
             code=f"val = {reduce_init.dc_dtype}({reduce_init.value})",
         )
@@ -1881,7 +1880,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 # even simpler case, where a constant value is written to destination node
                 output_dtype = output_expr.dc_dtype
                 tasklet_node, connector_mapping = self._add_tasklet(
-                    name="write", inputs=set(), outputs={"out"}, code=f"out = {output_expr.value}"
+                    name="write", inputs={}, outputs={"out"}, code=f"out = {output_expr.value}"
                 )
 
             output_expr = self._construct_tasklet_result(
