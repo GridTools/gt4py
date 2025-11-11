@@ -16,7 +16,7 @@ from gt4py import next as gtx
 from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common, Field, named_collections
 
-from ..artifacts import custom_named_collections as cnc
+from next_tests.artifacts import custom_named_collections as cnc
 
 
 @dataclasses.dataclass

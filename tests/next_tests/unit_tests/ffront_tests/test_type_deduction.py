@@ -35,6 +35,8 @@ from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_specifications as ts
 
+from next_tests.artifacts import custom_named_collections as cnc
+
 # Meaningless dimensions, used for tests.
 TDim = Dimension("TDim")
 SDim = Dimension("SDim")
@@ -574,44 +576,6 @@ def test_unexpected_closure_var_error():
         _ = FieldOperatorParser.apply_to_function(unexpected_closure_var)
 
 
-class NamedTupleNamedCollection(NamedTuple):
-    x: Field[[TDim], float32]
-    y: Field[[TDim], float32]
-
-
-@dataclasses.dataclass
-class DataclassNamedCollection:
-    x: Field[[TDim], float32]
-    y: Field[[TDim], float32]
-
-
-@dataclasses.dataclass
-class NestedDataclassNamedCollection:
-    a: DataclassNamedCollection
-    b: DataclassNamedCollection
-    c: DataclassNamedCollection
-
-
-class NestedNamedTupleDataclassNamedCollection(NamedTuple):
-    a: DataclassNamedCollection
-    b: DataclassNamedCollection
-    c: DataclassNamedCollection
-
-
-@dataclasses.dataclass
-class NestedDataclassNamedTupleNamedCollection:
-    a: NamedTupleNamedCollection
-    b: NamedTupleNamedCollection
-    c: NamedTupleNamedCollection
-
-
-@dataclasses.dataclass
-class NestedMixedTupleNamedCollection:
-    a: NamedTupleNamedCollection
-    b: DataclassNamedCollection
-    c: NamedTupleNamedCollection
-
-
 def _expected_named_tuple_type_maker(original_python_type: type) -> ts.NamedCollectionType:
     return ts.NamedCollectionType(
         types=[
@@ -638,8 +602,8 @@ def _expected_nested_named_tuple_type_maker(
 @pytest.mark.parametrize(
     "named_collection",
     [
-        NamedTupleNamedCollection,
-        DataclassNamedCollection,
+        cnc.NamedTupleNamedCollection,
+        cnc.DataclassNamedCollection,
     ],
 )
 def test_named_collections(named_collection):
@@ -656,12 +620,16 @@ def test_named_collections(named_collection):
 @pytest.mark.parametrize(
     "named_collection, nested_types",
     [
-        (NestedDataclassNamedCollection, [DataclassNamedCollection] * 3),
-        (NestedNamedTupleDataclassNamedCollection, [DataclassNamedCollection] * 3),
-        (NestedDataclassNamedTupleNamedCollection, [NamedTupleNamedCollection] * 3),
+        (cnc.NestedDataclassNamedCollection, [cnc.DataclassNamedCollection] * 3),
+        (cnc.NestedNamedTupleDataclassNamedCollection, [cnc.DataclassNamedCollection] * 3),
+        (cnc.NestedDataclassNamedTupleNamedCollection, [cnc.NamedTupleNamedCollection] * 3),
         (
-            NestedMixedTupleNamedCollection,
-            [NamedTupleNamedCollection, DataclassNamedCollection, NamedTupleNamedCollection],
+            cnc.NestedMixedTupleNamedCollection,
+            [
+                cnc.NamedTupleNamedCollection,
+                cnc.DataclassNamedCollection,
+                cnc.NamedTupleNamedCollection,
+            ],
         ),
     ],
 )

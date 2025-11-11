@@ -19,7 +19,7 @@ from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next import constructors
 
-from ...artifacts import custom_named_collections as cnc
+from next_tests.artifacts import custom_named_collections as cnc
 
 
 class CustomInt32DType:
