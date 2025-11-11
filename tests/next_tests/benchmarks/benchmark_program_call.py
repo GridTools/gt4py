@@ -347,8 +347,8 @@ if __name__ == "__main__":
                     "'viztracer' is not installed. Please install it to use profiling."
                 )
             with viztracer.VizTracer(
-                output_file=f"{profile_session}_{func.func.__name__}.json"
-            ) as tracer:
+                output_file=f"{profile_session}_{func.func.__name__}_{backend.name}.json"
+            ):
                 func()
 
     backends = []
