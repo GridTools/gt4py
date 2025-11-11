@@ -44,20 +44,16 @@ class ExpandPure(dace_transform.ExpandTransformation):
         out_mem = dace.Memlet(expr=f"{out}[{','.join(map_params)}]")
         outputs = {"_out": out_mem}
 
-        if node._value is None:
-            assert len(parent_state.in_edges(node)) == 1
-            inedge = parent_state.in_edges(node)[0]
-            inp_desc = parent_sdfg.arrays[inedge.data.data]
-            inner_inp_desc = inp_desc.clone()
-            inner_inp_desc.transient = False
-            inp = sdfg.add_datadesc(_INPUT_NAME, inner_inp_desc)
-            inedge._dst_conn = _INPUT_NAME
-            node.add_in_connector(_INPUT_NAME)
-            inputs = {"_in": dace.Memlet(data=inp, subset="0")}
-            code = "_out = _in"
-        else:
-            inputs = {}
-            code = f"_out = {node._value}"
+        assert len(parent_state.in_edges(node)) == 1
+        inedge = parent_state.in_edges(node)[0]
+        inp_desc = parent_sdfg.arrays[inedge.data.data]
+        inner_inp_desc = inp_desc.clone()
+        inner_inp_desc.transient = False
+        inp = sdfg.add_datadesc(_INPUT_NAME, inner_inp_desc)
+        inedge._dst_conn = _INPUT_NAME
+        node.add_in_connector(_INPUT_NAME)
+        inputs = {"_in": dace.Memlet(data=inp, subset="0")}
+        code = "_out = _in"
 
         state.add_mapped_tasklet(
             f"{node.label}_tasklet", map_rng, inputs, code, outputs, external_edges=True
@@ -72,8 +68,6 @@ class Fill(dace_nodes.LibraryNode):
 
     implementations: Final[dict[str, dace_transform.ExpandTransformation]] = {"pure": ExpandPure}
     default_implementation: Final[str] = "pure"
-    _value: dace.typeclass | None
 
-    def __init__(self, name: str, value: dace.typeclass | None = None):
+    def __init__(self, name: str):
         super().__init__(name)
-        self._value = value

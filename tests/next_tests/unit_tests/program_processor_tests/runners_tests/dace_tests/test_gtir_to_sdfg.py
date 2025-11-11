@@ -2110,16 +2110,8 @@ def test_gtir_concat_where():
         gtx_common.GridType.CARTESIAN, {IDim: (SUBSET_SIZE, gtir.InfinityLiteral.POSITIVE)}
     )
 
-    concat_expr_lhs = im.concat_where(
-        domain_cond_lhs,
-        im.as_fieldop("deref")("x"),
-        im.as_fieldop("deref")("y"),
-    )
-    concat_expr_rhs = im.concat_where(
-        domain_cond_rhs,
-        im.as_fieldop("deref")("y"),
-        im.as_fieldop("deref")("x"),
-    )
+    concat_expr_lhs = im.concat_where(domain_cond_lhs, "x", "y")
+    concat_expr_rhs = im.concat_where(domain_cond_rhs, "y", "x")
 
     a = np.random.rand(N)
     b = np.random.rand(N)
@@ -2177,12 +2169,8 @@ def test_gtir_concat_where_two_dimensions():
             gtir.SetAt(
                 expr=im.concat_where(
                     domain_cond1,  # 0, 30; 10,20
-                    im.concat_where(
-                        domain_cond2,
-                        im.as_fieldop("deref")("x"),
-                        im.as_fieldop("deref")("y"),
-                    ),
-                    im.as_fieldop("deref")("w"),
+                    im.concat_where(domain_cond2, "x", "y"),
+                    "w",
                 ),
                 domain=domain,
                 target=gtir.SymRef(id="z"),

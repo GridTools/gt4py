@@ -16,7 +16,11 @@ from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
@@ -247,10 +251,16 @@ def translate_as_fieldop(
         raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
 
     if cpm.is_ref_to(fieldop_expr, "deref"):
-        # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
-        # value to 'as_fieldop' function. It results in broadcasting the scalar value
-        # over the field domain.
-        return translate_broadcast(node, ctx, sdfg_builder)
+        if isinstance(node.args[0].type, ts.ScalarType):
+            # Special usage of 'deref' as argument to fieldop expression, to broadcast
+            # a scalar value on the field domain.
+            return translate_broadcast(node, ctx, sdfg_builder)
+        else:
+            # Special usage of 'deref' with field argument, to return a subset of
+            # the full field domain.
+            # TODO(edopao): Lower this case to a memlet edge, planned for next PR.
+            stencil_expr = im.lambda_("a")(im.deref("a"))
+            stencil_expr.expr.type = node.type.dtype
     elif isinstance(fieldop_expr, gtir.Lambda):
         # Default case, handled below: the argument expression is a lambda function
         # representing the stencil operation to be computed over the field domain.
@@ -285,6 +295,7 @@ def translate_broadcast(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
 ) -> gtir_to_sdfg_types.FieldopData:
+    """Translates a broadcast expression which writes a scalar value on the field domain."""
     assert isinstance(node, gtir.FunCall)
     assert cpm.is_call_to(node.fun, "as_fieldop")
 
@@ -293,6 +304,10 @@ def translate_broadcast(
 
     assert isinstance(node.type.dtype, ts.ScalarType)
     field_dtype = gtx_dace_utils.as_dace_type(node.type.dtype)
+
+    assert len(node.args) == 1
+    assert isinstance(node.args[0].type, ts.ScalarType)
+    scalar_arg = node.args[0]
 
     fun_node = node.fun
     assert len(fun_node.args) == 2
@@ -308,32 +323,23 @@ def translate_broadcast(
     # The memory layout of the output field follows the field operator compute domain.
     field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
     assert field_dims == node.type.dims
-
     field_name, field_desc = sdfg_builder.add_temp_array(ctx.sdfg, field_shape, field_dtype)
     field_node = ctx.state.add_access(field_name)
 
     # Retrieve the scalar argument, which could be either a literal value or the
     # result of a scalar expression.
-    assert len(node.args) == 1
+    arg = _parse_fieldop_arg(scalar_arg, ctx, sdfg_builder, field_domain)
+    assert isinstance(arg, gtir_dataflow.MemletExpr)
+    assert arg.subset.num_elements() == 1
 
     # Use a 'Fill' library node to write the scalar value to the result field.
-    if isinstance(node.args[0], gtir.Literal):
-        assert node.args[0].type == node.type.dtype
-        value = field_dtype(node.args[0].value)
-        fill_node = sdfg_library_nodes.Fill("fill", value)
-        ctx.state.add_node(fill_node)
-    else:
-        arg = _parse_fieldop_arg(node.args[0], ctx, sdfg_builder, field_domain)
-        assert isinstance(arg, gtir_dataflow.MemletExpr)
-        assert arg.subset.num_elements() == 1
-
-        fill_node = sdfg_library_nodes.Fill("fill")
-        ctx.state.add_node(fill_node)
-        ctx.state.add_nedge(
-            arg.dc_node,
-            fill_node,
-            dace.Memlet(data=arg.dc_node.data, subset=arg.subset),
-        )
+    fill_node = sdfg_library_nodes.Fill("fill")
+    ctx.state.add_node(fill_node)
+    ctx.state.add_nedge(
+        arg.dc_node,
+        fill_node,
+        dace.Memlet(data=arg.dc_node.data, subset=arg.subset),
+    )
 
     ctx.state.add_nedge(
         fill_node,
