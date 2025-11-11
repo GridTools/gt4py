@@ -99,6 +99,13 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
 
         loc = inp.data.foast_node.location
         definition = inp.data.foast_node.type.definition
+        args_names = [
+            *definition.pos_only_args,
+            *definition.pos_or_kw_args.keys(),
+            *definition.kw_only_args.keys(),
+        ]
+        if isinstance(inp.data.foast_node.type, ts_ffront.ScanOperatorType):
+            args_names = args_names[1:]  # carry argument is not in parameter list
 
         type_ = inp.data.foast_node.type
         params_decl: list[past.Symbol] = [
@@ -109,11 +116,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
                 location=loc,
             )
             for name, arg_type in zip(
-                [
-                    *definition.pos_only_args,
-                    *definition.pos_or_kw_args.keys(),
-                    *definition.kw_only_args.keys(),
-                ],
+                args_names,
                 arg_types,
                 strict=True,
             )
