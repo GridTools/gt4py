@@ -29,6 +29,7 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
+    sdfg_library_nodes,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -99,24 +100,38 @@ def _make_concat_scalar_broadcast(
     out_name, out_desc = ctx.sdfg.add_temp_transient(out_shape, inp_desc.dtype)
     out_node = ctx.state.add_access(out_name)
 
-    map_variables = [gtir_to_sdfg_utils.get_map_variable(dim) for dim in out_dims]
-    inp_index = (
-        "0"
-        if isinstance(inp.dc_node.desc(ctx.sdfg), dace.data.Scalar)
-        else (
+    if isinstance(inp.dc_node.desc(ctx.sdfg), dace.data.Scalar):
+        # Use a 'Fill' library node to write the scalar value to the result field.
+        fill_node = sdfg_library_nodes.Fill("fill")
+        ctx.state.add_node(fill_node)
+        ctx.state.add_nedge(
+            inp.dc_node,
+            fill_node,
+            dace.Memlet(data=inp.dc_node.data, subset="0"),
+        )
+        ctx.state.add_nedge(
+            fill_node,
+            out_node,
+            dace.Memlet(data=out_name, subset=dace_subsets.Range.from_array(out_desc)),
+        )
+    else:
+        # Create a map to copy one level on the field domain.
+        map_variables = [gtir_to_sdfg_utils.get_map_variable(dim) for dim in out_dims]
+        inp_index = (
             f"({map_variables[concat_dim_index]} + {out_origin[concat_dim_index] - inp.origin[0]})"
         )
-    )
-    ctx.state.add_mapped_tasklet(
-        "broadcast",
-        map_ranges=dict(zip(map_variables, dace_subsets.Range.from_array(out_desc), strict=True)),
-        code="__out = __inp",
-        inputs={"__inp": dace.Memlet(data=inp.dc_node.data, subset=inp_index)},
-        outputs={"__out": dace.Memlet(data=out_name, subset=",".join(map_variables))},
-        input_nodes={inp.dc_node},
-        output_nodes={out_node},
-        external_edges=True,
-    )
+        ctx.state.add_mapped_tasklet(
+            "broadcast",
+            map_ranges=dict(
+                zip(map_variables, dace_subsets.Range.from_array(out_desc), strict=True)
+            ),
+            code="__out = __inp",
+            inputs={"__inp": dace.Memlet(data=inp.dc_node.data, subset=inp_index)},
+            outputs={"__out": dace.Memlet(data=out_name, subset=",".join(map_variables))},
+            input_nodes={inp.dc_node},
+            output_nodes={out_node},
+            external_edges=True,
+        )
 
     out_type = ts.FieldType(dims=out_dims, dtype=inp.gt_type.dtype)
     out_field = gtir_to_sdfg_types.FieldopData(out_node, out_type, tuple(out_origin))
