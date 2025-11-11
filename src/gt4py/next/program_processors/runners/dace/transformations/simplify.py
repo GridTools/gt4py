@@ -299,7 +299,7 @@ def gt_inline_nested_sdfg(
         return None
 
     # Now order them, such that we can process them in a stable way.
-    nested_sdfgs_to_process.sort(key=lambda nsdfg: (str(nsdfg.sdfg.name), str(nsdfg.parent.label)))
+    nested_sdfgs_to_process.sort(key=lambda nsdfg: (str(nsdfg.label), str(nsdfg.sdfg.parent.label)))
 
     nb_preproccess_total = 0
     nb_inlines_total = 0
@@ -316,7 +316,7 @@ def gt_inline_nested_sdfg(
 
         # Recursive processing of nested SDFGs.
         recursive_result = gt_inline_nested_sdfg(
-            sdfg=nsdfg_node,
+            sdfg=nsdfg_node.sdfg,
             permissive=permissive,
             validate=False,
             validate_all=validate_all,
@@ -342,7 +342,7 @@ def gt_inline_nested_sdfg(
                 nb_preproccess_total += 1
 
         # Inlining an SDFG is only possible if the nested SDFG node is at global scope.
-        if parent_sdfg.scope_dict()[nsdfg_node] is not None:
+        if parent_state.scope_dict()[nsdfg_node] is not None:
             continue
 
         # Check the `no_inline` flag. Note that it has to be checked here and not
