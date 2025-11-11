@@ -644,4 +644,101 @@ def test_nested_named_collections(named_collection, nested_types):
     assert parsed.body.stmts[-1].value.type == expected
 
 
-# TODO add tests that mix NamedTupleType and TupleType
+def test_tuples_and_named_collections():
+    DeeplyNestedNamedCollection = cnc.DeeplyNestedNamedCollection
+    ScalarsNamedCollection = cnc.ScalarsNamedCollection
+    NamedTupleNamedCollection = cnc.NamedTupleNamedCollection
+    DataclassNamedCollection = cnc.DataclassNamedCollection
+
+    def testee(data: DeeplyNestedNamedCollection) -> DeeplyNestedNamedCollection:
+        return DeeplyNestedNamedCollection(
+            a=(data.a[0], data.a[1]),
+            b=ScalarsNamedCollection(
+                a=(data.b.a[0], data.b.a[1]),
+                b=((data.b.b[0][0], data.b.b[0][1]), (data.b.b[1][0], data.b.b[1][1])),
+            ),
+            c=(
+                (
+                    NamedTupleNamedCollection(x=data.c[0][0].x, y=data.c[0][0].y),
+                    DataclassNamedCollection(x=data.c[0][1].x, y=data.c[0][1].y),
+                ),
+                data.c[1],
+            ),
+        )
+
+    parsed = FieldOperatorParser.apply_to_function(testee)
+    expected = ts.NamedCollectionType(
+        types=[
+            ts.TupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                    ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                ]
+            ),
+            ts.NamedCollectionType(
+                types=[
+                    ts.TupleType(
+                        types=[
+                            ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                            ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                        ]
+                    ),
+                    ts.TupleType(
+                        types=[
+                            ts.TupleType(
+                                types=[
+                                    ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                                    ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                                ]
+                            ),
+                            ts.TupleType(
+                                types=[
+                                    ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                                    ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                                ]
+                            ),
+                        ]
+                    ),
+                ],
+                keys=["a", "b"],
+                original_python_type="next_tests.artifacts.custom_named_collections:ScalarsNamedCollection",
+            ),
+            ts.TupleType(
+                types=[
+                    ts.TupleType(
+                        types=[
+                            ts.NamedCollectionType(
+                                types=[
+                                    ts.FieldType(
+                                        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+                                    ),
+                                    ts.FieldType(
+                                        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+                                    ),
+                                ],
+                                keys=["x", "y"],
+                                original_python_type="next_tests.artifacts.custom_named_collections:NamedTupleNamedCollection",
+                            ),
+                            ts.NamedCollectionType(
+                                types=[
+                                    ts.FieldType(
+                                        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+                                    ),
+                                    ts.FieldType(
+                                        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+                                    ),
+                                ],
+                                keys=["x", "y"],
+                                original_python_type="next_tests.artifacts.custom_named_collections:DataclassNamedCollection",
+                            ),
+                        ]
+                    ),
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
+                ]
+            ),
+        ],
+        keys=["a", "b", "c"],
+        original_python_type="next_tests.artifacts.custom_named_collections:DeeplyNestedNamedCollection",
+    )
+    assert parsed.params[0].type == expected
+    assert parsed.body.stmts[-1].value.type == expected
