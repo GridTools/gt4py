@@ -14,14 +14,9 @@ from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 import dace
 from dace import subsets as dace_subsets
 
-from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import (
-    common_pattern_matcher as cpm,
-    domain_utils,
-    ir_makers as im,
-)
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
@@ -29,6 +24,7 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
+    sdfg_library_nodes,
     utils as gtx_dace_utils,
 )
 from gt4py.next.program_processors.runners.dace.gtir_to_sdfg_concat_where import (
@@ -73,7 +69,7 @@ def _parse_fieldop_arg(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     domain: gtir_domain.FieldopDomain,
-) -> MaybeNestedInTuple[gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr]:
+) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
     """
     Helper method to visit an expression passed as argument to a field operator
     and create the local view for the field argument.
@@ -254,8 +250,7 @@ def translate_as_fieldop(
         # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
         # value to 'as_fieldop' function. It results in broadcasting the scalar value
         # over the field domain.
-        stencil_expr = im.lambda_("a")(im.deref("a"))
-        stencil_expr.expr.type = node.type.dtype
+        return translate_broadcast(node, ctx, sdfg_builder)
     elif isinstance(fieldop_expr, gtir.Lambda):
         # Default case, handled below: the argument expression is a lambda function
         # representing the stencil operation to be computed over the field domain.
@@ -283,6 +278,70 @@ def translate_as_fieldop(
     return _create_field_operator(
         ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
     )
+
+
+def translate_broadcast(
+    node: gtir.Node,
+    ctx: gtir_to_sdfg.SubgraphContext,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+) -> gtir_to_sdfg_types.FieldopData:
+    assert isinstance(node, gtir.FunCall)
+    assert cpm.is_call_to(node.fun, "as_fieldop")
+
+    if not isinstance(node.type, ts.FieldType):
+        raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
+
+    assert isinstance(node.type.dtype, ts.ScalarType)
+    field_dtype = gtx_dace_utils.as_dace_type(node.type.dtype)
+
+    fun_node = node.fun
+    assert len(fun_node.args) == 2
+    fieldop_expr, fieldop_domain_expr = fun_node.args
+    assert cpm.is_ref_to(fieldop_expr, "deref")
+
+    # Parse the domain of the field operator.
+    assert isinstance(fieldop_domain_expr.type, ts.DomainType)
+    field_domain = gtir_domain.get_field_domain(
+        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
+    )
+
+    # The memory layout of the output field follows the field operator compute domain.
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
+    assert field_dims == node.type.dims
+
+    field_name, field_desc = sdfg_builder.add_temp_array(ctx.sdfg, field_shape, field_dtype)
+    field_node = ctx.state.add_access(field_name)
+
+    # Retrieve the scalar argument, which could be either a literal value or the
+    # result of a scalar expression.
+    assert len(node.args) == 1
+
+    # Use a 'Fill' library node to write the scalar value to the result field.
+    if isinstance(node.args[0], gtir.Literal):
+        assert node.args[0].type == node.type.dtype
+        value = field_dtype(node.args[0].value)
+        fill_node = sdfg_library_nodes.Fill("fill", value)
+        ctx.state.add_node(fill_node)
+    else:
+        arg = _parse_fieldop_arg(node.args[0], ctx, sdfg_builder, field_domain)
+        assert isinstance(arg, gtir_dataflow.MemletExpr)
+        assert arg.subset.num_elements() == 1
+
+        fill_node = sdfg_library_nodes.Fill("fill")
+        ctx.state.add_node(fill_node)
+        ctx.state.add_nedge(
+            arg.dc_node,
+            fill_node,
+            dace.Memlet(data=arg.dc_node.data, subset=arg.subset),
+        )
+
+    ctx.state.add_nedge(
+        fill_node,
+        field_node,
+        dace.Memlet(data=field_name, subset=dace_subsets.Range.from_array(field_desc)),
+    )
+
+    return gtir_to_sdfg_types.FieldopData(field_node, node.type, tuple(field_origin))
 
 
 def _construct_if_branch_output(
@@ -715,6 +774,7 @@ if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_fieldop,
+        translate_broadcast,
         translate_concat_where,
         translate_if,
         translate_index,
