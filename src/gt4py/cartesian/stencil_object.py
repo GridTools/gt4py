@@ -88,7 +88,10 @@ def _extract_array_infos(
 def _extract_stencil_arrays(
     array_infos: dict[str, ArgsInfo | None],
 ) -> dict[str, FieldType | None]:
-    return {name: info.array if info is not None else None for name, info in array_infos.items()}
+    return {
+        name: info.array if info is not None else None
+        for name, info in array_infos.items()
+    }
 
 
 @dataclass(frozen=True)
@@ -113,8 +116,12 @@ class FrozenStencil:
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
 
-        field_args = {name: kwargs[name] for name in self.stencil_object.field_info.keys()}
-        parameter_args = {name: kwargs[name] for name in self.stencil_object.parameter_info.keys()}
+        field_args = {
+            name: kwargs[name] for name in self.stencil_object.field_info.keys()
+        }
+        parameter_args = {
+            name: kwargs[name] for name in self.stencil_object.parameter_info.keys()
+        }
 
         self.stencil_object.run(
             _domain_=self.domain,
@@ -188,7 +195,9 @@ class StencilObject(abc.ABC):
     _gt_id_: str
     definition_func: Callable[..., Any]
 
-    _domain_origin_cache: ClassVar[dict[int, tuple[tuple[int, ...], dict[str, tuple[int, ...]]]]]
+    _domain_origin_cache: ClassVar[
+        dict[int, tuple[tuple[int, ...], dict[str, tuple[int, ...]]]]
+    ]
     """Stores domain/origin pairs that have been used by hash."""
 
     def __new__(cls, *args, **kwargs):
@@ -198,7 +207,9 @@ class StencilObject(abc.ABC):
         return cls._instance
 
     def __setattr__(self, key, value) -> None:
-        raise AttributeError("Attempting a modification of an attribute in a frozen class")
+        raise AttributeError(
+            "Attempting a modification of an attribute in a frozen class"
+        )
 
     def __delattr__(self, item) -> None:
         raise AttributeError("Attempting a deletion of an attribute in a frozen class")
@@ -329,13 +340,17 @@ class StencilObject(abc.ABC):
                 assert info is not None, f"Invalid value for '{name}' field."
                 api_domain_mask = field_info.domain_mask
                 api_domain_ndim = field_info.domain_ndim
-                upper_indices = field_info.boundary.upper_indices.filter_mask(api_domain_mask)
+                upper_indices = field_info.boundary.upper_indices.filter_mask(
+                    api_domain_mask
+                )
                 field_origin = Index.from_value(origin[name])
                 field_domain = tuple(
                     info.array.shape[i] - (field_origin[i] + upper_indices[i])
                     for i in range(api_domain_ndim)
                 )
-                max_domain &= Shape.from_mask(field_domain, api_domain_mask, default=max_size)
+                max_domain &= Shape.from_mask(
+                    field_domain, api_domain_mask, default=max_size
+                )
 
         if squeeze:
             return Shape([i if i != max_size else 1 for i in max_domain])
@@ -381,7 +396,7 @@ class StencilObject(abc.ABC):
             )
         ):
             raise ValueError(
-                f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
+                f"Compute domain too large (provided: {domain}, maximum: {max_domain}. Adjust K interval as needed.)"
             )
 
         if domain[2] < self.domain_info.min_sequential_axis_size:
@@ -402,7 +417,8 @@ class StencilObject(abc.ABC):
                 if not backend_cls.storage_info["is_optimal_layout"](
                     arg_info.array,
                     tuple(
-                        list(field_info.axes) + [str(d) for d in range(len(field_info.data_dims))]
+                        list(field_info.axes)
+                        + [str(d) for d in range(len(field_info.data_dims))]
                     ),
                 ):
                     import warnings
@@ -424,7 +440,9 @@ class StencilObject(abc.ABC):
                 field_info = self.field_info[name]
                 field_domain_mask = field_info.domain_mask
                 field_domain_ndim = field_info.domain_ndim
-                field_domain_origin = Index.from_mask(origin[name], field_domain_mask[:domain_ndim])
+                field_domain_origin = Index.from_mask(
+                    origin[name], field_domain_mask[:domain_ndim]
+                )
 
                 if arg_info.array.ndim != field_domain_ndim + len(field_info.data_dims):
                     raise ValueError(
@@ -434,13 +452,20 @@ class StencilObject(abc.ABC):
 
                 if (
                     arg_info.dimensions is not None
-                    and (*field_info.axes, *(str(d) for d in range(len(field_info.data_dims))))
+                    and (
+                        *field_info.axes,
+                        *(str(d) for d in range(len(field_info.data_dims))),
+                    )
                     != arg_info.dimensions
                 ):
                     raise ValueError(
                         f"Storage for '{name}' has dimensions '{arg_info.dimensions}' but the API signature "
                         f"expects '[{', '.join(field_info.axes)}]'"
-                        + (f" and {len(field_info.data_dims)}" if field_info.data_dims else "")
+                        + (
+                            f" and {len(field_info.data_dims)}"
+                            if field_info.data_dims
+                            else ""
+                        )
                     )
 
                 # Check: data dimensions shape
@@ -460,10 +485,15 @@ class StencilObject(abc.ABC):
                     )
 
                 spatial_domain = domain.filter_mask(field_domain_mask)
-                lower_indices = field_info.boundary.lower_indices.filter_mask(field_domain_mask)
-                upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
+                lower_indices = field_info.boundary.lower_indices.filter_mask(
+                    field_domain_mask
+                )
+                upper_indices = field_info.boundary.upper_indices.filter_mask(
+                    field_domain_mask
+                )
                 min_shape = tuple(
-                    lb + d + ub for lb, d, ub in zip(lower_indices, spatial_domain, upper_indices)
+                    lb + d + ub
+                    for lb, d, ub in zip(lower_indices, spatial_domain, upper_indices)
                 )
                 if min_shape > arg_info.array.shape:
                     raise ValueError(
@@ -475,7 +505,10 @@ class StencilObject(abc.ABC):
             if parameter_info.access != AccessKind.NONE:
                 if name not in param_args:
                     raise ValueError(f"Missing value for '{name}' parameter.")
-                elif np.dtype(type(parameter := param_args[name])) != parameter_info.dtype:
+                elif (
+                    np.dtype(type(parameter := param_args[name]))
+                    != parameter_info.dtype
+                ):
                     raise TypeError(
                         f"The type of parameter '{name}' is '{type(parameter)}' instead of '{parameter_info.dtype}'"
                     )
@@ -498,9 +531,9 @@ class StencilObject(abc.ABC):
             if field_origin is not None:
                 field_origin_ndim = len(field_origin)
                 if field_origin_ndim != field_info.ndim:
-                    assert field_origin_ndim == field_info.domain_ndim, (
-                        f"Invalid origin specification ({field_origin}) for '{name}' field."
-                    )
+                    assert (
+                        field_origin_ndim == field_info.domain_ndim
+                    ), f"Invalid origin specification ({field_origin}) for '{name}' field."
                     origin[name] = (*field_origin, *((0,) * len(field_info.data_dims)))
 
             elif all_origin is not None:
@@ -508,7 +541,9 @@ class StencilObject(abc.ABC):
                     *gtc_utils.filter_mask(all_origin, field_info.domain_mask),
                     *((0,) * len(field_info.data_dims)),
                 )
-            elif (info_origin := getattr(array_infos.get(name), "origin", None)) is not None:
+            elif (
+                info_origin := getattr(array_infos.get(name), "origin", None)
+            ) is not None:
                 origin[name] = info_origin
             else:
                 origin[name] = (0,) * field_info.ndim
@@ -560,7 +595,9 @@ class StencilObject(abc.ABC):
         device = backend_cls.storage_info["device"]
         array_infos = _extract_array_infos(field_args, device)
 
-        cache_key = _compute_domain_origin_cache_key(array_infos, parameter_args, domain, origin)
+        cache_key = _compute_domain_origin_cache_key(
+            array_infos, parameter_args, domain, origin
+        )
         if cache_key not in self._domain_origin_cache:
             origin = self._normalize_origins(array_infos, self.field_info, origin)
 
@@ -589,7 +626,10 @@ class StencilObject(abc.ABC):
             exec_info["call_run_end_time"] = time.perf_counter()
 
     def freeze(
-        self: StencilObject, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]
+        self: StencilObject,
+        *,
+        origin: dict[str, tuple[int, ...]],
+        domain: tuple[int, ...],
     ) -> FrozenStencil:
         """Return a StencilObject wrapper with a fixed domain and origin for each argument.
 
