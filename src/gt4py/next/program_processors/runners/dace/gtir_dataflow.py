@@ -804,13 +804,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args
         )
 
-        for data_node in if_branch_state.data_nodes():
-            # In case of tuple arguments, isolated access nodes might be left in the state,
-            # because not all tuple fields are necessarily used inside the lambda scope
-            if if_branch_state.degree(data_node) == 0:
-                assert not data_node.desc(if_sdfg).transient
-                if_branch_state.remove_node(data_node)
-
         return input_edges, output_tree
 
     def _visit_if_branch_result(
@@ -1905,9 +1898,24 @@ class LambdaToDataflow(eve.NodeVisitor):
         return SymbolExpr(node.value, dc_dtype)
 
     def visit_SymRef(self, node: gtir.SymRef) -> MaybeNestedInTuple[IteratorExpr | DataExpr]:
+        def _copy_data(
+            data: IteratorExpr | DataExpr,
+        ) -> MaybeNestedInTuple[IteratorExpr | DataExpr]:
+            if isinstance(data, ValueExpr):
+                data_desc = data.dc_node.desc(self.sdfg)
+                temp, _ = self.sdfg.add_temp_transient_like(data_desc)
+                temp_node = self.state.add_access(temp)
+                subset = dace_subsets.Range.from_array(data_desc)
+                self.state.add_nedge(
+                    data.dc_node, temp_node, dace.Memlet(temp, subset=subset, other_subset=subset)
+                )
+                return ValueExpr(temp_node, data.gt_dtype)
+            else:
+                return data
+
         param = str(node.id)
         if param in self.symbol_map:
-            return self.symbol_map[param]
+            return gtx_utils.tree_map(_copy_data)(self.symbol_map[param])
         # if not in the lambda symbol map, this must be a symref to a builtin function
         assert param in gtir_python_codegen.MATH_BUILTINS_MAPPING
         return SymbolExpr(param, dace.string)

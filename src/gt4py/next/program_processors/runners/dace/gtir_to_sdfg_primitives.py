@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Iterable, Optional, Protocol
+from typing import TYPE_CHECKING, Iterable, Protocol
 
 import dace
 from dace import subsets as dace_subsets
@@ -496,69 +496,6 @@ def translate_index(
     )
 
 
-def _get_data_nodes(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    data_name: str,
-    data_type: ts.DataType,
-) -> gtir_to_sdfg_types.FieldopResult:
-    if isinstance(data_type, ts.FieldType):
-        data_node = state.add_access(data_name)
-        return sdfg_builder.make_field(data_node, data_type)
-
-    elif isinstance(data_type, ts.ScalarType):
-        if data_name in sdfg.symbols:
-            data_node = _get_symbolic_value(
-                sdfg, state, sdfg_builder, data_name, data_type, temp_name=f"__{data_name}"
-            )
-        else:
-            data_node = state.add_access(data_name)
-        return gtir_to_sdfg_types.FieldopData(data_node, data_type, origin=())
-
-    elif isinstance(data_type, ts.TupleType):
-        symbol_tree = gtir_to_sdfg_utils.make_symbol_tree(data_name, data_type)
-        return gtx_utils.tree_map(
-            lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, str(sym.id), sym.type)
-        )(symbol_tree)
-
-    else:
-        raise NotImplementedError(f"Symbol type {type(data_type)} not supported.")
-
-
-def _get_symbolic_value(
-    sdfg: dace.SDFG,
-    state: dace.SDFGState,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    symbolic_expr: dace.symbolic.SymExpr,
-    scalar_type: ts.ScalarType,
-    temp_name: Optional[str] = None,
-) -> dace.nodes.AccessNode:
-    tasklet_node, connector_mapping = sdfg_builder.add_tasklet(
-        name="get_value",
-        sdfg=sdfg,
-        state=state,
-        inputs={},
-        outputs={"out"},
-        code=f"out = {symbolic_expr}",
-    )
-    temp_name, _ = sdfg.add_scalar(
-        temp_name or sdfg.temp_data_name(),
-        gtx_dace_utils.as_dace_type(scalar_type),
-        find_new_name=True,
-        transient=True,
-    )
-    data_node = state.add_access(temp_name)
-    state.add_edge(
-        tasklet_node,
-        connector_mapping["out"],
-        data_node,
-        None,
-        dace.Memlet(data=temp_name, subset="0"),
-    )
-    return data_node
-
-
 def translate_literal(
     node: gtir.Node,
     ctx: gtir_to_sdfg.SubgraphContext,
@@ -568,7 +505,7 @@ def translate_literal(
     assert isinstance(node, gtir.Literal)
 
     data_type = node.type
-    data_node = _get_symbolic_value(ctx.sdfg, ctx.state, sdfg_builder, node.value, data_type)
+    data_node = sdfg_builder.get_symbolic_value(ctx.sdfg, ctx.state, node.value, data_type)
 
     return gtir_to_sdfg_types.FieldopData(data_node, data_type, origin=())
 
@@ -598,24 +535,7 @@ def translate_tuple_get(
     data_nodes = sdfg_builder.visit(node.args[1], ctx=ctx)
     if isinstance(data_nodes, gtir_to_sdfg_types.FieldopData):
         raise ValueError(f"Invalid tuple expression {node}")
-    # Now we remove the tuple fields that are not used, to avoid an SDFG validation
-    # error because of isolated access nodes.
-    unused_arg_nodes = gtx_utils.flatten_nested_tuple(
-        tuple(arg for i, arg in enumerate(data_nodes) if i != index)
-    )
-    # However, for temporary fields inside the tuple (non-globals and non-scalar
-    # values, supposed to contain the result of some field operator) the gt4py
-    # domain inference should have already set an empty domain, so the corresponding
-    # `arg` is expected to be None and can be ignored.
-    assert all(
-        not arg.dc_node.desc(ctx.sdfg).transient or isinstance(arg.gt_type, ts.ScalarType)
-        for arg in unused_arg_nodes
-        if arg is not None
-    )
-    unused_arg_nodes = tuple(arg for arg in unused_arg_nodes if arg is not None)
-    ctx.state.remove_nodes_from(
-        [arg.dc_node for arg in unused_arg_nodes if ctx.state.degree(arg.dc_node) == 0]
-    )
+
     return data_nodes[index]
 
 
@@ -708,7 +628,9 @@ def translate_symbol_ref(
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    return _get_data_nodes(ctx.sdfg, ctx.state, sdfg_builder, symbol_name, gt_symbol_type)
+    return sdfg_builder.get_data_value(
+        ctx.sdfg, ctx.state, im.sym(symbol_name, gt_symbol_type), make_temps=True
+    )
 
 
 if TYPE_CHECKING:

@@ -515,18 +515,11 @@ def _lower_lambda_to_nested_sdfg(
         lambda_result, lambda_result_shape, scan_carry_input
     )
 
-    # in case tuples are passed as argument, isolated access nodes might be left in the state,
-    # because not all tuple fields are necessarily accessed inside the lambda scope
-    for data_node in compute_state.data_nodes():
-        if compute_state.degree(data_node) == 0:
-            # By construction there should never be isolated transient nodes.
-            # Therefore, the assert below implements a sanity check, that allows
-            # the exceptional case (encountered in one GT4Py test) where the carry
-            # variable is not used, so not a scan indeed because no data dependency.
-            assert (not data_node.desc(lambda_ctx.sdfg).transient) or data_node.data.startswith(
-                scan_carry_symbol.id
-            )
-            compute_state.remove_node(data_node)
+    # corner case where the scan state is not used in column update (not really a scan)
+    for arg in gtx_utils.flatten_nested_tuple((stencil_args[0],)):
+        state_node = arg.dc_node
+        if compute_state.degree(state_node) == 0:
+            compute_state.remove_node(state_node)
 
     return lambda_ctx, lambda_output
 
