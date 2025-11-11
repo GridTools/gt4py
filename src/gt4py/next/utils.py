@@ -291,9 +291,11 @@ def make_args_canonicalizer(
     """
     Create a call arguments canonicalizer function from a given signature.
 
-    The canonicalizer returns a tuple with two arguments:
-    - a tuple of values containing all the positional arguments
-    - a dictionary of argument names to values for all keyword-only arguments
+    The canonicalizer returns the call arguments in a tuple with the
+    following two items:
+
+        - a tuple of values containing all the positional parameters
+        - a dictionary of parameter names to values for all keyword-only parameters
 
     Args:
         signature: The signature for which to create the canonicalizer.
@@ -327,19 +329,15 @@ def make_args_canonicalizer(
         parameters=params, return_annotation="tuple[tuple, dict[str, Any]]"
     )
 
-    if (pos_args_len := len(pos_args)) == 0:
-        pos_args_tuple = "()"
-    elif pos_args_len == 1 and var_pos_arg:
+    if len(pos_args) == 1 and var_pos_arg:
         # If there is only an '*args' parameter, we can just return it directly
         pos_args_tuple = var_pos_arg
     else:
         # In the regular case, assemble the output tuple with all positional arguments
         pos_args_tuple = f"({str.join(', ', pos_args)},)"
 
-    if (key_args_len := len(key_args)) == 0:
-        key_args_dict = "{}"
-    elif key_args_len == 1 and var_key_arg:
-        # If there is only an '*kwargs' parameter, we can just return it directly
+    if len(key_args) == 1 and var_key_arg:
+        # If there is only an '**kwargs' parameter, we can just return it directly
         key_args_dict = var_key_arg
     else:
         # In the regular case, assemble the output dictionary with all keyword arguments
