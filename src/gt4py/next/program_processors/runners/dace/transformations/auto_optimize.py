@@ -553,18 +553,21 @@ def _gt_auto_process_top_level_maps(
             dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
 
-            sdfg.apply_transformations_repeated(
-                [
-                    # TODO(phimuell): The transformation is also active inside Maps.
-                    #   Which is against the description of this function, but it should
-                    #   not matter that much.
-                    gtx_transformations.SplitAccessNode(
-                        single_use_data=single_use_data,
-                    ),
-                    gtx_transformations.GT4PyMapBufferElimination(
-                        assume_pointwise=assume_pointwise,
-                    ),
-                ],
+            # Split the top level AccessNodes.
+            # NOTE: This function will also update `single_use_data`.
+            gtx_transformations.gt_split_access_nodes(
+                sdfg=sdfg,
+                validate=False,
+                validate_all=True,
+                single_use_data=single_use_data,
+            )
+
+            # Perform buffer elimination.
+            # TODO(phimuell): Implement a faster matching.
+            sdfg.apply_transformations_once_everywhere(
+                gtx_transformations.GT4PyMapBufferElimination(
+                    assume_pointwise=assume_pointwise,
+                ),
                 validate=False,
                 validate_all=validate_all,
             )
