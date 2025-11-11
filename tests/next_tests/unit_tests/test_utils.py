@@ -98,3 +98,45 @@ class TestArgsCanonicalizer:
 
         with pytest.raises(TypeError, match="takes 2 positional arguments but 5 were given"):
             self.canonicalizer(*(1, 2, 3, 4, 5), **{})
+
+    def test_empty_signature(self):
+        def func():
+            return 42
+
+        canonicalizer = utils.make_args_canonicalizer(inspect.signature(func), name=func.__name__)
+        assert canonicalizer() == ((), {})
+
+    def pass_through_signature(self):
+        def func(*all_pos_args, **all_kwargs):
+            return 42
+
+        canonicalizer = utils.make_args_canonicalizer(inspect.signature(func), name=func.__name__)
+        assert canonicalizer(1, 2, 3, foo="foo value", bar="bar value") == (
+            (1, 2, 3),
+            {"foo": "foo value", "bar": "bar_value"},
+        )
+
+
+def test_make_args_canonicalizer_for_function():
+    def func(a, /, b, *, c, d):
+        return a + b + c + d
+
+    canonicalizer = utils.make_args_canonicalizer_for_function(func)
+
+    args, kwargs = (1,), {"c": 3, "d": 4, "b": 2}
+    bound_args = inspect.signature(func).bind(*args, **kwargs)
+    canonical_form = bound_args.args, bound_args.kwargs
+    assert canonicalizer(*args, **kwargs) == canonical_form
+
+    # Test caching
+    assert canonicalizer is utils.make_args_canonicalizer_for_function(func)
+
+
+def test_canonicalize_call_args():
+    def func(a, /, b, *, c, d):
+        return a + b + c + d
+
+    args, kwargs = (1,), {"c": 3, "d": 4, "b": 2}
+    bound_args = inspect.signature(func).bind(*args, **kwargs)
+    canonical_form = bound_args.args, bound_args.kwargs
+    assert utils.canonicalize_call_args(func, args, kwargs) == canonical_form

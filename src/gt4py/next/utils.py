@@ -11,6 +11,7 @@ from __future__ import annotations
 import functools
 import inspect
 import itertools
+import types
 from typing import (
     Any,
     Callable,
@@ -290,9 +291,9 @@ def make_args_canonicalizer(
     """
     Create a call arguments canonicalizer function from a given signature.
 
-    The canonicalization means that the returned arguments are as all positional
-    arguments were passed positionally, and only keyword-only arguments appear
-    in the dictionary.
+    The canonicalizer returns a tuple with two arguments:
+    - a tuple of values containing all the positional arguments
+    - a dictionary of argument names to values for all keyword-only arguments
 
     Args:
         signature: The signature for which to create the canonicalizer.
@@ -317,7 +318,7 @@ def make_args_canonicalizer(
                 var_pos_arg = key
                 pos_args.append(f"*{key}")
             case inspect.Parameter.KEYWORD_ONLY:
-                key_args.append(f"{key!r}: {key}")
+                key_args.append(f"{key!r}: {key}")  # -> 'foo': foo
             case inspect.Parameter.VAR_KEYWORD:
                 var_key_arg = key
                 key_args.append(f"**{key}")
@@ -326,18 +327,18 @@ def make_args_canonicalizer(
         parameters=params, return_annotation="tuple[tuple, dict[str, Any]]"
     )
 
-    # Optimization for 0 or 1 positional arguments
     if (pos_args_len := len(pos_args)) == 0:
         pos_args_tuple = "()"
     elif pos_args_len == 1 and var_pos_arg:
+        # If there is only an '*args' parameter, we can just return it directly
         pos_args_tuple = var_pos_arg
     else:
         pos_args_tuple = f"({str.join(', ', pos_args)},)"
 
-    # Optimization for 0 or 1 keyword-only arguments
     if (key_args_len := len(key_args)) == 0:
         key_args_dict = "{}"
     elif key_args_len == 1 and var_key_arg:
+        # If there is only an '*kwargs' parameter, we can just return it directly
         key_args_dict = var_key_arg
     else:
         key_args_dict = f"{{ {str.join(', ', key_args)} }}"
@@ -354,6 +355,13 @@ def {canonicalize_func_name}{canonicalizer_signature!s}:
     return cast(Callable[..., tuple[tuple, dict[str, Any]]], canonicalizer)
 
 
+@functools.cache
+def make_args_canonicalizer_for_function(
+    func: types.FunctionType,
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+    return make_args_canonicalizer(inspect.signature(func), name=func.__name__)
+
+
 def canonicalize_call_args(
     func: Callable,
     /,
@@ -363,19 +371,16 @@ def canonicalize_call_args(
     """
     Canonicalize call arguments for a given function.
 
-    The canonicalization means that the returned arguments are as all positional
-    arguments were passed positionally, and only keyword-only arguments appear
-    in the dictionary.
-
     Args:
         func: The function for which to canonicalize the call arguments.
         args: Positional arguments.
         kwargs: Keyword arguments.
 
+    Returns:
+        A tuple of positional arguments and a dictionary with keyword arguments.
+
     Note:
         This is a convenience wrapper around `make_args_canonicalizer`.
     """
 
-    signature = inspect.signature(func)
-    canonicalizer = make_args_canonicalizer(signature, name=func.__name__)
-    return canonicalizer(args, kwargs)
+    return make_args_canonicalizer_for_function(func)(*args, **kwargs)
