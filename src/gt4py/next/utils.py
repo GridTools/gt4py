@@ -333,6 +333,7 @@ def make_args_canonicalizer(
         # If there is only an '*args' parameter, we can just return it directly
         pos_args_tuple = var_pos_arg
     else:
+        # In the regular case, assemble the output tuple with all positional arguments
         pos_args_tuple = f"({str.join(', ', pos_args)},)"
 
     if (key_args_len := len(key_args)) == 0:
@@ -341,6 +342,7 @@ def make_args_canonicalizer(
         # If there is only an '*kwargs' parameter, we can just return it directly
         key_args_dict = var_key_arg
     else:
+        # In the regular case, assemble the output dictionary with all keyword arguments
         key_args_dict = f"{{ {str.join(', ', key_args)} }}"
 
     canonicalize_func_name = f"canonicalize_args_for_{name}" if name else "canonicalize_args"
