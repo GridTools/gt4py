@@ -99,25 +99,11 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     ) -> None:
         if isinstance(instance.left, FieldAccess):
             offset_reads = (
-                (
-                    eve.walk_values(instance.right)
-                    .filter(_cartesian_fieldaccess)
-                    .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
-                    .getattr("name")
-                    .to_set()
-                )
-                | (
-                    eve.walk_values(instance.right)
-                    .filter(_absolutekindex_fieldaccess)
-                    .getattr("name")
-                    .to_set()
-                )
-                | (
-                    eve.walk_values(instance.right)
-                    .filter(_variablek_fieldaccess)
-                    .getattr("name")
-                    .to_set()
-                )
+                eve.walk_values(instance.right)
+                .filter(_cartesian_fieldaccess)
+                .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
+                .getattr("name")
+                .to_set()
             )
             if instance.left.name in offset_reads:
                 raise ValueError("Self-assignment with offset is illegal.")
@@ -250,6 +236,42 @@ class VerticalLoop(LocNode):
                 f"Illegal write and read with horizontal offset detected for {non_tmp_fields}."
             )
 
+    @datamodels.root_validator
+    @classmethod
+    def _vertical_offset_in_parallel(cls: type[VerticalLoop], instance: VerticalLoop) -> None:
+        """
+        Read and write of the same field in a parallel loop with non-zero offsets is not allowed in parallel.
+        """
+        if instance.loop_order != common.LoopOrder.PARALLEL:
+            return
+
+        # gather all writes as a mapping of id(node) -> node
+        writes: dict[int, FieldAccess] = dict()
+        for left in eve.walk_values(instance.body).if_isinstance(ParAssignStmt).getattr("left"):
+            if isinstance(left, FieldAccess):
+                writes[id(left)] = left
+
+        # check that we don't have read/write of the same field with non-zero offsets
+        for node in eve.walk_values(instance.body).if_isinstance(FieldAccess):
+            if id(node) in writes:
+                # this is the write access - skip it
+                continue
+
+            for write_access in writes.values():
+                if node.name == write_access.name:
+                    if isinstance(node.offset, (VariableKOffset, AbsoluteKIndex)) or isinstance(
+                        write_access.offset, (VariableKOffset, AbsoluteKIndex)
+                    ):
+                        raise ValueError(
+                            "Not allowed to read and write with `VariableKOffset` and/or `AbsoluteKIndex` in PARALLEL loops."
+                        )
+
+                    # For cartesian offsets, we allow it if both are equal (e.g. 0)
+                    if node.offset.k != write_access.offset.k:
+                        raise ValueError(
+                            "Not allowed to read and write with k-offsets in PARALLEL loops."
+                        )
+
 
 class Argument(eve.Node):
     name: str
@@ -278,22 +300,6 @@ def _cartesian_fieldaccess(node) -> bool:
         isinstance(node, FieldAccess)
         and not isinstance(node.offset, VariableKOffset)
         and not isinstance(node.offset, AbsoluteKIndex)
-    )
-
-
-def _variablek_fieldaccess(node) -> bool:
-    return (
-        isinstance(node, FieldAccess)
-        and isinstance(node.offset, VariableKOffset)
-        and not isinstance(node.offset, AbsoluteKIndex)
-    )
-
-
-def _absolutekindex_fieldaccess(node) -> bool:
-    return (
-        isinstance(node, FieldAccess)
-        and isinstance(node.offset, AbsoluteKIndex)
-        and not isinstance(node.offset, VariableKOffset)
     )
 
 

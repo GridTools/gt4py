@@ -1472,3 +1472,71 @@ def test_upcasting_both_sides_of_assignment(backend: str) -> None:
 
     test_upcasting_stencil(input, index_array, output)
     assert (input == output).all()
+
+
+def test_k_offsets_in_parallel_loops() -> None:
+    with pytest.raises(ValueError, match="read and write with k-offsets in PARALLEL"):
+
+        @gtscript.stencil(backend="debug")
+        def self_assign_offset_parallel(field: Field[np.int32]) -> None:
+            with computation(PARALLEL), interval(1, None):
+                field = field[0, 0, -1] * 2
+
+    with pytest.raises(ValueError, match="read and write with k-offsets in PARALLEL"):
+
+        @gtscript.stencil(backend="debug")
+        def self_assign_offset_parallel_temp(field: Field[np.int32]) -> None:
+            with computation(PARALLEL), interval(1, None):
+                tmp = field[0, 0, -1]
+                field = tmp * 2
+
+    with pytest.raises(
+        ValueError, match="read and write with `VariableKOffset` and/or `AbsoluteKIndex`"
+    ):
+
+        @gtscript.stencil(backend="debug")
+        def mixed_read_write(field: Field[np.int32]):
+            with computation(PARALLEL), interval(...):
+                level = field.at(K=1)
+                field = 2 * level
+
+    with pytest.raises(
+        ValueError, match="read and write with `VariableKOffset` and/or `AbsoluteKIndex`"
+    ):
+
+        @gtscript.stencil(backend="debug")
+        def mixed_read_write(field: Field[np.int32], offset: int = -1):
+            with computation(PARALLEL), interval(1, None):
+                bottom = field[0, 0, offset]
+                field = field + 2 * bottom
+
+    # center reads and writes are allowed
+    @gtscript.stencil(backend="debug")
+    def self_assignment_center_read_parallel(field: Field[np.int32]) -> None:
+        with computation(PARALLEL), interval(...):
+            field = field[0, 0, 0] * 2
+
+    @gtscript.stencil(backend="debug")
+    def self_assignment_center_write_parallel(field: Field[np.int32]) -> None:
+        with computation(PARALLEL), interval(...):
+            field[0, 0, 0] = field * 2
+
+    # not mixing reads and writes are allowed too (e.g. index fields)
+    @gtscript.stencil(backend="debug")
+    def self_assignment_center_parallel(field: Field[np.float32], index: Field[np.int32]) -> None:
+        with computation(PARALLEL), interval(1, None):
+            field = index + index[0, 0, -1] * 2
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_self_assignment_in_forward(backend: str) -> None:
+    @gtscript.stencil(backend=backend)
+    def self_assignment_parallel(field: Field[np.int32]) -> None:
+        with computation(FORWARD), interval(1, None):
+            field = field[0, 0, -1] * 2
+
+    @gtscript.stencil(backend=backend)
+    def self_assignment_2_parallel(field: Field[np.int32]) -> None:
+        with computation(FORWARD), interval(1, None):
+            tmp = field[0, 0, -1]
+            field = tmp * 2
