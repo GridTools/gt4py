@@ -6,6 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from gt4py.next.iterator.transforms.concat_where.canonicalize_concat_where import (
+    canonicalize_concat_where,
+)
 from gt4py.next.iterator.transforms.concat_where.canonicalize_domain_argument import (
     canonicalize_domain_argument,
 )
@@ -15,4 +18,9 @@ from gt4py.next.iterator.transforms.concat_where.transform_to_as_fieldop import 
 )
 
 
-__all__ = ["canonicalize_domain_argument", "expand_tuple_args", "transform_to_as_fieldop"]
+__all__ = [
+    "canonicalize_concat_where",
+    "canonicalize_domain_argument",
+    "expand_tuple_args",
+    "transform_to_as_fieldop",
+]
