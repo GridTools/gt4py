@@ -242,7 +242,15 @@ class VerticalLoop(LocNode):
         """
         Read and write of the same field in a parallel loop with non-zero offsets is not allowed in parallel.
         """
-        if instance.loop_order != common.LoopOrder.PARALLEL:
+
+        def _size_one(interval: Interval) -> bool:
+            if interval.start.level != interval.end.level:
+                # if the levels (start/end) aren't the same, we don't know at this stage
+                return False
+
+            return abs(interval.end.offset - interval.start.offset) == 1
+
+        if instance.loop_order != common.LoopOrder.PARALLEL or _size_one(instance.interval):
             return
 
         # gather all writes as a mapping of id(node) -> node

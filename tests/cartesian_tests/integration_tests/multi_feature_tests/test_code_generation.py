@@ -1544,6 +1544,15 @@ def test_k_offsets_in_parallel_loops() -> None:
         with computation(PARALLEL), interval(1, None):
             field = index + index[0, 0, -1] * 2
 
+    # parallel intervals of static size 1 are allowed too
+    @gtscript.stencil(backend="debug")
+    def the_stencil(field: Field[np.bool_]) -> None:
+        with computation(PARALLEL):
+            with interval(0, 1):
+                field = field[K + 1]
+            with interval(-1, None):
+                field = field[K - 1]
+
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_self_assignment_in_forward(backend: str) -> None:
