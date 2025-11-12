@@ -312,10 +312,6 @@ def make_args_canonicalizer(
     var_key_arg: str | None = None
 
     for key, param in signature.parameters.items():
-        # Remove annotations to avoid issues in case `str(annotation)`
-        # produces incorrect python expressions
-        params.append(param.replace(annotation=param.empty))
-
         match param.kind:
             case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
                 pos_args.append(f"{key}")
@@ -327,6 +323,10 @@ def make_args_canonicalizer(
             case inspect.Parameter.VAR_KEYWORD:
                 var_key_arg = key
                 key_args.append(f"**{key}")
+
+        # Remove annotations to avoid issues in case `str(annotation)`
+        # produces incorrect python expressions
+        params.append(param.replace(annotation=param.empty))
 
     canonicalizer_signature = inspect.Signature(parameters=params)
 
@@ -341,7 +341,7 @@ def make_args_canonicalizer(
         pos_args_tuple_expr = f"({str.join(', ', pos_args)})"
 
     if len(key_args) == 1 and var_key_arg:
-        # If there is only an '**kwargs' parameter, we can just return it directly
+        # If there is only a '**kwargs' parameter, we can just return it directly
         key_args_dict_expr = var_key_arg
     else:
         # In the regular case, assemble the output dictionary with all keyword arguments
@@ -384,7 +384,7 @@ def canonicalize_call_args(
         A tuple of positional arguments and a dictionary with keyword arguments.
 
     Note:
-        This is a convenience wrapper around `make_args_canonicalizer`.
+        This is a convenience wrapper around `make_args_canonicalizer_for_function`.
     """
 
     return make_args_canonicalizer_for_function(func)(*args, **kwargs)
