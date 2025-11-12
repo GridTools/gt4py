@@ -33,13 +33,13 @@ def _tree_map_type_constructor(
 #   which also works with NamedCollections.
 tree_map_type = functools.partial(
     utils.tree_map,
-    collection_type=(ts.TupleType, ts.NamedCollectionType),
+    collection_type=ts.COLLECTION_TYPE_SPECS,
     result_collection_constructor=_tree_map_type_constructor,
 )
 
 named_collections_to_tuple_types = utils.tree_map(
     lambda x: x,
-    collection_type=(ts.TupleType, ts.NamedCollectionType),
+    collection_type=ts.COLLECTION_TYPE_SPECS,
     result_collection_constructor=lambda _, elems: ts.TupleType(types=list(elems)),
 )
 

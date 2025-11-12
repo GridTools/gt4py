@@ -438,7 +438,7 @@ class ProgramLowering(
         )
 
         @gtx_utils.tree_map(
-            collection_type=(ts.TupleType, ts.NamedCollectionType),
+            collection_type=ts.COLLECTION_TYPE_SPECS,
             with_path_arg=True,
             unpack=True,
             result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
