@@ -18,7 +18,7 @@ from gt4py.next.ffront import program_ast as past
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.type_system import type_specifications as ts
 
-from next_tests.past_common_fixtures import (
+from next_tests.fixtures.past_common import (
     IDim,
     copy_program_def,
     copy_restrict_program_def,

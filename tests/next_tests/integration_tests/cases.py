@@ -29,10 +29,12 @@ from gt4py.next import (
     common,
     constructors,
     field_utils,
+    named_collections,
     utils as gt_utils,
 )
 from gt4py.next.ffront import decorator
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.otf import arguments
 
 from next_tests import definitions as test_definitions
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
@@ -476,7 +478,9 @@ def verify(
 
     out_comp = out or inout
     assert out_comp is not None
+    out_comp = arguments.extract(out_comp)
     out_comp_ndarray = field_utils.asnumpy(out_comp)
+    ref = arguments.extract(ref)
     ref_ndarray = field_utils.asnumpy(ref)
 
     assert comparison(ref_ndarray, out_comp_ndarray), (
@@ -599,6 +603,22 @@ def _allocate_from_type(
                     for t in types
                 )
             )
+        case ts.NamedCollectionType(types=types) as named_collection_type_spec:
+            container_constructor = (
+                named_collections.make_named_collection_constructor_from_type_spec(
+                    named_collection_type_spec, nested=False
+                )
+            )
+            return container_constructor(
+                tuple(
+                    (
+                        _allocate_from_type(
+                            case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
+                        )
+                        for t in types
+                    )
+                )
+            )
         case _:
             raise TypeError(
                 f"Can not allocate for type '{arg_type}' with initializer '{strategy or 'default'}'."
@@ -624,7 +644,9 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
             return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
         case ts.ScalarType(shape=shape):
             return int(np.prod(shape)) if shape else 1
-        case ts.TupleType(types):
+        case ts.TupleType(types=types):
+            return sum([get_param_size(t, sizes=sizes) for t in types])
+        case ts.NamedCollectionType(types=types):
             return sum([get_param_size(t, sizes=sizes) for t in types])
         case _:
             raise TypeError(f"Can not get size for parameter of type '{param_type}'.")
