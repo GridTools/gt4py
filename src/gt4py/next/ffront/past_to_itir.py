@@ -120,13 +120,17 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
             body=body,
         )
 
+    # Translate NamedCollectionTypes to TupleTypes in compile-time args
+    args = tuple(ffront_ti.named_collections_to_tuple_types(arg) for arg in inp.args.args)
+    kwargs = {k: ffront_ti.named_collections_to_tuple_types(v) for k, v in inp.args.kwargs.items()}
+    compile_time_args = dataclasses.replace(
+        inp.args, args=args, kwargs=kwargs, column_axis=_column_axis(all_closure_vars)
+    )
+
     if config.DEBUG or inp.data.debug:
         devtools.debug(itir_program)
 
-    return stages.CompilableProgram(
-        data=itir_program,
-        args=dataclasses.replace(inp.args, column_axis=_column_axis(all_closure_vars)),
-    )
+    return stages.CompilableProgram(data=itir_program, args=compile_time_args)
 
 
 def past_to_gtir_factory(
