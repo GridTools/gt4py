@@ -321,22 +321,40 @@ def benchmark_horizontal_copy_25_arg_program(
 
 # This is useful for running this module as a python script,
 # mostly for profiling/debugging backends.
-# Example usage:
-#   python tests/next_tests/benchmarks/benchmark_program_call.py --backend=gtfn-cpu
+# Examples of usage:
+#   PYTHONOPTIMIZE=2 python tests/next_tests/benchmarks/benchmark_program_call.py --backend=gtfn-cpu
+#   PYTHONOPTIMIZE=2 python tests/next_tests/benchmarks/benchmark_program_call.py --backend=dace-cpu --profile-session=session1
 #   PYTHONOPTIMIZE=2 viztracer -o profile.json tests/next_tests/benchmarks/benchmark_program_call.py --backend=dace-cpu
 if __name__ == "__main__":
     import functools
     import sys
+
+    try:
+        import viztracer
+    except ImportError:
+        viztracer = None
+
+    profile_session: str | None = None
 
     def benchmark(*args, **kwargs):
         func = functools.partial(*args, **kwargs)
         for _ in range(5):
             func()
 
+        if profile_session:
+            if viztracer is None:
+                raise RuntimeError(
+                    "'viztracer' is not installed. Please install it to use profiling."
+                )
+            with viztracer.VizTracer(
+                output_file=f"{profile_session}_{func.func.__name__}_{backend.name}.json"
+            ):
+                func()
+
     backends = []
     for arg in sys.argv[1:]:
         if arg.startswith("--backend="):
-            backend_name = arg.split("=", 1)[1]
+            backend_name = (arg.split("=", 1)[-1]).strip()
             match backend_name:
                 case "dace-cpu":
                     backends.append(dace_backends.run_dace_cpu_cached)
@@ -348,9 +366,15 @@ if __name__ == "__main__":
                     backends.append(gtfn_gpu)
                 case _:
                     raise ValueError(f"Unknown backend: {backend_name}")
+        if arg.startswith("--profile-session="):
+            profile_session = (arg.split("=", 1)[-1]).strip()
 
     backends = backends or BACKENDS
 
+    if not sys.flags.optimize:
+        print(
+            "\nWARNING: run this script with 'PYTHONOPTIMIZE=2' for meaningful performance comparisons.\n"
+        )
     for backend in backends:
         print(f"Running benchmarks with backend: {backend.name}")
         benchmark_horizontal_copy_25_arg_program(benchmark, backend)
