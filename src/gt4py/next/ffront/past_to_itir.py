@@ -485,7 +485,7 @@ class ProgramLowering(
 
     def visit_Symbol(self, node: past.Symbol, **kwargs: Any) -> itir.Sym:
         if isinstance(node.type, ts.COLLECTION_TYPE_SPECS):
-            new_symbol_type = ffront_ti.named_collections_to_tuples_typespec(node.type)
+            new_symbol_type = ffront_ti.named_collections_to_tuple_types(node.type)
         else:
             new_symbol_type = node.type
         return itir.Sym(id=node.id, type=new_symbol_type)

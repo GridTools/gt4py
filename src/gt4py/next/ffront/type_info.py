@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-from typing import Callable, Iterator, Sequence, cast
+from typing import Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
@@ -16,10 +16,10 @@ from gt4py.next import common, utils
 from gt4py.next.type_system import type_info
 
 
-def _tree_map_typespec_constructor(
+def _tree_map_type_constructor(
     value: ts.CollectionTypeSpecT,
     elems: NestedTuple[ts.DataType],
-) -> Callable[..., ts.CollectionTypeSpecT]:
+) -> ts.CollectionTypeSpecT:
     return (
         ts.NamedCollectionType(
             keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
@@ -29,13 +29,15 @@ def _tree_map_typespec_constructor(
     )
 
 
-tree_map_typespec = functools.partial(
+# TODO: Replace all occurrences of `apply_to_primitive_constituents` with this function,
+#   which also works with NamedCollections.
+tree_map_type = functools.partial(
     utils.tree_map,
     collection_type=(ts.TupleType, ts.NamedCollectionType),
-    result_collection_constructor=_tree_map_typespec_constructor,
+    result_collection_constructor=_tree_map_type_constructor,
 )
 
-named_collections_to_tuples_typespec = utils.tree_map(
+named_collections_to_tuple_types = utils.tree_map(
     lambda x: x,
     collection_type=(ts.TupleType, ts.NamedCollectionType),
     result_collection_constructor=lambda _, elems: ts.TupleType(types=list(elems)),
@@ -333,5 +335,5 @@ def return_type_scanop(
     )
     return cast(
         ts.TypeSpec,
-        tree_map_typespec(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype),
+        tree_map_type(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype),
     )

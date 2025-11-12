@@ -230,7 +230,7 @@ class CompiledProgramsPool:
     ] = dataclasses.field(default_factory=dict, init=False)
 
     @functools.cached_property
-    def _numeric_values_extractor(self) -> Callable | None:
+    def _primitive_values_extractor(self) -> Callable | None:
         return arguments.make_primitive_value_args_extractor(self.program_type.definition)
 
     def __post_init__(self) -> None:
@@ -241,7 +241,7 @@ class CompiledProgramsPool:
         self._validate_argument_descriptor_mapping()
 
         # Force initialization of all cached properties here to minimize first-time call overhead
-        self._numeric_values_extractor  # noqa: B018
+        self._primitive_values_extractor  # noqa: B018
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -254,7 +254,7 @@ class CompiledProgramsPool:
         it is an error.
         """
         canonical_args, canonical_kwargs = self._args_canonicalizer(args, kwargs)
-        if (extractor := self._numeric_values_extractor) is not None:
+        if (extractor := self._primitive_values_extractor) is not None:
             args, kwargs = extractor(*canonical_args, **canonical_kwargs)
         else:
             args, kwargs = canonical_args, canonical_kwargs

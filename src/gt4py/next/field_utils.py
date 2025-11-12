@@ -55,7 +55,7 @@ def field_from_typespec(
 
     def _constructor(
         type_: ts.CollectionTypeSpec,
-        elems: NestedTuple[common.NumericValue],
+        elems: NestedTuple[common.MutableField],
     ) -> named_collections.NamedCollection:
         if isinstance(type_, ts.NamedCollectionType):
             return named_collections.make_named_collection_constructor_from_type_spec(type_)(elems)
