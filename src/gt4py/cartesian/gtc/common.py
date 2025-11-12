@@ -12,7 +12,6 @@ import enum
 import functools
 import numbers
 import typing
-import warnings
 from typing import (
     Any,
     ClassVar,
@@ -292,23 +291,23 @@ def verify_and_get_common_dtype(
         if strict:
             if all(dt == dtype for dt in dtypes):
                 return dtype
-            else:
-                raise ValueError(
-                    f"Type mismatch in `{node_cls.__name__}`. Types are "
-                    + ", ".join(dt.name for dt in dtypes)
-                )
-        else:
-            # upcasting
-            return max(dt for dt in dtypes)
-    else:
-        return None
+
+            raise ValueError(
+                f"Type mismatch in `{node_cls.__name__}`. Types are "
+                + ", ".join(dt.name for dt in dtypes)
+            )
+
+        # upcasting
+        return max(dt for dt in dtypes)
+
+    return None
 
 
 def compute_kind(*values: Expr) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
         return ExprKind.FIELD
-    else:
-        return ExprKind.SCALAR
+
+    return ExprKind.SCALAR
 
 
 class Literal(eve.Node):
@@ -367,12 +366,8 @@ class AbsoluteKIndex(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.validator("k")
     def offset_expr_is_int(self, _attribute: datamodels.Attribute, value: Any) -> None:
-        warnings.warn(
-            "Absolute indexing in `K` is an experimental feature. Please read "
-            "<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/experimental-features.md> "
-            "to understand the consequences.",
-            category=UserWarning,
-            stacklevel=2,
+        utils.warn_experimental_feature(
+            feature="Absolute indexing in `K`", ADR="experimental/indexing-absolute-k.md"
         )
         if isinstance(value, numbers.Real):
             if not isinstance(value, int):

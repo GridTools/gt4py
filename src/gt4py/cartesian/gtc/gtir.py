@@ -65,6 +65,16 @@ class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     pass
 
 
+class IteratorAccess(Expr):
+    class AxisName(eve.StrEnum):
+        I = "I"  # noqa: E741 [ambiguous-variable-name]
+        J = "J"
+        K = "K"
+
+    name: AxisName
+    kind: common.ExprKind = common.ExprKind.SCALAR
+
+
 class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
     """Parallel assignment.
 

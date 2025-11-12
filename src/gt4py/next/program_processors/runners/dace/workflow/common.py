@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import contextlib
+import os
 from typing import Any, Final, Generator, Optional
 
 import dace
@@ -16,7 +17,11 @@ from gt4py.next import config
 
 
 SDFG_ARG_METRIC_LEVEL: Final[str] = "gt_metrics_level"
-"""Name of SDFG argument to retrive the GT4Py metrics level."""
+"""Name of SDFG argument to input the GT4Py metrics level."""
+
+
+SDFG_ARG_METRIC_COMPUTE_TIME: Final[str] = "gt_compute_time"
+"""Name of SDFG argument to return the total compute time to GT4Py."""
 
 
 def set_dace_config(
@@ -64,15 +69,22 @@ def set_dace_config(
     if cmake_build_type is not None:
         dace.Config.set("compiler.build_type", value=cmake_build_type.value)
 
-    # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
-    dace.Config.set(
-        "compiler.cpu.args",
-        value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
-    )
-    dace.Config.set(
-        "compiler.cuda.args",
-        value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
-    )
+    # The dace dafault settings use fast-math in both cpu and gpu compilation,
+    # we don't use it here.
+    if gt_cxxargs := os.environ.get("CXXFLAGS", None):
+        dace.Config.set("compiler.cpu.args", value=gt_cxxargs)
+    else:
+        dace.Config.set(
+            "compiler.cpu.args",
+            value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
+        )
+    if gt_cudaargs := os.environ.get("CUDAFLAGS", None):
+        dace.Config.set("compiler.cuda.args", value=gt_cudaargs)
+    else:
+        dace.Config.set(
+            "compiler.cuda.args",
+            value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
+        )
     dace.Config.set(
         "compiler.cuda.hip_args",
         value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
