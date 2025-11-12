@@ -323,7 +323,7 @@ def make_args_canonicalizer(
                 var_pos_arg = key
                 pos_args.append(f"*{key}")
             case inspect.Parameter.KEYWORD_ONLY:
-                key_args.append(f"{key!r}: {key}")  # -> 'foo': foo
+                key_args.append(f"'{key}': {key}")
             case inspect.Parameter.VAR_KEYWORD:
                 var_key_arg = key
                 key_args.append(f"**{key}")
