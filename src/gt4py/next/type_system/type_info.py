@@ -129,6 +129,9 @@ def primitive_constituents(
         symbol_type: ts.TypeSpec, path: tuple[int, ...]
     ) -> Iterator[ts.TypeSpec] | Iterator[tuple[ts.TypeSpec, tuple[int, ...]]]:
         if isinstance(symbol_type, ts.COLLECTION_TYPE_SPECS):
+            symbol_type = cast(
+                ts.CollectionTypeSpec, symbol_type
+            )  # This shouldn't be needed after the previous isinstance() check
             for i, el_type in enumerate(symbol_type.types):
                 yield from constituents_yielder(el_type, (*path, i))
         else:

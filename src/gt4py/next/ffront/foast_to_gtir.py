@@ -12,7 +12,7 @@ from typing import Any, Callable, Optional
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Never
+from gt4py.eve.extended_typing import Never, cast
 from gt4py.next import common
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -506,6 +506,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         if isinstance(type_, ts.COLLECTION_TYPE_SPECS):
+            type_ = cast(
+                ts.CollectionTypeSpec, type_
+            )  # This shouldn't be needed after the previous isinstance() check
             # This code-path is only active in the init of a scan,
             # as otherwise the frontend generates tuple expressions of `Constant`s.
             val = arguments.extract(val) if isinstance(type_, ts.NamedCollectionType) else val

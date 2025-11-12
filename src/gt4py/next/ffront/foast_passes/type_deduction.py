@@ -399,7 +399,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]  # type: ignore[assignment] # see check in next line
+                    new_type = values.type.types[index]
                     assert isinstance(new_type, ts.DataType)
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs

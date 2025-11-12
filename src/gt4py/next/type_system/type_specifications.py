@@ -178,7 +178,7 @@ class NamedCollectionType(DataType):
 
 CollectionTypeSpecT = TypeVar("CollectionTypeSpecT", TupleType, NamedCollectionType)
 CollectionTypeSpec = TupleType | NamedCollectionType
-COLLECTION_TYPE_SPECS: Final[tuple[type[TupleType], type[NamedCollectionType]]] = xtyping.get_args(
+COLLECTION_TYPE_SPECS: Final[tuple[type[CollectionTypeSpec], ...]] = xtyping.get_args(
     CollectionTypeSpec
 )
 
