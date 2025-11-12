@@ -260,4 +260,5 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         third_node.data = first_node.data
 
         # Update strides after changing the data of access nodes
-        gtx_transformations_strides.gt_propagate_strides_of(sdfg, first_node.data)
+        for modified_node in [second_node, third_node]:
+                gtx_transformations_strides.gt_propagate_strides_from_access_node(sdfg, graph, modified_node)

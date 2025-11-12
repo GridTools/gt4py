@@ -30,7 +30,7 @@ inside the NestedSDFG.
 
 def gt_change_strides(
     sdfg: dace.SDFG,
-    gpu: bool = False,
+    gpu: bool,
 ) -> dace.SDFG:
     """Modifies the strides of transients.
 
