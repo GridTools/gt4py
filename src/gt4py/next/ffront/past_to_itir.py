@@ -122,7 +122,9 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
 
     # Translate NamedCollectionTypes to TupleTypes in compile-time args
     args = tuple(ffront_ti.named_collections_to_tuple_types(arg) for arg in inp.args.args)
-    kwargs = {k: ffront_ti.named_collections_to_tuple_types(v) for k, v in inp.args.kwargs.items()}
+    kwargs: dict[str, ts.TypeSpec] = {
+        k: ffront_ti.named_collections_to_tuple_types(v) for k, v in inp.args.kwargs.items()
+    }
     compile_time_args = dataclasses.replace(
         inp.args, args=args, kwargs=kwargs, column_axis=_column_axis(all_closure_vars)
     )
@@ -489,7 +491,7 @@ class ProgramLowering(
 
     def visit_Symbol(self, node: past.Symbol, **kwargs: Any) -> itir.Sym:
         if isinstance(node.type, ts.COLLECTION_TYPE_SPECS):
-            new_symbol_type = ffront_ti.named_collections_to_tuple_types(node.type)
+            new_symbol_type: ts.TypeSpec = ffront_ti.named_collections_to_tuple_types(node.type)
         else:
             new_symbol_type = node.type
         return itir.Sym(id=node.id, type=new_symbol_type)

@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+from collections.abc import Callable
 from typing import Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
@@ -37,10 +38,13 @@ tree_map_type = functools.partial(
     result_collection_constructor=_tree_map_type_constructor,
 )
 
-named_collections_to_tuple_types = utils.tree_map(
-    lambda x: x,
-    collection_type=ts.COLLECTION_TYPE_SPECS,
-    result_collection_constructor=lambda _, elems: ts.TupleType(types=list(elems)),
+named_collections_to_tuple_types = cast(
+    Callable[..., ts.TupleType],
+    utils.tree_map(
+        lambda x: x,
+        collection_type=ts.COLLECTION_TYPE_SPECS,
+        result_collection_constructor=lambda _, elems: ts.TupleType(types=list(elems)),
+    ),
 )
 
 
