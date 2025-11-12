@@ -371,10 +371,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 node.func.type, self.visit(node.args, **kwargs), self.visit(node.kwargs, **kwargs)
             )
             if isinstance(node.func, foast.Name) and isinstance(node.func.type, ts.ConstructorType):
-                if isinstance(node.func.type.definition.returns, ts.NamedCollectionType):
+                if isinstance(node.func.type.constructed_type, ts.NamedCollectionType):
                     # construct a plain tuple from the custom container constructor
                     return im.make_tuple(*lowered_args, *lowered_kwargs.values())
-                elif isinstance(node.func.type.definition.returns, ts.ScalarType):
+                elif isinstance(node.func.type.constructed_type, ts.ScalarType):
                     return self._visit_type_constr(node, **kwargs)
                 else:
                     raise AssertionError("Unexpected constructor encounterd.")
@@ -506,6 +506,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         if isinstance(type_, ts.COLLECTION_TYPE_SPECS):
+            # This code-path is only active in the init of a scan,
+            # as otherwise the frontend generates tuple expressions of `Constant`s.
             val = arguments.extract(val) if isinstance(type_, ts.NamedCollectionType) else val
             return im.make_tuple(
                 *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))
