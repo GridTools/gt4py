@@ -352,6 +352,13 @@ def gt_inline_nested_sdfg(
             continue
 
         # Now perform the actual inlining.
+        # NOTE: In [PR#2178](https://github.com/GridTools/gt4py/pull/2178) this function was
+        #   modified to be more efficient. It also changed the order in which the inlining
+        #   transformations of DaCe were applied. Instead of trying `InlineMultistateSDFG`
+        #   it changed that such that `InlineSDFG` was used. However, this triggered
+        #   [issue#2108](https://github.com/spcl/dace/issues/2108) which lead to the removals
+        #   of some writes. As a temporary solution we no longer use `InlineSDFG` but only
+        #   the multistate version.
         multi_state_candidate = {dace_interstate.InlineMultistateSDFG.nested_sdfg: nsdfg_node}
         multi_state_inliner = dace_interstate.InlineMultistateSDFG()
         multi_state_inliner.setup_match(
