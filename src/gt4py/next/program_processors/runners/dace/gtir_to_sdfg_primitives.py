@@ -331,7 +331,8 @@ def translate_broadcast(
     if isinstance(scalar_arg, gtir.Literal):
         # Use a 'Broadcast' library node to fill the result field with the given value.
         name = sdfg_builder.unique_tasklet_name("fill")
-        bcast_node = sdfg_library_nodes.Broadcast(name, value=dace.symbolic.SymExpr(scalar_arg.value))
+        dc_dtype = gtx_dace_utils.as_dace_type(scalar_arg.type)
+        bcast_node = sdfg_library_nodes.Broadcast(name, value=dc_dtype(scalar_arg.value))
         ctx.state.add_node(bcast_node)
     else:
         if isinstance(

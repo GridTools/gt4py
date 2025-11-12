@@ -83,6 +83,7 @@ class Broadcast(dace_nodes.LibraryNode):
             if self.axes:
                 raise ValueError("Unexpected domain axes with literal value.")
 
+
 @dace_library.register_expansion(Broadcast, "pure")
 class BroadcastExpandInlined(dace_transform.ExpandTransformation):
     """Implements pure expansion of the Fill library node."""
