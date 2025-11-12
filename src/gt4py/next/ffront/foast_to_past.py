@@ -9,7 +9,6 @@
 import dataclasses
 from typing import Any, Optional
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
     foast_to_gtir,
@@ -106,17 +105,27 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
 
         type_ = inp.data.foast_node.type
         loc = inp.data.foast_node.location
-        # use a new UID generator to allow caching
-        param_sym_uids = eve_utils.UIDGenerator()
+        definition = inp.data.foast_node.type.definition
+        args_names = [
+            *definition.pos_only_args,
+            *definition.pos_or_kw_args.keys(),
+            *definition.kw_only_args.keys(),
+        ]
+        if isinstance(inp.data.foast_node.type, ts_ffront.ScanOperatorType):
+            args_names = args_names[1:]  # carry argument is not in parameter list
 
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
-                id=param_sym_uids.sequential_id(prefix="__sym"),
+                id=name,
                 type=arg_type,
                 namespace=dialect_ast_enums.Namespace.LOCAL,
                 location=loc,
             )
-            for arg_type in arg_types
+            for name, arg_type in zip(
+                args_names,
+                arg_types,
+                strict=True,
+            )
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
         out_sym: past.Symbol = past.DataSymbol(
