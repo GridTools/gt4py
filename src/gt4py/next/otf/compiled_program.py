@@ -11,7 +11,6 @@ from __future__ import annotations
 import concurrent.futures
 import dataclasses
 import functools
-import inspect
 import itertools
 from collections.abc import Callable, Hashable, Sequence
 from typing import Any, TypeAlias, TypeVar
@@ -253,7 +252,7 @@ class CompiledProgramsPool:
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
-        canonical_args, canonical_kwargs = self._args_canonicalizer(args, kwargs)
+        canonical_args, canonical_kwargs = self._args_canonicalizer(*args, **kwargs)
         if (extractor := self._primitive_values_extractor) is not None:
             args, kwargs = extractor(*canonical_args, **canonical_kwargs)
         else:
@@ -298,10 +297,7 @@ class CompiledProgramsPool:
 
     @functools.cached_property
     def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
-        signature = inspect.signature(self.definition_stage.definition)
-        return gtx_utils.make_args_canonicalizer(
-            signature, name=self.definition_stage.definition.__name__
-        )
+        return gtx_utils.make_args_canonicalizer_for_function(self.definition_stage.definition)
 
     @functools.cached_property
     def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:
