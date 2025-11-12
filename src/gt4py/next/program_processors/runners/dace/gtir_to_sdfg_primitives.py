@@ -328,22 +328,40 @@ def translate_broadcast(
 
     # Retrieve the scalar argument, which could be either a literal value or the
     # result of a scalar expression.
-    arg = _parse_fieldop_arg(scalar_arg, ctx, sdfg_builder, field_domain)
-    assert isinstance(arg, gtir_dataflow.MemletExpr)
-    assert arg.subset.num_elements() == 1
+    if isinstance(scalar_arg, gtir.Literal):
+        # Use a 'Broadcast' library node to fill the result field with the given value.
+        name = sdfg_builder.unique_tasklet_name("fill")
+        bcast_node = sdfg_library_nodes.Broadcast(name, value=dace.symbolic.SymExpr(scalar_arg.value))
+        ctx.state.add_node(bcast_node)
+    else:
+        if isinstance(
+            arg := _parse_fieldop_arg(scalar_arg, ctx, sdfg_builder, field_domain),
+            gtir_dataflow.MemletExpr,
+        ):
+            inp_node = arg.dc_node
+            inp_axes = None
+            inp_origin = None
+        else:
+            inp_node = arg.field
+            inp_axes = [field_dims.index(dim) for dim in arg.get_field_type().dims]
+            inp_origin = [o for _, o in arg.field_domain]
 
-    # Use a 'Fill' library node to write the scalar value to the result field.
-    fill_node = sdfg_library_nodes.Fill("fill")
-    ctx.state.add_node(fill_node)
-    ctx.state.add_nedge(
-        arg.dc_node,
-        fill_node,
-        dace.Memlet(data=arg.dc_node.data, subset=arg.subset),
-    )
-
-    ctx.state.add_nedge(
-        fill_node,
+        # Use a 'Broadcast' library node to write the scalar value to the result field.
+        name = sdfg_builder.unique_tasklet_name("broadcast")
+        bcast_node = sdfg_library_nodes.Broadcast(name, inp_axes, inp_origin, field_origin)
+        ctx.state.add_node(bcast_node)
+        ctx.state.add_edge(
+            inp_node,
+            None,
+            bcast_node,
+            "_inp",
+            ctx.sdfg.make_array_memlet(inp_node.data),
+        )
+    ctx.state.add_edge(
+        bcast_node,
+        "_outp",
         field_node,
+        None,
         dace.Memlet(data=field_name, subset=dace_subsets.Range.from_array(field_desc)),
     )
 
