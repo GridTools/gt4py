@@ -1474,6 +1474,23 @@ def test_upcasting_both_sides_of_assignment(backend: str) -> None:
     assert (input == output).all()
 
 
+def test_no_read_write_with_horizontal_offset() -> None:
+    with pytest.raises(ValueError, match="Self-assignment with offset is illegal."):
+
+        @gtscript.stencil(backend="debug")
+        def self_assign_offset(field: Field[np.float64]) -> None:
+            with computation(PARALLEL), interval(...):
+                field = (field[I - 1] + field[I + 1]) / 2
+
+    with pytest.raises(ValueError, match="Illegal write and read with horizontal offset"):
+
+        @gtscript.stencil(backend="debug")
+        def self_assign_offset(field: Field[np.float64]) -> None:
+            with computation(PARALLEL), interval(...):
+                tmp = (field[J - 1] + field[J + 1]) / 2
+                field = tmp * 2
+
+
 def test_k_offsets_in_parallel_loops() -> None:
     with pytest.raises(ValueError, match="read and write with k-offsets in PARALLEL"):
 
