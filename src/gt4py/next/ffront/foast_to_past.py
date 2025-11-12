@@ -111,7 +111,9 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
             *definition.pos_or_kw_args.keys(),
             *definition.kw_only_args.keys(),
         ]
-        if isinstance(inp.data.foast_node.type, ts_ffront.ScanOperatorType):
+        if isinstance(
+            inp.data.foast_node.type, ts_ffront.ScanOperatorType
+        ):  # TODO(tehrengruber,sf-n): use signature_from_callable_in_program_context
             args_names = args_names[1:]  # carry argument is not in parameter list
 
         params_decl: list[past.Symbol] = [

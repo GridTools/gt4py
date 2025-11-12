@@ -310,14 +310,19 @@ def return_type_scanop(
     )
 
 
-def _signature_from_callable_in_program_context(callable_type: ts.CallableType):
+def signature_from_callable_in_program_context(callable_type: ts.CallableType):
     if isinstance(callable_type, ts_ffront.ProgramType):
-        return _signature_from_callable_in_program_context(callable_type.definition)
+        return signature_from_callable_in_program_context(callable_type.definition)
     elif isinstance(callable_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType):
-        operator_signature = _signature_from_callable_in_program_context(callable_type.definition)
+        operator_signature = signature_from_callable_in_program_context(callable_type.definition)
+        params = (
+            [*operator_signature.parameters.values()][1:]
+            if isinstance(callable_type, ts_ffront.ScanOperatorType)
+            else operator_signature.parameters.values()
+        )
         return inspect.Signature(
             parameters=itertools.chain(
-                operator_signature.parameters.values(),
+                params,
                 [inspect.Parameter("out", inspect.Parameter.KEYWORD_ONLY)],
             ),
             return_annotation=inspect.Signature.empty,
@@ -351,5 +356,5 @@ def make_args_canonicalizer(
     See :ref:`utils.make_args_canonicalizer`.
     """
     return utils.make_args_canonicalizer(
-        _signature_from_callable_in_program_context(callable_type), **kwargs
+        signature_from_callable_in_program_context(callable_type), **kwargs
     )
