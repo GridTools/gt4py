@@ -10,7 +10,6 @@ import pytest
 
 from gt4py import eve, next as gtx
 from gt4py.next import errors, backend
-from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.otf import compiled_program, toolchain, arguments
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
@@ -22,7 +21,15 @@ def test_static_arg_from_enum():
         FOO = 1
 
     static_arg = arguments.StaticArg(value=SomeEnum.FOO)
-    assert static_arg.value == 1
+    assert static_arg.value == 1 and type(static_arg.value) is int
+
+
+def test_static_arg_from_enum_tuple():
+    class SomeEnum(eve.IntEnum):
+        FOO = 1
+
+    static_arg = arguments.StaticArg(value=(SomeEnum.FOO, SomeEnum.FOO))
+    assert static_arg.value == (1, 1) and all (isinstance(val, int) and type(val) is int for val in static_arg.value)
 
 
 def test_static_args_non_scalar_type():
