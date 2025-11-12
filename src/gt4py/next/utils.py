@@ -312,7 +312,10 @@ def make_args_canonicalizer(
     var_key_arg: str | None = None
 
     for key, param in signature.parameters.items():
-        params.append(param.replace(annotation=param.empty))  # remove annotations to avoid issues
+        # Remove annotations to avoid issues in case `str(annotation)`
+        # produces incorrect python expressions
+        params.append(param.replace(annotation=param.empty))
+
         match param.kind:
             case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
                 pos_args.append(f"{key}")
@@ -325,9 +328,7 @@ def make_args_canonicalizer(
                 var_key_arg = key
                 key_args.append(f"**{key}")
 
-    canonicalizer_signature = inspect.Signature(
-        parameters=params, return_annotation="tuple[tuple, dict[str, Any]]"
-    )
+    canonicalizer_signature = inspect.Signature(parameters=params)
 
     if len(pos_args) == 1:
         if var_pos_arg:
