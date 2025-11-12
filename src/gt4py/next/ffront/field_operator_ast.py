@@ -64,6 +64,9 @@ ScalarSymbol = DataSymbol[ScalarTypeT]
 TupleTypeT = TypeVar("TupleTypeT", bound=ts.TupleType)
 TupleSymbol = DataSymbol[TupleTypeT]
 
+NamedCollectionTypeT = TypeVar("NamedCollectionTypeT", bound=ts.NamedCollectionType)
+NamedCollectionSymbol = DataSymbol[NamedCollectionTypeT]
+
 DimensionTypeT = TypeVar("DimensionTypeT", bound=ts.DimensionType)
 DimensionSymbol = DataSymbol[DimensionTypeT]
 
@@ -160,7 +163,7 @@ class Assign(Stmt):
 
 
 class TupleTargetAssign(Stmt):
-    targets: list[FieldSymbol | TupleSymbol | ScalarSymbol | Starred]
+    targets: list[ScalarSymbol | FieldSymbol | TupleSymbol | NamedCollectionSymbol | Starred]
     value: Expr
 
 
