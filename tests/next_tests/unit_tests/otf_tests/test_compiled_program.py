@@ -29,7 +29,7 @@ def test_static_arg_from_enum_tuple():
         FOO = 1
 
     static_arg = arguments.StaticArg(value=(SomeEnum.FOO, SomeEnum.FOO))
-    assert static_arg.value == (1, 1) and all (isinstance(val, int) and type(val) is int for val in static_arg.value)
+    assert static_arg.value == (1, 1) and all(type(val) is int for val in static_arg.value)
 
 
 def test_static_args_non_scalar_type():
