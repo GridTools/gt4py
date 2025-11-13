@@ -263,7 +263,6 @@ class Program:
             },
         )
 
-
     def __call__(
         self,
         *args: Any,
