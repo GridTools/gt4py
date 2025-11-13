@@ -250,12 +250,27 @@ def translate_as_fieldop(
     if not isinstance(node.type, ts.FieldType):
         raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
 
+    # parse the domain of the field operator
+    assert isinstance(fieldop_domain_expr.type, ts.DomainType)
+    field_domain = gtir_domain.get_field_domain(
+        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
+    )
+
     if cpm.is_ref_to(fieldop_expr, "deref"):
-        # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
-        # value to 'as_fieldop' function. It results in broadcasting the scalar value
-        # over the field domain.
-        stencil_expr = im.lambda_("a")(im.deref("a"))
-        stencil_expr.expr.type = node.type.dtype
+        arg_type = node.args[0].type
+        if isinstance(arg_type, ts.ScalarType) or (
+            isinstance(arg_type, ts.FieldType) and len(arg_type.dims) == 0
+        ):
+            # Special usage of 'deref' as argument to fieldop expression, to broadcast
+            # a scalar value on the field domain.
+            stencil_expr = im.lambda_("a")(im.deref("a"))
+            stencil_expr.expr.type = node.type.dtype
+        else:
+            # Special usage of 'deref' with field argument, to return a subset of
+            # the full field domain.
+            arg = sdfg_builder.visit(node.args[0], ctx=ctx)
+            assert isinstance(arg, gtir_to_sdfg_types.FieldopData)
+            return ctx.copy_field(arg, domain=field_domain)
     elif isinstance(fieldop_expr, gtir.Lambda):
         # Default case, handled below: the argument expression is a lambda function
         # representing the stencil operation to be computed over the field domain.
@@ -264,12 +279,6 @@ def translate_as_fieldop(
         raise NotImplementedError(
             f"Expression type '{type(fieldop_expr)}' not supported as argument to 'as_fieldop' node."
         )
-
-    # parse the domain of the field operator
-    assert isinstance(fieldop_domain_expr.type, ts.DomainType)
-    field_domain = gtir_domain.get_field_domain(
-        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
-    )
 
     # visit the list of arguments to be passed to the lambda expression
     fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, field_domain) for arg in node.args]
@@ -503,11 +512,7 @@ def translate_literal(
 ) -> gtir_to_sdfg_types.FieldopResult:
     """Generates the dataflow subgraph for a `ir.Literal` node."""
     assert isinstance(node, gtir.Literal)
-
-    data_type = node.type
-    data_node = sdfg_builder.get_symbolic_value(ctx.sdfg, ctx.state, node.value, data_type)
-
-    return gtir_to_sdfg_types.FieldopData(data_node, data_type, origin=())
+    return sdfg_builder.get_symbolic_value(ctx, node.value, node.type)
 
 
 def translate_make_tuple(
@@ -621,16 +626,35 @@ def translate_symbol_ref(
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
 
-    symbol_name = str(node.id)
-    # we retrieve the type of the symbol in the GT4Py prgram
-    gt_symbol_type = sdfg_builder.get_symbol_type(symbol_name)
-
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    return sdfg_builder.get_data_value(
-        ctx.sdfg, ctx.state, im.sym(symbol_name, gt_symbol_type), make_temps=True
-    )
+    def _access_symbol(sym_id: str, sym_type: ts.DataType) -> gtir_to_sdfg_types.FieldopResult:
+        if isinstance(sym_type, ts.FieldType):
+            data_node = ctx.state.add_access(sym_id)
+            field = sdfg_builder.make_field(data_node, sym_type)
+            return ctx.copy_field(field)
+
+        elif isinstance(sym_type, ts.ScalarType):
+            if sym_id in ctx.sdfg.symbols:
+                return sdfg_builder.get_symbolic_value(
+                    ctx, sym_id, sym_type, temp_name=f"__{sym_id}"
+                )
+            else:
+                data_node = ctx.state.add_access(sym_id)
+                field = gtir_to_sdfg_types.FieldopData(data_node, sym_type, origin=())
+                return ctx.copy_field(field)
+
+        elif isinstance(sym_type, ts.TupleType):
+            sym_tree = gtir_to_sdfg_utils.make_symbol_tree(sym_id, sym_type)
+            return gtx_utils.tree_map(lambda sym: _access_symbol(str(sym.id), sym.type))(sym_tree)
+
+        else:
+            raise NotImplementedError(f"Symbol type {type(sym_type)} not supported.")
+
+    sym_id = str(node.id)
+    sym_type = sdfg_builder.get_symbol_type(sym_id)
+    return _access_symbol(sym_id, sym_type)
 
 
 if TYPE_CHECKING:
