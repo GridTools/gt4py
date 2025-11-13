@@ -25,7 +25,12 @@ from typing import Any, Dict, List, Set, Tuple, Type
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.common import AxisBound, LocNode
+from gt4py.cartesian.gtc.common import (  # noqa: F401
+    AxisBound,
+    BaseAxisBound,
+    LocNode,
+    RuntimeAxisBound,
+)
 from gt4py.eve import datamodels
 
 
@@ -219,8 +224,11 @@ class ScalarDecl(Decl):
 
 
 class Interval(LocNode):
-    start: AxisBound
-    end: AxisBound
+    start: BaseAxisBound
+    end: BaseAxisBound
+
+    def has_runtime_access(self):
+        return isinstance(self.start, RuntimeAxisBound) or isinstance(self.end, RuntimeAxisBound)
 
 
 # TODO(havogt) should vertical loop open a scope?

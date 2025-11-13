@@ -76,6 +76,8 @@ def compute_min_k_size(node: gtir.Stencil) -> int:
     min_size_end = 0
     biggest_offset = 0
     for vloop in node.vertical_loops:
+        if vloop.interval.has_runtime_access():
+            continue
         if (
             vloop.interval.start.level == LevelMarker.START
             and vloop.interval.end.level == LevelMarker.END

@@ -726,7 +726,16 @@ def validate_lvalue_dims(
     return _make_root_validator(_impl)
 
 
-class AxisBound(eve.Node):
+class BaseAxisBound(eve.Node):
+    pass
+
+
+class RuntimeAxisBound(BaseAxisBound):
+    level: LevelMarker
+    offset: Union[ScalarAccess, FieldAccess]
+
+
+class AxisBound(BaseAxisBound):
     level: LevelMarker
     offset: int = 0
 

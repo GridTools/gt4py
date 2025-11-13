@@ -19,7 +19,12 @@ from typing import Any, List, Optional, Tuple, Type, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.common import AxisBound as AxisBound, LocNode as LocNode
+from gt4py.cartesian.gtc.common import (
+    AxisBound,
+    BaseAxisBound,
+    LocNode as LocNode,
+    RuntimeAxisBound,
+)
 from gt4py.eve import datamodels
 
 
@@ -160,6 +165,8 @@ def _check_interval(instance: Union[Interval, UnboundedInterval]) -> None:
         start is not None
         and end is not None
         and start.level == end.level
+        and not isinstance(start, RuntimeAxisBound)
+        and not isinstance(end, RuntimeAxisBound)
         and not start.offset < end.offset
     ):
         raise ValueError(
@@ -168,8 +175,8 @@ def _check_interval(instance: Union[Interval, UnboundedInterval]) -> None:
 
 
 class Interval(LocNode):
-    start: AxisBound
-    end: AxisBound
+    start: BaseAxisBound
+    end: BaseAxisBound
 
     @datamodels.root_validator
     @classmethod

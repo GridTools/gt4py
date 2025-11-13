@@ -107,9 +107,10 @@ class AxisIntervalParser(gt_meta.ASTPass):
         cls,
         node: Union[ast.Ellipsis, ast.Slice, ast.Subscript, ast.Constant],
         axis_name: str,
+        fields: dict[str, nodes.FieldDecl],
         loc: Optional[nodes.Location] = None,
     ) -> nodes.AxisInterval:
-        parser = cls(axis_name, loc)
+        parser = cls(axis_name, fields, loc)
 
         if isinstance(node, ast.Ellipsis):
             interval = nodes.AxisInterval.full_interval()
@@ -144,8 +145,14 @@ class AxisIntervalParser(gt_meta.ASTPass):
 
         return nodes.AxisInterval(start=start, end=end, loc=loc)
 
-    def __init__(self, axis_name: str, loc: Optional[nodes.Location] = None):
+    def __init__(
+        self,
+        axis_name: str,
+        fields: dict[str, nodes.FieldDecl],
+        loc: Optional[nodes.Location] = None,
+    ):
         self.axis_name = axis_name
+        self.fields = fields
         self.loc = loc
 
         error_msg = "Invalid interval range specification"
@@ -168,7 +175,7 @@ class AxisIntervalParser(gt_meta.ASTPass):
         self,
         value: Union[int, None, gtscript.AxisIndex, nodes.AxisBound, nodes.VarRef],
         endpt: nodes.LevelMarker,
-    ) -> nodes.AxisBound:
+    ) -> nodes.AxisBound | nodes.RuntimeAxisBound:
         if isinstance(value, nodes.AxisBound):
             return value
 
@@ -176,8 +183,13 @@ class AxisIntervalParser(gt_meta.ASTPass):
             level = nodes.LevelMarker.END if value < 0 else nodes.LevelMarker.START
             offset = value
         elif isinstance(value, nodes.VarRef):
-            level = value
-            offset = 0
+            level = nodes.LevelMarker.START
+            offset = value
+            return nodes.RuntimeAxisBound(level=level, offset=offset, loc=self.loc)
+        elif isinstance(value, nodes.FieldRef):
+            level = nodes.LevelMarker.START
+            offset = value
+            return nodes.RuntimeAxisBound(level=level, offset=offset, loc=self.loc)
         elif isinstance(value, gtscript.AxisIndex):
             level = nodes.LevelMarker.START if value.index >= 0 else nodes.LevelMarker.END
             offset = value.index + value.offset
@@ -195,7 +207,10 @@ class AxisIntervalParser(gt_meta.ASTPass):
         return nodes.AxisBound(level=level, offset=offset, loc=self.loc)
 
     def visit_Name(self, node: ast.Name) -> nodes.VarRef:
-        return nodes.VarRef(name=node.id, loc=nodes.Location.from_ast_node(node))
+        assert "K" not in self.fields[node.id].axes
+        return nodes.FieldRef.at_center(
+            name=node.id, axes=self.fields[node.id].axes, loc=nodes.Location.from_ast_node(node)
+        )
 
     def visit_Constant(self, node: ast.Constant) -> Union[int, gtscript.AxisIndex, None]:
         if isinstance(node.value, gtscript.AxisIndex):
@@ -976,13 +991,19 @@ class IRMaker(ast.NodeVisitor):
             interval_node = args[0]
 
         seq_name = nodes.Domain.LatLonGrid().sequential_axis.name
-        interval = AxisIntervalParser.apply(interval_node, seq_name, loc=loc)
+        interval = AxisIntervalParser.apply(interval_node, seq_name, self.fields, loc=loc)
 
         if (
             interval.start.level == nodes.LevelMarker.END
             and interval.end.level == nodes.LevelMarker.START
-        ) or (
+        ):
+            raise range_error
+        if (
             interval.start.level == interval.end.level
+            and (
+                not isinstance(interval.end, nodes.RuntimeAxisBound)
+                and not isinstance(interval.start, nodes.RuntimeAxisBound)
+            )
             and interval.end.offset <= interval.start.offset
         ):
             raise range_error

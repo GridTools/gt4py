@@ -62,6 +62,9 @@ class AccessKindComputer(eve.NodeVisitor):
         self.generic_visit(node, access=access, block_extents=block_extents)
         return access
 
+    def visit_RuntimeAxisBound(self, axis_bound: oir.RuntimeAxisBound, **kwargs: Any) -> None:
+        self.visit(axis_bound.offset, kind=AccessKind.READ, **kwargs)
+
 
 def compute_access_kinds(stencil: oir.Stencil) -> Dict[str, AccessKind]:
     return AccessKindComputer().visit(stencil)
