@@ -252,12 +252,19 @@ class CompiledProgramsPool:
         stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
     ] = dataclasses.field(default_factory=dict, init=False)
 
+    @functools.cached_property
+    def _primitive_values_extractor(self) -> Callable | None:
+        return arguments.make_primitive_value_args_extractor(self.program_type.definition)
+
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
         assert not self.program_type.definition.kw_only_args
         assert not self.program_type.definition.pos_only_args
         self._validate_argument_descriptor_mapping()
+
+        # Force initialization of all cached properties here to minimize first-time call overhead
+        self._primitive_values_extractor  # noqa: B018
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -269,7 +276,11 @@ class CompiledProgramsPool:
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
-        args, kwargs = self._args_canonicalizer(args, kwargs)
+        canonical_args, canonical_kwargs = self._args_canonicalizer(*args, **kwargs)
+        if (extractor := self._primitive_values_extractor) is not None:
+            args, kwargs = extractor(*canonical_args, **canonical_kwargs)
+        else:
+            args, kwargs = canonical_args, canonical_kwargs
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
         key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
 
@@ -301,7 +312,10 @@ class CompiledProgramsPool:
                     call_key=key,
                 )
                 return self(
-                    *args, offset_provider=offset_provider, enable_jit=False, **kwargs
+                    *canonical_args,
+                    offset_provider=offset_provider,
+                    enable_jit=False,
+                    **canonical_kwargs,
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 

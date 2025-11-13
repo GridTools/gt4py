@@ -167,19 +167,6 @@ class Program(CompiledProgramMixin):
     def __gt_type__(self):
         return self.past_stage.past_node.type
 
-    # needed in testing
-    @property
-    def definition(self) -> types.FunctionType:
-        return self.definition_stage.definition
-
-    @functools.cached_property
-    def past_stage(self) -> ffront_stages.PRG:
-        # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.CompilableProgram(
-            self.definition_stage, arguments.CompileTimeArgs.empty()
-        )
-        return self._frontend_transforms.func_to_past(no_args_def).data
-
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
         no_args_past = toolchain.CompilableProgram(
@@ -201,6 +188,18 @@ class Program(CompiledProgramMixin):
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
     @property
+    def definition(self) -> types.FunctionType:
+        return self.definition_stage.definition
+
+    @functools.cached_property
+    def past_stage(self) -> ffront_stages.PAST_PRG:
+        # backwards compatibility for backends that do not support the full toolchain
+        no_args_def = toolchain.CompilableProgram(
+            self.definition_stage, arguments.CompileTimeArgs.empty()
+        )
+        return self._frontend_transforms.func_to_past(no_args_def).data
+
+    @property
     def _frontend_transforms(self) -> next_backend.Transforms:
         if self.backend is None:
             return next_backend.DEFAULT_TRANSFORMS
@@ -208,6 +207,22 @@ class Program(CompiledProgramMixin):
         #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
         assert isinstance(self.backend.transforms, next_backend.Transforms)
         return self.backend.transforms
+
+    @functools.cached_property
+    def _all_closure_vars(self) -> dict[str, Any]:
+        return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
+
+    @functools.cached_property
+    def gtir(self) -> itir.Program:
+        no_args_past = toolchain.CompilableProgram(
+            data=ffront_stages.PastProgramDefinition(
+                past_node=self.past_stage.past_node,
+                closure_vars=self.past_stage.closure_vars,
+                grid_type=self.definition_stage.grid_type,
+            ),
+            args=arguments.CompileTimeArgs.empty(),
+        )
+        return self._frontend_transforms.past_to_itir(no_args_past).data
 
     def with_backend(self, backend: next_backend.Backend) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -271,22 +286,6 @@ class Program(CompiledProgramMixin):
                 if field.init
             },
         )
-
-    @functools.cached_property
-    def _all_closure_vars(self) -> dict[str, Any]:
-        return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
-
-    @functools.cached_property
-    def gtir(self) -> itir.Program:
-        no_args_past = toolchain.CompilableProgram(
-            data=ffront_stages.PastProgramDefinition(
-                past_node=self.past_stage.past_node,
-                closure_vars=self.past_stage.closure_vars,
-                grid_type=self.definition_stage.grid_type,
-            ),
-            args=arguments.CompileTimeArgs.empty(),
-        )
-        return self._frontend_transforms.past_to_itir(no_args_past).data
 
     def __call__(
         self,
@@ -354,7 +353,7 @@ class FrozenProgram:
     Does not work in embedded execution.
     """
 
-    program: ffront_stages.DSL_PRG | ffront_stages.PRG
+    program: ffront_stages.DSL_PRG | ffront_stages.PAST_PRG
     backend: next_backend.Backend
     _compiled_program: Optional[stages.CompiledProgram] = dataclasses.field(
         init=False, default=None

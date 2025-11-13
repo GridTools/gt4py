@@ -7,13 +7,46 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import inspect
 import itertools
-from functools import reduce
+import functools
+from collections.abc import Callable
 from typing import Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.next import common, utils
+from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next.type_system import type_info
+
+
+def _tree_map_type_constructor(
+    value: ts.CollectionTypeSpecT,
+    elems: NestedTuple[ts.DataType],
+) -> ts.CollectionTypeSpecT:
+    return (
+        ts.NamedCollectionType(
+            keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
+        )
+        if isinstance(value, ts.NamedCollectionType)
+        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
+    )
+
+
+# TODO: Replace all occurrences of `apply_to_primitive_constituents` with this function,
+#   which also works with NamedCollections.
+tree_map_type = functools.partial(
+    utils.tree_map,
+    collection_type=ts.COLLECTION_TYPE_SPECS,
+    result_collection_constructor=_tree_map_type_constructor,
+)
+
+named_collections_to_tuple_types = cast(
+    Callable[..., ts.TupleType],
+    utils.tree_map(
+        lambda x: x,
+        collection_type=ts.COLLECTION_TYPE_SPECS,
+        result_collection_constructor=lambda _, elems: ts.TupleType(types=list(elems)),
+    ),
+)
 
 
 def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
@@ -176,7 +209,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
     def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
         assert isinstance(dtype, ts.ScalarType)
         try:
-            el_type = reduce(
+            el_type = functools.reduce(
                 lambda type_, idx: type_.types[idx],  # type: ignore[attr-defined]
                 path,
                 arg,
@@ -305,8 +338,9 @@ def return_type_scanop(
         #  field
         [callable_type.axis],
     )
-    return type_info.apply_to_primitive_constituents(
-        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)), carry_dtype
+    return cast(
+        ts.TypeSpec,
+        tree_map_type(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype),
     )
 
 
@@ -349,7 +383,7 @@ def signature_from_callable_in_program_context(callable_type: ts.CallableType):
 
 def make_args_canonicalizer(
     callable_type: ts.CallableType, **kwargs
-) -> utils.CallArgsCanonicalizer:
+):
     """
     Create a call arguments canonicalizer function from a given signature.
 
