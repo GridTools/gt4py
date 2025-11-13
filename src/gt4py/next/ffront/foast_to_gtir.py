@@ -12,7 +12,7 @@ from typing import Any, Callable, Optional
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Never
+from gt4py.eve.extended_typing import Never, cast
 from gt4py.next import common
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -29,7 +29,7 @@ from gt4py.next.ffront.stages import AOT_FOP, FOP
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
-from gt4py.next.otf import toolchain, workflow
+from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 
@@ -238,9 +238,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
             return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
-        raise AssertionError(
-            "Unexpected attribute access. At this point all accesses should have been removed by `ClosureVarFolding`."
-        )
+
+        if isinstance(named_tup_type := node.value.type, ts.NamedCollectionType):
+            ind = named_tup_type.keys.index(node.attr)
+            return im.tuple_get(ind, self.visit(node.value, **kwargs))
+
+        raise AssertionError("Unreachable")
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         if isinstance(node.index.type, ts.IndexType):
@@ -353,17 +356,29 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         ):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
-        elif isinstance(node.func, foast.Name) and isinstance(node.func.type, ts.ConstructorType):
-            return self._visit_type_constr(node, **kwargs)
         elif isinstance(
             node.func.type,
-            (ts.FunctionType, ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
+            (
+                ts.FunctionType,
+                ts_ffront.FieldOperatorType,
+                ts_ffront.ScanOperatorType,
+                ts.ConstructorType,
+            ),
         ):
             # ITIR has no support for keyword arguments. Instead, we concatenate both positional
             # and keyword arguments and use the unique order as given in the function signature.
             lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
                 node.func.type, self.visit(node.args, **kwargs), self.visit(node.kwargs, **kwargs)
             )
+            if isinstance(node.func, foast.Name) and isinstance(node.func.type, ts.ConstructorType):
+                if isinstance(node.func.type.constructed_type, ts.NamedCollectionType):
+                    # construct a plain tuple from the custom container constructor
+                    return im.make_tuple(*lowered_args, *lowered_kwargs.values())
+                elif isinstance(node.func.type.constructed_type, ts.ScalarType):
+                    return self._visit_type_constr(node, **kwargs)
+                else:
+                    raise AssertionError("Unexpected constructor encounterd.")
+
             result = im.call(self.visit(node.func, **kwargs))(
                 *lowered_args, *lowered_kwargs.values()
             )
@@ -490,7 +505,13 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.literal(str(val), target_type)
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
-        if isinstance(type_, ts.TupleType):
+        if isinstance(type_, ts.COLLECTION_TYPE_SPECS):
+            type_ = cast(
+                ts.CollectionTypeSpec, type_
+            )  # This shouldn't be needed after the previous isinstance() check
+            # This code-path is only active in the init of a scan,
+            # as otherwise the frontend generates tuple expressions of `Constant`s.
+            val = arguments.extract(val) if isinstance(type_, ts.NamedCollectionType) else val
             return im.make_tuple(
                 *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))
             )

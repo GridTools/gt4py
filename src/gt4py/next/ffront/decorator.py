@@ -133,7 +133,7 @@ class Program:
         return self.definition_stage.definition
 
     @functools.cached_property
-    def past_stage(self) -> ffront_stages.PRG:
+    def past_stage(self) -> ffront_stages.PAST_PRG:
         # backwards compatibility for backends that do not support the full toolchain
         no_args_def = toolchain.CompilableProgram(
             self.definition_stage, arguments.CompileTimeArgs.empty()
@@ -362,7 +362,7 @@ class FrozenProgram:
     Does not work in embedded execution.
     """
 
-    program: ffront_stages.DSL_PRG | ffront_stages.PRG
+    program: ffront_stages.DSL_PRG | ffront_stages.PAST_PRG
     backend: next_backend.Backend
     _compiled_program: Optional[stages.CompiledProgram] = dataclasses.field(
         init=False, default=None

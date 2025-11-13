@@ -369,7 +369,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         TargetType: TypeAlias = list[foast.Starred | foast.Symbol]
         values = self.visit(node.value, **kwargs)
 
-        if isinstance(values.type, ts.TupleType):
+        if isinstance(values.type, ts.COLLECTION_TYPE_SPECS):
             num_elts: int = len(values.type.types)
             targets: TargetType = node.targets
             indices: list[tuple[int, int] | int] = foast_utils.compute_assign_indices(
@@ -399,7 +399,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]  # type: ignore[assignment] # see check in next line
+                    new_type = values.type.types[index]
                     assert isinstance(new_type, ts.DataType)
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
