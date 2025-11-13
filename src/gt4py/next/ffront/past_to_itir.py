@@ -14,7 +14,7 @@ from typing import Any, Optional, Sequence, cast
 
 import devtools
 
-from gt4py.eve import NodeTranslator, traits, utils as eve_utils
+from gt4py.eve import NodeTranslator, traits
 from gt4py.next import common, config, errors, utils
 from gt4py.next.ffront import (
     fbuiltins,

@@ -252,7 +252,6 @@ class Program:
             },
         )
 
-
     @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
