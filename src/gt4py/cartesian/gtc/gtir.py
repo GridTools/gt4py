@@ -271,14 +271,14 @@ class VerticalLoop(LocNode):
                         write_access.offset, (VariableKOffset, AbsoluteKIndex)
                     ):
                         raise ValueError(
-                            "Not allowed to read and write with `VariableKOffset` and/or "
+                            "Not allowed to write and read with `VariableKOffset` and/or "
                             f"`AbsoluteKIndex` in PARALLEL loops: `{node.name}`"
                         )
 
                     # For cartesian offsets, we allow it if both are equal (e.g. 0)
                     if node.offset.k != write_access.offset.k:
                         raise ValueError(
-                            "Not allowed to read and write with k-offsets in PARALLEL "
+                            "Not allowed to write and read with k-offsets in PARALLEL "
                             f"loops: `{node.name}`"
                         )
 

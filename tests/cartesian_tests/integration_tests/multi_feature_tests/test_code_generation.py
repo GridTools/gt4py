@@ -1492,14 +1492,14 @@ def test_no_read_write_with_horizontal_offset() -> None:
 
 
 def test_k_offsets_in_parallel_loops() -> None:
-    with pytest.raises(ValueError, match="read and write with k-offsets in PARALLEL"):
+    with pytest.raises(ValueError, match="write and read with k-offsets in PARALLEL"):
 
         @gtscript.stencil(backend="debug")
         def self_assign_offset_parallel(field: Field[np.int32]) -> None:
             with computation(PARALLEL), interval(1, None):
                 field = field[0, 0, -1] * 2
 
-    with pytest.raises(ValueError, match="read and write with k-offsets in PARALLEL"):
+    with pytest.raises(ValueError, match="write and read with k-offsets in PARALLEL"):
 
         @gtscript.stencil(backend="debug")
         def self_assign_offset_parallel_temp(field: Field[np.int32]) -> None:
@@ -1508,7 +1508,7 @@ def test_k_offsets_in_parallel_loops() -> None:
                 field = tmp * 2
 
     with pytest.raises(
-        ValueError, match="read and write with `VariableKOffset` and/or `AbsoluteKIndex`"
+        ValueError, match="write and read with `VariableKOffset` and/or `AbsoluteKIndex`"
     ):
 
         @gtscript.stencil(backend="debug")
@@ -1518,7 +1518,7 @@ def test_k_offsets_in_parallel_loops() -> None:
                 field = 2 * level
 
     with pytest.raises(
-        ValueError, match="read and write with `VariableKOffset` and/or `AbsoluteKIndex`"
+        ValueError, match="write and read with `VariableKOffset` and/or `AbsoluteKIndex`"
     ):
 
         @gtscript.stencil(backend="debug")
