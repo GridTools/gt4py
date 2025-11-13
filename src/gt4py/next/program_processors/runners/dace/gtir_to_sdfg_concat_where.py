@@ -216,8 +216,9 @@ def translate_concat_where(
     if isinstance(node.type.dtype, ts.ScalarType):
         dtype = gtx_dace_utils.as_dace_type(node.type.dtype)
     else:
-        assert isinstance(node.type.dtype.element_type, ts.ScalarType)
-        dtype = gtx_dace_utils.as_dace_type(node.type.dtype.element_type)
+        # TODO(edopao): Refactor allocation of fields with local dimension and enable this.
+        raise NotImplementedError("concat_where with list output is not supported")
+
     output, output_desc = sdfg_builder.add_temp_array(ctx.sdfg, output_shape, dtype)
     output_node = ctx.state.add_access(output)
 
