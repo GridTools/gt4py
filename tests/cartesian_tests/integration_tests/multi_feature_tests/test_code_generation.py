@@ -1475,7 +1475,7 @@ def test_upcasting_both_sides_of_assignment(backend: str) -> None:
 
 
 def test_no_write_and_read_with_horizontal_offset() -> None:
-    with pytest.raises(ValueError, match="Self-assignment with offset is illegal."):
+    with pytest.raises(ValueError, match="Self-assignment with offset in I or J is illegal."):
 
         @gtscript.stencil(backend="debug")
         def self_assign_offset(field: Field[np.float64]) -> None:
