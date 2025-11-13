@@ -173,12 +173,23 @@ class Program:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
 
-        if self.static_params is None:
-            object.__setattr__(self, "static_params", ())
+        def path_to_expr(path: Sequence[int]) -> str:
+            return "".join(map(lambda idx: f"[{idx}]", path))
 
-        argument_descriptor_mapping = {
-            arguments.StaticArg: self.static_params,
-        }
+        argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
+
+        if self.static_params:
+            argument_descriptor_mapping[arguments.StaticArg] = self.static_params
+
+        if self.static_domains:
+            static_domain_args = []
+            func_type = self.past_stage.past_node.type.definition  # type: ignore[union-attr] # type inference done at this point
+            param_types = func_type.pos_or_kw_args | func_type.kw_only_args
+            for name, type_ in param_types.items():
+                for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
+                    if isinstance(el_type_, ts.FieldType):
+                        static_domain_args.append(f"{name}{path_to_expr(path)}")
+            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = static_domain_args
 
         program_type = self.past_stage.past_node.type
         assert isinstance(program_type, ts_ffront.ProgramType)
@@ -186,7 +197,7 @@ class Program:
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
+            argument_descriptor_mapping=argument_descriptor_mapping,
         )
 
     def with_backend(self, backend: next_backend.Backend) -> Program:
@@ -252,37 +263,6 @@ class Program:
             },
         )
 
-    @functools.cached_property
-    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
-        if self.backend is None or self.backend == eve.NOTHING:
-            raise RuntimeError("Cannot compile a program without backend.")
-
-        def path_to_expr(path: Sequence[int]) -> str:
-            return "".join(map(lambda idx: f"[{idx}]", path))
-
-        argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
-
-        if self.static_params:
-            argument_descriptor_mapping[arguments.StaticArg] = self.static_params
-
-        if self.static_domains:
-            static_domain_args = []
-            func_type = self.past_stage.past_node.type.definition  # type: ignore[union-attr] # type inference done at this point
-            param_types = func_type.pos_or_kw_args | func_type.kw_only_args
-            for name, type_ in param_types.items():
-                for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
-                    if isinstance(el_type_, ts.FieldType):
-                        static_domain_args.append(f"{name}{path_to_expr(path)}")
-            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = static_domain_args
-
-        program_type = self.past_stage.past_node.type
-        assert isinstance(program_type, ts_ffront.ProgramType)
-        return compiled_program.CompiledProgramsPool(
-            backend=self.backend,
-            definition_stage=self.definition_stage,
-            program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,
-        )
 
     def __call__(
         self,
