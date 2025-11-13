@@ -14,9 +14,12 @@ translators in `gtir_to_sdfg_primitives` module.
 
 from __future__ import annotations
 
+from typing import Sequence
+
 import dace
 from dace import subsets as dace_subsets
 
+from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -28,184 +31,68 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
-    sdfg_library_nodes,
+    utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
 
 
-def _make_concat_scalar_broadcast(
+def _translate_concat_where_branch(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    inp: gtir_to_sdfg_types.FieldopData,
-    inp_desc: dace.data.Array,
-    out_domain: domain_utils.SymbolicDomain,
-) -> tuple[gtir_to_sdfg_types.FieldopData, dace.data.Array]:
-    """
-    Helper function called by `_translate_concat_where_impl` to create a mapped
-    tasklet that broadcasts one scalar value on the given domain.
+    concat_dim: gtx_common.Dimension,
+    concat_dim_bound_expr: gtir.Expr,
+    output_domain: domain_utils.SymbolicDomain,
+    output_type: ts.FieldType,
+    source_expr: gtir.Expr,
+    output_desc: dace.data.Array,
+    output_node: dace.nodes.AccessNode,
+    output_origin: Sequence[dace.symbolic.SymbolicType],
+    is_lower: bool,
+) -> None:
+    assert isinstance(source_expr.type, (ts.FieldType, ts.ScalarType))
 
-    The scalar value can come from either a scalar node or from a 1D-array (assuming
-    the array represents a field in the concat dimension).
-    """
-    out_dims, out_origin, out_shape = gtir_domain.get_field_layout(
-        gtir_domain.get_field_domain(out_domain)
-    )
-
-    out_name, out_desc = ctx.sdfg.add_temp_transient(out_shape, inp_desc.dtype)
-    out_node = ctx.state.add_access(out_name)
-
-    inp_desc = inp.dc_node.desc(ctx.sdfg)
-
-    if isinstance(inp.gt_type, ts.FieldType):
-        assert isinstance(inp.gt_type.dtype, ts.ScalarType)
-        inp_axes = [out_dims.index(dim) for dim in inp.gt_type.dims]
-        inp_origin = inp.origin
-        dtype = inp.gt_type.dtype
-    else:
-        inp_axes = None
-        inp_origin = None
-        dtype = inp.gt_type
-
-    # Use a 'Broadcast' library node to write the scalar value to the result field.
-    name = sdfg_builder.unique_tasklet_name("broadcast")
-    bcast_node = sdfg_library_nodes.Broadcast(name, inp_axes, inp_origin, out_origin)
-    ctx.state.add_node(bcast_node)
-    ctx.state.add_edge(
-        inp.dc_node,
-        None,
-        bcast_node,
-        "_inp",
-        dace.Memlet(data=inp.dc_node.data, subset=dace_subsets.Range.from_array(inp_desc)),
-    )
-    ctx.state.add_edge(
-        bcast_node,
-        "_outp",
-        out_node,
-        None,
-        dace.Memlet(data=out_name, subset=dace_subsets.Range.from_array(out_desc)),
-    )
-
-    out_type = ts.FieldType(dims=out_dims, dtype=dtype)
-    out_field = gtir_to_sdfg_types.FieldopData(out_node, out_type, tuple(out_origin))
-    return out_field, out_desc
-
-
-def _translate_concat_where_impl(
-    ctx: gtir_to_sdfg.SubgraphContext,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    node_domain: domain_utils.SymbolicDomain,
-    mask_domain: domain_utils.SymbolicDomain,
-    tb_field: gtir_to_sdfg_types.FieldopData,
-    tb_domain: domain_utils.SymbolicDomain,
-    fb_field: gtir_to_sdfg_types.FieldopData,
-    fb_domain: domain_utils.SymbolicDomain,
-) -> gtir_to_sdfg_types.FieldopData:
-    """
-    Helper function called by `translate_concat_where()` to lower 'concat_where'
-    on a single output field.
-
-    In case of tuples, this function is called on all fields by means of `tree_map`.
-
-    It builds the output field by concatanating the two input fields on the lower
-    and upper domain. These two domains are computed from the intersection of the
-    mask and the input domains.
-
-    Note that 'tb' and 'fb' stand for true/false branch and refer to the two branches
-    of the concat_where expression, passed as second and third argument, respectively.
-
-    Args:
-        ctx: The SDFG context where the primitive subgraph should be instantiated.
-        sdfg_builder: The object responsible for SubgraphContexting child nodes of the primitive node.
-        mask_domain: Domain (only for concat dimension) of the true branch, infinite
-            on lower or upper boundary.
-        node_domain: Domain (all dimensions) of output field.
-        tb_field: Input field on the true branch.
-        tb_domain: Domain of the field expression on the true branch.
-        fb_field: Input field on the false branch.
-        fb_domain: Domain of the field expression on the false branch.
-
-    Returns:
-        The field resulted from concatanating the input fields on the lower and upper domain.
-    """
-    tb_data_desc, fb_data_desc = (inp.dc_node.desc(ctx.sdfg) for inp in [tb_field, fb_field])
-    assert tb_data_desc.dtype == fb_data_desc.dtype
-
-    assert len(mask_domain.ranges) == 1
-    concat_dim = next(iter(mask_domain.ranges.keys()))
-
-    # Expect unbound range in the concat domain expression on lower or upper range:
-    #  - if the domain expression is unbound on lower side (negative infinite),
-    #    the expression on the true branch is to be considered the input for the
-    #    lower domain.
-    #  - viceversa, if the domain expression is unbound on upper side (positive
-    #    infinite), the true expression represents the input for the upper domain.
-    infinity_literals = (gtir.InfinityLiteral.POSITIVE, gtir.InfinityLiteral.NEGATIVE)
-    if mask_domain.ranges[concat_dim].start in infinity_literals:
-        concat_dim_bound_expr = mask_domain.ranges[concat_dim].stop
-        lower, lower_desc, lower_domain = (tb_field, tb_data_desc, tb_domain)
-        upper, upper_desc, upper_domain = (fb_field, fb_data_desc, fb_domain)
-    elif mask_domain.ranges[concat_dim].stop in infinity_literals:
-        concat_dim_bound_expr = mask_domain.ranges[concat_dim].start
-        lower, lower_desc, lower_domain = (fb_field, fb_data_desc, fb_domain)
-        upper, upper_desc, upper_domain = (tb_field, tb_data_desc, tb_domain)
-    else:
-        raise ValueError(f"Unexpected concat mask {mask_domain} with finite domain.")
-
-    # We use the concat domain, stored in the annex, as the domain of output field.
-    output_domain = gtir_domain.get_field_domain(node_domain)
-    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(output_domain)
-    concat_dim_index = output_dims.index(concat_dim)
-
-    """
-    We broadcast the argument field on dimensions on the output field, in case the
-    argument is a scalar value, for example:
-    ```python
-    @gtx.field_operator
-    def testee(a: np.int32, b: IJKField) -> IJKField:
-        return concat_where(KDim == 0, a, b)
-    ```
-    
-    Similarly, we broadcast a field defined as a slice of the output domain, i.e.
-    a field with a smaller number of dimensions than the out field.
-    Consider for example the following IR, where the the 'a' IJ-field is used for
-    the vertical boundary (`KDim == 0`):
-    ```python
-    @gtx.field_operator
-    def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
-        return concat_where(KDim == 0, boundary, interior)
-    ```
-    """
-    if isinstance(lower.gt_type, ts.ScalarType) or len(lower.gt_type.dims) < len(output_dims):
-        if concat_dim not in lower_domain.ranges:
-            lower_domain.ranges[concat_dim] = domain_utils.SymbolicRange(
-                start=node_domain.ranges[concat_dim].start, stop=concat_dim_bound_expr
+    source_domain = source_expr.annex.domain
+    if isinstance(source_expr.type, ts.ScalarType) or len(source_expr.type.dims) < len(
+        output_type.dims
+    ):
+        """
+        We broadcast the argument field on dimensions on the output field, in case the
+        argument is a scalar value, for example:
+        ```python
+        @gtx.field_operator
+        def testee(a: np.int32, b: IJKField) -> IJKField:
+            return concat_where(KDim == 0, a, b)
+        ```
+        
+        Similarly, we broadcast a field defined as a slice of the output domain, i.e.
+        a field with a smaller number of dimensions than the out field.
+        Consider for example the following IR, where the the 'a' IJ-field is used for
+        the vertical boundary (`KDim == 0`):
+        ```python
+        @gtx.field_operator
+        def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
+            return concat_where(KDim == 0, boundary, interior)
+        ```
+        """
+        if concat_dim not in source_domain.ranges:
+            source_domain.ranges[concat_dim] = (
+                domain_utils.SymbolicRange(
+                    start=output_domain.ranges[concat_dim].start, stop=concat_dim_bound_expr
+                )
+                if is_lower
+                else domain_utils.SymbolicRange(
+                    start=concat_dim_bound_expr,
+                    stop=output_domain.ranges[concat_dim].stop,
+                )
             )
-        lower_domain = domain_utils.promote_domain(lower_domain, node_domain.ranges.keys())
-        lower_domain = domain_utils.domain_intersection(lower_domain, node_domain)
-        lower, lower_desc = _make_concat_scalar_broadcast(
-            ctx=ctx,
-            sdfg_builder=sdfg_builder,
-            inp=lower,
-            inp_desc=lower_desc,
-            out_domain=lower_domain,
-        )
+        source_domain = domain_utils.promote_domain(source_domain, output_type.dims)
+        source_domain = domain_utils.domain_intersection(source_domain, output_domain)
 
-    elif isinstance(upper.gt_type, ts.ScalarType) or len(upper.gt_type.dims) < len(output_dims):
-        if concat_dim not in upper_domain.ranges:
-            upper_domain.ranges[concat_dim] = domain_utils.SymbolicRange(
-                start=concat_dim_bound_expr,
-                stop=node_domain.ranges[concat_dim].stop,
-            )
-        upper_domain = domain_utils.promote_domain(upper_domain, node_domain.ranges.keys())
-        upper_domain = domain_utils.domain_intersection(upper_domain, node_domain)
-        upper, upper_desc = _make_concat_scalar_broadcast(
-            ctx=ctx,
-            sdfg_builder=sdfg_builder,
-            inp=upper,
-            inp_desc=upper_desc,
-            out_domain=upper_domain,
-        )
+        # Use a 'deref' field operator to broadcast the input expression on the target domain.
+        bcast_expr = im.as_fieldop("deref", source_domain.as_expr())(source_expr)
+        bcast_expr.type = output_type
 
+        source = sdfg_builder.visit(bcast_expr, ctx=ctx)
     else:
         """
         Handle here the _regular_ case, that is concat_where applied to two fields
@@ -216,101 +103,65 @@ def _translate_concat_where_impl(
             return concat_where(KDim < 10, a, b)
         ```
         """
-        assert isinstance(lower.gt_type, ts.FieldType)
-        assert isinstance(upper.gt_type, ts.FieldType)
-        if lower.gt_type.dims != upper.gt_type.dims:
-            raise ValueError(
-                "Lowering concat_where on fields with different domain is not supported."
-            )
+        source = sdfg_builder.visit(source_expr, ctx=ctx)
 
-    lower_domain_range = lower_domain.ranges[concat_dim]
-    lower_range_0 = gtir_to_sdfg_utils.get_symbolic(lower_domain_range.start)
-    lower_range_1 = gtir_to_sdfg_utils.get_symbolic(
-        im.maximum(lower_domain_range.start, lower_domain_range.stop)
+    assert source.gt_type == output_type
+    source_domain_range = source_domain.ranges[concat_dim]
+    source_range_0 = gtir_to_sdfg_utils.get_symbolic(source_domain_range.start)
+    source_range_1 = gtir_to_sdfg_utils.get_symbolic(
+        im.maximum(source_domain_range.start, source_domain_range.stop)
     )
-    lower_range_size = lower_range_1 - lower_range_0
+    source_range_size = source_range_1 - source_range_0
 
-    upper_domain_range = upper_domain.ranges[concat_dim]
-    upper_range_0 = gtir_to_sdfg_utils.get_symbolic(upper_domain_range.start)
-    upper_range_1 = gtir_to_sdfg_utils.get_symbolic(
-        im.maximum(upper_domain_range.start, upper_domain_range.stop)
-    )
-    upper_range_size = upper_range_1 - upper_range_0
+    if isinstance(output_type.dtype, ts.ScalarType):
+        all_dims = gtx_common.order_dimensions(output_type.dims)
+    else:
+        assert output_type.dtype.offset_type
+        all_dims = gtx_common.order_dimensions([*output_type.dims, output_type.dtype.offset_type])
 
-    output, output_desc = sdfg_builder.add_temp_array(ctx.sdfg, output_shape, lower_desc.dtype)
-    output_node = ctx.state.add_access(output)
-
-    lower_subset = []
-    lower_output_subset = []
-    upper_subset = []
-    upper_output_subset = []
-    for dim_index, size in enumerate(output_desc.shape):
-        if dim_index == concat_dim_index:
-            lower_subset.append(
+    source_subset = []
+    output_subset = []
+    for dim, size, src_origin, dst_origin in zip(
+        all_dims,
+        output_desc.shape,
+        source.origin,
+        output_origin,
+        strict=True,
+    ):
+        if dim == concat_dim:
+            source_subset.append(
                 (
-                    lower_range_0 - lower.origin[dim_index],
-                    lower_range_1 - lower.origin[dim_index] - 1,
+                    source_range_0 - src_origin,
+                    source_range_1 - src_origin - 1,
                     1,
                 )
             )
-            upper_subset.append(
+            output_subset.append(
                 (
-                    upper_range_0 - upper.origin[dim_index],
-                    upper_range_1 - upper.origin[dim_index] - 1,
-                    1,
-                )
-            )
-            # we write the data of the lower range into the output array starting
-            # from the index zero
-            lower_output_subset.append((0, lower_range_size - 1, 1))
-            # the upper range should be written next to the lower range, so the
-            # destination subset does not start from index zero
-            upper_output_subset.append(
-                (
-                    lower_range_size,
-                    lower_range_size + upper_range_size - 1,
+                    source_range_0 - dst_origin,
+                    source_range_0 - dst_origin + source_range_size - 1,
                     1,
                 )
             )
         else:
-            lower_subset.append(
+            source_subset.append(
                 (
-                    output_domain[dim_index].start - lower.origin[dim_index],
-                    output_domain[dim_index].start - lower.origin[dim_index] + size - 1,
+                    dst_origin - src_origin,
+                    dst_origin - src_origin + size - 1,
                     1,
                 )
             )
-            upper_subset.append(
-                (
-                    output_domain[dim_index].start - upper.origin[dim_index],
-                    output_domain[dim_index].start - upper.origin[dim_index] + size - 1,
-                    1,
-                )
-            )
-
-            lower_output_subset.append((0, size - 1, 1))
-            upper_output_subset.append((0, size - 1, 1))
+            output_subset.append((0, size - 1, 1))
 
     ctx.state.add_nedge(
-        lower.dc_node,
+        source.dc_node,
         output_node,
         dace.Memlet(
-            data=lower.dc_node.data,
-            subset=dace_subsets.Range(lower_subset),
-            other_subset=dace_subsets.Range(lower_output_subset),
+            data=source.dc_node.data,
+            subset=dace_subsets.Range(source_subset),
+            other_subset=dace_subsets.Range(output_subset),
         ),
     )
-    ctx.state.add_nedge(
-        upper.dc_node,
-        output_node,
-        dace.Memlet(
-            data=upper.dc_node.data,
-            subset=dace_subsets.Range(upper_subset),
-            other_subset=dace_subsets.Range(upper_output_subset),
-        ),
-    )
-
-    return gtir_to_sdfg_types.FieldopData(output_node, lower.gt_type, origin=tuple(output_origin))
 
 
 def translate_concat_where(
@@ -339,18 +190,50 @@ def translate_concat_where(
     if len(mask_domain.ranges) != 1:
         raise NotImplementedError("Expected `concat_where` along single axis.")
 
-    # we visit the field arguments for the true and false branch
-    (tb, tb_domain), (fb, fb_domain) = (
-        (sdfg_builder.visit(node.args[i], ctx=ctx), node.args[i].annex.domain) for i in [1, 2]
-    )
+    concat_dim = next(iter(mask_domain.ranges.keys()))
 
-    return _translate_concat_where_impl(
-        ctx,
-        sdfg_builder,
-        node.annex.domain,
-        mask_domain,
-        tb,
-        tb_domain,
-        fb,
-        fb_domain,
-    )
+    # Expect unbound range in the concat domain expression on lower or upper range:
+    #  - if the domain expression is unbound on lower side (negative infinite),
+    #    the expression on the true branch is to be considered the input for the
+    #    lower domain.
+    #  - viceversa, if the domain expression is unbound on upper side (positive
+    #    infinite), the true expression represents the input for the upper domain.
+    infinity_literals = (gtir.InfinityLiteral.POSITIVE, gtir.InfinityLiteral.NEGATIVE)
+    if mask_domain.ranges[concat_dim].start in infinity_literals:
+        bound_expr = mask_domain.ranges[concat_dim].stop
+        lower_expr, upper_expr = node.args[1:]
+    elif mask_domain.ranges[concat_dim].stop in infinity_literals:
+        bound_expr = mask_domain.ranges[concat_dim].start
+        upper_expr, lower_expr = node.args[1:]
+    else:
+        raise ValueError(f"Unexpected concat mask {mask_domain} with finite domain.")
+
+    # We use the concat domain, stored in the annex, as the domain of output field.
+    output_domain = gtir_domain.get_field_domain(node.annex.domain)
+    output_dims, output_origin, output_shape = gtir_domain.get_field_layout(output_domain)
+    assert output_dims == node.type.dims
+
+    if isinstance(node.type.dtype, ts.ScalarType):
+        dtype = gtx_dace_utils.as_dace_type(node.type.dtype)
+    else:
+        assert isinstance(node.type.dtype.element_type, ts.ScalarType)
+        dtype = gtx_dace_utils.as_dace_type(node.type.dtype.element_type)
+    output, output_desc = sdfg_builder.add_temp_array(ctx.sdfg, output_shape, dtype)
+    output_node = ctx.state.add_access(output)
+
+    for i, source_expr in enumerate([lower_expr, upper_expr]):
+        _translate_concat_where_branch(
+            ctx=ctx,
+            sdfg_builder=sdfg_builder,
+            concat_dim=concat_dim,
+            concat_dim_bound_expr=bound_expr,
+            output_domain=node.annex.domain,
+            output_type=node.type,
+            source_expr=source_expr,
+            output_desc=output_desc,
+            output_node=output_node,
+            output_origin=output_origin,
+            is_lower=(i == 0),
+        )
+
+    return gtir_to_sdfg_types.FieldopData(output_node, node.type, origin=tuple(output_origin))
