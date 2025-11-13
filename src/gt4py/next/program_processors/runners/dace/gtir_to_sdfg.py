@@ -24,7 +24,7 @@ from dace.frontend.python import astutils as dace_astutils
 
 from gt4py import eve
 from gt4py.eve import concepts
-from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next import common as gtx_common, config as gtx_config, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
@@ -557,6 +557,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         input_memlets = {}
+        unused_data = []
         for nsdfg_dataname, nsdfg_datadesc in inner_ctx.sdfg.arrays.items():
             if nsdfg_datadesc.transient:
                 pass  # nothing to do here
@@ -573,7 +574,22 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 input_memlets[nsdfg_dataname] = outer_ctx.sdfg.make_array_memlet(source_data)
             else:
                 # Arguments with empty domain do not need to be connected on the nested SDFG.
-                pass
+                unused_data.append(nsdfg_dataname)
+
+        for data in unused_data:
+            src_nodes = [
+                inner_node for inner_node in inner_ctx.state.data_nodes() if inner_node.data == data
+            ]
+            for src_node in src_nodes:
+                assert inner_ctx.state.degree(src_node) == 1
+                assert len(inner_ctx.state.out_edges(src_node)) == 1
+                temp_node = inner_ctx.state.out_edges(src_node)[0].dst
+                assert isinstance(temp_node, dace.nodes.AccessNode)
+                assert temp_node.desc(inner_ctx.sdfg).transient
+                assert inner_ctx.state.degree(temp_node) == 1
+                inner_ctx.state.remove_nodes_from([src_node, temp_node])
+                inner_ctx.sdfg.remove_data(temp_node.data, validate=gtx_config.DEBUG)
+            inner_ctx.sdfg.remove_data(data, validate=gtx_config.DEBUG)
 
         nsdfg_node = outer_ctx.state.add_nested_sdfg(
             inner_ctx.sdfg,
