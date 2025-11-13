@@ -12,6 +12,7 @@ import abc
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
+import numpy as np
 from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
@@ -328,11 +329,12 @@ def translate_broadcast(
 
     # Retrieve the scalar argument, which could be either a literal value or the
     # result of a scalar expression.
-    if isinstance(scalar_arg, gtir.Literal):
+    if isinstance(scalar_arg, gtir.Literal) and np.isfinite(
+        value := (gtx_dace_utils.as_dace_type(scalar_arg.type))(scalar_arg.value)
+    ):
         # Use a 'Broadcast' library node to fill the result field with the given value.
         name = sdfg_builder.unique_tasklet_name("fill")
-        dc_dtype = gtx_dace_utils.as_dace_type(scalar_arg.type)
-        bcast_node = sdfg_library_nodes.Broadcast(name, value=dc_dtype(scalar_arg.value))
+        bcast_node = sdfg_library_nodes.Broadcast(name, value=value)
         ctx.state.add_node(bcast_node)
     else:
         if isinstance(
