@@ -22,6 +22,7 @@ from gt4py.next.ffront import (
     program_ast as past,
     stages as ffront_stages,
     transform_utils,
+    type_info as ffront_ti,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.stages import AOT_PRG
@@ -129,13 +130,19 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
             itir_program, sizes=field_domains
         )
 
+    # Translate NamedCollectionTypes to TupleTypes in compile-time args
+    args = tuple(ffront_ti.named_collections_to_tuple_types(arg) for arg in inp.args.args)
+    kwargs: dict[str, ts.TypeSpec] = {
+        k: ffront_ti.named_collections_to_tuple_types(v) for k, v in inp.args.kwargs.items()
+    }
+    compile_time_args = dataclasses.replace(
+        inp.args, args=args, kwargs=kwargs, column_axis=_column_axis(all_closure_vars)
+    )
+
     if config.DEBUG or inp.data.debug:
         devtools.debug(itir_program)
 
-    return stages.CompilableProgram(
-        data=itir_program,
-        args=dataclasses.replace(inp.args, column_axis=_column_axis(all_closure_vars)),
-    )
+    return stages.CompilableProgram(data=itir_program, args=compile_time_args)
 
 
 def past_to_gtir_factory(
@@ -447,7 +454,7 @@ class ProgramLowering(
         )
 
         @utils.tree_map(
-            collection_type=ts.TupleType,
+            collection_type=ts.COLLECTION_TYPE_SPECS,
             with_path_arg=True,
             unpack=True,
             result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
@@ -493,7 +500,11 @@ class ProgramLowering(
         return itir.SymRef(id=node.id, location=node.location)
 
     def visit_Symbol(self, node: past.Symbol, **kwargs: Any) -> itir.Sym:
-        return itir.Sym(id=node.id, type=node.type)
+        if isinstance(node.type, ts.COLLECTION_TYPE_SPECS):
+            new_symbol_type: ts.TypeSpec = ffront_ti.named_collections_to_tuple_types(node.type)
+        else:
+            new_symbol_type = node.type
+        return itir.Sym(id=node.id, type=new_symbol_type)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs: Any) -> itir.FunCall:
         return itir.FunCall(

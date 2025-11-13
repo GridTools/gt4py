@@ -24,7 +24,7 @@ from next_tests.integration_tests.cases import (
     cartesian_case,
     exec_alloc_descriptor,
 )
-from next_tests.past_common_fixtures import (
+from next_tests.fixtures.past_common import (
     copy_program_def,
     copy_restrict_program_def,
     double_copy_program_def,
