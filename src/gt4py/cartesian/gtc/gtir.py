@@ -240,7 +240,10 @@ class VerticalLoop(LocNode):
     @classmethod
     def _vertical_offset_in_parallel(cls: type[VerticalLoop], instance: VerticalLoop) -> None:
         """
-        Read and write of the same field in a parallel loop with non-zero offsets is not allowed in parallel.
+        In a parallel vertical loop we disallow writing and reading the same field with a non-zero offset.
+
+        To write and read with non-zero offset creates a race condition in parallel. There's an
+        exception for vertical loops with size one, e.g. `interval(0, 1)`.
         """
 
         def _size_one(interval: Interval) -> bool:
@@ -259,7 +262,7 @@ class VerticalLoop(LocNode):
             if isinstance(left, FieldAccess):
                 writes[id(left)] = left
 
-        # check that we don't have read/write of the same field with non-zero offsets
+        # check that we don't have a write and reads of the same field with non-zero offsets
         for node in eve.walk_values(instance.body).if_isinstance(FieldAccess):
             if id(node) in writes:
                 # this is the write access - skip it
@@ -275,7 +278,7 @@ class VerticalLoop(LocNode):
                             f"`AbsoluteKIndex` in PARALLEL loops: `{node.name}`"
                         )
 
-                    # For cartesian offsets, we allow it if both are equal (e.g. 0)
+                    # For cartesian offsets, we allow it if both offsets are equal (e.g. 0)
                     if node.offset.k != write_access.offset.k:
                         raise ValueError(
                             "Not allowed to write and read with k-offsets in PARALLEL "
