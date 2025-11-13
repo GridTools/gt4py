@@ -86,6 +86,7 @@ class Program:
     static_params: (
         Sequence[str] | None
     )  # if the user requests static params, they will be used later to initialize CompiledPrograms
+    static_domains: bool
 
     @classmethod
     def from_function(
@@ -95,6 +96,7 @@ class Program:
         grid_type: common.GridType | None = None,
         enable_jit: bool | None = None,
         static_params: Sequence[str] | None = None,
+        static_domains: bool = False,
         connectivities: Optional[
             common.OffsetProvider
         ] = None,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
@@ -106,6 +108,7 @@ class Program:
             connectivities=connectivities,
             enable_jit=enable_jit,
             static_params=static_params,
+            static_domains=static_domains,
         )
 
     # TODO(ricoh): linting should become optional, up to the backend.
@@ -170,12 +173,23 @@ class Program:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
 
-        if self.static_params is None:
-            object.__setattr__(self, "static_params", ())
+        def path_to_expr(path: Sequence[int]) -> str:
+            return "".join(map(lambda idx: f"[{idx}]", path))
 
-        argument_descriptor_mapping = {
-            arguments.StaticArg: self.static_params,
-        }
+        argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
+
+        if self.static_params:
+            argument_descriptor_mapping[arguments.StaticArg] = self.static_params
+
+        if self.static_domains:
+            static_domain_args = []
+            func_type = self.past_stage.past_node.type.definition  # type: ignore[union-attr] # type inference done at this point
+            param_types = func_type.pos_or_kw_args | func_type.kw_only_args
+            for name, type_ in param_types.items():
+                for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
+                    if isinstance(el_type_, ts.FieldType):
+                        static_domain_args.append(f"{name}{path_to_expr(path)}")
+            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = static_domain_args
 
         program_type = self.past_stage.past_node.type
         assert isinstance(program_type, ts_ffront.ProgramType)
@@ -183,7 +197,7 @@ class Program:
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
+            argument_descriptor_mapping=argument_descriptor_mapping,
         )
 
     def with_backend(self, backend: next_backend.Backend) -> Program:
@@ -529,6 +543,7 @@ def program(
     grid_type: common.GridType | None,
     enable_jit: bool | None,
     static_params: Sequence[str] | None,
+    static_domains: bool,
     frozen: bool,
 ) -> Callable[[types.FunctionType], Program]: ...
 
@@ -541,6 +556,7 @@ def program(
     grid_type: common.GridType | None = None,
     enable_jit: bool | None = None,  # only relevant if static_params are set
     static_params: Sequence[str] | None = None,
+    static_domains: bool = False,
     frozen: bool = False,
 ) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:
     """
@@ -569,6 +585,7 @@ def program(
             ),
             grid_type=grid_type,
             enable_jit=enable_jit,
+            static_domains=static_domains,
             static_params=static_params,
         )
         if frozen:
@@ -703,6 +720,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             connectivities=None,
             enable_jit=False,  # TODO(havogt): revisit ProgramFromPast
             static_params=None,  # TODO(havogt): revisit ProgramFromPast
+            static_domains=False,  # TODO(havogt): revisit ProgramFromPast
         )
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:

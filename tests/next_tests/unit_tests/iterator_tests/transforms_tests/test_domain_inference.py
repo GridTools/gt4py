@@ -229,7 +229,8 @@ def test_multi_length_shift(offset_provider):
 def test_unstructured_shift(unstructured_offset_provider):
     stencil = im.lambda_("arg0")(im.deref(im.shift("E2V", 1)("arg0")))
     domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
-    expected_domains = {"in_field1": {Vertex: (0, 2)}}
+    accessed_vertex = unstructured_offset_provider["E2V"].ndarray[0, 1]
+    expected_domains = {"in_field1": {Vertex: (accessed_vertex, accessed_vertex + np.int32(1))}}
 
     testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains=expected_domains)
     run_test_expr(testee, expected, domain, expected_domains, unstructured_offset_provider)
