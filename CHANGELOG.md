@@ -8,7 +8,7 @@ Notable changes to this project will be documented in this file. The format is b
 
 - Bug fixes:
   - Skip implicit upcasting in (explicit) cast operations
-  - Respect percision of constants
+  - Respect precision of Constants
 
 ## [1.1.0] - 2025-11-05
 
