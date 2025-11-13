@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 import dace
 from dace import subsets as dace_subsets
 
-from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import (
@@ -73,7 +72,7 @@ def _parse_fieldop_arg(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     domain: gtir_domain.FieldopDomain,
-) -> MaybeNestedInTuple[gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr]:
+) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
     """
     Helper method to visit an expression passed as argument to a field operator
     and create the local view for the field argument.

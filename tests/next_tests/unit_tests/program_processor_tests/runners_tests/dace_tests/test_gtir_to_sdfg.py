@@ -172,7 +172,7 @@ def test_gtir_broadcast():
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS, skip_domain_inference=True)
 
     sdfg(a, **FSYMBOLS)
-    np.testing.assert_array_equal(a, val)
+    assert np.allclose(a, np.full_like(a, val))
 
 
 def test_gtir_cast():
@@ -201,12 +201,12 @@ def test_gtir_cast():
 
     a = np.ones(N, dtype=np.float64) * np.sqrt(2.0)
     b = a.astype(np.float32)
-    c = np.empty_like(a, dtype=np.bool_)
+    c = np.full_like(a, False, dtype=np.bool_)
 
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     sdfg(a, b, c, **FSYMBOLS)
-    np.testing.assert_array_equal(c, True)
+    assert np.all(c)
 
 
 def test_gtir_copy_self():
