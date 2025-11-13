@@ -50,9 +50,7 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
         tmps_name_map = {tmp: new_symbol_name(tmp) for tmp in local_tmps_to_replace}
 
         return oir.HorizontalExecution(
-            body=self.visit(
-                node.body, tmps_name_map=tmps_name_map, symtable=symtable, **kwargs
-            ),
+            body=self.visit(node.body, tmps_name_map=tmps_name_map, symtable=symtable, **kwargs),
             declarations=node.declarations
             + [
                 oir.LocalScalar(
@@ -70,9 +68,7 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
     ) -> oir.VerticalLoop:
         return oir.VerticalLoop(
             loop_order=node.loop_order,
-            sections=self.visit(
-                node.sections, tmps_to_replace=tmps_to_replace, **kwargs
-            ),
+            sections=self.visit(node.sections, tmps_to_replace=tmps_to_replace, **kwargs),
             caches=[c for c in node.caches if c.name not in tmps_to_replace],
             loc=node.loc,
         )
@@ -88,9 +84,7 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
                 new_symbol_name=symbol_name_creator(all_names),
                 **kwargs,
             ),
-            declarations=[
-                d for d in node.declarations if d.name not in tmps_to_replace
-            ],
+            declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
             loc=node.loc,
         )
 
@@ -108,9 +102,7 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        horizontal_executions = node.walk_values().if_isinstance(
-            oir.HorizontalExecution
-        )
+        horizontal_executions = node.walk_values().if_isinstance(oir.HorizontalExecution)
         temps_without_data_dims = set(
             [decl.name for decl in node.declarations if not decl.data_dims]
         )
@@ -146,9 +138,7 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
             for symbol, value in kwargs["symtable"].items()
             if isinstance(value, oir.Temporary) and not value.data_dims
         }
-        horizontal_executions = node.walk_values().if_isinstance(
-            oir.HorizontalExecution
-        )
+        horizontal_executions = node.walk_values().if_isinstance(oir.HorizontalExecution)
 
         for horizontal_execution in horizontal_executions:
             accesses = AccessCollector.apply(horizontal_execution)
@@ -172,6 +162,4 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
                 tmp for tmp in write_before_read_tmps if write_before_read(tmp)
             }
 
-        return super().visit_Stencil(
-            node, tmps_to_replace=write_before_read_tmps, **kwargs
-        )
+        return super().visit_Stencil(node, tmps_to_replace=write_before_read_tmps, **kwargs)
