@@ -106,7 +106,7 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
                 .to_set()
             )
             if instance.left.name in offset_reads:
-                raise ValueError("Self-assignment with offset is illegal.")
+                raise ValueError("Self-assignment with offset in I or J is illegal.")
 
     _dtype_validation = common.assign_stmt_dtype_validation(strict=False)
 
