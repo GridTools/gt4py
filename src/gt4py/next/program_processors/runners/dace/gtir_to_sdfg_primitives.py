@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Iterable, Protocol
+from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
 from dace import subsets as dace_subsets
@@ -504,6 +504,39 @@ def translate_index(
     )
 
 
+def _get_symbolic_value(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    symbolic_expr: dace.symbolic.SymExpr,
+    scalar_type: ts.ScalarType,
+    temp_name: Optional[str] = None,
+) -> dace.nodes.AccessNode:
+    tasklet_node, connector_mapping = sdfg_builder.add_tasklet(
+        name="get_value",
+        sdfg=sdfg,
+        state=state,
+        inputs={},
+        outputs={"out"},
+        code=f"out = {symbolic_expr}",
+    )
+    temp_name, _ = sdfg.add_scalar(
+        temp_name or sdfg.temp_data_name(),
+        gtx_dace_utils.as_dace_type(scalar_type),
+        find_new_name=True,
+        transient=True,
+    )
+    data_node = state.add_access(temp_name)
+    state.add_edge(
+        tasklet_node,
+        connector_mapping["out"],
+        data_node,
+        None,
+        dace.Memlet(data=temp_name, subset="0"),
+    )
+    return data_node
+
+
 def translate_literal(
     node: gtir.Node,
     ctx: gtir_to_sdfg.SubgraphContext,
@@ -511,7 +544,11 @@ def translate_literal(
 ) -> gtir_to_sdfg_types.FieldopResult:
     """Generates the dataflow subgraph for a `ir.Literal` node."""
     assert isinstance(node, gtir.Literal)
-    return sdfg_builder.get_symbolic_value(ctx, node.value, node.type)
+
+    data_type = node.type
+    data_node = _get_symbolic_value(ctx.sdfg, ctx.state, sdfg_builder, node.value, data_type)
+
+    return gtir_to_sdfg_types.FieldopData(data_node, data_type, origin=())
 
 
 def translate_make_tuple(
@@ -636,9 +673,10 @@ def translate_symbol_ref(
 
         elif isinstance(sym_type, ts.ScalarType):
             if sym_id in ctx.sdfg.symbols:
-                return sdfg_builder.get_symbolic_value(
-                    ctx, sym_id, sym_type, temp_name=f"__{sym_id}"
+                data_node = _get_symbolic_value(
+                    ctx.sdfg, ctx.state, sdfg_builder, sym_id, sym_type, temp_name=f"__{sym_id}"
                 )
+                return gtir_to_sdfg_types.FieldopData(data_node, sym_type, origin=())
             else:
                 data_node = ctx.state.add_access(sym_id)
                 field = gtir_to_sdfg_types.FieldopData(data_node, sym_type, origin=())

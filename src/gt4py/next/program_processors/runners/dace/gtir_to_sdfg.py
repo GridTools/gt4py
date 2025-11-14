@@ -321,17 +321,6 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ...
 
     @abc.abstractmethod
-    def get_symbolic_value(
-        self,
-        ctx: SubgraphContext,
-        symbolic_expr: dace.symbolic.SymExpr,
-        scalar_type: ts.ScalarType,
-        temp_name: Optional[str] = None,
-    ) -> gtir_to_sdfg_types.FieldopData:
-        """Write a symbolic value or the result of a symbolic expression to a scalar node."""
-        ...
-
-    @abc.abstractmethod
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         """Visit a node of the GT4Py IR."""
         ...
@@ -604,37 +593,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
 
         return nsdfg_node, input_memlets
-
-    def get_symbolic_value(
-        self,
-        ctx: SubgraphContext,
-        symbolic_expr: dace.symbolic.SymExpr,
-        scalar_type: ts.ScalarType,
-        temp_name: Optional[str] = None,
-    ) -> gtir_to_sdfg_types.FieldopData:
-        tasklet_node, connector_mapping = self.add_tasklet(
-            name="get_value",
-            sdfg=ctx.sdfg,
-            state=ctx.state,
-            inputs={},
-            outputs={"out"},
-            code=f"out = {symbolic_expr}",
-        )
-        temp_name, _ = ctx.sdfg.add_scalar(
-            temp_name or ctx.sdfg.temp_data_name(),
-            gtx_dace_utils.as_dace_type(scalar_type),
-            find_new_name=True,
-            transient=True,
-        )
-        data_node = ctx.state.add_access(temp_name)
-        ctx.state.add_edge(
-            tasklet_node,
-            connector_mapping["out"],
-            data_node,
-            None,
-            dace.Memlet(data=temp_name, subset="0"),
-        )
-        return gtir_to_sdfg_types.FieldopData(data_node, scalar_type, origin=())
 
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
         nsdfg_list = [
