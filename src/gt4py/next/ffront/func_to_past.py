@@ -25,12 +25,12 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from gt4py.next.ffront.stages import AOT_DSL_PRG, AOT_PRG, DSL_PRG, PRG
+from gt4py.next.ffront.stages import AOT_DSL_PRG, AOT_PRG, DSL_PRG, PAST_PRG
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-def func_to_past(inp: DSL_PRG) -> PRG:
+def func_to_past(inp: DSL_PRG) -> PAST_PRG:
     """
     Turn a DSL program definition into a PAST Program definition, adding metadata.
 
@@ -65,7 +65,7 @@ def func_to_past(inp: DSL_PRG) -> PRG:
     )
 
 
-def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSL_PRG, PRG]:
+def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSL_PRG, PAST_PRG]:
     """
     Wrap `func_to_past` in a chainable and optionally cached workflow step.
 
