@@ -1162,8 +1162,7 @@ class IRMaker(ast.NodeVisitor):
         raise AssertionError(f"Missing '{symbol}' symbol definition")
 
     def visit_Index(self, node: ast.Index):
-        index = self.visit(node.value)
-        return index
+        return self.visit(node.value)
 
     def _eval_new_spatial_index(
         self, index_nodes: Sequence[nodes.Expr], field_axes: Optional[Set[Literal["I", "J", "K"]]]
@@ -2386,7 +2385,7 @@ class GTScriptParser(ast.NodeVisitor):
             parameters=[
                 parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
             ],
-            computations=init_computations + computations if init_computations else computations,
+            computations=init_computations + computations,
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),

@@ -530,7 +530,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.FieldIfStmt:
+    def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.HorizontalRestriction:
         def make_bound_or_level(bound: AxisBound, level) -> Optional[common.AxisBound]:
             if (level == LevelMarker.START and bound.offset <= -10000) or (
                 level == LevelMarker.END and bound.offset >= 10000
