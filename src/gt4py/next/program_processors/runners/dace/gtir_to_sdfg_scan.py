@@ -642,20 +642,18 @@ def translate_scan(
     ] + [
         (gt_symbol, arg)
         for gt_symbol, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
-        if arg is not None
     ]
 
     symbolic_args: dict[str, gtir_to_sdfg_types.SymbolicData] = {}
-    lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
+    lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData | None] = {}
     for gtsym, arg in lambda_args_mapping:
-        gtsym_id = str(gtsym.id)
         if isinstance(arg, gtir_to_sdfg_types.SymbolicData):
+            gtsym_id = str(gtsym.id)
             symbolic_args[gtsym_id] = arg
-        elif arg is not None:
+        else:
             lambda_arg_nodes |= {
                 str(nested_gtsym.id): nested_arg
                 for nested_gtsym, nested_arg in gtir_to_sdfg_types.flatten_tuple(gtsym, arg)
-                if nested_arg is not None
             }
 
     nsdfg_node, input_memlets = sdfg_builder.add_nested_sdfg(
@@ -676,6 +674,7 @@ def translate_scan(
     input_edges = []
     for input_connector, memlet in input_memlets.items():
         src_node = lambda_arg_nodes[input_connector]
+        assert src_node is not None
         input_edge = gtir_dataflow.MemletInputEdge(
             ctx.state, src_node.dc_node, memlet.src_subset, nsdfg_node, input_connector
         )
