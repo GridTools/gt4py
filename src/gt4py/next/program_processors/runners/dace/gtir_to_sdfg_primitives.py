@@ -504,6 +504,36 @@ def translate_index(
     )
 
 
+def _get_data_nodes(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    data_name: str,
+    data_type: ts.DataType,
+) -> gtir_to_sdfg_types.FieldopResult:
+    if isinstance(data_type, ts.FieldType):
+        data_node = state.add_access(data_name)
+        return sdfg_builder.make_field(data_node, data_type)
+
+    elif isinstance(data_type, ts.ScalarType):
+        if data_name in sdfg.symbols:
+            data_node = _get_symbolic_value(
+                sdfg, state, sdfg_builder, data_name, data_type, temp_name=f"__{data_name}"
+            )
+        else:
+            data_node = state.add_access(data_name)
+        return gtir_to_sdfg_types.FieldopData(data_node, data_type, origin=())
+
+    elif isinstance(data_type, ts.TupleType):
+        symbol_tree = gtir_to_sdfg_utils.make_symbol_tree(data_name, data_type)
+        return gtx_utils.tree_map(
+            lambda sym: _get_data_nodes(sdfg, state, sdfg_builder, str(sym.id), sym.type)
+        )(symbol_tree)
+
+    else:
+        raise NotImplementedError(f"Symbol type {type(data_type)} not supported.")
+
+
 def _get_symbolic_value(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -576,7 +606,22 @@ def translate_tuple_get(
     data_nodes = sdfg_builder.visit(node.args[1], ctx=ctx)
     if isinstance(data_nodes, gtir_to_sdfg_types.FieldopData):
         raise ValueError(f"Invalid tuple expression {node}")
-
+    # Now we remove the tuple fields that are not used, to avoid an SDFG validation
+    # error because of isolated access nodes.
+    unused_data_nodes = gtx_utils.flatten_nested_tuple(
+        tuple(arg for i, arg in enumerate(data_nodes) if i != index)
+    )
+    # However, for temporary fields inside the tuple (non-globals and non-scalar
+    # values, supposed to contain the result of some field operator) the gt4py
+    # domain inference should have already set an empty domain, so the corresponding
+    # `arg` is expected to be None and can be ignored.
+    access_nodes_to_remove = [
+        arg.dc_node
+        for arg in unused_data_nodes
+        if arg is not None and not arg.dc_node.desc(ctx.sdfg).transient
+    ]
+    assert all(ctx.state.degree(access_node) == 0 for access_node in access_nodes_to_remove)
+    ctx.state.remove_nodes_from(access_nodes_to_remove)
     return data_nodes[index]
 
 
@@ -662,36 +707,14 @@ def translate_symbol_ref(
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
 
+    symbol_name = str(node.id)
+    # we retrieve the type of the symbol in the GT4Py prgram
+    gt_symbol_type = sdfg_builder.get_symbol_type(symbol_name)
+
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
     # We rely on the dace simplify pass to remove duplicated access nodes.
-    def _access_symbol(sym_id: str, sym_type: ts.DataType) -> gtir_to_sdfg_types.FieldopResult:
-        if isinstance(sym_type, ts.FieldType):
-            data_node = ctx.state.add_access(sym_id)
-            field = sdfg_builder.make_field(data_node, sym_type)
-            return ctx.copy_field(field)
-
-        elif isinstance(sym_type, ts.ScalarType):
-            if sym_id in ctx.sdfg.symbols:
-                data_node = _get_symbolic_value(
-                    ctx.sdfg, ctx.state, sdfg_builder, sym_id, sym_type, temp_name=f"__{sym_id}"
-                )
-                return gtir_to_sdfg_types.FieldopData(data_node, sym_type, origin=())
-            else:
-                data_node = ctx.state.add_access(sym_id)
-                field = gtir_to_sdfg_types.FieldopData(data_node, sym_type, origin=())
-                return ctx.copy_field(field)
-
-        elif isinstance(sym_type, ts.TupleType):
-            sym_tree = gtir_to_sdfg_utils.make_symbol_tree(sym_id, sym_type)
-            return gtx_utils.tree_map(lambda sym: _access_symbol(str(sym.id), sym.type))(sym_tree)
-
-        else:
-            raise NotImplementedError(f"Symbol type {type(sym_type)} not supported.")
-
-    sym_id = str(node.id)
-    sym_type = sdfg_builder.get_symbol_type(sym_id)
-    return _access_symbol(sym_id, sym_type)
+    return _get_data_nodes(ctx.sdfg, ctx.state, sdfg_builder, symbol_name, gt_symbol_type)
 
 
 if TYPE_CHECKING:

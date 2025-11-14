@@ -583,28 +583,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 input_memlets[data] = outer_ctx.sdfg.make_array_memlet(data)
 
         if unused_data:
-            temp_nodes_to_remove = []
             for data in sorted(unused_data):  # NOTE: remove the data in deterministic order
+                assert not inner_ctx.sdfg.arrays[data].transient
                 input_nodes_to_remove = [
                     access_node
                     for access_node in inner_ctx.state.data_nodes()
                     if access_node.data == data
                 ]
-                for input_node in input_nodes_to_remove:
-                    assert inner_ctx.state.in_degree(input_node) == 0
-                    assert inner_ctx.state.out_degree(input_node) == 1
-                    edge = inner_ctx.state.out_edges(input_node)[0]
-                    if isinstance((dst_node := edge.dst), dace.nodes.AccessNode):
-                        assert inner_ctx.state.degree(dst_node) == 1
-                        assert dst_node.desc(inner_ctx.sdfg).transient
-                        temp_nodes_to_remove.append(dst_node)
-                    else:
-                        raise ValueError(f"Read of uninitialized data: {edge}")
+                non_isolated_nodes = [
+                    input_node
+                    for input_node in input_nodes_to_remove
+                    if inner_ctx.state.in_degree(input_node) != 0
+                ]
+                if non_isolated_nodes:
+                    raise ValueError(
+                        f"Found lambda nodes with uninitialized data: {non_isolated_nodes}"
+                    )
                 inner_ctx.state.remove_nodes_from(input_nodes_to_remove)
                 inner_ctx.sdfg.remove_data(data, validate=gtx_config.DEBUG)
-            inner_ctx.state.remove_nodes_from(temp_nodes_to_remove)
-            for access_node in temp_nodes_to_remove:
-                inner_ctx.sdfg.remove_data(access_node.data, validate=gtx_config.DEBUG)
 
         nsdfg_node = outer_ctx.state.add_nested_sdfg(
             inner_ctx.sdfg,
@@ -774,7 +770,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         self,
         node: gtir.Expr,
         sdfg: dace.SDFG,
-        state: dace.SDFGState,
+        head_state: dace.SDFGState,
+        use_temp: bool = True,
     ) -> gtir_to_sdfg_types.FieldopResult:
         """
         Specialized visit method for fieldview expressions.
@@ -787,72 +784,21 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             The nodes are organized in tree form, in case of tuples.
         """
 
-        result = self.visit(node, ctx=SubgraphContext(sdfg, state))
+        ctx = SubgraphContext(sdfg, head_state)
+        result = self.visit(node, ctx=ctx)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
         # i.e. eventually only introduce internal branches, and keep the same head state
         sink_states = sdfg.sink_nodes()
         assert len(sink_states) == 1
-        assert sink_states[0] == state
+        assert sink_states[0] == head_state
 
-        return result
-
-    def _visit_target(
-        self,
-        node: gtir.Expr,
-        sdfg: dace.SDFG,
-        state: dace.SDFGState,
-    ) -> gtir_to_sdfg_types.FieldopResult:
-        """
-        Specialized visit method for fieldview expressions.
-
-        This method represents the entry point to visit `ir.Stmt` expressions.
-        As such, it must preserve the property of single exit state in the SDFG.
-
-        Returns:
-            The SDFG array nodes containing the result of the fieldview expression.
-            The nodes are organized in tree form, in case of tuples.
-        """
-
-        class TargetExpressionParser(eve.visitors.NodeTranslator):
-            _sdfg_builder: SDFGBuilder
-
-            def __init__(self, sdfg_builder: SDFGBuilder):
-                self._sdfg_builder = sdfg_builder
-
-            def _make_access_node(
-                self, state: dace.SDFGState, sym_id: str, sym_type: ts.DataType
-            ) -> gtir_to_sdfg_types.FieldopResult:
-                if isinstance(sym_type, ts.FieldType):
-                    data_node = state.add_access(sym_id)
-                    return self._sdfg_builder.make_field(data_node, sym_type)
-                elif isinstance(sym_type, ts.ScalarType):
-                    data_node = state.add_access(sym_id)
-                    return gtir_to_sdfg_types.FieldopData(data_node, sym_type, origin=())
-                elif isinstance(sym_type, ts.TupleType):
-                    symbol_tree = gtir_to_sdfg_utils.make_symbol_tree(sym_id, sym_type)
-                    return gtx_utils.tree_map(
-                        lambda sym: self._make_access_node(state, str(sym.id), sym.type)
-                    )(symbol_tree)
-                else:
-                    raise NotImplementedError(f"Symbol type {type(sym_type)} not supported.")
-
-            def visit_FunCall(
-                self, node: gtir.FunCall, ctx: SubgraphContext
-            ) -> gtir_to_sdfg_types.FieldopResult:
-                if cpm.is_call_to(node, "make_tuple"):
-                    return tuple(self.visit(arg, ctx=ctx) for arg in node.args)
-                else:
-                    raise ValueError("Unexpected 'FunCall' node in target expression.")
-
-            def visit_SymRef(
-                self, node: gtir.SymRef, ctx: SubgraphContext
-            ) -> gtir_to_sdfg_types.FieldopResult:
-                symbol_name = str(node.id)
-                gt_symbol_type = self._sdfg_builder.get_symbol_type(symbol_name)
-                return self._make_access_node(ctx.state, symbol_name, gt_symbol_type)
-
-        return TargetExpressionParser(self).visit(node, ctx=SubgraphContext(sdfg, state))
+        if use_temp:
+            return gtx_utils.tree_map(
+                lambda x: x if x.dc_node.desc(ctx.sdfg).transient else ctx.copy_field(x)
+            )(result)
+        else:
+            return result
 
     def _add_sdfg_params(
         self,
@@ -982,7 +928,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # The target expression could be a `SymRef` to an output field or a `make_tuple`
         # expression in case the statement returns more than one field.
-        target_tree = self._visit_target(stmt.target, sdfg, state)
+        target_tree = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
 
         expr_input_args = {
             sym_id
@@ -1184,9 +1130,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             The same happens to symbols available in the lambda context but not explicitly passed as lambda
             arguments, that are simply returned by the lambda: it can be directly accessed in the parent SDFG.
             """
-            assert inner_data.dc_node.desc(lambda_ctx.sdfg).transient
-            inner_dataname = inner_data.dc_node.data
-
+            if not inner_data.dc_node.desc(lambda_ctx.sdfg).transient:
+                # Handle here inout data
+                nsdfg_node.remove_out_connector(inner_data.dc_node.data)
+                inner_data = lambda_ctx.copy_field(inner_data)
+                nsdfg_node.add_out_connector(inner_data.dc_node.data)
+            elif lambda_ctx.state.degree(inner_data.dc_node) == 0:
+                # Isolated access node will make validation fail.
+                # Isolated access nodes can be found in the join-state of an if-expression
+                # or in lambda expressions that just construct tuples from input arguments.
+                lambda_ctx.state.remove_node(inner_data.dc_node)
             # Transient data nodes only exist within the nested SDFG. In order to return some result data,
             # the corresponding data container inside the nested SDFG has to be changed to non-transient,
             # that is externally allocated, as required by the SDFG IR. An output edge will write the result
@@ -1196,16 +1149,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             )
             ctx.state.add_edge(
                 nsdfg_node,
-                inner_dataname,
+                inner_data.dc_node.data,
                 outer_data.dc_node,
                 None,
                 ctx.sdfg.make_array_memlet(outer_data.dc_node.data),
             )
-            # Isolated access node will make validation fail.
-            # Isolated access nodes can be found in the join-state of an if-expression
-            # or in lambda expressions that just construct tuples from input arguments.
-            if lambda_ctx.state.degree(inner_data.dc_node) == 0:
-                lambda_ctx.state.remove_node(inner_data.dc_node)
+
             return outer_data
 
         return gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
