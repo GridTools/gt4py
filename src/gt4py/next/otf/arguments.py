@@ -28,7 +28,7 @@ from gt4py.eve.extended_typing import (
     cast,
     final,
 )
-from gt4py.next import common, errors, named_collections
+from gt4py.next import common, errors, named_collections, utils
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -89,8 +89,13 @@ class StaticArg(ArgStaticDescriptor, Generic[core_defs.ScalarT]):
 
     def __post_init__(self) -> None:
         # transform enum value into the actual value
-        if isinstance(self.value, enum.Enum):
-            object.__setattr__(self, "value", self.value.value)
+        object.__setattr__(
+            self,
+            "value",
+            utils.tree_map(lambda val: val.value if isinstance(val, enum.Enum) else val)(
+                self.value
+            ),
+        )
 
     def validate(self, name: str, type_: ts.TypeSpec) -> None:
         if not type_info.is_type_or_tuple_of_type(type_, ts.ScalarType):
