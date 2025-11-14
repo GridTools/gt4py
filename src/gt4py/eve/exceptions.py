@@ -20,7 +20,7 @@ class EveError:
         This base class has to be always inherited together with a standard
         exception, and thus it should not be used as direct superclass
         for custom exceptions. Inherit directly from :class:`EveTypeError`,
-        :class:`EveTypeError`, etc. instead.
+        :class:`EveValueError`, etc. instead.
 
     """
 

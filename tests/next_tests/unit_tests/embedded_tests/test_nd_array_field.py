@@ -15,7 +15,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, constructors
-from gt4py.next.common import Dimension, Domain, NamedIndex, NamedRange, UnitRange
+from gt4py.next.common import Dimension, Domain, Field, NamedIndex, NamedRange, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
@@ -88,6 +88,10 @@ def _np_asarray_or_scalar(value: Iterable | core_defs.Scalar, dtype=None):
         if isinstance(value, core_defs.SCALAR_TYPES)
         else np.asarray(value, dtype=dtype)
     )
+
+
+def are_equal_fields(a: Field, b: Field) -> bool:
+    return (a.domain == b.domain) and (a.asnumpy() == b.asnumpy()).all()
 
 
 def test_nd_array_field_buffer_info(nd_array_implementation):
@@ -618,7 +622,7 @@ def test_absolute_indexing_dim_sliced():
     ]
 
     assert isinstance(indexed_field_1, common.Field)
-    assert indexed_field_1 == expected
+    assert are_equal_fields(indexed_field_1, expected)
 
 
 def test_absolute_indexing_dim_sliced_single_slice():
@@ -630,7 +634,7 @@ def test_absolute_indexing_dim_sliced_single_slice():
     indexed_field_2 = field[NamedIndex(D2, 11)]
 
     assert isinstance(indexed_field_1, common.Field)
-    assert indexed_field_1 == indexed_field_2
+    assert are_equal_fields(indexed_field_1, indexed_field_2)
 
 
 def test_absolute_indexing_wrong_dim_sliced():
