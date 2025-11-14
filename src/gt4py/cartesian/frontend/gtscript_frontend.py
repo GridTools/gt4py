@@ -919,7 +919,7 @@ class IRMaker(ast.NodeVisitor):
         list_of_exprs = [axis_node for axis_node in node.elts]
         axes_names = [axis.name for axis in self.domain.parallel_axes]
         return {
-            name: AxisIntervalParser.apply(axis_node, name)
+            name: AxisIntervalParser.apply(axis_node, self.fields, name)
             for axis_node, name in zip(list_of_exprs, axes_names)
         }
 
