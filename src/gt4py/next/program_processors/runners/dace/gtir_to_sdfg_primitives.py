@@ -250,12 +250,26 @@ def translate_as_fieldop(
     if not isinstance(node.type, ts.FieldType):
         raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
 
+    # parse the domain of the field operator
+    assert isinstance(fieldop_domain_expr.type, ts.DomainType)
+    field_domain = gtir_domain.get_field_domain(
+        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
+    )
+
     if cpm.is_ref_to(fieldop_expr, "deref"):
-        # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
-        # value to 'as_fieldop' function. It results in broadcasting the scalar value
-        # over the field domain.
-        stencil_expr = im.lambda_("a")(im.deref("a"))
-        stencil_expr.expr.type = node.type.dtype
+        arg_type = node.args[0].type
+        assert isinstance(arg_type, (ts.FieldType, ts.ScalarType))
+        if isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims:
+            # Special usage of 'deref' as argument to fieldop expression, to broadcast
+            # a scalar value on the field domain.
+            stencil_expr = im.lambda_("a")(im.deref("a"))
+            stencil_expr.expr.type = node.type.dtype
+        else:
+            # Special usage of 'deref' with field argument, to return a subset of
+            # the full field domain.
+            arg = sdfg_builder.visit(node.args[0], ctx=ctx)
+            assert isinstance(arg, gtir_to_sdfg_types.FieldopData)
+            return ctx.copy_field(arg, domain=field_domain)
     elif isinstance(fieldop_expr, gtir.Lambda):
         # Default case, handled below: the argument expression is a lambda function
         # representing the stencil operation to be computed over the field domain.
@@ -264,12 +278,6 @@ def translate_as_fieldop(
         raise NotImplementedError(
             f"Expression type '{type(fieldop_expr)}' not supported as argument to 'as_fieldop' node."
         )
-
-    # parse the domain of the field operator
-    assert isinstance(fieldop_domain_expr.type, ts.DomainType)
-    field_domain = gtir_domain.get_field_domain(
-        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
-    )
 
     # visit the list of arguments to be passed to the lambda expression
     fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, field_domain) for arg in node.args]
@@ -600,22 +608,20 @@ def translate_tuple_get(
         raise ValueError(f"Invalid tuple expression {node}")
     # Now we remove the tuple fields that are not used, to avoid an SDFG validation
     # error because of isolated access nodes.
-    unused_arg_nodes = gtx_utils.flatten_nested_tuple(
+    unused_data_nodes = gtx_utils.flatten_nested_tuple(
         tuple(arg for i, arg in enumerate(data_nodes) if i != index)
     )
     # However, for temporary fields inside the tuple (non-globals and non-scalar
     # values, supposed to contain the result of some field operator) the gt4py
     # domain inference should have already set an empty domain, so the corresponding
     # `arg` is expected to be None and can be ignored.
-    assert all(
-        not arg.dc_node.desc(ctx.sdfg).transient or isinstance(arg.gt_type, ts.ScalarType)
-        for arg in unused_arg_nodes
-        if arg is not None
-    )
-    unused_arg_nodes = tuple(arg for arg in unused_arg_nodes if arg is not None)
-    ctx.state.remove_nodes_from(
-        [arg.dc_node for arg in unused_arg_nodes if ctx.state.degree(arg.dc_node) == 0]
-    )
+    access_nodes_to_remove = [
+        arg.dc_node
+        for arg in unused_data_nodes
+        if arg is not None and not arg.dc_node.desc(ctx.sdfg).transient
+    ]
+    assert all(ctx.state.degree(access_node) == 0 for access_node in access_nodes_to_remove)
+    ctx.state.remove_nodes_from(access_nodes_to_remove)
     return data_nodes[index]
 
 

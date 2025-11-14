@@ -515,18 +515,11 @@ def _lower_lambda_to_nested_sdfg(
         lambda_result, lambda_result_shape, scan_carry_input
     )
 
-    # in case tuples are passed as argument, isolated access nodes might be left in the state,
-    # because not all tuple fields are necessarily accessed inside the lambda scope
-    for data_node in compute_state.data_nodes():
-        if compute_state.degree(data_node) == 0:
-            # By construction there should never be isolated transient nodes.
-            # Therefore, the assert below implements a sanity check, that allows
-            # the exceptional case (encountered in one GT4Py test) where the carry
-            # variable is not used, so not a scan indeed because no data dependency.
-            assert (not data_node.desc(lambda_ctx.sdfg).transient) or data_node.data.startswith(
-                scan_carry_symbol.id
-            )
-            compute_state.remove_node(data_node)
+    # corner case where the scan state is not used in column update (not really a scan)
+    for arg in gtx_utils.flatten_nested_tuple((stencil_args[0],)):
+        state_node = arg.dc_node
+        if compute_state.degree(state_node) == 0:
+            compute_state.remove_node(state_node)
 
     return lambda_ctx, lambda_output
 
@@ -649,20 +642,18 @@ def translate_scan(
     ] + [
         (gt_symbol, arg)
         for gt_symbol, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
-        if arg is not None
     ]
 
     symbolic_args: dict[str, gtir_to_sdfg_types.SymbolicData] = {}
-    lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
+    lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData | None] = {}
     for gtsym, arg in lambda_args_mapping:
-        gtsym_id = str(gtsym.id)
         if isinstance(arg, gtir_to_sdfg_types.SymbolicData):
+            gtsym_id = str(gtsym.id)
             symbolic_args[gtsym_id] = arg
-        elif arg is not None:
+        else:
             lambda_arg_nodes |= {
                 str(nested_gtsym.id): nested_arg
                 for nested_gtsym, nested_arg in gtir_to_sdfg_types.flatten_tuple(gtsym, arg)
-                if nested_arg is not None
             }
 
     nsdfg_node, input_memlets = sdfg_builder.add_nested_sdfg(
@@ -683,6 +674,7 @@ def translate_scan(
     input_edges = []
     for input_connector, memlet in input_memlets.items():
         src_node = lambda_arg_nodes[input_connector]
+        assert src_node is not None
         input_edge = gtir_dataflow.MemletInputEdge(
             ctx.state, src_node.dc_node, memlet.src_subset, nsdfg_node, input_connector
         )

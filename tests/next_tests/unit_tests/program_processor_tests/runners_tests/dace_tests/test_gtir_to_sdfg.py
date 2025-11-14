@@ -1693,7 +1693,7 @@ def test_gtir_let_lambda_scalar_expression():
     # to the symbol `inner_size` is preserved, for which we want to test the lowering.
     sdfg = build_dace_sdfg(testee, offset_provider=CARTESIAN_OFFSETS, skip_domain_inference=True)
 
-    sdfg(a, b, c, d, **(FSYMBOLS | {"__x_0_range_1": N + 1}))
+    sdfg(a, b, c, d, **(FSYMBOLS | {"__x_IDim_range_1": N + 1}))
     assert np.allclose(d, (a * a * b * b * c[1 : N + 1]))
 
 
