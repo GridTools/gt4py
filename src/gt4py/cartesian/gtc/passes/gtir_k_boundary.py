@@ -11,7 +11,7 @@ import typing
 from typing import Any, Dict, Tuple, Union
 
 from gt4py import eve
-from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc import common, gtir
 from gt4py.cartesian.gtc.common import LevelMarker
 
 
@@ -45,6 +45,12 @@ class KBoundaryVisitor(eve.NodeVisitor):
     ):
         boundary = field_boundaries[node.name]
         interval = vloop.interval
+        if not (
+            isinstance(interval.start, common.AxisBound)
+            and isinstance(interval.end, common.AxisBound)
+        ):
+            return
+
         if not isinstance(node.offset, (gtir.VariableKOffset, gtir.AbsoluteKIndex)):
             if interval.start.level == LevelMarker.START:
                 boundary = (
@@ -76,7 +82,10 @@ def compute_min_k_size(node: gtir.Stencil) -> int:
     min_size_end = 0
     biggest_offset = 0
     for vloop in node.vertical_loops:
-        if vloop.interval.has_runtime_access():
+        if not (
+            isinstance(vloop.interval.start, common.AxisBound)
+            and isinstance(vloop.interval.end, common.AxisBound)
+        ):
             continue
         if (
             vloop.interval.start.level == LevelMarker.START

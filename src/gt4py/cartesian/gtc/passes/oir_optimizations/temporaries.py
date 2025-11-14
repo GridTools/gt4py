@@ -69,7 +69,7 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
             loc=node.loc,
         )
 
-    def visit_Interval(self, interval: oir.Interval, **kwargs: Any):
+    def visit_Interval(self, interval: oir.Interval, **_: Any) -> oir.Interval:
         # We don't want to scalarize temporaries inside runtime intervals, so just return here.
         return interval
 
