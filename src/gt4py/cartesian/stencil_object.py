@@ -396,7 +396,7 @@ class StencilObject(abc.ABC):
             )
         ):
             raise ValueError(
-                f"Compute domain too large (provided: {domain}, maximum: {max_domain}. Adjust K interval as needed.)"
+                f"Compute domain too large (provided: {domain}, maximum: {max_domain}. Check stencil domain provided or adjust K interval as needed.)"
             )
 
         if domain[2] < self.domain_info.min_sequential_axis_size:
