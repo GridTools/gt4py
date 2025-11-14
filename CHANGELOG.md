@@ -6,6 +6,7 @@ Notable changes to this project will be documented in this file. The format is b
 
 ### Cartesian
 
+- Allow self-assignment with offset in K dimension in sequential vertical loops
 - Bug fixes:
   - Skip implicit upcasting in (explicit) cast operations
   - Respect precision of Constants
