@@ -207,7 +207,8 @@ class AxisIntervalParser(gt_meta.ASTPass):
         return nodes.AxisBound(level=level, offset=offset, loc=self.loc)
 
     def visit_Name(self, node: ast.Name) -> nodes.VarRef:
-        assert "K" not in self.fields[node.id].axes
+        if "K" in self.fields[node.id].axes:
+            raise ValueError("Using a field with a K-Axis as a bound for an interval is invalid.")
         return nodes.FieldRef.at_center(
             name=node.id, axes=self.fields[node.id].axes, loc=nodes.Location.from_ast_node(node)
         )
