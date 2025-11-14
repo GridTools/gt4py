@@ -32,6 +32,7 @@ from gt4py.eve.extended_typing import (
     Literal,
     NamedTuple,
     Never,
+    NoReturn,
     Optional,
     ParamSpec,
     Protocol,
@@ -691,6 +692,11 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
 
     def __str__(self) -> str:
         return f"⟨{self.domain!s} → {self.dtype}⟩"
+
+    def __bool__(self) -> NoReturn:
+        raise TypeError(
+            "The truth value of a Field is ambiguous. For one element Fields use '.as_scalar()'."
+        )
 
     @abc.abstractmethod
     def asnumpy(self) -> np.ndarray: ...
