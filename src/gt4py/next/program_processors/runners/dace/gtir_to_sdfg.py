@@ -24,7 +24,7 @@ from dace.frontend.python import astutils as dace_astutils
 
 from gt4py import eve
 from gt4py.eve import concepts
-from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next import common as gtx_common, config as gtx_config, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
@@ -564,16 +564,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         }
 
         input_memlets = {}
+        unused_data = set()
         for data, datadesc in inner_ctx.sdfg.arrays.items():
             if datadesc.transient:
                 pass  # nothing to do here
             elif data in data_args:
                 if (arg_node := data_args[data]) is None:
                     # Arguments with empty domain do not need to be connected on the nested SDFG.
-                    datadesc.transient = True
-                    # For arrays, ensure their shape and strides symbols are set.
-                    for s in datadesc.free_symbols:
-                        nsdfg_symbols_mapping[s] = 0
+                    unused_data.add(data)
                 else:
                     input_memlets[data] = outer_ctx.sdfg.make_array_memlet(arg_node.dc_node.data)
             else:
@@ -583,6 +581,30 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 if data in connectivity_arrays:
                     outer_ctx.sdfg.arrays[data].transient = False
                 input_memlets[data] = outer_ctx.sdfg.make_array_memlet(data)
+
+        if unused_data:
+            temp_nodes_to_remove = []
+            for data in sorted(unused_data):  # NOTE: remove the data in deterministic order
+                input_nodes_to_remove = [
+                    access_node
+                    for access_node in inner_ctx.state.data_nodes()
+                    if access_node.data == data
+                ]
+                for input_node in input_nodes_to_remove:
+                    assert inner_ctx.state.in_degree(input_node) == 0
+                    assert inner_ctx.state.out_degree(input_node) == 1
+                    edge = inner_ctx.state.out_edges(input_node)[0]
+                    if isinstance((dst_node := edge.dst), dace.nodes.AccessNode):
+                        assert inner_ctx.state.degree(dst_node) == 1
+                        assert dst_node.desc(inner_ctx.sdfg).transient
+                        temp_nodes_to_remove.append(dst_node)
+                    else:
+                        raise ValueError(f"Read of uninitialized data: {edge}")
+                inner_ctx.state.remove_nodes_from(input_nodes_to_remove)
+                inner_ctx.sdfg.remove_data(data, validate=gtx_config.DEBUG)
+            inner_ctx.state.remove_nodes_from(temp_nodes_to_remove)
+            for access_node in temp_nodes_to_remove:
+                inner_ctx.sdfg.remove_data(access_node.data, validate=gtx_config.DEBUG)
 
         nsdfg_node = outer_ctx.state.add_nested_sdfg(
             inner_ctx.sdfg,
