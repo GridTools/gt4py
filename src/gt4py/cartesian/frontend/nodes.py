@@ -728,17 +728,28 @@ class IterationOrder(enum.Enum):
         return self.cycle(steps=steps)
 
 
+class BaseAxisBound(Node):
+    pass
+
+
 @attribclass
-class AxisBound(Node):
+class AxisBound(BaseAxisBound):
     level = attribute(of=LevelMarker)
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
 
 
 @attribclass
+class RuntimeAxisBound(BaseAxisBound):
+    level = attribute(of=LevelMarker)
+    offset = attribute(of=Ref, default=0)
+    loc = attribute(of=Location, optional=True)
+
+
+@attribclass
 class AxisInterval(Node):
-    start = attribute(of=AxisBound)
-    end = attribute(of=AxisBound)
+    start = attribute(of=BaseAxisBound)
+    end = attribute(of=BaseAxisBound)
     loc = attribute(of=Location, optional=True)
 
     @classmethod

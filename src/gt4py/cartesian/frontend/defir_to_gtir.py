@@ -45,6 +45,7 @@ from gt4py.cartesian.frontend.nodes import (
     NativeFuncCall,
     NativeFunction,
     Node,
+    RuntimeAxisBound,
     ScalarLiteral,
     StencilDefinition,
     TernaryOpExpr,
@@ -570,6 +571,12 @@ class DefIRToGTIR(IRNodeVisitor):
         # TODO(havogt) add support VarRef
         return gtir.AxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
+        )
+
+    def visit_RuntimeAxisBound(self, node: RuntimeAxisBound) -> gtir.AxisBound:
+        return gtir.RuntimeAxisBound(
+            level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level],
+            offset=self.visit(node.offset),
         )
 
     def visit_FieldDecl(self, node: FieldDecl) -> gtir.FieldDecl:

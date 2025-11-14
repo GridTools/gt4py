@@ -226,7 +226,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             groups = self._group_statements(node)
             self.visit(groups, ctx=ctx)
 
-    def visit_AxisBound(self, node: oir.AxisBound, axis_start: str, axis_end: str) -> str:
+    def visit_AxisBound(self, node: common.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:
             return f"({axis_start}) + ({node.offset})"
 

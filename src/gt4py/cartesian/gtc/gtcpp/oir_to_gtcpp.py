@@ -214,7 +214,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return gtcpp.LocalAccess(name=node.name, dtype=node.dtype)
 
     def visit_AxisBound(
-        self, node: oir.AxisBound, *, is_start: bool, **kwargs: Any
+        self, node: common.AxisBound, *, is_start: bool, **kwargs: Any
     ) -> gtcpp.GTLevel:
         if node.level == common.LevelMarker.START:
             splitter = 0
