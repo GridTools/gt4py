@@ -413,6 +413,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return self._lower_and_map("if_", *node.args)
 
         cond_ = self.visit(node.args[0])
+        # TODO: use fingerprint such that source location does not play a role here
         cond_symref_name = f"__cond_{eve_utils.content_hash(cond_)}"
 
         def create_if(

@@ -19,6 +19,7 @@ from gt4py.next.utils import RecursionGuard
 
 
 class LocatedNode(Node):
+    # TODO: introduce fingerprint function that does not include location
     location: SourceLocation
 
     def __str__(self) -> str:

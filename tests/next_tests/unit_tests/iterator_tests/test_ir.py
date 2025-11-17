@@ -9,6 +9,7 @@
 import pytest
 
 from gt4py.next.iterator import ir
+from gt4py import eve
 
 
 def test_noninstantiable():
@@ -23,3 +24,12 @@ def test_str():
     expected = "λ(x) → x"
     actual = str(testee)
     assert actual == expected
+
+def test_fingerprint():
+    loc1 = eve.SourceLocation(filename="a", line=1, column=1)
+    loc2 = eve.SourceLocation(filename="a", line=1, column=1)
+    node1 = ir.SymRef(id="abc", location=loc1)
+    node2 = ir.SymRef(id="abc", location=loc2)
+    node3 = ir.SymRef(id="abcd", location=loc1)
+    assert node1.fingerprint() == node2.fingerprint()
+    assert node1.fingerprint() != node3.fingerprint()

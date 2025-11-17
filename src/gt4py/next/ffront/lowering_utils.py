@@ -38,6 +38,7 @@ def process_elements(
     if isinstance(objs, itir.Expr):
         objs = (objs,)
 
+    # TODO: use fingerprint such that source location does not play a role here
     let_ids = tuple(f"__val_{eve_utils.content_hash(obj)}" for obj in objs)
     body = _process_elements_impl(
         process_func,
