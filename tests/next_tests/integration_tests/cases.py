@@ -589,7 +589,7 @@ def _allocate_from_type(
         case ts.FieldType(dims=dims, dtype=arg_dtype):
             return strategy.field(
                 allocator=case.allocator,
-                domain=common.domain(tuple(domain[dim] for dim in dims)),
+                domain=domain[dims],
                 dtype=dtype or arg_dtype.kind.name.lower(),
             )
         case ts.ScalarType(kind=kind):
