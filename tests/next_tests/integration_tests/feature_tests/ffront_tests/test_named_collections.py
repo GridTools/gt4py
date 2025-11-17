@@ -249,7 +249,7 @@ def test_scan(cartesian_case, testee):
         testee,
         inp,
         out=out,
-        ref=np.cumsum(inp, axis=0),
+        ref=np.cumsum(inp.asnumpy(), axis=0),
     )
 
 

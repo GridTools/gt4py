@@ -180,7 +180,7 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     assert np.allclose(
         (a[1:].asnumpy(), b[1:].asnumpy()), (out_a[1:].asnumpy(), out_b[1:].asnumpy())
     )
-    assert out_a[0] == 0 and out_b[0] == 0
+    assert out_a[0].as_scalar() == 0 and out_b[0].as_scalar() == 0
 
 
 def test_tuple_program_return_constructed_inside_nested(cartesian_case):

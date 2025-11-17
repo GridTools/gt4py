@@ -39,45 +39,80 @@ from gt4py.next.type_system import type_specifications as ts
 def _translate_concat_where_branch(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    source_expr: gtir.Expr,
+    is_lower: bool,
     concat_dim: gtx_common.Dimension,
     concat_dim_bound_expr: gtir.Expr,
     output_domain: domain_utils.SymbolicDomain,
     output_type: ts.FieldType,
-    source_expr: gtir.Expr,
     output_desc: dace.data.Array,
     output_node: dace.nodes.AccessNode,
     output_origin: Sequence[dace.symbolic.SymbolicType],
-    is_lower: bool,
 ) -> None:
+    """
+    Translate one of the two branches of a 'concat_where' expression.
+
+    The 'concat_where' expression requires two input fields, one is written on the
+    lower part of the result domain, with respect to the domain boundary extracted
+    from the first argument; the other input field is written on the upper domain.
+    The handling of the two branches is similar, there is only one small difference
+    in case the input field does not contain the 'concat_where' dimension, which
+    is the case of scalar values or horizontal slice fields. In this case, we use
+    the 'is_lower' argument to specify which of the two branches this function
+    should target.
+
+    The _regular_ case is `concat_where` applied to two fields with same domain
+    as the result field, for example two 'IJK'-fields:
+    ```python
+    @gtx.field_operator
+    def testee(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
+        return concat_where(KDim < 10, a, b)
+    ```
+
+    In case of the arguments is a scalar value, we broadcast it on all dimensions
+    of the result field, for example:
+    ```python
+    @gtx.field_operator
+    def testee(a: np.int32, b: IJKField) -> IJKField:
+        return concat_where(KDim == 0, a, b)
+    ```
+    Similarly, we broadcast a field defined as a slice of the output domain, i.e.
+    a field with a smaller number of dimensions than the result field.
+    Consider for example the following field operator, where the 'boundary' IJ-field
+    is used for the vertical boundary (`KDim == 0`):
+    ```python
+    @gtx.field_operator
+    def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
+        return concat_where(KDim == 0, boundary, interior)
+    ```
+
+    Args:
+        ctx: The SDFG context in which to lower the `concat_where` branch expression.
+        sdfg_builder: The visitor object to build the SDFG.
+        source_expr: The expression producing the input field for this branch.
+        is_lower: Flag to specify whether the input expression is for the lower or upper domain.
+        concat_dim: The dimension along which to apply `concat_where` on the input fields.
+        concat_dim_bound_expr: The expression of the `concat_where` domain condition.
+        output_domain: The domain of the result field.
+        output_type: The GT4Py type descriptor of the result field.
+        output_desc: The DaCe array descriptor of the result field.
+        output_node: The SDFG access node for writing the result field.
+        output_origin: The origin of the result field, derived from `output_domain`,
+            to be used in the write memlet to `output_node`.
+    """
     assert isinstance(source_expr.type, (ts.FieldType, ts.ScalarType))
 
     source_domain = source_expr.annex.domain
     if isinstance(source_expr.type, ts.ScalarType) or len(source_expr.type.dims) < len(
         output_type.dims
     ):
-        """
-        We broadcast the argument field on dimensions on the output field, in case the
-        argument is a scalar value, for example:
-        ```python
-        @gtx.field_operator
-        def testee(a: np.int32, b: IJKField) -> IJKField:
-            return concat_where(KDim == 0, a, b)
-        ```
-        
-        Similarly, we broadcast a field defined as a slice of the output domain, i.e.
-        a field with a smaller number of dimensions than the out field.
-        Consider for example the following IR, where the the 'a' IJ-field is used for
-        the vertical boundary (`KDim == 0`):
-        ```python
-        @gtx.field_operator
-        def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
-            return concat_where(KDim == 0, boundary, interior)
-        ```
-        """
+        # We promote the input expression to a field defined on the output domain,
+        # refer to the function documentation for examples of such field operators.
         if concat_dim not in source_domain.ranges:
             source_domain.ranges[concat_dim] = (
                 domain_utils.SymbolicRange(
-                    start=output_domain.ranges[concat_dim].start, stop=concat_dim_bound_expr
+                    start=output_domain.ranges[concat_dim].start,
+                    stop=concat_dim_bound_expr,
                 )
                 if is_lower
                 else domain_utils.SymbolicRange(
@@ -94,15 +129,7 @@ def _translate_concat_where_branch(
 
         source = sdfg_builder.visit(bcast_expr, ctx=ctx)
     else:
-        """
-        Handle here the _regular_ case, that is concat_where applied to two fields
-        with same domain:
-        ```python
-        @gtx.field_operator
-        def testee(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
-            return concat_where(KDim < 10, a, b)
-        ```
-        """
+        # The input field is defined on all dimensions of the result field.
         source = sdfg_builder.visit(source_expr, ctx=ctx)
 
     assert source.gt_type == output_type
@@ -129,6 +156,7 @@ def _translate_concat_where_branch(
         strict=True,
     ):
         if dim == concat_dim:
+            # Write only the subset corresponding to the range of lower or upper branch.
             source_subset.append(
                 (
                     source_range_0 - src_origin,
@@ -144,6 +172,7 @@ def _translate_concat_where_branch(
                 )
             )
         else:
+            # Write the full subset which covers the array size in this dimension.
             source_subset.append(
                 (
                     dst_origin - src_origin,
@@ -192,11 +221,11 @@ def translate_concat_where(
 
     concat_dim = next(iter(mask_domain.ranges.keys()))
 
-    # Expect unbound range in the concat domain expression on lower or upper range:
-    #  - if the domain expression is unbound on lower side (negative infinite),
+    # Expect unbound range in the concat domain expression on range start or end:
+    #  - If the domain expression is unbound on range start (negative infinite),
     #    the expression on the true branch is to be considered the input for the
     #    lower domain.
-    #  - viceversa, if the domain expression is unbound on upper side (positive
+    #  - Vice versa, if the domain expression is unbound on range stop (positive
     #    infinite), the true expression represents the input for the upper domain.
     infinity_literals = (gtir.InfinityLiteral.POSITIVE, gtir.InfinityLiteral.NEGATIVE)
     if mask_domain.ranges[concat_dim].start in infinity_literals:
@@ -216,24 +245,40 @@ def translate_concat_where(
     if isinstance(node.type.dtype, ts.ScalarType):
         dtype = gtx_dace_utils.as_dace_type(node.type.dtype)
     else:
-        assert isinstance(node.type.dtype.element_type, ts.ScalarType)
-        dtype = gtx_dace_utils.as_dace_type(node.type.dtype.element_type)
+        # TODO(edopao): Refactor allocation of fields with local dimension and enable this.
+        raise NotImplementedError("'concat_where' with list output is not supported")
+
     output, output_desc = sdfg_builder.add_temp_array(ctx.sdfg, output_shape, dtype)
     output_node = ctx.state.add_access(output)
 
-    for i, source_expr in enumerate([lower_expr, upper_expr]):
-        _translate_concat_where_branch(
-            ctx=ctx,
-            sdfg_builder=sdfg_builder,
-            concat_dim=concat_dim,
-            concat_dim_bound_expr=bound_expr,
-            output_domain=node.annex.domain,
-            output_type=node.type,
-            source_expr=source_expr,
-            output_desc=output_desc,
-            output_node=output_node,
-            output_origin=output_origin,
-            is_lower=(i == 0),
-        )
+    # Translate the input expression on the lower domain.
+    _translate_concat_where_branch(
+        ctx=ctx,
+        sdfg_builder=sdfg_builder,
+        source_expr=lower_expr,
+        is_lower=True,
+        concat_dim=concat_dim,
+        concat_dim_bound_expr=bound_expr,
+        output_domain=node.annex.domain,
+        output_type=node.type,
+        output_desc=output_desc,
+        output_node=output_node,
+        output_origin=output_origin,
+    )
+
+    # Translate the input expression on the upper domain.
+    _translate_concat_where_branch(
+        ctx=ctx,
+        sdfg_builder=sdfg_builder,
+        source_expr=upper_expr,
+        is_lower=False,
+        concat_dim=concat_dim,
+        concat_dim_bound_expr=bound_expr,
+        output_domain=node.annex.domain,
+        output_type=node.type,
+        output_desc=output_desc,
+        output_node=output_node,
+        output_origin=output_origin,
+    )
 
     return gtir_to_sdfg_types.FieldopData(output_node, node.type, origin=tuple(output_origin))
