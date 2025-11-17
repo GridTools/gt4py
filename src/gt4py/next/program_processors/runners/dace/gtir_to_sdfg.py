@@ -182,6 +182,21 @@ class SubgraphContext:
         src: gtir_to_sdfg_types.FieldopData,
         domain: gtir_domain.FieldopDomain | None = None,
     ) -> gtir_to_sdfg_types.FieldopData:
+        """Create a copy of some data descriptor in the current SDFG context.
+
+        It allocates transient scalar or array storage with the exact same descriptor
+        as some other data in the same SDFG context, and creates an edge memlet
+        to write the full shape. If 'domain' is passed as argument, the result field
+        is defined on the givem domain, and only the corresponding subset is copied.
+
+        Args:
+            src: The data access node to copy, either a scalar or array.
+            domain: If None, the full shape is copied. Otherwise, the given domain
+                is translated into the subset to be copied.
+
+        Returns:
+            The new access node to the data copy.
+        """
         data_desc = src.dc_node.desc(self.sdfg)
         if isinstance(src.gt_type, ts.FieldType):
             if domain is None:
@@ -310,7 +325,8 @@ class SDFGBuilder(DataflowBuilder, Protocol):
             inner_ctx: The nested SDFG context, containing the state where `inner_result` is written.
             outer_ctx: The parent SDFG context, containing the state where the nested SDFG should be added.
             symbolic_args: Scalar argumemts to be passed to the nested SDFG through symbol mapping.
-            data_args: Data arguments to be passed through edge memlets.
+            data_args: Data arguments to be passed through edge memlets. If None,
+                domain inference detected that this argument is not used.
             inner_result: The data produced by the nested SDFG, inside the state specified by `inner_ctx`.
 
         Returns:
@@ -444,7 +460,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # of the lambda expression (`lambda_params`), we also pass to the nested SDFG
         # all GTIR-symbols in scope, which means the symbols defined in current context.
         # Note that we first collect the symbols captured from the parent scope,
-        # then we eventually override symbols defined as lambda parameters.
+        # then we add or override symbols defined as lambda parameters.
         if capture_scope_symbols:
             lambda_symbols = {
                 sym: self.scope_symbols[sym]
@@ -453,7 +469,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         else:
             lambda_symbols = {}
 
-        # We flatten all GTIR-symbols in current scope, that are caputered by the
+        # We flatten all GTIR-symbols in current scope that are captured by the
         # lambda expression, and filter the scalar symbols that are represented
         # as dace symbols in parent SDFG. These symbols are mapped to dace symbols
         # in the nested SDFG.
@@ -469,16 +485,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             elif isinstance(arg_type, ts.ScalarType) and name in parent_ctx.sdfg.symbols:
                 parent_sdfg_symbols.add(name)
 
-        # We add to 'lambda_symbols' the symbols defined as lambda parameters.
-        # Note that we could eventually override symbols that already exist in
-        # current scope, with the new value passed as lambda parameter.
+        # We add to 'lambda_symbols' the symbols passed as lambda parameters.
+        # Note that we might eventually override symbols that already exist in
+        # current scope, with the new values passed as lambda parameters.
         assert all(isinstance(p.type, ts.DataType) for p in params)
         lambda_symbols |= {
             str(p.id): p.type  # type: ignore[misc]
             for p in params
         }
 
-        # Note: ordering the parameter list in alphabetical order.
+        # Sorting the parameter list in alphabetical order to improve determinism.
         input_params = [
             gtir.Sym(id=name, type=lambda_symbols[name]) for name in sorted(lambda_symbols.keys())
         ]
@@ -569,15 +585,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if datadesc.transient:
                 pass  # nothing to do here
             elif data in data_args:
+                # Arguments with empty domain do not need to be connected on the nested SDFG.
                 if (arg_node := data_args[data]) is None:
-                    # Arguments with empty domain do not need to be connected on the nested SDFG.
                     unused_data.add(data)
                 else:
                     input_memlets[data] = outer_ctx.sdfg.make_array_memlet(arg_node.dc_node.data)
             else:
+                # Capture GTIR symbols (scalars, arrays) from the parent scope.
                 assert data in outer_ctx.sdfg.arrays
-                # include fields from the parent scope
-                # ensure that connectivity tables are non-transient arrays in parent SDFG
+                # Ensure that connectivity tables are non-transient arrays in parent SDFG.
                 if data in connectivity_arrays:
                     outer_ctx.sdfg.arrays[data].transient = False
                 input_memlets[data] = outer_ctx.sdfg.make_array_memlet(data)
@@ -1131,14 +1147,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             arguments, that are simply returned by the lambda: it can be directly accessed in the parent SDFG.
             """
             if not inner_data.dc_node.desc(lambda_ctx.sdfg).transient:
-                # Handle here inout data
+                # This is inout data: some global associated to an input connector
+                # is also a sink node of the lambda dataflow. This can happen, for
+                # example, when the lambda constructs a tuple of some input fields.
+                # We copy this data to a new node, which we use as output.
                 nsdfg_node.remove_out_connector(inner_data.dc_node.data)
                 inner_data = lambda_ctx.copy_field(inner_data)
                 nsdfg_node.add_out_connector(inner_data.dc_node.data)
             elif lambda_ctx.state.degree(inner_data.dc_node) == 0:
                 # Isolated access node will make validation fail.
-                # Isolated access nodes can be found in the join-state of an if-expression
-                # or in lambda expressions that just construct tuples from input arguments.
+                # Isolated access nodes can be found in the join-state of an if-expression.
                 lambda_ctx.state.remove_node(inner_data.dc_node)
             # Transient data nodes only exist within the nested SDFG. In order to return some result data,
             # the corresponding data container inside the nested SDFG has to be changed to non-transient,

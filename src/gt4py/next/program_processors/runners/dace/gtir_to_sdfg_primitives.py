@@ -249,7 +249,7 @@ def translate_as_fieldop(
     if not isinstance(node.type, ts.FieldType):
         raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
 
-    # parse the domain of the field operator
+    # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
     field_domain = gtir_domain.get_field_domain(
         domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
@@ -264,8 +264,9 @@ def translate_as_fieldop(
             stencil_expr = im.lambda_("a")(im.deref("a"))
             stencil_expr.expr.type = node.type.dtype
         else:
-            # Special usage of 'deref' with field argument, to return a subset of
-            # the full field domain.
+            # Special usage of 'deref' with field argument, to access the field
+            # on the given domain. It could either broadcast a field slice, or
+            # copy a subset of the source field.
             arg = sdfg_builder.visit(node.args[0], ctx=ctx)
             assert isinstance(arg, gtir_to_sdfg_types.FieldopData)
             return ctx.copy_field(arg, domain=field_domain)
