@@ -225,7 +225,7 @@ def translate_concat_where(
     #  - If the domain expression is unbound on range start (negative infinite),
     #    the expression on the true branch is to be considered the input for the
     #    lower domain.
-    #  - Viceversa, if the domain expression is unbound on range stop (positive
+    #  - Vice versa, if the domain expression is unbound on range stop (positive
     #    infinite), the true expression represents the input for the upper domain.
     infinity_literals = (gtir.InfinityLiteral.POSITIVE, gtir.InfinityLiteral.NEGATIVE)
     if mask_domain.ranges[concat_dim].start in infinity_literals:
@@ -246,7 +246,7 @@ def translate_concat_where(
         dtype = gtx_dace_utils.as_dace_type(node.type.dtype)
     else:
         # TODO(edopao): Refactor allocation of fields with local dimension and enable this.
-        raise NotImplementedError("concat_where with list output is not supported")
+        raise NotImplementedError("'concat_where' with list output is not supported")
 
     output, output_desc = sdfg_builder.add_temp_array(ctx.sdfg, output_shape, dtype)
     output_node = ctx.state.add_access(output)
