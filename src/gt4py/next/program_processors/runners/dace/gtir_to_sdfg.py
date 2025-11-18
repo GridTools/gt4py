@@ -252,6 +252,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         """
         ...
 
+    @abc.abstractmethod
     def add_nested_sdfg(
         self,
         node: gtir.Lambda,
