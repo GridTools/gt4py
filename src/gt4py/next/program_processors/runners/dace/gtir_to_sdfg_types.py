@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Final, TypeAlias
+from typing import Final, Iterable, TypeAlias
 
 import dace
 from dace import subsets as dace_subsets
@@ -22,7 +22,6 @@ from gt4py.next.iterator import builtins as gtir_builtins, ir as gtir
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
-    gtir_to_sdfg,
     gtir_to_sdfg_utils,
     utils as gtx_dace_utils,
 )
@@ -56,43 +55,6 @@ class FieldopData:
             if isinstance(self.gt_type, ts.ScalarType)
             else len(self.origin) == len(self.gt_type.dims)
         )
-
-    def map_to_parent_sdfg(
-        self,
-        sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-        inner_sdfg: dace.SDFG,
-        outer_sdfg: dace.SDFG,
-        outer_sdfg_state: dace.SDFGState,
-        symbol_mapping: dict[str, dace.symbolic.SymbolicType],
-    ) -> FieldopData:
-        """
-        Make the data descriptor which 'self' refers to, and which is located inside
-        a NestedSDFG, available in its parent SDFG.
-
-        Thus, it turns 'self' into a non-transient array and creates a new data
-        descriptor inside the parent SDFG, with same shape and strides.
-        """
-        inner_desc = self.dc_node.desc(inner_sdfg)
-        assert inner_desc.transient
-        inner_desc.transient = False
-
-        if isinstance(self.gt_type, ts.ScalarType):
-            outer, outer_desc = sdfg_builder.add_temp_scalar(outer_sdfg, inner_desc.dtype)
-            outer_origin = []
-        else:
-            outer, outer_desc = sdfg_builder.add_temp_array_like(outer_sdfg, inner_desc)
-            # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
-            dace.symbolic.safe_replace(
-                symbol_mapping,
-                lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
-            )
-            # Same applies to the symbols used as field origin (the domain range start)
-            outer_origin = [
-                gtx_dace_utils.safe_replace_symbolic(val, symbol_mapping) for val in self.origin
-            ]
-
-        outer_node = outer_sdfg_state.add_access(outer)
-        return FieldopData(outer_node, self.gt_type, tuple(outer_origin))
 
     def get_local_view(
         self, domain: gtir_domain.FieldopDomain, sdfg: dace.SDFG
@@ -200,18 +162,25 @@ INDEX_DTYPE: Final[dace.typeclass] = getattr(dace, gtir_builtins.INTEGER_INDEX_B
 """Data type used for field indexing."""
 
 
-def flatten_tuple(sym: gtir.Sym, arg: FieldopResult) -> list[tuple[gtir.Sym, FieldopData | None]]:
+def flatten_tuple_args(
+    args: Iterable[tuple[gtir.Sym, FieldopResult | SymbolicData]],
+) -> list[tuple[gtir.Sym, FieldopData | SymbolicData | None]]:
+    """Helper function to flatten tuple arguments.
+
+    Args:
+        args: A list of arguments containing either a symbolic value or some data
+            access node, possibly in the form of tuple.
+
+    Return:
+        A list of flat arguments, including all nested fields extracted from tuples.
     """
-    Visit a `FieldopResult`, potentially containing nested tuples, and construct
-    a list of pairs `(gtir.Sym, FieldopData)` containing the symbol of each tuple
-    field and the corresponding `FieldopData`.
-    """
-    if isinstance(arg, tuple):
-        assert isinstance(sym.type, ts.TupleType)
-        tuple_symbols = gtir_to_sdfg_utils.flatten_tuple_fields(sym.id, sym.type)
-        tuple_data_fields = gtx_utils.flatten_nested_tuple(arg)
-        return [
-            (tsym, tfield) for tsym, tfield in zip(tuple_symbols, tuple_data_fields, strict=True)
-        ]
-    else:
-        return [(sym, arg)]
+    flat_args: list[tuple[gtir.Sym, FieldopData | SymbolicData | None]] = []
+    for gtsym, arg in args:
+        if isinstance(arg, tuple):
+            assert isinstance(gtsym.type, ts.TupleType)
+            tuple_symbols = gtir_to_sdfg_utils.flatten_tuple_fields(gtsym.id, gtsym.type)
+            tuple_data_fields = gtx_utils.flatten_nested_tuple(arg)
+            flat_args.extend(flatten_tuple_args(zip(tuple_symbols, tuple_data_fields, strict=True)))
+        else:
+            flat_args.append((gtsym, arg))
+    return flat_args

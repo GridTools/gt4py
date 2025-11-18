@@ -515,7 +515,11 @@ def _lower_lambda_to_nested_sdfg(
         lambda_result, lambda_result_shape, scan_carry_input
     )
 
-    # corner case where the scan state is not used in column update (not really a scan)
+    # Corner case where the scan computation, on one level, does not depend on
+    # the result from previous level. In this case, the state information from
+    # previous level is not used, therefore we could find isolated access nodes.
+    # Note that this is probably a misuse of scan in application code: it could
+    # have been represented as a pure field ooperator.
     for arg in gtx_utils.flatten_nested_tuple((stencil_args[0],)):
         state_node = arg.dc_node
         if compute_state.degree(state_node) == 0:
@@ -646,15 +650,12 @@ def translate_scan(
 
     symbolic_args: dict[str, gtir_to_sdfg_types.SymbolicData] = {}
     lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData | None] = {}
-    for gtsym, arg in lambda_args_mapping:
+    for gtsym, arg in gtir_to_sdfg_types.flatten_tuple_args(lambda_args_mapping):
+        gtsym_id = str(gtsym.id)
         if isinstance(arg, gtir_to_sdfg_types.SymbolicData):
-            gtsym_id = str(gtsym.id)
             symbolic_args[gtsym_id] = arg
         else:
-            lambda_arg_nodes |= {
-                str(nested_gtsym.id): nested_arg
-                for nested_gtsym, nested_arg in gtir_to_sdfg_types.flatten_tuple(gtsym, arg)
-            }
+            lambda_arg_nodes[gtsym_id] = arg
 
     nsdfg_node, input_memlets = sdfg_builder.add_nested_sdfg(
         stencil_expr, lambda_ctx, ctx, symbolic_args, lambda_arg_nodes, lambda_output

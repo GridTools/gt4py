@@ -611,10 +611,13 @@ def translate_tuple_get(
     unused_data_nodes = gtx_utils.flatten_nested_tuple(
         tuple(arg for i, arg in enumerate(data_nodes) if i != index)
     )
-    # However, for temporary fields inside the tuple (non-globals and non-scalar
-    # values, supposed to contain the result of some field operator) the gt4py
-    # domain inference should have already set an empty domain, so the corresponding
-    # `arg` is expected to be None and can be ignored.
+    # For temporary fields inside the tuple (non-globals and non-scalar values,
+    # supposed to contain the result of some field operator), the domain inference
+    # pass should have already set an empty domain, so the corresponding `arg`
+    # is expected to be None and should be ignored.
+    # We also ignore transient fields, because they should never appear as isolated
+    # access nodes by construction: temporary fields are supposed to always contain
+    # the result of some expression.
     access_nodes_to_remove = [
         arg.dc_node
         for arg in unused_data_nodes
