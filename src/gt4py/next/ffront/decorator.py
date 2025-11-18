@@ -255,7 +255,7 @@ class Program(CompiledProgramMixin):
         return dataclasses.replace(
             self,
             compilation_options=dataclasses.replace(
-                self.compilation_options, connectivities=_static_params
+                self.compilation_options, static_params=_static_params
             ),
         )
 
