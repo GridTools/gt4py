@@ -196,4 +196,5 @@ def test_make_primitive_value_args_extractor_mixed_args(
     assert args == ((1.0, 2.0), 3.14)
     assert kwargs == {"c": (3.0, 4.0)}
 
+
 # TODO: write test for scan

@@ -14,8 +14,8 @@ from gt4py.next.ffront import (
     foast_to_gtir,
     program_ast as past,
     stages as ffront_stages,
-    type_specifications as ts_ffront,
     type_info as ffront_type_info,
+    type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
 from gt4py.next.ffront.stages import AOT_FOP, AOT_PRG
@@ -112,7 +112,9 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
             *partial_program_type.definition.pos_or_kw_args.keys(),
             *partial_program_type.definition.kw_only_args.keys(),
         ]
-        assert arg_types[-1] == type_info.return_type(type_, with_args=list(arg_types), with_kwargs=kwarg_types)
+        assert arg_types[-1] == type_info.return_type(
+            type_, with_args=list(arg_types), with_kwargs=kwarg_types
+        )
         assert args_names[-1] == "out"
 
         params_decl: list[past.Symbol] = [

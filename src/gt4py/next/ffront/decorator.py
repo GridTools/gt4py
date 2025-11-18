@@ -43,13 +43,13 @@ from gt4py.next.ffront import (
     signature,
     stages as ffront_stages,
     transform_utils,
+    type_info as ffront_type_info,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, options, stages, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
-from gt4py.next.ffront import type_info as ffront_type_info
 
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
@@ -806,7 +806,7 @@ def field_operator(
                 next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
             ),
             grid_type,
-            **compilation_options
+            **compilation_options,
         )
 
     return field_operator_inner if definition is None else field_operator_inner(definition)

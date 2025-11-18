@@ -21,7 +21,8 @@ from gt4py.next import backend as gtx_backend, common, config, errors, metrics, 
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
-    type_specifications as ts_ffront, type_translation,
+    type_specifications as ts_ffront,
+    type_translation,
 )
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -290,7 +291,7 @@ class CompiledProgramsPool:
                         self.program_type, self.argument_descriptor_mapping, args, kwargs
                     ),
                     arg_types=[type_translation.from_value(arg) for arg in args],
-                    kwarg_types={k: type_translation.from_value(v) for k,v in kwargs.items()},
+                    kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                     offset_provider=offset_provider,
                     call_key=key,
                 )
@@ -446,9 +447,10 @@ class CompiledProgramsPool:
 
         assert (arg_types is None) == (kwarg_types is None)
         if arg_types is None:
-            arg_types = tuple(self.program_type.definition.pos_only_args) + tuple(self.program_type.definition.pos_or_kw_args.values())
+            arg_types = tuple(self.program_type.definition.pos_only_args) + tuple(
+                self.program_type.definition.pos_or_kw_args.values()
+            )
             kwarg_types = self.program_type.definition.kw_only_args
-
 
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,
