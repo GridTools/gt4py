@@ -87,6 +87,14 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> None:
         raise NotImplementedError(f"Iterator access ({node.name}) is not implemented for numpy")
 
+    def visit_RuntimeAxisBound(self, node: common.RuntimeAxisBound, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            "Runtime interval bounds (e.g. `with interval(0, field)`) is an experimental feature and not implemented for the `numpy` backend."
+        )
+
+    def visit_AxisBound(self, node: common.AxisBound, **kwargs: Any) -> common.AxisBound:
+        return node
+
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
         i_offset, j_offset, k_offset = self.visit(node.offset, **kwargs)
         data_index = [self.visit(index, **kwargs) for index in node.data_index]
@@ -208,8 +216,8 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> npir.VerticalPass:
         return npir.VerticalPass(
             body=self.visit(node.horizontal_executions, **kwargs),
-            lower=node.interval.start,
-            upper=node.interval.end,
+            lower=self.visit(node.interval.start),
+            upper=self.visit(node.interval.end),
             direction=loop_order,
         )
 

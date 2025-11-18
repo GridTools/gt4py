@@ -14,6 +14,7 @@ from typing import Any, Dict, Final, List, Optional, Tuple, Union, cast
 
 import numpy as np
 
+from gt4py.cartesian import utils
 from gt4py.cartesian.frontend.node_util import (
     IRNodeMapper,
     IRNodeVisitor,
@@ -574,6 +575,9 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_RuntimeAxisBound(self, node: RuntimeAxisBound) -> gtir.AxisBound:
+        utils.warn_experimental_feature(
+            feature="Runtime Interval Bounds", ADR="experimental/runtime-intervals.md"
+        )
         return gtir.RuntimeAxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level],
             offset=self.visit(node.offset),

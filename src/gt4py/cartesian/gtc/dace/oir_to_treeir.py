@@ -232,6 +232,11 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return f"({axis_end}) + ({node.offset})"
 
+    def visit_RuntimeAxisBound(self, node: common.RuntimeAxisBound, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            "Runtime interval bounds (e.g. `with interval(0, field)`) is an experimental feature and not implemented for the `dace:X` backends."
+        )
+
     def visit_Interval(
         self, node: oir.Interval, loop_order: common.LoopOrder, axis_start: str, axis_end: str
     ) -> tir.Bounds:

@@ -16,6 +16,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
     collect_symbol_names,
     symbol_name_creator,
 )
+from gt4py.eve.utils import XIterable
 
 
 class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
@@ -137,11 +138,20 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        # Can't scalarize temporaries that are used in interval-bounds
+        intervals: XIterable[oir.Interval] = node.walk_values().if_isinstance(oir.Interval)
+        interval_temporaries = set()
+        for interval in intervals:
+            interval_temporaries.update(
+                interval.walk_values().if_isinstance(oir.FieldAccess).getattr("name").to_set()
+            )
         # Does not (yet) support scalarizing temporaries with data_dims
         write_before_read_tmps = {
             symbol
             for symbol, value in kwargs["symtable"].items()
-            if isinstance(value, oir.Temporary) and not value.data_dims
+            if isinstance(value, oir.Temporary)
+            and not value.data_dims
+            and symbol not in interval_temporaries
         }
         horizontal_executions = node.walk_values().if_isinstance(oir.HorizontalExecution)
 

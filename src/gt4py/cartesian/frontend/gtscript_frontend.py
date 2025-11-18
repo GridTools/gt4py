@@ -206,12 +206,18 @@ class AxisIntervalParser(gt_meta.ASTPass):
 
         return nodes.AxisBound(level=level, offset=offset, loc=self.loc)
 
-    def visit_Name(self, node: ast.Name) -> nodes.VarRef:
-        if "K" in self.fields[node.id].axes:
-            raise ValueError("Using a field with a K-Axis as a bound for an interval is invalid.")
-        return nodes.FieldRef.at_center(
-            name=node.id, axes=self.fields[node.id].axes, loc=nodes.Location.from_ast_node(node)
-        )
+    def visit_Name(self, node: ast.Name) -> nodes.Ref:
+        # Handle the field accesses
+        if node.id in self.fields:
+            if "K" in self.fields[node.id].axes:
+                raise ValueError(
+                    "Using a field with a K-Axis as a bound for an interval is invalid."
+                )
+            return nodes.FieldRef.at_center(
+                name=node.id, axes=self.fields[node.id].axes, loc=nodes.Location.from_ast_node(node)
+            )
+        # Handle the scalar accesses
+        return nodes.VarRef(name=node.id, loc=nodes.Location.from_ast_node(node))
 
     def visit_Constant(self, node: ast.Constant) -> Union[int, gtscript.AxisIndex, None]:
         if isinstance(node.value, gtscript.AxisIndex):
