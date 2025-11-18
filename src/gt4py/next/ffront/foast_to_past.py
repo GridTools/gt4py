@@ -15,6 +15,7 @@ from gt4py.next.ffront import (
     program_ast as past,
     stages as ffront_stages,
     type_specifications as ts_ffront,
+    type_info as ffront_type_info,
 )
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
 from gt4py.next.ffront.stages import AOT_FOP, AOT_PRG
@@ -100,21 +101,19 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         #  With the CompiledProgramPool the out argument is just the third argument (consistent
         #  with the program definition below). So we just drop it now. In general this function
         #  should be reworked or replaced. Decide in review.
-        arg_types, kwarg_types = inp.args.args[:-1], inp.args.kwargs
+        arg_types, kwarg_types = inp.args.args, inp.args.kwargs
         assert not kwarg_types
 
         type_ = inp.data.foast_node.type
         loc = inp.data.foast_node.location
-        definition = inp.data.foast_node.type.definition
+        partial_program_type = ffront_type_info.type_in_program_context(inp.data.foast_node.type)
         args_names = [
-            *definition.pos_only_args,
-            *definition.pos_or_kw_args.keys(),
-            *definition.kw_only_args.keys(),
+            *partial_program_type.definition.pos_only_args,
+            *partial_program_type.definition.pos_or_kw_args.keys(),
+            *partial_program_type.definition.kw_only_args.keys(),
         ]
-        if isinstance(
-            inp.data.foast_node.type, ts_ffront.ScanOperatorType
-        ):  # TODO(tehrengruber,sf-n): use signature_from_callable_in_program_context
-            args_names = args_names[1:]  # carry argument is not in parameter list
+        assert arg_types[-1] == type_info.return_type(type_, with_args=list(arg_types), with_kwargs=kwarg_types)
+        assert args_names[-1] == "out"
 
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
@@ -129,13 +128,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
                 strict=True,
             )
         ]
-        params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
-        out_sym: past.Symbol = past.DataSymbol(
-            id="out",
-            type=type_info.return_type(type_, with_args=list(arg_types), with_kwargs=kwarg_types),
-            namespace=dialect_ast_enums.Namespace.LOCAL,
-            location=loc,
-        )
+        params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl[:-1]]
         out_ref = past.Name(id="out", location=loc)
 
         if inp.data.foast_node.id in inp.data.closure_vars:
@@ -155,7 +148,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         untyped_past_node = past.Program(
             id=f"__field_operator_{inp.data.foast_node.id}",
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
-            params=[*params_decl, out_sym],
+            params=params_decl,
             body=[
                 past.Call(
                     func=past.Name(id=inp.data.foast_node.id, location=loc),
