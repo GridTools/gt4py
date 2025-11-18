@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import functools
 import time
@@ -54,8 +55,34 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
+DefinitionT = TypeVar(
+    "DefinitionT", ffront_stages.ProgramDefinition, ffront_stages.FieldOperatorDefinition
+)
 
-class CompiledProgramMixin:
+
+@dataclasses.dataclass(frozen=True)
+class _CommonProgramLike(Generic[DefinitionT]):
+    definition_stage: DefinitionT
+    backend: Optional[next_backend.Backend]
+    compilation_options: options.CompilationOptions
+
+    @abc.abstractmethod
+    def __gt_type__(self) -> ts.CallableType: ...
+
+    def with_backend(self, backend: next_backend.Backend) -> Self:
+        return dataclasses.replace(self, backend=backend)
+
+    def with_connectivities(
+        self,
+        connectivities: common.OffsetProvider,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime informatio
+    ) -> Self:
+        return dataclasses.replace(
+            self,
+            compilation_options=dataclasses.replace(
+                self.compilation_options, connectivities=connectivities
+            ),
+        )
+
     @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
@@ -88,7 +115,8 @@ class CompiledProgramMixin:
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         """
-        Compiles the program for the given combination of static arguments and offset provider type.
+        Compiles the program or operator for the given combination of static arguments and offset
+        provider type.
 
         Note: Unlike `with_...` methods, this method does not return a new instance of the program,
         but adds the compiled variants to the current program instance.
@@ -128,7 +156,7 @@ class CompiledProgramMixin:
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
-class Program(CompiledProgramMixin):
+class Program(_CommonProgramLike[ffront_stages.ProgramDefinition]):
     """
     Construct a program object from a PAST node.
 
@@ -147,10 +175,6 @@ class Program(CompiledProgramMixin):
             For now, it is used for ahead of time compilation in DaCe orchestrated programs,
             i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
     """
-
-    definition_stage: ffront_stages.ProgramDefinition
-    backend: Optional[next_backend.Backend]
-    compilation_options: options.CompilationOptions
 
     @classmethod
     def from_function(
@@ -226,20 +250,6 @@ class Program(CompiledProgramMixin):
             args=arguments.CompileTimeArgs.empty(),
         )
         return self._frontend_transforms.past_to_itir(no_args_past).data
-
-    def with_backend(self, backend: next_backend.Backend) -> Program:
-        return dataclasses.replace(self, backend=backend)
-
-    def with_connectivities(
-        self,
-        connectivities: common.OffsetProvider,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime informatio
-    ) -> Program:
-        return dataclasses.replace(
-            self,
-            compilation_options=dataclasses.replace(
-                self.compilation_options, connectivities=connectivities
-            ),
-        )
 
     def with_grid_type(self, grid_type: common.GridType) -> Program:
         return dataclasses.replace(
@@ -580,7 +590,9 @@ OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldOperator(CompiledProgramMixin, GTCallable, Generic[OperatorNodeT]):
+class FieldOperator(
+    _CommonProgramLike[ffront_stages.FieldOperatorDefinition], GTCallable, Generic[OperatorNodeT]
+):
     """
     Construct a field operator object from a FOAST node.
 
@@ -601,9 +613,6 @@ class FieldOperator(CompiledProgramMixin, GTCallable, Generic[OperatorNodeT]):
             it will be deduced from actually occurring dimensions.
     """
 
-    definition_stage: ffront_stages.FieldOperatorDefinition
-    backend: Optional[next_backend.Backend]
-    compilation_options: options.CompilationOptions
     _program_cache: dict = dataclasses.field(
         init=False, default_factory=dict
     )  # init=False ensure the cache is not copied in calls to replace
@@ -664,9 +673,6 @@ class FieldOperator(CompiledProgramMixin, GTCallable, Generic[OperatorNodeT]):
         type_ = self.foast_stage.foast_node.type
         assert isinstance(type_, ts.CallableType)
         return type_
-
-    def with_backend(self, backend: next_backend.Backend) -> FieldOperator:
-        return dataclasses.replace(self, backend=backend)
 
     def with_grid_type(self, grid_type: common.GridType) -> FieldOperator:
         return dataclasses.replace(

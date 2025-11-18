@@ -487,6 +487,7 @@ class CompiledProgramsPool:
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
+        # TODO: fail for scan operator
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
                 self._compile_variant(
