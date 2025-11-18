@@ -1409,8 +1409,8 @@ def test_runtime_interval_bounds():
         with computation(PARALLEL), interval(0, index_field):
             out_field[0, 0, 0] = in_field
 
-    index_field = gt_storage.ones(backend=backend, shape=domain, dtype=np.int64)
-    index_field[:, :, :] = 4
+    index_field = gt_storage.ones(backend=backend, shape=(domain[0], domain[1]), dtype=np.int64)
+    index_field[:, :] = 4
     in_arr[:, :, :] = 1
     out_arr[:, :, :] = 0
     test_field_arg(in_arr, out_arr, index_field)
