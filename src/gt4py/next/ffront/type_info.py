@@ -15,6 +15,7 @@ import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.next import common, utils
 from gt4py.eve.extended_typing import NestedTuple
+from gt4py.next.ffront.type_specifications import ProgramType
 from gt4py.next.type_system import type_info
 
 
@@ -342,6 +343,30 @@ def return_type_scanop(
         ts.TypeSpec,
         tree_map_type(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype),
     )
+
+
+def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.FunctionType:
+    if isinstance(callable_type, ts_ffront.FieldOperatorType):
+        return ProgramType(definition=ts.FunctionType(
+            pos_only_args=callable_type.pos_only_args,
+            pos_or_kw_args=callable_type.pos_or_kw_args | {"out": callable_type.returns},
+            kw_only_args=callable_type.kw_only_args,
+            returns=ts.VoidType()
+        ))
+    elif isinstance(callable_type, ts_ffront.ScanOperatorType):
+        as_deferred_type_with_same_structure = tree_map_type(lambda _: ts.DeferredType(constraint=None))
+        scan_pass_type = callable_type.definition
+        _, *non_carry_args = scan_pass_type.pos_or_kw_args.items()
+        pos_or_kw_args = dict(non_carry_args) | {"out": scan_pass_type.returns}
+        assert not scan_pass_type.pos_only_args
+        return ProgramType(ts.FunctionType(
+            pos_only_args=[],
+            pos_or_kw_args={k: as_deferred_type_with_same_structure(t) for k, t in pos_or_kw_args.items()},
+            kw_only_args={k: as_deferred_type_with_same_structure(t) for k, t in scan_pass_type.kw_only_args.items()},
+            returns=ts.VoidType()
+        ))
+    assert isinstance(callable_type, (ts.FunctionType, ts_ffront.ProgramType))
+    return callable_type
 
 
 def signature_from_callable_in_program_context(callable_type: ts.CallableType):

@@ -21,7 +21,7 @@ from gt4py.next import backend as gtx_backend, common, config, errors, metrics, 
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
-    type_specifications as ts_ffront,
+    type_specifications as ts_ffront, type_translation,
 )
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -220,31 +220,11 @@ class CompiledProgramsPool:
 
     backend: gtx_backend.Backend
     definition_stage: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition
-    callable_type: ts_ffront.ProgramType | ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType
+    program_type: ts_ffront.ProgramType
     #: mapping from an argument descriptor type to a list of parameters or expression thereof
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
-
-    @functools.cached_property
-    def program_type(self):
-        # TODO: use a signature object everywhere instead
-        if isinstance(
-            operator_type := self.callable_type,
-            ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType,
-        ):
-            # TODO: this is wrong for the scan operator
-            fun_type: ts.FunctionType = operator_type.definition
-            return ts_ffront.ProgramType(
-                definition=ts.FunctionType(
-                    pos_only_args=fun_type.pos_only_args,
-                    pos_or_kw_args={**fun_type.pos_or_kw_args, "out": fun_type.returns},
-                    kw_only_args=fun_type.kw_only_args,
-                    returns=fun_type.returns,
-                )
-            )
-        assert isinstance(self.callable_type, ts_ffront.ProgramType)
-        return self.callable_type
 
     # cache the compiled programs
     compiled_programs: dict[
@@ -282,6 +262,7 @@ class CompiledProgramsPool:
         else:
             args, kwargs = canonical_args, canonical_kwargs
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
+        # TODO: add arg types to key for scan
         key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
 
         try:
@@ -308,6 +289,8 @@ class CompiledProgramsPool:
                     argument_descriptors=_make_argument_descriptors(
                         self.program_type, self.argument_descriptor_mapping, args, kwargs
                     ),
+                    arg_types=[type_translation.from_value(arg) for arg in args],
+                    kwarg_types={k: type_translation.from_value(v) for k,v in kwargs.items()},
                     offset_provider=offset_provider,
                     call_key=key,
                 )
@@ -322,7 +305,7 @@ class CompiledProgramsPool:
     @functools.cached_property
     def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
         return ffront_type_info.make_args_canonicalizer(
-            self.callable_type, name=self.definition_stage.definition.__name__
+            self.program_type, name=self.definition_stage.definition.__name__
         )
 
     @functools.cached_property
@@ -419,6 +402,10 @@ class CompiledProgramsPool:
         self,
         argument_descriptors: ArgumentDescriptors,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
+        arg_types: tuple[ts.TypeSpec, ...] | None = None,
+        kwarg_types: tuple[ts.TypeSpec, ...] | None = None,
+        # argument used only to validate key computed in a call / dispatch agrees with the
+        # key computed here
         call_key: CompiledProgramsKey | None = None,
     ) -> None:
         if not common.is_offset_provider(offset_provider):
@@ -457,12 +444,17 @@ class CompiledProgramsPool:
                 },
             )
 
+        assert (arg_types is None) == (kwarg_types is None)
+        if arg_types is None:
+            arg_types = tuple(self.program_type.definition.pos_only_args) + tuple(self.program_type.definition.pos_or_kw_args.values())
+            kwarg_types = self.program_type.definition.kw_only_args
+
+
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
-            args=tuple(self.program_type.definition.pos_only_args)
-            + tuple(self.program_type.definition.pos_or_kw_args.values()),
-            kwargs=self.program_type.definition.kw_only_args,
+            args=arg_types,
+            kwargs=kwarg_types,
             argument_descriptor_contexts=argument_descriptor_contexts,
         )
         compile_call = functools.partial(

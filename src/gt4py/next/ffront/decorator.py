@@ -49,6 +49,7 @@ from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, options, stages, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.ffront import type_info as ffront_type_info
 
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
@@ -70,7 +71,7 @@ class CompiledProgramMixin:
         return compiled_program.CompiledProgramsPool(
             backend=self.backend,
             definition_stage=self.definition_stage,
-            callable_type=self.__gt_type__(),
+            program_type=ffront_type_info.type_in_program_context(self.__gt_type__()),
             argument_descriptor_mapping=argument_descriptor_mapping,
             # type: ignore[arg-type]  # covariant `type[T]` not possible
         )
