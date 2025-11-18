@@ -290,7 +290,7 @@ class CompiledProgramsPool:
                     argument_descriptors=_make_argument_descriptors(
                         self.program_type, self.argument_descriptor_mapping, args, kwargs
                     ),
-                    arg_types=[type_translation.from_value(arg) for arg in args],
+                    arg_types=tuple(type_translation.from_value(arg) for arg in args),
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                     offset_provider=offset_provider,
                     call_key=key,
@@ -404,7 +404,7 @@ class CompiledProgramsPool:
         argument_descriptors: ArgumentDescriptors,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
         arg_types: tuple[ts.TypeSpec, ...] | None = None,
-        kwarg_types: tuple[ts.TypeSpec, ...] | None = None,
+        kwarg_types: dict[str, ts.TypeSpec] | None = None,
         # argument used only to validate key computed in a call / dispatch agrees with the
         # key computed here
         call_key: CompiledProgramsKey | None = None,

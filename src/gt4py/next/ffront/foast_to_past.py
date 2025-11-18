@@ -107,6 +107,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         type_ = inp.data.foast_node.type
         loc = inp.data.foast_node.location
         partial_program_type = ffront_type_info.type_in_program_context(inp.data.foast_node.type)
+        assert isinstance(partial_program_type, ts_ffront.ProgramType)
         args_names = [
             *partial_program_type.definition.pos_only_args,
             *partial_program_type.definition.pos_or_kw_args.keys(),

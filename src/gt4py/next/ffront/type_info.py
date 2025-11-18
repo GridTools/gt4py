@@ -7,9 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import functools
 import inspect
-import itertools
 from collections.abc import Callable
-from typing import Iterator, Sequence, cast
+from typing import Any, Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
@@ -347,11 +346,12 @@ def return_type_scanop(
 
 def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.FunctionType:
     if isinstance(callable_type, ts_ffront.FieldOperatorType):
+        definition = callable_type.definition
         return ProgramType(
             definition=ts.FunctionType(
-                pos_only_args=callable_type.pos_only_args,
-                pos_or_kw_args=callable_type.pos_or_kw_args | {"out": callable_type.returns},
-                kw_only_args=callable_type.kw_only_args,
+                pos_only_args=definition.pos_only_args,
+                pos_or_kw_args=definition.pos_or_kw_args | {"out": definition.returns},
+                kw_only_args=definition.kw_only_args,
                 returns=ts.VoidType(),
             )
         )
@@ -380,7 +380,9 @@ def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.
     return callable_type
 
 
-def _signature_from_callable_in_program_context(callable_type: ts.CallableType):
+def _signature_from_callable_in_program_context(
+    callable_type: ts.CallableType,
+) -> inspect.Signature:
     if isinstance(callable_type, ts_ffront.ProgramType):
         return _signature_from_callable_in_program_context(callable_type.definition)
     elif isinstance(callable_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType):
@@ -391,10 +393,7 @@ def _signature_from_callable_in_program_context(callable_type: ts.CallableType):
             else operator_signature.parameters.values()
         )
         return inspect.Signature(
-            parameters=itertools.chain(
-                params,
-                [inspect.Parameter("out", inspect.Parameter.KEYWORD_ONLY)],
-            ),
+            parameters=[*params, inspect.Parameter("out", inspect.Parameter.KEYWORD_ONLY)],
             return_annotation=inspect.Signature.empty,
         )
     assert isinstance(callable_type, ts.FunctionType)
@@ -417,7 +416,9 @@ def _signature_from_callable_in_program_context(callable_type: ts.CallableType):
     )
 
 
-def make_args_canonicalizer(callable_type: ts.CallableType, **kwargs):
+def make_args_canonicalizer(
+    callable_type: ts.CallableType, **kwargs
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
     """
     Create a call arguments canonicalizer function from a given signature.
 

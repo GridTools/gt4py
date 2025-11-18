@@ -18,7 +18,7 @@ import time
 import types
 import typing
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import Any, Generic, Optional, TypeVar
 
 from gt4py import eve
@@ -68,12 +68,14 @@ class CompiledProgramMixin:
             arguments.StaticArg: self.compilation_options.static_params,
         }
 
+        program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
+        assert isinstance(program_type, ts_ffront.ProgramType)
+
         return compiled_program.CompiledProgramsPool(
             backend=self.backend,
             definition_stage=self.definition_stage,
-            program_type=ffront_type_info.type_in_program_context(self.__gt_type__()),
-            argument_descriptor_mapping=argument_descriptor_mapping,
-            # type: ignore[arg-type]  # covariant `type[T]` not possible
+            program_type=program_type,
+            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
         )
 
     def compile(
@@ -165,7 +167,7 @@ class Program(CompiledProgramMixin):
             compilation_options=options.CompilationOptions(**compilation_options),
         )
 
-    def __gt_type__(self):
+    def __gt_type__(self) -> ts_ffront.ProgramType:
         return self.past_stage.past_node.type
 
     # TODO(ricoh): linting should become optional, up to the backend.
@@ -232,7 +234,12 @@ class Program(CompiledProgramMixin):
         self,
         connectivities: common.OffsetProvider,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime informatio
     ) -> Program:
-        return dataclasses.replace(self, connectivities=connectivities)
+        return dataclasses.replace(
+            self,
+            compilation_options=dataclasses.replace(
+                self.compilation_options, connectivities=connectivities
+            ),
+        )
 
     def with_grid_type(self, grid_type: common.GridType) -> Program:
         return dataclasses.replace(
@@ -247,7 +254,9 @@ class Program(CompiledProgramMixin):
             _static_params = typing.cast(tuple[str], static_params)
         return dataclasses.replace(
             self,
-            static_params=_static_params,
+            compilation_options=dataclasses.replace(
+                self.compilation_options, connectivities=_static_params
+            ),
         )
 
     def with_bound_args(self, **kwargs: Any) -> ProgramWithBoundArgs:
@@ -519,9 +528,8 @@ def program(
     *,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-    enable_jit: bool | None,
-    static_params: Sequence[str] | None,
     frozen: bool,
+    **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> Callable[[types.FunctionType], Program]: ...
 
 
