@@ -71,9 +71,12 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         >>> op_to_prog = OperatorToProgram(foast_to_gtir.adapted_foast_to_gtir_factory())
 
         >>> compile_time_args = arguments.CompileTimeArgs(
-        ...     args=tuple(param.type for param in copy.foast_stage.foast_node.definition.params),
+        ...     args=(
+        ...       *(param.type for param in copy.foast_stage.foast_node.definition.params),
+        ...       copy.foast_stage.foast_node.definition.type.returns
+        ...     ),
         ...     kwargs={},
-        ...     offset_provider={"I", IDim},
+        ...     offset_provider={"I": IDim},
         ...     column_axis=None,
         ...     argument_descriptor_contexts={},
         ... )
