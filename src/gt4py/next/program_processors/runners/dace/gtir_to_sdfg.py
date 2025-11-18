@@ -1240,12 +1240,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
             return outer_data
 
-        apa = gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
-        try:
-            ctx.sdfg.validate()
-        except dace.sdfg.validation.InvalidSDFGNodeError:
-            ctx.sdfg.view()
-        return apa
+        return gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
 
     def visit_Literal(
         self,
