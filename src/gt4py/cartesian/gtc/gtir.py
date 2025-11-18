@@ -25,12 +25,7 @@ from typing import Any, Dict, List, Set, Tuple, Type
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.common import (  # noqa: F401
-    AxisBound,
-    BaseAxisBound,
-    LocNode,
-    RuntimeAxisBound,
-)
+from gt4py.cartesian.gtc.common import AxisBound, BaseAxisBound, LocNode, RuntimeAxisBound
 from gt4py.eve import datamodels
 
 
@@ -257,6 +252,9 @@ class VerticalLoop(LocNode):
         def _size_one(interval: Interval) -> bool:
             if interval.start.level != interval.end.level:
                 # if the levels (start/end) aren't the same, we don't know at this stage
+                return False
+            if not (isinstance(interval.start, AxisBound) and isinstance(interval.end, AxisBound)):
+                # If the intervals are bounds are determined at runtime, we don't know at this stage
                 return False
 
             return abs(interval.end.offset - interval.start.offset) == 1
