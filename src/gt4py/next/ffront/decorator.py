@@ -612,11 +612,6 @@ class FieldOperator(
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
     """
-
-    _program_cache: dict = dataclasses.field(
-        init=False, default_factory=dict
-    )  # init=False ensure the cache is not copied in calls to replace
-
     @classmethod
     def from_function(
         cls,
