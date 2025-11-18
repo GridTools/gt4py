@@ -1,11 +1,13 @@
 # ⚠️ Allow for runtime specification of interval bounds
 
-In the context of porting physics parametrization, a repeating pattern in a lot of solver-like codes are column based loops that only affect parts of the column until a certain condition is met. 
+In the context of porting physics parametrization, a repeating pattern in a lot of solver-like codes are column based loops that only affect parts of the column until a certain condition is met.
 
 ⚠️ This feature is not yet mature. Expect breaking changes if you use it in the current form.
 
 ## Context
+
 In the physics we see patterns like this:
+
 ```fortran
 integer    kpen        ! Highest layer with positive updraft velocity
 do k = 0, k0
@@ -19,7 +21,9 @@ do k = kpen - 1, kbup, -1
     ...
 end do 
 ```
+
 This pattern could theoretically be implemented with the current tooling in gt4py by using vertical masking and access to the K-index:
+
 ```py
 with computation(FORWARD), interval(...):
     temporary_mask : Field[IJ, int]
@@ -29,9 +33,12 @@ with computation(FORWARD), interval(0, -1):
     if K > temporary_mask: # ignoring the upper bound here for simplicity
         rhoifc0j = pifc0 / ( r * 0.5 * ( thv0bot[K+1] + thv0top ) * exnifc0)
 ```
+
 The problem with this solution is that:
+
 1. Bloats the user code, especially when these masks have to be carried around for long times.
 2. Generates performance issues on the CPUIn the physics we see patterns like this:
+
 ```fortran
 integer    kpen        ! Highest layer with positive updraft velocity
 do k = 0, k0
@@ -45,7 +52,9 @@ do k = kpen - 1, kbup, -1
     ...
 end do 
 ```
+
 This pattern could theoretically be implemented with the current tooling in gt4py by using vertical masking and access to the K-index:
+
 ```py
 with computation(FORWARD), interval(...):
     temporary_mask : Field[IJ, int]
@@ -55,7 +64,9 @@ with computation(FORWARD), interval(0, -1):
     if K > temporary_mask: # ignoring the upper bound here for simplicity
         rhoifc0j = pifc0 / ( r * 0.5 * ( thv0bot[K+1] + thv0top ) * exnifc0)
 ```
+
 The problem with this solution is that:
+
 1. Bloats the user code, especially when these masks have to be carried around for long times.
 2. Generates performance issues on the CPU
 
@@ -63,21 +74,23 @@ The problem with this solution is that:
 
 The most prominent related feature that is already in the gt4py syntax are vertical intervals.
 These have two different origins:
+
 1. The top or bottom most layer(s) of the atmosphere need a different form of numerical interpolation due to neighbors simply not existing.
 2. The vertical grid layout is usually hybrid with `σ`-coordinates near the surface and `p`-coordinates near the top of the atmosphere.
-This allows for a terrain-following grid near the surface and therefore can represent near-surface processes really well while still allowing for better representations of large-scale dynamics in the stratosphere.
+   This allows for a terrain-following grid near the surface and therefore can represent near-surface processes really well while still allowing for better representations of large-scale dynamics in the stratosphere.
 
 With the different expressions in the vertical, is is common to see slightly different numerical patterns supported in either of the intervals. Since the switch of coordinates is a grid-property and known at runtime, this patterns is not really applicable to what we see in the physics codes.
-
 
 ## Decision
 
 We chose to allow for more flexibility in what is allowed in the interval specification. Now it is possible to:
+
 1. Use externals (already supported)
 2. Use scalar arguments
 3. Use two-dimensional Fields
 4. Use two-dimensional temporaries
-to specify the bounds of the interval:
+   to specify the bounds of the interval:
+
 ```py
 def test_stencil(
     out_field: FloatField,
@@ -103,6 +116,7 @@ def test_stencil(
         with interval(0, temporary):
             out_field[0, 0, 0] = input_data[0, 0, 0]
 ```
+
 To bound the interval.
 
 ## Consequences
