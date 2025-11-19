@@ -92,7 +92,7 @@ To bound the interval.
 
 The biggest issue that comes with allowing temporary fields as well as 2d fields is the fact that this enforces an `(i,j)(k)`-loop order. We think it is ok for such a requirement to exist and want to allow the backend to make the decision that is right on a case-by-case basis.
 
-Another consequence is we break the guardrail of `gt4py` that guarantees you won't read or write out of bounds. 
+Another consequence is we break the guardrail of `gt4py` that guarantees you won't read or write out of bounds.
 Another feature (absolute indexing in K) is breaking this guardrail, and [we propose a runtime checker to be implemented](https://github.com/GridTools/gt4py/issues/1684).
 
 ## References
