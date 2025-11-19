@@ -37,13 +37,15 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     ],
 )
 def test_simplify_domain_expr(param):
-    domain_expr = domain_utils.SymbolicDomain.from_expr(im.domain(
-        gtx_common.GridType.CARTESIAN,
-        {
-            Cell: ("horizontal_start", "horizontal_end"),
-            KDim: ("vertical_start", "vertical_end"),
-        },
-    ))
+    domain_expr = domain_utils.SymbolicDomain.from_expr(
+        im.domain(
+            gtx_common.GridType.CARTESIAN,
+            {
+                Cell: ("horizontal_start", "horizontal_end"),
+                KDim: ("vertical_start", "vertical_end"),
+            },
+        )
+    )
     domain = gtx_dace_domain.get_field_domain(domain_expr)
 
     expr = dace.symbolic.pystr_to_symbolic(param[0])
@@ -56,13 +58,15 @@ def test_gtir_domain():
     Vertex = gtx_common.Dimension(value="Vertex", kind=gtx_common.DimensionKind.HORIZONTAL)
     KDim = gtx_common.Dimension(value="KDim", kind=gtx_common.DimensionKind.VERTICAL)
 
-    ir = domain_utils.SymbolicDomain.from_expr(im.domain(
-        gtx_common.GridType.UNSTRUCTURED,
-        {
-            Vertex: (1, 10),
-            KDim: (2, 20),
-        },
-    ))
+    ir = domain_utils.SymbolicDomain.from_expr(
+        im.domain(
+            gtx_common.GridType.UNSTRUCTURED,
+            {
+                Vertex: (1, 10),
+                KDim: (2, 20),
+            },
+        )
+    )
 
     assert gtx_dace_domain.get_field_domain(ir) == [
         gtx_dace_domain.FieldopDomainRange(
