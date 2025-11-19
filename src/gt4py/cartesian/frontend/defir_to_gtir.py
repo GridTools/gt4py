@@ -574,7 +574,7 @@ class DefIRToGTIR(IRNodeVisitor):
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )
 
-    def visit_RuntimeAxisBound(self, node: RuntimeAxisBound) -> gtir.AxisBound:
+    def visit_RuntimeAxisBound(self, node: RuntimeAxisBound) -> gtir.RuntimeAxisBound:
         utils.warn_experimental_feature(
             feature="Runtime Interval Bounds", ADR="experimental/runtime-intervals.md"
         )
