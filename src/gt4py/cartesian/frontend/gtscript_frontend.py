@@ -182,14 +182,8 @@ class AxisIntervalParser(gt_meta.ASTPass):
         if isinstance(value, int):
             level = nodes.LevelMarker.END if value < 0 else nodes.LevelMarker.START
             offset = value
-        elif isinstance(value, nodes.VarRef):
-            level = nodes.LevelMarker.START
-            offset = value
-            return nodes.RuntimeAxisBound(level=level, offset=offset, loc=self.loc)
-        elif isinstance(value, nodes.FieldRef):
-            level = nodes.LevelMarker.START
-            offset = value
-            return nodes.RuntimeAxisBound(level=level, offset=offset, loc=self.loc)
+        elif isinstance(value, (nodes.VarRef, nodes.FieldRef)):
+            return nodes.RuntimeAxisBound(level=nodes.LevelMarker.START, offset=value, loc=self.loc)
         elif isinstance(value, gtscript.AxisIndex):
             level = nodes.LevelMarker.START if value.index >= 0 else nodes.LevelMarker.END
             offset = value.index + value.offset
@@ -211,7 +205,7 @@ class AxisIntervalParser(gt_meta.ASTPass):
         if node.id in self.fields:
             if "K" in self.fields[node.id].axes:
                 raise ValueError(
-                    "Using a field with a K-Axis as a bound for an interval is invalid."
+                    f"Using field `{node.id}` with a K-Axis as a bound for an interval is invalid."
                 )
             return nodes.FieldRef.at_center(
                 name=node.id, axes=self.fields[node.id].axes, loc=nodes.Location.from_ast_node(node)

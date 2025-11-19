@@ -139,6 +139,7 @@ from __future__ import annotations
 import enum
 import operator
 import sys
+from abc import ABC
 from typing import List, Optional, Sequence
 
 import numpy as np
@@ -728,22 +729,19 @@ class IterationOrder(enum.Enum):
         return self.cycle(steps=steps)
 
 
-class BaseAxisBound(Node):
-    pass
+class BaseAxisBound(Node, ABC):
+    level = attribute(of=LevelMarker)
+    loc = attribute(of=Location, optional=True)
 
 
 @attribclass
 class AxisBound(BaseAxisBound):
-    level = attribute(of=LevelMarker)
     offset = attribute(of=int, default=0)
-    loc = attribute(of=Location, optional=True)
 
 
 @attribclass
 class RuntimeAxisBound(BaseAxisBound):
-    level = attribute(of=LevelMarker)
     offset = attribute(of=Ref, default=0)
-    loc = attribute(of=Location, optional=True)
 
 
 @attribclass

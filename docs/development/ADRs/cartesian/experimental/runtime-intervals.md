@@ -58,7 +58,8 @@ We chose to allow for more flexibility in what is allowed in the interval specif
 2. Use scalar arguments
 3. Use two-dimensional Fields
 4. Use two-dimensional temporaries
-   to specify the bounds of the interval:
+
+to specify the bounds of the interval.
 
 ```py
 def test_stencil(
@@ -85,8 +86,6 @@ def test_stencil(
         with interval(0, temporary):
             out_field[0, 0, 0] = input_data[0, 0, 0]
 ```
-
-To bound the interval.
 
 ## Consequences
 
