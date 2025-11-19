@@ -22,7 +22,7 @@ from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc.common import (
     AxisBound,
     BaseAxisBound,
-    LocNode as LocNode,
+    LocNode,
     RuntimeAxisBound,
 )
 from gt4py.eve import datamodels
