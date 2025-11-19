@@ -11,18 +11,17 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Final, Iterable, TypeAlias
+from typing import Final, TypeAlias
 
 import dace
 from dace import subsets as dace_subsets
 
 from gt4py.eve.extended_typing import MaybeNestedInTuple
-from gt4py.next import common as gtx_common, utils as gtx_utils
-from gt4py.next.iterator import builtins as gtir_builtins, ir as gtir
+from gt4py.next import common as gtx_common
+from gt4py.next.iterator import builtins as gtir_builtins
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
-    gtir_to_sdfg_utils,
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
@@ -160,27 +159,3 @@ class SymbolicData:
 
 INDEX_DTYPE: Final[dace.typeclass] = getattr(dace, gtir_builtins.INTEGER_INDEX_BUILTIN)
 """Data type used for field indexing."""
-
-
-def flatten_tuple_args(
-    args: Iterable[tuple[gtir.Sym, FieldopResult | SymbolicData]],
-) -> list[tuple[gtir.Sym, FieldopData | SymbolicData | None]]:
-    """Helper function to flatten tuple arguments.
-
-    Args:
-        args: A list of arguments containing either a symbolic value or some data
-            access node, possibly in the form of tuple.
-
-    Return:
-        A list of flat arguments, including all nested fields extracted from tuples.
-    """
-    flat_args: list[tuple[gtir.Sym, FieldopData | SymbolicData | None]] = []
-    for gtsym, arg in args:
-        if isinstance(arg, tuple):
-            assert isinstance(gtsym.type, ts.TupleType)
-            tuple_symbols = gtir_to_sdfg_utils.flatten_tuple_fields(gtsym.id, gtsym.type)
-            tuple_data_fields = gtx_utils.flatten_nested_tuple(arg)
-            flat_args.extend(flatten_tuple_args(zip(tuple_symbols, tuple_data_fields, strict=True)))
-        else:
-            flat_args.append((gtsym, arg))
-    return flat_args

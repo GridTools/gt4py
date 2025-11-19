@@ -708,7 +708,6 @@ def test_gtir_cond(s1, s2):
     assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
 
 
-@pytest.mark.xfail(reason="requires function to retrieve the annex tuple domain")
 def test_gtir_cond_with_tuple_return():
     testee = gtir.Program(
         id="cond_with_tuple_return",
@@ -731,7 +730,14 @@ def test_gtir_cond_with_tuple_return():
                         im.make_tuple(im.make_tuple("y", "x"), "w"),
                     ),
                 ),
-                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim]),
+                domain=im.make_tuple(
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(0, "z"), [IDim]
+                    ),
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(1, "z"), [IDim]
+                    ),
+                ),
                 target=gtir.SymRef(id="z"),
             )
         ],
@@ -2130,9 +2136,9 @@ def test_gtir_concat_where():
             id=f"gtir_concat_where_{suffix}",
             function_definitions=[],
             params=[
-                gtir.Sym(id="x", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
-                gtir.Sym(id="y", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
-                gtir.Sym(id="z", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
+                gtir.Sym(id="x", type=IFTYPE),
+                gtir.Sym(id="y", type=IFTYPE),
+                gtir.Sym(id="z", type=IFTYPE),
             ],
             declarations=[],
             body=[

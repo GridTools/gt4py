@@ -21,6 +21,7 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
+from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
@@ -260,13 +261,12 @@ def translate_as_fieldop(
         assert isinstance(arg_type, (ts.FieldType, ts.ScalarType))
         if isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims:
             # Special usage of 'deref' as argument to fieldop expression, to broadcast
-            # a scalar value on the field domain.
+            # the input value (a scalar or a field slice) on the output domain.
             stencil_expr = im.lambda_("a")(im.deref("a"))
             stencil_expr.expr.type = node.type.dtype
         else:
             # Special usage of 'deref' with field argument, to access the field
-            # on the given domain. It could either broadcast a field slice, or
-            # copy a subset of the source field.
+            # on the given domain. It copies a subset of the source field.
             arg = sdfg_builder.visit(node.args[0], ctx=ctx)
             assert isinstance(arg, gtir_to_sdfg_types.FieldopData)
             return ctx.copy_field(arg, domain=field_domain)
@@ -434,7 +434,9 @@ def translate_if(
     false_br_result = sdfg_builder.visit(false_expr, ctx=fbranch_ctx)
 
     node_output = gtx_utils.tree_map(
-        lambda domain, true_br, false_br: _construct_if_branch_output(
+        lambda domain, true_br, false_br: None
+        if domain == infer_domain.DomainAccessDescriptor.NEVER
+        else _construct_if_branch_output(
             ctx=ctx,
             sdfg_builder=sdfg_builder,
             field_domain=gtir_domain.get_field_domain(domain),
@@ -446,12 +448,12 @@ def translate_if(
         true_br_result,
         false_br_result,
     )
-    gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(tbranch_ctx, src, dst))(
-        true_br_result, node_output
-    )
-    gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(fbranch_ctx, src, dst))(
-        false_br_result, node_output
-    )
+    gtx_utils.tree_map(
+        lambda src, dst: None if dst is None else _write_if_branch_output(tbranch_ctx, src, dst)
+    )(true_br_result, node_output)
+    gtx_utils.tree_map(
+        lambda src, dst: None if dst is None else _write_if_branch_output(fbranch_ctx, src, dst)
+    )(false_br_result, node_output)
 
     return node_output
 
@@ -511,7 +513,9 @@ def _get_data_nodes(
     data_name: str,
     data_type: ts.DataType,
 ) -> gtir_to_sdfg_types.FieldopResult:
+    # We ensure that the visited data descriptor is global, i.e. non-transient.
     if isinstance(data_type, ts.FieldType):
+        sdfg.arrays[data_name].transient = False
         data_node = state.add_access(data_name)
         return sdfg_builder.make_field(data_node, data_type)
 
@@ -521,6 +525,7 @@ def _get_data_nodes(
                 sdfg, state, sdfg_builder, data_name, data_type, temp_name=f"__{data_name}"
             )
         else:
+            sdfg.arrays[data_name].transient = False
             data_node = state.add_access(data_name)
         return gtir_to_sdfg_types.FieldopData(data_node, data_type, origin=())
 
@@ -587,7 +592,15 @@ def translate_make_tuple(
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
 ) -> gtir_to_sdfg_types.FieldopResult:
     assert cpm.is_call_to(node, "make_tuple")
-    return tuple(sdfg_builder.visit(arg, ctx=ctx) for arg in node.args)
+    if "domain" in node.annex:
+        return tuple(
+            None
+            if domain == infer_domain.DomainAccessDescriptor.NEVER
+            else sdfg_builder.visit(arg, ctx=ctx)
+            for arg, domain in zip(node.args, node.annex.domain, strict=True)
+        )
+    else:
+        return tuple(sdfg_builder.visit(arg, ctx=ctx) for arg in node.args)
 
 
 def translate_tuple_get(
