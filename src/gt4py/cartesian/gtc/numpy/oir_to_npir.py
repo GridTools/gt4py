@@ -216,8 +216,8 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> npir.VerticalPass:
         return npir.VerticalPass(
             body=self.visit(node.horizontal_executions, **kwargs),
-            lower=self.visit(node.interval.start),
-            upper=self.visit(node.interval.end),
+            lower=self.visit(node.interval.start, **kwargs),
+            upper=self.visit(node.interval.end, **kwargs),
             direction=loop_order,
         )
 
