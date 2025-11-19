@@ -37,38 +37,7 @@ with computation(FORWARD), interval(0, -1):
 The problem with this solution is that:
 
 1. Bloats the user code, especially when these masks have to be carried around for long times.
-2. Generates performance issues on the CPUIn the physics we see patterns like this:
-
-```fortran
-integer    kpen        ! Highest layer with positive updraft velocity
-do k = 0, k0
-  if( wtw .le. 0. ) then
-    kpen = k
-    go to 45
-  end if
-end do
-do k = kpen - 1, kbup, -1                    
-    rhoifc0j = pifc0(k) / ( r * 0.5 * ( thv0bot(k+1) + thv0top(k) ) * exnifc0(k) )
-    ...
-end do 
-```
-
-This pattern could theoretically be implemented with the current tooling in gt4py by using vertical masking and access to the K-index:
-
-```py
-with computation(FORWARD), interval(...):
-    temporary_mask : Field[IJ, int]
-    if wtw < 0:
-        temporary_mask = min(temporary_mask,K)
-with computation(FORWARD), interval(0, -1):
-    if K > temporary_mask: # ignoring the upper bound here for simplicity
-        rhoifc0j = pifc0 / ( r * 0.5 * ( thv0bot[K+1] + thv0top ) * exnifc0)
-```
-
-The problem with this solution is that:
-
-1. Bloats the user code, especially when these masks have to be carried around for long times.
-2. Generates performance issues on the CPU
+2. Generates performance issues on the CPU with potentially much more computation and conditionals that might kill caching.
 
 **Similar patterns**
 
@@ -122,6 +91,9 @@ To bound the interval.
 ## Consequences
 
 The biggest issue that comes with allowing temporary fields as well as 2d fields is the fact that this enforces an `(i,j)(k)`-loop order. We think it is ok for such a requirement to exist and want to allow the backend to make the decision that is right on a case-by-case basis.
+
+Another consequence is we break the guardrail of `gt4py` that guarantees you won't read or write out of bounds. 
+Another feature (absolute indexing in K) is breaking this guardrail, and [we propose a runtime checker to be implemented](https://github.com/GridTools/gt4py/issues/1684).
 
 ## References
 
