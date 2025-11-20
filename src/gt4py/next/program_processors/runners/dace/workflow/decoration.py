@@ -13,7 +13,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, locking
 from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable
@@ -34,6 +34,11 @@ def convert_args(
     update_sdfg_call_args = functools.partial(
         fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
     )
+    # Lock the SDFG build folder while initializing the binary library, in order
+    # to avoid race conditions in parallel pytest sessions where other processes
+    # might be trying to load this precompiled SDFG at the same time.
+    with locking.lock(fun.sdfg_program.sdfg.build_folder):
+        fun.sdfg_program.initialize()
 
     def decorated_program(
         *args: Any,

@@ -69,13 +69,6 @@ class CompiledDaceProgram(stages.CompiledProgram):
         self.csdfg_argv = None
         self.csdfg_init_argv = None
 
-    def __del__(self) -> None:
-        # Lock the SDFG build folder while releasing the binary library, in order
-        # to avoid race conditions in parallel pytest sessions where other workers
-        # might be trying to load the precompiled SDFG at the same time.
-        with locking.lock(self.sdfg_program.sdfg.build_folder):
-            pass
-
     def construct_arguments(self, **kwargs: Any) -> None:
         """
         This function will process the arguments and store the processed argument
