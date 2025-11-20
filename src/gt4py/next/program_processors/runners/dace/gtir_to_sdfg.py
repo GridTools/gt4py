@@ -714,6 +714,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     input_memlets[dataname] = outer_ctx.sdfg.make_array_memlet(dataname)
 
         if uninitialized_data:
+            # This case is only hit in 'test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge'
             input_nodes_to_remove = [
                 access_node
                 for access_node in inner_ctx.state.data_nodes()
