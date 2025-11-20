@@ -11,6 +11,7 @@ from typing import Any, Optional, Sequence
 
 import dace
 from dace import (
+    data as dace_data,
     properties as dace_properties,
     subsets as dace_sbs,
     symbolic as dace_sym,
@@ -418,3 +419,333 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             return CopyChainRemoverMode.PUSH
 
         return CopyChainRemoverMode.NONE
+
+
+@dace_properties.make_properties
+class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
+    """Removes Redundant writes that are related to slices.
+
+    Consider the following code:
+    ```python
+    for i in range(N):
+        temp[i] = ...
+    A[:, slice1] = temp
+    A[:, slice2] = temp
+    ```
+    The function will transform it into the following:
+    ```python
+    for i in range(N):
+        temp_scalar = ...
+        A[i, slice1] = temp_scalar
+        A[i, slice2] = temp_scalar
+    ```
+
+    The transformation will only apply if:
+    - `temp` is single use data.
+    - `temp` is only consumed by other AccessNodes and not Maps.
+    - `temp` must be fully copied into its destination, i.e. not partially.
+
+    Args:
+        single_use_data: List of data containers that are used only at one place.
+            Will be stored internally and not updated.
+
+    Todo:
+        - Extend such that not the full array must be read.
+    """
+
+    map_exit = dace_transformation.PatternNode(dace_nodes.MapExit)
+    temp_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+
+    # Name of all data that is used at only one place. Is computed by the
+    #  `FindSingleUseData` pass and be passed at construction time. Needed until
+    #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
+    _single_use_data: Optional[dict[dace.SDFG, set[str]]]
+
+    def __init__(
+        self,
+        *args: Any,
+        single_use_data: Optional[dict[dace.SDFG, set[str]]],
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._single_use_data = single_use_data
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [
+            dace.sdfg.utils.node_path_graph(
+                cls.map_exit,
+                cls.temp_node,
+            )
+        ]
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        map_exit: dace_nodes.MapExit = self.map_exit
+        temp_node: dace_nodes.AccessNode = self.temp_node
+        temp_desc = temp_node.desc(sdfg)
+
+        # Only the Map can produce data.
+        if graph.in_degree(temp_node) != 1:
+            return False
+
+        producer_edge = next(iter(graph.in_edges(temp_node)))
+        produced_sbs: dace_sbs.Range = producer_edge.data.get_dst_subset(producer_edge, graph)
+        assert produced_sbs is not None
+
+        # Only step 1 is allowed.
+        if any(step != 1 for _, _, step in map_exit.map.range):
+            return False
+        if any(step != 1 for _, _, step in produced_sbs):
+            return False
+
+        # To simplify implementation we only allow that there is one producer inside the Map.
+        assert producer_edge.src_conn.startswith("OUT_")
+        inner_producer_edges = [
+            inner_map_edge
+            for inner_map_edge in graph.in_edges_by_connector(
+                map_exit, "IN_" + producer_edge.src_conn[4:]
+            )
+        ]
+        if len(inner_producer_edges) != 1:
+            return False
+        inner_producer_edge = inner_producer_edges[0]
+
+        # To simplify implementation, ensures that `temp_node` does not have any "dummy"
+        #  dimensions, i.e. dimensions of size 1. Or differently, that every Map parameter
+        #  is used in indexing.
+        # TODO(phimuell): Lift this limitation.
+        # TODO(phimuell): Is this check strong enough.
+        if len(map_exit.map.params) != produced_sbs.dims():
+            return False
+
+        # To further simplify, we require that the Memlet is "simple" and that only a
+        #  scalar is moved around.
+        inner_production_sbs = inner_producer_edge.data.get_dst_subset(inner_producer_edge, graph)
+        if inner_production_sbs.num_elements() != 1:
+            return False
+        if inner_producer_edge.data.allow_oob:
+            return False
+        if inner_producer_edge.data.is_empty():
+            return False
+        if inner_producer_edge.data.wcr is not None:
+            return False
+
+        # We only allow arrays that are transients.
+        if not isinstance(temp_desc, dace_data.Array):
+            return False
+        if isinstance(temp_desc, dace_data.View):
+            return False
+        if not temp_desc.transient:
+            return False
+
+        # Check the consumer
+        for consumer_edge in graph.out_edges(temp_node):
+            consumer_sbs: dace_sbs.Range = consumer_edge.data.get_src_subset(consumer_edge, graph)
+            if consumer_sbs is None:
+                return False
+
+            # What is produced must be consumed.
+            if consumer_sbs != produced_sbs:
+                return False
+            if any(step != 1 for _, _, step in consumer_sbs):
+                return False
+
+            # Since `temp_node` is eliminated, the consumer must be another AccessNode.
+            # TODO(phimuell): Allow the consumer to be a Map, in which case `temp_node`
+            #   should not be removed.`
+            consumer_node = consumer_edge.dst
+            if not isinstance(consumer_node, dace_nodes.AccessNode):
+                return False
+
+            consumer_desc = consumer_node.desc(sdfg)
+            if not isinstance(consumer_desc, dace_data.Array):
+                return False
+            if isinstance(consumer_desc, dace_data.View):
+                return False
+
+        # `temp_node` will be removed this means it must be single use.
+        if self._single_use_data is None:
+            find_single_use_data = dace_analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+        else:
+            single_use_data = self._single_use_data
+        if temp_node.data not in single_use_data[sdfg]:
+            return False
+
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        map_exit: dace_nodes.MapExit = self.map_exit
+        temp_node: dace_nodes.AccessNode = self.temp_node
+        temp_desc = temp_node.desc(sdfg)
+
+        # Understand how the Map writes into the `temp_node`. For this we have to
+        #  look at the subset of the inner edge that writes into the node.
+        assert graph.in_degree(temp_node) == 1
+        outer_producer_edge = next(iter(graph.in_edges(temp_node)))
+        outer_producer_subset = outer_producer_edge.data.get_dst_subset(outer_producer_edge, graph)
+        assert outer_producer_subset is not None
+        assert outer_producer_edge.src_conn.startswith("OUT_")
+        inner_producer_edge = next(
+            iter(
+                inner_producer_edge
+                for inner_producer_edge in graph.in_edges_by_connector(
+                    map_exit, "IN_" + outer_producer_edge.src_conn[4:]
+                )
+            )
+        )
+        inner_producer_subset = inner_producer_edge.data.get_dst_subset(inner_producer_edge, graph)
+
+        # Because we distribute to multiple consumers, we need some temporary storage
+        #  inside the Map scope, aka. AccessNode. We will first check if there is
+        #  already an AccessNode that can be used or if we have to create a new one.
+        current_inner_producer_node = inner_producer_edge.src
+        if not isinstance(current_inner_producer_node, dace_nodes.AccessNode):
+            reuse_inner_producer_node = False
+        else:
+            current_inner_producer_desc = current_inner_producer_node.desc(sdfg)
+            if isinstance(current_inner_producer_desc, dace_data.View):
+                reuse_inner_producer_node = False
+            elif isinstance(current_inner_producer_desc, dace_data.Scalar):
+                reuse_inner_producer_node = True
+            elif (
+                isinstance(current_inner_producer_desc, dace_data.Array)
+                and len(current_inner_producer_desc.shape) == 1
+                and (current_inner_producer_desc.shape[0] == 1) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            ):
+                reuse_inner_producer_node = True
+            else:
+                reuse_inner_producer_node = False
+
+        if reuse_inner_producer_node:
+            # We can reuse the one that is already there.
+            inner_distribution_node: dace_nodes.AccessNode = current_inner_producer_node
+            assert inner_producer_edge.src_conn is None
+        else:
+            # We have to create a new intermediate storage inside the Map scope.
+            #  For this we are using a scalar.
+            assert inner_producer_edge.data.dst_subset.num_elements() == 1
+            distribution_data, _ = sdfg.add_scalar(
+                "__gtx_double_write_remover_inner_inner_distribution_node",
+                dtype=temp_desc.dtype,
+                storage=dace.dtypes.StorageType.Register,
+                transient=True,
+                find_new_name=True,
+            )
+            inner_distribution_node = graph.add_access(distribution_data)
+            graph.add_edge(
+                inner_producer_edge.src,
+                inner_producer_edge.src_conn,
+                inner_distribution_node,
+                None,
+                dace.Memlet(
+                    data=distribution_data,
+                    subset="0",
+                    other_subset=inner_producer_edge.data.src_subset,
+                ),
+            )
+
+        # Now we have to delete the producer Memlet tree, which consists of
+        #  `{inner, outer}_producer_edge`.
+        # NOTE: `outer_producer_edge` and `inner_producer_edge` are no invalid.
+        graph.remove_edge(outer_producer_edge)
+        map_exit.remove_out_connector(outer_producer_edge.src_conn)
+        graph.remove_edge(inner_producer_edge)
+        map_exit.remove_in_connector(inner_producer_edge.dst_conn)
+        assert graph.in_degree(temp_node) == 0 and graph.out_degree(temp_node) > 0
+
+        # Now reroute the dataflow, instead going through `temp_node` directly serve
+        #  them from the Map. To be precise use the `inner_distribution_node`.
+        for consumer_edge in list(graph.out_edges(temp_node)):
+            consumer_node = consumer_edge.dst
+            consumer_destination = consumer_edge.data.get_dst_subset(consumer_edge, graph)
+            assert isinstance(consumer_node, dace_nodes.AccessNode)
+
+            # Since we want to understand how the destination is written we have to
+            #  pass `dst_subset` as `sbs1` and `src_subset`, which reads from
+            #  `temp_node` as `sbs2`.
+            consumer_to_temp_mapping, consumer_drop, temp_drop = (
+                gtx_transformations.utils.associate_dimmensions(
+                    sbs1=consumer_edge.data.dst_subset,
+                    sbs2=consumer_edge.data.src_subset,
+                )
+            )
+            assert len(temp_drop) == 0
+
+            # Now compose the subset (on the inside of the Map) that is used to write
+            #  into `consumer_node`.
+            inner_map_output_subset: list[tuple[Any, Any, int]] = []
+            consumer_dst_subset = consumer_edge.data.dst_subset
+            for consumer_dim in range(consumer_dst_subset.dims()):
+                if consumer_dim in consumer_to_temp_mapping:
+                    # This dimension is copied from `temp_node` into `consumer_node`.
+                    #  Thus we have to use same subset that was used to write the
+                    #  original `temp_node` thing.
+                    temp_node_dim = consumer_to_temp_mapping[consumer_dim]
+
+                    # Compute the correction.
+                    consumer_correction = consumer_destination[consumer_dim][0]
+                    temp_correction = outer_producer_subset[temp_node_dim][0]
+                    correction = consumer_correction - temp_correction
+
+                    # Compose the final subset.
+                    inner_producer_idx = inner_producer_subset[temp_node_dim]
+                    inner_map_output_subset.append(
+                        (inner_producer_idx[0] + correction, inner_producer_idx[1] + correction, 1)
+                    )
+                else:
+                    # The dimension is not written to by a Map parameter, which means
+                    #  that it is some dummy dimension, such as an offset. Thus we use
+                    #  the original subset.
+                    #  There is no correction needed here.
+                    assert consumer_dim in consumer_drop
+                    inner_map_output_subset.append(consumer_dst_subset[consumer_dim])
+            new_inner_dst_subset = dace_sbs.Range(inner_map_output_subset)
+
+            # Now we create the new connection from the `inner_distribution_node` to
+            #  the final consumer. For the connection from the MapExit to the consumer
+            #  we essentially recycle the Memlet, but create a new one, to ensure that
+            #  it has the canonical format.
+            # TODO: We can not use `graph.add_memlet_path()` because sometimes Memlet
+            #   propagation fails. Here we are reusing the subsets that were already
+            #   there. Which assumes that they are correct.
+            connector_name = map_exit.next_connector()
+            graph.add_edge(
+                inner_distribution_node,
+                None,
+                map_exit,
+                "IN_" + connector_name,
+                dace.Memlet(
+                    data=consumer_edge.dst.data,
+                    subset=new_inner_dst_subset,
+                    other_subset=dace_sbs.Range.from_string("0"),
+                ),
+            )
+            graph.add_edge(
+                map_exit,
+                "OUT_" + connector_name,
+                consumer_edge.dst,
+                consumer_edge.dst_conn,
+                dace.Memlet(
+                    data=consumer_edge.dst.data,
+                    subset=consumer_edge.data.dst_subset,
+                    other_subset=None,
+                ),
+            )
+            map_exit.add_scope_connectors(connector_name)
+            graph.remove_edge(consumer_edge)
+
+        # Remove `temp_node` and the data it refers to as it is no longer needed.
+        assert graph.out_degree(temp_node) == 0
+        graph.remove_node(temp_node)
+        sdfg.remove_data(temp_node.data, validate=False)

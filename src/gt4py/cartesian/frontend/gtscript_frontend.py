@@ -441,6 +441,7 @@ class CallInliner(ast.NodeTransformer):
     def visit_Call(self, node: ast.Call, *, target_node=None):  # Cyclomatic complexity too high
         if _filter_absolute_K_index_method(node):
             return node
+
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
         if call_name in self.call_stack:
@@ -1091,12 +1092,12 @@ class IRMaker(ast.NodeVisitor):
             if self.dtypes and type(value) in self.dtypes.keys():
                 value_type = self.dtypes[type(value)]
             else:
-                if isinstance(value, int):
+                if hasattr(value, "dtype") and isinstance(value.dtype, np.dtype):
+                    value_type = value.dtype
+                elif isinstance(value, int):
                     value_type = np.dtype(f"i{int(self.literal_int_precision / 8)}")
                 elif isinstance(value, float):
                     value_type = np.dtype(f"f{int(self.literal_float_precision / 8)}")
-                elif hasattr(value, "dtype") and isinstance(value.dtype, np.dtype):
-                    value_type = value.dtype
                 else:
                     raise GTScriptSyntaxError(
                         f"Unexpected constant type `{type(value)}`. Expected integer or float."
@@ -1157,8 +1158,7 @@ class IRMaker(ast.NodeVisitor):
         raise AssertionError(f"Missing '{symbol}' symbol definition")
 
     def visit_Index(self, node: ast.Index):
-        index = self.visit(node.value)
-        return index
+        return self.visit(node.value)
 
     def _eval_new_spatial_index(
         self,

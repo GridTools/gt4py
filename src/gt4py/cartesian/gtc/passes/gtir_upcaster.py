@@ -85,7 +85,7 @@ class _GTIRUpcasting(eve.NodeTranslator):
     Postcondition: all dtype transitions are explicit via a `Cast` node
     """
 
-    def visit_BinaryOp(self, node: gtir.BinaryOp, **kwargs: Any) -> gtir.BinaryOp:
+    def visit_BinaryOp(self, node: gtir.BinaryOp) -> gtir.BinaryOp:
         upcasting_rule = functools.partial(
             _numpy_ufunc_upcasting_rule, ufunc=common.op_to_ufunc(node.op)
         )
@@ -94,7 +94,7 @@ class _GTIRUpcasting(eve.NodeTranslator):
         )
         return _update_node(node, {"left": left, "right": right})
 
-    def visit_UnaryOp(self, node: gtir.UnaryOp, **kwargs: Any) -> gtir.UnaryOp:
+    def visit_UnaryOp(self, node: gtir.UnaryOp) -> gtir.UnaryOp:
         upcasting_rule = functools.partial(
             _numpy_ufunc_upcasting_rule, ufunc=common.op_to_ufunc(node.op)
         )
@@ -111,15 +111,17 @@ class _GTIRUpcasting(eve.NodeTranslator):
             node, {"true_expr": true_expr, "false_expr": false_expr, "cond": self.visit(node.cond)}
         )
 
-    def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs: Any) -> gtir.NativeFuncCall:
-        # Skip upcasting for cast operations
+    def visit_NativeFuncCall(self, node: gtir.NativeFuncCall) -> gtir.NativeFuncCall:
+        # Skip upcasting of cast operations
         if node.func in [
             common.NativeFunction.INT32,
             common.NativeFunction.INT64,
             common.NativeFunction.FLOAT32,
             common.NativeFunction.FLOAT64,
         ]:
-            return node
+            # Make sure to upcast arguments of cast operations, e.g.
+            # float(my_int32 + my_int64) -> float(cast(int64, my_int32), my_int64)
+            return _update_node(node, {"args": self.visit(node.args)})
 
         upcasting_rule = functools.partial(
             _numpy_ufunc_upcasting_rule, ufunc=common.op_to_ufunc(node.func)
@@ -127,7 +129,7 @@ class _GTIRUpcasting(eve.NodeTranslator):
         args = [*_upcast_nodes(*self.visit(node.args), upcasting_rule=upcasting_rule)]
         return _update_node(node, {"args": args})
 
-    def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> gtir.ParAssignStmt:
+    def visit_ParAssignStmt(self, node: gtir.ParAssignStmt) -> gtir.ParAssignStmt:
         assert node.left.dtype
 
         def upcasting_rule(*dtypes):

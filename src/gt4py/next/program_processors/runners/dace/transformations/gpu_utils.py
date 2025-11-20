@@ -531,9 +531,6 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     Note there are some special rules:
     - If a Map with (at most 3 dimension) has only one non trivial dimension, i.e.
         > 1, then the Map is handled as a 1D Map.
-    - If there is a 1D Map that contains a nested SDFG whose label starts with `scan_`
-        and `launch_bounds_1d` was not specified, then a value of 512 is assumed to
-        limit register usage.
 
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
@@ -712,10 +709,11 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
                 block_size = [1, 1, 1]
                 # Order of Map parameters is from outer to inner, i.e. z,y,x
-                block_size[len(map_size) - non_trivial_1d_map_degenerated_map_dimension - 1] = (
-                    self.block_size_1d[0]
+                block_size_1D_index = (
+                    len(map_size) - non_trivial_1d_map_degenerated_map_dimension - 1
                 )
-                if non_trivial_1d_map_degenerated_map_dimension != 0:
+                block_size[block_size_1D_index] = self.block_size_1d[0]
+                if block_size_1D_index != 0:
                     warnings.warn(
                         f"Blocksize of 1d Map '{gpu_map}' was set to {block_size}, but the iteration index is not the x dimension.",
                         stacklevel=0,
@@ -724,14 +722,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             else:
                 block_size = list(self.block_size_1d)
 
-            # Launchbounds, if we have a scan and it is not specified use a special launch bound.
             launch_bounds = self.launch_bounds_1d
-            if launch_bounds is None:
-                for node in graph.scope_subgraph(
-                    self.map_entry, include_entry=False, include_exit=False
-                ):
-                    if isinstance(node, dace_nodes.NestedSDFG) and node.label.startswith("scan_"):
-                        launch_bounds = "512"  # Use high launch bound in case of scans to limit register usage and increase occupancy
 
         elif num_map_params == 2:
             block_size = list(self.block_size_2d)
