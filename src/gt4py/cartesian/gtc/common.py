@@ -733,10 +733,12 @@ class BaseAxisBound(eve.Node, ABC):
 
 
 class RuntimeAxisBound(BaseAxisBound):
+    level: LevelMarker
     offset: Union[ScalarAccess, FieldAccess]
 
 
 class AxisBound(BaseAxisBound):
+    level: LevelMarker
     offset: int = 0
 
     @classmethod
