@@ -72,8 +72,12 @@ def convert_args(
             # on the SDFG build folder in order to avoid race conditions in parallel
             # pytest sessions, where other processes might be trying to load this
             # precompiled SDFG at the same time.
-            with locking.lock(fun.sdfg_program.sdfg.build_folder):
-                fun.sdfg_program._initialize(fun.csdfg_init_argv)
+            # This a workaround because the DaCe loading of pre-compiled SDFG is
+            # not thread-safe: if the library is already loaded, DaCe creates a copy
+            # of the .so file before loading it, which could lead to name clashes.
+            if not fun.sdfg_program._initialized:
+                with locking.lock(fun.sdfg_program.sdfg.build_folder):
+                    fun.sdfg_program._initialize(fun.csdfg_init_argv)
 
         # Perform the call to the SDFG.
         fun.fast_call()
