@@ -157,7 +157,7 @@ test_cscs_amd_rocm:
   needs:
     - build_cscs_amd_rocm
   variables:
-    TEST_VARIANTS: 'rocm6_0'
+    TEST_VARIANTS: 'cpu rocm6_0'
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
