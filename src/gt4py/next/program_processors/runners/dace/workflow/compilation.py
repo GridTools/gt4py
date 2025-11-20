@@ -74,7 +74,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
         # to avoid race conditions in parallel pytest sessions where other workers
         # might be trying to load the precompiled SDFG at the same time.
         with locking.lock(self.sdfg_program.sdfg.build_folder):
-            self.sdfg_program.finalize()
+            pass
 
     def construct_arguments(self, **kwargs: Any) -> None:
         """
