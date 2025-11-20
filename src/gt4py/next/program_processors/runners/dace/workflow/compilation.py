@@ -73,8 +73,7 @@ class CompiledDaceProgram(stages.CompiledProgram):
         # Lock the SDFG build folder while releasing the binary library, in order
         # to avoid race conditions in parallel pytest sessions where other workers
         # might be trying to load the precompiled SDFG at the same time.
-        sdfg_build_folder = self.sdfg_program.sdfg.sdfg_build_folder
-        with locking.lock(sdfg_build_folder):
+        with locking.lock(self.sdfg_program.sdfg.build_folder):
             self.sdfg_program.finalize()
 
     def construct_arguments(self, **kwargs: Any) -> None:
