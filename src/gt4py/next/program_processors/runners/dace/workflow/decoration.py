@@ -51,8 +51,6 @@ def convert_args(
             # TODO(phimuell, edopao): Think about refactor the code such that the update
             #   of the argument vector is a Method of the `CompiledDaceProgram`.
             update_sdfg_call_args(args, fun.csdfg_argv)  # type: ignore[arg-type]  # Will error out in first call.
-            # Perform the call to the SDFG.
-            fun.fast_call()
 
         except TypeError:
             # First call. Construct the initial argument vector of the `CompiledDaceProgram`.
@@ -74,7 +72,10 @@ def convert_args(
             # race conditions in parallel pytest sessions where other processes might
             # be trying to load this precompiled SDFG at the same time.
             with locking.lock(fun.sdfg_program.sdfg.build_folder):
-                fun.fast_call()
+                fun.sdfg_program._initialize(fun.csdfg_init_argv)
+
+        # Perform the call to the SDFG.
+        fun.fast_call()
 
         if collect_time:
             metric_source = metrics.get_current_source()
