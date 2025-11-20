@@ -51,6 +51,8 @@ def convert_args(
             # TODO(phimuell, edopao): Think about refactor the code such that the update
             #   of the argument vector is a Method of the `CompiledDaceProgram`.
             update_sdfg_call_args(args, fun.csdfg_argv)  # type: ignore[arg-type]  # Will error out in first call.
+            # Perform the call to the SDFG.
+            fun.fast_call()
 
         except TypeError:
             # First call. Construct the initial argument vector of the `CompiledDaceProgram`.
@@ -66,15 +68,13 @@ def convert_args(
                 gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
+            fun.construct_arguments(**this_call_args)
             # In case of precompiled SDFG, the first call will also load and initialize
             # the compiled SDFG. We lock the SDFG build folder in order to avoid
             # race conditions in parallel pytest sessions where other processes might
             # be trying to load this precompiled SDFG at the same time.
             with locking.lock(fun.sdfg_program.sdfg.build_folder):
-                fun.construct_arguments(**this_call_args)
-
-        # Perform the call to the SDFG.
-        fun.fast_call()
+                fun.fast_call()
 
         if collect_time:
             metric_source = metrics.get_current_source()
