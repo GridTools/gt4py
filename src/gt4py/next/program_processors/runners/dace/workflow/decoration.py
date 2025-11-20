@@ -67,10 +67,11 @@ def convert_args(
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
             fun.construct_arguments(**this_call_args)
-            # In case of precompiled SDFG, the first call will also load and initialize
-            # the compiled SDFG. We lock the SDFG build folder in order to avoid
-            # race conditions in parallel pytest sessions where other processes might
-            # be trying to load this precompiled SDFG at the same time.
+            # In case of precompiled SDFG, the first `fast_call()` will also load
+            # and initialize the compiled SDFG. We do it here, using a lock guard
+            # on the SDFG build folder in order to avoid race conditions in parallel
+            # pytest sessions, where other processes might be trying to load this
+            # precompiled SDFG at the same time.
             with locking.lock(fun.sdfg_program.sdfg.build_folder):
                 fun.sdfg_program._initialize(fun.csdfg_init_argv)
 
