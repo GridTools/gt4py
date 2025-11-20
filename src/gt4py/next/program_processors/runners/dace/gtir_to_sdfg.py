@@ -1237,9 +1237,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
             ctx.state.add_edge(src_node, None, nsdfg_node, input_connector, memlet)
 
-        # Now we can safely remove all remaining argument nodes, because unused.
+        # We can now safely remove all remaining arguments, because unused. Note
+        # that we only consider global access nodes, because the only goal of this
+        # cleanup is to remove isolated nodes. At these stage, by construction,
+        # transients should not appear as isolated nodes.
         if unused_access_nodes := [
-            arg_node.dc_node for arg_node in lambda_arg_nodes.values() if arg_node is not None
+            arg_node.dc_node
+            for arg_node in lambda_arg_nodes.values()
+            if not (arg_node is None or arg_node.dc_node.desc(ctx.sdfg).transient)
         ]:
             assert all(ctx.state.degree(access_node) == 0 for access_node in unused_access_nodes)
             ctx.state.remove_nodes_from(unused_access_nodes)
