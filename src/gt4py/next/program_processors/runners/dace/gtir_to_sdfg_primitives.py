@@ -296,14 +296,17 @@ def translate_as_fieldop(
 def _construct_if_branch_output(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    field_domain: gtir_domain.FieldopDomain,
+    domain: infer_domain.NonTupleDomainAccess,
     true_br: gtir_to_sdfg_types.FieldopData,
     false_br: gtir_to_sdfg_types.FieldopData,
-) -> gtir_to_sdfg_types.FieldopData:
+) -> gtir_to_sdfg_types.FieldopData | None:
     """
     Helper function called by `translate_if()` to allocate a temporary field to store
     the result of an if expression.
     """
+    if domain == infer_domain.DomainAccessDescriptor.NEVER:
+        return None
+    assert isinstance(domain, domain_utils.SymbolicDomain)
     assert true_br.gt_type == false_br.gt_type
     out_type = true_br.gt_type
 
@@ -314,6 +317,7 @@ def _construct_if_branch_output(
         return gtir_to_sdfg_types.FieldopData(out_node, out_type, origin=())
 
     assert isinstance(out_type, ts.FieldType)
+    field_domain = gtir_domain.get_field_domain(domain)
     dims, origin, shape = gtir_domain.get_field_layout(field_domain)
     assert dims == out_type.dims
 
@@ -339,14 +343,16 @@ def _construct_if_branch_output(
 def _write_if_branch_output(
     ctx: gtir_to_sdfg.SubgraphContext,
     src: gtir_to_sdfg_types.FieldopData,
-    dst: gtir_to_sdfg_types.FieldopData,
+    dst: gtir_to_sdfg_types.FieldopData | None,
 ) -> None:
     """
     Helper function called by `translate_if()` to write the result of an if-branch,
     here `src` field, to the output 'dst' field. The data subset is based on the
     domain of the `dst` field. Therefore, the full shape of `dst` array is written.
     """
-    if src.gt_type != dst.gt_type:
+    if dst is None:
+        return
+    elif src.gt_type != dst.gt_type:
         raise ValueError(
             f"Source and destination type mismatch, '{dst.gt_type}' vs '{src.gt_type}'."
         )
@@ -434,26 +440,20 @@ def translate_if(
     false_br_result = sdfg_builder.visit(false_expr, ctx=fbranch_ctx)
 
     node_output = gtx_utils.tree_map(
-        lambda domain, true_br, false_br: None
-        if domain == infer_domain.DomainAccessDescriptor.NEVER
-        else _construct_if_branch_output(
-            ctx=ctx,
-            sdfg_builder=sdfg_builder,
-            field_domain=gtir_domain.get_field_domain(domain),
-            true_br=true_br,
-            false_br=false_br,
+        lambda domain, true_br, false_br: _construct_if_branch_output(
+            ctx, sdfg_builder, domain, true_br, false_br
         )
     )(
         node.annex.domain,
         true_br_result,
         false_br_result,
     )
-    gtx_utils.tree_map(
-        lambda src, dst: None if dst is None else _write_if_branch_output(tbranch_ctx, src, dst)
-    )(true_br_result, node_output)
-    gtx_utils.tree_map(
-        lambda src, dst: None if dst is None else _write_if_branch_output(fbranch_ctx, src, dst)
-    )(false_br_result, node_output)
+    gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(tbranch_ctx, src, dst))(
+        true_br_result, node_output
+    )
+    gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(fbranch_ctx, src, dst))(
+        false_br_result, node_output
+    )
 
     return node_output
 
@@ -593,6 +593,7 @@ def translate_make_tuple(
 ) -> gtir_to_sdfg_types.FieldopResult:
     assert cpm.is_call_to(node, "make_tuple")
     if "domain" in node.annex:
+        assert isinstance(node.annex.domain, tuple)
         return tuple(
             None
             if domain == infer_domain.DomainAccessDescriptor.NEVER

@@ -1250,15 +1250,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             capture_outer_data=True,
         )
 
+        # In this loop we call `pop()`, whenever an argument is connected to an input
+        # connector on the nested SDFG, so the corresponding node is removed from the dictionary.
         for input_connector, memlet in input_memlets.items():
             if input_connector in lambda_arg_nodes:
-                arg_node = lambda_arg_nodes[input_connector]
+                arg_node = lambda_arg_nodes.pop(input_connector)
                 assert arg_node is not None
                 src_node = arg_node.dc_node
             else:
                 src_node = ctx.state.add_access(memlet.data)
 
             ctx.state.add_edge(src_node, None, nsdfg_node, input_connector, memlet)
+
+        # Now we can safely remove all remaining argument nodes, because unused.
+        if unused_access_nodes := [
+            arg_node.dc_node for arg_node in lambda_arg_nodes.values() if arg_node is not None
+        ]:
+            assert all(ctx.state.degree(access_node) == 0 for access_node in unused_access_nodes)
+            ctx.state.remove_nodes_from(unused_access_nodes)
 
         def construct_output_for_nested_sdfg(
             inner_data: gtir_to_sdfg_types.FieldopData,
