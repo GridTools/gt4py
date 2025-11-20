@@ -1239,8 +1239,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # We can now safely remove all remaining arguments, because unused. Note
         # that we only consider global access nodes, because the only goal of this
-        # cleanup is to remove isolated nodes. At these stage, by construction,
-        # transients should not appear as isolated nodes.
+        # cleanup is to remove isolated nodes. At this stage, temporary input nodes
+        # should not appear as isolated nodes, because they are supposed to contain
+        # the result of some argument expression.
         if unused_access_nodes := [
             arg_node.dc_node
             for arg_node in lambda_arg_nodes.values()
