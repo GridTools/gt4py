@@ -682,12 +682,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ]
 
         input_memlets = {}
-        uninitialized_data = set()
         for dataname in inner_ctx_globals:
             if dataname in data_args:
-                # Uninitialized arguments cannot be connected to the nested SDFG.
+                # Uninitialized arguments should not be used inside the nested SDFG.
                 if (arg_node := data_args[dataname]) is None:
-                    uninitialized_data.add(dataname)
+                    inner_ctx.sdfg.remove_data(dataname, validate=gtx_config.DEBUG)
                 else:
                     input_memlets[dataname] = outer_ctx.sdfg.make_array_memlet(
                         arg_node.dc_node.data
@@ -712,31 +711,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     # It is accessed in the lambda SDFG, so we need to setup an input edge.
                     outer_ctx.sdfg.arrays[dataname].transient = False
                     input_memlets[dataname] = outer_ctx.sdfg.make_array_memlet(dataname)
-
-        if uninitialized_data:
-            # This case is only hit in 'test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge'
-            input_nodes_to_remove = [
-                access_node
-                for access_node in inner_ctx.state.data_nodes()
-                if access_node.data in uninitialized_data
-            ]
-            # We check that uninitialized data only appear in isolated access nodes,
-            # then we remove these nodes and the corresponding data storage.
-            if non_isolated_nodes_with_uninitialized_data := [
-                input_node
-                for input_node in input_nodes_to_remove
-                if inner_ctx.state.degree(input_node) != 0
-            ]:
-                assert all(
-                    inner_ctx.state.in_degree(input_node) == 0
-                    for input_node in non_isolated_nodes_with_uninitialized_data
-                )  # sanity check, we expect that these global nodes are only inputs
-                raise ValueError(
-                    f"Found input nodes with uninitialized data: {non_isolated_nodes_with_uninitialized_data}"
-                )
-            inner_ctx.state.remove_nodes_from(input_nodes_to_remove)
-            for dataname in sorted(uninitialized_data):  # remove the data in deterministic order
-                inner_ctx.sdfg.remove_data(dataname, validate=gtx_config.DEBUG)
 
         nsdfg_node = outer_ctx.state.add_nested_sdfg(
             inner_ctx.sdfg,
