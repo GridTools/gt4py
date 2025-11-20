@@ -17,7 +17,7 @@ class TestFrozenList:
 
         fl = FrozenList([0, 1, 2, 3, 4, 5])
 
-        with pytest.raises(TypeError, match="object does not support item assignment."):
+        with pytest.raises(TypeError, match="object does not support item assignment"):
             fl[2] = -2
 
     def test_instance_check(self):
