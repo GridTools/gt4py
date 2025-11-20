@@ -736,11 +736,13 @@ class BaseAxisBound(Node, ABC):
 
 @attribclass
 class AxisBound(BaseAxisBound):
+    level = attribute(of=LevelMarker)
     offset = attribute(of=int, default=0)
 
 
 @attribclass
 class RuntimeAxisBound(BaseAxisBound):
+    level = attribute(of=LevelMarker)
     offset = attribute(of=Ref, default=0)
 
 
