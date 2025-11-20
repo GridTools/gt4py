@@ -34,11 +34,6 @@ def convert_args(
     update_sdfg_call_args = functools.partial(
         fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
     )
-    # Lock the SDFG build folder while initializing the binary library, in order
-    # to avoid race conditions in parallel pytest sessions where other processes
-    # might be trying to load this precompiled SDFG at the same time.
-    with locking.lock(fun.sdfg_program.sdfg.build_folder):
-        fun.sdfg_program.initialize()
 
     def decorated_program(
         *args: Any,
@@ -71,7 +66,12 @@ def convert_args(
                 gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
-            fun.construct_arguments(**this_call_args)
+            # In case of precompiled SDFG, the first call will also load and initialize
+            # the compiled SDFG. We lock the SDFG build folder in order to avoid
+            # race conditions in parallel pytest sessions where other processes might
+            # be trying to load this precompiled SDFG at the same time.
+            with locking.lock(fun.sdfg_program.sdfg.build_folder):
+                fun.construct_arguments(**this_call_args)
 
         # Perform the call to the SDFG.
         fun.fast_call()
