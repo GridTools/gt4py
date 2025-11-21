@@ -10,7 +10,16 @@ from __future__ import annotations
 
 from typing import Any, Generic, TypeVar, Union
 
-from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
+from gt4py.eve import (
+    Coerced,
+    Node,
+    SourceLocation,
+    SymbolName,
+    SymbolRef,
+    concepts as eve_concepts,
+    datamodels,
+    utils as eve_utils,
+)
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
@@ -21,6 +30,9 @@ from gt4py.next.utils import RecursionGuard
 class LocatedNode(Node):
     # TODO: introduce fingerprint function that does not include location
     location: SourceLocation
+
+    def fingerprint(self) -> str:
+        return eve_utils.content_hash(self, pickler=eve_concepts.selective_pickler({"location"}))
 
     def __str__(self) -> str:
         from gt4py.next.ffront.foast_pretty_printer import pretty_format

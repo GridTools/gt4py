@@ -618,7 +618,11 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
     return "__noninstantiable__" in cls.__dict__
 
 
-def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | None = None, pickler = pickle.Pickler) -> str:
+def content_hash(
+    *args: Any,
+    hash_algorithm: str | xtyping.HashlibAlgorithm | None = None,
+    pickler: type = pickle.Pickler,
+) -> str:
     """Stable content-based hash function using instance serialization data.
 
     It provides a customizable hash function for any kind of data.

@@ -12,10 +12,9 @@ import typing
 from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
-from gt4py.eve import Coerced, SymbolName, SymbolRef
+from gt4py.eve import Coerced, SymbolName, SymbolRef, utils as eve_utils
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
-from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.iterator.builtins import BUILTINS
 from gt4py.next.type_system import type_specifications as ts
@@ -23,11 +22,17 @@ from gt4py.next.type_system import type_specifications as ts
 
 DimensionKind = common.DimensionKind
 
+
 class _FingerprintPickler(pickle.Pickler):
     def reducer_override(self, obj):
         if not isinstance(obj, Node):
             return NotImplemented  # no override
-        return (obj.__class__, (), tuple((k, v) for k, v in obj.iter_children_items() if k not in ("location", "type")))
+        return (
+            obj.__class__,
+            (),
+            tuple((k, v) for k, v in obj.iter_children_items() if k not in ("location", "type")),
+        )
+
 
 @eve_utils.noninstantiable
 class Node(eve.Node):
@@ -36,8 +41,10 @@ class Node(eve.Node):
     # TODO(tehrengruber): include in comparison if value is not None
     type: Optional[ts.TypeSpec] = eve.field(default=None, repr=False, compare=False)
 
-    def fingerprint(self):
-        return eve_utils.content_hash(self, pickler=_FingerprintPickler)
+    def fingerprint(self) -> str:
+        return eve_utils.content_hash(
+            self, pickler=eve.concepts.selective_pickler({"type", "location"})
+        )
 
     def __str__(self) -> str:
         from gt4py.next.iterator.pretty_printer import pformat
