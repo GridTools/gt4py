@@ -13,7 +13,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from gt4py._core import definitions as core_defs, locking
+from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable
@@ -67,11 +67,6 @@ def convert_args(
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
             fun.construct_arguments(**this_call_args)
-            # This a workaround because the DaCe loading of pre-compiled SDFG is
-            # not thread-safe: if the library is already loaded, DaCe creates a copy
-            # of the .so file before loading it, which could lead to name clashes.
-            with locking.lock(fun.sdfg_program.sdfg.build_folder):
-                fun.sdfg_program._initialize(fun.csdfg_init_argv)
 
         # Perform the call to the SDFG.
         fun.fast_call()

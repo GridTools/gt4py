@@ -12,7 +12,7 @@ import dataclasses
 import os
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any
+from typing import Any, Final
 
 import dace
 import factory
@@ -131,16 +131,18 @@ class DaCeCompiler(
         self,
         inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
+        use_cache: Final[bool] = (self.cache_lifetime == config.BuildCacheLifetime.PERSISTENT)
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
-            use_cache=(self.cache_lifetime == config.BuildCacheLifetime.PERSISTENT),
+            use_cache=use_cache,
         ):
             sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
             sdfg.build_folder = sdfg_build_folder
+            sdfg.regenerate_code = (not use_cache)
             with locking.lock(sdfg_build_folder):
                 sdfg_program = sdfg.compile(validate=False)
 
