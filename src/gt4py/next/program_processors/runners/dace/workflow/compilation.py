@@ -131,18 +131,26 @@ class DaCeCompiler(
         self,
         inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
-        use_cache: Final[bool] = (self.cache_lifetime == config.BuildCacheLifetime.PERSISTENT)
+        # When the cache is configured as persistent, we rely on dace cache to load
+        # the precompiled SDFGs from .so file, if present. On the contrary, when
+        # the cache has session lifetime, we do not load the SDFG from file, instead
+        # we regenerate the code (see setting of `sdfg.regenerate_code`). Note that
+        # dace will not overwrite any existing source files, in the SDFG build folder,
+        # instead it will copy the SDFG using a unique filename and .so file.
+        use_persistent_cache: Final[bool] = (
+            self.cache_lifetime == config.BuildCacheLifetime.PERSISTENT
+        )
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
-            use_cache=use_cache,
+            use_cache=use_persistent_cache,
         ):
             sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
             sdfg.build_folder = sdfg_build_folder
-            sdfg.regenerate_code = (not use_cache)
+            sdfg.regenerate_code = not use_persistent_cache
             with locking.lock(sdfg_build_folder):
                 sdfg_program = sdfg.compile(validate=False)
 
