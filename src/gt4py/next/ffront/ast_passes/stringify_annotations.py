@@ -30,12 +30,14 @@ class StringifyAnnotationsPass(ast.NodeTransformer):
     ...     return result
 
     >>> ast_node = ast.parse(inspect.getsource(foo))
-    >>> print(ast_node.body[0].args.args[0].annotation)
-    ...Subscript...
+    >>> print(
+    ...     f"_ {ast_node.body[0].args.args[0].annotation}"
+    ... )  # first character of output can not be ignored
+    _ ...Subscript...
 
     >>> ast_node = StringifyAnnotationsPass.apply(ast_node)
-    >>> print(ast_node.body[0].args.args[0].annotation)
-    ...Constant...
+    >>> print(f"_ {ast_node.body[0].args.args[0].annotation}")
+    _ ...Constant...
     """
 
     @classmethod
