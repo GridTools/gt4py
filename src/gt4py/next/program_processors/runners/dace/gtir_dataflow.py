@@ -953,13 +953,6 @@ class LambdaToDataflow(eve.NodeVisitor):
                 )
             )(out_edges, out_syms)
 
-            # Isolated access node will make validation fail.
-            # Isolated access nodes can be found in `make_tuple` expressions that
-            # construct tuples from input arguments.
-            for data_node in nstate.data_nodes():
-                if nstate.degree(data_node) == 0:
-                    assert not data_node.desc(nsdfg).transient
-                    nsdfg.remove_node(data_node)
         else:
             result = outer_value
 
