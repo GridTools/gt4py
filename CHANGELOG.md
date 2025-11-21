@@ -2,6 +2,29 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.1] - 2025-11-13
+
+### Cartesian
+
+- Allow self-assignment with offset in K dimension in sequential vertical loops
+- Bug fixes:
+  - Skip implicit upcasting in (explicit) cast operations
+  - Respect precision of Constants
+
+## [1.1.0] - 2025-11-05
+
+### Cartesian
+
+- New experimental feature: 2D temporaries.
+- Removed deprecated `cuda` backend.
+- Bug fixes:
+  - Absolute field-access in while-condition
+  - Upcasting of expressions on the rhs
+
+### Versioning
+
+- Added a fallback version of the form `1.0.10+unknown.version.details`, when no version is available from git.
+
 ## [1.0.10] - 2025-10-23
 
 ### Cartesian

@@ -16,25 +16,14 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
 import dace
+from dace.frontend.python import astutils as dace_astutils
 
 from gt4py import eve
 from gt4py.eve import concepts
-from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next import common as gtx_common, config as gtx_config, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
@@ -48,6 +37,17 @@ from gt4py.next.program_processors.runners.dace import (
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+
+
+def _replace_connectors_in_code_string(
+    code: str, language: dace.dtypes.Language, connector_mapping: Mapping[str, str]
+) -> str:
+    """Helper function to replace connector names in the code of a Python tasklet."""
+    code_block = dace.properties.CodeBlock(code, language)
+    transformed_code_stmts = [
+        dace_astutils.ASTFindReplace(connector_mapping).visit(stmt) for stmt in code_block.code
+    ]
+    return dace.properties.CodeBlock(transformed_code_stmts, language).as_string
 
 
 class DataflowBuilder(Protocol):
@@ -101,30 +101,72 @@ class DataflowBuilder(Protocol):
     def add_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
-        inputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
-        outputs: Union[Set[str], Dict[str, dace.dtypes.typeclass]],
+        inputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
+        outputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
         code: str,
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
     ) -> dace.nodes.Tasklet:
-        """Wrapper of `dace.SDFGState.add_tasklet` that assigns unique name."""
+        """Wrapper of `dace.SDFGState.add_tasklet` that assigns a unique name.
+
+        It also modifies the tasklet connectors by adding a prefix string (see
+        `gtir_to_sdfg_utils.get_tasklet_connector()`), in order to avoid name conflicts
+        with SDFG data. Otherwise, SDFG validation would detect such conflicts and fail.
+        """
+        if isinstance(inputs, set):
+            inputs = {k: None for k in sorted(inputs)}
+        if isinstance(outputs, set):
+            outputs = {k: None for k in sorted(outputs)}
+        assert inputs.keys().isdisjoint(outputs.keys())
+
+        connector_mapping = {
+            conn: gtir_to_sdfg_utils.make_tasklet_connector_for(conn)
+            for conn in (inputs.keys() | outputs.keys())
+        }
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
+
+        inputs = {connector_mapping[k]: v for k, v in inputs.items()}
+        outputs = {connector_mapping[k]: v for k, v in outputs.items()}
+
         unique_name = self.unique_tasklet_name(name)
-        return state.add_tasklet(unique_name, inputs, outputs, code, **kwargs)
+        tasklet_node = state.add_tasklet(
+            unique_name, inputs, outputs, new_code, language=language, **kwargs
+        )
+        return tasklet_node, connector_mapping
 
     def add_mapped_tasklet(
         self,
         name: str,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
-        map_ranges: Dict[str, str | dace.subsets.Subset]
-        | List[Tuple[str, str | dace.subsets.Subset]],
-        inputs: Dict[str, dace.Memlet],
+        map_ranges: Mapping[str, str | dace.subsets.Subset],
+        inputs: Mapping[str, dace.Memlet],
         code: str,
-        outputs: Dict[str, dace.Memlet],
+        outputs: Mapping[str, dace.Memlet],
+        language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit]:
-        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns unique name."""
+    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
+        """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns a unique name.
+
+        It also modifies the tasklet connectors, in the same way as `add_tasklet()`.
+        """
+        assert inputs.keys().isdisjoint(outputs.keys())
+
+        connector_mapping = {
+            conn: gtir_to_sdfg_utils.make_tasklet_connector_for(conn)
+            for conn in (inputs.keys() | outputs.keys())
+        }
+        new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
+
+        inputs = {connector_mapping[k]: v for k, v in inputs.items()}
+        outputs = {connector_mapping[k]: v for k, v in outputs.items()}
         unique_name = self.unique_tasklet_name(name)
-        return state.add_mapped_tasklet(unique_name, map_ranges, inputs, code, outputs, **kwargs)
+        tasklet_node, map_entry, map_exit = state.add_mapped_tasklet(
+            unique_name, map_ranges, inputs, new_code, outputs, language=language, **kwargs
+        )
+        return tasklet_node, map_entry, map_exit, connector_mapping
 
 
 @dataclasses.dataclass(frozen=True)
@@ -144,7 +186,26 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         data_node: dace.nodes.AccessNode,
         data_type: ts.FieldType,
     ) -> gtir_to_sdfg_types.FieldopData:
-        """Retrieve the field data descriptor including the domain offset information."""
+        """Retrieve the field descriptor of a data node, including the origin information.
+
+        In case of `ScalarType` data, the `FieldopData` is constructed with `origin=None`.
+        In case of `FieldType` data, the field origin is added to the data descriptor.
+        Besides, if the `FieldType` contains a local dimension, the descriptor is converted
+        to a canonical form where the field domain consists of all global dimensions
+        (the grid axes) and the field data type is `ListType`, with `offset_type` equal
+        to the field local dimension.
+
+        TODO(edoapo): consider refactoring this method and moving it to a type module
+            close to the `FieldopData` type declaration.
+
+        Args:
+            data_node: The access node to the SDFG data storage.
+            data_type: The GT4Py data descriptor, which can either come from a program
+                symbol, or from an intermediate field for an argument expression.
+
+        Returns:
+            The descriptor associated with the SDFG data storage, filled with field origin.
+        """
         ...
 
     @abc.abstractmethod
@@ -163,8 +224,9 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         expr: gtir.Lambda,
         sdfg_name: str,
         parent_ctx: SubgraphContext,
-        scope_symbols: dict[str, ts.DataType],
+        params: Iterable[gtir.Sym],
         symbolic_inputs: set[str],
+        capture_scope_symbols: bool,
     ) -> tuple[SDFGBuilder, SubgraphContext]:
         """
         Create an nested SDFG context to lower a lambda expression, indipendent
@@ -179,10 +241,11 @@ class SDFGBuilder(DataflowBuilder, Protocol):
             expr: The lambda expression to be lowered as a nested SDFG.
             sdfg_name: The name of the nested SDFG where to lower the given expression.
             parent_ctx: The parent SDFG context.
-            scope_symbols: Mapping from symbol name to data type for the GTIR symbols
-                forwarded to the nested context.
+            params: List of GTIR symbols passed as parameters to the lambda expression.
             symbolic_inputs: Arguments that have to be passed to the nested SDFG
                 as dace symbols.
+            capture_scope_symbols: When True, the lambda expression will capture
+                GTIR symbols defined in the parent scope.
 
         Returns:
             A visitor object implementing the `SDFGBuilder` protocol.
@@ -190,9 +253,55 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ...
 
     @abc.abstractmethod
+    def add_nested_sdfg(
+        self,
+        node: gtir.Lambda,
+        inner_ctx: SubgraphContext,
+        outer_ctx: SubgraphContext,
+        symbolic_args: Mapping[str, gtir_to_sdfg_types.SymbolicData],
+        data_args: Mapping[str, gtir_to_sdfg_types.FieldopData],
+        inner_result: gtir_to_sdfg_types.FieldopResult,
+    ) -> tuple[dace.nodes.NestedSDFG, Mapping[str, dace.Memlet]]:
+        """
+        Helper function that prepares the input connections and symbol mapping before
+        calling `SDFG.add_nestd_sdfg()` to add the given SDFG as a nested SDFG node
+        inside the parent SDFG.
+
+        Args:
+            node: The lambda GTIR node containing the expression which was lowered in `inner_ctx`.
+            inner_ctx: The nested SDFG context, containing the state where `inner_result` is written.
+            outer_ctx: The parent SDFG context, containing the state where the nested SDFG should be added.
+            symbolic_args: Scalar argumemts to be passed to the nested SDFG through symbol mapping.
+            data_args: Data arguments to be passed through edge memlets.
+            inner_result: The data produced by the nested SDFG, inside the state specified by `inner_ctx`.
+
+        Returns:
+            A tuple of two elements:
+            - The nested SDFG graph node.
+            - The mapping from input connectors to data memlets.
+        """
+        ...
+
+    @abc.abstractmethod
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         """Visit a node of the GT4Py IR."""
         ...
+
+
+def _flatten_tuple_symbols(symbols: Iterable[gtir.Sym]) -> list[gtir.Sym]:
+    """
+    Helper function to flatten tuple symbols, recursively in case of nested tuples,
+    and extract all scalar symbols.
+    """
+    flat_symbols: list[gtir.Sym] = []
+    for sym in symbols:
+        if isinstance(sym.type, ts.TupleType):
+            flat_symbols.extend(
+                f for f in gtir_to_sdfg_utils.flatten_tuple_fields(sym.id, sym.type)
+            )
+        else:
+            flat_symbols.append(sym)
+    return flat_symbols
 
 
 def _make_access_index_for_field(
@@ -231,7 +340,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     offset_provider_type: gtx_common.OffsetProviderType
     column_axis: Optional[gtx_common.Dimension]
-    global_symbols: dict[str, ts.DataType]
+    scope_symbols: dict[str, ts.DataType]
     map_uids: eve.utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
     )
@@ -247,27 +356,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         data_node: dace.nodes.AccessNode,
         data_type: ts.FieldType,
     ) -> gtir_to_sdfg_types.FieldopData:
-        """
-        Helper method to build the field data type associated with a data access node.
-
-        In case of `ScalarType` data, the `FieldopData` is constructed with `origin=None`.
-        In case of `FieldType` data, the field origin is added to the data descriptor.
-        Besides, if the `FieldType` contains a local dimension, the descriptor is converted
-        to a canonical form where the field domain consists of all global dimensions
-        (the grid axes) and the field data type is `ListType`, with `offset_type` equal
-        to the field local dimension.
-
-        TODO(edoapo): consider refactoring this method and moving it to a type module
-            close to the `FieldopData` type declaration.
-
-        Args:
-            data_node: The access node to the SDFG data storage.
-            data_type: The GT4Py data descriptor, which can either come from a field parameter
-                of an expression node, or from an intermediate field in a previous expression.
-
-        Returns:
-            The descriptor associated with the SDFG data storage, filled with field origin.
-        """
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
@@ -290,13 +378,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 "Fields with more than one local dimension are not supported."
             )
         field_origin = tuple(
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.range_start_symbol(data_node.data, dim))
-            for dim in field_type.dims
+            gtx_dace_utils.range_start_symbol(data_node.data, dim) for dim in field_type.dims
         )
         return gtir_to_sdfg_types.FieldopData(data_node, field_type, field_origin)
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
-        return self.global_symbols[symbol_name]
+        return self.scope_symbols[symbol_name]
 
     def is_column_axis(self, dim: gtx_common.Dimension) -> bool:
         assert self.column_axis
@@ -307,42 +394,48 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         expr: gtir.Lambda,
         sdfg_name: str,
         parent_ctx: SubgraphContext,
-        scope_symbols: dict[str, ts.DataType],
+        params: Iterable[gtir.Sym],
         symbolic_inputs: set[str],
+        capture_scope_symbols: bool,
     ) -> tuple[SDFGBuilder, SubgraphContext]:
+        lambda_pnames = {str(p.id) for p in params}
+        assert symbolic_inputs.issubset(lambda_pnames) and all(
+            isinstance(p.type, ts.ScalarType) for p in params if str(p.id) in symbolic_inputs
+        )
+
+        # If `capture_scope_symbols` is True, besides the values mapped to the parameters
+        # of the lambda expression (`lambda_params`), we also pass to the nested SDFG
+        # all GTIR-symbols in scope, which means the symbols defined in current context.
+        if capture_scope_symbols:
+            lambda_symbols = {
+                sym: self.scope_symbols[sym]
+                for sym in symbol_ref_utils.collect_symbol_refs(expr, self.scope_symbols.keys())
+            }
+        else:
+            lambda_symbols = {}
+
+        assert all(isinstance(p.type, ts.DataType) for p in params)
+        lambda_symbols |= {
+            str(p.id): p.type  # type: ignore[misc]
+            for p in params
+        }
+        all_params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in lambda_symbols.items()]
+
         sdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, sdfg_name))
         sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(expr, default=parent_ctx.sdfg.debuginfo)
         state = sdfg.add_state(f"{sdfg_name}_entry")
         nested_ctx = SubgraphContext(sdfg, state)
-        nsdfg_builder = GTIRToSDFG(self.offset_provider_type, self.column_axis, scope_symbols)
-
-        # We pass to the nested SDFG all GTIR-symbols in scope, which includes the
-        # values mapped to the parameters of the lambda expression (`node.params`)
-        # and the GTIR-symbols defined in the current context.
-        params = [gtir.Sym(id=p_name, type=p_type) for p_name, p_type in scope_symbols.items()]
-
-        # Tuples need to be flattened, recursively in case of nested tuples,
-        # in order to iterate over all fields.
-        def flatten_tuple_syms(params: Iterable[gtir.Sym]) -> list[gtir.Sym]:
-            flat_scalar_params: list[gtir.Sym] = []
-            for p in params:
-                if isinstance(p.type, ts.TupleType):
-                    flat_scalar_params.extend(
-                        f
-                        for f in gtir_to_sdfg_utils.flatten_tuple_fields(p.id, p.type)
-                        if isinstance(f.type, ts.ScalarType)
-                    )
-                elif isinstance(p.type, ts.ScalarType):
-                    flat_scalar_params.append(p)
-            return flat_scalar_params
+        nsdfg_builder = GTIRToSDFG(
+            offset_provider_type=self.offset_provider_type,
+            column_axis=self.column_axis,
+            scope_symbols=lambda_symbols,
+        )
 
         # Scalar GTIR-symbols represented as dace symbols in parent SDFG are mapped
         # to dace symbols in the nested SDFG.
-        parent_symbols = {
-            name
-            for p in flatten_tuple_syms(params)
-            if (name := str(p.id)) in parent_ctx.sdfg.symbols
-        }
+        parent_symbols = set(
+            s for p in _flatten_tuple_symbols(all_params) if (s := str(p.id)) not in lambda_pnames
+        ).intersection(parent_ctx.sdfg.symbols.keys())
 
         # All GTIR-symbols accessed in domain expressions by the lambda need to be
         # represented as dace symbols.
@@ -352,19 +445,100 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             .map(
                 lambda domain: eve.walk_values(domain)
                 .if_isinstance(gtir.SymRef)
-                .filter(lambda sym: str(sym.id) in scope_symbols)
+                .filter(lambda sym: str(sym.id) in lambda_symbols)
                 .to_set()
             )
             .reduce(lambda x, y: x | y, init=set())
         )
-        domain_symbols = {str(p.id) for p in flatten_tuple_syms(domain_symrefs)}
+        domain_symbols = {str(p.id) for p in _flatten_tuple_symbols(domain_symrefs)}
 
         nsdfg_builder._add_sdfg_params(
             sdfg,
-            params,
+            node_params=all_params,
             symbolic_params=(domain_symbols | parent_symbols | symbolic_inputs),
         )
         return nsdfg_builder, nested_ctx
+
+    def add_nested_sdfg(
+        self,
+        node: gtir.Lambda,
+        inner_ctx: SubgraphContext,
+        outer_ctx: SubgraphContext,
+        symbolic_args: Mapping[str, gtir_to_sdfg_types.SymbolicData],
+        data_args: Mapping[str, gtir_to_sdfg_types.FieldopData],
+        inner_result: gtir_to_sdfg_types.FieldopResult,
+    ) -> tuple[dace.nodes.NestedSDFG, Mapping[str, dace.Memlet]]:
+        assert data_args.keys().isdisjoint(symbolic_args.keys())
+
+        # Collect the names of all output data, by flattening any tuple structure.
+        lambda_output_data = (
+            gtx_utils.flatten_nested_tuple(inner_result)
+            if isinstance(inner_result, tuple)
+            else [inner_result]
+        )
+        # The output connectors only need to be setup for the actual result of the
+        # internal dataflow that writes to some sink data nodes of the nested SDFG.
+        # All sink nodes inside the nested SDFG which contain the lambda result
+        # are expected to be transient data. The caller is responsible for turning
+        # them into global data and map it to arrays outside the nested SDFG.
+        lambda_outputs = {
+            output.dc_node.data
+            for output in lambda_output_data
+            if output is not None and output.dc_node.desc(inner_ctx.sdfg).transient
+        }
+
+        # Map free symbols to parent SDFG
+        nsdfg_symbols_mapping = {}
+        for dc_symbol in inner_ctx.sdfg.free_symbols:
+            if dc_symbol in data_args:
+                assert isinstance(data_args[dc_symbol].gt_type, ts.ScalarType)
+                raise NotImplementedError(
+                    "Unexpected mapping of scalar node to symbol on nested SDFG."
+                )
+            elif dc_symbol in symbolic_args:
+                nsdfg_symbols_mapping[dc_symbol] = symbolic_args[dc_symbol].value
+            else:
+                nsdfg_symbols_mapping[dc_symbol] = dc_symbol
+        for gt_symbol, arg in data_args.items():
+            nsdfg_symbols_mapping |= arg.get_symbol_mapping(gt_symbol, outer_ctx.sdfg)
+
+        connectivity_arrays = {
+            gtx_dace_utils.connectivity_identifier(offset)
+            for offset in gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
+        }
+
+        input_memlets = {}
+        unused_data = set()
+        for nsdfg_dataname, nsdfg_datadesc in inner_ctx.sdfg.arrays.items():
+            if nsdfg_datadesc.transient:
+                pass  # nothing to do here
+            elif nsdfg_dataname in data_args:
+                arg_node = data_args[nsdfg_dataname]
+                source_data = arg_node.dc_node.data
+                input_memlets[nsdfg_dataname] = outer_ctx.sdfg.make_array_memlet(source_data)
+            elif nsdfg_dataname in outer_ctx.sdfg.arrays:
+                # include fields from the parent scope
+                source_data = nsdfg_dataname
+                # ensure that connectivity tables are non-transient arrays in parent SDFG
+                if source_data in connectivity_arrays:
+                    outer_ctx.sdfg.arrays[source_data].transient = False
+                input_memlets[nsdfg_dataname] = outer_ctx.sdfg.make_array_memlet(source_data)
+            else:
+                # Arguments with empty domain do not need to be connected on the nested SDFG.
+                unused_data.add(nsdfg_dataname)
+
+        for data in sorted(unused_data):  # NOTE: remove the data in deterministic order
+            inner_ctx.sdfg.remove_data(data, validate=gtx_config.DEBUG)
+
+        nsdfg_node = outer_ctx.state.add_nested_sdfg(
+            inner_ctx.sdfg,
+            inputs=input_memlets.keys(),
+            outputs=lambda_outputs,
+            symbol_mapping=nsdfg_symbols_mapping,
+            debuginfo=gtir_to_sdfg_utils.debug_info(node, default=outer_ctx.sdfg.debuginfo),
+        )
+
+        return nsdfg_node, input_memlets
 
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
         nsdfg_list = [
@@ -397,15 +571,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
         neighbor_table_types = gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
         shape = []
-        for i, dim in enumerate(dims):
+        for dim in dims:
             if dim.kind == gtx_common.DimensionKind.LOCAL:
                 # for local dimension, the size is taken from the associated connectivity type
                 shape.append(neighbor_table_types[dim.value].max_neighbors)
             elif gtx_dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
                 # we use symbolic size for the global dimension of a connectivity
-                shape.append(
-                    dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_size_symbol_name(name, i))
-                )
+                shape.append(gtx_dace_utils.field_size_symbol(name, dim, neighbor_table_types))
             else:
                 # the size of global dimensions for a regular field is the symbolic
                 # expression of domain range 'stop - start'
@@ -418,8 +590,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     )
                 )
         strides = [
-            dace.symbolic.pystr_to_symbolic(gtx_dace_utils.field_stride_symbol_name(name, i))
-            for i in range(len(dims))
+            gtx_dace_utils.field_stride_symbol(name, dim, neighbor_table_types) for dim in dims
         ]
         return shape, strides
 
@@ -486,13 +657,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 )
             if isinstance(gt_type.dtype, ts.ScalarType):
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype)
-                dims = gt_type.dims
+                all_dims = gt_type.dims
             elif not transient:  # 'ts.ListType': use 'offset_type' as local dimension
                 assert gt_type.dtype.offset_type is not None
                 assert gt_type.dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
                 assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype.element_type)
-                dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
+                all_dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
             else:
                 # By design, the domain of temporary fields used by SDFG lowering
                 # contains only the global dimensions. The local dimension is extracted,
@@ -500,7 +671,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 raise ValueError("Unexpected local dimension in temporary field domain.")
             # Use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, dims)
+            sym_shape, sym_strides = self._make_array_shape_and_strides(name, all_dims)
             sdfg.add_array(name, sym_shape, dc_dtype, strides=sym_strides, transient=transient)
             return [(name, gt_type)]
 
@@ -844,123 +1015,40 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         the previous symbol during traversal of the lambda expression.
         """
 
-        data_args: dict[str, gtir_to_sdfg_types.FieldopResult] = {}
         symbolic_args: dict[str, gtir_to_sdfg_types.SymbolicData] = {}
         lambda_arg_nodes: dict[str, gtir_to_sdfg_types.FieldopData] = {}
-        for gt_symbol, arg in args.items():
-            gt_symbol_name = str(gt_symbol.id)
+        for gtsym, arg in args.items():
+            gtsym_id = str(gtsym.id)
             if arg is None:
                 pass  # domain inference has detetcted that this argument is not used
             elif isinstance(arg, gtir_to_sdfg_types.SymbolicData):
-                symbolic_args[gt_symbol_name] = arg
+                symbolic_args[gtsym_id] = arg
             else:
-                data_args[gt_symbol_name] = arg
                 lambda_arg_nodes |= {
-                    str(nested_param.id): nested_arg
-                    for nested_param, nested_arg in gtir_to_sdfg_types.flatten_tuple(gt_symbol, arg)
+                    str(nested_gtsym.id): nested_arg
+                    for nested_gtsym, nested_arg in gtir_to_sdfg_types.flatten_tuple(gtsym, arg)
                     if nested_arg is not None  # we filter out arguments with empty domain
                 }
 
-        # inherit symbols from parent scope but eventually override with local symbols
-        lambda_symbols = {
-            sym: self.global_symbols[sym]
-            for sym in symbol_ref_utils.collect_symbol_refs(node.expr, self.global_symbols.keys())
-        } | {str(param.id): param.type for param, arg in args.items() if arg is not None}
-        assert all(isinstance(_type, ts.DataType) for _type in lambda_symbols.values())
-
         # lower let-statement lambda node as a nested SDFG
-        lamnda_translator, lambda_ctx = self.setup_nested_context(
+        lambda_translator, lambda_ctx = self.setup_nested_context(
             expr=node,
             sdfg_name="lambda",
             parent_ctx=ctx,
-            scope_symbols=lambda_symbols,  # type: ignore[arg-type]  # lambda_symbols checked by assert above
+            params=args.keys(),
             symbolic_inputs=set(symbolic_args.keys()),
+            capture_scope_symbols=True,
         )
 
-        lambda_result = lamnda_translator.visit(node.expr, ctx=lambda_ctx)
+        lambda_result = lambda_translator.visit(node.expr, ctx=lambda_ctx)
 
-        # Process lambda inputs
-        #
-        # All input arguments are passed as parameters to the nested SDFG, therefore
-        # we they are stored as non-transient array and scalar objects.
-        #
-        connectivity_arrays = {
-            gtx_dace_utils.connectivity_identifier(offset)
-            for offset in gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
-        }
-
-        input_memlets = {}
-        unused_data = set()
-        for nsdfg_dataname, nsdfg_datadesc in lambda_ctx.sdfg.arrays.items():
-            if nsdfg_datadesc.transient:
-                pass  # nothing to do here
-            elif nsdfg_dataname in lambda_arg_nodes:
-                arg_node = lambda_arg_nodes[nsdfg_dataname]
-                source_data = arg_node.dc_node.data
-                input_memlets[nsdfg_dataname] = ctx.sdfg.make_array_memlet(source_data)
-            elif nsdfg_dataname in ctx.sdfg.arrays:
-                source_data = nsdfg_dataname
-                # ensure that connectivity tables are non-transient arrays in parent SDFG
-                if source_data in connectivity_arrays:
-                    ctx.sdfg.arrays[source_data].transient = False
-                input_memlets[nsdfg_dataname] = ctx.sdfg.make_array_memlet(source_data)
-            else:
-                # This argument has empty domain, which means that it is not used
-                # by the lambda expression, and does not need to be connected on
-                # the nested SDFG.
-                unused_data.add(nsdfg_dataname)
-
-        for data in sorted(unused_data):  # NOTE: remove the data in deterministic order
-            lambda_ctx.sdfg.remove_data(data, validate=__debug__)
-
-        # Process lambda outputs
-        #
-        # The output arguments do not really exist, so they are not allocated before
-        # visiting the lambda expression. Therefore, the result appears inside the
-        # nested SDFG as transient array/scalar storage. The exception is given by
-        # input arguments that are just passed through and returned by the lambda,
-        # e.g. when the lambda is constructing a tuple: in this case, the result
-        # data is non-transient, because it corresponds to an input node.
-        # The transient storage of the lambda result in nested-SDFG is corrected
-        # below by the call to `make_temps()`: this function ensures that the result
-        # transient nodes are changed to non-transient and the corresponding output
-        # connecters on the nested SDFG are connected to new data nodes in parent SDFG.
-        #
-        lambda_output_data: Iterable[gtir_to_sdfg_types.FieldopData] = (
-            gtx_utils.flatten_nested_tuple(lambda_result)
-        )
-        # The output connectors only need to be setup for the actual result of the
-        # internal dataflow that writes to transient nodes.
-        # We filter out the non-transient nodes because they are already available
-        # in the current context. Later these nodes will eventually be removed
-        # from the nested SDFG because they are isolated (see `make_temps()`).
-        lambda_outputs = {
-            output_data.dc_node.data
-            for output_data in lambda_output_data
-            if output_data.dc_node.desc(lambda_ctx.sdfg).transient
-        }
-
-        # Map free symbols to parent SDFG
-        nsdfg_symbols_mapping = {}
-        for dc_symbol in lambda_ctx.sdfg.free_symbols:
-            if dc_symbol in lambda_arg_nodes:
-                assert isinstance(lambda_arg_nodes[dc_symbol].gt_type, ts.ScalarType)
-                raise NotImplementedError(
-                    "Unexpected mapping of scalar node to symbol on nested SDFG."
-                )
-            elif dc_symbol in symbolic_args:
-                nsdfg_symbols_mapping[dc_symbol] = symbolic_args[dc_symbol].value
-            else:
-                nsdfg_symbols_mapping[dc_symbol] = dc_symbol
-        for gt_symbol_name, arg in lambda_arg_nodes.items():
-            nsdfg_symbols_mapping |= arg.get_symbol_mapping(gt_symbol_name, ctx.sdfg)
-
-        nsdfg_node = ctx.state.add_nested_sdfg(
-            lambda_ctx.sdfg,
-            inputs=set(input_memlets.keys()),
-            outputs=lambda_outputs,
-            symbol_mapping=nsdfg_symbols_mapping,
-            debuginfo=gtir_to_sdfg_utils.debug_info(node, default=ctx.sdfg.debuginfo),
+        nsdfg_node, input_memlets = self.add_nested_sdfg(
+            node=node,
+            inner_ctx=lambda_ctx,
+            outer_ctx=ctx,
+            symbolic_args=symbolic_args,
+            data_args=lambda_arg_nodes,
+            inner_result=lambda_result,
         )
 
         for input_connector, memlet in input_memlets.items():
@@ -995,7 +1083,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # that is externally allocated, as required by the SDFG IR. An output edge will write the result
                 # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
                 outer_data = inner_data.map_to_parent_sdfg(
-                    self, lambda_ctx.sdfg, ctx.sdfg, ctx.state, nsdfg_symbols_mapping
+                    self, lambda_ctx.sdfg, ctx.sdfg, ctx.state, nsdfg_node.symbol_mapping
                 )
                 ctx.state.add_edge(
                     nsdfg_node,
@@ -1009,8 +1097,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # Non-transient nodes are just input nodes that are immediately returned
                 # by the lambda expression. Therefore, these nodes are already available
                 # in the parent context and can be directly accessed there.
-                outer_arg = lambda_arg_nodes[inner_dataname]
-                if outer_arg is None:
+                if (outer_arg := lambda_arg_nodes[inner_dataname]) is None:
                     raise ValueError(f"Unexpected argument with empty domain {inner_data}.")
                 outer_data = outer_arg
             else:

@@ -384,6 +384,11 @@ def gt_auto_optimize(
             validate_all=validate_all,
         )
 
+        # Canonicalize the SDFG. This ensures that the code generator will see SDFGs
+        #  that conform to the historical expected version.
+        # NOTE: Currently needed to avoid an error in `AddThreadBlockMap`.
+        dace.sdfg.utils.canonicalize_memlet_trees(sdfg)
+
         # Set the implementation of the library nodes.
         dace_aoptimize.set_fast_implementations(sdfg, device)
 
@@ -463,6 +468,15 @@ def _gt_auto_process_top_level_maps(
 
         sdfg.apply_transformations_repeated(
             vertical_map_fusion,
+            validate=False,
+            validate_all=validate_all,
+        )
+
+        # Try to remove some unnecessary copies.
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.DoubleWriteRemover(
+                single_use_data=single_use_data,
+            ),
             validate=False,
             validate_all=validate_all,
         )
@@ -748,7 +762,7 @@ def _gt_auto_configure_maps_and_strides(
     #   bad thing is to set the strides of the transients here. The main downside
     #   is that this and the `_gt_auto_post_processing()` function has these weird
     #   names.
-    gtx_transformations.gt_change_transient_strides(sdfg, gpu=gpu)
+    gtx_transformations.gt_change_strides(sdfg, gpu=gpu)
 
     if gpu:
         # TODO(phimuell): The GPU function might modify the map iteration order.
