@@ -31,11 +31,11 @@ class StringifyAnnotationsPass(ast.NodeTransformer):
 
     >>> ast_node = ast.parse(inspect.getsource(foo))
     >>> print(ast_node.body[0].args.args[0].annotation)
-    <ast.Subscript object at ...>
+    ...Subscript...
 
     >>> ast_node = StringifyAnnotationsPass.apply(ast_node)
     >>> print(ast_node.body[0].args.args[0].annotation)
-    <ast.Constant object at ...>
+    ...Constant...
     """
 
     @classmethod
