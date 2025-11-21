@@ -1024,9 +1024,9 @@ def _make_datamodel(
     """
     mro_bases: Tuple[Type, ...] = cls.__mro__[1:]
 
-    if "__annotations__" not in cls.__dict__:
+    if "__annotations__" not in cls.__dict__ and "__annotate_func__" not in cls.__dict__:
         cls.__annotations__ = {}
-    annotations = cls.__dict__["__annotations__"]
+    annotations = cls.__annotations__
     resolved_annotations = xtyping.get_partial_type_hints(cls)
     annotations_with_extras = xtyping.get_partial_type_hints(cls, include_extras=True)
 
