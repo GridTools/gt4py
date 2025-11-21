@@ -436,8 +436,13 @@ def _lower_lambda_to_nested_sdfg(
     for edge in lambda_input_edges:
         edge.connect(map_entry=None)
 
-    # Create the body of the initialization state.
-    # This dataflow will initialize the scan carry variable.
+    # Create the body of the initialization state, which will initialize the scan
+    # carry variable. Note that we do it here, after having visited the lambda node
+    # and having built 'compute_state', for a specific reason: the scan carry variable
+    # was initially a lambda parameter, and threfore lowered as a non-transient node,
+    # but it needs to be changed into transient (see `scan_carry_desc.transient = True`)
+    # because it is only used as internal state. The input data will a different node,
+    # which is copied to the scan carry variable in the initialization state.
     scan_carry_input = (
         gtir_to_sdfg_utils.make_symbol_tree(scan_carry_symbol.id, scan_carry_symbol.type)
         if isinstance(scan_carry_symbol.type, ts.TupleType)
@@ -521,8 +526,9 @@ def _lower_lambda_to_nested_sdfg(
     # Corner case where the scan computation, on one level, does not depend on
     # the result from previous level. In this case, the state information from
     # previous level is not used, therefore we could find isolated access nodes.
-    # Note that this is probably a misuse of scan in application code: it could
-    # have been represented as a pure field ooperator.
+    # In case of tuples, it might be that only some of the fields are used.
+    # In case of scalars, this is probably a misuse of scan in application code:
+    # it could have been represented as a pure field operator.
     for arg in gtx_utils.flatten_nested_tuple((stencil_args[0],)):
         state_node = arg.dc_node
         if compute_state.degree(state_node) == 0:

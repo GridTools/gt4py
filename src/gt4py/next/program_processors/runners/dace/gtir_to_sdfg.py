@@ -374,8 +374,8 @@ class SDFGBuilder(DataflowBuilder, Protocol):
             inner_ctx: The nested SDFG context, containing the state where `inner_result` is written.
             outer_ctx: The parent SDFG context, containing the state where the nested SDFG should be added.
             symbolic_args: Scalar argumemts to be passed to the nested SDFG through symbol mapping.
-            data_args: Data arguments to be passed through edge memlets. If None,
-                domain inference detected that this argument is not used.
+            data_args: Data arguments to be passed through edge memlets. It contains `None` values
+                for those arguments that, based on domain inference, should not be used.
             inner_result: The data produced by the nested SDFG, inside the state specified by `inner_ctx`.
             capture_outer_data: Allow capturing scalars and arrays defined in the parent SDFG.
 
@@ -927,7 +927,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Helper function to add storage for node parameters and connectivity tables.
 
         If `use_transient_storage=True`, all scalars and arrays are allocated as
-        transient data. When this data is accessed by the `SymRef` visitor, it is
+        transient data. When this data is accessed by the `SymRef` visitor or mapped
+        to input data inside a nested SDFG, during lowering of let-lambdas, it is
         turned into global. This allows, for nested SDFGs, to prune input connectors
         for data that is not used. The remaining unused transients in the SDFG are
         removed by the dace simplify pass. For connectivity arrays, we always use

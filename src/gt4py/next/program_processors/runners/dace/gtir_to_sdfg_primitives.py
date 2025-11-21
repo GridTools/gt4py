@@ -635,7 +635,7 @@ def translate_tuple_get(
     access_nodes_to_remove = [
         arg.dc_node
         for arg in unused_data_nodes
-        if arg is not None and not arg.dc_node.desc(ctx.sdfg).transient
+        if not (arg is None or arg.dc_node.desc(ctx.sdfg).transient)
     ]
     assert all(ctx.state.degree(access_node) == 0 for access_node in access_nodes_to_remove)
     ctx.state.remove_nodes_from(access_nodes_to_remove)
