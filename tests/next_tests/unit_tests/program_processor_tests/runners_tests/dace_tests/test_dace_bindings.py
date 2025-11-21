@@ -41,7 +41,7 @@ def _binding_source(use_metrics: bool) -> str:
     # Note that the position of 'gt_compute_time' in the SDFG arguments list is
     # defined by dace, based on alphabetical order from index 0 ('a', 'b', 'gt_compute_time').
     metrics_arg_index = 2
-    idx = [21, 22, 0, 3, 4, 5, 6, 7, 8, 1, 9, 10, 11, 12, 13, 14, 23, 2, 15, 16, 17, 18, 19, 20]
+    idx = [21, 22, 0, 3, 5, 7, 4, 6, 8, 1, 9, 11, 13, 10, 12, 14, 23, 2, 15, 17, 19, 16, 18, 20]
     if use_metrics:
         idx = [idx + 1 if idx >= metrics_arg_index else idx for idx in idx]
     return (

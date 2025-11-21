@@ -52,20 +52,18 @@ def find_constant_symbols(
                     raise NotImplementedError(
                         f"Unsupported field with multiple horizontal dimensions '{p}'."
                     )
-                if isinstance(p.type.dtype, ts.ListType):
-                    assert p.type.dtype.offset_type is not None
-                    full_dims = common.order_dimensions([*p.type.dims, p.type.dtype.offset_type])
-                    dim_index = full_dims.index(dim)
-                else:
-                    dim_index = p.type.dims.index(dim)
-                stride_name = gtx_dace_utils.field_stride_symbol_name(p.id, dim_index)
-                constant_symbols[stride_name] = 1
+                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(str(p.id), dim)
+                constant_symbols[sdfg_stride_symbol.name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
-        for conn, desc in sdfg.arrays.items():
-            if gtx_dace_utils.is_connectivity_identifier(conn, offset_provider_type):
-                assert not desc.transient
-                stride_name = gtx_dace_utils.field_stride_symbol_name(conn, 0)
-                constant_symbols[stride_name] = 1
+        connectivity_types = gtx_dace_utils.filter_connectivity_types(offset_provider_type)
+        for offset, conn_type in connectivity_types.items():
+            if (conn_id := gtx_dace_utils.connectivity_identifier(offset)) in sdfg.arrays:
+                assert not sdfg.arrays[conn_id].transient
+                assert conn_type.source_dim.kind == common.DimensionKind.HORIZONTAL
+                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(
+                    conn_id, conn_type.source_dim, connectivity_types
+                )
+                constant_symbols[sdfg_stride_symbol.name] = 1
 
     if disable_field_origin_on_program_arguments:
         # collect symbols used as range start for all program arguments
@@ -85,11 +83,12 @@ def find_constant_symbols(
                 if len(psymbol.type.dims) == 0:
                     # zero-dimensional field
                     continue
-                dataname = str(psymbol.id)
                 # set all range start symbols to constant value 0
-                constant_symbols |= {
-                    gtx_dace_utils.range_start_symbol(dataname, dim): 0 for dim in psymbol.type.dims
-                }
+                sdfg_origin_symbols = [
+                    gtx_dace_utils.range_start_symbol(str(psymbol.id), dim)
+                    for dim in psymbol.type.dims
+                ]
+                constant_symbols |= {sdfg_symbol.name: 0 for sdfg_symbol in sdfg_origin_symbols}
 
     return constant_symbols
 
@@ -266,8 +265,11 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         None,
         dace.Memlet(f"{output}[0]"),
     )
-
-    # Check SDFG validity after applying the above changes.
+    # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
+    #  the wrapper provided by `DataflowBuilder`, that modifies the tasklet connectors
+    #  to avoid name conflicts with program symbols. However, this method is not
+    #  available here, so we have to call the underlying DaCe function directly.
+    #  We now run `validate()` to make sure that no name conflict was introduced.
     sdfg.validate()
 
 

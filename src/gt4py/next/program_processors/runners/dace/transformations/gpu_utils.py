@@ -709,10 +709,11 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
                 block_size = [1, 1, 1]
                 # Order of Map parameters is from outer to inner, i.e. z,y,x
-                block_size[len(map_size) - non_trivial_1d_map_degenerated_map_dimension - 1] = (
-                    self.block_size_1d[0]
+                block_size_1D_index = (
+                    len(map_size) - non_trivial_1d_map_degenerated_map_dimension - 1
                 )
-                if non_trivial_1d_map_degenerated_map_dimension != 0:
+                block_size[block_size_1D_index] = self.block_size_1d[0]
+                if block_size_1D_index != 0:
                     warnings.warn(
                         f"Blocksize of 1d Map '{gpu_map}' was set to {block_size}, but the iteration index is not the x dimension.",
                         stacklevel=0,

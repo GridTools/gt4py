@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, Optional, Type
 
 import numpy as np
 import pytest
+import dataclasses
 
 import gt4py.cartesian.definitions as gt_definitions
 from gt4py.cartesian import gtscript
@@ -90,8 +91,27 @@ def parse_definition(
 
 GLOBAL_BOOL_CONSTANT = True
 GLOBAL_CONSTANT = 1.0
+GLOBAL_CONSTANT_I32 = np.int32(1)
+GLOBAL_CONSTANT_I64 = np.int64(1)
+GLOBAL_CONSTANT_F32 = np.float32(1.0)
+GLOBAL_CONSTANT_F64 = np.float64(1.0)
 GLOBAL_NESTED_CONSTANTS = types.SimpleNamespace(A=100, B=200)
 GLOBAL_VERY_NESTED_CONSTANTS = types.SimpleNamespace(nested=types.SimpleNamespace(A=1000, B=2000))
+
+
+class GlobalConstants:
+    i32 = np.int32(1)
+    i64 = np.int64(1)
+    f32 = np.float32(1.0)
+    f64 = np.float64(1.0)
+
+
+@dataclasses.dataclass
+class GlobalConstantsDataclass:
+    i32: np.int32 = np.int32(1)
+    i64: np.int64 = np.int64(1)
+    f32: np.float32 = np.float32(1.0)
+    f64: np.float64 = np.float64(1.0)
 
 
 @gtscript.function
@@ -117,6 +137,50 @@ class TestInlinedExternals:
         parse_definition(
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
+
+    def test_typed_globals(self):
+        def my_stencil(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                i32 = GLOBAL_CONSTANT_I32
+                i64 = GLOBAL_CONSTANT_I64
+                f32 = GLOBAL_CONSTANT_F32
+                f64 = GLOBAL_CONSTANT_F64
+                c_i32 = GlobalConstants.i32
+                c_i64 = GlobalConstants.i64
+                c_f32 = GlobalConstants.f32
+                c_f64 = GlobalConstants.f64
+                dc_i32 = GlobalConstantsDataclass.i32
+                dc_i64 = GlobalConstantsDataclass.i64
+                dc_f32 = GlobalConstantsDataclass.f32
+                dc_f64 = GlobalConstantsDataclass.f64
+                field = i32 + c_i32 + dc_i32
+                field = i64 + c_i64 + dc_i64
+                field = f32 + c_f32 + dc_f32
+                field = f64 + c_f64 + dc_f64
+
+        parsed = parse_definition(
+            my_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_float_precision=32,
+            literal_int_precision=32,
+        )
+        # Assert we keep the precision
+        for i in range(3):
+            assert (
+                parsed.computations[0].body.stmts[1 + 8 * i].value.data_type == nodes.DataType.INT32
+            )
+            assert (
+                parsed.computations[0].body.stmts[3 + 8 * i].value.data_type == nodes.DataType.INT64
+            )
+            assert (
+                parsed.computations[0].body.stmts[5 + 8 * i].value.data_type
+                == nodes.DataType.FLOAT32
+            )
+            assert (
+                parsed.computations[0].body.stmts[7 + 8 * i].value.data_type
+                == nodes.DataType.FLOAT64
+            )
 
     def test_missing(self):
         def definition_func(inout_field: gtscript.Field[float]):
