@@ -134,6 +134,7 @@ class DaCeCompiler(
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
+            use_cache=(self.cache_lifetime == config.BuildCacheLifetime.PERSISTENT),
         ):
             sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)

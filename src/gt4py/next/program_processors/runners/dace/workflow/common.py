@@ -27,6 +27,7 @@ SDFG_ARG_METRIC_COMPUTE_TIME: Final[str] = "gt_compute_time"
 def set_dace_config(
     device_type: core_defs.DeviceType,
     cmake_build_type: Optional[config.CMakeBuildType] = None,
+    use_cache: bool = True,
 ) -> None:
     """Set the DaCe configuration as required by GT4Py.
 
@@ -37,6 +38,7 @@ def set_dace_config(
     Args:
         device_type: Target device type, needed for compiler config.
         cmake_build_type: CMake build type, needed for compiler config.
+        use_cache: Use the dace cache to load a precompiled SDFG from file.
 
     Note:
         For every thread DaCe will maintain a separate set of configuration. Thus,
@@ -54,7 +56,7 @@ def set_dace_config(
     #   is translating from `CompilableProgram` (ITIR.Program + CompileTimeArgs)
     #   to `ProgramSource`, so this step is storing in cache only the result
     #   of the SDFG transformations, not the compiled program binary.
-    dace.Config.set("compiler.use_cache", value=True)
+    dace.Config.set("compiler.use_cache", value=use_cache)
 
     # We rely on gt4py function `get_cache_folder` to get a unique build folder
     #   for each program. Within this folder, by setting 'cache=single', dace will
