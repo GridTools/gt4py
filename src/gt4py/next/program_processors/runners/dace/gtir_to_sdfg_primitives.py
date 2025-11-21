@@ -21,6 +21,7 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
+from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
@@ -249,12 +250,26 @@ def translate_as_fieldop(
     if not isinstance(node.type, ts.FieldType):
         raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
 
+    # Parse the domain of the field operator.
+    assert isinstance(fieldop_domain_expr.type, ts.DomainType)
+    field_domain = gtir_domain.get_field_domain(
+        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
+    )
+
     if cpm.is_ref_to(fieldop_expr, "deref"):
-        # Special usage of 'deref' as argument to fieldop expression, to pass a scalar
-        # value to 'as_fieldop' function. It results in broadcasting the scalar value
-        # over the field domain.
-        stencil_expr = im.lambda_("a")(im.deref("a"))
-        stencil_expr.expr.type = node.type.dtype
+        arg_type = node.args[0].type
+        assert isinstance(arg_type, (ts.FieldType, ts.ScalarType))
+        if isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims:
+            # Special usage of 'deref' as argument to fieldop expression, to broadcast
+            # the input value (a scalar or a field slice) on the output domain.
+            stencil_expr = im.lambda_("a")(im.deref("a"))
+            stencil_expr.expr.type = node.type.dtype
+        else:
+            # Special usage of 'deref' with field argument, to access the field
+            # on the given domain. It copies a subset of the source field.
+            arg = sdfg_builder.visit(node.args[0], ctx=ctx)
+            assert isinstance(arg, gtir_to_sdfg_types.FieldopData)
+            return ctx.copy_field(arg, domain=field_domain)
     elif isinstance(fieldop_expr, gtir.Lambda):
         # Default case, handled below: the argument expression is a lambda function
         # representing the stencil operation to be computed over the field domain.
@@ -263,12 +278,6 @@ def translate_as_fieldop(
         raise NotImplementedError(
             f"Expression type '{type(fieldop_expr)}' not supported as argument to 'as_fieldop' node."
         )
-
-    # parse the domain of the field operator
-    assert isinstance(fieldop_domain_expr.type, ts.DomainType)
-    field_domain = gtir_domain.get_field_domain(
-        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
-    )
 
     # visit the list of arguments to be passed to the lambda expression
     fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, field_domain) for arg in node.args]
@@ -287,14 +296,17 @@ def translate_as_fieldop(
 def _construct_if_branch_output(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    field_domain: gtir_domain.FieldopDomain,
+    domain: infer_domain.NonTupleDomainAccess,
     true_br: gtir_to_sdfg_types.FieldopData,
     false_br: gtir_to_sdfg_types.FieldopData,
-) -> gtir_to_sdfg_types.FieldopData:
+) -> gtir_to_sdfg_types.FieldopData | None:
     """
     Helper function called by `translate_if()` to allocate a temporary field to store
     the result of an if expression.
     """
+    if domain == infer_domain.DomainAccessDescriptor.NEVER:
+        return None
+    assert isinstance(domain, domain_utils.SymbolicDomain)
     assert true_br.gt_type == false_br.gt_type
     out_type = true_br.gt_type
 
@@ -305,6 +317,7 @@ def _construct_if_branch_output(
         return gtir_to_sdfg_types.FieldopData(out_node, out_type, origin=())
 
     assert isinstance(out_type, ts.FieldType)
+    field_domain = gtir_domain.get_field_domain(domain)
     dims, origin, shape = gtir_domain.get_field_layout(field_domain)
     assert dims == out_type.dims
 
@@ -330,14 +343,16 @@ def _construct_if_branch_output(
 def _write_if_branch_output(
     ctx: gtir_to_sdfg.SubgraphContext,
     src: gtir_to_sdfg_types.FieldopData,
-    dst: gtir_to_sdfg_types.FieldopData,
+    dst: gtir_to_sdfg_types.FieldopData | None,
 ) -> None:
     """
     Helper function called by `translate_if()` to write the result of an if-branch,
     here `src` field, to the output 'dst' field. The data subset is based on the
     domain of the `dst` field. Therefore, the full shape of `dst` array is written.
     """
-    if src.gt_type != dst.gt_type:
+    if dst is None:
+        return
+    elif src.gt_type != dst.gt_type:
         raise ValueError(
             f"Source and destination type mismatch, '{dst.gt_type}' vs '{src.gt_type}'."
         )
@@ -426,11 +441,7 @@ def translate_if(
 
     node_output = gtx_utils.tree_map(
         lambda domain, true_br, false_br: _construct_if_branch_output(
-            ctx=ctx,
-            sdfg_builder=sdfg_builder,
-            field_domain=gtir_domain.get_field_domain(domain),
-            true_br=true_br,
-            false_br=false_br,
+            ctx, sdfg_builder, domain, true_br, false_br
         )
     )(
         node.annex.domain,
@@ -502,7 +513,9 @@ def _get_data_nodes(
     data_name: str,
     data_type: ts.DataType,
 ) -> gtir_to_sdfg_types.FieldopResult:
+    # We ensure that the visited data descriptor is global, i.e. non-transient.
     if isinstance(data_type, ts.FieldType):
+        sdfg.arrays[data_name].transient = False
         data_node = state.add_access(data_name)
         return sdfg_builder.make_field(data_node, data_type)
 
@@ -512,6 +525,7 @@ def _get_data_nodes(
                 sdfg, state, sdfg_builder, data_name, data_type, temp_name=f"__{data_name}"
             )
         else:
+            sdfg.arrays[data_name].transient = False
             data_node = state.add_access(data_name)
         return gtir_to_sdfg_types.FieldopData(data_node, data_type, origin=())
 
@@ -578,7 +592,16 @@ def translate_make_tuple(
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
 ) -> gtir_to_sdfg_types.FieldopResult:
     assert cpm.is_call_to(node, "make_tuple")
-    return tuple(sdfg_builder.visit(arg, ctx=ctx) for arg in node.args)
+    if "domain" in node.annex:
+        assert isinstance(node.annex.domain, tuple)
+        return tuple(
+            None
+            if domain == infer_domain.DomainAccessDescriptor.NEVER
+            else sdfg_builder.visit(arg, ctx=ctx)
+            for arg, domain in zip(node.args, node.annex.domain, strict=True)
+        )
+    else:
+        return tuple(sdfg_builder.visit(arg, ctx=ctx) for arg in node.args)
 
 
 def translate_tuple_get(
@@ -599,22 +622,23 @@ def translate_tuple_get(
         raise ValueError(f"Invalid tuple expression {node}")
     # Now we remove the tuple fields that are not used, to avoid an SDFG validation
     # error because of isolated access nodes.
-    unused_arg_nodes = gtx_utils.flatten_nested_tuple(
+    unused_data_nodes = gtx_utils.flatten_nested_tuple(
         tuple(arg for i, arg in enumerate(data_nodes) if i != index)
     )
-    # However, for temporary fields inside the tuple (non-globals and non-scalar
-    # values, supposed to contain the result of some field operator) the gt4py
-    # domain inference should have already set an empty domain, so the corresponding
-    # `arg` is expected to be None and can be ignored.
-    assert all(
-        not arg.dc_node.desc(ctx.sdfg).transient or isinstance(arg.gt_type, ts.ScalarType)
-        for arg in unused_arg_nodes
-        if arg is not None
-    )
-    unused_arg_nodes = tuple(arg for arg in unused_arg_nodes if arg is not None)
-    ctx.state.remove_nodes_from(
-        [arg.dc_node for arg in unused_arg_nodes if ctx.state.degree(arg.dc_node) == 0]
-    )
+    # For temporary fields inside the tuple (non-globals and non-scalar values,
+    # supposed to contain the result of some field operator), the domain inference
+    # pass should have already set an empty domain, so the corresponding `arg`
+    # is expected to be None and should be ignored.
+    # We also ignore transient fields, because they should never appear as isolated
+    # access nodes by construction: temporary fields are supposed to always contain
+    # the result of some expression.
+    access_nodes_to_remove = [
+        arg.dc_node
+        for arg in unused_data_nodes
+        if not (arg is None or arg.dc_node.desc(ctx.sdfg).transient)
+    ]
+    assert all(ctx.state.degree(access_node) == 0 for access_node in access_nodes_to_remove)
+    ctx.state.remove_nodes_from(access_nodes_to_remove)
     return data_nodes[index]
 
 
