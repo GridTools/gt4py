@@ -323,7 +323,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 )
 
                 # Check if the partition exists.
-                if class_res is None:
+                if self.require_independent_nodes and class_res is None:
                     self._independent_nodes = None
                     return False
                 if class_res is True:
