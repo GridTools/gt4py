@@ -600,7 +600,10 @@ class CallInliner(ast.NodeTransformer):
 
     def visit_Expr(self, node: ast.Expr):
         """Ignore pure string statements in callee."""
-        if not isinstance(node.value, (ast.Constant, ast.Str)):
+        possible_types = [ast.Constant]
+        if ast_str := getattr(ast, "Str", None):
+            possible_types.append(ast_str)
+        if not isinstance(node.value, tuple(possible_types)):
             return super().visit(node.value)
 
 
