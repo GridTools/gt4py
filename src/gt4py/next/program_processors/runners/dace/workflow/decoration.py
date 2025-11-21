@@ -66,6 +66,7 @@ def convert_args(
                 gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
+            fun.construct_arguments(**this_call_args)
             # This a workaround because the DaCe loading of pre-compiled SDFG is
             # not thread-safe: if the library is already loaded, DaCe creates a copy
             # of the .so file before loading it, which could lead to name clashes.
