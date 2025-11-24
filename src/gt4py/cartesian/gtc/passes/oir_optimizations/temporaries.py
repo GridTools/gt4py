@@ -26,8 +26,8 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
         if node.name in tmps_name_map:
             if offsets["i"] != 0 or offsets["j"] != 0 or offsets["k"] != 0:
                 raise ValueError(
-                    "No K-offset capabilities of 3D temporaries. Must "
-                    f"define '{node.name}' as a FloatField."
+                    "No offset write capabilities of temporaries. Must "
+                    f"define '{node.name}' as FloatField, FloatFieldIJ, etc."
                 )
             return oir.ScalarAccess(name=tmps_name_map[node.name], dtype=node.dtype)
         return self.generic_visit(node, tmps_name_map=tmps_name_map, **kwargs)
