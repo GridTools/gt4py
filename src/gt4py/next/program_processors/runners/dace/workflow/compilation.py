@@ -145,9 +145,6 @@ class DaCeCompiler(
             cmake_build_type=self.cmake_build_type,
             use_cache=use_persistent_cache,
         ):
-            # TODO(edopao): remove, this is just for testing
-            assert self.cache_lifetime == config.BuildCacheLifetime.SESSION
-
             sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
