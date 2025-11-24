@@ -1423,15 +1423,22 @@ class TestDTypes:
         list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])),
     )
     def test_invalid_inlined_dtypes(self, id_case, test_dtype):
-        with pytest.raises(ValueError, match=r".*data type descriptor.*"):
+        def definition_func(
+            in_field: gtscript.Field[test_dtype],
+            out_field: gtscript.Field[test_dtype],
+            param: test_dtype,
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field + param
+            # TODO(ricoh): either force eager evaluation of annotations or
+            # trigger it explicitly.
 
-            def definition_func(
-                in_field: gtscript.Field[test_dtype],
-                out_field: gtscript.Field[test_dtype],
-                param: test_dtype,
-            ):
-                with computation(PARALLEL), interval(...):
-                    out_field = in_field + param
+        with pytest.raises(ValueError, match=r".*data type descriptor.*"):
+            parse_definition(
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
 
     @pytest.mark.parametrize(
         "id_case,test_dtype",
@@ -1485,6 +1492,8 @@ class TestAssignmentSyntax:
                 out_field[...] = in_field
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+        # TODO(ricoh): track down where the supbscript of 'out_field' is parsed and
+        # ensure parity in ellipsis handling between <3.14 and 3.14
 
     def test_offset(self):
         def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
