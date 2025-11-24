@@ -18,6 +18,7 @@ from gt4py.next import errors, config
 from gt4py.next.otf import compiled_program
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
+from gt4py._core import definitions as core_defs
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -401,6 +402,14 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
 
 
 def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_testee):
+    if (
+        cartesian_case.backend.name.startswith("run_dace_gpu")
+        and core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
+    ):
+        # TODO(edopao): The reason for this segmentation fault is not yet understood,
+        #   but it only appears in this test case, with the dace backend and the ROCM device.
+        pytest.skip("segmentation fault in loading compiled SDFG from library file")
+
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
