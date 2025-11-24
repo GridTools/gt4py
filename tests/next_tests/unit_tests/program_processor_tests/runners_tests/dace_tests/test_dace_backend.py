@@ -9,6 +9,7 @@
 """Test the bindings stage of the dace backend workflow."""
 
 import pytest
+import typing
 import unittest.mock as mock
 
 dace = pytest.importorskip("dace")
@@ -47,7 +48,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
         testee_op(a, b, out=out)
 
     mock_top_level_dataflow_hook1 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookFun)
-    mock_top_level_dataflow_hook2 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookFun)
+    mock_top_level_dataflow_hook2 = mock.create_autospec(typing.Callable[[dace.SDFG], None])
 
     if not auto_optimize:
         optimization_args = {}
