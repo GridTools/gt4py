@@ -305,8 +305,7 @@ def translate_broadcast(
     field_dtype = gtx_dace_utils.as_dace_type(node.type.dtype)
 
     assert len(node.args) == 1
-    assert isinstance(node.args[0].type, ts.ScalarType)
-    scalar_arg = node.args[0]
+    bcast_arg = node.args[0]
 
     fun_node = node.fun
     assert len(fun_node.args) == 2
@@ -327,15 +326,15 @@ def translate_broadcast(
 
     # Retrieve the scalar argument, which could be either a literal value or the
     # result of a scalar expression.
-    if isinstance(scalar_arg, gtir.Literal):
+    if isinstance(bcast_arg, gtir.Literal):
         # Use a 'Broadcast' library node to fill the result field with the given value.
         name = sdfg_builder.unique_tasklet_name("fill")
-        value = (gtx_dace_utils.as_dace_type(scalar_arg.type))(scalar_arg.value)
+        value = (gtx_dace_utils.as_dace_type(bcast_arg.type))(bcast_arg.value)
         bcast_node = sdfg_library_nodes.Broadcast(name, value=value)
         ctx.state.add_node(bcast_node)
     else:
         if isinstance(
-            arg := _parse_fieldop_arg(scalar_arg, ctx, sdfg_builder, field_domain),
+            arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
             gtir_dataflow.MemletExpr,
         ):
             inp_node = arg.dc_node
