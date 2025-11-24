@@ -16,11 +16,7 @@ from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import (
-    common_pattern_matcher as cpm,
-    domain_utils,
-    ir_makers as im,
-)
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
@@ -263,8 +259,7 @@ def translate_as_fieldop(
         if isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims:
             # Special usage of 'deref' as argument to fieldop expression, to broadcast
             # the input value (a scalar or a field slice) on the output domain.
-            stencil_expr = im.lambda_("a")(im.deref("a"))
-            stencil_expr.expr.type = node.type.dtype
+            return translate_broadcast(node, ctx, sdfg_builder)
         else:
             # Special usage of 'deref' with field argument, to access the field
             # on the given domain. It copies a subset of the source field.
