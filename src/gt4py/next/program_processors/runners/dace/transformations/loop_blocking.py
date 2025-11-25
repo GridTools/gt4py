@@ -74,10 +74,16 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         default=True,
         desc="If 'True' then blocking is only applied if there are independent nodes.",
     )
+    promote_independent_memlets = dace_properties.Property(
+        dtype=bool,
+        default=True,
+        desc="If 'True' then memlets of independent nodes are promoted to the outer map.",
+    )
 
     # Set of nodes that are independent of the blocking parameter.
     _independent_nodes: Optional[set[dace_nodes.AccessNode]]
     _dependent_nodes: Optional[set[dace_nodes.AccessNode]]
+    _memlet_to_promote: Optional[set[dace.Memlet]]
 
     outer_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
@@ -86,6 +92,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         blocking_size: Optional[int] = None,
         blocking_parameter: Optional[Union[gtx_common.Dimension, str]] = None,
         require_independent_nodes: Optional[bool] = None,
+        promote_independent_memlets: Optional[bool] = None,
     ) -> None:
         super().__init__()
         if isinstance(blocking_parameter, gtx_common.Dimension):
@@ -96,8 +103,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             self.blocking_size = blocking_size
         if require_independent_nodes is not None:
             self.require_independent_nodes = require_independent_nodes
+        if promote_independent_memlets is not None:
+            self.promote_independent_memlets = promote_independent_memlets
         self._independent_nodes = None
         self._dependent_nodes = None
+        self._memlet_to_promote = None
 
     @classmethod
     def expressions(cls) -> Any:
@@ -150,6 +160,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             return False
         self._independent_nodes = None
         self._dependent_nodes = None
+        self._memlet_to_promote = None
 
         return True
 
@@ -179,6 +190,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         )
         self._independent_nodes = None
         self._dependent_nodes = None
+        self._memlet_to_promote = None
 
     def _prepare_inner_outer_maps(
         self,
@@ -300,6 +312,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # Clear the previous partition.
         self._independent_nodes = set()
         self._dependent_nodes = None
+        self._memlet_to_promote = set()
 
         while True:
             # Find all the nodes that we have to classify in this iteration.
@@ -523,6 +536,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     continue
                 return False
 
+        has_dependent_memlet = False
+
+        independent_memlets: set[dace_graph.MultiConnectorEdge[dace.Memlet]] = set()
+
         # Now we have to look at incoming edges individually.
         #  We will inspect the subset of the Memlet to see if they depend on the
         #  block variable. If this loop ends normally, then we classify the node
@@ -545,12 +562,23 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             # If a subset needs the block variable then the node is not independent
             #  but dependent.
             if any(self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect):
-                return False
+                has_dependent_memlet = True
 
             # The edge must either originate from `outer_entry` or from an independent
             #  node if not it is dependent.
             if not (in_edge.src is outer_entry or in_edge.src in self._independent_nodes):
-                return False
+                has_dependent_memlet = True
+
+            # sdfg.view()
+            # breakpoint()
+            if self.promote_independent_memlets and in_edge.src is outer_entry and all(self.blocking_parameter not in subset.free_symbols for subset in subsets_to_inspect) and in_edge.src is outer_entry:
+                independent_memlets.add(in_edge)
+            
+        if has_dependent_memlet:
+            self._memlet_to_promote.update(independent_memlets)
+            for independent_memlet in independent_memlets:
+                print(f"Promoting memlet {independent_memlet} of node {node_to_classify} to outer map.")
+            return False
 
         # Loop ended normally, thus we update the list of independent nodes.
         self._independent_nodes.update(new_independent_nodes)
@@ -628,6 +656,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # Contains the nodes that are already have been handled.
         relocated_nodes: set[dace_nodes.Node] = set()
+
+        sdfg.save(f"_rewire_map_scope_initial_{inner_entry.map.label}.sdfg")
+        # breakpoint()
 
         # We now handle all independent nodes, this means that all of their
         #  _output_ edges have to go through the new inner map and the Memlets
@@ -747,6 +778,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         #  in that they _after_ the new inner map entry. Thus, we have to modify
         #  their incoming edges.
         for dependent_node in self._dependent_nodes:
+            # breakpoint()
             for in_edge in state.in_edges(dependent_node):
                 edge_src: dace_nodes.Node = in_edge.src
 
@@ -785,14 +817,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     new_memlet_inner = dace.Memlet.from_array(
                         in_edge.data.data, sdfg.arrays[in_edge.data.data]
                     )
-                    state.add_edge(
+                    new_in_edge = state.add_edge(
                         in_edge.src,
                         in_edge.src_conn,
                         inner_entry,
                         new_in_conn,
                         new_memlet_inner,
                     )
-                    state.add_edge(
+                    new_out_edge = state.add_edge(
                         inner_entry,
                         new_out_conn,
                         in_edge.dst,
@@ -802,6 +834,60 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     inner_entry.add_in_connector(new_in_conn)
                     inner_entry.add_out_connector(new_out_conn)
                     state.remove_edge(in_edge)
+                
+                    if self.promote_independent_memlets and in_edge in self._memlet_to_promote:
+                        original_data = in_edge.data
+                        original_data_name = original_data.data
+                        original_dst = in_edge.dst
+                        sdfg.save(f"_promote_memlet_before_{original_data_name}_{inner_entry.map.label}.sdfg")
+                        # breakpoint()
+                        # Create a new AccessNode to hold the promoted data
+                        promoted_name, promoted_desc = sdfg.add_temp_transient(
+                            shape=(len(inner_entry.map.range[0]),),
+                            dtype=sdfg.arrays[original_data_name].dtype,
+                        )
+                        promoted_access_node = state.add_access(promoted_name)
+                        # Create edge from outer map to promoted access node
+                        state.add_edge(
+                            outer_entry,
+                            in_edge.src_conn,
+                            promoted_access_node,
+                            None,
+                            dace.Memlet(
+                                data=original_data.data,
+                                subset=in_edge.data.src_subset,
+                                other_subset=f"0:{len(inner_entry.map.range[0])}",
+                            )
+                        )
+                        # Create edge from promoted access node to inner map
+                        state.add_edge(
+                            promoted_access_node,
+                            None,
+                            inner_entry,
+                            new_in_conn,
+                            dace.Memlet(
+                                data=promoted_name,
+                                subset=f"0:{len(inner_entry.map.range[0])}",
+                            )
+                        )
+                        new_out_edge.data = dace.Memlet.from_array(
+                            promoted_name,
+                            sdfg.arrays[promoted_name],
+                        )
+                        state.remove_edge(new_in_edge)
+                        self._memlet_to_promote.remove(in_edge)
+                        sdfg.save(f"_promote_memlet_after_{original_data_name}_{inner_entry.map.label}.sdfg")
+                        dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=inner_entry)
+                        # dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_entry)
+                        sdfg.save(f"_promote_memlet_after_can_{original_data_name}_{inner_entry.map.label}.sdfg")
+                        for oedge in state.out_edges(inner_entry):
+                            if isinstance(oedge.dst, dace_nodes.MapEntry):
+                                for oedge_inner in state.out_edges(oedge.dst):
+                                    if oedge_inner.data.data == promoted_name:
+                                        oedge_inner.data.subset = oedge.dst.map.params[0]
+                                        oedge_inner.data.other_subset = None
+                        sdfg.save(f"_promote_memlet_after_edge_fix_{original_data_name}_{inner_entry.map.label}.sdfg")
+                        # breakpoint()
 
                 else:
                     raise NotImplementedError("Unknown node configuration.")
