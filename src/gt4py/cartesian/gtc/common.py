@@ -608,7 +608,11 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
         raise NotImplementedError(f"Found unknown precision specification {func}")
 
     def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
-        if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
+        if instance.func in (
+            NativeFunction.ISFINITE,
+            NativeFunction.ISINF,
+            NativeFunction.ISNAN,
+        ):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
         elif instance.func in (
             NativeFunction.INT32,
@@ -666,7 +670,12 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
         self.generic_visit(node, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(
-        self, node: AssignStmt, *, loop_order: LoopOrder, symtable: Dict[str, Any], **kwargs: Any
+        self,
+        node: AssignStmt,
+        *,
+        loop_order: LoopOrder,
+        symtable: Dict[str, Any],
+        **kwargs: Any,
     ) -> None:
         decl = symtable.get(node.left.name, None)
         if decl is None:
@@ -931,7 +940,10 @@ OP_TO_UFUNC_NAME: Final[
         ComparisonOperator.EQ: "equal",
         ComparisonOperator.NE: "not_equal",
     },
-    LogicalOperator: {LogicalOperator.AND: "logical_and", LogicalOperator.OR: "logical_or"},
+    LogicalOperator: {
+        LogicalOperator.AND: "logical_and",
+        LogicalOperator.OR: "logical_or",
+    },
     NativeFunction: {
         NativeFunction.ABS: "abs",
         NativeFunction.MIN: "minimum",
@@ -976,11 +988,22 @@ OP_TO_UFUNC_NAME: Final[
 
 def op_to_ufunc(
     op: Union[
-        UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
+        UnaryOperator,
+        ArithmeticOperator,
+        ComparisonOperator,
+        LogicalOperator,
+        NativeFunction,
     ],
 ) -> np.ufunc:
     if not isinstance(
-        op, (UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction)
+        op,
+        (
+            UnaryOperator,
+            ArithmeticOperator,
+            ComparisonOperator,
+            LogicalOperator,
+            NativeFunction,
+        ),
     ):
         raise TypeError(
             "Can only convert instances of GTC operators and supported native functions to typestr."
