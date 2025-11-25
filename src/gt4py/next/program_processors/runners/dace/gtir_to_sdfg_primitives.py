@@ -16,11 +16,7 @@ from dace import subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import (
-    common_pattern_matcher as cpm,
-    domain_utils,
-    ir_makers as im,
-)
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
@@ -29,6 +25,7 @@ from gt4py.next.program_processors.runners.dace import (
     gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
+    sdfg_library_nodes,
     utils as gtx_dace_utils,
 )
 from gt4py.next.program_processors.runners.dace.gtir_to_sdfg_concat_where import (
@@ -262,8 +259,7 @@ def translate_as_fieldop(
         if isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims:
             # Special usage of 'deref' as argument to fieldop expression, to broadcast
             # the input value (a scalar or a field slice) on the output domain.
-            stencil_expr = im.lambda_("a")(im.deref("a"))
-            stencil_expr.expr.type = node.type.dtype
+            return translate_broadcast(node, ctx, sdfg_builder)
         else:
             # Special usage of 'deref' with field argument, to access the field
             # on the given domain. It copies a subset of the source field.
@@ -291,6 +287,84 @@ def translate_as_fieldop(
     return _create_field_operator(
         ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
     )
+
+
+def translate_broadcast(
+    node: gtir.Node,
+    ctx: gtir_to_sdfg.SubgraphContext,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+) -> gtir_to_sdfg_types.FieldopData:
+    """Translates a broadcast expression which writes a scalar value on the field domain."""
+    assert isinstance(node, gtir.FunCall)
+    assert cpm.is_call_to(node.fun, "as_fieldop")
+
+    if not isinstance(node.type, ts.FieldType):
+        raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
+
+    assert isinstance(node.type.dtype, ts.ScalarType)
+    field_dtype = gtx_dace_utils.as_dace_type(node.type.dtype)
+
+    assert len(node.args) == 1
+    bcast_arg = node.args[0]
+
+    fun_node = node.fun
+    assert len(fun_node.args) == 2
+    fieldop_expr, fieldop_domain_expr = fun_node.args
+    assert cpm.is_ref_to(fieldop_expr, "deref")
+
+    # Parse the domain of the field operator.
+    assert isinstance(fieldop_domain_expr.type, ts.DomainType)
+    field_domain = gtir_domain.get_field_domain(
+        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
+    )
+
+    # The memory layout of the output field follows the field operator compute domain.
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
+    assert field_dims == node.type.dims
+    field_name, field_desc = sdfg_builder.add_temp_array(ctx.sdfg, field_shape, field_dtype)
+    field_node = ctx.state.add_access(field_name)
+
+    # Retrieve the scalar argument, which could be either a literal value or the
+    # result of a scalar expression.
+    if isinstance(bcast_arg, gtir.Literal):
+        # Use a 'Broadcast' library node to fill the result field with the given value.
+        name = sdfg_builder.unique_tasklet_name("fill")
+        value = (gtx_dace_utils.as_dace_type(bcast_arg.type))(bcast_arg.value)
+        bcast_node = sdfg_library_nodes.Broadcast(name, value=value)
+        ctx.state.add_node(bcast_node)
+    else:
+        if isinstance(
+            arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
+            gtir_dataflow.MemletExpr,
+        ):
+            inp_node = arg.dc_node
+            inp_axes = None
+            inp_origin = None
+        else:
+            inp_node = arg.field
+            inp_axes = [field_dims.index(dim) for dim in arg.get_field_type().dims]
+            inp_origin = [o for _, o in arg.field_domain]
+
+        # Use a 'Broadcast' library node to write the scalar value to the result field.
+        name = sdfg_builder.unique_tasklet_name("broadcast")
+        bcast_node = sdfg_library_nodes.Broadcast(name, inp_axes, inp_origin, field_origin)
+        ctx.state.add_node(bcast_node)
+        ctx.state.add_edge(
+            inp_node,
+            None,
+            bcast_node,
+            "_inp",
+            ctx.sdfg.make_array_memlet(inp_node.data),
+        )
+    ctx.state.add_edge(
+        bcast_node,
+        "_outp",
+        field_node,
+        None,
+        dace.Memlet(data=field_name, subset=dace_subsets.Range.from_array(field_desc)),
+    )
+
+    return gtir_to_sdfg_types.FieldopData(field_node, node.type, tuple(field_origin))
 
 
 def _construct_if_branch_output(
@@ -738,6 +812,7 @@ if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_fieldop,
+        translate_broadcast,
         translate_concat_where,
         translate_if,
         translate_index,

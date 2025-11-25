@@ -19,7 +19,10 @@ from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    sdfg_library_nodes,
+    transformations as gtx_transformations,
+)
 
 
 class GT4PyAutoOptHook(enum.Enum):
@@ -238,6 +241,12 @@ def gt_auto_optimize(
         #  that the origin can potentially be negative.
         #  See also [issue#2095](https://github.com/spcl/dace/issues/2095)
         dace.Config.set("optimizer", "symbolic_positive", value=False)
+
+        # We need new transformations in order to deal with GTIR library nodes.
+        # For now, we simply expand these nodes before starting optimizing.
+        for node, state in sdfg.all_nodes_recursive():
+            if isinstance(node, sdfg_library_nodes.GTIR_LIBRARY_NODES):
+                node.expand(state)
 
         # Initial Cleanup
         # NOTE: The initial simplification stage must be synchronized with the one that
