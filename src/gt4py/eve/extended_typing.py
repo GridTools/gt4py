@@ -14,7 +14,10 @@ Definitions in 'typing_extensions' take priority over those in 'typing'.
 
 from __future__ import annotations
 
+# ruff: noqa: F401, F405
+import abc as _abc
 import array as _array
+import collections.abc as _collections_abc
 import dataclasses as _dataclasses
 import functools as _functools
 import inspect as _inspect
@@ -138,13 +141,30 @@ MaybeNestedInSequence = Union[_T_co, NestedSequence[_T_co]]
 MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
 MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
 
+
+def is_nested_tuple_of(value: object, type_: type[_T_co]) -> TypeIs[NestedTuple[_T_co]]:
+    """Check if `value` is a nested tuple of elements of type `type_`."""
+    return isinstance(value, tuple) and all(
+        isinstance(v, type_) or (isinstance(v, tuple) and is_nested_tuple_of(v, type_))
+        for v in value
+    )
+
+
+def is_maybe_nested_in_tuple_of(
+    value: object, type_: type[_T_co]
+) -> TypeIs[MaybeNestedInTuple[_T_co]]:
+    """Check if `value` is either of type `type_` or a nested tuple of elements of type `type_`."""
+    return isinstance(value, type_) or is_nested_tuple_of(value, type_)
+
+
 # -- Typing annotations --
-SolvedTypeAnnotation = Union[
+SingleTypeAnnotation = Union[
     Type,
-    _typing._SpecialForm,
     _types.GenericAlias,
     _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
 ]
+
+SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
@@ -370,6 +390,49 @@ def get_actual_type(obj: _T) -> Type[_T]:
     return StdGenericAliasType if isinstance(obj, StdGenericAliasType) else type(obj)
 
 
+def get_represented_types(
+    type_annotation: TypeAnnotation,
+    *,
+    globalns: Optional[Dict[str, Any]] = None,
+    localns: Optional[Dict[str, Any]] = None,
+) -> tuple[type, ...]:
+    """Return a tuple with all the actual types contained in a type annotation."""
+
+    def recurse_all(annotations: Iterable[TypeAnnotation]) -> tuple[type, ...]:
+        return _functools.reduce(lambda acc, c: acc + get_represented_types(c), annotations, ())
+
+    if type_annotation is Ellipsis:
+        return ()
+
+    if is_actual_type(type_annotation):
+        return (type_annotation,)
+
+    if isinstance(type_annotation, TypeVar):
+        if type_annotation.__bound__:
+            return get_represented_types(type_annotation.__bound__)
+        if type_annotation.__constraints__:
+            return recurse_all(type_annotation.__constraints__)
+        if typevar_default := getattr(type_annotation, "__default__", None):
+            return get_represented_types(typevar_default)
+
+    if isinstance(type_annotation, ForwardRef):
+        return get_represented_types(
+            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
+        )
+
+    # Generic types
+    origin_type = get_origin(type_annotation)
+    type_args = get_args(type_annotation)
+
+    if origin_type in [Literal, Union, _types.UnionType]:
+        return recurse_all(t for t in type_args)
+
+    if origin_type is not None:
+        return (origin_type,)
+
+    return ()
+
+
 def is_type_with_custom_hash(type_: Type) -> bool:
     return type_.__hash__ not in (None, object.__hash__)
 
@@ -382,62 +445,131 @@ class HasCustomHash(Hashable):
         return is_type_with_custom_hash(candidate_cls)
 
 
-def is_value_hashable(obj: Any) -> TypeGuard[HasCustomHash]:
-    return isinstance(obj, type) or obj is None or is_type_with_custom_hash(type(obj))
+class TypedNamedTupleABC(_abc.ABC, Generic[_T_co]):
+    """ABC for `tuple` subclasses created with `collections.abc.namedtuple()`."""
 
+    # Replicate the standard tuple API
+    @overload
+    @_abc.abstractmethod
+    def __getitem__(self, index: int) -> _T_co: ...
 
-def is_value_hashable_typing(
-    type_annotation: TypeAnnotation,
-    *,
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
-) -> bool:
-    """Check if a type annotation describes a type hashable by value."""
-    if is_actual_type(type_annotation):
-        assert not get_args(type_annotation)
+    @overload
+    @_abc.abstractmethod
+    def __getitem__(self, index: slice) -> Self: ...
+
+    @_abc.abstractmethod
+    def __getitem__(self, index: Union[int, slice]) -> Union[_T_co, Self]: ...
+
+    @_abc.abstractmethod
+    def __len__(self) -> int: ...
+
+    @_abc.abstractmethod
+    def __contains__(self, value: object) -> bool: ...
+
+    @_abc.abstractmethod
+    def __iter__(self) -> Iterator[_T_co]: ...
+
+    @_abc.abstractmethod
+    def __add__(self, other: Self) -> Self: ...
+
+    @_abc.abstractmethod
+    def __mul__(self, other: int) -> Self: ...
+
+    @_abc.abstractmethod
+    def __rmul__(self, other: int) -> Self: ...
+
+    @_abc.abstractmethod
+    def index(self, value: Any, start: int = 0, stop: Optional[int] = None) -> int: ...
+
+    @_abc.abstractmethod
+    def count(self, value: Any) -> int: ...
+
+    # Add specific namedtuple methods
+    _fields: ClassVar[tuple[str, ...]]
+
+    @_abc.abstractmethod
+    def _make(self, iterable: Iterable) -> Self: ...
+
+    @_abc.abstractmethod
+    def _asdict(self) -> dict[str, Any]: ...
+
+    @_abc.abstractmethod
+    def _replace(self, **kwargs: Any) -> Self: ...
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
         return (
-            True
-            if type_annotation in (type, type(None))
-            else is_type_with_custom_hash(type_annotation)
+            issubclass(subclass, tuple)
+            and (_typing.NamedTuple in getattr(subclass, "__orig_bases__", ()))
+        ) or (
+            (field_names := getattr(subclass, "_fields", None)) is not None
+            and {*field_names} <= _typing.get_type_hints(subclass).keys()
         )
 
-    if isinstance(type_annotation, TypeVar):
-        if type_annotation.__bound__:
-            return is_value_hashable_typing(type_annotation.__bound__)
-        if type_annotation.__constraints__:
-            return all(is_value_hashable_typing(c) for c in type_annotation.__constraints__)
-        return False
 
-    if isinstance(type_annotation, ForwardRef):
-        return is_value_hashable_typing(
-            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
-        )
+class DataclassABC(_abc.ABC):
+    """ABC for data classes."""
 
-    if type_annotation is Any:
-        return False
+    __dataclass_fields__: ClassVar[dict[str, _dataclasses.Field]]
+    __dataclass_params__: ClassVar[_DataclassParamsABC]
 
-    # Generic types
-    origin_type = get_origin(type_annotation)
-    type_args = get_args(type_annotation)
-
-    if origin_type is Literal:
-        return True
-
-    if origin_type is Union:
-        return all(is_value_hashable_typing(t) for t in type_args)
-
-    if isinstance(origin_type, type) and is_value_hashable_typing(origin_type):
-        return all(is_value_hashable_typing(t) for t in type_args if t != Ellipsis)
-
-    return type_annotation is None
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        return _dataclasses.is_dataclass(subclass)
 
 
-def _is_protocol(type_: type, /) -> bool:
-    """Check if a type is a Protocol definition."""
-    return getattr(type_, "_is_protocol", False)
+class _DataclassParamsABC(_abc.ABC):
+    init: bool
+    repr: bool
+    eq: bool
+    order: bool
+    unsafe_hash: bool
+    frozen: bool
+    match_args: bool
+    kw_only: bool
+    slots: bool
+    weakref_slot: bool
 
 
-is_protocol = getattr(_typing_extensions, "is_protocol", _is_protocol)
+class FrozenDataclass(DataclassABC):
+    """ABC for frozen data classes."""
+
+    __dataclass_params__: ClassVar[_FrozenDataclassParamsABC]
+
+    @_abc.abstractmethod
+    def __setattr__(self, name: str, value: Any) -> Never: ...
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        try:
+            return _dataclasses.is_dataclass(subclass) and (
+                subclass.__dataclass_params__.frozen is True  # type: ignore[attr-defined]  # subclass.__dataclass_params__ is ok after check
+            )
+        except AttributeError:
+            return False
+
+
+class _FrozenDataclassParamsABC(_DataclassParamsABC):
+    frozen: Literal[True]
+
+
+_KT = TypeVar("_KT", contravariant=True)
+_VT = TypeVar("_VT")
+
+
+class OpaqueMutableMapping(Protocol[_KT, _VT]):
+    """
+    Mutable mapping without access to the keys, just setting, getting, deleting with a given key.
+    """
+
+    def __getitem__(self, key: _KT) -> _VT: ...
+
+    def __setitem__(self, key: _KT, value: _VT) -> None: ...
+
+    def __delitem__(self, key: _KT) -> None: ...
+
+
+is_protocol = _typing_extensions.is_protocol
 
 
 def get_partial_type_hints(
@@ -516,21 +648,16 @@ def eval_forward_ref(
         Result: ...ict[str, ...uple[int, float]]
 
     """
-    actual_type = ForwardRef(ref) if isinstance(ref, str) else ref
 
-    def _f() -> None:
-        pass
+    def f() -> None: ...
 
-    _f.__annotations__ = {"ref": actual_type}
+    f.__annotations__ = {"return": ForwardRef(ref) if isinstance(ref, str) else ref}
 
-    if localns:
-        safe_localns = {**localns}
-        safe_localns.setdefault("typing", _sys.modules[__name__])
-        safe_localns.setdefault("NoneType", type(None))
-    else:
-        safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
+    safe_localns = {**localns} if localns else {}
+    safe_localns.setdefault("typing", _sys.modules[__name__])
+    safe_localns.setdefault("NoneType", type(None))
 
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]
+    actual_type = get_type_hints(f, globalns, safe_localns, include_extras=include_extras)["return"]
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type
@@ -622,7 +749,10 @@ def infer_type(
     if isinstance(value, type):
         return Type[value]
 
-    if isinstance(value, tuple):
+    if isinstance(value, tuple) and not isinstance(value, TypedNamedTupleABC):
+        # Special case for tuples, which can have multiple types.
+        # We should not confuse them with namedtuples, which are
+        # treated as normal classes.
         _, args = _collapse_type_args(*(_infer(item) for item in value))
         if args:
             return StdGenericAliasType(tuple, args)

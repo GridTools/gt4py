@@ -75,70 +75,6 @@ def _make_slice_access(
     return axes
 
 
-ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
-    """\
-    class Field:
-        def __init__(self, field, offsets: Tuple[int, ...], dimensions: Tuple[bool, bool, bool]):
-            ii = iter(range(3))
-            self.idx_to_data = tuple(
-                [next(ii) if has_dim else None for has_dim in dimensions]
-                + list(range(sum(dimensions), len(field.shape)))
-            )
-
-            shape = [field.shape[i] if i is not None else 1 for i in self.idx_to_data]
-            self.field_view = np.reshape(field.data, shape).view(np.ndarray)
-
-            self.offsets = offsets
-
-        @classmethod
-        def empty(cls, shape, dtype, offset):
-            return cls(np.empty(shape, dtype=dtype), offset, (True, True, True))
-
-        def shim_key(self, key):
-            new_args = []
-            if not isinstance(key, tuple):
-                key = (key, )
-            for index in self.idx_to_data:
-                if index is None:
-                    new_args.append(slice(None, None))
-                else:
-                    idx = key[index]
-                    offset = self.offsets[index]
-                    if isinstance(idx, slice):
-                        new_args.append(
-                            slice(idx.start + offset, idx.stop + offset, idx.step) if offset else idx
-                        )
-                    else:
-                        new_args.append(idx + offset)
-            if not isinstance(new_args[2], (numbers.Integral, slice)):
-                new_args = self.broadcast_and_clip_variable_k(new_args)
-            return tuple(new_args)
-
-        def broadcast_and_clip_variable_k(self, new_args: tuple):
-            assert isinstance(new_args[0], slice) and isinstance(new_args[1], slice)
-            if np.max(new_args[2]) >= self.field_view.shape[2] or np.min(new_args[2]) < 0:
-                new_args[2] = np.clip(new_args[2].copy(), 0, self.field_view.shape[2]-1)
-            new_args[:2] = np.broadcast_arrays(
-                np.expand_dims(
-                    np.arange(new_args[0].start, new_args[0].stop),
-                    axis=tuple(i for i in range(self.field_view.ndim) if i != 0)
-                ),
-                np.expand_dims(
-                    np.arange(new_args[1].start, new_args[1].stop),
-                    axis=tuple(i for i in range(self.field_view.ndim) if i != 1)
-                ),
-            )
-            return new_args
-
-        def __getitem__(self, key):
-            return self.field_view.__getitem__(self.shim_key(key))
-
-        def __setitem__(self, key, value):
-            return self.field_view.__setitem__(self.shim_key(key), value)
-    """
-)
-
-
 class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     @dataclass
     class BlockContext:
@@ -152,12 +88,20 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_TemporaryDecl(
         self, node: npir.TemporaryDecl, **kwargs
     ) -> Union[str, Collection[str]]:
-        shape = [f"_dI_ + {node.padding[0]}", f"_dJ_ + {node.padding[1]}", "_dK_"] + [
-            str(dim) for dim in node.data_dims
-        ]
-        offset = [str(off) for off in node.offset] + ["0"] * (1 + len(node.data_dims))
+        # Cartesian IJ
+        shape = [f"_dI_ + {node.padding[0]}", f"_dJ_ + {node.padding[1]}"]
+        offset = [str(off) for off in node.offset]
+        # Vertical dimension K
+        if node.dimensions[2]:
+            shape += ["_dK_"]
+            offset += ["0"]
+        # Data dimensions
+        shape += [str(dim) for dim in node.data_dims]
+        offset += ["0"] * len(node.data_dims)
+
         dtype = self.visit(node.dtype, **kwargs)
-        return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}))"
+        dims = node.dimensions
+        return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}), {dims})"
 
     LocalScalarDecl = as_fmt(
         "{name} = Field.empty((_dI_ + {upper[0] + lower[0]}, _dJ_ + {upper[1] + lower[1]}, {ksize}), {dtype}, ({', '.join(str(l) for l in lower)}, 0))"
@@ -171,6 +115,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             if isinstance(node.k_offset, npir.VarKOffset)
             else node.k_offset
         )
+
         offsets: Tuple[Optional[int], Optional[int], Union[str, int, None]] = (
             node.i_offset,
             node.j_offset,
@@ -180,7 +125,11 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         # To determine: when is the symbol name not in the symtable?
         if node.name in kwargs.get("symtable", {}):
             decl = kwargs["symtable"][node.name]
-            dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
+            dimensions = (
+                decl.dimensions
+                if isinstance(decl, npir.FieldDecl | npir.TemporaryDecl)
+                else [True] * 3
+            )
             offsets = cast(
                 Tuple[Optional[int], Optional[int], Union[str, int, None]],
                 tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
@@ -372,7 +321,6 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return self.generic_visit(
             node,
             signature=", ".join(signature),
-            data_view_class=ORIGIN_CORRECTED_VIEW_CLASS,
             ignore_np_errstate=ignore_np_errstate,
             **kwargs,
         )
@@ -385,8 +333,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
             import numpy as np
             from gt4py.cartesian.gtc import ufuncs
-
-            {{ data_view_class }}
+            from gt4py.cartesian.utils import Field
 
             def run({{ signature }}):
 

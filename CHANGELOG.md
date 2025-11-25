@@ -1,6 +1,140 @@
 # GT4Py Changelog
 
-Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [1.1.1] - 2025-11-13
+
+### Cartesian
+
+- Allow self-assignment with offset in K dimension in sequential vertical loops
+- Bug fixes:
+  - Skip implicit upcasting in (explicit) cast operations
+  - Respect precision of Constants
+
+## [1.1.0] - 2025-11-05
+
+### Cartesian
+
+- New experimental feature: 2D temporaries.
+- Removed deprecated `cuda` backend.
+- Bug fixes:
+  - Absolute field-access in while-condition
+  - Upcasting of expressions on the rhs
+
+### Versioning
+
+- Added a fallback version of the form `1.0.10+unknown.version.details`, when no version is available from git.
+
+## [1.0.10] - 2025-10-23
+
+### Cartesian
+
+- New backend `dace:cpu_kfirst`.
+- New experimental features:
+  - absolute indexing in K.
+  - expose K index.
+- Fixes and performance improvements in DaCe backends.
+- Improved error messages.
+
+### Development
+
+- Enabled DaCe backends on AMD MI300 CI.
+
+### Next
+
+See commit history.
+
+## [1.0.9] - 2025-09-12
+
+### General
+
+- Performance optimizations in `eve.visitors` classes, by caching visitor methods at class level.
+
+### Cartesian
+
+- Some fixes in dace backend.
+
+### Next
+
+See commit history.
+
+## [1.0.8] - 2025-09-03
+
+### Cartesian
+
+- feature: support for `round` and `round_away_from_zero`
+- fix: support for np.bool\_ in gtscript ValueInliner
+
+### Development
+
+- Add AMD MI300 system to CSCS CI with testing for HIP
+
+### Next
+
+See commit history.
+
+## [1.0.7] - 2025-08-12
+
+### Cartesian
+
+- Introduce switches for the default `int` and `float` precision.
+- Introduce `erf` and `erfc` functions.
+- Make CUDA compilation thread-safe.
+
+### Development
+
+- Add MacOS to daily CI.
+
+### Next
+
+See commit history.
+
+## [1.0.6] - 2025-07-30
+
+### Cartesian
+
+- Introduced a debug backend, a plain python backend for debugging and rapid prototyping of features.
+- Refactoring of the lowering to SDFG using DaCe ScheduleTree: the current bridge OIR -> TreeIR -> SDFG is replaced with OIR -> TreeIR -> ScheduleTree, then it relies on DaCe to expand ScheduleTree to SDFG.
+
+### Development
+
+- GitHub Actions CI infrastructure updated with (optional) `test-components` exclusions loaded from a dynamically generated JSON file.
+
+### Next
+
+See commit history.
+
+## [1.0.5] - 2025-07-21
+
+### General
+
+- We dropped support for Python < 3.10.
+- We moved to versioningit for versioning: each commit will now have a version following the format `{major}.{minor}.{path}[.post{#commits since release}+{rev}[.dirty]]`, see section `[tool.versioningit.format]` in `pyproject.toml`.
+- The GridTools C++ library doesn't require Boost anymore, therefore there is no implicit dependency to Boost in GT4Py.
+
+### Cartesian
+
+- New feature: Allow writes with K-offsets in `FORWARD` and `BACKWARD` computations.
+- Undeprecated `__INLINED` as no concrete plans exist to implement an alternative.
+- Fixes cases with while-loops in conditionals.
+- Fix @gtscript.function inlining in while-loops.
+- Fixes in CuPy-ROCm storage allocation.
+- Improved test coverage for horizontal regions.
+- Improved some error messages and warnings.
+- Various style modernizations (especially related to dropped support for Python < 3.10)
+
+#### DaCe support in Cartesian
+
+- Expose control flow elements to DaCe
+- Fixes argument validation in intersection code of DaCeIR's `DomainInterval`.
+
+### Development
+
+- Switched to `uv` is the standard project management tool.
+
+### Next
+
+See commit history.
 
 ## [1.0.4] - 2024-09-20
 
@@ -67,7 +201,7 @@ First version including the experimental `gt4py.next` aka _Declarative GT4Py_. T
 
 ### Cartesian
 
-- Parametrized dtype: see option 4 of [the gtscript concept workshop](https://github.com/GridTools/concepts/blob/master/collaboration/gtscript-workshop/GTScript-Syntax-Discussion.md#gtscript-syntax-discussed-issues-20200829])
+- Parametrized dtype: see option 4 of [the gtscript concept workshop](https://github.com/GridTools/concepts/blob/master/collaboration/gtscript-workshop/GTScript-Syntax-Discussion.md#gtscript-syntax-discussed-issues-20200829)
 
 ## [1.0.0] - 2022-12-21
 

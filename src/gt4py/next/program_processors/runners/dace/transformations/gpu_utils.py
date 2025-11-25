@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
@@ -32,6 +33,7 @@ def gt_gpu_transformation(
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
+    gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -57,6 +59,8 @@ def gt_gpu_transformation(
             Will only take effect if `gpu_block_size` is specified.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             Will only take effect if `gpu_block_size` is specified.
+        gpu_block_size_spec: Specify thread block size per dimension, see
+            `gt_set_gpu_blocksize()` for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -84,39 +88,43 @@ def gt_gpu_transformation(
 
     # Now turn it into a GPU SDFG
     sdfg.apply_gpu_transformations(
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
         simplify=False,
     )
 
     # The documentation recommends to run simplify afterwards
-    gtx_transformations.gt_simplify(sdfg)
+    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     if try_removing_trivial_maps:
         # TODO(phimuell): Figuring out if it is still important/needed to do or if
         #   it can be removed, it should definitely be reworked.
         gt_remove_trivial_gpu_maps(
             sdfg=sdfg,
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
         )
-        gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+        gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # TODO(phimuell): Fixing the stride problem in DaCe.
     sdfg = gt_gpu_transform_non_standard_memlet(
         sdfg=sdfg,
         map_postprocess=True,
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
     # Set the GPU block size if it is known.
-    if gpu_block_size is not None:
+    if gpu_block_size is not None or gpu_block_size_spec is not None:
+        gpu_block_size_spec = gpu_block_size_spec or {}
         gt_set_gpu_blocksize(
             sdfg=sdfg,
             block_size=gpu_block_size,
             launch_bounds=gpu_launch_bounds,
             launch_factor=gpu_launch_factor,
+            **gpu_block_size_spec,
+            validate=False,
+            validate_all=validate_all,
         )
 
     if validate_all or validate:
@@ -168,30 +176,39 @@ def gt_gpu_transform_non_standard_memlet(
 
     # This function allows to restrict any fusion operation to the maps
     #  that we have just created.
-    def restrict_fusion_to_newly_created_maps(
-        self: gtx_transformations.MapFusion,
+    def restrict_fusion_to_newly_created_maps_vertical(
+        self: gtx_transformations.MapFusionVertical,
+        map_exit_1: dace_nodes.MapExit,
+        map_entry_2: dace_nodes.MapEntry,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+    ) -> bool:
+        return (map_entry_2 in new_maps) or (graph.entry_node(map_exit_1) in new_maps)
+
+    def restrict_fusion_to_newly_created_maps_horizontal(
+        self: gtx_transformations.MapFusionHorizontal,
         map_entry_1: dace_nodes.MapEntry,
         map_entry_2: dace_nodes.MapEntry,
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
-        permissive: bool,
     ) -> bool:
-        return any(new_entry in new_maps for new_entry in [map_entry_1, map_entry_2])
+        return (map_entry_1 in new_maps) or (map_entry_2 in new_maps)
 
     # Now try to fuse the maps together, but restrict them that at least one map
     #  needs to be new.
+    # TODO(phimuell): Improve this by replacing it by an explicit loop.
     sdfg.apply_transformations_repeated(
         [
-            gtx_transformations.MapFusionSerial(
+            gtx_transformations.MapFusionVertical(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_fusion_to_newly_created_maps,
+                check_fusion_callback=restrict_fusion_to_newly_created_maps_vertical,
             ),
-            gtx_transformations.MapFusionParallel(
+            gtx_transformations.MapFusionHorizontal(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_fusion_to_newly_created_maps,
+                check_fusion_callback=restrict_fusion_to_newly_created_maps_horizontal,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
 
@@ -233,6 +250,9 @@ def gt_gpu_transform_non_standard_memlet(
                 reversed(map_to_modify.range.ranges), reversed(map_to_modify.range.tile_sizes)
             )
         )
+
+    if validate or validate_all:
+        sdfg.validate()
 
     return sdfg
 
@@ -342,8 +362,10 @@ def gt_set_gpu_blocksize(
     block_size: Optional[Sequence[int | str] | str],
     launch_bounds: Optional[int | str] = None,
     launch_factor: Optional[int] = None,
+    validate: bool = True,
+    validate_all: bool = False,
     **kwargs: Any,
-) -> Any:
+) -> int:
     """Set the block size related properties of _all_ Maps.
 
     It supports the same arguments as `GPUSetBlockSize`, however it also has
@@ -356,6 +378,8 @@ def gt_set_gpu_blocksize(
         launch_bounds: The value for the launch bound that should be used.
         launch_factor: If no `launch_bounds` was given use the number of threads
             in a block multiplied by this number.
+        validate: Perform validation at the end of the function.
+        validate_all: Perform validation also on intermediate steps.
 
     Note:
         If a Map is found whose range is smaller than the specified block size for
@@ -369,7 +393,40 @@ def gt_set_gpu_blocksize(
         }.items():
             if f"{arg}_{dim}d" not in kwargs:
                 kwargs[f"{arg}_{dim}d"] = val
-    return sdfg.apply_transformations_once_everywhere(GPUSetBlockSize(**kwargs))
+
+    setter = GPUSetBlockSize(**kwargs)
+
+    configured_maps = 0
+    for state in sdfg.states():
+        scope_dict: Union[None, dict[Any, Any]] = None
+        cfg_id = state.parent_graph.cfg_id
+        state_id = state.block_id
+        for node in state.nodes():
+            if not isinstance(node, dace_nodes.MapEntry):
+                continue
+            if scope_dict is None:
+                scope_dict = state.scope_dict()
+            if scope_dict[node] is not None:
+                continue
+            candidate = {GPUSetBlockSize.map_entry: node}
+            setter.setup_match(
+                sdfg=sdfg,
+                cfg_id=cfg_id,
+                state_id=state_id,
+                subgraph=candidate,
+                expr_index=0,
+                override=True,
+            )
+            if setter.can_be_applied(state, 0, sdfg, False):
+                setter.apply(state, sdfg)
+                if validate_all:
+                    sdfg.validate()
+                configured_maps += 1
+
+    if validate and (not validate_all):
+        sdfg.validate()
+
+    return configured_maps
 
 
 def _make_gpu_block_parser_for(
@@ -471,6 +528,10 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     four iteration in the second dimension, will get a block size of `(32, 4, 1)`.
     Note that this modification will not influence the launch bound value.
 
+    Note there are some special rules:
+    - If a Map with (at most 3 dimension) has only one non trivial dimension, i.e.
+        > 1, then the Map is handled as a 1D Map.
+
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
         launch_bounds_Xd: The value for the launch bound that should be used for `X`
@@ -483,6 +544,9 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         - "Over specification" is ignored, i.e. if `(32, 3, 1)` is passed as block
             size for 1 dimensional maps, then it is changed to `(32, 1, 1)`.
         - In case the Map has more than 3 dimension, normal DaCe semantic is used.
+
+    Todo:
+        - Turn this into a function.
     """
 
     _block_size_default: Final[tuple[int, int, int]] = (32, 1, 1)
@@ -545,8 +609,18 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         super().__init__()
         if block_size_1d is not None:
             self.block_size_1d = block_size_1d
+            if self.block_size_1d[1] != 1 or self.block_size_1d[2] != 1:
+                warnings.warn(
+                    f"1D map block size specified with more than one dimension larger than 1. Configured 1D block size: {self.block_size_1d}.",
+                    stacklevel=0,
+                )
         if block_size_2d is not None:
             self.block_size_2d = block_size_2d
+            if self.block_size_2d[2] != 1:
+                warnings.warn(
+                    f"2D map block size specified with more than twi dimensions larger than 1. Configured 2D block size: {self.block_size_2d}.",
+                    stacklevel=0,
+                )
         if block_size_3d is not None:
             self.block_size_3d = block_size_3d
         self.launch_bounds_1d = _gpu_launch_bound_parser(
@@ -594,32 +668,82 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         """Modify the map as requested."""
         gpu_map: dace_nodes.Map = self.map_entry.map
         map_size = gpu_map.range.size()
-        num_map_params = len(gpu_map.params)
+        dims_to_inspect = len(map_size)
+        num_map_params = dims_to_inspect  # Might be modified
+
+        # Test if the Map is a degenerated 1d Map, i.e. a Map that only has one dimension
+        #  that is non trivial, i.e. > 1.
+        # NOTE: To simplify implementation, we only do this check for Maps with at most
+        #   three dimensions. We also do this because the outcome in DaCe is not fully
+        #   clear how the dimensions are lumped together.
+        is_degenerated_1d_map = False
+        non_trivial_1d_map_degenerated_map_dimension: Optional[int] = None
+        if 1 < dims_to_inspect <= 3:
+            for dim, dim_size in enumerate(map_size):
+                if dim_size != 1:
+                    if non_trivial_1d_map_degenerated_map_dimension is not None:
+                        # A non trivial dimension is already known, so do not handle the map.
+                        non_trivial_1d_map_degenerated_map_dimension = None
+                        is_degenerated_1d_map = False
+                        break
+                    else:
+                        # No non trivial dimension is known yet.
+                        non_trivial_1d_map_degenerated_map_dimension = dim
+                        is_degenerated_1d_map = True
+
+            if is_degenerated_1d_map:
+                num_map_params = 1
+                warnings.warn(
+                    f"Map '{gpu_map}', size '{map_size}', is a degenerated 1d Map. Handle it as a 1d Map.",
+                    stacklevel=0,
+                )
 
         # Because of a particularity of the DaCe code generator, the iteration
         #  variable that is associated to the `x` dimension of the block is the
         #  last parameter, i.e. `gpu_map.params[-1]`. The one for `y` the second last.
         if num_map_params == 1:
-            block_size = list(self.block_size_1d)
+            if is_degenerated_1d_map:
+                assert non_trivial_1d_map_degenerated_map_dimension is not None
+                assert 0 <= non_trivial_1d_map_degenerated_map_dimension <= 2
+                assert len(map_size) <= 3
+
+                block_size = [1, 1, 1]
+                # Order of Map parameters is from outer to inner, i.e. z,y,x
+                block_size_1D_index = (
+                    len(map_size) - non_trivial_1d_map_degenerated_map_dimension - 1
+                )
+                block_size[block_size_1D_index] = self.block_size_1d[0]
+                if block_size_1D_index != 0:
+                    warnings.warn(
+                        f"Blocksize of 1d Map '{gpu_map}' was set to {block_size}, but the iteration index is not the x dimension.",
+                        stacklevel=0,
+                    )
+
+            else:
+                block_size = list(self.block_size_1d)
+
             launch_bounds = self.launch_bounds_1d
-            dims_to_inspect = 1
+
         elif num_map_params == 2:
             block_size = list(self.block_size_2d)
             launch_bounds = self.launch_bounds_2d
-            dims_to_inspect = 2
+
         else:
             block_size = list(self.block_size_3d)
             launch_bounds = self.launch_bounds_3d
+
             # If there are more than three dimensions DaCe will condense them into
             #  the `z` dimension of the block, so we have to ignore the `z` dimension,
             #  when we modify the block sizes.
-            dims_to_inspect = 3 if num_map_params == 3 else 2
+            if num_map_params > 3:
+                dims_to_inspect = 2
 
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
+        assert dims_to_inspect <= 3
         for i in range(dims_to_inspect):
-            map_dim_idx_to_inspect = num_map_params - 1 - i
+            map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
                 block_size[i] = map_size[map_dim_idx_to_inspect]
 
@@ -648,6 +772,8 @@ def gt_remove_trivial_gpu_maps(
         sdfg: The SDFG that we process.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
+
+    Todo: Improve this function.
     """
 
     # First we try to promote and fuse them with other non-trivial maps.
@@ -657,20 +783,24 @@ def gt_remove_trivial_gpu_maps(
             only_gpu_maps=True,
         ),
         validate=False,
-        validate_all=False,
+        validate_all=validate_all,
     )
-    gtx_transformations.gt_simplify(sdfg, validate=validate, validate_all=validate_all)
+    gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
     # Now we try to fuse them together, however, we restrict the fusion to trivial
     #  GPU map.
     def restrict_to_trivial_gpu_maps(
-        self: gtx_transformations.MapFusion,
-        map_entry_1: dace_nodes.MapEntry,
+        self: Union[gtx_transformations.MapFusionVertical, gtx_transformations.MapFusionHorizontal],
+        map_node_1: Union[dace_nodes.MapEntry, dace_nodes.MapExit],
         map_entry_2: dace_nodes.MapEntry,
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
-        permissive: bool,
     ) -> bool:
+        map_entry_1 = (
+            map_node_1
+            if isinstance(map_node_1, dace_nodes.MapEntry)
+            else graph.entry_node(map_node_1)
+        )
         for map_entry in [map_entry_1, map_entry_2]:
             _map = map_entry.map
             if len(_map.params) != 1:
@@ -684,20 +814,24 @@ def gt_remove_trivial_gpu_maps(
                 return False
         return True
 
+    # TODO(phimuell): Replace this with a more performant loop.
     sdfg.apply_transformations_repeated(
         [
-            gtx_transformations.MapFusionSerial(
+            gtx_transformations.MapFusionVertical(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+                check_fusion_callback=restrict_to_trivial_gpu_maps,
             ),
-            gtx_transformations.MapFusionParallel(
+            gtx_transformations.MapFusionHorizontal(
                 only_toplevel_maps=True,
-                apply_fusion_callback=restrict_to_trivial_gpu_maps,
+                check_fusion_callback=restrict_to_trivial_gpu_maps,
             ),
         ],
-        validate=validate,
+        validate=False,
         validate_all=validate_all,
     )
+
+    if validate and (not validate_all):
+        sdfg.validate()
 
     return sdfg
 
@@ -720,6 +854,8 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         - This transformation should not be run on its own, instead it
             is run within the context of `gt_gpu_transformation()`.
         - This transformation must be run after the GPU Transformation.
+
+    Todo: Figuring out if this transformation is still needed.
     """
 
     only_gpu_maps = dace_properties.Property(
@@ -815,12 +951,19 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         #  do a temporary promotion, it is important that we do not perform the
         #  renaming. If the old symbol is still used, it is used inside a tasklet
         #  so it would show up (temporarily) as free symbol.
+        # NOTE: We use the same options as in `MapPromoter`, however, since we do
+        #   not have the list of single use data available, we have to specify it.
         org_trivial_map_params = copy.deepcopy(trivial_map.params)
         org_trivial_map_range = copy.deepcopy(trivial_map.range)
         try:
             self._promote_map(graph, replace_trivail_map_parameter=False)
-            if not gtx_transformations.MapFusionSerial.can_be_applied_to(
+            if not gtx_transformations.MapFusionVertical.can_be_applied_to(
                 sdfg=sdfg,
+                options={
+                    "only_toplevel_maps": True,
+                    "require_all_intermediates": True,
+                    "require_exclusive_intermediates": True,
+                },
                 first_map_exit=trivial_map_exit,
                 array=self.access_node,
                 second_map_entry=self.second_map_entry,
@@ -846,13 +989,19 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         self._promote_map(graph)
 
         # Perform the fusing if requested.
+        #  For the selection of the option, see the `can_be_applied()` function.
         if not self.do_not_fuse:
-            gtx_transformations.MapFusionSerial.apply_to(
+            gtx_transformations.MapFusionVertical.apply_to(
                 sdfg=sdfg,
+                options={
+                    "only_toplevel_maps": True,
+                    "require_all_intermediates": True,
+                    "require_exclusive_intermediates": True,
+                },
                 first_map_exit=trivial_map_exit,
                 array=access_node,
                 second_map_entry=second_map_entry,
-                verify=True,
+                verify=False,  # Do not rerun `can_be_applied()`.
             )
 
     def _promote_map(
@@ -886,3 +1035,22 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         # Now copy parameter and the ranges from the second to the trivial map.
         trivial_map.params = copy.deepcopy(second_map.params)
         trivial_map.range = copy.deepcopy(second_map.range)
+
+
+def gt_gpu_apply_mempool(sdfg: dace.SDFG) -> None:
+    """Enables the stream ordered memory allocator in CUDA code generation.
+
+    It sets the `pool` flag on all transients allocated in GPU global memory.
+    The dace code genarator will handle this flag by calling `cudaMallocAsync`
+    and `cudaFreeAsync` in the CUDA code for allocation/release of the buffers.
+
+    Args:
+        sdfg: The SDFG that should be processed.
+    """
+    for _, _, desc in sdfg.arrays_recursive():
+        if (
+            isinstance(desc, dace.data.Array)
+            and desc.storage == dace.StorageType.GPU_Global
+            and desc.transient
+        ):
+            desc.pool = True

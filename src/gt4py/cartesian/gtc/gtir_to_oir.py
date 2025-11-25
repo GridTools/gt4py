@@ -66,6 +66,9 @@ class GTIRToOIR(eve.NodeTranslator):
             loc=node.loc,
         )
 
+    def visit_AbsoluteKIndex(self, node: gtir.AbsoluteKIndex) -> oir.AbsoluteKIndex:
+        return oir.AbsoluteKIndex(k=self.visit(node.k))
+
     def visit_VariableKOffset(self, node: gtir.VariableKOffset) -> oir.VariableKOffset:
         return oir.VariableKOffset(k=self.visit(node.k))
 
@@ -183,6 +186,12 @@ class GTIRToOIR(eve.NodeTranslator):
             statements.append(oir.MaskStmt(body=body, mask=negated_condition, loc=node.loc))
 
         return statements
+
+    def visit_IteratorAccess(self, iterator_access: gtir.IteratorAccess) -> oir.IteratorAccess:
+        return oir.IteratorAccess(
+            name=oir.IteratorAccess.AxisName(iterator_access.name.value),
+            dtype=iterator_access.dtype,
+        )
 
     # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
     # This is not meant to be set in stone...

@@ -329,6 +329,11 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
     @staticmethod
     def _requires_splitting(interval: oir.Interval) -> bool:
         """Check if an interval is larger than one level and thus may require splitting."""
+        if not (
+            isinstance(interval.start, common.AxisBound)
+            and isinstance(interval.end, common.AxisBound)
+        ):
+            raise NotImplementedError("K-Caches should be disabled with runtime axis bounds")
         if interval.start.level != interval.end.level:
             return True
         return abs(interval.end.offset - interval.start.offset) > 1
@@ -349,6 +354,11 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             Two loop sections.
         """
         assert loop_order in (common.LoopOrder.FORWARD, common.LoopOrder.BACKWARD)
+        if not (
+            isinstance(section.interval.start, common.AxisBound)
+            and isinstance(section.interval.end, common.AxisBound)
+        ):
+            raise NotImplementedError("K-Caches should be disabled with runtime axis bounds")
         if loop_order == common.LoopOrder.FORWARD:
             bound = common.AxisBound(
                 level=section.interval.start.level, offset=section.interval.start.offset + 1
@@ -537,7 +547,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             first_unfilled: Dict[str, int] = dict()
             split_sections: List[oir.VerticalLoopSection] = []
             for section in node.sections:
-                split_section, previous_fills = self._split_section_with_multiple_fills(
+                split_section, _previous_fills = self._split_section_with_multiple_fills(
                     node.loop_order, section, filling_fields, first_unfilled, new_symbol_name
                 )
                 split_sections += split_section

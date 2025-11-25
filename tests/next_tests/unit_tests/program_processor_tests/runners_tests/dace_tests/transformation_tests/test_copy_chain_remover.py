@@ -13,6 +13,8 @@ import copy
 import numpy as np
 
 dace = pytest.importorskip("dace")
+
+from dace import libraries as dace_libnode
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
@@ -58,7 +60,7 @@ def _make_simple_linear_chain_sdfg() -> dace.SDFG:
     return sdfg
 
 
-def _make_diff_sizes_linear_chain_sdfg() -> tuple[
+def _make_diff_sizes_pull_chain_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.Tasklet
 ]:
     """Creates a linear chain of copies.
@@ -73,7 +75,7 @@ def _make_diff_sizes_linear_chain_sdfg() -> tuple[
     - The AccessNode that is used as final output, refers to `e`.
     - The Tasklet that is within the Map.
     """
-    sdfg = dace.SDFG(util.unique_name("diff_size_linear_chain_sdfg"))
+    sdfg = dace.SDFG(util.unique_name("diff_size_linear_pull_chain_sdfg"))
 
     array_size_increment = 10
     array_size = 10
@@ -106,6 +108,49 @@ def _make_diff_sizes_linear_chain_sdfg() -> tuple[
     state.add_nedge(d, e, dace.Memlet("d[0:40] -> [3:43]"))
     sdfg.validate()
     return sdfg, state, e, tasklet
+
+
+def _make_diff_sizes_push_chain_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.Tasklet
+]:
+    """Creates a linear chain of copies.
+
+    Same as `_make_simple_linear_pull_chain_sdfg()` but the intermediates become
+    smaller and smaller, so the full shape of the destination array is always written.
+    """
+    sdfg = dace.SDFG(util.unique_name("diff_size_linear_push_chain_sdfg"))
+
+    array_size_decrement = 10
+    array_size = 50
+    for name in ["a", "b", "c", "d", "e"]:
+        sdfg.add_array(
+            name,
+            shape=(array_size,),
+            dtype=dace.float64,
+            transient=True,
+        )
+        array_size -= array_size_decrement
+    sdfg.arrays["a"].transient = False
+    sdfg.arrays["e"].transient = False
+    assert sdfg.arrays["e"].shape[0] == 10
+
+    state = sdfg.add_state(is_start_block=True)
+    a, b, c, d = (state.add_access(name) for name in "abcd")
+
+    state.add_nedge(a, b, dace.Memlet("a[3:43] -> [0:40]"))
+    state.add_nedge(b, c, dace.Memlet("b[2:32] -> [0:30]"))
+    state.add_nedge(c, d, dace.Memlet("c[10:30] -> [0:20]"))
+    tasklet, _, _ = state.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("d[__i + 3]")},
+        input_nodes={d},
+        code="__out = __in",
+        outputs={"__out": dace.Memlet("e[__i]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+    return sdfg, state, a, tasklet
 
 
 def _make_multi_stage_reduction_sdfg() -> dace.SDFG:
@@ -308,7 +353,6 @@ def _make_linear_chain_with_nested_sdfg_sdfg() -> tuple[dace.SDFG, dace.SDFG]:
 
     nsdfg = state.add_nested_sdfg(
         inner_sdfg,
-        parent=sdfg,
         inputs={"i0"},
         outputs={"o0"},
         symbol_mapping={},
@@ -356,6 +400,105 @@ def _make_a1_has_output_sdfg() -> dace.SDFG:
     return sdfg
 
 
+def _make_copy_chain_with_reduction_node(
+    output_an_array: bool,
+) -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_libnode.Reduce,
+    dace_nodes.AccessNode,
+    dace_libnode.standar.Reduce,
+    dace_nodes.AccessNode,
+    dace_nodes.AccessNode,
+]:
+    sdfg = dace.SDFG(util.unique_name("copy_chain_remover_with_reduction_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+
+    if output_an_array:
+        input_shape = (10, 3, 20)
+        output_shape = (10, 2, 20)
+        reduce_axes = [1]
+        # Actually we should use `(10, 20)` as shape, but then the transformation
+        #  does not apply, this is a limitation in the transformation.
+        acc_shape = (10, 1, 20)
+    else:
+        input_shape = (3,)
+        acc_shape = ()  # Is a scalar.
+        output_shape = (2,)
+        reduce_axes = None
+
+    for i in range(2):
+        sdfg.add_array(
+            f"data{i}",
+            shape=input_shape,
+            dtype=dace.float64,
+            transient=False,
+        )
+        if output_an_array:
+            sdfg.add_array(
+                f"acc{i}",
+                shape=acc_shape,
+                dtype=dace.float64,
+                transient=True,
+            )
+        else:
+            sdfg.add_scalar(
+                f"acc{i}",
+                dtype=dace.float64,
+                transient=True,
+            )
+    sdfg.add_array(
+        "output",
+        shape=output_shape,
+        dtype=dace.float64,
+        transient=False,
+    )
+
+    accumulators: list[dace_nodes.AccessNode] = []
+    reducers: list[dace_libnode.standard.Reduce] = []
+    for i in range(2):
+        data_ac = state.add_access(f"data{i}")
+        acc_ac = state.add_access(f"acc{i}")
+        reduce_node = state.add_reduce(
+            wcr="lambda x, y: x + y",
+            axes=reduce_axes,
+            identity=0.0,
+        )
+        state.add_nedge(
+            data_ac,
+            reduce_node,
+            dace.Memlet(f"{data_ac.data}[" + ", ".join(f"0:{s}" for s in input_shape) + "]"),
+        )
+        if output_an_array:
+            state.add_nedge(
+                reduce_node,
+                acc_ac,
+                dace.Memlet(f"{acc_ac.data}[0:{acc_shape[0]}, 0, 0:{acc_shape[-1]}]"),
+            )
+        else:
+            state.add_nedge(reduce_node, acc_ac, dace.Memlet(f"{acc_ac.data}[0]"))
+        accumulators.append(acc_ac)
+        reducers.append(reduce_node)
+
+    red0, red1 = reducers
+    output_ac = state.add_access("output")
+
+    for i, acc in enumerate(accumulators):
+        if output_an_array:
+            state.add_nedge(
+                acc,
+                output_ac,
+                dace.Memlet(
+                    f"{acc.data}[0:{output_shape[0]}, 0, 0:{output_shape[-1]}] -> [0:{output_shape[0]}, {i}, 0:{output_shape[-1]}]"
+                ),
+            )
+        else:
+            state.add_nedge(acc, output_ac, dace.Memlet(f"{acc.data}[0] -> [{i}]"))
+    sdfg.validate()
+
+    return sdfg, state, red0, accumulators[0], red1, accumulators[1], output_ac
+
+
 def test_simple_linear_chain():
     sdfg = _make_simple_linear_chain_sdfg()
 
@@ -369,17 +512,17 @@ def test_simple_linear_chain():
     assert nb_applies == 3
 
 
-def test_diff_size_linear_chain():
-    sdfg, state, output, tasklet = _make_diff_sizes_linear_chain_sdfg()
+def test_diff_size_linear_pull_chain():
+    sdfg, state, output, tasklet = _make_diff_sizes_pull_chain_sdfg()
 
     nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
 
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
         sdfg, dace_nodes.AccessNode, return_nodes=True
     )
+    assert nb_applies == 3
     assert len(acnodes) == 2
     assert not any(ac.desc(sdfg).transient for ac in acnodes)
-    assert nb_applies == 3
     assert output in acnodes
     assert state.in_degree(output) == 1
     assert state.out_degree(output) == 0
@@ -391,6 +534,31 @@ def test_diff_size_linear_chain():
     assert output_memlet.dst_subset.max_element()[0] == 27
 
     tasklet_memlet: dace.Memlet = next(iter(state.out_edges(tasklet))).data
+    assert str(tasklet_memlet.subset[0][0] - 18).strip() == "__i"
+
+
+def test_diff_size_linear_push_chain():
+    sdfg, state, input, tasklet = _make_diff_sizes_push_chain_sdfg()
+
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+
+    acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
+        sdfg, dace_nodes.AccessNode, return_nodes=True
+    )
+    assert nb_applies == 3
+    assert len(acnodes) == 2
+    assert not any(ac.desc(sdfg).transient for ac in acnodes)
+    assert input in acnodes
+    assert state.in_degree(input) == 0
+    assert state.out_degree(input) == 1
+
+    # Look if the subsets were correctly adapted, for that we look at the output
+    #  AccessNode and the tasklet inside the map.
+    input_memlet: dace.Memlet = next(iter(state.out_edges(input))).data
+    assert input_memlet.src_subset.min_element()[0] == 18
+    assert input_memlet.src_subset.max_element()[0] == 27
+
+    tasklet_memlet: dace.Memlet = next(iter(state.in_edges(tasklet))).data
     assert str(tasklet_memlet.subset[0][0] - 18).strip() == "__i"
 
 
@@ -467,17 +635,18 @@ def test_possible_cyclic_sdfg():
     sdfg = _make_possible_cyclic_sdfg()
 
     # Apply the transformation.
-    #  It will not remove `a1`, because it it would and replace it with `a2` then
-    #  the resulting SDFG is cyclic. It will, however, replace `a2` with `o1`.
+    #  The first iteration will replace `a2` with `o1`, in pull mode, since the
+    #  full shape of `a2` is copied into `o1`. In a second iteration, the transformation
+    #  will be applied in push mode: the full shape of the global `i1` is copied
+    #  into `a1`, thus `a1` will be replaced with `i1`.
     nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+    assert nb_applies == 2
 
     # Perform all the checks.
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
         sdfg, dace_nodes.AccessNode, return_nodes=True
     )
-    assert len(acnodes) == 3
-    assert nb_applies == 1
-    assert "o1" not in acnodes
+    assert {node.data for node in acnodes} == {"i1", "o1"}
 
 
 def test_a1_additional_output():
@@ -568,3 +737,102 @@ def test_linear_chain_with_nested_sdfg():
     # Now run the transformed SDFG to see if the same output is generated.
     util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
+
+
+@pytest.mark.parametrize("output_an_array", [False, True])
+def test_copy_chain_remover_with_reduction(output_an_array: bool):
+    sdfg, state, red0, acc0, red1, acc1, output = _make_copy_chain_with_reduction_node(
+        output_an_array
+    )
+
+    def apply_to(a1, a2):
+        candidate = {
+            gtx_transformations.CopyChainRemover.node_a1: a1,
+            gtx_transformations.CopyChainRemover.node_a2: a2,
+        }
+        copy_chain_remover = gtx_transformations.CopyChainRemover(
+            single_use_data={sdfg: {acc0.data, acc1.data}},
+        )
+        copy_chain_remover.setup_match(
+            sdfg=sdfg,
+            cfg_id=state.parent_graph.cfg_id,
+            state_id=state.block_id,
+            subgraph=candidate,
+            expr_index=0,
+            override=True,
+        )
+        assert copy_chain_remover.can_be_applied(state, 0, sdfg, permissive=False)
+        copy_chain_remover.apply(state, sdfg)
+
+    assert sdfg.number_of_nodes() == 1
+    assert state.number_of_nodes() == 7
+
+    assert all(e.dst is acc0 for e in state.out_edges(red0))
+    assert state.in_degree(acc0) == 1
+    assert state.out_degree(acc0) == 1
+
+    assert all(e.dst is acc1 for e in state.out_edges(red1))
+    assert state.in_degree(acc1) == 1
+    assert state.out_degree(acc1) == 1
+
+    assert all(e.src in [acc0, acc1] for e in state.in_edges(output))
+    assert state.out_degree(output) == 0
+
+    # Now remove the `acc0` intermediate.
+    apply_to(a1=acc0, a2=output)
+
+    # The accumulator `acc0` has been removed.
+    sdfg.validate()
+    assert state.number_of_nodes() == 6
+
+    access_nodes: list[dace_nodes.AccessNode] = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(access_nodes) == 4
+    assert acc0 not in access_nodes
+    assert acc1 in access_nodes
+    assert output in access_nodes
+
+    assert state.out_degree(red0) == 1
+    red0_oedge: dace.sdfg.graph.MultiDiConnectorGraph[dace.Memlet] = next(
+        iter(state.out_edges(red0))
+    )
+    assert red0_oedge.dst is output
+    red0_oedge_mlet: dace.Memlet = red0_oedge.data
+    assert red0_oedge_mlet.src_subset is None
+
+    if output_an_array:
+        assert len(red0_oedge_mlet.dst_subset) == 3
+        assert red0_oedge_mlet.dst_subset == dace.subsets.Range.from_string("0:10, 0, 0:20")
+
+    else:
+        assert len(red0_oedge_mlet.dst_subset) == 1
+        assert red0_oedge_mlet.dst_subset == dace.subsets.Range.from_string("0")
+
+    assert state.out_degree(red1) == 1
+    assert all(e.dst is acc1 for e in state.out_edges(red1))
+
+    # Now the accumulator `acc1` will be removed.
+    apply_to(a1=acc1, a2=output)
+
+    sdfg.validate()
+    assert state.number_of_nodes() == 5
+
+    access_nodes = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(access_nodes) == 3
+    assert acc0 not in access_nodes
+    assert acc1 not in access_nodes
+    assert output in access_nodes
+
+    assert state.out_degree(red1) == 1
+    red1_oedge: dace.sdfg.graph.MultiDiConnectorGraph[dace.Memlet] = next(
+        iter(state.out_edges(red1))
+    )
+    assert red1_oedge.dst is output
+    red1_oedge_mlet: dace.Memlet = red1_oedge.data
+    assert red1_oedge_mlet.src_subset is None
+
+    if output_an_array:
+        assert len(red1_oedge_mlet.dst_subset) == 3
+        assert red1_oedge_mlet.dst_subset == dace.subsets.Range.from_string("0:10, 1, 0:20")
+    else:
+        assert len(red1_oedge_mlet.dst_subset) == 1
+        assert red1_oedge_mlet.dst_subset == dace.subsets.Range.from_string("1")

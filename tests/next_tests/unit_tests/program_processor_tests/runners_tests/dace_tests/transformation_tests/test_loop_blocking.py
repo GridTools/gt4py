@@ -653,7 +653,6 @@ def _make_loop_blocking_sdfg_with_inner_map(
                 )
                 nsdfg_node = state.add_nested_sdfg(
                     nsdfg,
-                    sdfg,
                     inputs={nsdfg_inp},
                     outputs={nsdfg_out},
                     symbol_mapping={nsdfg_sym: 0},
@@ -1172,7 +1171,7 @@ def test_loop_blocking_no_independent_nodes():
     nsdfg_sym, nsdfg_inp, nsdfg_out = ("S", "I", "V")
     nsdfg = _make_conditional_block_sdfg("dependent_component", nsdfg_sym, nsdfg_inp, nsdfg_out)
     nsdfg_node = state.add_nested_sdfg(
-        nsdfg, sdfg, inputs={nsdfg_inp}, outputs={nsdfg_out}, symbol_mapping={nsdfg_sym: "__i1"}
+        nsdfg, inputs={nsdfg_inp}, outputs={nsdfg_out}, symbol_mapping={nsdfg_sym: "__i1"}
     )
     state.add_memlet_path(A, me, nsdfg_node, dst_conn=nsdfg_inp, memlet=dace.Memlet("A[1,1]"))
     state.add_memlet_path(
@@ -1440,7 +1439,7 @@ def _make_loop_blocking_only_independent_inner_map() -> tuple[
 
     state.add_edge(ime, "OUT_A", itlet, "__in", dace.Memlet("A[__i0, 1]"))
     state.add_edge(itlet, "__out", t, None, dace.Memlet("t[0]"))
-    state.add_edge(t, None, imx, "IN_B", dace.Memlet("t[0]"))
+    state.add_edge(t, None, imx, "IN_B", dace.Memlet("t[0] -> [__i0, __i1]"))
     ime.add_scope_connectors("A")
 
     state.add_edge(imx, "OUT_B", mx, "IN_B", dace.Memlet("B[__i0, __i1]"))

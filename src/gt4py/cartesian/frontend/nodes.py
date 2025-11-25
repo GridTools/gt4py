@@ -40,7 +40,9 @@ BinaryOperator enumeration (:class:`BinaryOperator`)
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
-    `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
+    `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`,
+    `TRUNC`, `ERF`, `ERFC`, `INT32`, `INT64`, `FLOAT32`, `FLOAT64`, `ROUND`,
+    `ROUND_AWAY_FROM_ZERO`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
@@ -137,6 +139,7 @@ from __future__ import annotations
 import enum
 import operator
 import sys
+from abc import ABC
 from typing import List, Optional, Sequence
 
 import numpy as np
@@ -168,9 +171,12 @@ class Location(Node):
     scope = attribute(of=str, default="<source>")
 
     @classmethod
-    def from_ast_node(cls, ast_node, scope="<source>"):
+    def from_ast_node(cls, ast_node, scope: str | None = None):
         lineno = getattr(ast_node, "lineno", 0)
         col_offset = getattr(ast_node, "col_offset", 0)
+        scope = (
+            "<source>" if scope is None else scope
+        )  # scope is sometimes explicitly passed down as `None`
         return cls(line=lineno, column=col_offset + 1, scope=scope)
 
 
@@ -281,6 +287,28 @@ class DataType(enum.Enum):
         return result
 
 
+def frontend_type_to_native_type(
+    literal_int_precision: int, literal_float_precision: int
+) -> dict[str, DataType]:
+    """Return the mapping of frontend types to native types.
+
+    Args:
+        literal_int_precision (int): Literal precision used for mapping `int` to either 32 or 64 bit precision.
+        literal_float_precision (int): Literal precision used for mapping `float` to either 32 or 64 bit precision.
+
+    Returns:
+        dict[str, DataType]: Mapping of the frontend types to our DataTypes.
+    """
+    return {
+        "int32": DataType.INT32,
+        "int64": DataType.INT64,
+        "int": DataType.INT32 if literal_int_precision == 32 else DataType.INT64,
+        "float32": DataType.FLOAT32,
+        "float64": DataType.FLOAT64,
+        "float": DataType.FLOAT32 if literal_float_precision == 32 else DataType.FLOAT64,
+    }
+
+
 DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.DEFAULT: "float_",
     DataType.BOOL: "bool",
@@ -333,9 +361,24 @@ class VarRef(Ref):
 
 
 @attribclass
+class AbsoluteKIndex(Expr):
+    """See gtc.common.AbsoluteKIndex"""
+
+    k = attribute(of=Any)
+
+
+@attribclass
+class IteratorAccess(Ref):
+    """Iterator query"""
+
+    name = attribute(of=str)
+    data_type = attribute(of=DataType)
+
+
+@attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
+    offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])
     data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -407,6 +450,16 @@ class NativeFunction(enum.Enum):
     FLOOR = enum.auto()
     CEIL = enum.auto()
     TRUNC = enum.auto()
+    ERF = enum.auto()
+    ERFC = enum.auto()
+    ROUND = enum.auto()
+    ROUND_AWAY_FROM_ZERO = enum.auto()
+
+    # Cast operations - share a keyword with type hints
+    INT32 = enum.auto()
+    INT64 = enum.auto()
+    FLOAT32 = enum.auto()
+    FLOAT64 = enum.auto()
 
     @property
     def arity(self):
@@ -442,6 +495,14 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.FLOOR: 1,
     NativeFunction.CEIL: 1,
     NativeFunction.TRUNC: 1,
+    NativeFunction.INT32: 1,
+    NativeFunction.INT64: 1,
+    NativeFunction.FLOAT32: 1,
+    NativeFunction.FLOAT64: 1,
+    NativeFunction.ERF: 1,
+    NativeFunction.ERFC: 1,
+    NativeFunction.ROUND: 1,
+    NativeFunction.ROUND_AWAY_FROM_ZERO: 1,
 }
 
 
@@ -668,17 +729,29 @@ class IterationOrder(enum.Enum):
         return self.cycle(steps=steps)
 
 
+class BaseAxisBound(Node, ABC):
+    level = attribute(of=LevelMarker)
+    loc = attribute(of=Location, optional=True)
+
+
 @attribclass
-class AxisBound(Node):
+class AxisBound(BaseAxisBound):
     level = attribute(of=LevelMarker)
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
 
 
 @attribclass
+class RuntimeAxisBound(BaseAxisBound):
+    level = attribute(of=LevelMarker)
+    offset = attribute(of=Ref, default=0)
+    loc = attribute(of=Location, optional=True)
+
+
+@attribclass
 class AxisInterval(Node):
-    start = attribute(of=AxisBound)
-    end = attribute(of=AxisBound)
+    start = attribute(of=BaseAxisBound)
+    end = attribute(of=BaseAxisBound)
     loc = attribute(of=Location, optional=True)
 
     @classmethod

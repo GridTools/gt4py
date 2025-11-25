@@ -12,19 +12,17 @@ from typing import Any, Callable, Dict, Iterator, List, TypeVar
 import numpy as np
 
 from gt4py import eve
-from gt4py.cartesian.gtc import gtir
-from gt4py.cartesian.gtc.common import DataType, op_to_ufunc, typestr_to_data_type
-from gt4py.cartesian.gtc.gtir import Expr
+from gt4py.cartesian.gtc import common, gtir
 from gt4py.eve import datamodels
 
 
-def _upcast_node(target_dtype: DataType, node: Expr) -> Expr:
+def _upcast_node(target_dtype: common.DataType, node: gtir.Expr) -> gtir.Expr:
     return node if node.dtype == target_dtype else gtir.Cast(dtype=target_dtype, expr=node)
 
 
-def _upcast_nodes(*exprs: Expr, upcasting_rule: Callable) -> Iterator[Expr]:
+def _upcast_nodes(*exprs: gtir.Expr, upcasting_rule: Callable) -> Iterator[gtir.Expr]:
     assert all(e.dtype for e in exprs)
-    dtypes: List[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
+    dtypes: List[common.DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
     target_dtypes = upcasting_rule(*dtypes)
     return iter(_upcast_node(target_dtype, arg) for target_dtype, arg in zip(target_dtypes, exprs))
 
@@ -52,22 +50,28 @@ def _numpy_ufunc_upcasting_rule(*dtypes, ufunc: np.ufunc):
     implementing C/C++ type promotion rules, restricted to supported types.
     See https://numpy.org/doc/stable/user/basics.ufuncs.html?highlight=index#type-casting-rules for details.
     """
+    matched: dict[int, list[common.DataType]] = {}
     for t in ufunc.types:
         inputs, output = t.split("->")
         assert len(inputs) == len(dtypes)
         if all(
-            arg_dtype <= typestr_to_data_type(np.dtype(cand_typestr).str)
+            arg_dtype <= common.typestr_to_data_type(np.dtype(cand_typestr).str)
             for arg_dtype, cand_typestr in zip(dtypes, inputs)
         ):
-            assert typestr_to_data_type(np.dtype(output).str) != DataType.INVALID
-            return [typestr_to_data_type(np.dtype(cand_typestr).str) for cand_typestr in inputs]
-    raise ValueError(f"No implementation found for dtypes {dtypes} and ufunc {ufunc}")
+            assert common.typestr_to_data_type(np.dtype(output).str) != common.DataType.INVALID
+            result = [
+                common.typestr_to_data_type(np.dtype(cand_typestr).str) for cand_typestr in inputs
+            ]
+            matched[sum(result)] = result
+    # take the one with the lowest precision, for binary functions with mixed parameter types this is a bit arbitrary,
+    # but it seems we don't have any of these functions anyway
+    return matched[min(matched.keys())]
 
 
 def _common_upcasting_rule(*dtypes):
     """Look up upcasting behavior according to C++ casting rules."""
-    if all(dtype == DataType.DEFAULT for dtype in dtypes):
-        res_type = DataType.DEFAULT
+    if all(dtype == common.DataType.DEFAULT for dtype in dtypes):
+        res_type = common.DataType.DEFAULT
     else:
         res_type = max(dtypes)
     return [res_type] * len(dtypes)
@@ -81,15 +85,19 @@ class _GTIRUpcasting(eve.NodeTranslator):
     Postcondition: all dtype transitions are explicit via a `Cast` node
     """
 
-    def visit_BinaryOp(self, node: gtir.BinaryOp, **kwargs: Any) -> gtir.BinaryOp:
-        upcasting_rule = functools.partial(_numpy_ufunc_upcasting_rule, ufunc=op_to_ufunc(node.op))
+    def visit_BinaryOp(self, node: gtir.BinaryOp) -> gtir.BinaryOp:
+        upcasting_rule = functools.partial(
+            _numpy_ufunc_upcasting_rule, ufunc=common.op_to_ufunc(node.op)
+        )
         left, right = _upcast_nodes(
             self.visit(node.left), self.visit(node.right), upcasting_rule=upcasting_rule
         )
         return _update_node(node, {"left": left, "right": right})
 
-    def visit_UnaryOp(self, node: gtir.UnaryOp, **kwargs: Any) -> gtir.UnaryOp:
-        upcasting_rule = functools.partial(_numpy_ufunc_upcasting_rule, ufunc=op_to_ufunc(node.op))
+    def visit_UnaryOp(self, node: gtir.UnaryOp) -> gtir.UnaryOp:
+        upcasting_rule = functools.partial(
+            _numpy_ufunc_upcasting_rule, ufunc=common.op_to_ufunc(node.op)
+        )
         (expr,) = _upcast_nodes(self.visit(node.expr), upcasting_rule=upcasting_rule)
         return _update_node(node, {"expr": expr})
 
@@ -103,21 +111,34 @@ class _GTIRUpcasting(eve.NodeTranslator):
             node, {"true_expr": true_expr, "false_expr": false_expr, "cond": self.visit(node.cond)}
         )
 
-    def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs: Any) -> gtir.NativeFuncCall:
+    def visit_NativeFuncCall(self, node: gtir.NativeFuncCall) -> gtir.NativeFuncCall:
+        # Skip upcasting of cast operations
+        if node.func in [
+            common.NativeFunction.INT32,
+            common.NativeFunction.INT64,
+            common.NativeFunction.FLOAT32,
+            common.NativeFunction.FLOAT64,
+        ]:
+            # Make sure to upcast arguments of cast operations, e.g.
+            # float(my_int32 + my_int64) -> float(cast(int64, my_int32), my_int64)
+            return _update_node(node, {"args": self.visit(node.args)})
+
         upcasting_rule = functools.partial(
-            _numpy_ufunc_upcasting_rule, ufunc=op_to_ufunc(node.func)
+            _numpy_ufunc_upcasting_rule, ufunc=common.op_to_ufunc(node.func)
         )
         args = [*_upcast_nodes(*self.visit(node.args), upcasting_rule=upcasting_rule)]
         return _update_node(node, {"args": args})
 
-    def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> gtir.ParAssignStmt:
+    def visit_ParAssignStmt(self, node: gtir.ParAssignStmt) -> gtir.ParAssignStmt:
         assert node.left.dtype
 
         def upcasting_rule(*dtypes):
             return [node.left.dtype] * len(dtypes)
 
-        _, right = _upcast_nodes(node.left, self.visit(node.right), upcasting_rule=upcasting_rule)
-        return _update_node(node, {"right": right})
+        left, right = _upcast_nodes(
+            self.visit(node.left), self.visit(node.right), upcasting_rule=upcasting_rule
+        )
+        return _update_node(node, {"left": left, "right": right})
 
 
 def upcast(node: gtir.Stencil) -> gtir.Stencil:

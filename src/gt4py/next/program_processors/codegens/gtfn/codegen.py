@@ -92,24 +92,32 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
         return node.id
 
-    @staticmethod
-    def asfloat(value: str) -> str:
-        if "." not in value and "e" not in value and "E" not in value:
-            return f"{value}."
-        return value
-
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
-        if node.type == "axis_literal":
-            return node.value
-
         # TODO(tehrengruber): isn't this wrong and int32 should be casted to an actual int32?
-        match cpp_utils.pytype_to_cpptype(node.type):
-            case "float":
-                return self.asfloat(node.value) + "f"
-            case "double":
-                return self.asfloat(node.value)
+        match node.type:
+            case "float32" | "float64":
+                cpp_value = node.value
+
+                if node.value in ["inf", "-inf"]:
+                    sign = "-" if node.value == "-inf" else ""
+                    cpp_value = (
+                        f"std::numeric_limits<{cpp_utils.pytype_to_cpptype(node.type)}>::infinity()"
+                    )
+                    return f"{sign}{cpp_value}"
+                elif node.value == "nan":
+                    cpp_value = f"std::numeric_limits<{cpp_utils.pytype_to_cpptype(node.type)}>::signaling_NaN()"
+                    return cpp_value
+
+                if not any(c in cpp_value for c in ".eE"):
+                    cpp_value = f"{cpp_value}."
+
+                if node.type == "float32":
+                    cpp_value = f"{cpp_value}f"
+                return cpp_value
             case "bool":
                 return node.value.lower()
+            case "axis_literal":
+                return node.value
             case _:
                 # TODO(tehrengruber): we should probably shouldn't just allow anything here. Revisit.
                 return node.value
@@ -145,18 +153,18 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     SidFromScalar = as_fmt("gridtools::stencil::global_parameter({arg})")
 
-    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
-        if (
+    def is_functor_call(self, node: gtfn_ir.FunCall) -> bool:
+        return (
             isinstance(node.fun, gtfn_ir_common.SymRef)
             and node.fun.id in self.user_defined_function_ids
-        ):
-            fun_name = f"{self.visit(node.fun)}{{}}()"
-        else:
-            fun_name = self.visit(node.fun)
+        )
 
-        return self.generic_visit(node, fun_name=fun_name)
+    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
+        # functions are represented as function objects that need to be instantiated
+        instantiate = "{}()" if self.is_functor_call(node) else ""
+        return self.generic_visit(node, instantiate=instantiate)
 
-    FunCall = as_fmt("{fun_name}({','.join(args)})")
+    FunCall = as_fmt("{fun}{instantiate}({','.join(args)})")
 
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
@@ -199,16 +207,12 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs: Any) -> str:
-        expr_ = "return " + self.visit(node.expr)
-        return self.generic_visit(node, expr_=expr_)
-
     FunctionDefinition = as_mako(
         """
         struct ${id} {
             constexpr auto operator()() const {
                 return [](${','.join('auto const& ' + p for p in params)}){
-                    ${expr_};
+                    return ${expr};
                 };
             }
         };
@@ -270,6 +274,20 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <gridtools/fn/${grid_type_str}.hpp>
     #include <gridtools/fn/sid_neighbor_table.hpp>
     #include <gridtools/stencil/global_parameter.hpp>
+    
+    // TODO(tehrengruber): This should disappear as soon as we introduce a proper builtin.
+    namespace gridtools::fn {
+        """
+        # TODO(tehrengruber): The return type should be
+        #  `typename gridtools::sid::lower_bounds_type<S>, typename gridtools::sid::upper_bounds_type<S>`,
+        #  but fails as type used for index calculations in gtfn differs
+        """
+        template <class S, class D>
+        GT_FUNCTION gridtools::tuple<int, int> get_domain_range(S &&sid, D) {
+            return {gridtools::host_device::at_key<D>(gridtools::sid::get_lower_bounds(sid)),
+                gridtools::host_device::at_key<D>(gridtools::sid::get_upper_bounds(sid))};
+        }
+    }
     
     namespace generated{
 

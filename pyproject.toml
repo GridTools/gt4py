@@ -2,21 +2,23 @@
 
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = ['cython>=3.0.0', 'setuptools>=70.0.0', 'versioningit>=3.1.1', 'wheel>=0.33.6']
+requires = ['cython>=3.0.0', 'setuptools>=77.0.3', 'versioningit>=3.1.1', 'wheel>=0.33.6']
 
 # -- Dependency groups --
 [dependency-groups]
-build = [
-  'cython>=3.0.0',
-  'pip>=22.1.1',
-  'setuptools>=70.0.0',
-  'wheel>=0.33.6'
+build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=77.0.3', 'wheel>=0.33.6']
+dace-cartesian = [
+  'dace>=1.0.2,<2'  # renfined in [tool.uv.sources]
+]
+dace-next = [
+  'dace==2025.11.25'  # refined in [tool.uv.sources]
 ]
 dev = [
   {include-group = 'build'},
   {include-group = 'docs'},
   {include-group = 'frameworks'},
   {include-group = 'lint'},
+  {include-group = 'scripts'},
   {include-group = 'test'},
   {include-group = 'typing'}
 ]
@@ -40,6 +42,7 @@ lint = [
   'tach>=0.23.0',
   'validate-pyproject-schema-store[all]>=2025.06.13'
 ]
+scripts = ["pyyaml>=6.0.1", "typer>=0.12.3", "packaging"]
 test = [
   'coverage[toml]>=7.6.1',
   'hypothesis>=6.0.0',
@@ -70,7 +73,6 @@ classifiers = [
   'Environment :: Console',
   'Environment :: GPU :: NVIDIA CUDA',
   'Intended Audience :: Science/Research',
-  'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.10',
@@ -92,20 +94,19 @@ dependencies = [
   'cytoolz>=1.0.1',
   'deepdiff>=8.1.0',
   'devtools>=0.6',
-  'diskcache>=5.6.3',
-  'factory-boy>=3.3.0',
+  'factory-boy>=3.3.3',
   "filelock>=3.18.0",
   'frozendict>=2.3',
   'gridtools-cpp>=2.3.9,==2.*',
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.3',
-  'nanobind>=1.4.0 ',
-  'ninja>=1.10',
+  'nanobind>=1.9.0',
+  'ninja>=1.11',
   'numpy>=1.26.4',
   'packaging>=20.0',
   'pybind11>=2.10.1',
-  'setuptools>=70.0.0',
+  'setuptools>=77.0.3',
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
   'typing-extensions>=4.12.0',
@@ -123,31 +124,24 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {text = 'BSD-3 License'}  # TODO: waiting for PEP 639 being implemented by setuptools (https://github.com/codecov/codecov-cli/issues/605)
+license = 'BSD-3-Clause'
+license-files = ['LICENSE']
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.10, <3.14'
 
 [project.optional-dependencies]
-# bundles
-all = ['gt4py[dace,formatting,jax,performance,testing]']
-# device-specific extras
+cartesian = ['gt4py[jax,standard,testing]']
 cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
-# features
-dace = ['dace>=1.0.2,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
-dace-next = ['dace']  # pull dace latest version from the git repository
-formatting = ['clang-format>=9.0']
 jax = ['jax>=0.4.26']
 jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
-performance = ['scipy>=1.14.1']
+next = ['gt4py[jax,standard,testing]']
 rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
 rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
 rocm6_0 = ['cupy>=13.4.1']
+standard = ['clang-format>=18.1', 'scipy>=1.14.1']
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
-
-[project.scripts]
-gtpyc = 'gt4py.cartesian.cli:gtpyc'
 
 [project.urls]
 Documentation = 'https://gridtools.github.io/gt4py'
@@ -182,13 +176,7 @@ source_pkgs = ['gt4py']
 [tool.mypy]
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
-exclude = [
-  '^setup\.py$',
-  'build/.*$',
-  'ci/*.$',
-  'docs/.*$',
-  'tests/.*$'
-]
+exclude = ['^setup\.py$', 'build/.*$', 'ci/*.$', 'docs/.*$', 'tests/.*$']
 ignore_missing_imports = true
 implicit_optional = false
 implicit_reexport = false
@@ -253,13 +241,14 @@ disallow_untyped_defs = false
 module = 'gt4py.next.iterator.*'
 
 [[tool.mypy.overrides]]
-disallow_incomplete_defs = false
-disallow_untyped_defs = false
-module = 'gt4py.next.program_processors.runners.dace_iterator.*'
-
-[[tool.mypy.overrides]]
 ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+implicit_reexport = true
+# factory-boy is broken, see https://github.com/FactoryBoy/factory_boy/pull/1114
+module = "factory.*"
 
 # -- pytest --
 [tool.pytest]
@@ -308,6 +297,8 @@ markers = [
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
+python_files = ['test_*.py', '*_test.py', 'benchmark_*.py']
+python_functions = ['test_*', 'benchmark_*']
 testpaths = 'tests'
 xfail_strict = true
 
@@ -323,26 +314,49 @@ target-version = 'py310'
 docstring-code-format = true
 
 [tool.ruff.lint]
-# # Rules sets:
-# E: pycodestyle
-# F: Pyflakes
-# I: isort
-# B: flake8-bugbear
+# -- Rules set to be considered --
 # A: flake8-builtins
-# T10: flake8-debugger
+# B: flake8-bugbear
+# C4: flake8-comprehensions
+# CPY: flake8-copyright
+# D: pydocstyle
+# DOC: pydoclint
+# E: pycodestyle
 # ERA: eradicate
+# F: Pyflakes
+# FA100: future-rewritable-type-annotation
+# FBT: flake8-boolean-trap
+# FLY: flynt
+# I: isort
+# ICN: flake8-import-conventions
+# ISC: flake8-implicit-str-concat
+# N: pep8-naming
 # NPY: NumPy-specific rules
+# PERF: Perflint
+# PGH: pygrep-hooks
+# PTH: flake8-use-pathlib
+# Q: flake8-quotes
 # RUF: Ruff-specific rules
+# SIM: flake8-simplify
+# T10: flake8-debugger
+# TD: flake8-todos
+# UP: pyupgrade
+# YTT: flake8-2020
+exclude = ['docs/**', "examples/**", "tests/**"]
+explicit-preview-rules = true
+extend-select = ["F822"]  # TODO(egparedes): remove when not longer in preview
 ignore = [
   'E501',  # [line-too-long]
-  'B905'  # [zip-without-explicit-strict]  # TODO(egparedes): Reevaluate this rule
+  'B905',  # [zip-without-explicit-strict]  # TODO(egparedes): remove when possible
+  'TD003'  # [missing-todo-link]
 ]
-select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
+preview = true  # use only with explicit-preview-rules=true
+select = ['A', 'B', 'CPY', 'E', 'ERA', 'F', 'FA100', 'I', 'ISC', 'NPY', 'Q', 'RUF', 'T10', 'YTT']
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
 [tool.ruff.lint.flake8-builtins]
-builtins-allowed-modules = ['builtins']
+builtins-allowed-modules = ['builtins', 'typing']
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -391,10 +405,6 @@ split-on-trailing-comma = false
 [tool.ruff.lint.mccabe]
 max-complexity = 15
 
-[tool.ruff.lint.per-file-ignores]
-'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
-'src/gt4py/next/__init__.py' = ['F401']
-
 # -- setuptools build backend --
 [tool.setuptools]
 platforms = ['Linux', 'Mac']
@@ -418,31 +428,32 @@ conflicts = [
     {extra = 'cuda11'},
     {extra = 'jax-cuda12'},
     {extra = 'rocm4_3'},
-    {extra = 'rocm5_0'}
+    {extra = 'rocm5_0'},
+    {extra = 'rocm6_0'}
   ],
   [
-    {extra = 'dace'},
-    {extra = 'dace-next'}
-  ],
-  [
-    {extra = 'all'},
-    {extra = 'dace-next'}
+    {group = 'dace-cartesian'},
+    {group = 'dace-next'}
   ]
 ]
+default-groups = ["dev"]
 required-version = ">=0.6.10"
 
 [[tool.uv.index]]
 explicit = true
 name = 'test.pypi'
-url = 'https://test.pypi.org/simple/'
+url = 'https://test.pypi.org/simple'
 
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_07_03", extra = "dace-next"}
+dace = [
+  {git = "https://github.com/GridTools/dace", branch = "romanc/stree-roundtrip", group = "dace-cartesian"},
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_11_25", group = "dace-next"}
+]
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "0.0.0+missing.version.info"
+default-version = "1.1.1+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty

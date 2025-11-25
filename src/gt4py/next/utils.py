@@ -6,9 +6,24 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import functools
+import inspect
 import itertools
-from typing import Any, Callable, ClassVar, Optional, ParamSpec, TypeGuard, TypeVar, cast, overload
+import types
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Optional,
+    ParamSpec,
+    Sequence,
+    TypeGuard,
+    TypeVar,
+    cast,
+    overload,
+)
 
 
 class RecursionGuard:
@@ -73,7 +88,9 @@ def tree_map(
     fun: Callable[_P, _R],
     *,
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_constructor: Optional[type | Callable] = None,
+    result_collection_constructor: Optional[Callable] = None,
+    unpack: bool = False,
+    with_path_arg: bool = False,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
 
 
@@ -81,17 +98,21 @@ def tree_map(
 def tree_map(
     *,
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_constructor: Optional[type | Callable] = None,
+    result_collection_constructor: Optional[Callable] = None,
+    unpack: bool = False,
+    with_path_arg: bool = False,
 ) -> Callable[
     [Callable[_P, _R]], Callable[..., Any]
-]: ...  # TODO(havogt): if result_collection_constructor is Callable, improve typing
+]: ...  # TODO(havogt): typing of `result_collection_constructor` is too weak here
 
 
 def tree_map(
     fun: Optional[Callable[_P, _R]] = None,
     *,
     collection_type: type | tuple[type, ...] = tuple,
-    result_collection_constructor: Optional[type | Callable] = None,
+    result_collection_constructor: Optional[Callable] = None,
+    unpack: bool = False,
+    with_path_arg: bool = False,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
     """
     Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
@@ -100,7 +121,9 @@ def tree_map(
         fun: Function to apply to each entry of the collection.
         collection_type: Type of the collection to be traversed. Can be a single type or a tuple of types.
         result_collection_constructor: Type of the collection to be returned. If `None` the same type as `collection_type` is used.
-
+        unpack: Replicate tuple structure returned from `fun` to the mapped result, i.e. return
+          tuple of result collections instead of result collections of tuples.
+        with_path_arg: Pass the path to access the current element to `fun`.
     Examples:
         >>> tree_map(lambda x: x + 1)(((1, 2), 3))
         ((2, 3), 4)
@@ -111,46 +134,90 @@ def tree_map(
         >>> tree_map(collection_type=list)(lambda x: x + 1)([[1, 2], 3])
         [[2, 3], 4]
 
-        >>> tree_map(collection_type=list, result_collection_constructor=tuple)(lambda x: x + 1)(
-        ...     [[1, 2], 3]
-        ... )
-        ((2, 3), 4)
+        >>> tree_map(
+        ...     collection_type=(list, tuple),
+        ...     result_collection_constructor=lambda value, elts: tuple(elts)
+        ...     if isinstance(value, list)
+        ...     else list(elts),
+        ... )(lambda x: x + 1)([(1, 2), 3])
+        ([2, 3], 4)
 
         >>> @tree_map
         ... def impl(x):
         ...     return x + 1
         >>> impl(((1, 2), 3))
         ((2, 3), 4)
+
+        >>> @tree_map(with_path_arg=True)
+        ... def impl(x, path: tuple[int, ...]):
+        ...     path_str = "".join(f"[{i}]" for i in path)
+        ...     return f"t{path_str} = {x}"
+        >>> t = impl(((1, 2), 3))
+        >>> t[0][0]
+        't[0][0] = 1'
+        >>> t[0][1]
+        't[0][1] = 2'
+        >>> t[1]
+        't[1] = 3'
+
+        >>> @tree_map(unpack=True)
+        ... def impl(x):
+        ...     return (x, x**2)
+        >>> identity, squared = impl(((2, 3), 4))
+        >>> identity
+        ((2, 3), 4)
+        >>> squared
+        ((4, 9), 16)
     """
 
     if result_collection_constructor is None:
         if isinstance(collection_type, tuple):
+            # Note: that doesn't mean `collection_type=tuple`, but e.g. `collection_type=(list, tuple)`
             raise TypeError(
                 "tree_map() requires `result_collection_constructor` when `collection_type` is a tuple of types."
             )
-        result_collection_constructor = collection_type
+        result_collection_constructor = lambda _, elts: collection_type(elts)  # noqa: E731 # because a lambda is clearer
 
     if fun:
 
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
             if isinstance(args[0], collection_type):
+                non_path_args: Sequence[Any]
+                if with_path_arg:
+                    *non_path_args, path = args
+                    args = (*non_path_args, tuple((*path, i) for i in range(len(args[0]))))
+                else:
+                    non_path_args = args
+
                 assert all(
-                    isinstance(arg, collection_type) and len(args[0]) == len(arg) for arg in args
+                    isinstance(arg, collection_type) and len(args[0]) == len(arg)
+                    for arg in non_path_args
                 )
                 assert result_collection_constructor is not None
-                return result_collection_constructor(impl(*arg) for arg in zip(*args))
+                ctor = functools.partial(result_collection_constructor, args[0])
 
-            return fun(  # type: ignore[call-arg, misc] # mypy not smart enough
-                *cast(_P.args, args)
+                mapped = [impl(*arg) for arg in zip(*args)]
+                if unpack:
+                    return tuple(map(ctor, zip(*mapped)))
+                else:
+                    return ctor(mapped)
+
+            return fun(  # type: ignore[call-arg]
+                *cast(_P.args, args),  # type: ignore[valid-type]
             )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
-        return impl
+        if with_path_arg:
+            return lambda *args: impl(*args, ())
+        else:
+            return impl
     else:
         return functools.partial(
             tree_map,
             collection_type=collection_type,
             result_collection_constructor=result_collection_constructor,
+            unpack=unpack,
+            with_path_arg=with_path_arg,
         )
 
 
@@ -214,3 +281,110 @@ def equalize_tuple_structure(
             )
         )
     return d1, d2
+
+
+def make_args_canonicalizer(
+    signature: inspect.Signature,
+    *,
+    name: str | None = None,
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+    """
+    Create a call arguments canonicalizer function from a given signature.
+
+    The canonicalizer returns the call arguments in a tuple with the
+    following two items:
+
+        - a tuple of values containing all the positional parameters
+        - a dictionary of parameter names to values for all keyword-only parameters
+
+    Args:
+        signature: The signature for which to create the canonicalizer.
+
+    Keyword Args:
+        name: Name of the function for which the canonicalizer is created.
+
+    """
+
+    params = []
+    pos_args = []
+    key_args = []
+    var_pos_arg: str | None = None
+    var_key_arg: str | None = None
+
+    for key, param in signature.parameters.items():
+        match param.kind:
+            case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
+                pos_args.append(f"{key}")
+            case inspect.Parameter.VAR_POSITIONAL:
+                var_pos_arg = key
+                pos_args.append(f"*{key}")
+            case inspect.Parameter.KEYWORD_ONLY:
+                key_args.append(f"'{key}': {key}")
+            case inspect.Parameter.VAR_KEYWORD:
+                var_key_arg = key
+                key_args.append(f"**{key}")
+
+        # Remove annotations to avoid issues in case `str(annotation)`
+        # produces incorrect python expressions
+        params.append(param.replace(annotation=param.empty))
+
+    canonicalizer_signature = inspect.Signature(parameters=params)
+
+    if len(pos_args) == 1:
+        if var_pos_arg:
+            # If there is only an '*args' parameter, we can just return it directly
+            pos_args_tuple_expr = var_pos_arg
+        else:
+            pos_args_tuple_expr = f"({pos_args[0]},)"  # Add trailing comma to make it a tuple
+    else:
+        # In the regular case, assemble the output tuple with all positional arguments
+        pos_args_tuple_expr = f"({str.join(', ', pos_args)})"
+
+    if len(key_args) == 1 and var_key_arg:
+        # If there is only a '**kwargs' parameter, we can just return it directly
+        key_args_dict_expr = var_key_arg
+    else:
+        # In the regular case, assemble the output dictionary with all keyword arguments
+        key_args_dict_expr = f"{{ {str.join(', ', key_args)} }}"
+
+    canonicalize_func_name = f"canonicalize_args_for_{name}" if name else "canonicalize_args"
+    canonicalizer_src = f"""
+def {canonicalize_func_name}{canonicalizer_signature!s}:
+    return {pos_args_tuple_expr}, {key_args_dict_expr}
+"""
+    namespace: dict[str, Any] = {}
+    exec(canonicalizer_src, namespace)
+    canonicalizer = namespace[canonicalize_func_name]
+
+    return cast(Callable[..., tuple[tuple, dict[str, Any]]], canonicalizer)
+
+
+@functools.cache
+def make_args_canonicalizer_for_function(
+    func: types.FunctionType,
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+    return make_args_canonicalizer(inspect.signature(func), name=func.__name__)
+
+
+def canonicalize_call_args(
+    func: Callable,
+    /,
+    args: tuple,
+    kwargs: dict[str, Any],
+) -> tuple[tuple, dict[str, Any]]:
+    """
+    Canonicalize call arguments for a given function.
+
+    Args:
+        func: The function for which to canonicalize the call arguments.
+        args: Positional arguments.
+        kwargs: Keyword arguments.
+
+    Returns:
+        A tuple of positional arguments and a dictionary with keyword arguments.
+
+    Note:
+        This is a convenience wrapper around `make_args_canonicalizer_for_function`.
+    """
+
+    return make_args_canonicalizer_for_function(func)(*args, **kwargs)

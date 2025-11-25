@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 class LayoutInfo(TypedDict):
     alignment: int  # measured in bytes
     device: Literal["cpu", "gpu"]
-    layout_map: Callable[[Tuple[str, ...]], Tuple[Optional[int], ...]]
+    layout_map: Callable[[Tuple[str, ...]], Tuple[int, ...]]
     is_optimal_layout: Callable[[Any, Tuple[str, ...]], bool]
 
 
@@ -128,7 +128,7 @@ def make_gtcpu_ifirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]
     return _permute_layout_to_dimensions(layout, dimensions)
 
 
-def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ...]:
+def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
     layout = tuple(reversed(range(len(dimensions))))
     return _permute_layout_to_dimensions(layout, dimensions)
 
@@ -159,13 +159,10 @@ CPUKFirstLayout: Final[LayoutInfo] = {
 register("cpu_kfirst", CPUKFirstLayout)
 
 
-CUDALayout: Final[LayoutInfo] = {
+GPULayout: Final[LayoutInfo] = {
     "alignment": 32,
     "device": "gpu",
     "layout_map": make_cuda_layout_map,
     "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
 }
-register("cuda", CUDALayout)
-
-GPULayout: Final[LayoutInfo] = CUDALayout
 register("gpu", GPULayout)

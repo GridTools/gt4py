@@ -11,20 +11,25 @@ from __future__ import annotations
 import functools
 from typing import Any, Sequence
 
-import dace
+import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
-from gt4py.next.otf import arguments, stages
-from gt4py.next.program_processors.runners.dace import sdfg_callable, workflow as dace_worflow
-
-from . import common as dace_common
+from gt4py.next.otf import stages
+from gt4py.next.program_processors.runners.dace import sdfg_callable
+from gt4py.next.program_processors.runners.dace.workflow import (
+    common as gtx_wfdcommon,
+    compilation as gtx_wfdcompilation,
+)
 
 
 def convert_args(
-    fun: dace_worflow.compilation.CompiledDaceProgram,
+    fun: gtx_wfdcompilation.CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> stages.CompiledProgram:
+    # Retieve metrics level from GT4Py environment variable.
+    collect_time = config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
+    collect_time_arg = np.array([1], dtype=np.float64)
     # We use the callback function provided by the compiled program to update the SDFG arglist.
     update_sdfg_call_args = functools.partial(
         fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
@@ -34,53 +39,41 @@ def convert_args(
         *args: Any,
         offset_provider: gtx_common.OffsetProvider,
         out: Any = None,
-    ) -> None:
+    ) -> Any:
         if out is not None:
             args = (*args, out)
 
-        if fun.implicit_domain:
-            # Generate implicit domain size arguments only if necessary
-            size_args = arguments.iter_size_args(args)
-            args = (*args, *size_args)
+        try:
+            # Not the first call.
+            #  We will only update the argument vector  for the normal call.
+            # NOTE: If this is the first time then we will generate an exception because
+            #   `fun.csdfg_args` is `None`
+            # TODO(phimuell, edopao): Think about refactor the code such that the update
+            #   of the argument vector is a Method of the `CompiledDaceProgram`.
+            update_sdfg_call_args(args, fun.csdfg_argv)  # type: ignore[arg-type]  # Will error out in first call.
 
-        if not fun.sdfg_program._lastargs:
-            # First call, the SDFG is not intitalized, so forward the call to `CompiledSDFG`
-            # to proper initilize it. Later calls to this SDFG will be handled through
-            # the `fast_call()` API.
-            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
+        except TypeError:
+            # First call. Construct the initial argument vector of the `CompiledDaceProgram`.
+            assert fun.csdfg_argv is None and fun.csdfg_init_argv is None
+            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
             this_call_args = sdfg_callable.get_sdfg_args(
                 fun.sdfg_program.sdfg,
                 offset_provider,
                 *flat_args,
                 filter_args=False,
             )
-            with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-                fun(**this_call_args)
+            this_call_args |= {
+                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
+                gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
+            }
+            fun.construct_arguments(**this_call_args)
 
-        else:
-            # Initialization of `_lastargs` was done by the `CompiledSDFG` object,
-            #  so we just update it with the current call arguments.
-            update_sdfg_call_args(args, fun.sdfg_program._lastargs[0])
-            fun.fast_call()
+        # Perform the call to the SDFG.
+        fun.fast_call()
 
-        metric_collection = metrics.get_active_metric_collection()
-        if (metric_collection is not None) and (
-            config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
-        ):
-            # Observe that dace instrumentation adds runtime overhead:
-            # DaCe writes an instrumentation report file for each SDFG run.
-            with dace.config.temporary_config():
-                # We need to set the cache folder and key config in order to retrieve
-                # the SDFG report file.
-                dace_common.set_dace_config(device_type=device)
-                sdfg_events = fun.sdfg_program.sdfg.get_latest_report().events
-                assert len(sdfg_events) == 1
-                # The event name gets truncated in dace, so we only check that
-                # it corresponds to the beginning of SDFG label.
-                assert f"SDFG {fun.sdfg_program.sdfg.label}".startswith(sdfg_events[0].name)
-            duration_secs = (
-                sdfg_events[0].duration / 1e6
-            )  # dace timer returns the duration in microseconds
-            metric_collection.add_sample(metrics.COMPUTE_METRIC, duration_secs)
+        if collect_time:
+            metric_source = metrics.get_current_source()
+            assert metric_source is not None
+            metric_source.metrics[metrics.COMPUTE_METRIC].add_sample(collect_time_arg[0].item())
 
     return decorated_program

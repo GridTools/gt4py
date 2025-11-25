@@ -9,18 +9,23 @@ repos:
     rev: v2.15.0
     hooks:
       - id: pretty-format-toml
-        args: [--autofix]
+        args: [--autofix, --indent, "2"]
         exclude: tach.toml
       - id: pretty-format-yaml
         args: [--autofix, --preserve-quotes, --indent, "2", --offset, "2"]
 
-  # We don't want to update this hook since newer versions of prettier are broken for pre-commit.
-  # TODO(egparedes): find a lightweight alternative to prettier
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
+  - repo: https://github.com/hukkin/mdformat
+    rev: 0.7.22
     hooks:
-      - id: prettier
-        types_or: [markdown, json]
+      - id: mdformat
+        additional_dependencies:
+          - mdformat-frontmatter
+          - mdformat-gfm
+          - mdformat-gfm-alerts
+          - mdformat-myst
+          - mdformat-ruff
+          - mdformat-tables
+        args: [--number]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -63,34 +68,34 @@ repos:
       - <<: *uv-managed-hook
         id: ruff-check
         name: ruff checker
-        entry: uv run --frozen --isolated --group dev ruff check --force-exclude --fix
+        entry: uv run --group dev --frozen --isolated ruff check --force-exclude --fix
         types_or: [python, pyi, jupyter]
-        exclude: '^(tests/|docs/|examples/)'  # TODO(egparedes): remove the exclusions
+        exclude: "^(tests/|docs/|examples/)" # TODO(egparedes): remove the exclusions
         require_serial: true
 
       - <<: *uv-managed-hook
         id: ruff-format
         name: ruff formatter
-        entry: uv run --frozen --isolated --group dev ruff format --force-exclude
+        entry: uv run --group dev --frozen --isolated ruff format --force-exclude
         types_or: [python, pyi, jupyter]
         require_serial: true
 
       - <<: *uv-managed-hook
         id: tach
         name: tach module dependency checker
-        entry: uv run --frozen --isolated --group dev tach check
+        entry: uv run --group dev --frozen --isolated tach check
         pass_filenames: false
 
       - <<: *uv-managed-hook
         id: mypy
         name: mypy static type checker
-        entry: uv run --frozen --isolated --group dev mypy --no-install-types src/
+        entry: uv run --group dev --frozen --isolated mypy --no-install-types src/
         types_or: [python, pyi]
         pass_filenames: false
 
       - <<: *uv-managed-hook
         id: validate
         name: validate pyproject.toml
-        entry: uv run --frozen --isolated --group dev validate-pyproject pyproject.toml
+        entry: uv run --group dev --frozen --isolated validate-pyproject pyproject.toml
         files: ^pyproject\.toml$
         pass_filenames: false
