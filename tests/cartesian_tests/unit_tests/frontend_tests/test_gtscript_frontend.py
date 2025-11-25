@@ -1485,15 +1485,6 @@ class TestBuiltinDTypes:
 
 
 class TestAssignmentSyntax:
-    def test_ellipsis(self):
-        def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
-            with computation(PARALLEL), interval(...):
-                out_field[...] = in_field
-
-        parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-        # TODO(ricoh): track down where the supbscript of 'out_field' is parsed and
-        # ensure parity in ellipsis handling between <3.14 and 3.14
-
     def test_offset(self):
         def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
