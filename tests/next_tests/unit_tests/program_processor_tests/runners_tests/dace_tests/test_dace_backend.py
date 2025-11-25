@@ -47,8 +47,8 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     def testee(a: cases.IField, b: cases.IField, out: cases.IField):
         testee_op(a, b, out=out)
 
-    mock_top_level_dataflow_hook1 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookFun)
-    mock_top_level_dataflow_hook2 = mock.create_autospec(typing.Callable[[dace.SDFG], None])
+    mock_top_level_dataflow_hook1 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookStage)
+    mock_top_level_dataflow_hook2 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookStage)
 
     if not auto_optimize:
         optimization_args = {}
