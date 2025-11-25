@@ -77,6 +77,7 @@ def apply_common_transforms(
     #  test_can_deref. We didn't notice previously as FieldOpFusion did this implicitly everywhere.
     ir = inline_lifts.InlineLifts().visit(ir)
 
+    ir = concat_where.canonicalize_concat_where(ir)
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = dead_code_elimination.dead_code_elimination(
         ir, collapse_tuple_uids=collapse_tuple_uids, offset_provider_type=offset_provider_type
@@ -176,6 +177,7 @@ def apply_fieldview_transforms(
 
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+    ir = concat_where.canonicalize_concat_where(ir)
     # required for dead-code-elimination and `prune_empty_concat_where` pass
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = dead_code_elimination.dead_code_elimination(ir, offset_provider_type=offset_provider_type)
