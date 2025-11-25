@@ -947,8 +947,8 @@ dependencies = [
 
 [[package]]
 name = "dace"
-version = "2025.11.5"
-source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_11_05#7a0d751271cda13a57349d1e90169f8ded2c3865" }
+version = "2025.11.25"
+source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_11_25#85080da511dc9a554e6623393c7de101931ad9b6" }
 resolution-markers = [
     "python_full_version >= '3.13'",
     "python_full_version == '3.12.*'",
@@ -1429,7 +1429,7 @@ dace-cartesian = [
     { name = "dace", version = "1.0.2", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip#1033dfcf9d118856d82c6ee8d6f6cfacec662335" } },
 ]
 dace-next = [
-    { name = "dace", version = "2025.11.5", source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_11_05#7a0d751271cda13a57349d1e90169f8ded2c3865" } },
+    { name = "dace", version = "2025.11.25", source = { git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_11_25#85080da511dc9a554e6623393c7de101931ad9b6" } },
 ]
 dev = [
     { name = "atlas4py" },
@@ -1572,7 +1572,7 @@ build = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dace-cartesian = [{ name = "dace", git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip" }]
-dace-next = [{ name = "dace", git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_11_05" }]
+dace-next = [{ name = "dace", git = "https://github.com/GridTools/dace?tag=__gt4py-next-integration_2025_11_25" }]
 dev = [
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },

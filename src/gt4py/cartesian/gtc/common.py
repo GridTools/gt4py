@@ -12,6 +12,7 @@ import enum
 import functools
 import numbers
 import typing
+from abc import ABC
 from typing import (
     Any,
     ClassVar,
@@ -735,7 +736,17 @@ def validate_lvalue_dims(
     return _make_root_validator(_impl)
 
 
-class AxisBound(eve.Node):
+class BaseAxisBound(eve.Node, ABC):
+    level: LevelMarker
+    offset: Union[ScalarAccess, FieldAccess, int]
+
+
+class RuntimeAxisBound(BaseAxisBound):
+    level: LevelMarker
+    offset: Union[ScalarAccess, FieldAccess]
+
+
+class AxisBound(BaseAxisBound):
     level: LevelMarker
     offset: int = 0
 
