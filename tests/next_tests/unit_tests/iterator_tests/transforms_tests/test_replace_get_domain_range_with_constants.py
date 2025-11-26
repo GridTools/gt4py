@@ -21,7 +21,7 @@ from gt4py import next as gtx
 from gt4py.next import Domain, common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.transform_get_domain_range import (
+from gt4py.next.iterator.transforms.replace_get_domain_range_with_constants import (
     ReplaceGetDomainRangeWithConstants,
 )
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple

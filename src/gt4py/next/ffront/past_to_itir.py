@@ -28,7 +28,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.stages import AOT_PRG
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms import remap_symbols, transform_get_domain_range
+from gt4py.next.iterator.transforms import remap_symbols, replace_get_domain_range_with_constants
 from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -126,8 +126,10 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
             param: utils.tree_map(lambda x: x.domain if x is not None else x)(v)
             for param, v in context.items()
         }
-        itir_program = transform_get_domain_range.TransformGetDomainRange.apply(
-            itir_program, sizes=field_domains
+        itir_program = (
+            replace_get_domain_range_with_constants.ReplaceGetDomainRangeWithConstants.apply(
+                itir_program, sizes=field_domains
+            )
         )
 
     # Translate NamedCollectionTypes to TupleTypes in compile-time args

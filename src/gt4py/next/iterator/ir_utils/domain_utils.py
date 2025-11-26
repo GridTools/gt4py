@@ -58,6 +58,78 @@ _GRID_TYPE_MAPPING = {
 }
 
 
+def _unstructured_translate_range_statically(
+    range_: SymbolicRange,
+    tag: str,
+    val: itir.OffsetLiteral
+    | Literal[trace_shifts.Sentinel.VALUE, trace_shifts.Sentinel.ALL_NEIGHBORS],
+    offset_provider: common.OffsetProvider,
+    expr: itir.Expr | None = None,
+) -> SymbolicRange:
+    """
+    Translate `range_` using static connectivity information from `offset_provider`.
+    """
+    assert common.is_offset_provider(offset_provider)
+    connectivity = offset_provider[tag]
+    assert isinstance(connectivity, common.Connectivity)
+    skip_value = connectivity.skip_value
+
+    # fold & convert expr into actual integers
+    start_expr, stop_expr = range_.start, range_.stop
+    start_expr, stop_expr = (
+        collapse_tuple.CollapseTuple.apply(
+            expr,
+            within_stencil=False,
+            allow_undeclared_symbols=True,
+        )
+        for expr in (start_expr, stop_expr)
+    )  # type: ignore[assignment]  # mypy not smart enough
+    assert isinstance(start_expr, itir.Literal) and isinstance(stop_expr, itir.Literal)
+    start, stop = (int(literal.value) for literal in (start_expr, stop_expr))  # type: ignore[attr-defined]  # mypy does not understand assert above
+
+    nb_index: slice | int
+    if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
+        nb_index = slice(None)
+    else:
+        nb_index = val.value  # type: ignore[assignment]  # assert above
+
+    accessed = connectivity.ndarray[start:stop, nb_index]
+
+    if isinstance(val, itir.OffsetLiteral) and np.any(accessed == skip_value):
+        # TODO(tehrengruber): Turn this into a configurable error. This is currently
+        #  not possible since some test cases starting from ITIR containing
+        #  `can_deref` might lead here. The frontend never emits such IR and domain
+        #  inference runs after we transform reductions into stmts containing
+        #  `can_deref`.
+        warnings.warn(
+            UserWarning(f"Translating '{expr}' using '{tag}' has an out-of-bounds access."),
+            stacklevel=2,
+        )
+
+    new_start, new_stop = accessed.min(), accessed.max() + 1  # type: ignore[attr-defined]  # TODO(havogt): improve typing for NDArrayObject
+
+    fraction_accessed = np.unique(accessed).size / (new_stop - new_start)  # type: ignore[call-overload]  # TODO(havogt): improve typing for NDArrayObject
+
+    if fraction_accessed < _NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD and (
+        tag not in _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS
+    ):
+        _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS.add(tag)
+        warnings.warn(
+            UserWarning(
+                f"Translating '{expr}' using '{tag}' requires "
+                f"computations on many additional points "
+                f"({round((1 - fraction_accessed) * 100)}%) in order to get a contiguous "
+                f"domain. Please consider reordering your mesh."
+            ),
+            stacklevel=2,
+        )
+
+    return SymbolicRange(
+        im.literal(str(new_start), builtins.INTEGER_INDEX_BUILTIN),
+        im.literal(str(new_stop), builtins.INTEGER_INDEX_BUILTIN),
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class SymbolicDomain:
     grid_type: common.GridType
@@ -143,69 +215,8 @@ class SymbolicDomain:
                         im.ensure_expr(symbolic_domain_sizes[new_dim.value]),
                     )
                 else:
-                    assert common.is_offset_provider(offset_provider)
-                    connectivity = offset_provider[off.value]
-                    assert isinstance(connectivity, common.Connectivity)
-                    skip_value = connectivity.skip_value
-
-                    # fold & convert expr into actual integers
-                    start_expr, stop_expr = new_ranges[old_dim].start, new_ranges[old_dim].stop
-                    start_expr, stop_expr = (
-                        collapse_tuple.CollapseTuple.apply(
-                            expr,
-                            within_stencil=False,
-                            allow_undeclared_symbols=True,
-                        )
-                        for expr in (start_expr, stop_expr)
-                    )  # type: ignore[assignment]  # mypy not smart enough
-                    assert isinstance(start_expr, itir.Literal) and isinstance(
-                        stop_expr, itir.Literal
-                    )
-                    start, stop = (int(literal.value) for literal in (start_expr, stop_expr))  # type: ignore[attr-defined]  # mypy does not understand assert above
-
-                    nb_index: slice | int
-                    if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
-                        nb_index = slice(None)
-                    else:
-                        nb_index = val.value  # type: ignore[assignment]  # assert above
-
-                    accessed = connectivity.ndarray[start:stop, nb_index]
-
-                    if isinstance(val, itir.OffsetLiteral) and np.any(accessed == skip_value):
-                        # TODO(tehrengruber): Turn this into a configurable error. This is currently
-                        #  not possible since some test cases starting from ITIR containing
-                        #  `can_deref` might lead here. The frontend never emits such IR and domain
-                        #  inference runs after we transform reductions into stmts containing
-                        #  `can_deref`.
-                        warnings.warn(
-                            UserWarning(
-                                f"Translating '{self.as_expr()}' using '{off.value}' has "
-                                f"an out-of-bounds access."
-                            ),
-                            stacklevel=2,
-                        )
-
-                    new_start, new_stop = accessed.min(), accessed.max() + 1  # type: ignore[attr-defined]  # TODO(havogt): improve typing for NDArrayObject
-
-                    fraction_accessed = np.unique(accessed).size / (new_stop - new_start)  # type: ignore[call-overload]  # TODO(havogt): improve typing for NDArrayObject
-
-                    if fraction_accessed < _NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD and (
-                        off.value not in _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS
-                    ):
-                        _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS.add(off.value)
-                        warnings.warn(
-                            UserWarning(
-                                f"Translating '{self.as_expr()}' using '{off.value}' requires "
-                                f"computations on many additional points "
-                                f"({round((1 - fraction_accessed) * 100)}%) in order to get a contiguous "
-                                f"domain. Please consider reordering your mesh."
-                            ),
-                            stacklevel=2,
-                        )
-
-                    new_range = SymbolicRange(
-                        im.literal(str(new_start), builtins.INTEGER_INDEX_BUILTIN),
-                        im.literal(str(new_stop), builtins.INTEGER_INDEX_BUILTIN),
+                    new_range = _unstructured_translate_range_statically(
+                        new_ranges[old_dim], off.value, val, offset_provider, self.as_expr()
                     )
 
                 new_ranges = dict(
