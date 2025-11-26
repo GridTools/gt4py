@@ -64,6 +64,14 @@ def test_copy(cartesian_case):
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
+def test_copy_vertical(unstructured_case_3d):
+    @gtx.field_operator
+    def testee(a: cases.KField) -> cases.KField:
+        return a
+
+    cases.verify_with_default_data(unstructured_case_3d, testee, ref=lambda a: a)
+
+
 @pytest.mark.uses_tuple_returns
 def test_multicopy(cartesian_case):
     @gtx.field_operator
