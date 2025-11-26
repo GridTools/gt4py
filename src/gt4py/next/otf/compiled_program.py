@@ -18,7 +18,12 @@ from typing import Any, TypeAlias, TypeVar
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, config, errors, metrics, utils as gtx_utils
-from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
+from gt4py.next.ffront import (
+    stages as ffront_stages,
+    type_info as ffront_type_info,
+    type_specifications as ts_ffront,
+    type_translation,
+)
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -215,7 +220,7 @@ class CompiledProgramsPool:
     """
 
     backend: gtx_backend.Backend
-    definition_stage: ffront_stages.ProgramDefinition
+    definition_stage: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition
     program_type: ts_ffront.ProgramType
     #: mapping from an argument descriptor type to a list of parameters or expression thereof
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
@@ -258,6 +263,7 @@ class CompiledProgramsPool:
         else:
             args, kwargs = canonical_args, canonical_kwargs
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
+        # TODO: add arg types to key for scan
         key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
 
         try:
@@ -284,6 +290,8 @@ class CompiledProgramsPool:
                     argument_descriptors=_make_argument_descriptors(
                         self.program_type, self.argument_descriptor_mapping, args, kwargs
                     ),
+                    arg_types=tuple(type_translation.from_value(arg) for arg in args),
+                    kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                     offset_provider=offset_provider,
                     call_key=key,
                 )
@@ -297,7 +305,9 @@ class CompiledProgramsPool:
 
     @functools.cached_property
     def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
-        return gtx_utils.make_args_canonicalizer_for_function(self.definition_stage.definition)
+        return ffront_type_info.make_args_canonicalizer(
+            self.program_type, name=self.definition_stage.definition.__name__
+        )
 
     @functools.cached_property
     def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:
@@ -393,6 +403,10 @@ class CompiledProgramsPool:
         self,
         argument_descriptors: ArgumentDescriptors,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
+        arg_types: tuple[ts.TypeSpec, ...] | None = None,
+        kwarg_types: dict[str, ts.TypeSpec] | None = None,
+        # argument used only to validate key computed in a call / dispatch agrees with the
+        # key computed here
         call_key: CompiledProgramsKey | None = None,
     ) -> None:
         if not common.is_offset_provider(offset_provider):
@@ -431,12 +445,18 @@ class CompiledProgramsPool:
                 },
             )
 
+        assert (arg_types is None) == (kwarg_types is None)
+        if arg_types is None:
+            arg_types = tuple(self.program_type.definition.pos_only_args) + tuple(
+                self.program_type.definition.pos_or_kw_args.values()
+            )
+            kwarg_types = self.program_type.definition.kw_only_args
+
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
-            args=tuple(self.program_type.definition.pos_only_args)
-            + tuple(self.program_type.definition.pos_or_kw_args.values()),
-            kwargs=self.program_type.definition.kw_only_args,
+            args=arg_types,
+            kwargs=kwarg_types,
             argument_descriptor_contexts=argument_descriptor_contexts,
         )
         compile_call = functools.partial(
@@ -467,6 +487,7 @@ class CompiledProgramsPool:
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
+        # TODO: fail for scan operator
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
                 self._compile_variant(

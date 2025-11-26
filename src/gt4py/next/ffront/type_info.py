@@ -5,15 +5,16 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
 import functools
+import inspect
 from collections.abc import Callable
-from typing import Iterator, Sequence, cast
+from typing import Any, Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common, utils
+from gt4py.next.ffront.type_specifications import ProgramType
 from gt4py.next.type_system import type_info
 
 
@@ -340,4 +341,89 @@ def return_type_scanop(
     return cast(
         ts.TypeSpec,
         tree_map_type(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype),
+    )
+
+
+def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.FunctionType:
+    if isinstance(callable_type, ts_ffront.FieldOperatorType):
+        definition = callable_type.definition
+        return ProgramType(
+            definition=ts.FunctionType(
+                pos_only_args=definition.pos_only_args,
+                pos_or_kw_args=definition.pos_or_kw_args | {"out": definition.returns},
+                kw_only_args=definition.kw_only_args,
+                returns=ts.VoidType(),
+            )
+        )
+    elif isinstance(callable_type, ts_ffront.ScanOperatorType):
+        as_deferred_type_with_same_structure = tree_map_type(
+            lambda _: ts.DeferredType(constraint=None)
+        )
+        scan_pass_type = callable_type.definition
+        _, *non_carry_args = scan_pass_type.pos_or_kw_args.items()
+        pos_or_kw_args = dict(non_carry_args) | {"out": scan_pass_type.returns}
+        assert not scan_pass_type.pos_only_args
+        return ProgramType(
+            ts.FunctionType(
+                pos_only_args=[],
+                pos_or_kw_args={
+                    k: as_deferred_type_with_same_structure(t) for k, t in pos_or_kw_args.items()
+                },
+                kw_only_args={
+                    k: as_deferred_type_with_same_structure(t)
+                    for k, t in scan_pass_type.kw_only_args.items()
+                },
+                returns=ts.VoidType(),
+            )
+        )
+    assert isinstance(callable_type, (ts.FunctionType, ts_ffront.ProgramType))
+    return callable_type
+
+
+def _signature_from_callable_in_program_context(
+    callable_type: ts.CallableType,
+) -> inspect.Signature:
+    if isinstance(callable_type, ts_ffront.ProgramType):
+        return _signature_from_callable_in_program_context(callable_type.definition)
+    elif isinstance(callable_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType):
+        operator_signature = _signature_from_callable_in_program_context(callable_type.definition)
+        params = (
+            [*operator_signature.parameters.values()][1:]
+            if isinstance(callable_type, ts_ffront.ScanOperatorType)
+            else operator_signature.parameters.values()
+        )
+        return inspect.Signature(
+            parameters=[*params, inspect.Parameter("out", inspect.Parameter.KEYWORD_ONLY)],
+            return_annotation=inspect.Signature.empty,
+        )
+    assert isinstance(callable_type, ts.FunctionType)
+    return inspect.Signature(
+        parameters=(
+            [
+                inspect.Parameter(name=str(i), kind=inspect.Parameter.POSITIONAL_ONLY)
+                for i, type_ in enumerate(callable_type.pos_only_args)
+            ]
+            + [
+                inspect.Parameter(name=name, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                for name, type_ in callable_type.pos_or_kw_args.items()
+            ]
+            + [
+                inspect.Parameter(name=name, kind=inspect.Parameter.KEYWORD_ONLY)
+                for name, type_ in callable_type.kw_only_args.items()
+            ]
+        ),
+        return_annotation=callable_type.returns,
+    )
+
+
+def make_args_canonicalizer(
+    callable_type: ts.CallableType, **kwargs
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+    """
+    Create a call arguments canonicalizer function from a given signature.
+
+    See :ref:`utils.make_args_canonicalizer`.
+    """
+    return utils.make_args_canonicalizer(
+        _signature_from_callable_in_program_context(callable_type), **kwargs
     )
