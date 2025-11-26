@@ -169,7 +169,8 @@ class AxisIntervalParser(gt_meta.ASTPass):
     def slice_from_value(node: ast.Expr) -> ast.Slice:
         """Create an ast.Slice node from a general ast.Expr node."""
         slice_node = ast.Slice(
-            lower=node, upper=ast.BinOp(left=node, op=ast.Add(), right=ast.Constant(value=1))
+            lower=node,
+            upper=ast.BinOp(left=node, op=ast.Add(), right=ast.Constant(value=1)),
         )
         slice_node = ast.copy_location(slice_node, node)
         return slice_node
@@ -380,7 +381,11 @@ class CallInliner(ast.NodeTransformer):
 
     @classmethod
     def apply(
-        cls, func_node: ast.FunctionDef, context: dict, *, call_stack: Optional[Set[str]] = None
+        cls,
+        func_node: ast.FunctionDef,
+        context: dict,
+        *,
+        call_stack: Optional[Set[str]] = None,
     ):
         inliner = cls(context, call_stack=call_stack or set())
         inliner(func_node)
@@ -476,7 +481,9 @@ class CallInliner(ast.NodeTransformer):
         call_ast = copy.deepcopy(call_info["ast"])
         self.current_name = call_name
         CallInliner.apply(
-            call_ast, call_info["local_context"], call_stack={*self.call_stack, call_name}
+            call_ast,
+            call_info["local_context"],
+            call_stack={*self.call_stack, call_name},
         )
 
         # Extract call arguments
@@ -529,7 +536,10 @@ class CallInliner(ast.NodeTransformer):
         template_fmt = "{name}__" + call_id_suffix
 
         gt_meta.map_symbol_names(
-            call_ast, name_mapping, template_fmt=template_fmt, skip_names=self.all_skip_names
+            call_ast,
+            name_mapping,
+            template_fmt=template_fmt,
+            skip_names=self.all_skip_names,
         )
 
         # Replace returns by assignments in subroutine
@@ -668,7 +678,9 @@ def _make_temp_decls(
 
 
 def _make_init_computations(
-    temp_decls: Dict[str, nodes.FieldDecl], init_values: Dict[str, Any], func_node: ast.AST
+    temp_decls: Dict[str, nodes.FieldDecl],
+    init_values: Dict[str, Any],
+    func_node: ast.AST,
 ) -> List[nodes.ComputationBlock]:
     if not temp_decls:
         return []
@@ -695,7 +707,8 @@ def _make_init_computations(
         else:
             stmts.append(
                 nodes.Assign(
-                    target=nodes.FieldRef.at_center(name, axes=decl.axes), value=init_values[name]
+                    target=nodes.FieldRef.at_center(name, axes=decl.axes),
+                    value=init_values[name],
                 )
             )
 
@@ -856,12 +869,14 @@ class IRMaker(ast.NodeVisitor):
             "int64": nodes.DataType.INT64,
             "float32": nodes.DataType.FLOAT32,
             "float64": nodes.DataType.FLOAT64,
-            "int": nodes.DataType.INT32
-            if self.literal_int_precision == 32
-            else nodes.DataType.INT64,
-            "float": nodes.DataType.FLOAT32
-            if self.literal_float_precision == 32
-            else nodes.DataType.FLOAT64,
+            "int": (
+                nodes.DataType.INT32 if self.literal_int_precision == 32 else nodes.DataType.INT64
+            ),
+            "float": (
+                nodes.DataType.FLOAT32
+                if self.literal_float_precision == 32
+                else nodes.DataType.FLOAT64
+            ),
         }  # Conversion table for types to DataTypes
 
     def __call__(self, ast_root: ast.AST):
@@ -933,7 +948,8 @@ class IRMaker(ast.NodeVisitor):
         self, node: ast.withitem, loc: nodes.Location
     ) -> List[Dict[str, nodes.AxisInterval]]:
         syntax_error = GTScriptSyntaxError(
-            f"Invalid 'with' statement at line {loc.line} (column {loc.column})", loc=loc
+            f"Invalid 'with' statement at line {loc.line} (column {loc.column})",
+            loc=loc,
         )
 
         call_args = node.context_expr.args
@@ -953,7 +969,8 @@ class IRMaker(ast.NodeVisitor):
 
     def _visit_iteration_order_node(self, node: ast.withitem, loc: nodes.Location):
         syntax_error = GTScriptSyntaxError(
-            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})", loc=loc
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
+            loc=loc,
         )
         comp_node = node.context_expr
         if len(comp_node.args) + len(comp_node.keywords) != 1 or any(
@@ -1021,7 +1038,8 @@ class IRMaker(ast.NodeVisitor):
     def _visit_computation_node(self, node: ast.With) -> nodes.ComputationBlock:
         loc = nodes.Location.from_ast_node(node, scope=self.stencil_name)
         syntax_error = GTScriptSyntaxError(
-            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})", loc=loc
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
+            loc=loc,
         )
 
         # Parse computation specification, i.e. `withItems` nodes
@@ -1171,7 +1189,9 @@ class IRMaker(ast.NodeVisitor):
         return self.visit(node.value)
 
     def _eval_new_spatial_index(
-        self, index_nodes: Sequence[nodes.Expr], field_axes: Optional[Set[Literal["I", "J", "K"]]]
+        self,
+        index_nodes: Sequence[nodes.Expr],
+        field_axes: Optional[Set[Literal["I", "J", "K"]]],
     ) -> List[int]:
         index_dict = {}
         all_spatial_axes = ("I", "J", "K")
@@ -1216,7 +1236,9 @@ class IRMaker(ast.NodeVisitor):
         return [index_dict.get(axis, 0) for axis in ("I", "J", "K") if axis in field_axes]
 
     def _eval_index(
-        self, node: ast.Subscript, field_axes: Optional[Set[Literal["I", "J", "K"]]] = None
+        self,
+        node: ast.Subscript,
+        field_axes: Optional[Set[Literal["I", "J", "K"]]] = None,
     ) -> list[int] | nodes.AbsoluteKIndex | None:
         tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
         index_nodes = gt_utils.listify(
@@ -2040,12 +2062,16 @@ class GTScriptParser(ast.NodeVisitor):
         temp_init_values: Dict[str, numbers.Number] = {}
 
         frontend_types_to_native_types = nodes.frontend_type_to_native_type(
-            options.literal_int_precision
-            if options is not None
-            else gt_definitions.LITERAL_INT_PRECISION,
-            options.literal_float_precision
-            if options is not None
-            else gt_definitions.LITERAL_FLOAT_PRECISION,
+            (
+                options.literal_int_precision
+                if options is not None
+                else gt_definitions.LITERAL_INT_PRECISION
+            ),
+            (
+                options.literal_float_precision
+                if options is not None
+                else gt_definitions.LITERAL_FLOAT_PRECISION
+            ),
         )
 
         ann_assign_context = {
@@ -2217,7 +2243,9 @@ class GTScriptParser(ast.NodeVisitor):
                             (
                                 attr_name,
                                 GTScriptParser.eval_external(
-                                    attr_name, context, nodes.Location.from_ast_node(attr_nodes[0])
+                                    attr_name,
+                                    context,
+                                    nodes.Location.from_ast_node(attr_nodes[0]),
                                 ),
                             )
                         )
@@ -2267,7 +2295,8 @@ class GTScriptParser(ast.NodeVisitor):
         for arg_info, arg_annotation in zip(api_signature, api_annotations):
             try:
                 assert arg_annotation in gtscript._VALID_DATA_TYPES or isinstance(
-                    arg_annotation, (gtscript._SequenceDescriptor, gtscript._FieldDescriptor)
+                    arg_annotation,
+                    (gtscript._SequenceDescriptor, gtscript._FieldDescriptor),
                 ), "Invalid parameter annotation"
 
                 if arg_annotation in gtscript._VALID_DATA_TYPES:
@@ -2283,7 +2312,10 @@ class GTScriptParser(ast.NodeVisitor):
                     data_type = nodes.DataType.from_dtype(np.dtype(arg_annotation))
                     length = arg_annotation.length
                     parameter_decls[arg_info.name] = nodes.VarDecl(
-                        name=arg_info.name, data_type=data_type, length=length, is_api=True
+                        name=arg_info.name,
+                        data_type=data_type,
+                        length=length,
+                        is_api=True,
                     )
                 else:
                     assert isinstance(arg_annotation, gtscript._FieldDescriptor)
@@ -2365,7 +2397,9 @@ class GTScriptParser(ast.NodeVisitor):
         fields_decls.update(temp_decls)
 
         init_computations = _make_init_computations(
-            temp_decls, self.definition._gtscript_["temp_init_values"], func_node=main_func_node
+            temp_decls,
+            self.definition._gtscript_["temp_init_values"],
+            func_node=main_func_node,
         )
 
         # Generate definition IR

@@ -25,9 +25,11 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
         offsets = node.offset.to_dict()
         if node.name in tmps_name_map:
-            assert offsets["i"] == offsets["j"] == offsets["k"] == 0, (
-                "Non-zero offset in temporary that is replaced?!"
-            )
+            if offsets["i"] != 0 or offsets["j"] != 0 or offsets["k"] != 0:
+                raise ValueError(
+                    "No offset write capabilities of temporaries. Must "
+                    f"define '{node.name}' as FloatField, FloatFieldIJ, etc."
+                )
             return oir.ScalarAccess(name=tmps_name_map[node.name], dtype=node.dtype)
         return self.generic_visit(node, tmps_name_map=tmps_name_map, **kwargs)
 
@@ -53,7 +55,9 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
             declarations=node.declarations
             + [
                 oir.LocalScalar(
-                    name=tmps_name_map[tmp], dtype=symtable[tmp].dtype, loc=symtable[tmp].loc
+                    name=tmps_name_map[tmp],
+                    dtype=symtable[tmp].dtype,
+                    loc=symtable[tmp].loc,
                 )
                 for tmp in local_tmps_to_replace
             ],
@@ -81,7 +85,9 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
             name=node.name,
             params=node.params,
             vertical_loops=self.visit(
-                node.vertical_loops, new_symbol_name=symbol_name_creator(all_names), **kwargs
+                node.vertical_loops,
+                new_symbol_name=symbol_name_creator(all_names),
+                **kwargs,
             ),
             declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
             loc=node.loc,
