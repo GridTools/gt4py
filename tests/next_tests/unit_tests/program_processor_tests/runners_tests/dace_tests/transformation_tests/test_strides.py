@@ -222,7 +222,7 @@ def test_strides_propagation():
     # Now we also propagate `c` thus now all data descriptors have the same stride.
     gtx_transformations.gt_propagate_strides_of(sdfg_level1, "c1")
     sdfg_level1.validate()
-    for level, sdfg in enumerate([sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg], start=1):
+    for sdfg in [sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg]:
         for aname, adesc in sdfg.arrays.items():
             if aname == "a2_alias":
                 # The symbol `a1_stride` is already used, the suffix `_0` is the result of `find_new_name=True`.
