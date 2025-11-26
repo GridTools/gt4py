@@ -363,7 +363,6 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             sdfg=sdfg,
             state=graph,
             outer_node=new_node,
-            ignore_symbol_mapping=False,
         )
 
     def _get_copy_chain_mode(self, sdfg: dace.SDFG, state: dace.SDFG) -> CopyChainRemoverMode:

@@ -99,7 +99,7 @@ def _make_strides_propagation_level2_sdfg() -> tuple[dace.SDFG, dace_nodes.Neste
         sdfg=sdfg_level3,
         inputs={"a3"},
         outputs={"c3"},
-        symbol_mapping={s3: s3 for s3 in sdfg_level3.free_symbols},
+        symbol_mapping={s3: s3.replace("3", "2") for s3 in sdfg_level3.free_symbols},
     )
 
     state.add_edge(state.add_access("a2"), None, nsdfg, "a3", dace.Memlet("a2[0:10]"))
@@ -147,7 +147,7 @@ def _make_strides_propagation_level1_sdfg() -> tuple[
         sdfg=sdfg_level2,
         inputs={"a2", "c2"},
         outputs={"a2_alias", "b2", "c2"},
-        symbol_mapping={s: s for s in sdfg_level2.free_symbols},
+        symbol_mapping={s: s.replace("2", "1") for s in sdfg_level2.free_symbols},
     )
 
     for inner_name in nsdfg_level2.in_connectors:
@@ -174,131 +174,61 @@ def _make_strides_propagation_level1_sdfg() -> tuple[
     return sdfg, nsdfg_level2, nsdfg_level3
 
 
-def test_strides_propagation_use_symbol_mapping():
+def test_strides_propagation():
     # Note that the SDFG we are building here is not really meaningful.
     sdfg_level1, nsdfg_level2, nsdfg_level3 = _make_strides_propagation_level1_sdfg()
 
     # Tests if all strides are distinct in the beginning and match what we expect.
-    for sdfg in [sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg]:
-        for aname, adesc in sdfg.arrays.items():
-            exp_stride = f"{aname}_stride"
-            actual_stride = adesc.strides[0]
-            assert len(adesc.strides) == 1
-            assert str(actual_stride) == exp_stride, (
-                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
-            )
-
-            nsdfg = sdfg.parent_nsdfg_node
-            if nsdfg is not None:
-                assert exp_stride in nsdfg.symbol_mapping
-                assert str(nsdfg.symbol_mapping[exp_stride]) == exp_stride
-
-    # Now we propagate `a` and `b`, but not `c`.
-    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "a1", ignore_symbol_mapping=False)
-    sdfg_level1.validate()
-    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "b1", ignore_symbol_mapping=False)
-    sdfg_level1.validate()
-
-    # Because `ignore_symbol_mapping=False` the strides of the data descriptor should
-    #  not have changed. But the `symbol_mapping` has been updated for `a` and `b`.
-    #  However, the symbols will only point one level above.
     for level, sdfg in enumerate([sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg], start=1):
         for aname, adesc in sdfg.arrays.items():
-            nsdfg = sdfg.parent_nsdfg_node
-            original_stride = f"{aname}_stride"
-
-            if aname.startswith("c"):
-                target_symbol = f"{aname}_stride"
-            else:
-                target_symbol = f"{aname[0]}{level - 1}_stride"
-
-            if nsdfg is not None:
-                assert original_stride in nsdfg.symbol_mapping
-                assert str(nsdfg.symbol_mapping[original_stride]) == target_symbol
-            assert len(adesc.strides) == 1
-            assert str(adesc.strides[0]) == original_stride, (
-                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
-            )
-
-    # Now we also propagate `c` thus now all data descriptors have the same stride
-    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "c1", ignore_symbol_mapping=False)
-    sdfg_level1.validate()
-    for level, sdfg in enumerate([sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg], start=1):
-        for aname, adesc in sdfg.arrays.items():
-            nsdfg = sdfg.parent_nsdfg_node
-            original_stride = f"{aname}_stride"
-            target_symbol = f"{aname[0]}{level - 1}_stride"
-            if nsdfg is not None:
-                assert original_stride in nsdfg.symbol_mapping
-                assert str(nsdfg.symbol_mapping[original_stride]) == target_symbol
-            assert len(adesc.strides) == 1
-            assert str(adesc.strides[0]) == original_stride, (
-                f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
-            )
-
-
-def test_strides_propagation_ignore_symbol_mapping():
-    # Note that the SDFG we are building here is not really meaningful.
-    sdfg_level1, nsdfg_level2, nsdfg_level3 = _make_strides_propagation_level1_sdfg()
-
-    # Tests if all strides are distinct in the beginning and match what we expect.
-    for sdfg in [sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg]:
-        for aname, adesc in sdfg.arrays.items():
             exp_stride = f"{aname}_stride"
-            actual_stride = adesc.strides[0]
+            target_symbol = exp_stride.replace(str(level), str(level - 1))
             assert len(adesc.strides) == 1
-            assert str(actual_stride) == exp_stride, (
+            assert str(adesc.strides[0]) == exp_stride, (
                 f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
             )
 
-            nsdfg = sdfg.parent_nsdfg_node
-            if nsdfg is not None:
+            if (nsdfg := sdfg.parent_nsdfg_node) is not None:
                 assert exp_stride in nsdfg.symbol_mapping
-                assert str(nsdfg.symbol_mapping[exp_stride]) == exp_stride
+                assert str(nsdfg.symbol_mapping[exp_stride]) == target_symbol
 
     # Now we propagate `a` and `b`, but not `c`.
-    # TODO(phimuell): Create a version where we can set `ignore_symbol_mapping=False`.
-    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "a1", ignore_symbol_mapping=True)
+    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "a1")
     sdfg_level1.validate()
-    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "b1", ignore_symbol_mapping=True)
+    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "b1")
     sdfg_level1.validate()
 
-    # After the propagation `a` and `b` should use the same stride (the one that
-    #  it has on level 1, but `c` should still be level depending.
-    for sdfg in [sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg]:
+    # Check that the strides inside the nested SDFGs have been updated for `a` and `b`.
+    for level, sdfg in enumerate([sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg], start=1):
         for aname, adesc in sdfg.arrays.items():
-            original_stride = f"{aname}_stride"
             if aname.startswith("c"):
                 exp_stride = f"{aname}_stride"
+                target_symbol = f"{aname[0]}{level - 1}_stride"
             else:
                 exp_stride = f"{aname[0]}1_stride"
+                target_symbol = exp_stride
             assert len(adesc.strides) == 1
             assert str(adesc.strides[0]) == exp_stride, (
                 f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
             )
 
-            nsdfg = sdfg.parent_nsdfg_node
-            if nsdfg is not None:
-                assert original_stride in nsdfg.symbol_mapping
-                assert str(nsdfg.symbol_mapping[original_stride]) == original_stride
+            if (nsdfg := sdfg.parent_nsdfg_node) is not None:
+                assert exp_stride in nsdfg.symbol_mapping
+                assert str(nsdfg.symbol_mapping[exp_stride]) == target_symbol
 
-    # Now we also propagate `c` thus now all data descriptors have the same stride
-    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "c1", ignore_symbol_mapping=True)
+    # Now we also propagate `c` thus now all data descriptors have the same stride.
+    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "c1")
     sdfg_level1.validate()
-    for sdfg in [sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg]:
+    for level, sdfg in enumerate([sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg], start=1):
         for aname, adesc in sdfg.arrays.items():
             exp_stride = f"{aname[0]}1_stride"
-            original_stride = f"{aname}_stride"
             assert len(adesc.strides) == 1
             assert str(adesc.strides[0]) == exp_stride, (
                 f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
             )
-
-            nsdfg = sdfg.parent_nsdfg_node
-            if nsdfg is not None:
-                # The symbol mapping must should not be updated.
-                assert original_stride in nsdfg.symbol_mapping
-                assert str(nsdfg.symbol_mapping[original_stride]) == original_stride
+            if (nsdfg := sdfg.parent_nsdfg_node) is not None:
+                assert exp_stride in nsdfg.symbol_mapping
+                assert str(nsdfg.symbol_mapping[exp_stride]) == exp_stride
 
 
 def _make_strides_propagation_dependent_symbol_nsdfg() -> dace.SDFG:
@@ -384,9 +314,9 @@ def test_strides_propagation_dependent_symbol():
             assert sdfg_level1.symbols[sym] == dtype
 
     # Now propagate `a1` and `b1`.
-    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "a1", ignore_symbol_mapping=True)
+    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "a1")
     sdfg_level1.validate()
-    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "b1", ignore_symbol_mapping=True)
+    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "b1")
     sdfg_level1.validate()
 
     # Now we check if the update has worked.
@@ -485,12 +415,6 @@ def test_strides_propagation_shared_symbols_sdfg():
     set explicitly, which is the case, the strides will also be related to their
     shape. This test explores the situation, where we can, for whatever reason,
     only propagate the strides of one such data descriptor.
-
-    Note:
-        If `ignore_symbol_mapping` is `False` then this test will fail.
-        This is because the `symbol_mapping` of the NestedSDFG will act on the
-        whole SDFG. Thus it will not only change the strides of `b` but as an
-        unintended side effect also the strides of `a`.
     """
 
     def ref(a1, b1):

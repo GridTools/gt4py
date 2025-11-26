@@ -304,34 +304,17 @@ def _make_possible_cyclic_sdfg() -> dace.SDFG:
     return sdfg
 
 
-def _make_linear_chain_with_nested_sdfg_sdfg(
-    use_symbolic: bool,
-) -> tuple[dace.SDFG, dace.SDFG, dace_nodes.NestedSDFG]:
+def _make_linear_chain_with_nested_sdfg_sdfg() -> tuple[dace.SDFG, dace.SDFG]:
     """
     The structure is very similar than `_make_diff_sizes_linear_chain_sdfg()`, with
     the main difference that the Map is inside a NestedSDFG.
     """
 
-    def make_array_shape(array_name: str) -> list[dace.symbol]:
-        return [dace.symbol(f"__{array_name}_size_{i}") for i in range(2)]
-
-    def make_array_strides(array_name: str) -> list[dace.symbol]:
-        return [dace.symbol(f"__{array_name}_stride_{i}") for i in range(2)]
-
     def make_inner_sdfg() -> dace.SDFG:
         inner_sdfg = dace.SDFG("inner_sdfg")
         inner_state = inner_sdfg.add_state(is_start_block=True)
         for name in ["i0", "o0"]:
-            if use_symbolic:
-                inner_sdfg.add_array(
-                    name=name,
-                    shape=make_array_shape(name),
-                    strides=make_array_strides(name),
-                    dtype=dace.float64,
-                    transient=False,
-                )
-            else:
-                inner_sdfg.add_array(name=name, shape=(10, 10), dtype=dace.float64, transient=False)
+            inner_sdfg.add_array(name=name, shape=(10, 10), dtype=dace.float64, transient=False)
         inner_state.add_mapped_tasklet(
             "inner_comp",
             map_ranges={
@@ -372,24 +355,7 @@ def _make_linear_chain_with_nested_sdfg_sdfg(
         inner_sdfg,
         inputs={"i0"},
         outputs={"o0"},
-        symbol_mapping=(
-            {
-                inner_size.name: outer_size
-                for inner_name, outer_name in [("i0", "a"), ("o0", "b")]
-                for inner_size, outer_size in zip(
-                    make_array_shape(inner_name), sdfg.arrays[outer_name].shape, strict=True
-                )
-            }
-            | {
-                inner_stride.name: outer_stride
-                for inner_name, outer_name in [("i0", "a"), ("o0", "b")]
-                for inner_stride, outer_stride in zip(
-                    make_array_strides(inner_name), sdfg.arrays[outer_name].strides, strict=True
-                )
-            }
-            if use_symbolic
-            else {}
-        ),
+        symbol_mapping={},
     )
 
     state.add_edge(a, None, nsdfg, "i0", sdfg.make_array_memlet("a"))
@@ -399,7 +365,7 @@ def _make_linear_chain_with_nested_sdfg_sdfg(
     state.add_nedge(c, d, dace.Memlet("c[0:20, 0:20] -> [2:22, 6:26]"))
     state.add_nedge(d, e, dace.Memlet("d[0:30, 0:30] -> [1:31, 8:38]"))
     sdfg.validate()
-    return sdfg, inner_sdfg, nsdfg
+    return sdfg, inner_sdfg
 
 
 def _make_a1_has_output_sdfg() -> dace.SDFG:
@@ -718,21 +684,14 @@ def test_a1_additional_output():
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
 
 
-@pytest.mark.parametrize(
-    "use_symbolic", [False, True], ids=["constant_strides", "symbolic_strides"]
-)
-def test_linear_chain_with_nested_sdfg(use_symbolic):
-    sdfg, inner_sdfg, nsdfg_node = _make_linear_chain_with_nested_sdfg_sdfg(use_symbolic)
+def test_linear_chain_with_nested_sdfg():
+    sdfg, inner_sdfg = _make_linear_chain_with_nested_sdfg_sdfg()
 
-    inner_input_desc = inner_sdfg.arrays["i0"].clone()
-    inner_output_desc = inner_sdfg.arrays["o0"].clone()
-
-    if not use_symbolic:
-        # Ensure that the SDFG was constructed in the correct way.
-        assert inner_input_desc.shape == sdfg.arrays["a"].shape
-        assert inner_input_desc.strides == sdfg.arrays["a"].strides
-        assert inner_output_desc.shape == sdfg.arrays["b"].shape
-        assert inner_output_desc.strides == sdfg.arrays["b"].strides
+    # Ensure that the SDFG was constructed in the correct way.
+    assert inner_sdfg.arrays["i0"].strides == sdfg.arrays["a"].strides
+    assert inner_sdfg.arrays["o0"].strides == sdfg.arrays["b"].strides
+    assert inner_sdfg.arrays["i0"].shape == inner_sdfg.arrays["o0"].shape
+    assert inner_sdfg.arrays["i0"].shape == sdfg.arrays["a"].shape
 
     def ref_comp(a, e):
         def inner_ref(i0, o0):
@@ -758,7 +717,6 @@ def test_linear_chain_with_nested_sdfg(use_symbolic):
     # Apply the transformation.
     #  It should remove all non transient arrays.
     nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
-    assert nb_applies == 3
 
     # Perform the tests.
     acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
@@ -768,26 +726,13 @@ def test_linear_chain_with_nested_sdfg(use_symbolic):
     assert util.count_nodes(sdfg, dace_nodes.NestedSDFG) == 1
 
     # The shapes should be the same as before.
-    assert inner_sdfg.arrays["i0"].shape == inner_input_desc.shape
-    assert inner_sdfg.arrays["o0"].shape == inner_output_desc.shape
+    assert inner_sdfg.arrays["i0"].shape == inner_sdfg.arrays["o0"].shape
+    assert inner_sdfg.arrays["i0"].shape == sdfg.arrays["a"].shape
 
-    if use_symbolic:
-        # The strides should still use the same symbols as before, but the symbol
-        # mapping should be updated.
-        assert inner_sdfg.arrays["i0"].strides == inner_input_desc.strides
-        assert inner_sdfg.arrays["o0"].strides == inner_output_desc.strides
-        assert all(
-            nsdfg_node.symbol_mapping[inner_stride.name] == outer_stride
-            for inner_name, outer_name in [("i0", "a"), ("o0", "e")]
-            for inner_stride, outer_stride in zip(
-                inner_sdfg.arrays[inner_name].strides, sdfg.arrays[outer_name].strides, strict=True
-            )
-        )
-    else:
-        # The strides of `i0` should also be the same as the arrays in the parent SDFG,
-        # that is the same as the strides of array `a` for input and `e` for output.
-        assert inner_sdfg.arrays["i0"].strides == sdfg.arrays["a"].strides
-        assert inner_sdfg.arrays["o0"].strides == sdfg.arrays["e"].strides
+    # The strides of `i0` should also be the same as before, but the strides
+    #  of `o0` should now be the same as `e`.
+    assert inner_sdfg.arrays["i0"].strides == sdfg.arrays["a"].strides
+    assert inner_sdfg.arrays["o0"].strides == sdfg.arrays["e"].strides
 
     # Now run the transformed SDFG to see if the same output is generated.
     util.compile_and_run_sdfg(sdfg, **res)
