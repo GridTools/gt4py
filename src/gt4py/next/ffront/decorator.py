@@ -64,6 +64,7 @@ def _field_domain_descriptor_mapping_from_func_type(func_type: ts.FunctionType) 
                 static_domain_args.append(f"{name}{path_as_expr}")
     return static_domain_args
 
+
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
@@ -189,7 +190,11 @@ class Program:
             argument_descriptor_mapping[arguments.StaticArg] = self.static_params
 
         if self.static_domains:
-            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = _field_domain_descriptor_mapping_from_func_type(self.past_stage.past_node.type.definition)
+            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = (
+                _field_domain_descriptor_mapping_from_func_type(
+                    self.past_stage.past_node.type.definition
+                )
+            )
 
         program_type = self.past_stage.past_node.type
         assert isinstance(program_type, ts_ffront.ProgramType)

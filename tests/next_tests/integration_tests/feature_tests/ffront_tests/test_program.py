@@ -82,9 +82,7 @@ def test_shift_by_one_execution(cartesian_case):
 
 
 def test_copy_execution(cartesian_case, copy_program_def):
-    copy_program = gtx.program(
-        copy_program_def, backend=cartesian_case.backend, static_domains=True
-    )
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
     cases.verify_with_default_data(cartesian_case, copy_program, ref=lambda in_field: in_field)
 

@@ -24,7 +24,7 @@ from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 #: Threshold fraction of domain points which may be added to a domain on translation in order
 #: to have a contiguous domain before a warning is raised.
-NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD: float = 1 / 4
+_NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD: float = 1 / 4
 
 #: Offset tags for which a non-contiguous domain warning has already been printed
 _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS: set[str] = set()
@@ -158,7 +158,9 @@ class SymbolicDomain:
                         )
                         for expr in (start_expr, stop_expr)
                     )  # type: ignore[assignment]  # mypy not smart enough
-                    assert isinstance(start_expr, itir.Literal) and isinstance(stop_expr, itir.Literal)
+                    assert isinstance(start_expr, itir.Literal) and isinstance(
+                        stop_expr, itir.Literal
+                    )
                     start, stop = (int(literal.value) for literal in (start_expr, stop_expr))  # type: ignore[attr-defined]  # mypy does not understand assert above
 
                     nb_index: slice | int
@@ -187,9 +189,8 @@ class SymbolicDomain:
 
                     fraction_accessed = np.unique(accessed).size / (new_stop - new_start)  # type: ignore[call-overload]  # TODO(havogt): improve typing for NDArrayObject
 
-                    if (
-                        fraction_accessed < NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD
-                        and (off.value not in _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS)
+                    if fraction_accessed < _NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD and (
+                        off.value not in _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS
                     ):
                         _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS.add(off.value)
                         warnings.warn(

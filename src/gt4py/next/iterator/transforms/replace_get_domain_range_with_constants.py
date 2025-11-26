@@ -48,9 +48,9 @@ class _DomainDeduction(NodeTranslator):
 
 
 @dataclasses.dataclass(frozen=True)
-class TransformGetDomainRange(PreserveLocationVisitor, NodeTranslator):
+class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator):
     """
-    Transforms `get_domain` calls into a tuple containing start and stop.
+    Replace `get_domain` calls into a tuple containing start and stop.
 
     Example:
         >>> from gt4py import next as gtx
@@ -86,7 +86,7 @@ class TransformGetDomainRange(PreserveLocationVisitor, NodeTranslator):
         ...         ),
         ...     ],
         ... )
-        >>> result = TransformGetDomainRange.apply(ir, sizes=sizes)
+        >>> result = ReplaceGetDomainRangeWithConstants.apply(ir, sizes=sizes)
         >>> print(result)
         test(inp, out) {
           out @ u⟨ Vertexₕ: [{0, 10}[0], {0, 10}[1][, KDimᵥ: [{0, 20}[0], {0, 20}[1][ ⟩ ← (⇑deref)(inp);

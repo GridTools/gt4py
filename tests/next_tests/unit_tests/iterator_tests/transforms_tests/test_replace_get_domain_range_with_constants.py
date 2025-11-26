@@ -21,7 +21,9 @@ from gt4py import next as gtx
 from gt4py.next import Domain, common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.transform_get_domain_range import TransformGetDomainRange
+from gt4py.next.iterator.transforms.transform_get_domain_range import (
+    ReplaceGetDomainRangeWithConstants,
+)
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 
 
@@ -64,7 +66,7 @@ def run_test_program(
         params=params,
         body=[setat_factory(domain=domain, target=im.ref(target))],
     )
-    actual = TransformGetDomainRange.apply(testee, sizes=sizes)
+    actual = ReplaceGetDomainRangeWithConstants.apply(testee, sizes=sizes)
     actual = CollapseTuple.apply(
         actual, enabled_transformations=CollapseTuple.Transformation.COLLAPSE_TUPLE_GET_MAKE_TUPLE
     )

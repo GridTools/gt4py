@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import warnings
-from typing import Any, Mapping, Optional, Protocol
+from typing import Optional, Protocol
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
@@ -87,6 +87,28 @@ def _process_symbolic_domains_option(
     symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]],
     use_max_domain_range_on_unstructured_shift: Optional[bool],
 ) -> Optional[dict[str, str | itir.Expr]]:
+    """
+    Given a program, offset_provider and some configuration options determine how domains are
+    inferred.
+
+    The output of this function is used as `symbolic_domain_sizes` argument of domain inference, i.e.
+    :func:`infer_domain.infer_program`.
+
+    Right now domains of `as_fieldop` expressions can be inferred either a) using static information
+    from the offset provider, or b) they are set to an expression controlled by
+    the user and configured in the backend, or c) they are set to the maximum possible domain /
+    everywhere (see :func:`_max_domain_range_sizes`)
+
+    Option a) applies when the program is decorated with `static_domains = True` (unless option c)
+    is explicitly requested). Then all dynamic domains were replaced with static ones
+    which we recognize here. The domain inference then uses this static information which we
+    communicate by returning `None`, i.e. no symbolic domain sizes.
+    Option b) applies when the user explicitly configured `symbolic_domain_sizes` in the backend.
+    In that case we just forward the value.
+    Option c) applies when `static_domains = False` or when explicitly configured in the backend
+    with `use_max_domain_range_on_unstructured_shift = True`. In that case we determine the
+    maximum sizes using :func:`_max_domain_range_sizes` and return them.
+    """
     if symbolic_domain_sizes:
         assert not use_max_domain_range_on_unstructured_shift, "Options are mutually exclusive."
         return symbolic_domain_sizes
