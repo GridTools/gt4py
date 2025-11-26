@@ -15,6 +15,7 @@ from typing import Any, Optional, Sequence, cast
 import devtools
 
 from gt4py.eve import NodeTranslator, traits
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common, config, errors, utils
 from gt4py.next.ffront import (
     fbuiltins,
@@ -121,10 +122,9 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         )
 
     # TODO(tehrengruber): Put this in a dedicated transformation step.
-    if arguments.FieldDomainDescriptor in inp.args.argument_descriptor_contexts:
-        context = inp.args.argument_descriptor_contexts[arguments.FieldDomainDescriptor]
+    if (context := inp.args.argument_descriptor_contexts.get(arguments.FieldDomainDescriptor, None)):
         field_domains = {
-            param: utils.tree_map(lambda x: x.domain if x else x)(v) for param, v in context.items()
+            param: utils.tree_map(lambda x: x.domain if x is not None else x)(v) for param, v in context.items()
         }
         itir_program = transform_get_domain_range.TransformGetDomainRange.apply(
             itir_program, sizes=field_domains

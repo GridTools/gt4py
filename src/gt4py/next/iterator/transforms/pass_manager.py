@@ -45,7 +45,7 @@ class GTIRTransform(Protocol):
     ) -> itir.Program: ...
 
 
-def _max_domain_range_sizes(offset_provider: Mapping[str, Any]) -> dict[str, itir.Literal]:
+def _max_domain_range_sizes(offset_provider: common.OffsetProvider) -> dict[str, itir.Literal]:
     """
     Extract horizontal domain sizes from an `offset_provider`.
 
@@ -83,7 +83,7 @@ def _has_dynamic_domains(ir: itir.Program) -> bool:
 
 def _process_symbolic_domains_option(
     ir: itir.Program,
-    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    offset_provider: common.OffsetProvider,
     symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]],
     use_max_domain_range_on_unstructured_shift: Optional[bool],
 ) -> Optional[dict[str, str | itir.Expr]]:
@@ -116,7 +116,7 @@ def apply_common_transforms(
     *,
     # TODO(havogt): should be replaced by `common.OffsetProviderType`, but global_tmps currently
     #  relies on runtime info or `symbolic_domain_sizes`.
-    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    offset_provider: common.OffsetProvider,
     extract_temporaries=False,
     unroll_reduce=False,
     common_subexpression_elimination=True,

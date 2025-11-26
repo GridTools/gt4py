@@ -244,7 +244,9 @@ def test_unstructured_translate(shift_chain, expected_end_domain):
     assert end_domain == expected_end_domain
 
 
-def test_non_contiguous_domain_warning():
+def test_non_contiguous_domain_warning(monkeypatch):
+    monkeypatch.setattr(domain_utils, "_NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS", set())
+
     offset_provider = {
         "V2V": constructors.as_connectivity(
             domain={Vertex: (0, 100), V2VDim: 1},

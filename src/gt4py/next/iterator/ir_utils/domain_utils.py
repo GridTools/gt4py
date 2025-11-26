@@ -26,11 +26,8 @@ from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 #: to have a contiguous domain before a warning is raised.
 NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD: float = 1 / 4
 
-#: Skip printing warnings after exceeding `NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD` this many times.
-NON_CONTIGUOUS_DOMAIN_MAX_WARNINGS: int = 5
-
-#: Number of warnings raised after exceeding `NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD`
-_NON_CONTIGUOUS_DOMAIN_WARNING_COUNTER: int = 0
+#: Offset tags for which a non-contiguous domain warning has already been printed
+_NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS: set[str] = set()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -152,17 +149,17 @@ class SymbolicDomain:
                     skip_value = connectivity.skip_value
 
                     # fold & convert expr into actual integers
-                    range_exprs = new_ranges[old_dim].start, new_ranges[old_dim].stop
-                    range_exprs = tuple(
+                    start_expr, stop_expr = new_ranges[old_dim].start, new_ranges[old_dim].stop
+                    start_expr, stop_expr = (
                         collapse_tuple.CollapseTuple.apply(
                             expr,
                             within_stencil=False,
                             allow_undeclared_symbols=True,
                         )
-                        for expr in range_exprs
+                        for expr in (start_expr, stop_expr)
                     )  # type: ignore[assignment]  # mypy not smart enough
-                    assert all(isinstance(expr, itir.Literal) for expr in range_exprs)
-                    start, stop = (int(literal.value) for literal in range_exprs)  # type: ignore[attr-defined]  # mypy does not understand assert above
+                    assert isinstance(start_expr, itir.Literal) and isinstance(stop_expr, itir.Literal)
+                    start, stop = (int(literal.value) for literal in (start_expr, stop_expr))  # type: ignore[attr-defined]  # mypy does not understand assert above
 
                     nb_index: slice | int
                     if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
@@ -180,7 +177,7 @@ class SymbolicDomain:
                         #  `can_deref`.
                         warnings.warn(
                             UserWarning(
-                                f"Translating '{self.as_expr()}' using '{shift[0].value}' has "
+                                f"Translating '{self.as_expr()}' using '{off.value}' has "
                                 f"an out-of-bounds access."
                             ),
                             stacklevel=2,
@@ -192,12 +189,12 @@ class SymbolicDomain:
 
                     if (
                         fraction_accessed < NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD
-                        and (_NON_CONTIGUOUS_DOMAIN_WARNING_COUNTER := +1)
-                        < NON_CONTIGUOUS_DOMAIN_MAX_WARNINGS
+                        and (off.value not in _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS)
                     ):
+                        _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS.add(off.value)
                         warnings.warn(
                             UserWarning(
-                                f"Translating '{self.as_expr()}' using '{shift[0].value}' requires "
+                                f"Translating '{self.as_expr()}' using '{off.value}' requires "
                                 f"computations on many additional points "
                                 f"({round((1 - fraction_accessed) * 100)}%) in order to get a contiguous "
                                 f"domain. Please consider reordering your mesh."

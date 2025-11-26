@@ -54,6 +54,16 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
+def _field_domain_descriptor_mapping_from_func_type(func_type: ts.FunctionType) -> list[str]:
+    static_domain_args = []
+    param_types = func_type.pos_or_kw_args | func_type.kw_only_args
+    for name, type_ in param_types.items():
+        for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
+            if isinstance(el_type_, ts.FieldType):
+                path_as_expr = "".join(map(lambda idx: f"[{idx}]", path))
+                static_domain_args.append(f"{name}{path_as_expr}")
+    return static_domain_args
+
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
@@ -173,23 +183,13 @@ class Program:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
 
-        def path_to_expr(path: Sequence[int]) -> str:
-            return "".join(map(lambda idx: f"[{idx}]", path))
-
         argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
 
         if self.static_params:
             argument_descriptor_mapping[arguments.StaticArg] = self.static_params
 
         if self.static_domains:
-            static_domain_args = []
-            func_type = self.past_stage.past_node.type.definition  # type: ignore[union-attr] # type inference done at this point
-            param_types = func_type.pos_or_kw_args | func_type.kw_only_args
-            for name, type_ in param_types.items():
-                for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
-                    if isinstance(el_type_, ts.FieldType):
-                        static_domain_args.append(f"{name}{path_to_expr(path)}")
-            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = static_domain_args
+            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = _field_domain_descriptor_mapping_from_func_type(self.past_stage.past_node.type.definition)
 
         program_type = self.past_stage.past_node.type
         assert isinstance(program_type, ts_ffront.ProgramType)
