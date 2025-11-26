@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Generic, TypeVar, Union
 
+from gt4py import eve
 from gt4py.eve import (
     Coerced,
     Node,
@@ -28,11 +29,13 @@ from gt4py.next.utils import RecursionGuard
 
 
 class LocatedNode(Node):
-    # TODO: introduce fingerprint function that does not include location
-    location: SourceLocation
+    location: SourceLocation = eve.field(repr=False, compare=False)
 
     def fingerprint(self) -> str:
-        return eve_utils.content_hash(self, pickler=eve_concepts.selective_pickler({"location"}))
+        """
+        Generates a unique hash string for this node that is location agnostic.
+        """
+        return eve_utils.content_hash(self, pickler=eve_concepts.selective_node_pickler("location"))
 
     def __str__(self) -> str:
         from gt4py.next.ffront.foast_pretty_printer import pretty_format

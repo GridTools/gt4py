@@ -27,8 +27,8 @@ def test_str():
 
 
 def test_fingerprint():
-    loc1 = eve.SourceLocation(filename="a", line=1, column=1)
-    loc2 = eve.SourceLocation(filename="a", line=1, column=1)
+    loc1 = eve.SourceLocation(filename="loc1", line=1, column=1)
+    loc2 = eve.SourceLocation(filename="loc2", line=1, column=1)
     node1 = ir.SymRef(id="abc", location=loc1)
     node2 = ir.SymRef(id="abc", location=loc2)
     node3 = ir.SymRef(id="abcd", location=loc1)

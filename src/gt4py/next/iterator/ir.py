@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
-import pickle
 import typing
 from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
 
@@ -23,17 +22,6 @@ from gt4py.next.type_system import type_specifications as ts
 DimensionKind = common.DimensionKind
 
 
-class _FingerprintPickler(pickle.Pickler):
-    def reducer_override(self, obj):
-        if not isinstance(obj, Node):
-            return NotImplemented  # no override
-        return (
-            obj.__class__,
-            (),
-            tuple((k, v) for k, v in obj.iter_children_items() if k not in ("location", "type")),
-        )
-
-
 @eve_utils.noninstantiable
 class Node(eve.Node):
     location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
@@ -42,8 +30,11 @@ class Node(eve.Node):
     type: Optional[ts.TypeSpec] = eve.field(default=None, repr=False, compare=False)
 
     def fingerprint(self) -> str:
+        """
+        Generates a unique hash string for this node that is location and type agnostic.
+        """
         return eve_utils.content_hash(
-            self, pickler=eve.concepts.selective_pickler({"type", "location"})
+            self, pickler=eve.concepts.selective_node_pickler("type", "location")
         )
 
     def __str__(self) -> str:

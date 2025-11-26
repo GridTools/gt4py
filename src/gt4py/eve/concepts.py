@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import pickle
 import re
 
@@ -20,7 +21,6 @@ from .extended_typing import (
     Any,
     Callable,
     ClassVar,
-    Container,
     Dict,
     Final,
     Iterable,
@@ -239,13 +239,14 @@ def eq_nonlocated(a: Node, b: Node) -> bool:
     return len(utils.ddiff(a, b, exclude_types=[SourceLocation, SourceLocationGroup])) == 0
 
 
-def selective_pickler(skipped_fields: Container[str]) -> type:
+@functools.cache
+def selective_node_pickler(*skipped_fields: str) -> type:
     """
     Return a `pickle.Pickler` to serialize a node skipping the given fields in the node or any of
     its child nodes.
     """
 
-    class SelectivePickler(pickle.Pickler):
+    class SelectiveNodePickler(pickle.Pickler):
         def reducer_override(self: Self, obj: Any) -> tuple[type, tuple, tuple] | None:
             if not isinstance(obj, Node):
                 return NotImplemented  # no override
@@ -255,4 +256,4 @@ def selective_pickler(skipped_fields: Container[str]) -> type:
                 tuple((k, v) for k, v in obj.iter_children_items() if k not in skipped_fields),
             )
 
-    return SelectivePickler
+    return SelectiveNodePickler
