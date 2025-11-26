@@ -25,7 +25,6 @@ from .extended_typing import (
     Final,
     Iterable,
     List,
-    NotImplementedType,
     Optional,
     Self,
     Set,
@@ -247,9 +246,7 @@ def selective_pickler(skipped_fields: Container[str]) -> type:
     """
 
     class SelectivePickler(pickle.Pickler):
-        def reducer_override(
-            self: Self, obj: Any
-        ) -> NotImplementedType | tuple[type, tuple, tuple]:
+        def reducer_override(self: Self, obj: Any) -> tuple[type, tuple, tuple] | None:
             if not isinstance(obj, Node):
                 return NotImplemented  # no override
             return (
