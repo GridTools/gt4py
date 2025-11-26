@@ -190,6 +190,7 @@ class Program:
             argument_descriptor_mapping[arguments.StaticArg] = self.static_params
 
         if self.static_domains:
+            assert isinstance(self.past_stage.past_node.type, ts_ffront.ProgramType)
             argument_descriptor_mapping[arguments.FieldDomainDescriptor] = (
                 _field_domain_descriptor_mapping_from_func_type(
                     self.past_stage.past_node.type.definition

@@ -76,16 +76,16 @@ def _unstructured_translate_range_statically(
 
     # fold & convert expr into actual integers
     start_expr, stop_expr = range_.start, range_.stop
-    start_expr, stop_expr = (
+    start_expr, stop_expr = (  # type: ignore[assignment]  # mypy not smart enough
         collapse_tuple.CollapseTuple.apply(
             expr,
             within_stencil=False,
             allow_undeclared_symbols=True,
         )
         for expr in (start_expr, stop_expr)
-    )  # type: ignore[assignment]  # mypy not smart enough
+    )
     assert isinstance(start_expr, itir.Literal) and isinstance(stop_expr, itir.Literal)
-    start, stop = (int(literal.value) for literal in (start_expr, stop_expr))  # type: ignore[attr-defined]  # mypy does not understand assert above
+    start, stop = int(start_expr.value), int(stop_expr.value)
 
     nb_index: slice | int
     if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
@@ -215,6 +215,7 @@ class SymbolicDomain:
                         im.ensure_expr(symbolic_domain_sizes[new_dim.value]),
                     )
                 else:
+                    assert common.is_offset_provider(offset_provider)
                     new_range = _unstructured_translate_range_statically(
                         new_ranges[old_dim], off.value, val, offset_provider, self.as_expr()
                     )

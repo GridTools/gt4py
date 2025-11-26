@@ -136,9 +136,7 @@ def _process_symbolic_domains_option(
 def apply_common_transforms(
     ir: itir.Program,
     *,
-    # TODO(havogt): should be replaced by `common.OffsetProviderType`, but global_tmps currently
-    #  relies on runtime info or `symbolic_domain_sizes`.
-    offset_provider: common.OffsetProvider,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
     extract_temporaries=False,
     unroll_reduce=False,
     common_subexpression_elimination=True,
@@ -151,6 +149,9 @@ def apply_common_transforms(
     use_max_domain_range_on_unstructured_shift: Optional[bool] = None,
 ) -> itir.Program:
     assert isinstance(ir, itir.Program)
+    # TODO(tehrengruber): Allow `common.OffsetProviderType`, but domain inference currently
+    #  relies on static information or `symbolic_domain_sizes`.
+    assert common.is_offset_provider(offset_provider)
 
     offset_provider_type = common.offset_provider_to_type(offset_provider)
 

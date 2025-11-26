@@ -94,7 +94,9 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
     """
 
     @classmethod
-    def apply(cls, program: itir.Program, sizes: dict[str, MaybeNestedInTuple[common.Domain]]):
+    def apply(
+        cls, program: itir.Program, sizes: dict[str, MaybeNestedInTuple[common.Domain | None]]
+    ):
         return cls().visit(program, sizes=sizes)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.FunCall:
