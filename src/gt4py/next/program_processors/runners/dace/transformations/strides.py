@@ -518,7 +518,7 @@ def _gt_map_strides_into_nested_sdfg(
             dim_istride = nsdfg_node.sdfg.add_symbol(
                 dim_ostride.name, sdfg.symbols[dim_ostride.name], find_new_name=True
             )
-            new_strides[i] = dim_ostride
+            new_strides[i] = dace.symbolic.pystr_to_symbolic(dim_istride)
             nsdfg_node.symbol_mapping[dim_istride] = dim_ostride
         elif (free_symbols := dim_ostride.free_symbols).isdisjoint(nsdfg_used_symbols):
             # A symbolic expression such as `value1 - value2`, where no symbol is
