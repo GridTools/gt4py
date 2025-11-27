@@ -120,6 +120,7 @@ def gt_auto_optimize(
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
+    promote_independent_memlets_for_blocking: bool = False,
     disable_splitting: bool = False,
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
@@ -319,6 +320,7 @@ def gt_auto_optimize(
             blocking_dim=blocking_dim,
             blocking_size=blocking_size,
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
+            promote_independent_memlets_for_blocking=promote_independent_memlets_for_blocking,
             validate_all=validate_all,
         )
 
@@ -645,6 +647,7 @@ def _gt_auto_process_dataflow_inside_maps(
     blocking_dim: Optional[gtx_common.Dimension],
     blocking_size: int,
     blocking_only_if_independent_nodes: Optional[bool],
+    promote_independent_memlets_for_blocking: Optional[bool],
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
@@ -681,6 +684,7 @@ def _gt_auto_process_dataflow_inside_maps(
                 blocking_size=blocking_size,
                 blocking_parameter=blocking_dim,
                 require_independent_nodes=blocking_only_if_independent_nodes,
+                promote_independent_memlets=promote_independent_memlets_for_blocking,
             ),
             validate=False,
             validate_all=validate_all,
