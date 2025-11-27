@@ -98,16 +98,21 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
     ) -> None:
         for loop in stencil.vertical_loops:
             for section in loop.sections:
-                with self.create_k_loop_code(section, loop):
-                    for execution in section.horizontal_executions:
-                        with self.generate_ij_loop(block_extents, execution):
+                for execution in section.horizontal_executions:
+                    with self.generate_ij_loop(block_extents, execution):
+                        with self.create_k_loop_code(section, loop, symtable=symtable):
                             self.visit(execution, symtable=symtable)
 
     @contextmanager
     def create_k_loop_code(
-        self, section: oir.VerticalLoopSection, loop: oir.VerticalLoop
+        self,
+        section: oir.VerticalLoopSection,
+        loop: oir.VerticalLoop,
+        symtable: Mapping[str, oir.FieldDecl],
     ) -> Generator:
-        loop_bounds: str = self.visit(section.interval, var="k", direction=loop.loop_order)
+        loop_bounds: str = self.visit(
+            section.interval, var="k", direction=loop.loop_order, symtable=symtable
+        )
         increment = "-1" if loop.loop_order == gtc_common.LoopOrder.BACKWARD else "1"
         loop_code = f"for k in range( {loop_bounds} , {increment}):"
         self.body.append(loop_code)
@@ -130,13 +135,13 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         self.body.dedent()
         self.body.dedent()
 
-    def visit_While(self, while_node: gtc_common.While, **_) -> None:
-        while_condition = self.visit(while_node.cond)
+    def visit_While(self, while_node: gtc_common.While, **kwargs) -> None:
+        while_condition = self.visit(while_node.cond, **kwargs)
         while_code = f"while {while_condition}:"
         self.body.append(while_code)
         with self.body.indented():
             for statement in while_node.body:
-                self.visit(statement)
+                self.visit(statement, **kwargs)
 
     def visit_HorizontalExecution(
         self, horizontal_execution: oir.HorizontalExecution, **kwargs
@@ -191,6 +196,9 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         if axis_bound.level == gtc_common.LevelMarker.END:
             return f"{kwargs['var']}_size + {axis_bound.offset}"
 
+    def visit_RuntimeAxisBound(self, axis_bound: gtc_common.RuntimeAxisBound, **kwargs) -> str:
+        return f"int({kwargs['var']}_0 + {self.visit(axis_bound.offset, **kwargs)})"
+
     def visit_Interval(self, interval: oir.Interval, **kwargs) -> str:
         if kwargs["direction"] == gtc_common.LoopOrder.BACKWARD:
             return ",".join(
@@ -202,20 +210,30 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         return ",".join([self.visit(interval.start, **kwargs), self.visit(interval.end, **kwargs)])
 
     def visit_Temporary(self, temporary_declaration: oir.Temporary, **kwargs) -> str:
+        # Cartesian IJ
         field_extents = kwargs["field_extents"]
         local_field_extent = field_extents[temporary_declaration.name]
         i_padding: int = local_field_extent[0][1] - local_field_extent[0][0]
         j_padding: int = local_field_extent[1][1] - local_field_extent[1][0]
-        shape: list[str] = [f"i_size + {i_padding}", f"j_size + {j_padding}", "k_size"]
-        data_dimensions: list[str] = [str(dim) for dim in temporary_declaration.data_dims]
-        shape = shape + data_dimensions
-        shape_decl = ", ".join(shape)
-        dtype: str = self.visit(temporary_declaration.dtype)
+        shape: list[str] = [f"i_size + {i_padding}", f"j_size + {j_padding}"]
         field_offset = tuple(-ext[0] for ext in local_field_extent)
-        offset = [str(off) for off in field_offset] + ["0"] * (
-            1 + len(temporary_declaration.data_dims)
-        )
-        return f"{temporary_declaration.name} = Field.empty(({shape_decl}), {dtype}, ({', '.join(offset)}))"
+        offset = [str(off) for off in field_offset]
+
+        # Cartesian vertical dimension K
+        if temporary_declaration.dimensions[2]:
+            shape.append("k_size")
+            offset.append("0")
+
+        # Data dimensions
+        data_dimensions: list[str] = [str(dim) for dim in temporary_declaration.data_dims]
+        offset += ["0"] * len(temporary_declaration.data_dims)
+
+        # All together to write the `Field.empty` call
+        dims = temporary_declaration.dimensions
+        shape_decl = ", ".join(shape + data_dimensions)
+        dtype: str = self.visit(temporary_declaration.dtype)
+
+        return f"{temporary_declaration.name} = Field.empty(({shape_decl}), {dtype}, ({', '.join(offset)}), {dims})"
 
     def visit_DataType(self, data_type: gtc_common.DataType, **_) -> str:
         if data_type in {gtc_common.DataType.BOOL}:
@@ -269,6 +287,19 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
             return f"{field_access.name}[{offset_str},{data_index_access}]"
         return f"{field_access.name}[{offset_str}]"
 
+    def visit_AbsoluteKIndex(self, absolute_k_index: oir.AbsoluteKIndex, **kwargs) -> str:
+        access_pattern = []
+        if kwargs["dimensions"][2] is False:
+            raise ValueError(
+                "Tried accessing a field with no K-dimensions with an absolute K-index."
+            )
+        if kwargs["dimensions"][0]:
+            access_pattern.append("i")
+        if kwargs["dimensions"][1]:
+            access_pattern.append("j")
+        access_pattern.append(f"int({self.visit(absolute_k_index.k, **kwargs)})")
+        return ",".join(access_pattern)
+
     def visit_BinaryOp(self, binary: oir.BinaryOp, **kwargs) -> str:
         return f"( {self.visit(binary.left, **kwargs)} {binary.op} {self.visit(binary.right, **kwargs)} )"
 
@@ -306,6 +337,10 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         arguments = ",".join(arglist)
         function = gtc_common.OP_TO_UFUNC_NAME[gtc_common.NativeFunction][native_function_call.func]
         return f"ufuncs.{function}({arguments})"
+
+    def visit_IteratorAccess(self, iterator_access: oir.IteratorAccess, **_) -> str:
+        """Returns the axis in lower letter (to match the index of the loop)"""
+        return iterator_access.name.value.lower()
 
     def visit_UnaryOp(self, unary_operator: oir.UnaryOp, **kwargs) -> str:
         return f"{unary_operator.op.value} {self.visit(unary_operator.expr, **kwargs)}"

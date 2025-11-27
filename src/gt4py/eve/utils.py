@@ -17,6 +17,7 @@ import dataclasses
 import enum
 import functools
 import hashlib
+import io
 import itertools
 import operator
 import pickle
@@ -261,7 +262,7 @@ _K = TypeVar("_K")
 _V = TypeVar("_V")
 
 
-class CustomDefaultDictBase(collections.UserDict[_K, _V]):
+class CustomDefaultDictBase(collections.defaultdict[_K, _V]):
     """
     Base dict-like class using a value factory to compute default values per key.
 
@@ -282,16 +283,16 @@ class CustomDefaultDictBase(collections.UserDict[_K, _V]):
 
     """
 
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+    def __missing__(self, key: _K) -> _V:
+        self[key] = value = self.value_factory(key)
+        return value
+
     @abc.abstractmethod
     def value_factory(self, key: _K) -> _V:
         raise NotImplementedError
-
-    def __getitem__(self, key: _K) -> _V:
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            self.data[key] = (value := self.value_factory(key))
-            return value
 
 
 class CustomMapping(collections.abc.MutableMapping[_K, _V]):
@@ -350,6 +351,10 @@ class CustomMapping(collections.abc.MutableMapping[_K, _V]):
             + ", ".join(f"{self.key_map[k]!r}: {self.value_map[k]!r}" for k in self.key_map)
             + "}"
         )
+
+    def internal_key(self, key: _K) -> int:
+        """Return the internal key used to store the value associated with `key`."""
+        return self.key_func(key)
 
 
 class HashableBy(Generic[_T]):
@@ -613,7 +618,11 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
     return "__noninstantiable__" in cls.__dict__
 
 
-def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | None = None) -> str:
+def content_hash(
+    *args: Any,
+    hash_algorithm: str | xtyping.HashlibAlgorithm | None = None,
+    pickler: type = pickle.Pickler,
+) -> str:
     """Stable content-based hash function using instance serialization data.
 
     It provides a customizable hash function for any kind of data.
@@ -636,7 +645,10 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
     else:
         hasher = hash_algorithm
 
-    hasher.update(pickle.dumps(args))
+    buf = io.BytesIO()
+    pickler(buf).dump(args)
+
+    hasher.update(buf.getvalue())
     result = hasher.hexdigest()
     assert isinstance(result, str)
 

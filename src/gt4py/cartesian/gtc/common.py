@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import enum
 import functools
+import numbers
 import typing
+from abc import ABC
 from typing import (
     Any,
     ClassVar,
@@ -290,23 +292,23 @@ def verify_and_get_common_dtype(
         if strict:
             if all(dt == dtype for dt in dtypes):
                 return dtype
-            else:
-                raise ValueError(
-                    f"Type mismatch in `{node_cls.__name__}`. Types are "
-                    + ", ".join(dt.name for dt in dtypes)
-                )
-        else:
-            # upcasting
-            return max(dt for dt in dtypes)
-    else:
-        return None
+
+            raise ValueError(
+                f"Type mismatch in `{node_cls.__name__}`. Types are "
+                + ", ".join(dt.name for dt in dtypes)
+            )
+
+        # upcasting
+        return max(dt for dt in dtypes)
+
+    return None
 
 
 def compute_kind(*values: Expr) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
         return ExprKind.FIELD
-    else:
-        return ExprKind.SCALAR
+
+    return ExprKind.SCALAR
 
 
 class Literal(eve.Node):
@@ -349,6 +351,34 @@ class VariableKOffset(eve.GenericNode, Generic[ExprT]):
             raise ValueError("Variable vertical index must be an integer expression")
 
 
+class AbsoluteKIndex(eve.GenericNode, Generic[ExprT]):
+    """Access a field with absolute K
+
+    Restrictions:
+    - Centered I/J
+    - No data dimensions
+    - Read-only
+    """
+
+    k: Union[int, ExprT]
+
+    def to_dict(self) -> Dict[str, Optional[int]]:
+        return {"i": 0, "j": 0, "k": None}
+
+    @datamodels.validator("k")
+    def offset_expr_is_int(self, _attribute: datamodels.Attribute, value: Any) -> None:
+        utils.warn_experimental_feature(
+            feature="Absolute indexing in `K`", ADR="experimental/indexing-absolute-k.md"
+        )
+        if isinstance(value, numbers.Real):
+            if not isinstance(value, int):
+                raise ValueError("Absolute vertical index literal must be an integer")
+        else:
+            value = typing.cast(Expr, value)
+            if value.dtype is not DataType.AUTO and not value.dtype.isinteger():
+                raise ValueError("Absolute vertical index must be an integer expression")
+
+
 class ScalarAccess(LocNode):
     name: eve.Coerced[eve.SymbolRef]
     kind: ExprKind = ExprKind.SCALAR
@@ -356,7 +386,7 @@ class ScalarAccess(LocNode):
 
 class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
     name: eve.Coerced[eve.SymbolRef]
-    offset: Union[CartesianOffset, VariableKOffsetT]
+    offset: CartesianOffset | VariableKOffsetT | AbsoluteKIndex
     data_index: List[ExprT] = eve.field(default_factory=list)
     kind: ExprKind = ExprKind.FIELD
 
@@ -578,7 +608,11 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
         raise NotImplementedError(f"Found unknown precision specification {func}")
 
     def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
-        if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
+        if instance.func in (
+            NativeFunction.ISFINITE,
+            NativeFunction.ISINF,
+            NativeFunction.ISNAN,
+        ):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
         elif instance.func in (
             NativeFunction.INT32,
@@ -636,7 +670,12 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
         self.generic_visit(node, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(
-        self, node: AssignStmt, *, loop_order: LoopOrder, symtable: Dict[str, Any], **kwargs: Any
+        self,
+        node: AssignStmt,
+        *,
+        loop_order: LoopOrder,
+        symtable: Dict[str, Any],
+        **kwargs: Any,
     ) -> None:
         decl = symtable.get(node.left.name, None)
         if decl is None:
@@ -697,7 +736,17 @@ def validate_lvalue_dims(
     return _make_root_validator(_impl)
 
 
-class AxisBound(eve.Node):
+class BaseAxisBound(eve.Node, ABC):
+    level: LevelMarker
+    offset: Union[ScalarAccess, FieldAccess, int]
+
+
+class RuntimeAxisBound(BaseAxisBound):
+    level: LevelMarker
+    offset: Union[ScalarAccess, FieldAccess]
+
+
+class AxisBound(BaseAxisBound):
     level: LevelMarker
     offset: int = 0
 
@@ -891,7 +940,10 @@ OP_TO_UFUNC_NAME: Final[
         ComparisonOperator.EQ: "equal",
         ComparisonOperator.NE: "not_equal",
     },
-    LogicalOperator: {LogicalOperator.AND: "logical_and", LogicalOperator.OR: "logical_or"},
+    LogicalOperator: {
+        LogicalOperator.AND: "logical_and",
+        LogicalOperator.OR: "logical_or",
+    },
     NativeFunction: {
         NativeFunction.ABS: "abs",
         NativeFunction.MIN: "minimum",
@@ -936,11 +988,22 @@ OP_TO_UFUNC_NAME: Final[
 
 def op_to_ufunc(
     op: Union[
-        UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
+        UnaryOperator,
+        ArithmeticOperator,
+        ComparisonOperator,
+        LogicalOperator,
+        NativeFunction,
     ],
 ) -> np.ufunc:
     if not isinstance(
-        op, (UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction)
+        op,
+        (
+            UnaryOperator,
+            ArithmeticOperator,
+            ComparisonOperator,
+            LogicalOperator,
+            NativeFunction,
+        ),
     ):
         raise TypeError(
             "Can only convert instances of GTC operators and supported native functions to typestr."

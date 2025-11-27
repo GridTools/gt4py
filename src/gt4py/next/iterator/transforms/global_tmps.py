@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Sequence
 from typing import Callable, Literal, Optional, cast
 
 from gt4py.eve import utils as eve_utils
@@ -30,7 +29,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 def select_elems_by_domain(
     select_domain: SymbolicDomain,
     target: itir.Expr,
-    args: Sequence[itir.Expr],
+    source: itir.Expr,
     domains: tuple[SymbolicDomain, ...],
 ):
     """
@@ -40,12 +39,12 @@ def select_elems_by_domain(
     """
     new_targets = []
     new_els = []
-    for i, (el, el_domain) in enumerate(zip(args, domains)):
+    for i, el_domain in enumerate(domains):
         current_target = im.tuple_get(i, target)
+        current_source = im.tuple_get(i, source)
         if isinstance(el_domain, tuple):
-            assert cpm.is_call_to(el, "make_tuple")
             more_targets, more_els = select_elems_by_domain(
-                select_domain, current_target, el.args, el_domain
+                select_domain, current_target, current_source, el_domain
             )
             new_els.extend(more_els)
             new_targets.extend(more_targets)
@@ -53,16 +52,15 @@ def select_elems_by_domain(
             assert isinstance(el_domain, SymbolicDomain)
             if el_domain == select_domain:
                 new_targets.append(current_target)
-                new_els.append(el)
+                new_els.append(current_source)
     return new_targets, new_els
 
 
 def _set_at_for_domain(stmt: itir.SetAt, domain: SymbolicDomain) -> itir.SetAt:
     """Extract all elements with given domain into a new `SetAt` statement."""
     tuple_expr = stmt.expr
-    assert cpm.is_call_to(tuple_expr, "make_tuple")
     targets, expr_els = select_elems_by_domain(
-        domain, stmt.target, tuple_expr.args, stmt.expr.annex.domain
+        domain, stmt.target, tuple_expr, stmt.expr.annex.domain
     )
     new_expr = im.make_tuple(*expr_els)
     new_expr.annex.domain = domain
@@ -157,11 +155,6 @@ def _transform_by_pattern(
     # hide projector from extraction
     projector, expr = ir_utils_misc.extract_projector(stmt.expr)
 
-    # If we extracted a projector and the expression is not an as_fieldop of a scan,
-    # collapse tuple did not work as expected. We would expect that collapse
-    # tuple eleminated all top-level tuple expressions for non-scans.
-    assert projector is None or _is_as_fieldop_of_scan(expr)
-
     new_expr, extracted_fields, _ = cse.extract_subexpression(
         expr,
         predicate=predicate,
@@ -241,7 +234,7 @@ def _transform_by_pattern(
             #  `make_tuple` expression.
             target_expr: itir.Expr = next_utils.tree_map(
                 lambda name, domain: im.ref(name, annex={"domain": domain}),
-                result_collection_constructor=lambda els: im.make_tuple(*els),
+                result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
             )(tmp_names, tmp_domains)  # type: ignore[assignment]  # typing of tree_map does not reflect action of `result_collection_constructor` yet
 
             # note: the let would be removed automatically by the `cse.extract_subexpression`, but

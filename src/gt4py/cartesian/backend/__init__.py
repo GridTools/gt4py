@@ -9,7 +9,6 @@
 from warnings import warn
 
 from .base import REGISTRY, Backend, BaseBackend, BasePyExtBackend, from_name, register
-from .cuda_backend import CudaBackend
 from .debug_backend import DebugBackend
 from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend
 from .module_generator import BaseModuleGenerator
@@ -22,7 +21,6 @@ __all__ = [
     "BaseBackend",
     "BaseModuleGenerator",
     "BasePyExtBackend",
-    "CudaBackend",
     "DebugBackend",
     "GTCpuIfirstBackend",
     "GTCpuKfirstBackend",
@@ -34,11 +32,11 @@ __all__ = [
 
 
 try:
-    from .dace_backend import DaceCPUBackend, DaceGPUBackend
+    from .dace_backend import DaceCPUBackend, DaceCPUKFirstBackend, DaceGPUBackend
 
-    __all__ += ["DaceCPUBackend", "DaceGPUBackend"]
+    __all__ += ["DaceCPUBackend", "DaceCPUKFirstBackend", "DaceGPUBackend"]
 except ImportError:
     warn(
-        "GT4Py was unable to load DaCe. DaCe backends (`dace:cpu` and `dace:gpu`) will not be available.",
+        "GT4Py was unable to load DaCe. DaCe backends (`dace:cpu`, `dace:cpu_kfirst`, and `dace:gpu`) will not be available.",
         stacklevel=2,
     )

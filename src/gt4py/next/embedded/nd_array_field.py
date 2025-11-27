@@ -13,7 +13,6 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any
 
 import numpy as np
 from numpy import typing as npt
@@ -117,46 +116,7 @@ class NdArrayField(
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
 
-    array_ns: ClassVar[ModuleType]  # TODO(havogt) introduce a NDArrayNamespace protocol
-
-    @property
-    def domain(self) -> common.Domain:
-        return self._domain
-
-    @property
-    def shape(self) -> tuple[int, ...]:
-        return self._ndarray.shape
-
-    @property
-    def __gt_origin__(self) -> tuple[int, ...]:
-        assert common.Domain.is_finite(self._domain)
-        return tuple(-r.start for r in self._domain.ranges)
-
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        return self._ndarray
-
-    def asnumpy(self) -> np.ndarray:
-        if self.array_ns == cp:
-            return cp.asnumpy(self._ndarray)
-        else:
-            return np.asarray(self._ndarray)
-
-    def as_scalar(self) -> core_defs.ScalarT:
-        if self.domain.ndim != 0:
-            raise ValueError(
-                f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
-            )
-        # note: `.item()` will return a Python type, therefore we use indexing with an empty tuple
-        return self.asnumpy()[()]  # type: ignore[return-value] # should be ensured by the 0-d check
-
-    @property
-    def codomain(self) -> type[core_defs.ScalarT]:
-        return self.dtype.scalar_type
-
-    @property
-    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        return core_defs.dtype(self._ndarray.dtype.type)
+    array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
 
     @classmethod
     def from_array(
@@ -185,6 +145,59 @@ class NdArrayField(
         assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
+
+    @functools.cached_property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        assert common.Domain.is_finite(self.domain)
+        return tuple(-r.start for r in self.domain.ranges)
+
+    @functools.cached_property
+    def __gt_buffer_info__(self) -> common.BufferInfo:
+        """
+        Interface to retrieve the low-level description of a Field buffer.
+
+        Since by default NdArrayFields are implemented as frozen dataclasses,
+        and therefore the backing ndarray cannot be replaced after creation,
+        this is implemented as a cached property for performance reasons.
+
+        NDArrayField subclasses where the backing ndarray can be replaced
+        should override this and make it a regular property.
+        """
+        return common.BufferInfo.from_ndarray(self.ndarray)
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self._ndarray.shape
+
+    @property
+    def domain(self) -> common.Domain:
+        return self._domain
+
+    @property
+    def codomain(self) -> type[core_defs.ScalarT]:
+        return self.dtype.scalar_type
+
+    @functools.cached_property
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
+        return core_defs.dtype(self._ndarray.dtype.type)
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        return self._ndarray
+
+    def asnumpy(self) -> np.ndarray:
+        if self.array_ns == cp:
+            return cp.asnumpy(self._ndarray)
+        else:
+            return np.asarray(self._ndarray)
+
+    def as_scalar(self) -> core_defs.ScalarT:
+        if self.domain.ndim != 0:
+            raise ValueError(
+                f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        # note: `.item()` will return a Python type, therefore we use indexing with an empty tuple
+        return self.asnumpy()[()]  # type: ignore[return-value] # should be ensured by the 0-d check
 
     def premap(
         self: NdArrayField,
@@ -429,18 +442,13 @@ class NdArrayField(
         return new_domain, slice_
 
     if dace:
-        # Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs
+
         def _dace_data_ptr(self) -> int:
-            array_ns = self.array_ns
-            array_byte_bounds = (  # TODO(egparedes): make this part of some Array namespace protocol
-                array_ns.byte_bounds
-                if hasattr(array_ns, "byte_bounds")
-                else array_ns.lib.array_utils.byte_bounds
-            )
-            return array_byte_bounds(self.ndarray)[0]
+            return self.__gt_buffer_info__.data_ptr
 
         def _dace_descriptor(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.ndarray)
+
     else:
 
         def _dace_data_ptr(self) -> int:
@@ -448,13 +456,24 @@ class NdArrayField(
                 "data_ptr is only supported when the 'dace' module is available."
             )
 
-        def _dace_descriptor(self) -> Any:
+        def _dace_descriptor(self) -> dace.data.Data:
             raise NotImplementedError(
                 "__descriptor__ is only supported when the 'dace' module is available."
             )
 
     data_ptr = _dace_data_ptr
+    """
+    Returns the pointer of the underlying data buffer.
+
+    Fully equivalent to `self.__gt_buffer_info__.data_ptr`. It is only defined to emulate the
+    PyTorch API for DaCe interoperability.
+
+    Note:
+        This method is experimental and will be likely removed in future versions.
+    """
+
     __descriptor__ = _dace_descriptor
+    """Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -995,9 +1014,9 @@ def _make_reduction(
         reduce_dim_index = field.domain.dims.index(axis)
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
-        offset_definition = current_offset_provider[
-            axis.value
-        ]  # assumes offset and local dimension have same name
+        offset_definition = common.get_offset(
+            current_offset_provider, axis.value
+        )  # assumes offset and local dimension have same name
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
@@ -1073,6 +1092,10 @@ if jnp:
     @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
+
+        @property
+        def __gt_buffer_info__(self) -> common.BufferInfo:
+            raise NotImplementedError("'__gt_buffer_info__' for JaxArrayField not yet implemented.")
 
         def __setitem__(
             self,

@@ -11,9 +11,11 @@ from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVa
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, errors, field_utils, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 from gt4py.next.field_utils import get_array_ns
+from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -30,9 +32,9 @@ class EmbeddedOperator(Generic[_R, _P]):
 
 
 @dataclasses.dataclass(frozen=True)
-class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...], _P]):
+class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT], _P]):
     forward: bool
-    init: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...]
+    init: xtyping.MaybeNestedInTuple[core_defs.ScalarT]
     axis: common.Dimension
 
     def __call__(  # type: ignore[override]
@@ -59,17 +61,22 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
 
         xp = get_array_ns(*all_args)
         init_type = type_translation.from_value(self.init)
-        assert isinstance(init_type, ts.TupleType | ts.ScalarType)
+        assert isinstance(init_type, ts.TupleType | ts.ScalarType | ts.NamedCollectionType)
         res = field_utils.field_from_typespec(init_type, out_domain, xp)
 
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
-            acc: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...] = self.init
+            acc: xtyping.MaybeNestedInTuple[core_defs.ScalarT] = self.init
             for k in scan_range.unit_range if self.forward else reversed(scan_range.unit_range):
                 pos = (*hpos, common.NamedIndex(scan_axis, k))
                 new_args = [_tuple_at(pos, arg) for arg in args]
                 new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
                 acc = self.fun(acc, *new_args, **new_kwargs)  # type: ignore[arg-type] # need to express that the first argument is the same type as the return
-                _tuple_assign_value(pos, res, acc)
+                # convert custom NamedCollections to plain tuples for assignment
+                acc_extracted = arguments.extract(acc)
+                res_extracted = arguments.extract(res)
+                assert xtyping.is_maybe_nested_in_tuple_of(acc_extracted, core_defs.Scalar)  # type: ignore[arg-type]  # Scalar is a Union
+                assert xtyping.is_maybe_nested_in_tuple_of(res_extracted, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
+                _tuple_assign_value(pos, res_extracted, acc_extracted)
 
         if len(non_scan_domain) == 0:
             # if we don't have any dimension orthogonal to scan_axis, we need to do one scan_loop
@@ -81,9 +88,7 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
         return res
 
 
-def _get_out_domain(
-    out: common.MutableField | tuple[common.MutableField | tuple, ...],
-) -> common.Domain:
+def _get_out_domain(out: xtyping.MaybeNestedInTuple[common.MutableField]) -> common.Domain:
     return embedded_common.domain_intersection(
         *[f.domain for f in utils.flatten_nested_tuple((out,))]
     )
@@ -108,17 +113,23 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
 
         domain = kwargs.pop("domain", None)
 
-        out_domain = common.domain(domain) if domain is not None else _get_out_domain(out)
+        # TODO(havogt): To do the assignment of the resulting fields we extract containers and act on plain tuples.
+        # We currently apply the extract on both the rhs (`res`) computed by the operator and the lhs (`out`, provided by the user)
+        # without checking if the types are consistent. However, these errors are caught in linting if enabled.
+        container_extracted_out = arguments.extract(out)
+        assert xtyping.is_maybe_nested_in_tuple_of(container_extracted_out, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
+        out_domain = (
+            utils.tree_map(common.domain)(domain)
+            if domain is not None
+            else _get_out_domain(container_extracted_out)
+        )
 
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 
         with embedded_context.update(**new_context_kwargs):
             res = op(*args, **kwargs)
-        _tuple_assign_field(
-            out,
-            res,  # type: ignore[arg-type] # maybe can't be inferred properly because decorator.py is not properly typed yet
-            domain=out_domain,
-        )
+        container_extracted_res = arguments.extract(res)  # type: ignore[arg-type] # TODO(havogt): see notes above
+        _tuple_assign_field(container_extracted_out, container_extracted_res, domain=out_domain)  # type: ignore[arg-type]
         return None
     else:
         # called from other field_operator or missing `out` argument
@@ -128,6 +139,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
         return op(*args, **kwargs)
 
 
+@utils.tree_map
 def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.NothingType:
     vertical_dim_filtered = [nr for nr in domain if nr.dim.kind == common.DimensionKind.VERTICAL]
     assert len(vertical_dim_filtered) <= 1
@@ -135,23 +147,25 @@ def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.Nothin
 
 
 def _tuple_assign_field(
-    target: tuple[common.MutableField | tuple, ...] | common.MutableField,
-    source: tuple[common.Field | tuple, ...] | common.Field,
-    domain: common.Domain,
+    target: xtyping.MaybeNestedInTuple[common.MutableField],
+    source: xtyping.MaybeNestedInTuple[common.Field],
+    domain: xtyping.MaybeNestedInTuple[common.Domain],
 ) -> None:
     @utils.tree_map
-    def impl(target: common.MutableField, source: common.Field) -> None:
+    def impl(target: common.MutableField, source: common.Field, domain: common.Domain) -> None:
         if isinstance(source, common.Field):
             target[domain] = source[domain]
         else:
             assert core_defs.is_scalar_type(source)
             target[domain] = source
 
-    impl(target, source)
+    if not isinstance(domain, tuple):
+        domain = utils.tree_map(lambda _: domain)(target)
+    impl(target, source, domain)
 
 
 def _intersect_scan_args(
-    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
+    *args: xtyping.MaybeNestedInTuple[core_defs.Scalar | common.Field],
 ) -> common.Domain:
     return embedded_common.domain_intersection(
         *[arg.domain for arg in utils.flatten_nested_tuple(args) if isinstance(arg, common.Field)]
@@ -160,8 +174,8 @@ def _intersect_scan_args(
 
 def _tuple_assign_value(
     pos: Sequence[common.NamedIndex],
-    target: common.MutableField | tuple[common.MutableField | tuple, ...],
-    source: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
+    target: xtyping.MaybeNestedInTuple[common.MutableField],
+    source: xtyping.MaybeNestedInTuple[core_defs.Scalar],
 ) -> None:
     @utils.tree_map
     def impl(target: common.MutableField, source: core_defs.Scalar) -> None:
@@ -172,7 +186,7 @@ def _tuple_assign_value(
 
 def _tuple_at(
     pos: Sequence[common.NamedIndex],
-    field: common.Field | core_defs.Scalar | tuple[common.Field | core_defs.Scalar | tuple, ...],
+    field: xtyping.MaybeNestedInTuple[common.Field | core_defs.Scalar],
 ) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
     @utils.tree_map
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:

@@ -17,6 +17,7 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from dace.transformation.dataflow import map_fusion_helper as mfhelper
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -192,13 +193,15 @@ def _add_local_double_buffering_to_single_data(
     #  empty Memlets to the last row of nodes that writes to the global buffer.
     #  This is needed to handle the case that some other data path performs the
     #  write.
-    # TODO(phimuell): Add a test that only performs this when it is really needed.
     for inner_write_edge in inner_write_edges:
-        state.add_nedge(
-            new_double_inner_buff_node,
-            inner_write_edge.src,
-            dace.Memlet(),
-        )
+        if not mfhelper.is_node_reachable_from(
+            graph=state, begin=new_double_inner_buff_node, end=inner_write_edge.src
+        ):
+            state.add_nedge(
+                new_double_inner_buff_node,
+                inner_write_edge.src,
+                dace.Memlet(),
+            )
 
 
 def _is_inner_read_a_scalar(

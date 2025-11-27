@@ -16,13 +16,12 @@ from typing import Final, TypeAlias
 import dace
 from dace import subsets as dace_subsets
 
-from gt4py.next import common as gtx_common, utils as gtx_utils
-from gt4py.next.ffront import fbuiltins as gtx_fbuiltins
+from gt4py.eve.extended_typing import MaybeNestedInTuple
+from gt4py.next import common as gtx_common
+from gt4py.next.iterator import builtins as gtir_builtins
 from gt4py.next.program_processors.runners.dace import (
     gtir_dataflow,
     gtir_domain,
-    gtir_to_sdfg,
-    gtir_to_sdfg_utils,
     utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
@@ -55,43 +54,6 @@ class FieldopData:
             if isinstance(self.gt_type, ts.ScalarType)
             else len(self.origin) == len(self.gt_type.dims)
         )
-
-    def map_to_parent_sdfg(
-        self,
-        sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-        inner_sdfg: dace.SDFG,
-        outer_sdfg: dace.SDFG,
-        outer_sdfg_state: dace.SDFGState,
-        symbol_mapping: dict[str, dace.symbolic.SymbolicType],
-    ) -> FieldopData:
-        """
-        Make the data descriptor which 'self' refers to, and which is located inside
-        a NestedSDFG, available in its parent SDFG.
-
-        Thus, it turns 'self' into a non-transient array and creates a new data
-        descriptor inside the parent SDFG, with same shape and strides.
-        """
-        inner_desc = self.dc_node.desc(inner_sdfg)
-        assert inner_desc.transient
-        inner_desc.transient = False
-
-        if isinstance(self.gt_type, ts.ScalarType):
-            outer, outer_desc = sdfg_builder.add_temp_scalar(outer_sdfg, inner_desc.dtype)
-            outer_origin = []
-        else:
-            outer, outer_desc = sdfg_builder.add_temp_array_like(outer_sdfg, inner_desc)
-            # We cannot use a copy of the inner data descriptor directly, we have to apply the symbol mapping.
-            dace.symbolic.safe_replace(
-                symbol_mapping,
-                lambda m: dace.sdfg.replace_properties_dict(outer_desc, m),
-            )
-            # Same applies to the symbols used as field origin (the domain range start)
-            outer_origin = [
-                gtx_dace_utils.safe_replace_symbolic(val, symbol_mapping) for val in self.origin
-            ]
-
-        outer_node = outer_sdfg_state.add_access(outer)
-        return FieldopData(outer_node, self.gt_type, tuple(outer_origin))
 
     def get_local_view(
         self, domain: gtir_domain.FieldopDomain, sdfg: dace.SDFG
@@ -156,13 +118,14 @@ class FieldopData:
         if isinstance(self.gt_type.dtype, ts.ListType):
             local_dim = self.gt_type.dtype.offset_type
             assert local_dim is not None
-            full_dims = gtx_common.order_dimensions([*self.gt_type.dims, local_dim])
+            all_dims = gtx_common.order_dimensions([*self.gt_type.dims, local_dim])
             globals_size = [
                 size
-                for dim, size in zip(full_dims, outer_desc.shape, strict=True)
+                for dim, size in zip(all_dims, outer_desc.shape, strict=True)
                 if dim != local_dim
             ]
         else:
+            all_dims = self.gt_type.dims
             globals_size = outer_desc.shape
 
         symbol_mapping: dict[str, dace.symbolic.SymbolicType] = {}
@@ -171,15 +134,21 @@ class FieldopData:
                 gtx_dace_utils.range_start_symbol(dataname, dim): origin,
                 gtx_dace_utils.range_stop_symbol(dataname, dim): (origin + size),
             }
-        for i, stride in enumerate(outer_desc.strides):
+        for dim, stride in zip(all_dims, outer_desc.strides, strict=True):
             symbol_mapping |= {
-                gtx_dace_utils.field_stride_symbol_name(dataname, i): stride,
+                gtx_dace_utils.field_stride_symbol(dataname, dim): stride,
             }
         return symbol_mapping
 
 
-FieldopResult: TypeAlias = FieldopData | tuple[FieldopData | tuple, ...]
-"""Result of a field operator, can be either a field or a tuple fields."""
+FieldopResult: TypeAlias = MaybeNestedInTuple[FieldopData | None]
+"""Result of a field operator, can be either a field or a tuple fields.
+
+For tuple of fields, any of the nested fields can be None, in case it is not used
+and therefore does not need to be computed. The information whether a field needs
+to be computed or not is the result of GTIR domain inference, and it is stored in
+the GTIR node annex domain.
+"""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -188,32 +157,5 @@ class SymbolicData:
     value: dace.symbolic.SymbolicType
 
 
-INDEX_DTYPE: Final[dace.typeclass] = dace.dtype_to_typeclass(gtx_fbuiltins.IndexType)
+INDEX_DTYPE: Final[dace.typeclass] = getattr(dace, gtir_builtins.INTEGER_INDEX_BUILTIN)
 """Data type used for field indexing."""
-
-
-def get_tuple_type(data: tuple[FieldopResult, ...]) -> ts.TupleType:
-    """
-    Compute the `ts.TupleType` corresponding to the tuple structure of `FieldopResult`.
-    """
-    return ts.TupleType(
-        types=[get_tuple_type(d) if isinstance(d, tuple) else d.gt_type for d in data]
-    )
-
-
-def flatten_tuples(name: str, arg: FieldopResult) -> list[tuple[str, FieldopData]]:
-    """
-    Visit a `FieldopResult`, potentially containing nested tuples, and construct a list
-    of pairs `(str, FieldopData)` containing the symbol name of each tuple field and
-    the corresponding `FieldopData`.
-    """
-    if isinstance(arg, tuple):
-        tuple_type = get_tuple_type(arg)
-        tuple_symbols = gtir_to_sdfg_utils.flatten_tuple_fields(name, tuple_type)
-        tuple_data_fields = gtx_utils.flatten_nested_tuple(arg)
-        return [
-            (str(tsym.id), tfield)
-            for tsym, tfield in zip(tuple_symbols, tuple_data_fields, strict=True)
-        ]
-    else:
-        return [(name, arg)]

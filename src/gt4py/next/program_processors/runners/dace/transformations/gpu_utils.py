@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
@@ -32,6 +33,7 @@ def gt_gpu_transformation(
     gpu_block_size: Optional[Sequence[int | str] | str] = None,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
+    gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -57,6 +59,8 @@ def gt_gpu_transformation(
             Will only take effect if `gpu_block_size` is specified.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             Will only take effect if `gpu_block_size` is specified.
+        gpu_block_size_spec: Specify thread block size per dimension, see
+            `gt_set_gpu_blocksize()` for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -111,12 +115,14 @@ def gt_gpu_transformation(
     )
 
     # Set the GPU block size if it is known.
-    if gpu_block_size is not None:
+    if gpu_block_size is not None or gpu_block_size_spec is not None:
+        gpu_block_size_spec = gpu_block_size_spec or {}
         gt_set_gpu_blocksize(
             sdfg=sdfg,
             block_size=gpu_block_size,
             launch_bounds=gpu_launch_bounds,
             launch_factor=gpu_launch_factor,
+            **gpu_block_size_spec,
             validate=False,
             validate_all=validate_all,
         )
@@ -522,6 +528,10 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     four iteration in the second dimension, will get a block size of `(32, 4, 1)`.
     Note that this modification will not influence the launch bound value.
 
+    Note there are some special rules:
+    - If a Map with (at most 3 dimension) has only one non trivial dimension, i.e.
+        > 1, then the Map is handled as a 1D Map.
+
     Args:
         block_size_Xd: The size of a thread block on the GPU for `X` dimensional maps.
         launch_bounds_Xd: The value for the launch bound that should be used for `X`
@@ -599,8 +609,18 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         super().__init__()
         if block_size_1d is not None:
             self.block_size_1d = block_size_1d
+            if self.block_size_1d[1] != 1 or self.block_size_1d[2] != 1:
+                warnings.warn(
+                    f"1D map block size specified with more than one dimension larger than 1. Configured 1D block size: {self.block_size_1d}.",
+                    stacklevel=0,
+                )
         if block_size_2d is not None:
             self.block_size_2d = block_size_2d
+            if self.block_size_2d[2] != 1:
+                warnings.warn(
+                    f"2D map block size specified with more than twi dimensions larger than 1. Configured 2D block size: {self.block_size_2d}.",
+                    stacklevel=0,
+                )
         if block_size_3d is not None:
             self.block_size_3d = block_size_3d
         self.launch_bounds_1d = _gpu_launch_bound_parser(
@@ -648,32 +668,82 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         """Modify the map as requested."""
         gpu_map: dace_nodes.Map = self.map_entry.map
         map_size = gpu_map.range.size()
-        num_map_params = len(gpu_map.params)
+        dims_to_inspect = len(map_size)
+        num_map_params = dims_to_inspect  # Might be modified
+
+        # Test if the Map is a degenerated 1d Map, i.e. a Map that only has one dimension
+        #  that is non trivial, i.e. > 1.
+        # NOTE: To simplify implementation, we only do this check for Maps with at most
+        #   three dimensions. We also do this because the outcome in DaCe is not fully
+        #   clear how the dimensions are lumped together.
+        is_degenerated_1d_map = False
+        non_trivial_1d_map_degenerated_map_dimension: Optional[int] = None
+        if 1 < dims_to_inspect <= 3:
+            for dim, dim_size in enumerate(map_size):
+                if dim_size != 1:
+                    if non_trivial_1d_map_degenerated_map_dimension is not None:
+                        # A non trivial dimension is already known, so do not handle the map.
+                        non_trivial_1d_map_degenerated_map_dimension = None
+                        is_degenerated_1d_map = False
+                        break
+                    else:
+                        # No non trivial dimension is known yet.
+                        non_trivial_1d_map_degenerated_map_dimension = dim
+                        is_degenerated_1d_map = True
+
+            if is_degenerated_1d_map:
+                num_map_params = 1
+                warnings.warn(
+                    f"Map '{gpu_map}', size '{map_size}', is a degenerated 1d Map. Handle it as a 1d Map.",
+                    stacklevel=0,
+                )
 
         # Because of a particularity of the DaCe code generator, the iteration
         #  variable that is associated to the `x` dimension of the block is the
         #  last parameter, i.e. `gpu_map.params[-1]`. The one for `y` the second last.
         if num_map_params == 1:
-            block_size = list(self.block_size_1d)
+            if is_degenerated_1d_map:
+                assert non_trivial_1d_map_degenerated_map_dimension is not None
+                assert 0 <= non_trivial_1d_map_degenerated_map_dimension <= 2
+                assert len(map_size) <= 3
+
+                block_size = [1, 1, 1]
+                # Order of Map parameters is from outer to inner, i.e. z,y,x
+                block_size_1D_index = (
+                    len(map_size) - non_trivial_1d_map_degenerated_map_dimension - 1
+                )
+                block_size[block_size_1D_index] = self.block_size_1d[0]
+                if block_size_1D_index != 0:
+                    warnings.warn(
+                        f"Blocksize of 1d Map '{gpu_map}' was set to {block_size}, but the iteration index is not the x dimension.",
+                        stacklevel=0,
+                    )
+
+            else:
+                block_size = list(self.block_size_1d)
+
             launch_bounds = self.launch_bounds_1d
-            dims_to_inspect = 1
+
         elif num_map_params == 2:
             block_size = list(self.block_size_2d)
             launch_bounds = self.launch_bounds_2d
-            dims_to_inspect = 2
+
         else:
             block_size = list(self.block_size_3d)
             launch_bounds = self.launch_bounds_3d
+
             # If there are more than three dimensions DaCe will condense them into
             #  the `z` dimension of the block, so we have to ignore the `z` dimension,
             #  when we modify the block sizes.
-            dims_to_inspect = 3 if num_map_params == 3 else 2
+            if num_map_params > 3:
+                dims_to_inspect = 2
 
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
+        assert dims_to_inspect <= 3
         for i in range(dims_to_inspect):
-            map_dim_idx_to_inspect = num_map_params - 1 - i
+            map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
                 block_size[i] = map_size[map_dim_idx_to_inspect]
 

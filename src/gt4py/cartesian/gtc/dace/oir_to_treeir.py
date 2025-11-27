@@ -226,11 +226,16 @@ class OIRToTreeIR(eve.NodeVisitor):
             groups = self._group_statements(node)
             self.visit(groups, ctx=ctx)
 
-    def visit_AxisBound(self, node: oir.AxisBound, axis_start: str, axis_end: str) -> str:
+    def visit_AxisBound(self, node: common.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:
             return f"({axis_start}) + ({node.offset})"
 
         return f"({axis_end}) + ({node.offset})"
+
+    def visit_RuntimeAxisBound(self, node: common.RuntimeAxisBound, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            "Runtime interval bounds (e.g. `with interval(0, field)`) is an experimental feature and not implemented for the `dace:X` backends."
+        )
 
     def visit_Interval(
         self, node: oir.Interval, loop_order: common.LoopOrder, axis_start: str, axis_end: str
@@ -294,6 +299,11 @@ class OIRToTreeIR(eve.NodeVisitor):
         dimensions: dict[str, tuple[bool, bool, bool]] = {}
         symbols: tir.SymbolDict = {}
         shift: dict[str, dict[tir.Axis, int]] = {}  # dict of field_name -> (dict of axis -> shift)
+
+        # Make sure we have the domain symbols of all 3 dimensions defined at all times.
+        # They will be used e.g. for loop bounds or data sizing
+        for axis in tir.Axis.dims_3d():
+            symbols[axis.domain_symbol()] = dtypes.int32
 
         # this is ij blocks = horizontal execution
         field_extents, block_extents = oir_utils.compute_extents(
@@ -428,6 +438,19 @@ class OIRToTreeIR(eve.NodeVisitor):
             f"{tir.k_symbol(ctx.current_scope)}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
         )
 
+    def visit_AbsoluteKIndex(
+        self, node: oir.AbsoluteKIndex, field: oir.FieldAccess, ctx: tir.Context, **kwargs: Any
+    ) -> str:
+        shift = ctx.root.shift[field.name]
+        i_shift = f" + {shift[tir.Axis.I]}" if shift[tir.Axis.I] != 0 else ""
+        j_shift = f" + {shift[tir.Axis.J]}" if shift[tir.Axis.J] != 0 else ""
+
+        return (
+            f"{tir.Axis.I.iteration_symbol()}{i_shift}, "
+            f"{tir.Axis.J.iteration_symbol()}{j_shift}, "
+            f"{self.visit(node.k, ctx=ctx, **kwargs)}"
+        )
+
     def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs: Any) -> str:
         return f"{node.name}"
 
@@ -479,6 +502,14 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return f"({if_code} if {condition} else {else_code})"
 
+    def visit_IteratorAccess(
+        self, node: oir.IteratorAccess, ctx: tir.Context, **kwargs: Any
+    ) -> str:
+        if node.name == tir.Axis.K:
+            return tir.k_symbol(ctx.current_scope)
+
+        return tir.Axis(node.name).iteration_symbol()
+
     # visitors that should _not_ be called
 
     def visit_Decl(self, node: oir.Decl, **kwargs: Any) -> None:
@@ -501,7 +532,6 @@ def get_dace_shape(
     for index, axis in enumerate(tir.Axis.dims_3d()):
         if field.dimensions[index]:
             symbol = axis.domain_dace_symbol()
-            symbols[axis.domain_symbol()] = dtypes.int32
 
             if axis == tir.Axis.I:
                 i_padding = extent[0][1] - extent[0][0]

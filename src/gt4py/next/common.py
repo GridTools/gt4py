@@ -14,13 +14,14 @@ import dataclasses
 import enum
 import functools
 import math
+import sys
 import types
 from collections.abc import Iterable, Mapping, Sequence
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils
+from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -31,6 +32,7 @@ from gt4py.eve.extended_typing import (
     Literal,
     NamedTuple,
     Never,
+    NoReturn,
     Optional,
     ParamSpec,
     Protocol,
@@ -71,6 +73,8 @@ class DimensionKind(StrEnum):
 
 _DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
+_IMPLICIT_OFFSET_PREFIX: Final[str] = "_Off"
+
 
 def dimension_to_implicit_offset(dim: str) -> str:
     """
@@ -83,7 +87,7 @@ def dimension_to_implicit_offset(dim: str) -> str:
     without having to explicitly define an offset for ``TDim``. This function defines the respective
     naming convention.
     """
-    return f"_{dim}Off"
+    return f"{_IMPLICIT_OFFSET_PREFIX}{dim}"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -98,13 +102,7 @@ class Dimension:
         return NamedIndex(self, val)
 
     def __add__(self, offset: int) -> Connectivity:
-        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
-        from gt4py.next.ffront import fbuiltins
-
-        assert isinstance(self.value, str)
-        return fbuiltins.FieldOffset(
-            dimension_to_implicit_offset(self.value), source=self, target=(self,)
-        )[offset]
+        return CartesianConnectivity(self, offset)
 
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
@@ -695,18 +693,22 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __str__(self) -> str:
         return f"⟨{self.domain!s} → {self.dtype}⟩"
 
+    def __bool__(self) -> NoReturn:
+        raise TypeError(
+            "The truth value of a Field is ambiguous. For one element Fields use '.as_scalar()'."
+        )
+
     @abc.abstractmethod
     def asnumpy(self) -> np.ndarray: ...
+
+    @abc.abstractmethod
+    def as_scalar(self) -> core_defs.ScalarT: ...
 
     @abc.abstractmethod
     def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
-
-    @abc.abstractmethod
-    def as_scalar(self) -> core_defs.ScalarT: ...
-
     # Operators
     @abc.abstractmethod
     def __call__(
@@ -786,6 +788,87 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
 class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
+
+
+#: Type alias for primitive numeric values (i.e. scalars or fields).
+NumericValue: TypeAlias = core_defs.Scalar | Field
+NumericValueT = TypeVar("NumericValueT", bound=NumericValue)
+NUMERIC_VALUE_TYPES: Final[tuple[type[NumericValue], ...]] = xtyping.get_represented_types(
+    NumericValue
+)
+
+#: Type alias for any kind primitive value understood by GT4Py DSL.
+PrimitiveValue: TypeAlias = NumericValue  # For now, only numeric values, in the future it could include functions, enums, ...
+PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_represented_types(
+    PrimitiveValue
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class BufferInfo:
+    """Holds information about a buffer in memory."""
+
+    data_ptr: int
+    ndim: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    byte_strides: tuple[int, ...]
+    device: core_defs.Device
+
+    @classmethod
+    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
+        # TODO(egparedes): Implement this function using __dlpack__ and ctypes.
+        #   The current implementation is messy and only works for numpy and cupy.
+        try:
+            array_ns = ndarray.__array_namespace__()  # type: ignore[attr-defined]
+        except AttributeError:
+            array_ns = sys.modules[ndarray.__class__.__module__]
+
+        array_byte_bounds_func = (
+            getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
+        )
+
+        data_ptr = array_byte_bounds_func(ndarray)[0]
+        ndim = ndarray.ndim
+        shape = ndarray.shape
+        byte_strides = ndarray.strides
+        elem_strides = tuple(s // ndarray.dtype.itemsize for s in byte_strides)
+
+        try:
+            device = core_defs.from_dlpack_device(ndarray.__dlpack_device__())  # type: ignore[attr-defined]
+        except AttributeError as err:
+            ns = ndarray.__class__.__module__
+            if ns.startswith("numpy"):
+                device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+            elif ns.startswith("cupy"):
+                device = core_defs.Device(core_defs.CUPY_DEVICE_TYPE, ndarray.device.id)  # type: ignore[attr-defined]
+            else:
+                raise RuntimeError(f"Unsupported ndarray type '{type(ndarray)}'") from err
+
+        return BufferInfo(
+            data_ptr=data_ptr,
+            ndim=ndim,
+            shape=shape,
+            elem_strides=elem_strides,
+            byte_strides=byte_strides,
+            device=device,
+        )
+
+    @functools.cached_property
+    def hash_key(self) -> int:
+        return hash(
+            (
+                self.data_ptr,
+                self.ndim,
+                self.shape,
+                self.elem_strides,
+                self.byte_strides,
+                self.device,
+            )
+        )
+
+    def __hash__(self) -> int:
+        return self.hash_key
 
 
 class ConnectivityKind(enum.Flag):
@@ -1010,6 +1093,8 @@ def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
 
 OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
 OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
+# Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
+# use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
 
@@ -1034,12 +1119,47 @@ def offset_provider_to_type(
     }
 
 
-def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:
-    """Compute hash of an offset provider on the tuples of key and value id.
+def _get_dimension_name_from_implicit_offset(offset: str) -> str:
+    assert offset.startswith(_IMPLICIT_OFFSET_PREFIX)
+    return offset[len(_IMPLICIT_OFFSET_PREFIX) :]
 
-    Directly using the `id` of the offset provider is not possible as the decorator adds
-    the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
-    different `id` every time. Instead use the `id` of each individual offset provider.
+
+def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
+    """
+    Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
+
+    Note: This function handles implicit offsets. All accesses of `OffsetProvider` or
+    `OffsetProviderType` should go through this function.
+    """
+    # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
+    if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
+        return Dimension(value=_get_dimension_name_from_implicit_offset(offset_tag))
+    if offset_tag not in offset_provider:
+        raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
+    return offset_provider[offset_tag]  # TODO return a valid dimension
+
+
+get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
+
+
+def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
+    """Determine if offset provider has an element for the given offset tag."""
+    try:
+        get_offset(offset_provider, offset_tag)  # type: ignore[arg-type]  # implementation is shared with `get_offset_type`, no need to duplicate the function
+    except KeyError:
+        return False
+    return True
+
+
+def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
+    """
+    Compute hash of an offset provider on the tuples of key and value id.
+
+    This function is unsafe since it uses the `id` of the values in the
+    offset provider, which could generate different hashes for two
+    offset providers that are semantically equal. It additionally relies
+    on the ordering of the items in the mapping, which could also lead to
+    different hashes for semantically equal offset providers.
     """
     return hash(tuple((k, id(v)) for k, v in offset_provider.items()))
 

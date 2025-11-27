@@ -8,14 +8,16 @@
 
 import dataclasses
 from collections import ChainMap
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, TypeVar, cast
 
 from gt4py import eve
+from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
+from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -227,9 +229,20 @@ def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
         return common.GridType.UNSTRUCTURED
 
 
+def _flatten_tuple_expr(expr: itir.Expr) -> tuple[itir.Expr]:
+    if cpm.is_call_to(expr, "make_tuple"):
+        return sum(
+            (_flatten_tuple_expr(arg) for arg in expr.args), start=cast(tuple[itir.Expr], ())
+        )
+    else:
+        return (expr,)
+
+
 def grid_type_from_program(program: itir.Program) -> common.GridType:
-    domains = program.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
-    grid_types = {grid_type_from_domain(d) for d in domains}
+    domain_exprs = program.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+    domains = sum((_flatten_tuple_expr(domain_expr) for domain_expr in domain_exprs), start=())
+    assert all(isinstance(d, itir.FunCall) for d in domains)
+    grid_types = {grid_type_from_domain(d) for d in domains}  # type: ignore[arg-type] # checked above
     if len(grid_types) != 1:
         raise ValueError(
             f"Found 'set_at' with more than one 'GridType': '{grid_types}'. This is currently not supported."
@@ -253,3 +266,10 @@ def unique_symbol(sym: SymOrStr, reserved_names: Iterable[str]) -> SymOrStr:
         name = name + "_"
 
     return name
+
+
+def value_from_literal(literal: itir.Literal) -> core_defs.Scalar:
+    if literal.type.kind == ts.ScalarKind.BOOL:
+        assert literal.value in ["True", "False"]
+        return literal.value == "True"
+    return getattr(embedded, str(literal.type))(literal.value)

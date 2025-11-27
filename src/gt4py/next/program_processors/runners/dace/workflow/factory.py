@@ -13,7 +13,7 @@ from typing import Final
 
 import factory
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, filecache
 from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -26,7 +26,6 @@ from gt4py.next.program_processors.runners.dace.workflow.compilation import (
 from gt4py.next.program_processors.runners.dace.workflow.translation import (
     DaCeTranslationStepFactory,
 )
-from gt4py.next.program_processors.runners.gtfn import FileCache
 
 
 _GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
@@ -38,7 +37,6 @@ class DaCeWorkflowFactory(factory.Factory):
 
     class Params:
         auto_optimize: bool = False
-        make_persistent: bool = False
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
@@ -49,7 +47,7 @@ class DaCeWorkflowFactory(factory.Factory):
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
                     hash_function=stages.fingerprint_compilable_program,
-                    cache=FileCache(str(config.BUILD_CACHE_DIR / "translation_cache")),
+                    cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "translation_cache")),
                 )
             ),
         )
@@ -58,7 +56,6 @@ class DaCeWorkflowFactory(factory.Factory):
             DaCeTranslationStepFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
-            make_persistent=factory.SelfAttribute("..make_persistent"),
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
@@ -66,7 +63,6 @@ class DaCeWorkflowFactory(factory.Factory):
         lambda o: functools.partial(
             bindings_step.bind_sdfg,
             bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
-            make_persistent=o.make_persistent,
         )
     )
     compilation = factory.SubFactory(
