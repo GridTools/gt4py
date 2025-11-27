@@ -158,7 +158,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         if not self.partition_map_output(graph, sdfg) and (
             not self.promote_independent_memlets
-            or (self.promote_independent_memlets and self._memlet_to_promote is not None and len(self._memlet_to_promote) == 0)
+            or (
+                self.promote_independent_memlets
+                and self._memlet_to_promote is not None
+                and len(self._memlet_to_promote) == 0
+            )
         ):
             return False
         self._independent_nodes = None
@@ -586,14 +590,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     self.blocking_parameter not in subset.free_symbols
                     for subset in subsets_to_inspect
                 )
-                and in_edge.src is outer_entry
             ):
                 independent_memlets.add(in_edge)
 
         if has_dependent_memlet:
-            self._memlet_to_promote.update(independent_memlets)
-            # for independent_memlet in independent_memlets:
-            #     print(f"Promoting memlet {independent_memlet} of node {node_to_classify} to outer map.")
+            self._memlet_to_promote.update(independent_memlets) # TODO(iomaganaris): Remove self._memlet_to_promote. Not necessary anymore.
             return False
 
         # Loop ended normally, thus we update the list of independent nodes.
@@ -726,6 +727,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     for edge in state.out_edges(original_dst_of_in_edge):
                         if edge.data.data == in_edge.data.data:
                             edge.data.data = promoted_name
+                            assert len(original_dst_of_in_edge.params) == 1, (
+                                "Independent memlets should only be inputs to maps that have a single parameter. "
+                                "Those should always be neighbor reductions."
+                            )
                             edge.data.subset = next(iter(original_dst_of_in_edge.params))
                             edge.data.other_subset = None
                 elif isinstance(original_dst_of_in_edge, dace_nodes.NestedSDFG):
@@ -994,29 +999,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         The function returns `True` if it decides that blocking is good and `False`
         otherwise. The function will not modify `self._independent_nodes`.
         """
+        # TODO(iomganaris): Update docstring
         assert self._independent_nodes is not None
         assert self._dependent_nodes is None
-        return True # TODO(iomaganaris): Need to check the number of self._memlet_to_promote instead.
-
-        # There is nothing to move out so ignore it.
-        if len(self._independent_nodes) == 0:
-            return False
-
-        # Currently we only filter out Tasklets that do not read any data, which
-        #  is the example above, Because of how DaCe works we also subtract all
-        #  of its output nodes, that are classified independent.
-        # TODO(phimuell): Think if we should expand on that.
-        nb_independent_nodes = len(self._independent_nodes)
-
-        for node in self._independent_nodes:
-            if isinstance(node, dace_nodes.Tasklet):
-                if not all(iedge.data.is_empty() for iedge in state.in_edges(node)):
-                    continue
-                nb_independent_nodes -= 1
-                for oedge in state.out_edges(node):
-                    assert isinstance(oedge.dst, dace_nodes.AccessNode)
-                    assert oedge.dst in self._independent_nodes
-                    nb_independent_nodes -= 1
-            assert nb_independent_nodes >= 0
-
-        return nb_independent_nodes > 0
+        return self.promote_independent_memlets and self._memlet_to_promote is not None and len(self._memlet_to_promote) > 0
