@@ -191,6 +191,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             state=graph,
             sdfg=sdfg,
         )
+        inner_entry.map.unroll = True
+        inner_entry.map.unroll_factor = 1
         self._independent_nodes = None
         self._dependent_nodes = None
         self._memlet_to_promote = None
