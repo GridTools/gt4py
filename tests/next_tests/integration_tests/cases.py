@@ -472,14 +472,14 @@ def verify(
     Else, ``inout`` will not be passed and compared to ``ref``.
     """
     kwargs = {}
-    if out:
+    if out is not None:
         kwargs["out"] = out
-    if domain:
+    if domain is not None:
         kwargs["domain"] = domain
 
     run(case, fieldview_prog, *args, **kwargs, offset_provider=offset_provider)
 
-    out_comp = out or inout
+    out_comp = out if out is not None else inout
     assert out_comp is not None
     out_comp = arguments.extract(out_comp)
     out_comp_ndarray = field_utils.asnumpy(out_comp)

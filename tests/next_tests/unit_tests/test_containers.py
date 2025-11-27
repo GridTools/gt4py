@@ -86,4 +86,12 @@ def test_make_container_constructor(
     constructed_container = constructor(nested_tuple)
 
     assert isinstance(constructed_container, container_type)
-    assert constructed_container == expected_container
+    for name in named_collections.elements_keys(expected_container):
+        constructed_value = getattr(constructed_container, name)
+        expected_value = getattr(expected_container, name)
+        if isinstance(expected_value, Field):
+            assert isinstance(constructed_value, Field)
+            assert constructed_value.domain == expected_value.domain
+            assert (constructed_value.asnumpy() == expected_value.asnumpy()).all()
+        else:
+            constructed_value == expected_value
