@@ -57,7 +57,7 @@ def fingerprint_compilable_program(inp: CompilableProgram) -> str:
 
     program_hash = utils.content_hash(
         (
-            program,
+            program.fingerprint(),
             sorted(offset_provider.items(), key=lambda el: el[0]),
             column_axis,
         )
