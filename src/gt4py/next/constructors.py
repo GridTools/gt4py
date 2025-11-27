@@ -288,7 +288,7 @@ def as_connectivity(
     domain: common.DomainLike | Sequence[common.Dimension],
     codomain: common.Dimension,
     data: core_defs.NDArrayObject,
-    dtype: Optional[core_defs.DType] = None,
+    dtype: Optional[core_defs.DTypeLike] = None,
     *,
     allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,

@@ -14,10 +14,10 @@ from __future__ import annotations
 import enum
 import re
 import subprocess
+import tomllib
 
 import packaging
 import rich
-import tomllib
 import typer
 
 from . import _common as common

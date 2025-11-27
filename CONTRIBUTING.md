@@ -47,9 +47,9 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 2. Clone your fork locally and check out the relevant branch:
 
    ```bash
-   $ git clone git@github.com:your_name_here/gt4py.git
-   $ cd gt4py
-   $ git checkout main
+   git clone git@github.com:your_name_here/gt4py.git
+   cd gt4py
+   git checkout main
    ```
 
 3. Follow instructions in the [README.md](README.md) file to set up an environment for local development.
@@ -57,7 +57,7 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 4. Create a branch for local development:
 
    ```bash
-   $ git checkout -b name-of-your-bugfix-or-feature
+   git checkout -b name-of-your-bugfix-or-feature
    ```
 
    Now you can make your changes locally. Make sure you follow the project code style documented in [CODING_GUIDELINES.md](CODING_GUIDELINES.md).
@@ -65,8 +65,8 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 5. When you're done making changes, check that your code complies with the project code style and other quality assurance (QA) practices using `pre-commit`. Additionally, make sure that unit and regression tests pass for all supported Python versions by running `nox`:
 
    ```bash
-   $ pre-commit run
-   $ nox
+   pre-commit run
+   nox
    ```
 
    Read [Testing](#testing) section below for further details.
@@ -74,9 +74,9 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 6. Commit your changes and push your branch to GitHub:
 
    ```bash
-    $ git add .
-    $ git commit -m "Your detailed description of your changes."
-    $ git push origin name-of-your-bugfix-or-feature
+    git add .
+    git commit -m "Your detailed description of your changes."
+    git push origin name-of-your-bugfix-or-feature
    ```
 
 7. Submit a pull request (PR) on [GT4Py's GitHub page](https://github.com/gridtools/gt4py).
@@ -145,7 +145,7 @@ We recommended you to use `nox` for running the test suite in different environm
 nox --list
 
 # Run a specific session
-nox -s "test_cartesian-3.10(internal, cpu)"
+nox -s "test_cartesian-3.11(internal, cpu)"
 ```
 
 Check `nox` documentation (`nox --help`) for the complete reference.
