@@ -99,7 +99,7 @@ def _make_strides_propagation_level2_sdfg() -> tuple[dace.SDFG, dace_nodes.Neste
         sdfg=sdfg_level3,
         inputs={"a3"},
         outputs={"c3"},
-        symbol_mapping={s3: s3.replace("3", "2") for s3 in sdfg_level3.free_symbols},
+        symbol_mapping={s3: s3 for s3 in sdfg_level3.free_symbols},
     )
 
     state.add_edge(state.add_access("a2"), None, nsdfg, "a3", dace.Memlet("a2[0:10]"))
@@ -147,7 +147,7 @@ def _make_strides_propagation_level1_sdfg() -> tuple[
         sdfg=sdfg_level2,
         inputs={"a2", "c2"},
         outputs={"a2_alias", "b2", "c2"},
-        symbol_mapping={s: s.replace("2", "1") for s in sdfg_level2.free_symbols},
+        symbol_mapping={s: s for s in sdfg_level2.free_symbols},
     )
 
     for inner_name in nsdfg_level2.in_connectors:
@@ -179,10 +179,9 @@ def test_strides_propagation():
     sdfg_level1, nsdfg_level2, nsdfg_level3 = _make_strides_propagation_level1_sdfg()
 
     # Tests if all strides are distinct in the beginning and match what we expect.
-    for level, sdfg in enumerate([sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg], start=1):
+    for sdfg in [sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg]:
         for aname, adesc in sdfg.arrays.items():
             exp_stride = f"{aname}_stride"
-            target_symbol = exp_stride.replace(str(level), str(level - 1))
             assert len(adesc.strides) == 1
             assert str(adesc.strides[0]) == exp_stride, (
                 f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
@@ -190,7 +189,7 @@ def test_strides_propagation():
 
             if (nsdfg := sdfg.parent_nsdfg_node) is not None:
                 assert exp_stride in nsdfg.symbol_mapping
-                assert str(nsdfg.symbol_mapping[exp_stride]) == target_symbol
+                assert str(nsdfg.symbol_mapping[exp_stride]) == exp_stride
 
     # Now we propagate `a` and `b`, but not `c`.
     gtx_transformations.gt_propagate_strides_of(sdfg_level1, "a1")
@@ -199,11 +198,14 @@ def test_strides_propagation():
     sdfg_level1.validate()
 
     # Check that the strides inside the nested SDFGs have been updated for `a` and `b`.
-    for level, sdfg in enumerate([sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg], start=1):
+    for sdfg in [sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg]:
         for aname, adesc in sdfg.arrays.items():
             if aname.startswith("c"):
-                exp_stride = f"{aname}_stride"
-                target_symbol = f"{aname[0]}{level - 1}_stride"
+                target_symbol = exp_stride = f"{aname}_stride"
+            elif aname == "a2_alias":
+                # The outside symbol should be used for `a`, create a new one with `_0` suffix
+                exp_stride = f"{aname[0]}1_stride_0"
+                target_symbol = f"{aname[0]}1_stride"
             else:
                 target_symbol = exp_stride = f"{aname[0]}1_stride"
             assert len(adesc.strides) == 1
@@ -220,7 +222,12 @@ def test_strides_propagation():
     sdfg_level1.validate()
     for sdfg in [sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg]:
         for aname, adesc in sdfg.arrays.items():
-            target_symbol = exp_stride = f"{aname[0]}1_stride"
+            if aname == "a2_alias":
+                # The outside symbol should be used for `a`, create a new one with `_0` suffix
+                exp_stride = f"{aname[0]}1_stride_0"
+                target_symbol = f"{aname[0]}1_stride"
+            else:
+                target_symbol = exp_stride = f"{aname[0]}1_stride"
             assert len(adesc.strides) == 1
             assert str(adesc.strides[0]) == exp_stride, (
                 f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."
@@ -296,21 +303,24 @@ def _make_strides_propagation_dependent_symbol_sdfg() -> tuple[dace.SDFG, dace_n
     return sdfg_level1, nsdfg
 
 
-def test_strides_propagation_dependent_symbol():
+def test_strides_propagation_symbolic_expression():
     sdfg_level1, nsdfg_level2 = _make_strides_propagation_dependent_symbol_sdfg()
-    sym1_dtype = dace.uint32
-    sym2_dtype = dace.int32
 
     # Ensure that the special symbols are not already present inside the nested SDFG.
     for aname, adesc in sdfg_level1.arrays.items():
-        sym1 = f"{aname}_1stride"
-        sym2 = f"{aname}_2stride"
-        for sym, dtype in [(sym1, sym1_dtype), (sym2, sym2_dtype)]:
+        inner_aname = aname.replace("1", "2")
+        inner_stride = f"{inner_aname}_stride"
+        adesc2 = nsdfg_level2.sdfg.arrays[inner_aname]
+        assert len(adesc2.strides) == 1 and isinstance(adesc2.strides[0], dace.symbol)
+        assert adesc2.strides[0].name == inner_stride
+        assert str(nsdfg_level2.symbol_mapping[inner_stride]) == inner_stride
+
+        for sym, dtype in [(f"{aname}_1stride", dace.uint32), (f"{aname}_2stride", dace.int32)]:
+            assert sym in sdfg_level1.symbols
             assert sym in {fs.name for fs in adesc.strides[0].free_symbols}
+            assert sdfg_level1.symbols[sym] == dtype
             assert sym not in nsdfg_level2.symbol_mapping
             assert sym not in nsdfg_level2.sdfg.symbols
-            assert sym in sdfg_level1.symbols
-            assert sdfg_level1.symbols[sym] == dtype
 
     # Now propagate `a1` and `b1`.
     gtx_transformations.gt_propagate_strides_of(sdfg_level1, "a1")
@@ -320,18 +330,18 @@ def test_strides_propagation_dependent_symbol():
 
     # Now we check if the update has worked.
     for aname, adesc in sdfg_level1.arrays.items():
-        sym1 = f"{aname}_1stride"
-        sym2 = f"{aname}_2stride"
+        inner_aname = aname.replace("1", "2")
+        inner_stride = f"__{inner_aname}_stride_0"
         adesc2 = nsdfg_level2.sdfg.arrays[aname.replace("1", "2")]
-        assert adesc2.strides == adesc.strides
+        assert len(adesc2.strides) == 1 and isinstance(adesc2.strides[0], dace.symbol)
+        assert adesc2.strides[0].name == inner_stride
+        assert nsdfg_level2.symbol_mapping[inner_stride] == adesc.strides[0]
 
-        for sym, dtype in [(sym1, sym1_dtype), (sym2, sym2_dtype)]:
-            assert sym in nsdfg_level2.symbol_mapping
-            assert nsdfg_level2.symbol_mapping[sym].name == sym
+        for sym in [f"{aname}_1stride", f"{aname}_2stride"]:
             assert sym in sdfg_level1.symbols
-            assert sdfg_level1.symbols[sym] == dtype
-            assert sym in nsdfg_level2.sdfg.symbols
-            assert nsdfg_level2.sdfg.symbols[sym] == dtype
+            assert sym in {fs.name for fs in adesc.strides[0].free_symbols}
+            assert sym not in nsdfg_level2.symbol_mapping
+            assert sym not in nsdfg_level2.sdfg.symbols
 
 
 def _make_strides_propagation_shared_symbols_nsdfg() -> dace.SDFG:
@@ -407,7 +417,7 @@ def _make_strides_propagation_shared_symbols_sdfg() -> tuple[dace.SDFG, dace_nod
 
 
 def test_strides_propagation_shared_symbols_sdfg():
-    """Tests what happens if symbols are (unintentionally) shred between descriptor.
+    """Tests what happens if symbols are (unintentionally) shared between descriptor.
 
     This test looks rather artificial, but it is actually quite likely. Because
     transients will most likely have the same shape and if the strides are not
