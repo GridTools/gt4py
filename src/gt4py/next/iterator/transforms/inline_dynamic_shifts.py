@@ -81,6 +81,7 @@ class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     fuse_args,
                     uids=self.uids,
                     offset_provider_type=self.offset_provider_type,
+                    enable_cse=True,
                 )
 
         return node

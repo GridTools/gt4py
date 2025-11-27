@@ -68,7 +68,7 @@ def test_trivial_same_arg_twice():
         d,
     )(im.ref("inp1", field_type), im.ref("inp2", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected
 
@@ -93,7 +93,7 @@ def test_tuple_arg():
         d,
     )()
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected
 
@@ -113,7 +113,7 @@ def test_symref_used_twice():
         d,
     )("inp1", "inp2")
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected
 
@@ -128,7 +128,7 @@ def test_no_inline():
         d1,
     )(im.op_as_fieldop("plus", d2)(im.ref("inp1", field_type), im.ref("inp2", field_type)))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
+        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == testee
 
@@ -152,7 +152,7 @@ def test_staged_inlining():
         d,
     )(im.ref("a", field_type), im.ref("b", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected
 
@@ -168,7 +168,7 @@ def test_make_tuple_fusion_trivial():
         d,
     )(im.ref("a", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     # simplify to remove unnecessary make_tuple call `{v[0], v[1]}(actual)`
     actual_simplified = collapse_tuple.CollapseTuple.apply(
@@ -188,7 +188,7 @@ def test_make_tuple_fusion_symref():
         d,
     )(im.ref("a", field_type), im.ref("b", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     # simplify to remove unnecessary make_tuple call
     actual_simplified = collapse_tuple.CollapseTuple.apply(
@@ -208,7 +208,7 @@ def test_make_tuple_fusion_symref_same_ref():
         d,
     )(im.ref("a", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     # simplify to remove unnecessary make_tuple call
     actual_simplified = collapse_tuple.CollapseTuple.apply(
@@ -233,7 +233,7 @@ def test_make_tuple_nested():
         d,
     )(im.ref("a", field_type), im.ref("b", field_type), im.ref("c", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     # simplify to remove unnecessary make_tuple call
     actual_simplified = collapse_tuple.CollapseTuple.apply(
@@ -275,7 +275,7 @@ def test_make_tuple_fusion_different_domains():
         )
     )
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected
 
@@ -311,7 +311,7 @@ def test_partial_inline():
         "inp2",
     )
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
+        testee, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected
 
@@ -335,7 +335,7 @@ def test_chained_fusion():
         d,
     )(im.ref("inp1", field_type), im.ref("inp2", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected
 
@@ -352,7 +352,7 @@ def test_inline_as_fieldop_with_list_dtype():
         im.lambda_("inp")(im.call(im.call("reduce")("plus", 0))(im.deref("inp"))), d
     )(im.ref("inp", list_field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected
 
@@ -363,7 +363,7 @@ def test_inline_into_scan():
     testee = im.as_fieldop(scan, d)(im.as_fieldop("deref")(im.ref("a", field_type)))
     expected = im.as_fieldop(scan, d)(im.ref("a", field_type))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected
 
@@ -376,7 +376,7 @@ def test_no_inline_into_scan():
     scan = im.as_fieldop(scan_stencil, d)(im.ref("a", field_type))
     testee = im.as_fieldop(im.lambda_("arg")(im.deref("arg")), d)(scan)
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == testee
 
@@ -389,6 +389,6 @@ def test_opage_arg_deduplication():
         d,
     )(im.index(IDim))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False
     )
     assert actual == expected

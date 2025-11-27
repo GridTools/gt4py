@@ -125,6 +125,7 @@ def fuse_as_fieldop(
     eligible_args: list[bool],
     *,
     offset_provider_type: common.OffsetProviderType,
+    enable_cse: bool,
     uids: eve_utils.UIDGenerator,
 ) -> itir.Expr:
     assert cpm.is_applied_as_fieldop(expr)
@@ -189,10 +190,11 @@ def fuse_as_fieldop(
     new_stencil = inline_lifts.InlineLifts().visit(new_stencil)
 
     new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
-    # TODO(havogt): We should investigate how to keep the tree small without having to run CSE.
-    new_node = cse.CommonSubexpressionElimination.apply(
-        new_node, within_stencil=False, uids=uids, offset_provider_type=offset_provider_type
-    )
+    if enable_cse:
+        # TODO(havogt): We should investigate how to keep the tree small without having to run CSE.
+        new_node = cse.CommonSubexpressionElimination.apply(
+            new_node, within_stencil=False, uids=uids, offset_provider_type=offset_provider_type
+        )
 
     return new_node
 
@@ -288,6 +290,7 @@ class FuseAsFieldOp(
 
     uids: eve_utils.UIDGenerator
     offset_provider_type: common.OffsetProviderType
+    enable_cse: bool  # option to disable is mainly for testing purposes
 
     @classmethod
     def apply(
@@ -299,6 +302,7 @@ class FuseAsFieldOp(
         allow_undeclared_symbols=False,
         within_set_at_expr: Optional[bool] = None,
         enabled_transformations: Optional[Transformation] = None,
+        enable_cse: bool = True,
     ):
         enabled_transformations = enabled_transformations or cls.enabled_transformations
 
@@ -318,6 +322,7 @@ class FuseAsFieldOp(
             uids=uids,
             enabled_transformations=enabled_transformations,
             offset_provider_type=offset_provider_type,
+            enable_cse=enable_cse,
         ).visit(node, within_set_at_expr=within_set_at_expr)
         # The `FuseAsFieldOp` pass does not fully preserve the type information yet. In particular
         # for the generated lifts this is tricky and error-prone. For simplicity, we just reinfer
@@ -408,6 +413,7 @@ class FuseAsFieldOp(
                         eligible_els,
                         uids=self.uids,
                         offset_provider_type=self.offset_provider_type,
+                        enable_cse=self.enable_cse,
                     ),
                     **{**kwargs, "recurse": False},
                 )
