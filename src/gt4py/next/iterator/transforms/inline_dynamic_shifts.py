@@ -12,6 +12,7 @@ from typing import Optional
 import gt4py.next.iterator.ir_utils.common_pattern_matcher as cpm
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import fuse_as_fieldop, inline_lambdas, trace_shifts
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
@@ -34,14 +35,20 @@ def _dynamic_shift_args(node: itir.Expr) -> None | list[bool]:
 
 @dataclasses.dataclass
 class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
+    offset_provider_type: common.OffsetProviderType
     uids: eve_utils.UIDGenerator
 
     @classmethod
-    def apply(cls, node: itir.Program, uids: Optional[eve_utils.UIDGenerator] = None):
+    def apply(
+        cls,
+        node: itir.Program,
+        offset_provider_type: common.OffsetProviderType,
+        uids: Optional[eve_utils.UIDGenerator] = None,
+    ):
         if not uids:
             uids = eve_utils.UIDGenerator()
 
-        return cls(uids=uids).visit(node)
+        return cls(offset_provider_type=offset_provider_type, uids=uids).visit(node)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
         node = self.generic_visit(node, **kwargs)
@@ -69,6 +76,11 @@ class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 for inp, dynamic_shift_arg in zip(node.args, dynamic_shift_args, strict=True)
             ]
             if any(fuse_args):
-                return fuse_as_fieldop.fuse_as_fieldop(node, fuse_args, uids=self.uids)
+                return fuse_as_fieldop.fuse_as_fieldop(
+                    node,
+                    fuse_args,
+                    uids=self.uids,
+                    offset_provider_type=self.offset_provider_type,
+                )
 
         return node

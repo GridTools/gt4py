@@ -42,10 +42,7 @@ class FixedPointTransformation(eve.NodeTranslator):
 
     def _post_transform(self, node: ir.Node, new_node: ir.Node) -> ir.Node:
         if self.REINFER_TYPES:
-            kwargs = {}
-            if hasattr(self, "offset_provider_type"):
-                kwargs["offset_provider_type"] = self.offset_provider_type
-            itir_type_inference.reinfer(new_node, **kwargs)
+            itir_type_inference.reinfer(new_node)
         self._preserve_annex(node, new_node)
         return new_node
 

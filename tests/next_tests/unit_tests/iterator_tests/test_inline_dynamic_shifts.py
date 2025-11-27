@@ -27,7 +27,7 @@ def test_inline_dynamic_shift_as_fieldop_arg():
         )
     )("inp", "offset_field")
 
-    actual = inline_dynamic_shifts.InlineDynamicShifts.apply(testee)
+    actual = inline_dynamic_shifts.InlineDynamicShifts.apply(testee, offset_provider_type={})
     assert actual == expected
 
 
@@ -44,5 +44,5 @@ def test_inline_dynamic_shift_let_var():
         )
     )("inp", "offset_field")
 
-    actual = inline_dynamic_shifts.InlineDynamicShifts.apply(testee)
+    actual = inline_dynamic_shifts.InlineDynamicShifts.apply(testee, offset_provider_type={})
     assert actual == expected

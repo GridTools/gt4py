@@ -121,7 +121,11 @@ def _prettify_as_fieldop_args(
 
 
 def fuse_as_fieldop(
-    expr: itir.Expr, eligible_args: list[bool], *, uids: eve_utils.UIDGenerator
+    expr: itir.Expr,
+    eligible_args: list[bool],
+    *,
+    offset_provider_type: common.OffsetProviderType,
+    uids: eve_utils.UIDGenerator,
 ) -> itir.Expr:
     assert cpm.is_applied_as_fieldop(expr)
 
@@ -183,11 +187,12 @@ def fuse_as_fieldop(
         new_stencil, opcount_preserving=True, force_inline_lift_args=True
     )
     new_stencil = inline_lifts.InlineLifts().visit(new_stencil)
-    new_stencil = cse.CommonSubexpressionElimination.apply(
-        new_stencil, within_stencil=True, uids=uids
-    )
 
     new_node = im.as_fieldop(new_stencil, domain)(*new_args.values())
+    # TODO(havogt): We should investigate how to keep the tree small without having to run CSE.
+    new_node = cse.CommonSubexpressionElimination.apply(
+        new_node, within_stencil=False, uids=uids, offset_provider_type=offset_provider_type
+    )
 
     return new_node
 
@@ -398,7 +403,12 @@ class FuseAsFieldOp(
             ]
             if any(eligible_els):
                 return self.visit(
-                    fuse_as_fieldop(node, eligible_els, uids=self.uids),
+                    fuse_as_fieldop(
+                        node,
+                        eligible_els,
+                        uids=self.uids,
+                        offset_provider_type=self.offset_provider_type,
+                    ),
                     **{**kwargs, "recurse": False},
                 )
         return None

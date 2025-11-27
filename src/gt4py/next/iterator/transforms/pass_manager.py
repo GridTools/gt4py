@@ -83,7 +83,7 @@ def apply_common_transforms(
         ir, collapse_tuple_uids=collapse_tuple_uids, offset_provider_type=offset_provider_type
     )  # domain inference does not support dead-code
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
-        ir
+        ir, offset_provider_type=offset_provider_type
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
@@ -183,7 +183,7 @@ def apply_fieldview_transforms(
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = dead_code_elimination.dead_code_elimination(ir, offset_provider_type=offset_provider_type)
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
-        ir
+        ir, offset_provider_type=offset_provider_type
     )  # domain inference does not support dynamic offsets yet
 
     ir = infer_domain_ops.InferDomainOps.apply(ir)
