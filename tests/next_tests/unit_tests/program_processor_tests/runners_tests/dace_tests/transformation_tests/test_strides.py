@@ -204,10 +204,6 @@ def test_strides_propagation():
             if aname.startswith("c"):
                 exp_stride = f"{aname}_stride"
                 target_symbol = f"{aname[0]}{level - 1}_stride"
-            elif aname == "a2_alias":
-                # The symbol `a1_stride` is already used, the suffix `_0` is the result of `find_new_name=True`.
-                exp_stride = "a1_stride_0"
-                target_symbol = "a1_stride"
             else:
                 target_symbol = exp_stride = f"{aname[0]}1_stride"
             assert len(adesc.strides) == 1
@@ -224,12 +220,7 @@ def test_strides_propagation():
     sdfg_level1.validate()
     for sdfg in [sdfg_level1, nsdfg_level2.sdfg, nsdfg_level3.sdfg]:
         for aname, adesc in sdfg.arrays.items():
-            if aname == "a2_alias":
-                # The symbol `a1_stride` is already used, the suffix `_0` is the result of `find_new_name=True`.
-                exp_stride = "a1_stride_0"
-                target_symbol = "a1_stride"
-            else:
-                target_symbol = exp_stride = f"{aname[0]}1_stride"
+            target_symbol = exp_stride = f"{aname[0]}1_stride"
             assert len(adesc.strides) == 1
             assert str(adesc.strides[0]) == exp_stride, (
                 f"Expected that '{aname}' has strides '{exp_stride}', but found '{adesc.strides}'."

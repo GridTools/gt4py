@@ -508,33 +508,34 @@ def _gt_map_strides_into_nested_sdfg(
 
     # Make sure that the stride symbols from the outer array are not already defined
     #  inside the nested SDFG, by calling with `add_symbol()` with `find_new_name=True`.
-    nsdfg_used_symbols = nsdfg_node.sdfg.used_symbols(all_symbols=True)
     for i, dim_ostride in enumerate(new_strides):
         if str(dim_ostride).isdigit():
             # A literal stride (e.g. `1`) can be set directly
             new_strides[i] = dim_ostride
         elif dim_ostride.is_symbol:
             # Try reusing the same symbol name as the outer stride, but find a new name if already used.
-            dim_istride = nsdfg_node.sdfg.add_symbol(
-                dim_ostride.name, sdfg.symbols[dim_ostride.name], find_new_name=True
-            )
-            new_strides[i] = dace.symbolic.pystr_to_symbolic(dim_istride)
-            nsdfg_node.symbol_mapping[dim_istride] = dim_ostride
-        elif (free_symbols := dim_ostride.free_symbols).isdisjoint(nsdfg_used_symbols):
-            # A symbolic expression such as `value1 - value2`, where no symbol is
-            #  already used inside the nested SDFG, can be used as is for the inner stride.
-            for sym in free_symbols:
-                nsdfg_node.sdfg.add_symbol(sym.name, sym.dtype, find_new_name=False)
-            new_strides[i] = dim_ostride
-            nsdfg_node.symbol_mapping |= {sym.name: sym.name for sym in free_symbols}
+            if (
+                dim_ostride.name not in nsdfg_node.symbol_mapping
+                or str(nsdfg_node.symbol_mapping[dim_ostride.name]) != dim_ostride.name
+            ):
+                dim_istride = nsdfg_node.sdfg.add_symbol(
+                    dim_ostride.name, sdfg.symbols[dim_ostride.name], find_new_name=True
+                )
+                new_strides[i] = dace.symbolic.pystr_to_symbolic(dim_istride)
+                nsdfg_node.symbol_mapping[dim_istride] = dim_ostride
         else:
-            # A symbolic expression such as `value1 - value2`, where any symbol is
-            #  already used inside the nested SDFG, is mapped to a new inner stride symbol.
-            dim_istride = nsdfg_node.sdfg.add_symbol(
-                f"__{inner_data}_stride", inner_desc.strides[i].dtype, find_new_name=True
-            )
-            new_strides[i] = dace.symbolic.pystr_to_symbolic(dim_istride)
-            nsdfg_node.symbol_mapping[dim_istride] = dim_ostride
+            # Map a symbolic expression such as `value1 - value2`, by replacing free
+            #  symbols which are already used inside the nested SDFG.
+            stride_symbol_mapping = {}
+            for osym in dim_ostride.free_symbols:
+                if (
+                    osym.name not in nsdfg_node.symbol_mapping
+                    or str(nsdfg_node.symbol_mapping[osym.name]) != osym.name
+                ):
+                    isym = nsdfg_node.sdfg.add_symbol(osym.name, osym.dtype, find_new_name=True)
+                    stride_symbol_mapping[isym] = osym
+            new_strides[i] = dim_ostride.subs(stride_symbol_mapping)
+            nsdfg_node.symbol_mapping |= stride_symbol_mapping
 
     # We have to replace the `strides` attribute of the inner descriptor.
     inner_desc.set_shape(inner_desc.shape, new_strides)
