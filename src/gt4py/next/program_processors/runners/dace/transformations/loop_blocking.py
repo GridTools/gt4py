@@ -173,8 +173,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         Performs the operation described in the doc string.
         """
+        print(f"\n\nApplying LoopBlocking on map {self.outer_entry.map.label}.\n\n")
         # Now compute the partitions of the nodes.
         self.partition_map_output(graph, sdfg)
+
+        self._prepare_independent_memlets(graph, sdfg)
 
         # Modify the outer map and create the inner map.
         (outer_entry, outer_exit), (inner_entry, inner_exit) = self._prepare_inner_outer_maps(graph)
@@ -571,13 +574,21 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
             # sdfg.view()
             # breakpoint()
-            if self.promote_independent_memlets and in_edge.src is outer_entry and all(self.blocking_parameter not in subset.free_symbols for subset in subsets_to_inspect) and in_edge.src is outer_entry:
+            if (
+                self.promote_independent_memlets
+                and in_edge.src is outer_entry
+                and all(
+                    self.blocking_parameter not in subset.free_symbols
+                    for subset in subsets_to_inspect
+                )
+                and in_edge.src is outer_entry
+            ):
                 independent_memlets.add(in_edge)
-            
+
         if has_dependent_memlet:
             self._memlet_to_promote.update(independent_memlets)
-            for independent_memlet in independent_memlets:
-                print(f"Promoting memlet {independent_memlet} of node {node_to_classify} to outer map.")
+            # for independent_memlet in independent_memlets:
+            #     print(f"Promoting memlet {independent_memlet} of node {node_to_classify} to outer map.")
             return False
 
         # Loop ended normally, thus we update the list of independent nodes.
@@ -627,6 +638,101 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     self._independent_nodes.remove(node)
                     independent_nodes_were_updated = True
                     break
+
+    def _prepare_independent_memlets(
+        self,
+        state: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        outer_map_entry: dace_nodes.MapEntry = self.outer_entry
+
+        # sdfg.save(f"_before_promote_independent_memlets_{outer_map_entry.map.label}.sdfg")
+
+        _ = sdfg.reset_cfg_list()
+        dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=outer_map_entry)
+        dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_map_entry)
+
+        for in_edge in state.out_edges(outer_map_entry):
+            if in_edge.dst not in self._independent_nodes:
+                # if outer_map_entry.map.label == "map_10_fieldop":
+                #     breakpoint()
+                memlet: dace.Memlet = in_edge.data
+                src_subset: dace_subsets.Subset | None = memlet.src_subset
+                dst_subset: dace_subsets.Subset | None = memlet.dst_subset
+
+                if memlet.is_empty():  # Empty Memlets should already be in independent nodes and don't have read dependencies
+                    continue
+
+                # Now we have to look at the source and destination set of the Memlet.
+                subsets_to_inspect: list[dace_subsets.Subset] = []
+                if dst_subset is not None:
+                    subsets_to_inspect.append(dst_subset)
+                if src_subset is not None:
+                    subsets_to_inspect.append(src_subset)
+
+                if any(
+                    self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect
+                ):
+                    continue
+
+                if (
+                    isinstance(in_edge.dst, dace_nodes.Tasklet)
+                    and self.blocking_parameter in in_edge.dst.code.get_free_symbols()
+                ):
+                    continue
+
+                print(
+                    f"Creating temporary access node for memlet {in_edge} of outer map {self.outer_entry.map.label}."
+                )
+                # Create a temporary AccessNode that will be used to promote the memlet
+                promoted_name, promoted_desc = sdfg.add_temp_transient(
+                    shape=(in_edge.data.volume,),
+                    dtype=sdfg.arrays[in_edge.data.data].dtype,
+                )
+                promoted_anode = state.add_access(promoted_name)
+                original_dst_of_in_edge = in_edge.dst
+                original_dst_conn_of_in_edge = in_edge.dst_conn
+                original_dst_other_subset_of_in_edge = in_edge.data.other_subset
+                # Redirect the memlet to the temporary AccessNode
+                dace_helpers.redirect_edge(
+                    state=state,
+                    edge=in_edge,
+                    new_dst=promoted_anode,
+                    new_dst_conn=None,
+                    new_memlet=dace.Memlet(
+                        data=in_edge.data.data,
+                        subset=in_edge.data.subset,
+                        other_subset=dace_subsets.Range.from_array(sdfg.arrays[promoted_name]),
+                    ),
+                )
+
+                # Create a new memlet from the temporary AccessNode to the original destination
+                state.add_edge(
+                    promoted_anode,
+                    None,
+                    original_dst_of_in_edge,
+                    original_dst_conn_of_in_edge,
+                    memlet=dace.Memlet(
+                        data=promoted_name,
+                        subset=dace_subsets.Range.from_array(promoted_desc),
+                        other_subset=original_dst_other_subset_of_in_edge,
+                    ),
+                )
+
+                if isinstance(original_dst_of_in_edge, dace_nodes.MapEntry):
+                    for edge in state.out_edges(original_dst_of_in_edge):
+                        if edge.data.data == in_edge.data.data:
+                            edge.data.data = promoted_name
+                            # breakpoint()
+                            edge.data.subset = next(iter(original_dst_of_in_edge.params))
+                            edge.data.other_subset = None
+                elif isinstance(original_dst_of_in_edge, dace_nodes.NestedSDFG):
+                    raise NotImplementedError(
+                        "Promotion of memlets to NestedSDFG not implemented yet."
+                    )
+
+                self._independent_nodes.add(promoted_anode)
+        # sdfg.save(f"_after_promote_independent_memlets_{outer_map_entry.map.label}.sdfg")
 
     def _rewire_map_scope(
         self,
@@ -817,14 +923,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     new_memlet_inner = dace.Memlet.from_array(
                         in_edge.data.data, sdfg.arrays[in_edge.data.data]
                     )
-                    new_in_edge = state.add_edge(
+                    state.add_edge(
                         in_edge.src,
                         in_edge.src_conn,
                         inner_entry,
                         new_in_conn,
                         new_memlet_inner,
                     )
-                    new_out_edge = state.add_edge(
+                    state.add_edge(
                         inner_entry,
                         new_out_conn,
                         in_edge.dst,
@@ -834,60 +940,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     inner_entry.add_in_connector(new_in_conn)
                     inner_entry.add_out_connector(new_out_conn)
                     state.remove_edge(in_edge)
-                
-                    if self.promote_independent_memlets and in_edge in self._memlet_to_promote:
-                        original_data = in_edge.data
-                        original_data_name = original_data.data
-                        original_dst = in_edge.dst
-                        sdfg.save(f"_promote_memlet_before_{original_data_name}_{inner_entry.map.label}.sdfg")
-                        # breakpoint()
-                        # Create a new AccessNode to hold the promoted data
-                        promoted_name, promoted_desc = sdfg.add_temp_transient(
-                            shape=(len(inner_entry.map.range[0]),),
-                            dtype=sdfg.arrays[original_data_name].dtype,
-                        )
-                        promoted_access_node = state.add_access(promoted_name)
-                        # Create edge from outer map to promoted access node
-                        state.add_edge(
-                            outer_entry,
-                            in_edge.src_conn,
-                            promoted_access_node,
-                            None,
-                            dace.Memlet(
-                                data=original_data.data,
-                                subset=in_edge.data.src_subset,
-                                other_subset=f"0:{len(inner_entry.map.range[0])}",
-                            )
-                        )
-                        # Create edge from promoted access node to inner map
-                        state.add_edge(
-                            promoted_access_node,
-                            None,
-                            inner_entry,
-                            new_in_conn,
-                            dace.Memlet(
-                                data=promoted_name,
-                                subset=f"0:{len(inner_entry.map.range[0])}",
-                            )
-                        )
-                        new_out_edge.data = dace.Memlet.from_array(
-                            promoted_name,
-                            sdfg.arrays[promoted_name],
-                        )
-                        state.remove_edge(new_in_edge)
-                        self._memlet_to_promote.remove(in_edge)
-                        sdfg.save(f"_promote_memlet_after_{original_data_name}_{inner_entry.map.label}.sdfg")
-                        dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=inner_entry)
-                        # dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_entry)
-                        sdfg.save(f"_promote_memlet_after_can_{original_data_name}_{inner_entry.map.label}.sdfg")
-                        for oedge in state.out_edges(inner_entry):
-                            if isinstance(oedge.dst, dace_nodes.MapEntry):
-                                for oedge_inner in state.out_edges(oedge.dst):
-                                    if oedge_inner.data.data == promoted_name:
-                                        oedge_inner.data.subset = oedge.dst.map.params[0]
-                                        oedge_inner.data.other_subset = None
-                        sdfg.save(f"_promote_memlet_after_edge_fix_{original_data_name}_{inner_entry.map.label}.sdfg")
-                        # breakpoint()
 
                 else:
                     raise NotImplementedError("Unknown node configuration.")
