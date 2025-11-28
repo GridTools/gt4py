@@ -50,7 +50,7 @@ from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
-DimT_cov = TypeVar("DimT_cov", bound="Dimension", covariant=True)
+DimT_co = TypeVar("DimT_co", bound="Dimension", covariant=True)
 ShapeTs = TypeVarTuple("ShapeTs")
 
 
@@ -933,10 +933,10 @@ class NeighborConnectivityType(ConnectivityType):
 
 
 @runtime_checkable
-class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_cov]):
+class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_co]):
     @property
     @abc.abstractmethod
-    def codomain(self) -> DimT_cov:
+    def codomain(self) -> DimT_co:
         """
         The `codomain` is the set of all indices in a certain `Dimension`.
 
