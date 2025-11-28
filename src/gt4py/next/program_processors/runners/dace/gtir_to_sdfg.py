@@ -841,7 +841,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype)
                 all_dims = gt_type.dims
             else:  # for 'ts.ListType' use 'offset_type' as local dimension
-                assert gt_type.dtype.offset_type is not None
+                assert (
+                    gt_type.dtype.offset_type is not None
+                    and not gt_type.dtype.offset_type == "unspecified"
+                )
                 assert gt_type.dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
                 assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
                 dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype.element_type)

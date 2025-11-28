@@ -45,7 +45,11 @@ def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
     assert all(isinstance(arg.type, ts.ListType) for arg in reduce_args)
     assert all(arg.type.offset_type is not None for arg in reduce_args)  # type: ignore[union-attr] # checked in previous line
 
-    return [arg.type.offset_type.value for arg in reduce_args]  # type: ignore[union-attr] # checked in previous lines
+    return [
+        arg.type.offset_type.value  # type: ignore[union-attr] # checked in previous lines
+        for arg in reduce_args
+        if not arg.type.offset_type == "unspecified"  # type: ignore[union-attr] # checked in previous lines
+    ]
 
 
 def _get_connectivity(

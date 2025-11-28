@@ -1417,7 +1417,9 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
 
 @builtins.list_get.register(EMBEDDED)
 def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
-    return lst[i]
+    if i < len(lst.values):
+        return lst[i]
+    return _UNDEFINED  # might happen for lists originating from neighbors with skip values
 
 
 def _get_offset(*lists: _List | _ConstList) -> Optional[runtime.Offset]:

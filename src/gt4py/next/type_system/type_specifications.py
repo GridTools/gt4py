@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Final, Iterator, Optional, Sequence, TypeVar
+from typing import Final, Iterator, Literal, Optional, Sequence, TypeVar
 
 from gt4py.eve import (
     datamodels as eve_datamodels,
@@ -112,8 +112,8 @@ class ListType(DataType):
     """
 
     element_type: DataType
-    # TODO(tehrengruber): make `offset_type` mandatory
-    offset_type: Optional[common.Dimension] = None
+    # "unspecified" is used to describe lists originating from `make_const_list`
+    offset_type: common.Dimension | Literal["unspecified"]
 
 
 class FieldType(DataType, CallableType):
