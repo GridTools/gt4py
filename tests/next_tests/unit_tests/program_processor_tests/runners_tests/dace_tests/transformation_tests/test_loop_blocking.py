@@ -1608,3 +1608,164 @@ def test_loop_blocking_direct_access_node_scalar():
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref)
+
+
+def _make_loop_blocking_sdfg_with_everything() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
+]:
+    sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_semi_independent_map"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("A", shape=(40, 8), dtype=dace.float64, transient=False)
+    for name in "BC":
+        sdfg.add_array(name, shape=(40, 8), dtype=dace.float64, transient=False)
+    sdfg.add_array("inc", shape=(40, 3), dtype=dace.float64, transient=False)
+    sdfg.add_array("gt_conn_dummy", shape=(40, 2), dtype=dace.int32, transient=False)
+    sdfg.add_array("S", shape=(40,), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("t", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("tt", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("ttt", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("tttt", dtype=dace.float64, transient=True)
+
+    A, B, C, T, t, S = (state.add_access(name) for name in "ABCTtS")
+    inc = state.add_access("inc")
+    gt_conn_dummy = state.add_access("gt_conn_dummy")
+    tt = state.add_access("tt")
+    ttt = state.add_access("ttt")
+    tttt = state.add_access("tttt")
+
+    # Note that creating `T` as an array is not useful at all, a scalar would be
+    #  enough. The only reason for doing it is, that the Memlets inside and outside
+    #  the inner Map scope can refer to different data, and the outside Memlet
+    #  is dependent.
+    sdfg.add_array("T", shape=(8,), dtype=dace.float64, transient=True)
+
+    me, mx = state.add_map("main_comp", ndrange={"__i0": "0:40", "__i1": "0:8"})
+
+    # The inner computation on its own is not useful.
+    ime, imx = state.add_map("inner_comp", ndrange={"__inner": "0:3"})
+    itlet = state.add_tasklet(
+        "inner_tasklet",
+        inputs={"__in", "__inc"},
+        outputs={"__out"},
+        code="__out = __in + __inc",
+    )
+
+    indirectaccesstlet = state.add_tasklet(
+        "indirect_access_tlet",
+        inputs={"__in", "__gt_conn_dummy"},
+        outputs={"__out"},
+        code="__out = __in[(__gt_conn_dummy - 0), (-0) + __i1]",
+    )
+
+    dtletB = state.add_tasklet(
+        "dependent_tlet_B",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in + 5.0",
+    )
+
+    idtlet = state.add_tasklet(
+        "independent_tlet",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in + 2.0",
+    )
+
+    # This is the dependent Tasklet.
+    dtlet = state.add_tasklet(
+        "dependent_tlet",
+        inputs={"__in1", "__in2", "__in3", "__in4"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2 + __in3 + __in4",
+    )
+
+    state.add_edge(A, None, me, "IN_A", dace.Memlet("A[0:40, 0:8]"))
+    state.add_edge(me, "OUT_A", ime, "IN_A", dace.Memlet("A[__i0, __i1]"))
+    me.add_scope_connectors("A")
+
+    state.add_edge(inc, None, me, "IN_inc", dace.Memlet("inc[0:40, 0:3]"))
+    state.add_edge(me, "OUT_inc", ime, "IN_inc", dace.Memlet("inc[__i0, 0:3]"))
+    me.add_scope_connectors("inc")
+
+    state.add_edge(ime, "OUT_A", itlet, "__in", dace.Memlet("A[__i0, __i1] -> __in"))
+    ime.add_scope_connectors("A")
+    state.add_edge(ime, "OUT_inc", itlet, "__inc", dace.Memlet("inc[__i0, __inner] -> __inc"))
+    ime.add_scope_connectors("inc")
+
+    # Here is the interesting part, on the inside of the inner Map scope, the output
+    #  Memlet refers to `t` the scalar, but on the outside the Memlet refers to
+    #  `T` and this also includes the blocking variable `__i1`.
+    state.add_edge(t, None, imx, "IN_t", dace.Memlet("t[0]"))
+    state.add_edge(imx, "OUT_t", T, None, dace.Memlet("T[__i1]"))
+    imx.add_scope_connectors("t")
+
+    state.add_edge(T, None, dtlet, "__in1", dace.Memlet("T[__i1]"))
+
+    state.add_edge(itlet, "__out", t, None, dace.Memlet("t[0]"))
+
+    state.add_edge(B, None, me, "IN_B", dace.Memlet("B[0:40, 0:8]"))
+    state.add_edge(
+        gt_conn_dummy, None, me, "IN_gt_conn_dummy", dace.Memlet("gt_conn_dummy[0:40, 0:2]")
+    )
+    state.add_edge(me, "OUT_B", indirectaccesstlet, "__in", dace.Memlet("B[0:40, 0:8]"))
+    state.add_edge(
+        me,
+        "OUT_gt_conn_dummy",
+        indirectaccesstlet,
+        "__gt_conn_dummy",
+        dace.Memlet("gt_conn_dummy[__i0, 0]"),
+    )
+    me.add_scope_connectors("B")
+    me.add_scope_connectors("gt_conn_dummy")
+
+    state.add_edge(indirectaccesstlet, "__out", tt, None, dace.Memlet("tt[0]"))
+    state.add_edge(tt, None, dtlet, "__in2", dace.Memlet("tt[0]"))
+
+    state.add_edge(me, "OUT_B", dtletB, "__in", dace.Memlet("B[__i0, __i1]"))
+    state.add_edge(dtletB, "__out", ttt, None, dace.Memlet("ttt[0]"))
+    state.add_edge(ttt, None, dtlet, "__in3", dace.Memlet("ttt[0]"))
+
+    state.add_edge(S, None, me, "IN_S", dace.Memlet("S[__i0]"))
+    state.add_edge(me, "OUT_S", idtlet, "__in", dace.Memlet("S[__i0]"))
+    me.add_scope_connectors("S")
+
+    state.add_edge(idtlet, "__out", tttt, None, dace.Memlet("tttt[0]"))
+    state.add_edge(tttt, None, dtlet, "__in4", dace.Memlet("tttt[0]"))
+
+    state.add_edge(dtlet, "__out", mx, "IN_C", dace.Memlet("C[__i0, __i1]"))
+    state.add_edge(mx, "OUT_C", C, None, dace.Memlet("C[0:40, 0:8]"))
+    mx.add_scope_connectors("C")
+
+    sdfg.validate()
+
+    return sdfg, state, me, ime
+
+
+@pytest.mark.parametrize(
+    "require_independent_nodes,promote_independent_memlets",
+    [(True, True), (True, False), (False, True), (False, False)],
+)
+def test_loop_blocking_sdfg_with_everything(
+    require_independent_nodes: bool, promote_independent_memlets: bool
+):
+    sdfg, state, me, ime = _make_loop_blocking_sdfg_with_everything()
+
+    scope_dict_before = state.scope_dict()
+    assert scope_dict_before[ime] is me
+
+    count = sdfg.apply_transformations_repeated(
+        gtx_transformations.LoopBlocking(
+            blocking_size=2,
+            blocking_parameter="__i1",
+            require_independent_nodes=require_independent_nodes,
+            promote_independent_memlets=promote_independent_memlets,
+        ),
+        validate=True,
+        validate_all=True,
+    )
+    assert count == (1 if not require_independent_nodes or promote_independent_memlets else 0)
+
+    new_scope_of_inner_map = state.scope_dict()[ime]
+    assert isinstance(new_scope_of_inner_map, dace_nodes.MapEntry)
+    assert new_scope_of_inner_map is not (me if count == 1 else None)

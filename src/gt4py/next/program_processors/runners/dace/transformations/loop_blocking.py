@@ -592,9 +592,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 )
             ):
                 independent_memlets.add(in_edge)
+        self._memlet_to_promote.update(
+            independent_memlets
+        )  # TODO(iomaganaris): Remove self._memlet_to_promote. Not necessary anymore.
 
         if has_dependent_memlet:
-            self._memlet_to_promote.update(independent_memlets) # TODO(iomaganaris): Remove self._memlet_to_promote. Not necessary anymore.
             return False
 
         # Loop ended normally, thus we update the list of independent nodes.
@@ -736,6 +738,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 elif isinstance(original_dst_of_in_edge, dace_nodes.NestedSDFG):
                     raise NotImplementedError(
                         "Promotion of memlets to NestedSDFG not implemented yet."
+                    )
+                elif isinstance(original_dst_of_in_edge, dace_nodes.LibraryNode):
+                    raise NotImplementedError(
+                        "Promotion of memlets to LibraryNode not implemented yet."
                     )
 
                 self._independent_nodes.add(promoted_anode)
@@ -1002,4 +1008,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # TODO(iomganaris): Update docstring
         assert self._independent_nodes is not None
         assert self._dependent_nodes is None
-        return self.promote_independent_memlets and self._memlet_to_promote is not None and len(self._memlet_to_promote) > 0
+        return (
+            self.promote_independent_memlets
+            and self._memlet_to_promote is not None
+            and len(self._memlet_to_promote) > 0
+        )
