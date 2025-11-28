@@ -30,7 +30,7 @@ class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
     >>> testee1 = im.lambda_("a")(im.plus("a", "b"))
     >>> cannonicalized_testee1 = CannonicalizeBoundSymbolNames.apply(testee1)
     >>> str(cannonicalized_testee1)
-    'λ(_csym_1) → _csym_1 + b'
+    'λ(_csym_0) → _csym_0 + b'
 
     >>> testee2 = im.lambda_("c")(im.plus("c", "b"))
     >>> cannonicalized_testee2 = CannonicalizeBoundSymbolNames.apply(testee2)

@@ -236,6 +236,7 @@ class FuseAsFieldOp(
     Merge multiple `as_fieldop` calls into one.
 
     >>> from gt4py import next as gtx
+    >>> from gt4py.next import utils
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> IDim = gtx.Dimension("IDim")
     >>> field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
@@ -252,7 +253,10 @@ class FuseAsFieldOp(
     )
     >>> print(
     ...     FuseAsFieldOp.apply(
-    ...         nested_as_fieldop, offset_provider_type={}, allow_undeclared_symbols=True
+    ...         nested_as_fieldop,
+    ...         offset_provider_type={},
+    ...         allow_undeclared_symbols=True,
+    ...         uids=utils.SequentialPrefixedIDGenerator(),
     ...     )
     ... )
     as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2, inp3)
