@@ -377,8 +377,9 @@ class TestSequentialIDGenerator:
         from gt4py.eve.utils import SequentialIDGenerator
 
         uids = SequentialIDGenerator()
-        i = next(uids)
-        assert next(uids) != i
+        first = next(uids)
+        second = uids.next()
+        assert next(uids) != first != second
 
     def test_prefix(self):
         from gt4py.eve.utils import SequentialIDGenerator

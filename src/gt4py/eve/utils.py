@@ -869,16 +869,19 @@ class FrozenNamespace(Namespace[T]):
         return self.__cached_hash_value__
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class SequentialIDGenerator:
     """Simple sequential ID generator."""
 
     prefix: str = ""
+    counter: Iterator[int] = dataclasses.field(default_factory=itertools.count)
     format: str = "{prefix}_{id}"
-    _id: Iterator[int] = dataclasses.field(default_factory=itertools.count)
 
     def __next__(self) -> str:
-        return self.format.format(prefix=self.prefix, id=next(self._id))
+        return self.format.format(prefix=self.prefix, id=next(self.counter))
+
+    def next(self) -> str:
+        return self.__next__()
 
 
 # -- Iterators --
