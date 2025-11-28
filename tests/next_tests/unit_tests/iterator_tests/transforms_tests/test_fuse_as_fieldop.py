@@ -342,7 +342,11 @@ def test_chained_fusion():
 
 def test_inline_as_fieldop_with_list_dtype():
     list_field_type = ts.FieldType(
-        dims=[IDim], dtype=ts.ListType(element_type=ts.ScalarType(kind=ts.ScalarKind.INT32))
+        dims=[IDim],
+        dtype=ts.ListType(
+            element_type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+            offset_type=gtx.Dimension("Neighbor", kind=gtx.DimensionKind.LOCAL),
+        ),
     )
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.as_fieldop(
