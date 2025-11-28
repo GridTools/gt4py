@@ -593,9 +593,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 independent_memlets.add(in_edge)
 
         if self.promote_independent_memlets:
-            self._memlet_to_promote.update(
-                independent_memlets
-            )
+            self._memlet_to_promote.update(independent_memlets)
 
         if has_dependent_memlet:
             return False
@@ -1000,4 +998,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         assert self._independent_nodes is not None
         assert self._dependent_nodes is None
         assert self._memlet_to_promote is not None
-        return (self.promote_independent_memlets and len(self._memlet_to_promote) > 0) or not self.require_independent_nodes
+        return (
+            (self.promote_independent_memlets and len(self._memlet_to_promote) > 0)
+            or not self.require_independent_nodes
+            or len(self._independent_nodes) > 0
+        )
