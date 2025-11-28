@@ -228,12 +228,12 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
         b = 2
         c = a + b
         d = 3
-        _let_result_1 = c + d
-        return _let_result_1 + 4
+        _cs_1 = c + d
+        return _cs_1 + 4
     """
     ).strip()
 
-    uid_gen = UIDGenerator(prefix="_let_result")
+    uid_gen = UIDGenerator()
 
     def convert_to_assignment_stmt_form(node: ir.Expr) -> tuple[list[tuple[str, ir.Expr]], ir.Expr]:
         assignment_stmts: list[tuple[str, ir.Expr]] = []

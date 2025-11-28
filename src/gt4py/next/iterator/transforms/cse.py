@@ -90,7 +90,7 @@ def _is_collectable_expr(node: itir.Node) -> bool:
         # do also not collect index nodes because otherwise the right hand side of SetAts becomes a let statement
         #  instead of an as_fieldop
         if cpm.is_call_to(
-            node, ("lift", "shift", "reduce", "map_", "index")
+            node, ("lift", "shift", "neighbors", "reduce", "map_", "index")
         ) or cpm.is_applied_lift(node):
             return False
         return True
@@ -262,6 +262,19 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
             state.used_symbol_ids.add(id(symtable[node.id]))
 
 
+def _unique_id(uid_generator: UIDGenerator) -> str:
+    """
+    Generate a unique id with '_cs' prefix using the given uid generator.
+
+    In case cse is used from a different context where the uid generator already has a prefix.
+    """
+    prefix = uid_generator.prefix or ""
+    if prefix != "_cs":
+        prefix = f"{prefix}_cs"
+
+    return uid_generator.sequential_id(prefix=prefix)
+
+
 def extract_subexpression(
     node: itir.Expr,
     predicate: Callable[[itir.Expr, int], bool],
@@ -299,10 +312,10 @@ def extract_subexpression(
         ...     expr, predicate, UIDGenerator(prefix="_subexpr")
         ... )
         >>> print(new_expr)
-        _subexpr_1 + (_subexpr_1 + z)
+        _subexpr_cs_1 + (_subexpr_cs_1 + z)
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_1`: `x + y`
+        `_subexpr_cs_1`: `x + y`
 
         The order of the extraction can be configured using `deepest_expr_first`. By default, the nodes
         closer to the root are eliminated first:
@@ -315,10 +328,10 @@ def extract_subexpression(
         ...     expr, predicate, UIDGenerator(prefix="_subexpr"), deepest_expr_first=False
         ... )
         >>> print(new_expr)
-        _subexpr_1 + _subexpr_1
+        _subexpr_cs_1 + _subexpr_cs_1
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_1`: `x + y + (x + y)`
+        `_subexpr_cs_1`: `x + y + (x + y)`
 
         Since `(x+y)` is a child of one of the expressions it is ignored:
 
@@ -339,10 +352,10 @@ def extract_subexpression(
         ...     deepest_expr_first=True,
         ... )
         >>> print(new_expr)
-        _subexpr_1 + _subexpr_1 + (_subexpr_1 + _subexpr_1)
+        _subexpr_cs_1 + _subexpr_cs_1 + (_subexpr_cs_1 + _subexpr_cs_1)
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_1`: `x + y`
+        `_subexpr_cs_1`: `x + y`
 
         Note that this requires `once_only` to be set right now.
     """
@@ -396,7 +409,7 @@ def extract_subexpression(
         if not eligible_ids:
             continue
 
-        expr_id = uid_generator.sequential_id()
+        expr_id = _unique_id(uid_generator)
         extracted[itir.Sym(id=expr_id)] = expr
         expr_ref = itir.SymRef(id=expr_id)
         for id_ in eligible_ids:
@@ -435,9 +448,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
 
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_cs")
-    )
+    uids: UIDGenerator = dataclasses.field(repr=False)
 
     collect_all: bool = dataclasses.field(default=False)
 
@@ -447,6 +458,8 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         node: ProgramOrExpr,
         within_stencil: bool | None = None,
         offset_provider_type: common.OffsetProviderType | None = None,
+        *,
+        uids: UIDGenerator | None = None,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, itir.Program)
         if is_program:
@@ -457,11 +470,14 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
                 "The expression's context must be specified using `within_stencil`."
             )
 
+        if not uids:
+            uids = UIDGenerator()
+
         offset_provider_type = offset_provider_type or {}
         node = itir_type_inference.infer(
             node, offset_provider_type=offset_provider_type, allow_undeclared_symbols=not is_program
         )
-        return cls().visit(node, within_stencil=within_stencil)
+        return cls(uids=uids).visit(node, within_stencil=within_stencil)
 
     def generic_visit(self, node, **kwargs):
         if cpm.is_call_to(node, "as_fieldop"):

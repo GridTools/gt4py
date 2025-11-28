@@ -66,6 +66,7 @@ def apply_common_transforms(
     tmp_uids = eve_utils.UIDGenerator(prefix="__tmp")
     mergeasfop_uids = eve_utils.UIDGenerator()
     collapse_tuple_uids = eve_utils.UIDGenerator()
+    cse_uids = eve_utils.UIDGenerator()
 
     ir = MergeLet().visit(ir)
     ir = inline_fundefs.InlineFundefs().visit(ir)
@@ -82,7 +83,7 @@ def apply_common_transforms(
         ir, collapse_tuple_uids=collapse_tuple_uids, offset_provider_type=offset_provider_type
     )  # domain inference does not support dead-code
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
-        ir
+        ir, offset_provider_type=offset_provider_type
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
@@ -128,7 +129,9 @@ def apply_common_transforms(
 
     # breaks in test_zero_dim_tuple_arg as trivial tuple_get is not inlined
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination.apply(ir, offset_provider_type=offset_provider_type)
+        ir = CommonSubexpressionElimination.apply(
+            ir, offset_provider_type=offset_provider_type, uids=cse_uids
+        )
         ir = MergeLet().visit(ir)
         ir = InlineLambdas.apply(ir, opcount_preserving=True)
 
@@ -180,7 +183,7 @@ def apply_fieldview_transforms(
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = dead_code_elimination.dead_code_elimination(ir, offset_provider_type=offset_provider_type)
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
-        ir
+        ir, offset_provider_type=offset_provider_type
     )  # domain inference does not support dynamic offsets yet
 
     ir = infer_domain_ops.InferDomainOps.apply(ir)
