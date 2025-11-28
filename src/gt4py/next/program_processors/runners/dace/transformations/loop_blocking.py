@@ -180,7 +180,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         Performs the operation described in the doc string.
         """
-        print(f"\n\nApplying LoopBlocking on map {self.outer_entry.map.label}.\n\n")
         # Now compute the partitions of the nodes.
         self.partition_map_output(graph, sdfg)
 
@@ -596,7 +595,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if self.promote_independent_memlets:
             self._memlet_to_promote.update(
                 independent_memlets
-            )  # TODO(iomaganaris): Remove self._memlet_to_promote. Not necessary anymore.
+            )
 
         if has_dependent_memlet:
             return False
@@ -1001,6 +1000,4 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         assert self._independent_nodes is not None
         assert self._dependent_nodes is None
         assert self._memlet_to_promote is not None
-        return (self.promote_independent_memlets and len(self._memlet_to_promote) > 0) or (
-            not self.require_independent_nodes and len(self._independent_nodes) > 0
-        )
+        return (self.promote_independent_memlets and len(self._memlet_to_promote) > 0) or not self.require_independent_nodes
