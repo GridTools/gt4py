@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Final, Iterator, Literal, Optional, Sequence, TypeVar
+from typing import Final, Iterator, Optional, Sequence, TypeVar
 
 from gt4py.eve import (
     datamodels as eve_datamodels,
@@ -108,12 +108,13 @@ class ScalarType(DataType):
 class ListType(DataType):
     """Represents a neighbor list in the ITIR representation.
 
-    Note: not used in the frontend. The concept is represented as Field with local Dimension.
+    Note:
+      - not used in the frontend. The concept is represented as Field with local Dimension.
+      - `None` is used to describe lists originating from `make_const_list`.
     """
 
     element_type: DataType
-    # "unspecified" is used to describe lists originating from `make_const_list`
-    offset_type: common.Dimension | Literal["unspecified"]
+    offset_type: common.Dimension | None
 
 
 class FieldType(DataType, CallableType):

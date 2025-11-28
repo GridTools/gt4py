@@ -223,7 +223,7 @@ def if_(
 @_register_builtin_type_synthesizer
 def make_const_list(scalar: ts.ScalarType) -> ts.ListType:
     assert isinstance(scalar, ts.ScalarType)
-    return ts.ListType(element_type=scalar, offset_type="unspecified")
+    return ts.ListType(element_type=scalar, offset_type=None)
 
 
 @_register_builtin_type_synthesizer
@@ -625,12 +625,8 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         arg_el_types = [arg.element_type for arg in args]
         el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
-        offset_types = [
-            arg.offset_type
-            for arg in args
-            if (arg.offset_type and not arg.offset_type == "unspecified")
-        ]
-        offset_type = offset_types[0] if offset_types else None
+        offset_types = [arg.offset_type for arg in args if arg.offset_type is not None]
+        offset_type = offset_types[0]
         assert all(offset_type == arg for arg in offset_types)
         return ts.ListType(element_type=el_type, offset_type=offset_type)
 
@@ -640,11 +636,12 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 @_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @type_synthesizer
-    def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):
-        assert all(isinstance(arg, ts.ListType) for arg in args)
-        return op(
-            init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
-        )
+    def applied_reduce(arg: ts.ListType, offset_provider_type: common.OffsetProviderType):
+        assert isinstance(arg, ts.ListType)
+        assert (
+            arg.offset_type is not None
+        )  # we only have `make_const_list`s in the reduce which is not allowed
+        return op(init, arg.element_type, offset_provider_type=offset_provider_type)
 
     return applied_reduce
 

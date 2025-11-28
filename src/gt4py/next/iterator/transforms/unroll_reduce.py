@@ -43,12 +43,11 @@ def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCa
 
 def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
     assert all(isinstance(arg.type, ts.ListType) for arg in reduce_args)
-    assert all(arg.type.offset_type is not None for arg in reduce_args)  # type: ignore[union-attr] # checked in previous line
 
     return [
         arg.type.offset_type.value  # type: ignore[union-attr] # checked in previous lines
         for arg in reduce_args
-        if not arg.type.offset_type == "unspecified"  # type: ignore[union-attr] # checked in previous lines
+        if arg.type.offset_type is not None  # type: ignore[union-attr] # checked in previous lines
     ]
 
 
@@ -67,7 +66,9 @@ def _get_connectivity(
         connectivities.append(conn)
 
     if not connectivities:
-        raise RuntimeError("Couldn't detect partial shift in any arguments of 'reduce'.")
+        raise RuntimeError(
+            "Couldn't deduce 'offset_type' in any arguments of 'reduce'. Did you reduce over `make_const_list`s only?"
+        )
 
     if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
         # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
