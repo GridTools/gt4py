@@ -49,7 +49,7 @@ bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 float64_list_type = ts.ListType(element_type=float64_type, offset_type=V2EDim)
-int_list_type = ts.ListType(element_type=int_type)
+int_list_type = ts.ListType(element_type=int_type, offset_type=V2EDim)
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float64_type)
 float_j_field = ts.FieldType(dims=[JDim], dtype=float64_type)
@@ -91,8 +91,11 @@ def expression_test_cases():
         (im.deref(im.ref("it", it_on_e_of_e_type)), it_on_e_of_e_type.element_type),
         (im.can_deref(im.ref("it", it_on_e_of_e_type)), bool_type),
         (im.if_(True, 1, 2), int_type),
-        (im.call("make_const_list")(True), ts.ListType(element_type=bool_type)),
-        (im.list_get(0, im.ref("l", ts.ListType(element_type=bool_type))), bool_type),
+        (im.call("make_const_list")(True), ts.ListType(element_type=bool_type, offset_type=None)),
+        (
+            im.list_get(0, im.ref("l", ts.ListType(element_type=bool_type, offset_type=None))),
+            bool_type,
+        ),
         (
             im.named_range(
                 itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
@@ -135,6 +138,14 @@ def expression_test_cases():
         # map
         (
             im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", int_list_type)),
+            int_list_type,
+        ),
+        (
+            im.map_(im.ref("plus"))(im.call("make_const_list")(1), im.ref("b", int_list_type)),
+            int_list_type,
+        ),
+        (
+            im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.call("make_const_list")(1)),
             int_list_type,
         ),
         (
