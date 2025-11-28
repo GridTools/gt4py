@@ -141,6 +141,14 @@ def expression_test_cases():
             int_list_type,
         ),
         (
+            im.map_(im.ref("plus"))(im.call("make_const_list")(1), im.ref("b", int_list_type)),
+            int_list_type,
+        ),
+        (
+            im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.call("make_const_list")(1)),
+            int_list_type,
+        ),
+        (
             im.map_(im.ref("plus"))(
                 im.ref("a", int_list_type),
                 im.ref("b", ts.ListType(element_type=int_type, offset_type=V2EDim)),
