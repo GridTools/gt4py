@@ -371,7 +371,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         )
 
         # If requested check if the blocking is a good idea.
-        if self.require_independent_nodes and (not self._check_if_blocking_is_favourable(state)):
+        if not self._check_if_blocking_can_promote_anything():
             self._independent_nodes = None
             return False
 
@@ -592,9 +592,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 )
             ):
                 independent_memlets.add(in_edge)
-        self._memlet_to_promote.update(
-            independent_memlets
-        )  # TODO(iomaganaris): Remove self._memlet_to_promote. Not necessary anymore.
+
+        if self.promote_independent_memlets:
+            self._memlet_to_promote.update(
+                independent_memlets
+            )  # TODO(iomaganaris): Remove self._memlet_to_promote. Not necessary anymore.
 
         if has_dependent_memlet:
             return False
@@ -687,9 +689,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 ):
                     continue
 
-                print(
-                    f"Creating temporary access node for memlet {in_edge} of outer map {self.outer_entry.map.label}."
-                )
                 # Create a temporary AccessNode that will be used to promote the memlet
                 promoted_name, promoted_desc = sdfg.add_temp_transient(
                     shape=(in_edge.data.volume,),
@@ -991,25 +990,17 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=outer_entry)
         dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_entry)
 
-    def _check_if_blocking_is_favourable(
+    def _check_if_blocking_can_promote_anything(
         self,
-        state: dace.SDFGState,
     ) -> bool:
-        """Test if the nodes are really independent nodes.
+        """Test if there can be any memory access promoted outside the inner loop.
 
-        After the classification the function will examine the set to see if some
-        nodes were found that brings no benefit to move out. The classical example
-        is a Tasklet that writes a constant into an AccessNode. These kind of
-        nodes are filtered out.
-
-        The function returns `True` if it decides that blocking is good and `False`
-        otherwise. The function will not modify `self._independent_nodes`.
+        If there are any memlets that have independent data or any independent nodes,
+        assume that blocking is favourable.
         """
-        # TODO(iomganaris): Update docstring
         assert self._independent_nodes is not None
         assert self._dependent_nodes is None
-        return (
-            self.promote_independent_memlets
-            and self._memlet_to_promote is not None
-            and len(self._memlet_to_promote) > 0
+        assert self._memlet_to_promote is not None
+        return (self.promote_independent_memlets and len(self._memlet_to_promote) > 0) or (
+            not self.require_independent_nodes and len(self._independent_nodes) > 0
         )

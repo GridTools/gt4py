@@ -1766,6 +1766,28 @@ def test_loop_blocking_sdfg_with_everything(
     )
     assert count == (1 if not require_independent_nodes or promote_independent_memlets else 0)
 
+    assert state.out_degree(me) == 6
+
+    me_tasklet_out_edges = [
+        edge for edge in state.out_edges(me) if isinstance(edge.dst, dace_nodes.Tasklet)
+    ]
+    me_access_node_out_edges = [
+        edge for edge in state.out_edges(me) if isinstance(edge.dst, dace_nodes.AccessNode)
+    ]
+
+    if count == 1 and promote_independent_memlets:
+        assert len(me_tasklet_out_edges) == 1
+        assert next(iter(me_tasklet_out_edges)).data.data == "S"
+        assert len(me_access_node_out_edges) == 2
+        assert all(
+            [edge.data.data in {"inc", "gt_conn_dummy"} for edge in me_access_node_out_edges]
+        )
+
+    elif count == 1 and not require_independent_nodes and not promote_independent_memlets:
+        assert len(me_tasklet_out_edges) == 1
+        assert next(iter(me_tasklet_out_edges)).data.data == "S"
+        assert len(me_access_node_out_edges) == 0
+
     new_scope_of_inner_map = state.scope_dict()[ime]
     assert isinstance(new_scope_of_inner_map, dace_nodes.MapEntry)
     assert new_scope_of_inner_map is not (me if count == 1 else None)
