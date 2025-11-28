@@ -25,6 +25,8 @@ from typing import (
     overload,
 )
 
+from gt4py.eve import utils as eve_utils
+
 
 class RecursionGuard:
     """
@@ -388,3 +390,8 @@ def canonicalize_call_args(
     """
 
     return make_args_canonicalizer_for_function(func)(*args, **kwargs)
+
+
+class SequentialPrefixedIDGenerator(eve_utils.CustomDefaultDictBase):
+    def value_factory(self, prefix: str) -> eve_utils.SequentialIDGenerator:
+        return eve_utils.SequentialIDGenerator(prefix=prefix)
