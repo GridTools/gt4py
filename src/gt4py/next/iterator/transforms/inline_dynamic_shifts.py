@@ -7,11 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Optional
 
 import gt4py.next.iterator.ir_utils.common_pattern_matcher as cpm
 from gt4py import eve
-from gt4py.eve import utils as eve_utils
+from gt4py.next import utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import fuse_as_fieldop, inline_lambdas, trace_shifts
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
@@ -34,13 +33,10 @@ def _dynamic_shift_args(node: itir.Expr) -> None | list[bool]:
 
 @dataclasses.dataclass
 class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
-    uids: eve_utils.UIDGenerator
+    uids: utils.SequentialPrefixedIDGenerator
 
     @classmethod
-    def apply(cls, node: itir.Program, uids: Optional[eve_utils.UIDGenerator] = None):
-        if not uids:
-            uids = eve_utils.UIDGenerator()
-
+    def apply(cls, node: itir.Program, uids: utils.SequentialPrefixedIDGenerator):
         return cls(uids=uids).visit(node)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):

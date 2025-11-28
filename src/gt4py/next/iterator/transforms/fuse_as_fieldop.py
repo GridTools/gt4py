@@ -15,8 +15,7 @@ import operator
 from typing import Optional
 
 from gt4py import eve
-from gt4py.eve import utils as eve_utils
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -55,7 +54,7 @@ def _is_tuple_expr_of_literals(expr: itir.Expr):
 
 
 def _inline_as_fieldop_arg(
-    arg: itir.Expr, *, uids: eve_utils.UIDGenerator
+    arg: itir.Expr, *, uids: utils.SequentialPrefixedIDGenerator
 ) -> tuple[itir.Expr, dict[str, itir.Expr]]:
     assert cpm.is_applied_as_fieldop(arg)
     arg = ir_misc.canonicalize_as_fieldop(arg)
@@ -76,7 +75,7 @@ def _inline_as_fieldop_arg(
             )
         else:
             stencil_params.append(inner_param)
-            new_outer_stencil_param = uids.sequential_id(prefix="__iasfop")
+            new_outer_stencil_param = next(uids["__iasfop"])
             extracted_args[new_outer_stencil_param] = inner_arg
 
     return im.lift(im.lambda_(*stencil_params)(stencil_body))(
@@ -120,7 +119,7 @@ def _prettify_as_fieldop_args(
 
 
 def fuse_as_fieldop(
-    expr: itir.Expr, eligible_args: list[bool], *, uids: eve_utils.UIDGenerator
+    expr: itir.Expr, eligible_args: list[bool], *, uids: utils.SequentialPrefixedIDGenerator
 ) -> itir.Expr:
     assert cpm.is_applied_as_fieldop(expr)
 
@@ -277,7 +276,7 @@ class FuseAsFieldOp(
 
     enabled_transformations = Transformation.all()
 
-    uids: eve_utils.UIDGenerator
+    uids: utils.SequentialPrefixedIDGenerator
 
     @classmethod
     def apply(
@@ -285,7 +284,7 @@ class FuseAsFieldOp(
         node: itir.Program,
         *,
         offset_provider_type: common.OffsetProviderType,
-        uids: Optional[eve_utils.UIDGenerator] = None,
+        uids: utils.SequentialPrefixedIDGenerator,
         allow_undeclared_symbols=False,
         within_set_at_expr: Optional[bool] = None,
         enabled_transformations: Optional[Transformation] = None,
@@ -300,9 +299,6 @@ class FuseAsFieldOp(
 
         if within_set_at_expr is None:
             within_set_at_expr = not isinstance(node, itir.Program)
-
-        if not uids:
-            uids = eve_utils.UIDGenerator()
 
         new_node = cls(uids=uids, enabled_transformations=enabled_transformations).visit(
             node, within_set_at_expr=within_set_at_expr
@@ -355,7 +351,7 @@ class FuseAsFieldOp(
                 let_vars = {}
                 for domain, inner_field_args in field_args_by_domain.items():
                     if len(inner_field_args) > 1:
-                        var = self.uids.sequential_id(prefix="__fasfop")
+                        var = next(self.uids["__fasfop"])
                         fused_args = im.op_as_fieldop(lambda *args: im.make_tuple(*args), domain)(
                             *(arg for _, arg in inner_field_args)
                         )
