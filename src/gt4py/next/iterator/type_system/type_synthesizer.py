@@ -636,12 +636,14 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 @_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @type_synthesizer
-    def applied_reduce(arg: ts.ListType, offset_provider_type: common.OffsetProviderType):
-        assert isinstance(arg, ts.ListType)
-        assert (
-            arg.offset_type is not None
+    def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):
+        assert all(isinstance(arg, ts.ListType) for arg in args)
+        assert any(
+            arg.offset_type is not None for arg in args
         )  # we only have `make_const_list`s in the reduce which is not allowed
-        return op(init, arg.element_type, offset_provider_type=offset_provider_type)
+        return op(
+            init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
+        )
 
     return applied_reduce
 
