@@ -371,86 +371,30 @@ def test_case_style_converter(name_with_cases):
             ]
 
 
-# -- UIDGenerator --
-class TestUIDGenerator:
-    def test_random_id(self):
-        from gt4py.eve.utils import UIDGenerator, UIDs
+# -- SequentialIDGenerator --
+class TestSequentialIDGenerator:
+    def test_basic(self):
+        from gt4py.eve.utils import SequentialIDGenerator
 
-        a = UIDs.random_id()
-        b = UIDs.random_id()
-        c = UIDs.random_id()
-        assert a != b and a != c and b != c
-        assert UIDs.random_id(prefix="abcde").startswith("abcde")
-        assert len(UIDs.random_id(width=10)) == 10
-        with pytest.raises(ValueError, match="Width"):
-            UIDs.random_id(width=-1)
-        with pytest.raises(ValueError, match="Width"):
-            UIDs.random_id(width=4)
+        uids = SequentialIDGenerator()
+        first = next(uids)
+        second = uids.next()
+        assert next(uids) != first != second
 
-        uids = UIDGenerator(prefix="abcde")
-        assert uids.sequential_id().startswith("abcde")
-        assert uids.sequential_id(prefix="xyz").startswith("xyz")
+    def test_prefix(self):
+        from gt4py.eve.utils import SequentialIDGenerator
 
-        uids = UIDGenerator(width=12)
-        assert len(uids.sequential_id()) == 12
-        assert len(UIDs.sequential_id(width=10)) == 10
+        uids = SequentialIDGenerator(prefix="test_")
+        uid = next(uids)
+        assert uid.startswith("test_")
 
-    def test_sequential_id(self):
-        from gt4py.eve.utils import UIDGenerator, UIDs
+    def test_format(self):
+        from gt4py.eve.utils import SequentialIDGenerator
 
-        i = UIDs.sequential_id()
-        assert UIDs.sequential_id() != i
-        assert UIDs.sequential_id(prefix="abcde").startswith("abcde")
-        assert len(UIDs.sequential_id(width=10)) == 10
-        assert not UIDs.sequential_id().startswith("0")
-        with pytest.raises(ValueError, match="Width"):
-            UIDs.sequential_id(width=-1)
-
-        uids = UIDGenerator(prefix="abcde")
-        assert uids.prefix == "abcde"
-        assert uids.sequential_id().startswith("abcde")
-        assert uids.sequential_id(prefix="xyz").startswith("xyz")
-
-        uids = UIDGenerator(width=12)
-        assert uids.width == 12
-        assert len(uids.sequential_id()) == 12
-        assert len(UIDs.sequential_id(width=10)) == 10
-
-    def test_reset_sequence(self):
-        import warnings
-
-        from gt4py.eve.utils import UIDGenerator, UIDs
-
-        i = UIDs.sequential_id()
-        counter = int(i)
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-
-            UIDs.reset_sequence(counter + 10)
-            assert int(UIDs.sequential_id()) == counter + 10
-
-            UIDs.reset_sequence(counter + 1, warn_unsafe=False)
-
-        with pytest.warns(UserWarning, match="Unsafe reset"):
-            UIDs.reset_sequence(counter, warn_unsafe=True)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-
-            uids = UIDGenerator(warn_unsafe=True).reset_sequence(10)
-            counter = int(uids.sequential_id())
-            assert uids.warn_unsafe is True
-            assert counter == 10
-
-            uids.reset_sequence(counter + 10)
-            uids.reset_sequence(1, warn_unsafe=False)
-
-        uids.reset_sequence(10, warn_unsafe=False)
-        with pytest.warns(UserWarning, match="Unsafe reset"):
-            uids.reset_sequence(1)
-
-        with pytest.raises(ValueError, match="must be a positive number"):
-            uids.reset_sequence(-1)
+        prefix = "UID"
+        uids = SequentialIDGenerator(format="{prefix}-{id:04d}", prefix=prefix)
+        uid = next(uids)
+        assert len(uid) == len(prefix) + 1 + 4  # prefix + '-' + zero-padded id
 
 
 # -- Iterators --

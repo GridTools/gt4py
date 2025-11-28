@@ -30,15 +30,17 @@ class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
     >>> testee1 = im.lambda_("a")(im.plus("a", "b"))
     >>> cannonicalized_testee1 = CannonicalizeBoundSymbolNames.apply(testee1)
     >>> str(cannonicalized_testee1)
-    'λ(_csym_1) → _csym_1 + b'
+    'λ(_csym_0) → _csym_0 + b'
 
     >>> testee2 = im.lambda_("c")(im.plus("c", "b"))
     >>> cannonicalized_testee2 = CannonicalizeBoundSymbolNames.apply(testee2)
     >>> assert cannonicalized_testee1 == cannonicalized_testee2
     """
 
-    _uids: eve_utils.UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: eve_utils.UIDGenerator(prefix="_csym")
+    _uids: eve_utils.SequentialIDGenerator = dataclasses.field(
+        init=False,
+        repr=False,
+        default_factory=lambda: eve_utils.SequentialIDGenerator(prefix="_csym"),
     )
 
     @classmethod
@@ -48,7 +50,7 @@ class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
     def visit_Lambda(self, node: itir.Lambda, *, sym_map: ChainMap) -> itir.Lambda:
         sym_map = sym_map.new_child()
         for param in node.params:
-            sym_map[str(param.id)] = self._uids.sequential_id()
+            sym_map[str(param.id)] = next(self._uids)
 
         return im.lambda_(*sym_map.values())(self.visit(node.expr, sym_map=sym_map))
 

@@ -9,7 +9,7 @@
 import pytest
 import textwrap
 
-from gt4py.eve.utils import UIDGenerator
+from gt4py.eve.utils import SequentialIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -228,12 +228,12 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
         b = 2
         c = a + b
         d = 3
-        _let_result_1 = c + d
-        return _let_result_1 + 4
+        _let_result_0 = c + d
+        return _let_result_0 + 4
     """
     ).strip()
 
-    uid_gen = UIDGenerator(prefix="_let_result")
+    uid_gen = SequentialIDGenerator(prefix="_let_result")
 
     def convert_to_assignment_stmt_form(node: ir.Expr) -> tuple[list[tuple[str, ir.Expr]], ir.Expr]:
         assignment_stmts: list[tuple[str, ir.Expr]] = []

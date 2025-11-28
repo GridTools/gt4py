@@ -209,10 +209,10 @@ def _infer_as_fieldop(
 
     # Assign ids for all inputs to `as_fieldop`. `SymRef`s stay as is, nested `as_fieldop` get a
     # temporary id.
-    tmp_uid_gen = eve_utils.UIDGenerator(prefix="__dom_inf")
+    tmp_uid_gen = eve_utils.SequentialIDGenerator(prefix="__dom_inf")
     for in_field in inputs:
         if isinstance(in_field, itir.FunCall) or isinstance(in_field, itir.Literal):
-            id_ = tmp_uid_gen.sequential_id()
+            id_ = next(tmp_uid_gen)
         elif isinstance(in_field, itir.SymRef):
             id_ = in_field.id
         else:
@@ -246,9 +246,7 @@ def _infer_as_fieldop(
     transformed_call = im.as_fieldop(stencil, target_domain_expr)(*transformed_inputs)
 
     accessed_domains_without_tmp = {
-        k: v
-        for k, v in accessed_domains.items()
-        if not k.startswith(tmp_uid_gen.prefix)  # type: ignore[arg-type] # prefix is always str
+        k: v for k, v in accessed_domains.items() if not k.startswith(tmp_uid_gen.prefix)
     }
 
     return transformed_call, accessed_domains_without_tmp

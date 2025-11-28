@@ -100,12 +100,12 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
 
         loc = inp.data.foast_node.location
         # use a new UID generator to allow caching
-        param_sym_uids = eve_utils.UIDGenerator()
+        param_sym_uids = eve_utils.SequentialIDGenerator(prefix="__sym")
 
         type_ = inp.data.foast_node.type
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
-                id=param_sym_uids.sequential_id(prefix="__sym"),
+                id=next(param_sym_uids),
                 type=arg_type,
                 namespace=dialect_ast_enums.Namespace.LOCAL,
                 location=loc,
