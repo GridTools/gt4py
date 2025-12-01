@@ -563,6 +563,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             dst_subset: dace_subsets.Subset | None = memlet.dst_subset
 
             if memlet.is_empty():  # Empty Memlets do not impose any restrictions.
+                if self.require_independent_nodes:
+                    has_dependent_memlet = True
                 continue
 
             # Now we have to look at the source and destination set of the Memlet.
@@ -998,6 +1000,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         assert self._independent_nodes is not None
         assert self._dependent_nodes is None
         assert self._memlet_to_promote is not None
+        # TODO(iomaganaris): Figure out how many memlets and nodes minimum there need to be
+        #  to make blocking worthwhile.
         return (
             (self.promote_independent_memlets and len(self._memlet_to_promote) > 0)
             or not self.require_independent_nodes

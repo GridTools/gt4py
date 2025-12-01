@@ -1764,7 +1764,7 @@ def test_loop_blocking_sdfg_with_everything(
         validate=True,
         validate_all=True,
     )
-    assert count == (1 if not require_independent_nodes or promote_independent_memlets else 0)
+    assert count == 1
 
     assert state.out_degree(me) == 6
 
@@ -1783,7 +1783,7 @@ def test_loop_blocking_sdfg_with_everything(
             [edge.data.data in {"inc", "gt_conn_dummy"} for edge in me_access_node_out_edges]
         )
 
-    elif count == 1 and not require_independent_nodes and not promote_independent_memlets:
+    else:  # Tasklet that reads 'S' is independent so transformation is always applied
         assert len(me_tasklet_out_edges) == 1
         assert next(iter(me_tasklet_out_edges)).data.data == "S"
         assert len(me_access_node_out_edges) == 0
