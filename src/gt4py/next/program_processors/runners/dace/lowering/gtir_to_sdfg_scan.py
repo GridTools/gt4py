@@ -37,7 +37,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import infer_domain
-from gt4py.next.program_processors.runners.dace import (
+from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_dataflow,
     gtir_domain,
     gtir_to_sdfg,
