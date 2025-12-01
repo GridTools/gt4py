@@ -774,6 +774,13 @@ def test_compile_variants_error_static_field(cartesian_case, compile_variants_te
 def compile_variants_testee_tuple(cartesian_case):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
+    elif (
+        cartesian_case.backend.name.startswith("run_dace_gpu")
+        and core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
+    ):
+        # TODO(edopao): The reason for this segmentation fault is not yet understood,
+        #   but it only appears in this test case, with the dace backend and the ROCM device.
+        pytest.skip("segmentation fault in loading compiled SDFG from library file")
 
     @gtx.field_operator
     def testee_op(

@@ -160,13 +160,11 @@ def _parse_gt_param(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {arg_stride}"
                         )
                     else:
-                        sdfg_stride_symbol = gtx_dace_args.field_stride_symbol(param_name, dim)
-                        assert array_stride == sdfg_stride_symbol
-                        # The strides of a global array are defined by a sequence
-                        # of SDFG symbols.
+                        # The strides of a global array are defined by a sequence of SDFG symbols.
+                        assert array_stride == gtx_dace_args.field_stride_symbol(param_name, dim)
                         _parse_gt_param(
-                            param_name=sdfg_stride_symbol.name,
-                            param_type=gtx_dace_args.as_itir_type(sdfg_stride_symbol.dtype),
+                            param_name=array_stride.name,
+                            param_type=gtx_dace_args.as_itir_type(array_stride.dtype),
                             arg=arg_stride,
                             code=code,
                             sdfg_arglist=sdfg_arglist,
