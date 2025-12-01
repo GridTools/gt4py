@@ -122,7 +122,7 @@ def _is_as_fieldop_of_scan(expr: itir.Expr) -> bool:
 def _transform_if(
     stmt: itir.Stmt,
     declarations: list[itir.Temporary],
-    uids: next_utils.SequentialPrefixedIDGenerator,
+    uids: next_utils.IDGeneratorPool,
 ) -> Optional[list[itir.Stmt]]:
     if isinstance(stmt, itir.SetAt) and cpm.is_call_to(stmt.expr, "if_"):
         cond, true_val, false_val = stmt.expr.args
@@ -148,7 +148,7 @@ def _transform_by_pattern(
     stmt: itir.Stmt,
     predicate: Callable[[itir.Expr, int], bool],
     declarations: list[itir.Temporary],
-    uids: next_utils.SequentialPrefixedIDGenerator,
+    uids: next_utils.IDGeneratorPool,
 ) -> Optional[list[itir.Stmt]]:
     if not isinstance(stmt, itir.SetAt):
         return None
@@ -272,7 +272,7 @@ def _transform_by_pattern(
 def _transform_stmt(
     stmt: itir.Stmt,
     declarations: list[itir.Temporary],
-    uids: next_utils.SequentialPrefixedIDGenerator,
+    uids: next_utils.IDGeneratorPool,
 ) -> list[itir.Stmt]:
     unprocessed_stmts: list[itir.Stmt] = [stmt]
     stmts: list[itir.Stmt] = []
@@ -317,7 +317,7 @@ def create_global_tmps(
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     *,
-    uids: next_utils.SequentialPrefixedIDGenerator,
+    uids: next_utils.IDGeneratorPool,
 ) -> itir.Program:
     """
     Given an `itir.Program` create temporaries for intermediate values.

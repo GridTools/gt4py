@@ -33,10 +33,10 @@ def _dynamic_shift_args(node: itir.Expr) -> None | list[bool]:
 
 @dataclasses.dataclass
 class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
-    uids: utils.SequentialPrefixedIDGenerator
+    uids: utils.IDGeneratorPool
 
     @classmethod
-    def apply(cls, node: itir.Program, uids: utils.SequentialPrefixedIDGenerator):
+    def apply(cls, node: itir.Program, uids: utils.IDGeneratorPool):
         return cls(uids=uids).visit(node)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):

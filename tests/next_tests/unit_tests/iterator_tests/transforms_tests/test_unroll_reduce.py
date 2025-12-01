@@ -28,7 +28,7 @@ def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
 
 @pytest.fixture
 def unroll_reduce():
-    return functools.partial(UnrollReduce.apply, uids=utils.SequentialPrefixedIDGenerator())
+    return functools.partial(UnrollReduce.apply, uids=utils.IDGeneratorPool())
 
 
 @pytest.fixture(params=[True, False])

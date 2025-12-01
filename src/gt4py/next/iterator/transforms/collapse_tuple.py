@@ -174,7 +174,7 @@ class CollapseTuple(
         def all(self) -> CollapseTuple.Transformation:
             return functools.reduce(operator.or_, self.__members__.values())
 
-    uids: utils.SequentialPrefixedIDGenerator
+    uids: utils.IDGeneratorPool
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     REINFER_TYPES = True
@@ -193,7 +193,7 @@ class CollapseTuple(
         enabled_transformations: Optional[Transformation] = None,
         # allow sym references without a symbol declaration, mostly for testing
         allow_undeclared_symbols: bool = False,
-        uids: utils.SequentialPrefixedIDGenerator,
+        uids: utils.IDGeneratorPool,
     ) -> itir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.

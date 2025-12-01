@@ -16,7 +16,7 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 def dead_code_elimination(
     program: itir.Program,
     *,
-    uids: utils.SequentialPrefixedIDGenerator,
+    uids: utils.IDGeneratorPool,
     offset_provider_type: common.OffsetProviderType,
 ) -> itir.Program:
     """

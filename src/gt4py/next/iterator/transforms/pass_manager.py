@@ -62,7 +62,7 @@ def apply_common_transforms(
 
     offset_provider_type = common.offset_provider_to_type(offset_provider)
 
-    uids = utils.SequentialPrefixedIDGenerator()
+    uids = utils.IDGeneratorPool()
 
     ir = MergeLet().visit(ir)
     ir = inline_fundefs.InlineFundefs().visit(ir)
@@ -173,7 +173,7 @@ def apply_fieldview_transforms(
 ) -> itir.Program:
     offset_provider_type = common.offset_provider_to_type(offset_provider)
 
-    uids = utils.SequentialPrefixedIDGenerator()
+    uids = utils.IDGeneratorPool()
 
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)

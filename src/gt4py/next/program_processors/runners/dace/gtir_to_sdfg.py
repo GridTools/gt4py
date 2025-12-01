@@ -484,8 +484,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     offset_provider_type: gtx_common.OffsetProviderType
     column_axis: Optional[gtx_common.Dimension]
     scope_symbols: dict[str, ts.DataType]
-    uids: gtx_utils.SequentialPrefixedIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: gtx_utils.SequentialPrefixedIDGenerator()
+    uids: gtx_utils.IDGeneratorPool = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: gtx_utils.IDGeneratorPool()
     )
 
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:

@@ -54,7 +54,7 @@ def _is_tuple_expr_of_literals(expr: itir.Expr):
 
 
 def _inline_as_fieldop_arg(
-    arg: itir.Expr, *, uids: utils.SequentialPrefixedIDGenerator
+    arg: itir.Expr, *, uids: utils.IDGeneratorPool
 ) -> tuple[itir.Expr, dict[str, itir.Expr]]:
     assert cpm.is_applied_as_fieldop(arg)
     arg = ir_misc.canonicalize_as_fieldop(arg)
@@ -119,7 +119,7 @@ def _prettify_as_fieldop_args(
 
 
 def fuse_as_fieldop(
-    expr: itir.Expr, eligible_args: list[bool], *, uids: utils.SequentialPrefixedIDGenerator
+    expr: itir.Expr, eligible_args: list[bool], *, uids: utils.IDGeneratorPool
 ) -> itir.Expr:
     assert cpm.is_applied_as_fieldop(expr)
 
@@ -280,7 +280,7 @@ class FuseAsFieldOp(
 
     enabled_transformations = Transformation.all()
 
-    uids: utils.SequentialPrefixedIDGenerator
+    uids: utils.IDGeneratorPool
 
     @classmethod
     def apply(
@@ -288,7 +288,7 @@ class FuseAsFieldOp(
         node: itir.Program,
         *,
         offset_provider_type: common.OffsetProviderType,
-        uids: utils.SequentialPrefixedIDGenerator,
+        uids: utils.IDGeneratorPool,
         allow_undeclared_symbols=False,
         within_set_at_expr: Optional[bool] = None,
         enabled_transformations: Optional[Transformation] = None,

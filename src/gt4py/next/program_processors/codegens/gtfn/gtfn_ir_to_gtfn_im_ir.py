@@ -108,8 +108,8 @@ class PlugInCurrentIdx(NodeTranslator):
 class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: utils.SequentialPrefixedIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=utils.SequentialPrefixedIDGenerator
+    uids: utils.IDGeneratorPool = dataclasses.field(
+        init=False, repr=False, default_factory=utils.IDGeneratorPool
     )
 
     def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs: Any) -> gtfn_ir_common.SymRef:

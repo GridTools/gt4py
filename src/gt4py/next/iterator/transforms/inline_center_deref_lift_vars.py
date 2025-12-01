@@ -58,10 +58,10 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
 
     PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("domain", "recorded_shifts")
 
-    uids: utils.SequentialPrefixedIDGenerator
+    uids: utils.IDGeneratorPool
 
     @classmethod
-    def apply(cls, node: T, *, is_stencil=False, uids: utils.SequentialPrefixedIDGenerator) -> T:
+    def apply(cls, node: T, *, is_stencil=False, uids: utils.IDGeneratorPool) -> T:
         if is_stencil:
             assert isinstance(node, itir.Expr)
             trace_shifts.trace_stencil(node, save_to_annex=True)

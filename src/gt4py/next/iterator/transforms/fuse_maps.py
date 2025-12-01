@@ -34,7 +34,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
         reduce(λ(x, y, z) → f(x, g(y, z)), init)(a, b)
     """
 
-    uids: utils.SequentialPrefixedIDGenerator = dataclasses.field(repr=False)
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     def _as_lambda(self, fun: ir.SymRef | ir.Lambda, param_count: int) -> ir.Lambda:
         # if fun is already a Lambda we still wrap it to get unique symbol names to avoid symbol clashes

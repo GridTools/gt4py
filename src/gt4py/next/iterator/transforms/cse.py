@@ -440,7 +440,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     top-down, extracted expressions always land up in the outermost scope they can appear in.
     """
 
-    uids: utils.SequentialPrefixedIDGenerator = dataclasses.field(repr=False)
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     collect_all: bool = dataclasses.field(default=False)
 
@@ -451,7 +451,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         within_stencil: bool | None = None,
         offset_provider_type: common.OffsetProviderType | None = None,
         *,
-        uids: utils.SequentialPrefixedIDGenerator,
+        uids: utils.IDGeneratorPool,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, itir.Program)
         if is_program:

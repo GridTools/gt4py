@@ -88,14 +88,14 @@ def _get_connectivity(
 class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: utils.SequentialPrefixedIDGenerator = dataclasses.field(repr=False)
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     @classmethod
     def apply(
         cls,
         node: itir.Node,
         offset_provider_type: common.OffsetProviderType,
-        uids: utils.SequentialPrefixedIDGenerator,
+        uids: utils.IDGeneratorPool,
     ) -> itir.Node:
         return cls(uids=uids).visit(node, offset_provider_type=offset_provider_type)
 

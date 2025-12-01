@@ -91,9 +91,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     [Sym(id=SymbolName('inp'))]
     """
 
-    uid_generator: utils.SequentialPrefixedIDGenerator = dataclasses.field(
-        default_factory=utils.SequentialPrefixedIDGenerator
-    )
+    uid_generator: utils.IDGeneratorPool = dataclasses.field(default_factory=utils.IDGeneratorPool)
 
     @classmethod
     def apply(cls, node: foast.LocatedNode) -> itir.FunctionDefinition:
