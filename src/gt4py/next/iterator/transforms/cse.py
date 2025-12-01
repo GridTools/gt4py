@@ -428,7 +428,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         >>> expr = plus(plus(x, x), plus(x, x))
         >>> print(
         ...     CommonSubexpressionElimination.apply(
-        ...         expr, within_stencil=True, uids=utils.SequentialPrefixedIDGenerator()
+        ...         expr, within_stencil=True, uids=utils.IDGeneratorPool()
         ...     )
         ... )
         (λ(_cs_0) → _cs_0 + _cs_0)(x + x)

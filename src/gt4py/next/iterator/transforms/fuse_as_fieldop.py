@@ -256,7 +256,7 @@ class FuseAsFieldOp(
     ...         nested_as_fieldop,
     ...         offset_provider_type={},
     ...         allow_undeclared_symbols=True,
-    ...         uids=utils.SequentialPrefixedIDGenerator(),
+    ...         uids=utils.IDGeneratorPool(),
     ...     )
     ... )
     as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2, inp3)
