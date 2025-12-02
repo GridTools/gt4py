@@ -1744,10 +1744,19 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
 
 @pytest.mark.parametrize(
     "require_independent_nodes,promote_independent_memlets,independent_node_threshold",
-    [(True, True, 0), (True, False, 0), (False, True, 0), (False, False, 0), (True, True, 4), (False, True, 4)],
+    [
+        (True, True, 0),
+        (True, False, 0),
+        (False, True, 0),
+        (False, False, 0),
+        (True, True, 4),
+        (False, True, 4),
+    ],
 )
 def test_loop_blocking_sdfg_with_everything(
-    require_independent_nodes: bool, promote_independent_memlets: bool, independent_node_threshold: int
+    require_independent_nodes: bool,
+    promote_independent_memlets: bool,
+    independent_node_threshold: int,
 ):
     sdfg, state, me, ime = _make_loop_blocking_sdfg_with_everything()
 

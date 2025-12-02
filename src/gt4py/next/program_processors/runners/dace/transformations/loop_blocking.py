@@ -696,6 +696,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
     ) -> None:
         assert self._independent_nodes is not None  # silence MyPy
+        assert self._memlet_to_promote is not None  # silence MyPy
         outer_map_entry: dace_nodes.MapEntry = self.outer_entry
 
         _ = sdfg.reset_cfg_list()
@@ -1014,11 +1015,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         assert self._dependent_nodes is None
         # TODO(iomaganaris): Figure out how many memlets and nodes minimum there need to be
         #  to make blocking worthwhile.
-        return (
-            not self.require_independent_nodes
-            or (
-                    len(self._independent_nodes)
-                    + (len(self._memlet_to_promote) if self._memlet_to_promote is not None else 0)
-                    > self.independent_node_threshold
-                )
+        return not self.require_independent_nodes or (
+            len(self._independent_nodes)
+            + (len(self._memlet_to_promote) if self._memlet_to_promote is not None else 0)
+            > self.independent_node_threshold
         )
