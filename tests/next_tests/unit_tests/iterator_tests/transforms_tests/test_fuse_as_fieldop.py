@@ -347,7 +347,7 @@ def test_inline_as_fieldop_with_list_dtype(uids: utils.IDGeneratorPool):
         dims=[IDim],
         dtype=ts.ListType(
             element_type=ts.ScalarType(kind=ts.ScalarKind.INT32),
-            offset_type=gtx.Dimension("Neighbor", kind=gtx.DimensionKind.LOCAL),
+            offset_type=common.Dimension("Neighbor", kind=common.DimensionKind.LOCAL),
         ),
     )
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
