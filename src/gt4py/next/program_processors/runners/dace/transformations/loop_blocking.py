@@ -155,6 +155,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         block_var_idx = map_params.index(block_var)
         map_range_size = map_range.size()
+
+        if all(map_range_size_i == 1 for map_range_size_i in map_range_size):
+            return False
+
         if map_range[block_var_idx][2] != 1:
             return False
 
