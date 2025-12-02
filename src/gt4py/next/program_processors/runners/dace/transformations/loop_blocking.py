@@ -79,6 +79,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         default=False,
         desc="If 'True' then memlets with independent data are promoted to the outer map.",
     )
+    independent_node_threshold = dace_properties.Property(
+        dtype=int,
+        default=0,
+        desc="Minimum number of independent nodes required to apply blocking (non-inclusive).",
+    )
 
     # Set of nodes that are independent of the blocking parameter.
     _independent_nodes: Optional[set[dace_nodes.AccessNode]]
@@ -93,6 +98,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         blocking_parameter: Optional[Union[gtx_common.Dimension, str]] = None,
         require_independent_nodes: Optional[bool] = None,
         promote_independent_memlets: Optional[bool] = None,
+        independent_node_threshold: Optional[int] = None,
     ) -> None:
         super().__init__()
         if isinstance(blocking_parameter, gtx_common.Dimension):
@@ -105,6 +111,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             self.require_independent_nodes = require_independent_nodes
         if promote_independent_memlets is not None:
             self.promote_independent_memlets = promote_independent_memlets
+        if independent_node_threshold is not None:
+            self.independent_node_threshold = independent_node_threshold
         self._independent_nodes = None
         self._dependent_nodes = None
         self._memlet_to_promote = None
@@ -654,7 +662,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         src_subset: dace_subsets.Subset | None = memlet.src_subset
         dst_subset: dace_subsets.Subset | None = memlet.dst_subset
 
-        if memlet.is_empty():  # Empty Memlets should already be in independent nodes and don't have read dependencies
+        if (
+            memlet.is_empty()
+        ):  # Empty Memlets should already be in independent nodes and don't have read dependencies
             return False
 
         # Now we have to look at the source and destination set of the Memlet.
@@ -664,9 +674,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if src_subset is not None:
             subsets_to_inspect.append(src_subset)
 
-        if any(
-            self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect
-        ):
+        if any(self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect):
             return False
 
         if (
@@ -736,9 +744,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                         edge.data.subset = next(iter(original_dst_of_in_edge.params))
                         edge.data.other_subset = None
             elif isinstance(original_dst_of_in_edge, dace_nodes.NestedSDFG):
-                raise NotImplementedError(
-                    "Promotion of memlets to NestedSDFG not implemented yet."
-                )
+                raise NotImplementedError("Promotion of memlets to NestedSDFG not implemented yet.")
             elif isinstance(original_dst_of_in_edge, dace_nodes.LibraryNode):
                 raise NotImplementedError(
                     "Promotion of memlets to LibraryNode not implemented yet."
@@ -1004,7 +1010,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # TODO(iomaganaris): Figure out how many memlets and nodes minimum there need to be
         #  to make blocking worthwhile.
         return (
-            (self.require_independent_nodes and (self._memlet_to_promote is not None and len(self._memlet_to_promote) > 0))
+            (
+                self.require_independent_nodes
+                and (self._memlet_to_promote is not None and len(self._memlet_to_promote) > 0)
+            )
             or not self.require_independent_nodes
-            or len(self._independent_nodes) + (len(self._memlet_to_promote) if self._memlet_to_promote is not None else 0) > self.independent_node_threshold
+            or len(self._independent_nodes)
+            + (len(self._memlet_to_promote) if self._memlet_to_promote is not None else 0)
+            > self.independent_node_threshold
         )
