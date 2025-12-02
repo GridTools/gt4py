@@ -5,13 +5,11 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-from gt4py.next import common
-import pytest
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im, domain_utils
 from gt4py.next.iterator.transforms import (
     concat_where,
-    inline_lambdas,
     infer_domain,
     collapse_tuple,
 )
@@ -47,7 +45,7 @@ def test_trivial():
     )
 
     actual = collapse_tuple.CollapseTuple.apply(
-        actual, allow_undeclared_symbols=True, within_stencil=False
+        actual, allow_undeclared_symbols=True, within_stencil=False, uids=utils.IDGeneratorPool()
     )
 
     assert actual == expected
@@ -87,7 +85,7 @@ def test_nested():
     )
 
     actual = collapse_tuple.CollapseTuple.apply(
-        actual, allow_undeclared_symbols=True, within_stencil=False
+        actual, allow_undeclared_symbols=True, within_stencil=False, uids=utils.IDGeneratorPool()
     )
 
     assert actual == expected
