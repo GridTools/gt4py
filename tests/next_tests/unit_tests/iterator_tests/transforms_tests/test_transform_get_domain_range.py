@@ -5,9 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-from typing import Dict, Union
-
-import pytest
 from next_tests.integration_tests.cases import (
     IField,
     IDim,
@@ -17,8 +14,7 @@ from next_tests.integration_tests.cases import (
     exec_alloc_descriptor,
 )
 
-from gt4py import next as gtx
-from gt4py.next import Domain, common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.transform_get_domain_range import TransformGetDomainRange
@@ -51,7 +47,7 @@ def setat_factory(
 
 def run_test_program(
     params: list[str],
-    sizes: Dict[str, common.Domain],
+    sizes: dict[str, common.Domain],
     target: str,
     domain: itir.Expr,
     domain_get: itir.Expr,
@@ -66,12 +62,14 @@ def run_test_program(
     )
     actual = TransformGetDomainRange.apply(testee, sizes=sizes)
     actual = CollapseTuple.apply(
-        actual, enabled_transformations=CollapseTuple.Transformation.COLLAPSE_TUPLE_GET_MAKE_TUPLE
+        actual,
+        enabled_transformations=CollapseTuple.Transformation.COLLAPSE_TUPLE_GET_MAKE_TUPLE,
+        uids=utils.IDGeneratorPool(),
     )
     assert actual == expected
 
 
-def domain_as_expr(domain: gtx.Domain) -> itir.Expr:
+def domain_as_expr(domain: common.Domain) -> itir.Expr:
     return im.domain(
         common.GridType.UNSTRUCTURED,
         {d: (r.start, r.stop) for d, r in zip(domain.dims, domain.ranges)},
@@ -79,14 +77,14 @@ def domain_as_expr(domain: gtx.Domain) -> itir.Expr:
 
 
 def test_get_domain():
-    sizes = {"out": gtx.domain({Vertex: (0, 10), KDim: (0, 20)})}
+    sizes = {"out": common.domain({Vertex: (0, 10), KDim: (0, 20)})}
     get_domain_expr = im.get_field_domain(common.GridType.UNSTRUCTURED, "out", sizes["out"].dims)
 
     run_test_program(["inp", "out"], sizes, "out", domain_as_expr(sizes["out"]), get_domain_expr)
 
 
 def test_get_domain_tuples():
-    sizes = {"out": (gtx.domain({Vertex: (0, 5)}), gtx.domain({Vertex: (0, 7)}))}
+    sizes = {"out": (common.domain({Vertex: (0, 5)}), common.domain({Vertex: (0, 7)}))}
 
     get_domain_expr = im.get_field_domain(
         common.GridType.UNSTRUCTURED, im.tuple_get(1, "out"), sizes["out"][1].dims
@@ -96,7 +94,7 @@ def test_get_domain_tuples():
 
 
 def test_get_domain_nested_tuples():
-    sizes = {"a": gtx.domain({KDim: (0, 3)})}
+    sizes = {"a": common.domain({KDim: (0, 3)})}
 
     get_domain_expr = im.get_field_domain(
         common.GridType.UNSTRUCTURED,

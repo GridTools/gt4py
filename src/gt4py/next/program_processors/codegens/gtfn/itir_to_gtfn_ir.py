@@ -11,9 +11,8 @@ import functools
 from typing import Any, Callable, ClassVar, Iterable, Optional, Type, TypeGuard, Union
 
 import gt4py.eve as eve
-from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -300,8 +299,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: eve_utils.UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=eve_utils.UIDGenerator
+    uids: utils.IDGeneratorPool = dataclasses.field(
+        init=False, repr=False, default_factory=utils.IDGeneratorPool
     )
 
     @classmethod
@@ -335,7 +334,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> SymRef:
         if force_function_extraction and node.id == "deref":
             assert extracted_functions is not None
-            fun_id = self.uids.sequential_id(prefix="_fun")
+            fun_id = next(self.uids["_fun"])
             fun_def = FunctionDefinition(
                 id=fun_id,
                 params=[Sym(id="x")],
@@ -355,7 +354,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> Union[SymRef, Lambda]:
         if force_function_extraction:
             assert extracted_functions is not None
-            fun_id = self.uids.sequential_id(prefix="_fun")
+            fun_id = next(self.uids["_fun"])
             fun_def = FunctionDefinition(
                 id=fun_id,
                 params=self.visit(node.params, **kwargs),
@@ -623,7 +622,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         backend = Backend(domain=self.visit(domain, stencil=stencil, **kwargs))
         if _is_scan(stencil):
-            scan_id = self.uids.sequential_id(prefix="_scan")
+            scan_id = next(self.uids["_scan"])
             scan_lambda = self.visit(stencil.args[0], **kwargs)
             forward = _bool_from_literal(stencil.args[1])
             scan_def = ScanPassDefinition(

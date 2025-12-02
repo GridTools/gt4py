@@ -484,11 +484,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     offset_provider_type: gtx_common.OffsetProviderType
     column_axis: Optional[gtx_common.Dimension]
     scope_symbols: dict[str, ts.DataType]
-    map_uids: eve.utils.UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="map")
-    )
-    tasklet_uids: eve.utils.UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="tlet")
+    uids: gtx_utils.IDGeneratorPool = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: gtx_utils.IDGeneratorPool()
     )
 
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
@@ -729,10 +726,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return f"{prefix}_{len(nsdfg_list)}"
 
     def unique_map_name(self, name: str) -> str:
-        return f"{self.map_uids.sequential_id()}_{name}"
+        return f"{next(self.uids['map'])}_{name}"
 
     def unique_tasklet_name(self, name: str) -> str:
-        return f"{self.tasklet_uids.sequential_id()}_{name}"
+        return f"{next(self.uids['tlet'])}_{name}"
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
