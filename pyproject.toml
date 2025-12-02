@@ -141,7 +141,12 @@ next = ['gt4py[jax,standard,testing]']
 rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
 rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
 rocm6_0 = ['cupy>=13.4.1']
-standard = ['clang-format>=18.1', 'scipy>=1.14.1']
+standard = [
+  'clang-format>=18.1',
+  # TODO(edopao): we keep 'scipy>=1.14.1' only because of wheels compatibility with python 3.10
+  'scipy>=1.14.1 ; python_version < "3.11"',
+  'scipy>=1.16.1 ; python_version >= "3.11"'
+]
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
 [project.urls]
