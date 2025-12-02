@@ -156,18 +156,18 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if (map_range_size[block_var_idx] <= self.blocking_size) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
             return False
 
-        if not self.partition_map_output(graph, sdfg) and (
-            not self.promote_independent_memlets
-            or (
-                self.promote_independent_memlets
-                and self._memlet_to_promote is not None
-                and len(self._memlet_to_promote) == 0
-            )
-        ):
+        if self.promote_independent_memlets:
+            self._memlet_to_promote = set()
+            for out_edge_outer_entry in graph.out_edges(outer_entry):
+                if self._check_if_edge_can_be_promoted(out_edge_outer_entry):
+                    self._memlet_to_promote.add(out_edge_outer_entry)
+        else:
+            self._memlet_to_promote = None
+
+        if not self.partition_map_output(graph, sdfg):
             return False
         self._independent_nodes = None
         self._dependent_nodes = None
-        self._memlet_to_promote = None
 
         return True
 
@@ -324,7 +324,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # Clear the previous partition.
         self._independent_nodes = set()
         self._dependent_nodes = None
-        self._memlet_to_promote = set()
 
         while True:
             # Find all the nodes that we have to classify in this iteration.
@@ -418,7 +417,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             sdfg: The SDFG that is processed.
         """
         assert self._independent_nodes is not None  # silence MyPy
-        assert self._memlet_to_promote is not None  # silence MyPy
         outer_entry: dace_nodes.MapEntry = self.outer_entry  # for caching.
         outer_exit: dace_nodes.MapExit = state.exit_node(outer_entry)
 
@@ -549,10 +547,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     continue
                 return False
 
-        has_dependent_memlet = False
-
-        independent_memlets: set[dace_graph.MultiConnectorEdge[dace.Memlet]] = set()
-
         # Now we have to look at incoming edges individually.
         #  We will inspect the subset of the Memlet to see if they depend on the
         #  block variable. If this loop ends normally, then we classify the node
@@ -563,9 +557,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             dst_subset: dace_subsets.Subset | None = memlet.dst_subset
 
             if memlet.is_empty():  # Empty Memlets do not impose any restrictions.
-                if self.require_independent_nodes:
-                    has_dependent_memlet = True
-                continue
+                if len(in_edges) == 1 and self.require_independent_nodes:
+                    return False
+                else:
+                    continue
 
             # Now we have to look at the source and destination set of the Memlet.
             subsets_to_inspect: list[dace_subsets.Subset] = []
@@ -577,28 +572,18 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             # If a subset needs the block variable then the node is not independent
             #  but dependent.
             if any(self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect):
-                has_dependent_memlet = True
+                return False
 
             # The edge must either originate from `outer_entry` or from an independent
             #  node if not it is dependent.
             if not (in_edge.src is outer_entry or in_edge.src in self._independent_nodes):
-                has_dependent_memlet = True
+                return False
 
-            if (
-                self.promote_independent_memlets
-                and in_edge.src is outer_entry
-                and all(
-                    self.blocking_parameter not in subset.free_symbols
-                    for subset in subsets_to_inspect
-                )
-            ):
-                independent_memlets.add(in_edge)
-
-        if self.promote_independent_memlets:
-            self._memlet_to_promote.update(independent_memlets)
-
-        if has_dependent_memlet:
-            return False
+        if self._memlet_to_promote is not None:
+            # Remove all memlets that are connected to an independent node
+            for edge in state.in_edges(node_to_classify):
+                if edge in self._memlet_to_promote:
+                    self._memlet_to_promote.remove(edge)
 
         # Loop ended normally, thus we update the list of independent nodes.
         self._independent_nodes.update(new_independent_nodes)
@@ -648,6 +633,50 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     independent_nodes_were_updated = True
                     break
 
+    def _check_if_edge_can_be_promoted(
+        self,
+        edge: dace_graph.MultiConnectorEdge[dace.Memlet],
+    ) -> bool:
+        """Check if a memlet can be promoted to the outer map.
+
+        The function checks if the memlet can be promoted to the outer map.
+        This is the case if the memlet does not depend on the blocking parameter.
+
+        Args:
+            edge: The edge containing the memlet to inspect.
+        Returns:
+            The function returns `True` if the memlet can be promoted.
+        """
+        assert self._independent_nodes is None or edge.dst not in self._independent_nodes
+        assert edge.src == self.outer_entry
+
+        memlet: dace.Memlet = edge.data
+        src_subset: dace_subsets.Subset | None = memlet.src_subset
+        dst_subset: dace_subsets.Subset | None = memlet.dst_subset
+
+        if memlet.is_empty():  # Empty Memlets should already be in independent nodes and don't have read dependencies
+            return False
+
+        # Now we have to look at the source and destination set of the Memlet.
+        subsets_to_inspect: list[dace_subsets.Subset] = []
+        if dst_subset is not None:
+            subsets_to_inspect.append(dst_subset)
+        if src_subset is not None:
+            subsets_to_inspect.append(src_subset)
+
+        if any(
+            self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect
+        ):
+            return False
+
+        if (
+            isinstance(edge.dst, dace_nodes.Tasklet)
+            and self.blocking_parameter in edge.dst.code.get_free_symbols()
+            and not edge.data.data.startswith("gt_conn_")
+        ):
+            return False
+        return True
+
     def _prepare_independent_memlets(
         self,
         state: dace.SDFGState,
@@ -660,89 +689,62 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=outer_map_entry)
         dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_map_entry)
 
-        for in_edge in state.out_edges(outer_map_entry):
-            if in_edge.dst not in self._independent_nodes:
-                memlet: dace.Memlet = in_edge.data
-                src_subset: dace_subsets.Subset | None = memlet.src_subset
-                dst_subset: dace_subsets.Subset | None = memlet.dst_subset
+        for in_edge in self._memlet_to_promote:
+            # Create a temporary AccessNode that will be used to promote the memlet
+            promoted_name, promoted_desc = sdfg.add_temp_transient(
+                shape=(in_edge.data.volume,),
+                dtype=sdfg.arrays[in_edge.data.data].dtype,
+            )
+            promoted_anode = state.add_access(promoted_name)
+            original_dst_of_in_edge = in_edge.dst
+            original_dst_conn_of_in_edge = in_edge.dst_conn
+            original_dst_other_subset_of_in_edge = in_edge.data.other_subset
+            # Redirect the memlet to the temporary AccessNode
+            dace_helpers.redirect_edge(
+                state=state,
+                edge=in_edge,
+                new_dst=promoted_anode,
+                new_dst_conn=None,
+                new_memlet=dace.Memlet(
+                    data=in_edge.data.data,
+                    subset=in_edge.data.subset,
+                    other_subset=dace_subsets.Range.from_array(sdfg.arrays[promoted_name]),
+                ),
+            )
 
-                if memlet.is_empty():  # Empty Memlets should already be in independent nodes and don't have read dependencies
-                    continue
+            # Create a new memlet from the temporary AccessNode to the original destination
+            state.add_edge(
+                promoted_anode,
+                None,
+                original_dst_of_in_edge,
+                original_dst_conn_of_in_edge,
+                memlet=dace.Memlet(
+                    data=promoted_name,
+                    subset=dace_subsets.Range.from_array(promoted_desc),
+                    other_subset=original_dst_other_subset_of_in_edge,
+                ),
+            )
 
-                # Now we have to look at the source and destination set of the Memlet.
-                subsets_to_inspect: list[dace_subsets.Subset] = []
-                if dst_subset is not None:
-                    subsets_to_inspect.append(dst_subset)
-                if src_subset is not None:
-                    subsets_to_inspect.append(src_subset)
-
-                if any(
-                    self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect
-                ):
-                    continue
-
-                if (
-                    isinstance(in_edge.dst, dace_nodes.Tasklet)
-                    and self.blocking_parameter in in_edge.dst.code.get_free_symbols()
-                    and not in_edge.data.data.startswith("gt_conn_")
-                ):
-                    continue
-
-                # Create a temporary AccessNode that will be used to promote the memlet
-                promoted_name, promoted_desc = sdfg.add_temp_transient(
-                    shape=(in_edge.data.volume,),
-                    dtype=sdfg.arrays[in_edge.data.data].dtype,
+            if isinstance(original_dst_of_in_edge, dace_nodes.MapEntry):
+                for edge in state.out_edges(original_dst_of_in_edge):
+                    if edge.data.data == in_edge.data.data:
+                        edge.data.data = promoted_name
+                        assert len(original_dst_of_in_edge.params) == 1, (
+                            "Independent memlets should only be inputs to maps that have a single parameter. "
+                            "Those should always be neighbor reductions."
+                        )
+                        edge.data.subset = next(iter(original_dst_of_in_edge.params))
+                        edge.data.other_subset = None
+            elif isinstance(original_dst_of_in_edge, dace_nodes.NestedSDFG):
+                raise NotImplementedError(
+                    "Promotion of memlets to NestedSDFG not implemented yet."
                 )
-                promoted_anode = state.add_access(promoted_name)
-                original_dst_of_in_edge = in_edge.dst
-                original_dst_conn_of_in_edge = in_edge.dst_conn
-                original_dst_other_subset_of_in_edge = in_edge.data.other_subset
-                # Redirect the memlet to the temporary AccessNode
-                dace_helpers.redirect_edge(
-                    state=state,
-                    edge=in_edge,
-                    new_dst=promoted_anode,
-                    new_dst_conn=None,
-                    new_memlet=dace.Memlet(
-                        data=in_edge.data.data,
-                        subset=in_edge.data.subset,
-                        other_subset=dace_subsets.Range.from_array(sdfg.arrays[promoted_name]),
-                    ),
-                )
-
-                # Create a new memlet from the temporary AccessNode to the original destination
-                state.add_edge(
-                    promoted_anode,
-                    None,
-                    original_dst_of_in_edge,
-                    original_dst_conn_of_in_edge,
-                    memlet=dace.Memlet(
-                        data=promoted_name,
-                        subset=dace_subsets.Range.from_array(promoted_desc),
-                        other_subset=original_dst_other_subset_of_in_edge,
-                    ),
+            elif isinstance(original_dst_of_in_edge, dace_nodes.LibraryNode):
+                raise NotImplementedError(
+                    "Promotion of memlets to LibraryNode not implemented yet."
                 )
 
-                if isinstance(original_dst_of_in_edge, dace_nodes.MapEntry):
-                    for edge in state.out_edges(original_dst_of_in_edge):
-                        if edge.data.data == in_edge.data.data:
-                            edge.data.data = promoted_name
-                            assert len(original_dst_of_in_edge.params) == 1, (
-                                "Independent memlets should only be inputs to maps that have a single parameter. "
-                                "Those should always be neighbor reductions."
-                            )
-                            edge.data.subset = next(iter(original_dst_of_in_edge.params))
-                            edge.data.other_subset = None
-                elif isinstance(original_dst_of_in_edge, dace_nodes.NestedSDFG):
-                    raise NotImplementedError(
-                        "Promotion of memlets to NestedSDFG not implemented yet."
-                    )
-                elif isinstance(original_dst_of_in_edge, dace_nodes.LibraryNode):
-                    raise NotImplementedError(
-                        "Promotion of memlets to LibraryNode not implemented yet."
-                    )
-
-                self._independent_nodes.add(promoted_anode)
+            self._independent_nodes.add(promoted_anode)
 
     def _rewire_map_scope(
         self,
@@ -999,11 +1001,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """
         assert self._independent_nodes is not None
         assert self._dependent_nodes is None
-        assert self._memlet_to_promote is not None
         # TODO(iomaganaris): Figure out how many memlets and nodes minimum there need to be
         #  to make blocking worthwhile.
         return (
-            (self.promote_independent_memlets and len(self._memlet_to_promote) > 0)
+            (self.require_independent_nodes and (self._memlet_to_promote is not None and len(self._memlet_to_promote) > 0))
             or not self.require_independent_nodes
-            or len(self._independent_nodes) > 0
+            or len(self._independent_nodes) + (len(self._memlet_to_promote) if self._memlet_to_promote is not None else 0) > self.independent_node_threshold
         )
