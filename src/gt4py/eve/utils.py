@@ -25,8 +25,6 @@ import pprint
 import re
 import types
 import typing
-import uuid
-import warnings
 
 import deepdiff
 import xxhash
@@ -871,64 +869,22 @@ class FrozenNamespace(Namespace[T]):
         return self.__cached_hash_value__
 
 
-@dataclasses.dataclass
-class UIDGenerator:
-    """Simple unique id generator using different methods."""
+@dataclasses.dataclass(frozen=True)
+class SequentialIDGenerator:
+    """Simple sequential ID generator."""
 
-    prefix: Optional[str] = dataclasses.field(default=None, kw_only=True)
-    width: Optional[int] = dataclasses.field(default=None, kw_only=True)
-    warn_unsafe: Optional[bool] = dataclasses.field(default=None, kw_only=True)
+    prefix: str = ""
+    counter: Iterator[int] = dataclasses.field(default_factory=itertools.count)
+    #: A string to be used as template for the new ids.
+    #: It should contain the `{prefix}`and `{id}` format keys.
+    format: str = "{prefix}_{id}"
 
-    _counter: Iterator[int] = dataclasses.field(
-        default_factory=functools.partial(itertools.count, 1), init=False
-    )
-    """Constantly increasing counter for generation of sequential unique ids."""
+    def __next__(self) -> str:
+        return self.format.format(prefix=self.prefix, id=next(self.counter))
 
-    def random_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a random globally unique id."""
-        width = width or self.width or 8
-        if width <= 4:
-            raise ValueError(f"Width must be a positive number > 4 ({width} provided).")
-        prefix = prefix or self.prefix
-        u = uuid.uuid4()
-        s = str(u).replace("-", "")[:width]
-        return f"{prefix}_{s}" if prefix else f"{s}"
+    def next(self) -> str:
+        return self.__next__()
 
-    def sequential_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a sequential unique id (for the current session)."""
-        width = width or self.width
-        if width is not None and width < 1:
-            raise ValueError(f"Width must be a positive number ({width} provided).")
-        prefix = prefix or self.prefix
-        count = next(self._counter)
-        s = f"{count:0{width}}" if width else f"{count}"
-        return f"{prefix}_{s}" if prefix else f"{s}"
-
-    def reset_sequence(self, start: int = 1, *, warn_unsafe: Optional[bool] = None) -> UIDGenerator:
-        """Reset generator counter.
-
-        It returns the same instance to allow resetting at initialization:
-
-        Example:
-            >>> generator = UIDGenerator().reset_sequence(3)
-
-        Notes:
-            If the new start value is lower than the last generated UID, new
-            IDs are not longer guaranteed to be unique.
-
-        """
-        if start < 0:
-            raise ValueError(f"Starting value must be a positive number ({start} provided).")
-        if warn_unsafe is None:
-            warn_unsafe = self.warn_unsafe
-        if warn_unsafe and start < next(self._counter):
-            warnings.warn("Unsafe reset of UIDGenerator ({self})", stacklevel=2)
-        self._counter = itertools.count(start)
-
-        return self
-
-
-UIDs = UIDGenerator()
 
 # -- Iterators --
 S = TypeVar("S")

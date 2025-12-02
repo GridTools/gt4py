@@ -7,9 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
-import textwrap
 
-from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
