@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import pytest
 from gt4py.next import utils
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
@@ -47,7 +46,7 @@ def unwrap_from_program(program: itir.Program) -> itir.Expr:
     return stencil.expr
 
 
-def test_simple(uids):
+def test_simple(uids: utils.IDGeneratorPool):
     testee = im.let("var", im.lift("deref")("it"))(im.deref("var"))
     expected = "(λ(_icdlv_0) → ·(↑(λ() → _icdlv_0()))())(λ() → ·it)"
 
@@ -57,7 +56,7 @@ def test_simple(uids):
     assert str(actual) == expected
 
 
-def test_double_deref(uids):
+def test_double_deref(uids: utils.IDGeneratorPool):
     testee = im.let("var", im.lift("deref")("it"))(im.plus(im.deref("var"), im.deref("var")))
     expected = "(λ(_icdlv_0) → ·(↑(λ() → _icdlv_0()))() + ·(↑(λ() → _icdlv_0()))())(λ() → ·it)"
 
@@ -67,7 +66,7 @@ def test_double_deref(uids):
     assert str(actual) == expected
 
 
-def test_deref_at_non_center_different_pos(uids):
+def test_deref_at_non_center_different_pos(uids: utils.IDGeneratorPool):
     testee = im.let("var", im.lift("deref")("it"))(im.deref(im.shift("I", 1)("var")))
 
     program = wrap_in_program(testee)
@@ -76,7 +75,7 @@ def test_deref_at_non_center_different_pos(uids):
     assert testee == actual
 
 
-def test_deref_at_multiple_pos(uids):
+def test_deref_at_multiple_pos(uids: utils.IDGeneratorPool):
     testee = im.let("var", im.lift("deref")("it"))(
         im.plus(im.deref("var"), im.deref(im.shift("I", 1)("var")))
     )
@@ -87,7 +86,7 @@ def test_deref_at_multiple_pos(uids):
     assert testee == actual
 
 
-def test_bc(uids):
+def test_bc(uids: utils.IDGeneratorPool):
     # we also check that the common subexpression is able to extract the inlined value, such
     # that it is only evaluated once
     testee = im.let("var", im.lift("deref")("it2"))(

@@ -6,8 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import functools
-
 import pytest
 
 from gt4py.next import common, utils
@@ -96,7 +94,7 @@ def _expected(red, max_neighbors, has_skip_values, shifted_arg=0):
     return im.let(step, step_fun)(step_app)
 
 
-def test_basic(basic_reduction, has_skip_values, uids):
+def test_basic(basic_reduction, has_skip_values, uids: utils.IDGeneratorPool):
     expected = _expected(basic_reduction, 3, has_skip_values)
 
     offset_provider_type = {
@@ -122,7 +120,7 @@ def test_reduction_with_shift_on_second_arg(
     assert actual == expected
 
 
-def test_reduction_with_if(reduction_if, uids):
+def test_reduction_with_if(reduction_if, uids: utils.IDGeneratorPool):
     expected = _expected(reduction_if, 2, False)
 
     offset_provider_type = {"Dim": dummy_connectivity_type(max_neighbors=2, has_skip_values=False)}
@@ -130,7 +128,9 @@ def test_reduction_with_if(reduction_if, uids):
     assert actual == expected
 
 
-def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shift, uids):
+def test_reduction_with_irrelevant_full_shift(
+    reduction_with_irrelevant_full_shift, uids: utils.IDGeneratorPool
+):
     expected = _expected(reduction_with_irrelevant_full_shift, 3, False)
 
     offset_provider_type = {

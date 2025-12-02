@@ -6,9 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import copy
-import pytest
 
-from gt4py import next as gtx
+from gt4py.next import utils, common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im, domain_utils
 from gt4py.next.iterator.transforms import (
@@ -18,8 +17,8 @@ from gt4py.next.iterator.transforms import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
+IDim = common.Dimension("IDim")
+JDim = common.Dimension("JDim")
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
 
@@ -29,7 +28,7 @@ def _with_domain_annex(node: itir.Expr, domain: itir.Expr):
     return node
 
 
-def test_trivial(uids):
+def test_trivial(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.op_as_fieldop("plus", d)(
         im.op_as_fieldop("multiplies", d)(im.ref("inp1", field_type), im.ref("inp2", field_type)),
@@ -47,7 +46,7 @@ def test_trivial(uids):
     assert actual == expected
 
 
-def test_trivial_literal(uids):
+def test_trivial_literal(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {})
     testee = im.op_as_fieldop("plus", d)(im.op_as_fieldop("multiplies", d)(1, 2), 3)
     expected = im.as_fieldop(im.lambda_()(im.plus(im.multiplies_(1, 2), 3)), d)()
@@ -57,7 +56,7 @@ def test_trivial_literal(uids):
     assert actual == expected
 
 
-def test_trivial_same_arg_twice(uids):
+def test_trivial_same_arg_twice(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.op_as_fieldop("plus", d)(
         # note: inp1 occurs twice here
@@ -76,7 +75,7 @@ def test_trivial_same_arg_twice(uids):
     assert actual == expected
 
 
-def test_tuple_arg(uids):
+def test_tuple_arg(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {})
     testee = im.op_as_fieldop("plus", d)(
         im.op_as_fieldop(im.lambda_("t")(im.plus(im.tuple_get(0, "t"), im.tuple_get(1, "t"))), d)(
@@ -101,7 +100,7 @@ def test_tuple_arg(uids):
     assert actual == expected
 
 
-def test_symref_used_twice(uids):
+def test_symref_used_twice(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.as_fieldop(im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))), d)(
         im.as_fieldop(im.lambda_("c", "d")(im.multiplies_(im.deref("c"), im.deref("d"))), d)(
@@ -121,7 +120,7 @@ def test_symref_used_twice(uids):
     assert actual == expected
 
 
-def test_no_inline(uids):
+def test_no_inline(uids: utils.IDGeneratorPool):
     d1 = im.domain("cartesian_domain", {IDim: (1, 2)})
     d2 = im.domain("cartesian_domain", {IDim: (0, 3)})
     testee = im.as_fieldop(
@@ -136,7 +135,7 @@ def test_no_inline(uids):
     assert actual == testee
 
 
-def test_staged_inlining(uids):
+def test_staged_inlining(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.let(
         "tmp", im.op_as_fieldop("plus", d)(im.ref("a", field_type), im.ref("b", field_type))
@@ -160,7 +159,7 @@ def test_staged_inlining(uids):
     assert actual == expected
 
 
-def test_make_tuple_fusion_trivial(uids):
+def test_make_tuple_fusion_trivial(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.make_tuple(
         im.as_fieldop("deref", d)(im.ref("a", field_type)),
@@ -180,7 +179,7 @@ def test_make_tuple_fusion_trivial(uids):
     assert actual_simplified == expected
 
 
-def test_make_tuple_fusion_symref(uids):
+def test_make_tuple_fusion_symref(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.make_tuple(
         im.as_fieldop("deref", d)(im.ref("a", field_type)),
@@ -200,7 +199,7 @@ def test_make_tuple_fusion_symref(uids):
     assert actual_simplified == expected
 
 
-def test_make_tuple_fusion_symref_same_ref(uids):
+def test_make_tuple_fusion_symref_same_ref(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.make_tuple(
         im.as_fieldop("deref", d)(im.ref("a", field_type)),
@@ -220,7 +219,7 @@ def test_make_tuple_fusion_symref_same_ref(uids):
     assert actual_simplified == expected
 
 
-def test_make_tuple_nested(uids):
+def test_make_tuple_nested(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.make_tuple(
         _with_domain_annex(im.ref("a", field_type), d),
@@ -245,7 +244,7 @@ def test_make_tuple_nested(uids):
     assert actual_simplified == expected
 
 
-def test_make_tuple_fusion_different_domains(uids):
+def test_make_tuple_fusion_different_domains(uids: utils.IDGeneratorPool):
     d1 = im.domain("cartesian_domain", {IDim: (0, 1)})
     d2 = im.domain("cartesian_domain", {JDim: (0, 1)})
     field_i_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
@@ -283,7 +282,7 @@ def test_make_tuple_fusion_different_domains(uids):
     assert actual == expected
 
 
-def test_partial_inline(uids):
+def test_partial_inline(uids: utils.IDGeneratorPool):
     d1 = im.domain("cartesian_domain", {IDim: (1, 2)})
     d2 = im.domain("cartesian_domain", {IDim: (0, 3)})
     testee = im.as_fieldop(
@@ -319,7 +318,7 @@ def test_partial_inline(uids):
     assert actual == expected
 
 
-def test_chained_fusion(uids):
+def test_chained_fusion(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.let(
         "a", im.op_as_fieldop("plus", d)(im.ref("inp1", field_type), im.ref("inp2", field_type))
@@ -343,7 +342,7 @@ def test_chained_fusion(uids):
     assert actual == expected
 
 
-def test_inline_as_fieldop_with_list_dtype(uids):
+def test_inline_as_fieldop_with_list_dtype(uids: utils.IDGeneratorPool):
     list_field_type = ts.FieldType(
         dims=[IDim], dtype=ts.ListType(element_type=ts.ScalarType(kind=ts.ScalarKind.INT32))
     )
@@ -360,7 +359,7 @@ def test_inline_as_fieldop_with_list_dtype(uids):
     assert actual == expected
 
 
-def test_inline_into_scan(uids):
+def test_inline_into_scan(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     scan = im.call("scan")(im.lambda_("state", "a")(im.plus("state", im.deref("a"))), True, 0)
     testee = im.as_fieldop(scan, d)(im.as_fieldop("deref")(im.ref("a", field_type)))
@@ -371,7 +370,7 @@ def test_inline_into_scan(uids):
     assert actual == expected
 
 
-def test_no_inline_into_scan(uids):
+def test_no_inline_into_scan(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     scan_stencil = im.call("scan")(
         im.lambda_("state", "a")(im.plus("state", im.deref("a"))), True, 0
@@ -384,7 +383,7 @@ def test_no_inline_into_scan(uids):
     assert actual == testee
 
 
-def test_opage_arg_deduplication(uids):
+def test_opage_arg_deduplication(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {IDim: (0, 1)})
     testee = im.op_as_fieldop("plus", d)(im.as_fieldop("deref", d)(im.index(IDim)), im.index(IDim))
     expected = im.as_fieldop(

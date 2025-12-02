@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import pytest
 from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next import utils
 from gt4py.next.iterator import ir
@@ -42,7 +41,7 @@ _p_sym = P(ir.Sym)
 _p_symref = P(ir.SymRef)
 
 
-def test_simple(uids):
+def test_simple(uids: utils.IDGeneratorPool):
     testee = _map(
         ir.SymRef(id="plus"),
         ir.SymRef(id="a"),
@@ -77,7 +76,7 @@ def test_simple(uids):
     assert expected.match(actual)
 
 
-def test_simple_with_lambdas(uids):
+def test_simple_with_lambdas(uids: utils.IDGeneratorPool):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="a"),
@@ -112,7 +111,7 @@ def test_simple_with_lambdas(uids):
     assert expected.match(actual)
 
 
-def test_simple_reduce(uids):
+def test_simple_reduce(uids: utils.IDGeneratorPool):
     testee = _reduce(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="init"),
@@ -147,7 +146,7 @@ def test_simple_reduce(uids):
     assert expected.match(actual)
 
 
-def test_nested(uids):
+def test_nested(uids: utils.IDGeneratorPool):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="a"),
@@ -194,7 +193,7 @@ def test_nested(uids):
     assert expected.match(actual)
 
 
-def test_multiple_maps_with_colliding_symbol_names(uids):
+def test_multiple_maps_with_colliding_symbol_names(uids: utils.IDGeneratorPool):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         _map(

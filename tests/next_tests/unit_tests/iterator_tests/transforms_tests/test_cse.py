@@ -8,7 +8,6 @@
 
 import pytest
 import textwrap
-import functools
 
 from gt4py.eve.utils import SequentialIDGenerator
 from gt4py.next import common, utils
@@ -42,7 +41,7 @@ def opaque_fun(request):
     )
 
 
-def test_trivial(uids):
+def test_trivial(uids: utils.IDGeneratorPool):
     common = im.plus("x", "y")
     testee = im.plus(common, common)
     expected = im.let("_cs_0", common)(im.plus("_cs_0", "_cs_0"))
@@ -50,7 +49,7 @@ def test_trivial(uids):
     assert actual == expected
 
 
-def test_lambda_capture(uids):
+def test_lambda_capture(uids: utils.IDGeneratorPool):
     common = ir.FunCall(fun=ir.SymRef(id="plus"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")])
     testee = ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id="x")], expr=common), args=[common])
     expected = testee
@@ -58,7 +57,7 @@ def test_lambda_capture(uids):
     assert actual == expected
 
 
-def test_lambda_no_capture(uids):
+def test_lambda_no_capture(uids: utils.IDGeneratorPool):
     common = im.plus("x", "y")
     testee = im.call(im.lambda_("z")(im.plus("x", "y")))(im.plus("x", "y"))
     expected = im.let("_cs_0", common)("_cs_0")
@@ -66,7 +65,7 @@ def test_lambda_no_capture(uids):
     assert actual == expected
 
 
-def test_lambda_nested_capture(uids):
+def test_lambda_nested_capture(uids: utils.IDGeneratorPool):
     def common_expr():
         return im.plus("x", "y")
 
@@ -78,7 +77,7 @@ def test_lambda_nested_capture(uids):
     assert actual == expected
 
 
-def test_lambda_nested_capture_scoped(uids):
+def test_lambda_nested_capture_scoped(uids: utils.IDGeneratorPool):
     def common_expr():
         return im.plus("x", "x")
 
@@ -92,7 +91,7 @@ def test_lambda_nested_capture_scoped(uids):
     assert actual == expected
 
 
-def test_lambda_redef(uids):
+def test_lambda_redef(uids: utils.IDGeneratorPool):
     def common_expr():
         return im.lambda_("a")(im.plus("a", 1))
 
@@ -106,7 +105,7 @@ def test_lambda_redef(uids):
     assert actual == expected
 
 
-def test_lambda_redef_same_arg(uids):
+def test_lambda_redef_same_arg(uids: utils.IDGeneratorPool):
     def common_expr():
         return im.lambda_("a")(im.plus("a", 1))
 
@@ -122,7 +121,7 @@ def test_lambda_redef_same_arg(uids):
     assert actual == expected
 
 
-def test_lambda_redef_same_arg_scope(uids):
+def test_lambda_redef_same_arg_scope(uids: utils.IDGeneratorPool):
     pytest.xfail(
         reason="Not implemented. The CSE pass may not extract from a lambda function"
         "unless it knows the function is unconditionally evaluated. For this"
@@ -152,7 +151,7 @@ def test_lambda_redef_same_arg_scope(uids):
     assert actual == expected
 
 
-def test_if_can_deref_no_extraction(offset_provider_type, uids):
+def test_if_can_deref_no_extraction(offset_provider_type, uids: utils.IDGeneratorPool):
     # Test that a subexpression only occurring in one branch of an `if_` is not moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -178,7 +177,7 @@ def test_if_can_deref_no_extraction(offset_provider_type, uids):
     assert actual == expected
 
 
-def test_if_can_deref_eligible_extraction(offset_provider_type, uids):
+def test_if_can_deref_eligible_extraction(offset_provider_type, uids: utils.IDGeneratorPool):
     # Test that a subexpression only occurring in both branches of an `if_` is moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -201,7 +200,7 @@ def test_if_can_deref_eligible_extraction(offset_provider_type, uids):
     assert actual == expected
 
 
-def test_if_eligible_extraction(offset_provider_type, uids):
+def test_if_eligible_extraction(offset_provider_type, uids: utils.IDGeneratorPool):
     # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
     # if statement.
 
@@ -275,7 +274,7 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
     assert actual == expected
 
 
-def test_no_extraction_outside_asfieldop(uids):
+def test_no_extraction_outside_asfieldop(uids: utils.IDGeneratorPool):
     plus_fieldop = im.as_fieldop(
         im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))), im.call("cartesian_domain")()
     )
@@ -293,7 +292,7 @@ def test_no_extraction_outside_asfieldop(uids):
     assert actual == testee
 
 
-def test_field_extraction_outside_asfieldop(uids):
+def test_field_extraction_outside_asfieldop(uids: utils.IDGeneratorPool):
     plus_fieldop = im.as_fieldop(
         im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))), im.call("cartesian_domain")()
     )
@@ -314,7 +313,7 @@ def test_field_extraction_outside_asfieldop(uids):
     assert actual == expected
 
 
-def test_scalar_extraction_inside_as_fieldop(uids):
+def test_scalar_extraction_inside_as_fieldop(uids: utils.IDGeneratorPool):
     common_expr = im.plus(1, 2)
 
     testee = im.as_fieldop(
@@ -329,7 +328,7 @@ def test_scalar_extraction_inside_as_fieldop(uids):
     assert actual == expected
 
 
-def test_no_extraction_from_unapplied_lambda(uids):
+def test_no_extraction_from_unapplied_lambda(uids: utils.IDGeneratorPool):
     testee = im.if_(
         "cond",
         im.let("f", im.lambda_()(im.deref("guarded_it")))(im.if_("cond2", im.call("f")(), 0)),
@@ -340,7 +339,7 @@ def test_no_extraction_from_unapplied_lambda(uids):
     assert actual == testee  # no extraction should happen
 
 
-def test_extraction_from_let_form(uids):
+def test_extraction_from_let_form(uids: utils.IDGeneratorPool):
     common = im.plus(1, 2)
     testee = im.plus(im.let("a", 1)(im.plus("a", common)), im.let("b", 2)(im.plus("b", common)))
     expected = im.let("_cs_0", common)(
@@ -353,7 +352,7 @@ def test_extraction_from_let_form(uids):
     assert actual == expected
 
 
-def test_sym_ref_collection_from_lambda(opaque_fun, uids):
+def test_sym_ref_collection_from_lambda(opaque_fun, uids: utils.IDGeneratorPool):
     # This is more a regression than a unit test. When `f` & `g` are collected, we don't want to
     # collect subexpression from their body (as the pass does not recognize them to be evaluated),
     # but still need to respect that `val` is used inside. Hence, when extracting `f` and `g,` the

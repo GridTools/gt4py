@@ -58,12 +58,7 @@ def program_factory(
     )
 
 
-@pytest.fixture
-def uids():
-    return utils.IDGeneratorPool()
-
-
-def test_trivial(uids):
+def test_trivial(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -96,7 +91,7 @@ def test_trivial(uids):
     assert actual == expected
 
 
-def test_trivial_let(uids):
+def test_trivial_let(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -161,7 +156,7 @@ def test_trivial_let(uids):
         ),
     ],
 )
-def test_dont_extract_projector(projector_maker, inp_type, out_type, uids):
+def test_dont_extract_projector(projector_maker, inp_type, out_type, uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     # this is a a scan, because we assert that we only extract projectors from scans
     scan = im.as_fieldop(
@@ -186,7 +181,7 @@ def test_dont_extract_projector(projector_maker, inp_type, out_type, uids):
     assert actual == testee  # did not extract from projector
 
 
-def test_top_level_if(uids):
+def test_top_level_if(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -242,7 +237,7 @@ def test_top_level_if(uids):
     assert actual == expected
 
 
-def test_nested_if(uids):
+def test_nested_if(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -303,7 +298,7 @@ def test_nested_if(uids):
     assert actual == expected
 
 
-def test_tuple_different_domain(uids):
+def test_tuple_different_domain(uids: utils.IDGeneratorPool):
     domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
     offset_provider = {"I": IDim}
@@ -386,7 +381,7 @@ def test_tuple_different_domain(uids):
     assert actual == expected
 
 
-def test_tuple_different_domain_nested(uids):
+def test_tuple_different_domain_nested(uids: utils.IDGeneratorPool):
     domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
     domainm10 = im.domain("cartesian_domain", {IDim: (-1, 0)})
@@ -500,7 +495,7 @@ def test_tuple_different_domain_nested(uids):
     assert actual == expected
 
 
-def test_domain_preservation(uids):
+def test_domain_preservation(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 2)})
     domain_tb = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain_fb = im.domain("cartesian_domain", {IDim: (1, 2)})
@@ -550,7 +545,7 @@ def test_domain_preservation(uids):
     assert actual == expected
 
 
-def test_non_scan_projector(uids):
+def test_non_scan_projector(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 2)})
     offset_provider = {}
     stmt = itir.SetAt(

@@ -21,7 +21,7 @@ IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
 field_type = ts.FieldType(dims=[IDim], dtype=int_type)
 
 
-def test_trivial(uids):
+def test_trivial(uids: utils.IDGeneratorPool):
     cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)})
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 2)})
     symbolic_domain = domain_utils.SymbolicDomain.from_expr(domain)
@@ -51,7 +51,7 @@ def test_trivial(uids):
     assert actual == expected
 
 
-def test_nested(uids):
+def test_nested(uids: utils.IDGeneratorPool):
     cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)})
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 2)})
     symbolic_domain = domain_utils.SymbolicDomain.from_expr(domain)
