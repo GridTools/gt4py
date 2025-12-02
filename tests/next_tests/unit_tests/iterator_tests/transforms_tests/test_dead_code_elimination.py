@@ -46,7 +46,9 @@ def program_factory(expr: itir.Expr) -> itir.Program:
         (im.let("val", "inp1")(im.if_(im.and_(True, True), "val", "inp2")), im.ref("inp1")),
     ],
 )
-def test_let_constant_foldable_if(input, expected):
+def test_let_constant_foldable_if(input, expected, uids):
     input_program = program_factory(input)
-    inlined = dead_code_elimination.dead_code_elimination(input_program, offset_provider_type={})
+    inlined = dead_code_elimination.dead_code_elimination(
+        input_program, offset_provider_type={}, uids=uids
+    )
     assert inlined == program_factory(expected)
