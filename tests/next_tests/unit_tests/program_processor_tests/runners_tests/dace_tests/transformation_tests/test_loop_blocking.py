@@ -1743,11 +1743,11 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
 
 
 @pytest.mark.parametrize(
-    "require_independent_nodes,promote_independent_memlets",
-    [(True, True), (True, False), (False, True), (False, False)],
+    "require_independent_nodes,promote_independent_memlets,independent_node_threshold",
+    [(True, True, 0), (True, False, 0), (False, True, 0), (False, False, 0), (True, True, 4), (False, True, 4)],
 )
 def test_loop_blocking_sdfg_with_everything(
-    require_independent_nodes: bool, promote_independent_memlets: bool
+    require_independent_nodes: bool, promote_independent_memlets: bool, independent_node_threshold: int
 ):
     sdfg, state, me, ime = _make_loop_blocking_sdfg_with_everything()
 
@@ -1760,11 +1760,12 @@ def test_loop_blocking_sdfg_with_everything(
             blocking_parameter="__i1",
             require_independent_nodes=require_independent_nodes,
             promote_independent_memlets=promote_independent_memlets,
+            independent_node_threshold=independent_node_threshold,
         ),
         validate=True,
         validate_all=True,
     )
-    assert count == 1
+    assert count == (1 if (independent_node_threshold <= 3 or not require_independent_nodes) else 0)
 
     assert state.out_degree(me) == 6
 
@@ -1782,10 +1783,13 @@ def test_loop_blocking_sdfg_with_everything(
         assert all(
             [edge.data.data in {"inc", "gt_conn_dummy"} for edge in me_access_node_out_edges]
         )
-
-    else:  # Tasklet that reads 'S' is independent so transformation is always applied
+    elif count == 1 and not promote_independent_memlets:
+        # Tasklet that reads 'S' is independent
         assert len(me_tasklet_out_edges) == 1
         assert next(iter(me_tasklet_out_edges)).data.data == "S"
+        assert len(me_access_node_out_edges) == 0
+    else:
+        assert len(me_tasklet_out_edges) == 4
         assert len(me_access_node_out_edges) == 0
 
     new_scope_of_inner_map = state.scope_dict()[ime]

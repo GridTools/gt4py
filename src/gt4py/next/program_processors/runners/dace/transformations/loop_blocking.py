@@ -379,6 +379,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # If requested check if the blocking is a good idea.
         if not self._check_if_blocking_can_promote_anything():
             self._independent_nodes = None
+            self._memlet_to_promote = None
             return False
 
         # After the independent set is computed compute the set of dependent nodes
@@ -1010,12 +1011,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # TODO(iomaganaris): Figure out how many memlets and nodes minimum there need to be
         #  to make blocking worthwhile.
         return (
-            (
-                self.require_independent_nodes
-                and (self._memlet_to_promote is not None and len(self._memlet_to_promote) > 0)
-            )
-            or not self.require_independent_nodes
-            or len(self._independent_nodes)
-            + (len(self._memlet_to_promote) if self._memlet_to_promote is not None else 0)
-            > self.independent_node_threshold
+            not self.require_independent_nodes
+            or (
+                    len(self._independent_nodes)
+                    + (len(self._memlet_to_promote) if self._memlet_to_promote is not None else 0)
+                    > self.independent_node_threshold
+                )
         )
