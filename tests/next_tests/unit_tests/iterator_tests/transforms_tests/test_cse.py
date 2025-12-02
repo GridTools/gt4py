@@ -22,11 +22,6 @@ from gt4py.next.iterator.transforms.cse import (
 
 
 @pytest.fixture
-def cse():
-    return functools.partial(CommonSubexpressionElimination.apply, uids=utils.IDGeneratorPool())
-
-
-@pytest.fixture
 def offset_provider_type(request):
     return {"I": common.Dimension("I", kind=common.DimensionKind.HORIZONTAL)}
 
@@ -47,31 +42,31 @@ def opaque_fun(request):
     )
 
 
-def test_trivial(cse):
+def test_trivial(uids):
     common = im.plus("x", "y")
     testee = im.plus(common, common)
     expected = im.let("_cs_0", common)(im.plus("_cs_0", "_cs_0"))
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_capture(cse):
+def test_lambda_capture(uids):
     common = ir.FunCall(fun=ir.SymRef(id="plus"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")])
     testee = ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id="x")], expr=common), args=[common])
     expected = testee
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_no_capture(cse):
+def test_lambda_no_capture(uids):
     common = im.plus("x", "y")
     testee = im.call(im.lambda_("z")(im.plus("x", "y")))(im.plus("x", "y"))
     expected = im.let("_cs_0", common)("_cs_0")
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_nested_capture(cse):
+def test_lambda_nested_capture(uids):
     def common_expr():
         return im.plus("x", "y")
 
@@ -79,11 +74,11 @@ def test_lambda_nested_capture(cse):
     testee = im.call(im.lambda_("x", "y")(common_expr()))(common_expr(), common_expr())
     # (λ(_cs_1) → _cs_1 + _cs_1)(x + y)
     expected = im.let("_cs_0", common_expr())(im.plus("_cs_0", "_cs_0"))
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_nested_capture_scoped(cse):
+def test_lambda_nested_capture_scoped(uids):
     def common_expr():
         return im.plus("x", "x")
 
@@ -93,11 +88,11 @@ def test_lambda_nested_capture_scoped(cse):
     expected = im.lambda_("x")(
         im.let("_cs_0", common_expr())(im.plus("z", im.plus("_cs_0", "_cs_0")))
     )
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_redef(cse):
+def test_lambda_redef(uids):
     def common_expr():
         return im.lambda_("a")(im.plus("a", 1))
 
@@ -107,11 +102,11 @@ def test_lambda_redef(cse):
     )
     # (λ(_cs_1) → _cs_1(2) + _cs_1(3))(λ(a) → a + 1)
     expected = im.let("_cs_0", common_expr())(im.plus(im.call("_cs_0")(2), im.call("_cs_0")(3)))
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_redef_same_arg(cse):
+def test_lambda_redef_same_arg(uids):
     def common_expr():
         return im.lambda_("a")(im.plus("a", 1))
 
@@ -123,11 +118,11 @@ def test_lambda_redef_same_arg(cse):
     expected = im.let("_cs_0", common_expr())(
         im.let("_cs_1", im.call("_cs_0")(2))(im.plus("_cs_1", "_cs_1"))
     )
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_redef_same_arg_scope(cse):
+def test_lambda_redef_same_arg_scope(uids):
     pytest.xfail(
         reason="Not implemented. The CSE pass may not extract from a lambda function"
         "unless it knows the function is unconditionally evaluated. For this"
@@ -153,11 +148,11 @@ def test_lambda_redef_same_arg_scope(cse):
             )
         )
     )
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_if_can_deref_no_extraction(offset_provider_type, cse):
+def test_if_can_deref_no_extraction(offset_provider_type, uids):
     # Test that a subexpression only occurring in one branch of an `if_` is not moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -177,11 +172,13 @@ def test_if_can_deref_no_extraction(offset_provider_type, cse):
         )
     )
 
-    actual = cse(testee, offset_provider_type=offset_provider_type, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(
+        testee, offset_provider_type=offset_provider_type, within_stencil=True, uids=uids
+    )
     assert actual == expected
 
 
-def test_if_can_deref_eligible_extraction(offset_provider_type, cse):
+def test_if_can_deref_eligible_extraction(offset_provider_type, uids):
     # Test that a subexpression only occurring in both branches of an `if_` is moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -198,11 +195,13 @@ def test_if_can_deref_eligible_extraction(offset_provider_type, cse):
         )
     )
 
-    actual = cse(testee, offset_provider_type=offset_provider_type, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(
+        testee, offset_provider_type=offset_provider_type, within_stencil=True, uids=uids
+    )
     assert actual == expected
 
 
-def test_if_eligible_extraction(offset_provider_type, cse):
+def test_if_eligible_extraction(offset_provider_type, uids):
     # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
     # if statement.
 
@@ -211,7 +210,9 @@ def test_if_eligible_extraction(offset_provider_type, cse):
     # (λ(_cs_1) → if _cs_1 ∧ _cs_1 then c else d)(a ∧ b)
     expected = im.let("_cs_0", im.and_("a", "b"))(im.if_(im.and_("_cs_0", "_cs_0"), "c", "d"))
 
-    actual = cse(testee, offset_provider_type=offset_provider_type, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(
+        testee, offset_provider_type=offset_provider_type, within_stencil=True, uids=uids
+    )
     assert actual == expected
 
 
@@ -274,7 +275,7 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
     assert actual == expected
 
 
-def test_no_extraction_outside_asfieldop(cse):
+def test_no_extraction_outside_asfieldop(uids):
     plus_fieldop = im.as_fieldop(
         im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))), im.call("cartesian_domain")()
     )
@@ -288,11 +289,11 @@ def test_no_extraction_outside_asfieldop(cse):
         identity_fieldop(im.ref("a", field_type)), identity_fieldop(im.ref("b", field_type))
     )
 
-    actual = cse(testee, within_stencil=False)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=False, uids=uids)
     assert actual == testee
 
 
-def test_field_extraction_outside_asfieldop(cse):
+def test_field_extraction_outside_asfieldop(uids):
     plus_fieldop = im.as_fieldop(
         im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))), im.call("cartesian_domain")()
     )
@@ -309,11 +310,11 @@ def test_field_extraction_outside_asfieldop(cse):
     # )
     expected = im.let("_cs_0", identity_fieldop(field))(plus_fieldop("_cs_0", "_cs_0"))
 
-    actual = cse(testee, within_stencil=False)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=False, uids=uids)
     assert actual == expected
 
 
-def test_scalar_extraction_inside_as_fieldop(cse):
+def test_scalar_extraction_inside_as_fieldop(uids):
     common_expr = im.plus(1, 2)
 
     testee = im.as_fieldop(
@@ -324,22 +325,22 @@ def test_scalar_extraction_inside_as_fieldop(cse):
         im.domain(common.GridType.CARTESIAN, {}),
     )()
 
-    actual = cse(testee, within_stencil=False)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=False, uids=uids)
     assert actual == expected
 
 
-def test_no_extraction_from_unapplied_lambda(cse):
+def test_no_extraction_from_unapplied_lambda(uids):
     testee = im.if_(
         "cond",
         im.let("f", im.lambda_()(im.deref("guarded_it")))(im.if_("cond2", im.call("f")(), 0)),
         im.deref("guarded_it"),
     )
 
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == testee  # no extraction should happen
 
 
-def test_extraction_from_let_form(cse):
+def test_extraction_from_let_form(uids):
     common = im.plus(1, 2)
     testee = im.plus(im.let("a", 1)(im.plus("a", common)), im.let("b", 2)(im.plus("b", common)))
     expected = im.let("_cs_0", common)(
@@ -348,11 +349,11 @@ def test_extraction_from_let_form(cse):
     # note: inner occurrences of "_cs_0" are intentionally left as the extracted name;
     # the outer let name was shifted to _cs_0 above and the extraction logic produces consistent names.
 
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_sym_ref_collection_from_lambda(opaque_fun, cse):
+def test_sym_ref_collection_from_lambda(opaque_fun, uids):
     # This is more a regression than a unit test. When `f` & `g` are collected, we don't want to
     # collect subexpression from their body (as the pass does not recognize them to be evaluated),
     # but still need to respect that `val` is used inside. Hence, when extracting `f` and `g,` the
@@ -366,5 +367,5 @@ def test_sym_ref_collection_from_lambda(opaque_fun, cse):
         im.let("_cs_0", im.lambda_()("val"))(im.call(opaque_fun)("_cs_0", "_cs_0"))
     )
 
-    actual = cse(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected  # no extraction should happen

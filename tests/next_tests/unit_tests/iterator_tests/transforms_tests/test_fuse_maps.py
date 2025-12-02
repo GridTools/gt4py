@@ -42,19 +42,7 @@ _p_sym = P(ir.Sym)
 _p_symref = P(ir.SymRef)
 
 
-@pytest.fixture
-def apply_fuse_maps():
-    def impl(ir: ir.Node) -> ir.Node:
-        result = fuse_maps.FuseMaps(uids=utils.IDGeneratorPool()).visit(ir)
-        result = inline_lambdas.InlineLambdas.apply(
-            result
-        )  # FuseMaps does not inline everything which makes the expected result harder to test
-        return result
-
-    return impl
-
-
-def test_simple(apply_fuse_maps):
+def test_simple(uids):
     testee = _map(
         ir.SymRef(id="plus"),
         ir.SymRef(id="a"),
@@ -83,11 +71,13 @@ def test_simple(apply_fuse_maps):
         ir.SymRef(id="c"),
     )
 
-    actual = apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_simple_with_lambdas(apply_fuse_maps):
+def test_simple_with_lambdas(uids):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="a"),
@@ -116,11 +106,13 @@ def test_simple_with_lambdas(apply_fuse_maps):
         ir.SymRef(id="c"),
     )
 
-    actual = apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_simple_reduce(apply_fuse_maps):
+def test_simple_reduce(uids):
     testee = _reduce(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="init"),
@@ -149,11 +141,13 @@ def test_simple_reduce(apply_fuse_maps):
         ir.SymRef(id="b"),
     )
 
-    actual = apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_nested(apply_fuse_maps):
+def test_nested(uids):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="a"),
@@ -194,11 +188,13 @@ def test_nested(apply_fuse_maps):
         ir.SymRef(id="d"),
     )
 
-    actual = apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_multiple_maps_with_colliding_symbol_names(apply_fuse_maps):
+def test_multiple_maps_with_colliding_symbol_names(uids):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         _map(
@@ -232,5 +228,7 @@ def test_multiple_maps_with_colliding_symbol_names(apply_fuse_maps):
         ir.SymRef(id="d"),
     )
 
-    actual = apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)

@@ -63,17 +63,7 @@ def uids():
     return utils.IDGeneratorPool()
 
 
-@pytest.fixture
-def create_global_tmps(uids):
-    return functools.partial(global_tmps.create_global_tmps, uids=uids)
-
-
-@pytest.fixture
-def collapse_tuple(uids):
-    return functools.partial(ct.CollapseTuple.apply, uids=uids)
-
-
-def test_trivial(create_global_tmps):
+def test_trivial(uids):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -102,11 +92,11 @@ def test_trivial(create_global_tmps):
         ],
     )
 
-    actual = create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
-def test_trivial_let(create_global_tmps):
+def test_trivial_let(uids):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -137,7 +127,7 @@ def test_trivial_let(create_global_tmps):
         ],
     )
 
-    actual = create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
@@ -171,7 +161,7 @@ def test_trivial_let(create_global_tmps):
         ),
     ],
 )
-def test_dont_extract_projector(projector_maker, inp_type, out_type, create_global_tmps):
+def test_dont_extract_projector(projector_maker, inp_type, out_type, uids):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     # this is a a scan, because we assert that we only extract projectors from scans
     scan = im.as_fieldop(
@@ -192,11 +182,11 @@ def test_dont_extract_projector(projector_maker, inp_type, out_type, create_glob
         ],
     )
 
-    actual = create_global_tmps(testee, offset_provider={})
+    actual = global_tmps.create_global_tmps(testee, offset_provider={}, uids=uids)
     assert actual == testee  # did not extract from projector
 
 
-def test_top_level_if(create_global_tmps):
+def test_top_level_if(uids):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -248,11 +238,11 @@ def test_top_level_if(create_global_tmps):
         ],
     )
 
-    actual = create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
-def test_nested_if(create_global_tmps):
+def test_nested_if(uids):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -309,11 +299,11 @@ def test_nested_if(create_global_tmps):
         ],
     )
 
-    actual = create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
-def test_tuple_different_domain(create_global_tmps, collapse_tuple):
+def test_tuple_different_domain(uids):
     domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
     offset_provider = {"I": IDim}
@@ -391,12 +381,12 @@ def test_tuple_different_domain(create_global_tmps, collapse_tuple):
         ],
     )
 
-    actual = create_global_tmps(testee, offset_provider)
-    actual = collapse_tuple(actual)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    actual = ct.CollapseTuple.apply(actual, uids=uids)
     assert actual == expected
 
 
-def test_tuple_different_domain_nested(create_global_tmps, collapse_tuple):
+def test_tuple_different_domain_nested(uids):
     domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
     domainm10 = im.domain("cartesian_domain", {IDim: (-1, 0)})
@@ -505,12 +495,12 @@ def test_tuple_different_domain_nested(create_global_tmps, collapse_tuple):
         ],
     )
 
-    actual = create_global_tmps(testee, offset_provider)
-    actual = collapse_tuple(actual)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    actual = ct.CollapseTuple.apply(actual, uids=uids)
     assert actual == expected
 
 
-def test_domain_preservation(create_global_tmps):
+def test_domain_preservation(uids):
     domain = im.domain("cartesian_domain", {IDim: (0, 2)})
     domain_tb = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain_fb = im.domain("cartesian_domain", {IDim: (1, 2)})
@@ -556,11 +546,11 @@ def test_domain_preservation(create_global_tmps):
         ],
     )
 
-    actual = create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
-def test_non_scan_projector(create_global_tmps):
+def test_non_scan_projector(uids):
     domain = im.domain("cartesian_domain", {IDim: (0, 2)})
     offset_provider = {}
     stmt = itir.SetAt(
@@ -581,5 +571,5 @@ def test_non_scan_projector(create_global_tmps):
     projector, expr = ir_utils_misc.extract_projector(stmt.expr)
     assert projector is not None
 
-    actual = create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == testee

@@ -15,7 +15,7 @@ IDim = gtx.Dimension("IDim")
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 
 
-def test_inline_dynamic_shift_as_fieldop_arg():
+def test_inline_dynamic_shift_as_fieldop_arg(uids):
     testee = im.as_fieldop(im.lambda_("a", "b")(im.deref(im.shift("IOff", im.deref("b"))("a"))))(
         im.as_fieldop("deref")("inp"), "offset_field"
     )
@@ -25,11 +25,11 @@ def test_inline_dynamic_shift_as_fieldop_arg():
         )
     )("inp", "offset_field")
 
-    actual = inline_dynamic_shifts.InlineDynamicShifts.apply(testee, uids=utils.IDGeneratorPool())
+    actual = inline_dynamic_shifts.InlineDynamicShifts.apply(testee, uids=uids)
     assert actual == expected
 
 
-def test_inline_dynamic_shift_let_var():
+def test_inline_dynamic_shift_let_var(uids):
     testee = im.let("tmp", im.as_fieldop("deref")("inp"))(
         im.as_fieldop(im.lambda_("a", "b")(im.deref(im.shift("IOff", im.deref("b"))("a"))))(
             "tmp", "offset_field"
@@ -42,5 +42,5 @@ def test_inline_dynamic_shift_let_var():
         )
     )("inp", "offset_field")
 
-    actual = inline_dynamic_shifts.InlineDynamicShifts.apply(testee, uids=utils.IDGeneratorPool())
+    actual = inline_dynamic_shifts.InlineDynamicShifts.apply(testee, uids=uids)
     assert actual == expected

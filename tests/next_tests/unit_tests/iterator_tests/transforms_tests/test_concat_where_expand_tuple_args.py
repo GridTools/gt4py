@@ -21,7 +21,7 @@ IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
 field_type = ts.FieldType(dims=[IDim], dtype=int_type)
 
 
-def test_trivial():
+def test_trivial(uids):
     cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)})
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 2)})
     symbolic_domain = domain_utils.SymbolicDomain.from_expr(domain)
@@ -45,13 +45,13 @@ def test_trivial():
     )
 
     actual = collapse_tuple.CollapseTuple.apply(
-        actual, allow_undeclared_symbols=True, within_stencil=False, uids=utils.IDGeneratorPool()
+        actual, allow_undeclared_symbols=True, within_stencil=False, uids=uids
     )
 
     assert actual == expected
 
 
-def test_nested():
+def test_nested(uids):
     cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)})
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 2)})
     symbolic_domain = domain_utils.SymbolicDomain.from_expr(domain)
@@ -85,7 +85,7 @@ def test_nested():
     )
 
     actual = collapse_tuple.CollapseTuple.apply(
-        actual, allow_undeclared_symbols=True, within_stencil=False, uids=utils.IDGeneratorPool()
+        actual, allow_undeclared_symbols=True, within_stencil=False, uids=uids
     )
 
     assert actual == expected
