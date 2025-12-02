@@ -875,6 +875,8 @@ class SequentialIDGenerator:
 
     prefix: str = ""
     counter: Iterator[int] = dataclasses.field(default_factory=itertools.count)
+    #: A string to be used as template for the new ids.
+    #: It should contain the `{prefix}`and `{id}` format keys.
     format: str = "{prefix}_{id}"
 
     def __next__(self) -> str:
