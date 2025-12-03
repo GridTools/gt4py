@@ -12,6 +12,7 @@ from gt4py.next import common, utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
+from gt4py.next.type_system import type_specifications as ts
 
 
 def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
@@ -24,6 +25,19 @@ def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
     )
 
 
+def _list_type(dim: str) -> ts.ListType:
+    return ts.ListType(
+        element_type=ts.DataType(),
+        offset_type=common.Dimension(value=dim, kind=common.DimensionKind.LOCAL),
+    )
+
+
+def typed_neighbors(dim: str, arg: str | ir.Expr) -> ir.FunCall:
+    neighbors = im.neighbors(dim, arg)
+    neighbors.type = _list_type(dim)
+    return neighbors
+
+
 @pytest.fixture(params=[True, False])
 def has_skip_values(request):
     return request.param
@@ -31,29 +45,33 @@ def has_skip_values(request):
 
 @pytest.fixture
 def basic_reduction():
-    return im.reduce("foo", 0.0)(im.neighbors("Dim", "x"))
+    return im.reduce("foo", 0.0)(typed_neighbors("Dim", "x"))
 
 
 @pytest.fixture
 def reduction_with_shift_on_second_arg():
-    return im.reduce("foo", 0.0)("x", im.neighbors("Dim", "y"))
+    const_list = im.call("make_const_list")(42)
+    const_list.type = _list_type("Dim")
+    return im.reduce("foo", 0.0)(const_list, typed_neighbors("Dim", "y"))
 
 
 @pytest.fixture
 def reduction_with_incompatible_shifts():
-    return im.reduce("foo", 0.0)(im.neighbors("Dim", "x"), im.neighbors("Dim2", "y"))
+    return im.reduce("foo", 0.0)(typed_neighbors("Dim", "x"), typed_neighbors("Dim2", "y"))
 
 
 @pytest.fixture
 def reduction_with_irrelevant_full_shift():
     return im.reduce("foo", 0.0)(
-        im.neighbors("Dim", im.shift("IrrelevantDim", 0)("x")), im.neighbors("Dim", "y")
+        typed_neighbors("Dim", im.shift("IrrelevantDim", 0)("x")), typed_neighbors("Dim", "y")
     )
 
 
 @pytest.fixture
 def reduction_if():
-    return im.reduce("foo", 0.0)(im.if_(True, im.neighbors("Dim", "x"), "y"))
+    if_expr = im.if_(True, typed_neighbors("Dim", "x"), "y")
+    if_expr.type = _list_type("Dim")
+    return im.reduce("foo", 0.0)(if_expr)
 
 
 @pytest.mark.parametrize(
@@ -165,10 +183,6 @@ def test_reduction_with_irrelevant_full_shift(
 def test_reduction_with_incompatible_shifts(
     reduction_with_incompatible_shifts, offset_provider_type, uids
 ):
-    offset_provider_type = {
-        "Dim": dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
-        "Dim2": dummy_connectivity_type(max_neighbors=2, has_skip_values=False),
-    }
     with pytest.raises(RuntimeError, match="incompatible"):
         UnrollReduce.apply(
             reduction_with_incompatible_shifts, offset_provider_type=offset_provider_type, uids=uids

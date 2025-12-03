@@ -108,12 +108,13 @@ class ScalarType(DataType):
 class ListType(DataType):
     """Represents a neighbor list in the ITIR representation.
 
-    Note: not used in the frontend. The concept is represented as Field with local Dimension.
+    Note:
+      - not used in the frontend. The concept is represented as Field with local Dimension.
+      - `None` is used to describe lists originating from `make_const_list`.
     """
 
     element_type: DataType
-    # TODO(tehrengruber): make `offset_type` mandatory
-    offset_type: Optional[common.Dimension] = None
+    offset_type: common.Dimension | None
 
 
 class FieldType(DataType, CallableType):
