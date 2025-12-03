@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q --script
+#! /usr/bin/env -S uv run -q --script --python 3.11
 #
 # GT4Py - GridTools Framework
 #
@@ -9,7 +9,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
@@ -20,6 +20,7 @@ from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
 
 import nox
+import tomllib
 
 
 # This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
@@ -71,6 +72,9 @@ PYTHON_VERSIONS: Final[list[str]] = [
     v
     for line in (REPO_ROOT / ".python-versions").read_text().splitlines()
     if (v := line.strip()) and not v.startswith("#")
+]
+REQUIRES_PYTHON = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"][
+    "requires-python"
 ]
 
 # -- Parameter sets --
@@ -124,7 +128,10 @@ def install_session_venv(
         "uv",
         "sync",
         "--python",
-        str(session.python),
+        # uv does not yet combine explicit Python requests with the
+        # `requires-python` range in `pyproject.toml`, so we do it here.
+        # See: https://github.com/astral-sh/uv/issues/16654
+        f"{REQUIRES_PYTHON}, =={session.python!s}",
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
