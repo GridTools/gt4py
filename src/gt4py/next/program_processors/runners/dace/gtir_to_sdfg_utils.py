@@ -137,11 +137,11 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
         )
 
     ir_sym_ids = {str(sym.id) for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()}
-    ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_var")
+    ir_ssa_uuid = eve.utils.SequentialIDGenerator(prefix="gtir_var")
 
     # note: traverse in alphabetical order to generate UIDs in deterministic way
     invalid_symbols_mapping = {
-        sym_id: ir_ssa_uuid.sequential_id()
+        sym_id: next(ir_ssa_uuid)
         for sym_id in sorted(ir_sym_ids)
         if not dace.dtypes.validate_name(sym_id)
     }

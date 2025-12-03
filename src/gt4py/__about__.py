@@ -125,6 +125,7 @@ def __dir__() -> list[str]:
         import sys
 
         # Add virtual attributes (e.g. __version__, __version_info__) to the list
-        _dir = list(set(__annotations__.keys()) | vars(sys.modules[__name__]).keys())
+        annotations = globals().get("__annotations__", {})
+        _dir = list(set(annotations.keys()) | vars(sys.modules[__name__]).keys())
 
     return _dir

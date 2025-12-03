@@ -20,9 +20,9 @@ from gt4py.eve import (
     PreserveLocationVisitor,
     SymbolTableTrait,
     VisitorWithSymbolTableTrait,
+    utils as eve_utils,
 )
-from gt4py.eve.utils import UIDGenerator
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
@@ -262,23 +262,10 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
             state.used_symbol_ids.add(id(symtable[node.id]))
 
 
-def _unique_id(uid_generator: UIDGenerator) -> str:
-    """
-    Generate a unique id with '_cs' prefix using the given uid generator.
-
-    In case cse is used from a different context where the uid generator already has a prefix.
-    """
-    prefix = uid_generator.prefix or ""
-    if prefix != "_cs":
-        prefix = f"{prefix}_cs"
-
-    return uid_generator.sequential_id(prefix=prefix)
-
-
 def extract_subexpression(
     node: itir.Expr,
     predicate: Callable[[itir.Expr, int], bool],
-    uid_generator: UIDGenerator,
+    prefixed_uids: eve_utils.SequentialIDGenerator,
     once_only: bool = False,
     deepest_expr_first: bool = False,
 ) -> tuple[itir.Expr, Union[dict[itir.Sym, itir.Expr], None], bool]:
@@ -305,17 +292,17 @@ def extract_subexpression(
     Examples:
         Default case for `(x+y) + ((x+y)+z)`:
 
-        >>> from gt4py.eve.utils import UIDGenerator
+        >>> from gt4py.eve.utils import SequentialIDGenerator
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
         >>> predicate = lambda subexpr, num_occurences: num_occurences > 1
         >>> new_expr, extracted_subexprs, _ = extract_subexpression(
-        ...     expr, predicate, UIDGenerator(prefix="_subexpr")
+        ...     expr, predicate, SequentialIDGenerator("_subexpr")
         ... )
         >>> print(new_expr)
-        _subexpr_cs_1 + (_subexpr_cs_1 + z)
+        _subexpr_0 + (_subexpr_0 + z)
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_cs_1`: `x + y`
+        `_subexpr_0`: `x + y`
 
         The order of the extraction can be configured using `deepest_expr_first`. By default, the nodes
         closer to the root are eliminated first:
@@ -325,13 +312,16 @@ def extract_subexpression(
         ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
         ... )
         >>> new_expr, extracted_subexprs, ignored_children = extract_subexpression(
-        ...     expr, predicate, UIDGenerator(prefix="_subexpr"), deepest_expr_first=False
+        ...     expr,
+        ...     predicate,
+        ...     SequentialIDGenerator("_subexpr"),
+        ...     deepest_expr_first=False,
         ... )
         >>> print(new_expr)
-        _subexpr_cs_1 + _subexpr_cs_1
+        _subexpr_0 + _subexpr_0
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_cs_1`: `x + y + (x + y)`
+        `_subexpr_0`: `x + y + (x + y)`
 
         Since `(x+y)` is a child of one of the expressions it is ignored:
 
@@ -347,15 +337,15 @@ def extract_subexpression(
         >>> new_expr, extracted_subexprs, _ = extract_subexpression(
         ...     expr,
         ...     predicate,
-        ...     UIDGenerator(prefix="_subexpr"),
+        ...     SequentialIDGenerator("_subexpr"),
         ...     once_only=True,
         ...     deepest_expr_first=True,
         ... )
         >>> print(new_expr)
-        _subexpr_cs_1 + _subexpr_cs_1 + (_subexpr_cs_1 + _subexpr_cs_1)
+        _subexpr_0 + _subexpr_0 + (_subexpr_0 + _subexpr_0)
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_cs_1`: `x + y`
+        `_subexpr_0`: `x + y`
 
         Note that this requires `once_only` to be set right now.
     """
@@ -409,7 +399,7 @@ def extract_subexpression(
         if not eligible_ids:
             continue
 
-        expr_id = _unique_id(uid_generator)
+        expr_id = next(prefixed_uids)
         extracted[itir.Sym(id=expr_id)] = expr
         expr_ref = itir.SymRef(id=expr_id)
         for id_ in eligible_ids:
@@ -436,8 +426,12 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         >>> x = itir.SymRef(id="x")
         >>> plus = lambda a, b: itir.FunCall(fun=itir.SymRef(id=("plus")), args=[a, b])
         >>> expr = plus(plus(x, x), plus(x, x))
-        >>> print(CommonSubexpressionElimination.apply(expr, within_stencil=True))
-        (λ(_cs_1) → _cs_1 + _cs_1)(x + x)
+        >>> print(
+        ...     CommonSubexpressionElimination.apply(
+        ...         expr, within_stencil=True, uids=utils.IDGeneratorPool()
+        ...     )
+        ... )
+        (λ(_cs_0) → _cs_0 + _cs_0)(x + x)
 
     The pass visits the tree top-down starting from the root node, e.g. an itir.Program.
     For each node we extract (eligible) subexpressions occuring more than once using
@@ -446,9 +440,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     top-down, extracted expressions always land up in the outermost scope they can appear in.
     """
 
-    # we use one UID generator per instance such that the generated ids are
-    # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(repr=False)
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     collect_all: bool = dataclasses.field(default=False)
 
@@ -459,7 +451,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         within_stencil: bool | None = None,
         offset_provider_type: common.OffsetProviderType | None = None,
         *,
-        uids: UIDGenerator | None = None,
+        uids: utils.IDGeneratorPool,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, itir.Program)
         if is_program:
@@ -469,9 +461,6 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
             assert within_stencil is not None, (
                 "The expression's context must be specified using `within_stencil`."
             )
-
-        if not uids:
-            uids = UIDGenerator()
 
         offset_provider_type = offset_provider_type or {}
         node = itir_type_inference.infer(
@@ -519,7 +508,9 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
                         return True
             return False
 
-        new_expr, extracted, ignored_children = extract_subexpression(node, predicate, self.uids)
+        new_expr, extracted, ignored_children = extract_subexpression(
+            node, predicate, self.uids["_cs"]
+        )
 
         if not extracted:
             return self.generic_visit(node, **kwargs)

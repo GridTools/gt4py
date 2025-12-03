@@ -11,8 +11,7 @@ from collections.abc import Iterable, Iterator
 from typing import TypeGuard
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.eve.utils import UIDGenerator
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
@@ -89,11 +88,16 @@ def _get_connectivity(
 class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     @classmethod
-    def apply(cls, node: itir.Node, offset_provider_type: common.OffsetProviderType) -> itir.Node:
-        return cls().visit(node, offset_provider_type=offset_provider_type)
+    def apply(
+        cls,
+        node: itir.Node,
+        offset_provider_type: common.OffsetProviderType,
+        uids: utils.IDGeneratorPool,
+    ) -> itir.Node:
+        return cls(uids=uids).visit(node, offset_provider_type=offset_provider_type)
 
     def _visit_reduce(
         self, node: itir.FunCall, offset_provider_type: common.OffsetProviderType
@@ -102,9 +106,9 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
         max_neighbors = connectivity_type.max_neighbors
         has_skip_values = connectivity_type.has_skip_values
 
-        acc: str = self.uids.sequential_id(prefix="_acc")
-        offset: str = self.uids.sequential_id(prefix="_i")
-        step: str = self.uids.sequential_id(prefix="_step")
+        acc: str = next(self.uids["_acc"])
+        offset: str = next(self.uids["_i"])
+        step: str = next(self.uids["_step"])
 
         assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args

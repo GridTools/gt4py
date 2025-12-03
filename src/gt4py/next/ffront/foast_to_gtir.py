@@ -11,9 +11,8 @@ import dataclasses
 from typing import Any, Callable, Optional
 
 from gt4py import eve
-from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Never, cast
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental as experimental_builtins,
@@ -92,9 +91,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     [Sym(id=SymbolName('inp'))]
     """
 
-    uid_generator: eve_utils.UIDGenerator = dataclasses.field(
-        default_factory=eve_utils.UIDGenerator
-    )
+    uid_generator: utils.IDGeneratorPool = dataclasses.field(default_factory=utils.IDGeneratorPool)
 
     @classmethod
     def apply(cls, node: foast.LocatedNode) -> itir.FunctionDefinition:
@@ -200,7 +197,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
             # wrap the inner expression in a lambda function. note that this increases the
             # operation count if both branches are evaluated.
-            inner_expr_name = self.uid_generator.sequential_id(prefix="__inner_expr")
+            inner_expr_name = next(self.uid_generator["__inner_expr"])
             inner_expr_evaluator = im.lambda_(*common_syms)(inner_expr)
             inner_expr = im.call(inner_expr_name)(*common_symrefs)
 

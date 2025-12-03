@@ -15,8 +15,7 @@ import operator
 from typing import Optional
 
 from gt4py import eve
-from gt4py.eve import utils as eve_utils
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -56,7 +55,7 @@ def _is_tuple_expr_of_literals(expr: itir.Expr):
 
 
 def _inline_as_fieldop_arg(
-    arg: itir.Expr, *, uids: eve_utils.UIDGenerator
+    arg: itir.Expr, *, uids: utils.IDGeneratorPool
 ) -> tuple[itir.Expr, dict[str, itir.Expr]]:
     assert cpm.is_applied_as_fieldop(arg)
     arg = ir_misc.canonicalize_as_fieldop(arg)
@@ -77,7 +76,7 @@ def _inline_as_fieldop_arg(
             )
         else:
             stencil_params.append(inner_param)
-            new_outer_stencil_param = uids.sequential_id(prefix="__iasfop")
+            new_outer_stencil_param = next(uids["__iasfop"])
             extracted_args[new_outer_stencil_param] = inner_arg
 
     return im.lift(im.lambda_(*stencil_params)(stencil_body))(
@@ -126,7 +125,7 @@ def fuse_as_fieldop(
     *,
     offset_provider_type: common.OffsetProviderType,
     enable_cse: bool,
-    uids: eve_utils.UIDGenerator,
+    uids: utils.IDGeneratorPool,
 ) -> itir.Expr:
     assert cpm.is_applied_as_fieldop(expr)
 
@@ -248,6 +247,7 @@ class FuseAsFieldOp(
     Merge multiple `as_fieldop` calls into one.
 
     >>> from gt4py import next as gtx
+    >>> from gt4py.next import utils
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> IDim = gtx.Dimension("IDim")
     >>> field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
@@ -264,7 +264,10 @@ class FuseAsFieldOp(
     )
     >>> print(
     ...     FuseAsFieldOp.apply(
-    ...         nested_as_fieldop, offset_provider_type={}, allow_undeclared_symbols=True
+    ...         nested_as_fieldop,
+    ...         offset_provider_type={},
+    ...         allow_undeclared_symbols=True,
+    ...         uids=utils.IDGeneratorPool(),
     ...     )
     ... )
     as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2, inp3)
@@ -288,7 +291,7 @@ class FuseAsFieldOp(
 
     enabled_transformations = Transformation.all()
 
-    uids: eve_utils.UIDGenerator
+    uids: utils.IDGeneratorPool
     offset_provider_type: common.OffsetProviderType
     enable_cse: bool  # option to disable is mainly for testing purposes
 
@@ -298,7 +301,7 @@ class FuseAsFieldOp(
         node: itir.Program,
         *,
         offset_provider_type: common.OffsetProviderType,
-        uids: Optional[eve_utils.UIDGenerator] = None,
+        uids: utils.IDGeneratorPool,
         allow_undeclared_symbols=False,
         within_set_at_expr: Optional[bool] = None,
         enabled_transformations: Optional[Transformation] = None,
@@ -314,9 +317,6 @@ class FuseAsFieldOp(
 
         if within_set_at_expr is None:
             within_set_at_expr = not isinstance(node, itir.Program)
-
-        if not uids:
-            uids = eve_utils.UIDGenerator()
 
         new_node = cls(
             uids=uids,
@@ -372,7 +372,7 @@ class FuseAsFieldOp(
                 let_vars = {}
                 for domain, inner_field_args in field_args_by_domain.items():
                     if len(inner_field_args) > 1:
-                        var = self.uids.sequential_id(prefix="__fasfop")
+                        var = next(self.uids["__fasfop"])
                         fused_args = im.op_as_fieldop(lambda *args: im.make_tuple(*args), domain)(
                             *(arg for _, arg in inner_field_args)
                         )
