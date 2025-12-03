@@ -11,7 +11,7 @@ from gt4py.next import utils, common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im, domain_utils
 from gt4py.next.iterator.transforms import (
-    fuse_as_fieldop as fasfop,
+    fuse_as_fieldop,
     collapse_tuple as ct,
 )
 from gt4py.next.type_system import type_specifications as ts
@@ -40,8 +40,8 @@ def test_trivial(uids: utils.IDGeneratorPool):
         ),
         d,
     )(im.ref("inp1", field_type), im.ref("inp2", field_type), im.ref("inp3", field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, uids=uids
     )
     assert actual == expected
 
@@ -50,8 +50,8 @@ def test_trivial_literal(uids: utils.IDGeneratorPool):
     d = im.domain("cartesian_domain", {})
     testee = im.op_as_fieldop("plus", d)(im.op_as_fieldop("multiplies", d)(1, 2), 3)
     expected = im.as_fieldop(im.lambda_()(im.plus(im.multiplies_(1, 2), 3)), d)()
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, uids=uids
     )
     assert actual == expected
 
@@ -69,8 +69,8 @@ def test_trivial_same_arg_twice(uids: utils.IDGeneratorPool):
         ),
         d,
     )(im.ref("inp1", field_type), im.ref("inp2", field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
 
@@ -94,8 +94,8 @@ def test_tuple_arg(uids: utils.IDGeneratorPool):
         ),
         d,
     )()
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
 
@@ -114,8 +114,8 @@ def test_symref_used_twice(uids: utils.IDGeneratorPool):
         ),
         d,
     )("inp1", "inp2")
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
 
@@ -129,8 +129,12 @@ def test_no_inline(uids: utils.IDGeneratorPool):
         ),
         d1,
     )(im.op_as_fieldop("plus", d2)(im.ref("inp1", field_type), im.ref("inp2", field_type)))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee,
+        offset_provider_type={"IOff": IDim},
+        allow_undeclared_symbols=True,
+        enable_cse=False,
+        uids=uids,
     )
     assert actual == testee
 
@@ -153,8 +157,8 @@ def test_staged_inlining(uids: utils.IDGeneratorPool):
         ),
         d,
     )(im.ref("a", field_type), im.ref("b", field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
 
@@ -169,8 +173,8 @@ def test_make_tuple_fusion_trivial(uids: utils.IDGeneratorPool):
         im.lambda_("a")(im.make_tuple(im.deref("a"), im.deref("a"))),
         d,
     )(im.ref("a", field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     # simplify to remove unnecessary make_tuple call `{v[0], v[1]}(actual)`
     actual_simplified = ct.CollapseTuple.apply(
@@ -189,8 +193,8 @@ def test_make_tuple_fusion_symref(uids: utils.IDGeneratorPool):
         im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
         d,
     )(im.ref("a", field_type), im.ref("b", field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     # simplify to remove unnecessary make_tuple call
     actual_simplified = ct.CollapseTuple.apply(
@@ -209,8 +213,8 @@ def test_make_tuple_fusion_symref_same_ref(uids: utils.IDGeneratorPool):
         im.lambda_("a")(im.make_tuple(im.deref("a"), im.deref("a"))),
         d,
     )(im.ref("a", field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     # simplify to remove unnecessary make_tuple call
     actual_simplified = ct.CollapseTuple.apply(
@@ -234,8 +238,8 @@ def test_make_tuple_nested(uids: utils.IDGeneratorPool):
         ),
         d,
     )(im.ref("a", field_type), im.ref("b", field_type), im.ref("c", field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     # simplify to remove unnecessary make_tuple call
     actual_simplified = ct.CollapseTuple.apply(
@@ -276,8 +280,8 @@ def test_make_tuple_fusion_different_domains(uids: utils.IDGeneratorPool):
             im.tuple_get(1, "__fasfop_1"),
         )
     )
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
 
@@ -312,8 +316,12 @@ def test_partial_inline(uids: utils.IDGeneratorPool):
         "inp1",
         "inp2",
     )
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={"IOff": IDim}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee,
+        offset_provider_type={"IOff": IDim},
+        allow_undeclared_symbols=True,
+        enable_cse=False,
+        uids=uids,
     )
     assert actual == expected
 
@@ -336,8 +344,8 @@ def test_chained_fusion(uids: utils.IDGeneratorPool):
         ),
         d,
     )(im.ref("inp1", field_type), im.ref("inp2", field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
 
@@ -357,8 +365,8 @@ def test_inline_as_fieldop_with_list_dtype(uids: utils.IDGeneratorPool):
     expected = im.as_fieldop(
         im.lambda_("inp")(im.call(im.call("reduce")("plus", 0))(im.deref("inp"))), d
     )(im.ref("inp", list_field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
 
@@ -368,8 +376,8 @@ def test_inline_into_scan(uids: utils.IDGeneratorPool):
     scan = im.call("scan")(im.lambda_("state", "a")(im.plus("state", im.deref("a"))), True, 0)
     testee = im.as_fieldop(scan, d)(im.as_fieldop("deref")(im.ref("a", field_type)))
     expected = im.as_fieldop(scan, d)(im.ref("a", field_type))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
 
@@ -381,8 +389,8 @@ def test_no_inline_into_scan(uids: utils.IDGeneratorPool):
     )
     scan = im.as_fieldop(scan_stencil, d)(im.ref("a", field_type))
     testee = im.as_fieldop(im.lambda_("arg")(im.deref("arg")), d)(scan)
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == testee
 
@@ -394,7 +402,7 @@ def test_opage_arg_deduplication(uids: utils.IDGeneratorPool):
         im.lambda_("__arg1")(im.plus(im.deref("__arg1"), im.deref("__arg1"))),
         d,
     )(im.index(IDim))
-    actual = fasfop.FuseAsFieldOp.apply(
-        testee, uids=uids, offset_provider_type={}, allow_undeclared_symbols=True
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected

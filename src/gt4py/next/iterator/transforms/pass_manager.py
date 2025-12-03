@@ -79,7 +79,7 @@ def apply_common_transforms(
         ir, uids=uids, offset_provider_type=offset_provider_type
     )  # domain inference does not support dead-code
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
-        ir, uids=uids
+        ir, offset_provider_type=offset_provider_type, uids=uids
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
@@ -183,7 +183,7 @@ def apply_fieldview_transforms(
         ir, offset_provider_type=offset_provider_type, uids=uids
     )
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
-        ir, uids=uids
+        ir, offset_provider_type=offset_provider_type, uids=uids
     )  # domain inference does not support dynamic offsets yet
 
     ir = infer_domain_ops.InferDomainOps.apply(ir)
