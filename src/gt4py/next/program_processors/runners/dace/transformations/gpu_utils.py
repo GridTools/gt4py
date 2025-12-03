@@ -671,6 +671,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             return False
         if self.map_entry.map.gpu_block_size is not None:
             return False
+        if self.map_entry.map.gpu_maxnreg > 0:
+            return False
         return True
 
     def apply(
