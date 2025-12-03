@@ -1,4 +1,7 @@
 #! /usr/bin/env -S uv run -q --script --python 3.11
+#   The explicit '--python 3.11' is only needed due to
+#   the existance of the .python-versions file, which overrides
+#   the PEP 723 'requires-python' metadata.
 #
 # GT4Py - GridTools Framework
 #
