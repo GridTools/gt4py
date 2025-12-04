@@ -14,6 +14,7 @@ import time
 import contextlib
 
 from gt4py import next as gtx
+from gt4py._core import definitions as core_defs
 from gt4py.next import errors, config
 from gt4py.next.otf import compiled_program
 from gt4py.next.ffront.decorator import Program
@@ -120,6 +121,7 @@ def test_compile_kwargs(cartesian_case, compile_testee):
     assert np.allclose(kwargs["out"].ndarray, a.ndarray + b.ndarray)
 
 
+@pytest.mark.uses_scan
 def test_compile_scan(cartesian_case, compile_testee_scan):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
@@ -355,6 +357,13 @@ def compile_variants_testee_not_compiled(
 
 @pytest.fixture
 def compile_variants_testee(cartesian_case, compile_variants_testee_not_compiled) -> Program:
+    if (
+        cartesian_case.backend.name.startswith("run_dace_gpu")
+        and core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
+    ):
+        # TODO(edopao): The reason for this segmentation fault is not yet understood,
+        #   but it only appears in this test case, with the dace backend and the ROCM device.
+        pytest.skip("segmentation fault in loading compiled SDFG from library file")
     return compile_variants_testee_not_compiled.compile(
         scalar_int=[1, 2],
         scalar_float=[3.0, 4.0],
@@ -765,6 +774,13 @@ def test_compile_variants_error_static_field(cartesian_case, compile_variants_te
 def compile_variants_testee_tuple(cartesian_case):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
+    elif (
+        cartesian_case.backend.name.startswith("run_dace_gpu")
+        and core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
+    ):
+        # TODO(edopao): The reason for this segmentation fault is not yet understood,
+        #   but it only appears in this test case, with the dace backend and the ROCM device.
+        pytest.skip("segmentation fault in loading compiled SDFG from library file")
 
     @gtx.field_operator
     def testee_op(

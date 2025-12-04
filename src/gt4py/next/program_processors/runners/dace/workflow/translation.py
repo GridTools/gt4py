@@ -52,20 +52,18 @@ def find_constant_symbols(
                     raise NotImplementedError(
                         f"Unsupported field with multiple horizontal dimensions '{p}'."
                     )
-                if isinstance(p.type.dtype, ts.ListType):
-                    assert p.type.dtype.offset_type is not None
-                    full_dims = common.order_dimensions([*p.type.dims, p.type.dtype.offset_type])
-                    dim_index = full_dims.index(dim)
-                else:
-                    dim_index = p.type.dims.index(dim)
-                stride_name = gtx_dace_utils.field_stride_symbol_name(p.id, dim_index)
-                constant_symbols[stride_name] = 1
+                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(str(p.id), dim)
+                constant_symbols[sdfg_stride_symbol.name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
-        for conn, desc in sdfg.arrays.items():
-            if gtx_dace_utils.is_connectivity_identifier(conn, offset_provider_type):
-                assert not desc.transient
-                stride_name = gtx_dace_utils.field_stride_symbol_name(conn, 0)
-                constant_symbols[stride_name] = 1
+        connectivity_types = gtx_dace_utils.filter_connectivity_types(offset_provider_type)
+        for offset, conn_type in connectivity_types.items():
+            if (conn_id := gtx_dace_utils.connectivity_identifier(offset)) in sdfg.arrays:
+                assert not sdfg.arrays[conn_id].transient
+                assert conn_type.source_dim.kind == common.DimensionKind.HORIZONTAL
+                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(
+                    conn_id, conn_type.source_dim, connectivity_types
+                )
+                constant_symbols[sdfg_stride_symbol.name] = 1
 
     if disable_field_origin_on_program_arguments:
         # collect symbols used as range start for all program arguments
@@ -85,11 +83,12 @@ def find_constant_symbols(
                 if len(psymbol.type.dims) == 0:
                     # zero-dimensional field
                     continue
-                dataname = str(psymbol.id)
                 # set all range start symbols to constant value 0
-                constant_symbols |= {
-                    gtx_dace_utils.range_start_symbol(dataname, dim): 0 for dim in psymbol.type.dims
-                }
+                sdfg_origin_symbols = [
+                    gtx_dace_utils.range_start_symbol(str(psymbol.id), dim)
+                    for dim in psymbol.type.dims
+                ]
+                constant_symbols |= {sdfg_symbol.name: 0 for sdfg_symbol in sdfg_origin_symbols}
 
     return constant_symbols
 
@@ -168,10 +167,10 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     time, it does not include the overhead of calling the SDFG from Python.
 
     The execution time is measured in seconds and represented as a 'float64' value.
-    It is returned from the SDFG as a one-element array in the '__return' data node.
+    It is written to the global array 'SDFG_ARG_METRIC_COMPUTE_TIME'.
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
-    start_time, _ = sdfg.add_scalar("gt_start_time", dace.float64, transient=True)
+    start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
 
     #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
@@ -210,10 +209,10 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         inputs={},
         outputs={"time"},
         code="""\
-time = static_cast<double>(
-    std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
-) / 1e9;
+auto now = std::chrono::high_resolution_clock::now();
+time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()
+    ).count();
         """,
         language=dace.dtypes.Language.CPP,
     )
@@ -243,11 +242,11 @@ time = static_cast<double>(
         outputs={"duration"},
         code=sync_code
         + """
-double run_cpp_end_time = static_cast<double>(
-    std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
-) / 1e9;
-duration = run_cpp_end_time - run_cpp_start_time;
+auto now = std::chrono::high_resolution_clock::now();
+auto run_cpp_end_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()
+    ).count();
+duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         """,
         language=dace.dtypes.Language.CPP,
         side_effects=has_side_effects,
@@ -278,6 +277,11 @@ duration = run_cpp_end_time - run_cpp_start_time;
                 node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
     # Check SDFG validity after applying the above changes.
+    # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
+    #  the wrapper provided by `DataflowBuilder`, that modifies the tasklet connectors
+    #  to avoid name conflicts with program symbols. However, this method is not
+    #  available here, so we have to call the underlying DaCe function directly.
+    #  We now run `validate()` to make sure that no name conflict was introduced.
     sdfg.validate()
 
 

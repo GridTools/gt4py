@@ -11,7 +11,7 @@ dace-cartesian = [
   'dace>=1.0.2,<2'  # renfined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace==2025.10.23'  # refined in [tool.uv.sources]
+  'dace==2025.11.26'  # refined in [tool.uv.sources]
 ]
 dev = [
   {include-group = 'build'},
@@ -42,7 +42,7 @@ lint = [
   'tach>=0.23.0',
   'validate-pyproject-schema-store[all]>=2025.06.13'
 ]
-scripts = ["pyyaml>=6.0.1", "typer>=0.12.3"]
+scripts = ["pyyaml>=6.0.1", "typer>=0.12.3", "packaging"]
 test = [
   'coverage[toml]>=7.6.1',
   'hypothesis>=6.0.0',
@@ -79,6 +79,7 @@ classifiers = [
   'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: 3.12',
   'Programming Language :: Python :: 3.13',
+  'Programming Language :: Python :: 3.14',
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
@@ -86,7 +87,7 @@ classifiers = [
 ]
 dependencies = [
   'attrs>=21.3',
-  'black>=24.10',
+  'black>=25.11',
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
@@ -128,7 +129,7 @@ license = 'BSD-3-Clause'
 license-files = ['LICENSE']
 name = 'gt4py'
 readme = 'README.md'
-requires-python = '>=3.10, <3.14'
+requires-python = '>=3.10, <3.15'
 
 [project.optional-dependencies]
 cartesian = ['gt4py[jax,standard,testing]']
@@ -140,7 +141,12 @@ next = ['gt4py[jax,standard,testing]']
 rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
 rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
 rocm6_0 = ['cupy>=13.4.1']
-standard = ['clang-format>=18.1', 'scipy>=1.14.1']
+standard = [
+  'clang-format>=18.1',
+  # TODO(edopao): we keep 'scipy>=1.14.1' only because of wheels compatibility with python 3.10
+  'scipy>=1.14.1 ; python_version < "3.11"',
+  'scipy>=1.16.1 ; python_version >= "3.11"'
+]
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
 [project.urls]
@@ -239,11 +245,6 @@ warn_unused_ignores = false
 disallow_incomplete_defs = false
 disallow_untyped_defs = false
 module = 'gt4py.next.iterator.*'
-
-[[tool.mypy.overrides]]
-disallow_incomplete_defs = false
-disallow_untyped_defs = false
-module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
@@ -453,12 +454,12 @@ url = 'https://test.pypi.org/simple'
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-roundtrip", group = "dace-cartesian"},
-  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_10_23", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_11_26", group = "dace-next"}
 ]
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "0.0.0+missing.version.info"
+default-version = "1.1.1+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty

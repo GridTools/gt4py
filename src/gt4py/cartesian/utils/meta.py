@@ -26,10 +26,12 @@ def get_closure(func, *, include_globals=True, included_nonlocals=True, include_
         closure.update(closure_vars.globals)
     else:
         unbound |= set(closure_vars.globals.keys())
+
     if included_nonlocals:
         closure.update(closure_vars.nonlocals)
     else:
         unbound |= set(closure_vars.nonlocals.keys())
+
     if include_builtins:
         closure.update(closure_vars.builtins)
     else:
@@ -287,10 +289,10 @@ class ASTEvaluator(ASTPass):
         return self.context[node.id]
 
     def visit_Num(self, node):
-        return node.n
+        return node.value
 
     def visit_Constant(self, node):
-        return node.n
+        return node.value
 
     def visit_NameConstant(self, node):
         return node.value

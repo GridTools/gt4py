@@ -7,12 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import inspect
+import functools
 import textwrap
 import types
 from typing import Any, Callable, Dict, Optional, Type
 
 import numpy as np
 import pytest
+import dataclasses
 
 import gt4py.cartesian.definitions as gt_definitions
 from gt4py.cartesian import gtscript
@@ -36,6 +38,10 @@ from gt4py.cartesian.gtscript import (
     isfinite,
     region,
     sin,
+    float32,
+    float64,
+    int32,
+    int64,
 )
 
 
@@ -86,8 +92,27 @@ def parse_definition(
 
 GLOBAL_BOOL_CONSTANT = True
 GLOBAL_CONSTANT = 1.0
+GLOBAL_CONSTANT_I32 = np.int32(1)
+GLOBAL_CONSTANT_I64 = np.int64(1)
+GLOBAL_CONSTANT_F32 = np.float32(1.0)
+GLOBAL_CONSTANT_F64 = np.float64(1.0)
 GLOBAL_NESTED_CONSTANTS = types.SimpleNamespace(A=100, B=200)
 GLOBAL_VERY_NESTED_CONSTANTS = types.SimpleNamespace(nested=types.SimpleNamespace(A=1000, B=2000))
+
+
+class GlobalConstants:
+    i32 = np.int32(1)
+    i64 = np.int64(1)
+    f32 = np.float32(1.0)
+    f64 = np.float64(1.0)
+
+
+@dataclasses.dataclass
+class GlobalConstantsDataclass:
+    i32: np.int32 = np.int32(1)
+    i64: np.int64 = np.int64(1)
+    f32: np.float32 = np.float32(1.0)
+    f64: np.float64 = np.float64(1.0)
 
 
 @gtscript.function
@@ -113,6 +138,50 @@ class TestInlinedExternals:
         parse_definition(
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
+
+    def test_typed_globals(self):
+        def my_stencil(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                i32 = GLOBAL_CONSTANT_I32
+                i64 = GLOBAL_CONSTANT_I64
+                f32 = GLOBAL_CONSTANT_F32
+                f64 = GLOBAL_CONSTANT_F64
+                c_i32 = GlobalConstants.i32
+                c_i64 = GlobalConstants.i64
+                c_f32 = GlobalConstants.f32
+                c_f64 = GlobalConstants.f64
+                dc_i32 = GlobalConstantsDataclass.i32
+                dc_i64 = GlobalConstantsDataclass.i64
+                dc_f32 = GlobalConstantsDataclass.f32
+                dc_f64 = GlobalConstantsDataclass.f64
+                field = i32 + c_i32 + dc_i32
+                field = i64 + c_i64 + dc_i64
+                field = f32 + c_f32 + dc_f32
+                field = f64 + c_f64 + dc_f64
+
+        parsed = parse_definition(
+            my_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_float_precision=32,
+            literal_int_precision=32,
+        )
+        # Assert we keep the precision
+        for i in range(3):
+            assert (
+                parsed.computations[0].body.stmts[1 + 8 * i].value.data_type == nodes.DataType.INT32
+            )
+            assert (
+                parsed.computations[0].body.stmts[3 + 8 * i].value.data_type == nodes.DataType.INT64
+            )
+            assert (
+                parsed.computations[0].body.stmts[5 + 8 * i].value.data_type
+                == nodes.DataType.FLOAT32
+            )
+            assert (
+                parsed.computations[0].body.stmts[7 + 8 * i].value.data_type
+                == nodes.DataType.FLOAT64
+            )
 
     def test_missing(self):
         def definition_func(inout_field: gtscript.Field[float]):
@@ -1355,8 +1424,13 @@ class TestDTypes:
         list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])),
     )
     def test_invalid_inlined_dtypes(self, id_case, test_dtype):
+        parse_dec = functools.partial(
+            parse_definition, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
         with pytest.raises(ValueError, match=r".*data type descriptor.*"):
 
+            @parse_dec
             def definition_func(
                 in_field: gtscript.Field[test_dtype],
                 out_field: gtscript.Field[test_dtype],
@@ -1411,13 +1485,6 @@ class TestBuiltinDTypes:
 
 
 class TestAssignmentSyntax:
-    def test_ellipsis(self):
-        def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
-            with computation(PARALLEL), interval(...):
-                out_field[...] = in_field
-
-        parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
     def test_offset(self):
         def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
@@ -1961,10 +2028,24 @@ class TestTemporaryTypes:
                 temporary: float = 12
                 field[0, 0, 0] = temporary
 
+        def temporary_float32_64_stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                temporary32: float32 = 12.12
+                temporary64: float64 = 34.34
+                field[0, 0, 0] = temporary32 + temporary64
+
+        def temporary_int32_64_stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                temporary32: int32 = 12
+                temporary64: int64 = 34
+                field[0, 0, 0] = temporary32 + temporary64
+
         self.int_stencil = temporary_int_stencil
         self.float_stencil = temporary_float_stencil
+        self.float_explicit_stencil = temporary_float32_64_stencil
+        self.int_explicit_stencil = temporary_int32_64_stencil
 
-    def test_explicit_64_int_temp_defn(self):
+    def test_default_to_64_int_temp_defn(self):
         def_ir = parse_definition(
             self.int_stencil,
             name=inspect.stack()[0][3],
@@ -1975,7 +2056,7 @@ class TestTemporaryTypes:
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.INT64
 
-    def test_explicit_32_int_temp_defn(self):
+    def test_default_to_32_int_temp_defn(self):
         def_ir = parse_definition(
             self.int_stencil,
             name=inspect.stack()[0][3],
@@ -1986,7 +2067,7 @@ class TestTemporaryTypes:
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.INT32
 
-    def test_explicit_64_float_temp_defn(self):
+    def test_default_to_64_float_temp_defn(self):
         def_ir = parse_definition(
             self.float_stencil,
             name=inspect.stack()[0][3],
@@ -1997,7 +2078,7 @@ class TestTemporaryTypes:
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
         assert field_declaration.data_type == nodes.DataType.FLOAT64
 
-    def test_explicit_32_float_temp_defn(self):
+    def test_default_to_32_float_temp_defn(self):
         def_ir = parse_definition(
             self.float_stencil,
             name=inspect.stack()[0][3],
@@ -2005,8 +2086,37 @@ class TestTemporaryTypes:
             literal_float_precision=32,
         )
 
-        field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
-        assert field_declaration.data_type == nodes.DataType.FLOAT32
+    def test_explicit_float_precision_temp_defn(self):
+        def_ir = parse_definition(
+            self.float_explicit_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        field_decls = [
+            field_decl
+            for field_decl in def_ir.computations[0].body.stmts
+            if isinstance(field_decl, nodes.FieldDecl)
+        ]
+
+        assert field_decls[0].data_type == nodes.DataType.FLOAT32
+        assert field_decls[1].data_type == nodes.DataType.FLOAT64
+
+    def test_explicit_int_precision_temp_defn(self):
+        def_ir = parse_definition(
+            self.int_explicit_stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        field_decls = [
+            field_decl
+            for field_decl in def_ir.computations[0].body.stmts
+            if isinstance(field_decl, nodes.FieldDecl)
+        ]
+
+        assert field_decls[0].data_type == nodes.DataType.INT32
+        assert field_decls[1].data_type == nodes.DataType.INT64
 
 
 class TestNumpyTypedConstants:

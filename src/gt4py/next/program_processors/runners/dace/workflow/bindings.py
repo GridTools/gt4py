@@ -13,21 +13,15 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
-from gt4py.next.iterator import builtins as itir_builtins
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 from gt4py.next.type_system import type_specifications as ts
 
 
-FIELD_SYMBOL_GT_TYPE: Final[ts.ScalarType] = ts.ScalarType(
-    kind=getattr(ts.ScalarKind, itir_builtins.INTEGER_INDEX_BUILTIN.upper())
-)
-
 _cb_args: Final[str] = "args"
 _cb_device: Final[str] = "device"
-_cb_get_stride: Final[str] = "_get_stride"
 _cb_sdfg_argtypes: Final[str] = "sdfg_argtypes"
-_cb_last_call_args: Final[str] = "last_call_args"
+_cb_sdfg_call_args: Final[str] = "sdfg_call_args"
 
 
 def _update_sdfg_scalar_arg(
@@ -43,8 +37,8 @@ def _update_sdfg_scalar_arg(
     assert isinstance(sdfg_arg_desc, dace.data.Scalar)
     actype = sdfg_arg_desc.dtype.as_ctypes()
     actype_call = f"{actype.__module__}.{actype.__name__}"
-    code.append(f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes._SimpleCData)")
-    code.append(f"{_cb_last_call_args}[{sdfg_arg_index}] = {actype_call}({call_arg})")
+    code.append(f"assert isinstance({_cb_sdfg_call_args}[{sdfg_arg_index}], ctypes._SimpleCData)")
+    code.append(f"{_cb_sdfg_call_args}[{sdfg_arg_index}] = {actype_call}({call_arg})")
 
 
 def _unpack_args(code: codegen.TextBlock, num_args: int, arg_name: str) -> list[str]:
@@ -126,10 +120,12 @@ def _parse_gt_param(
                 assert isinstance(sdfg_arg_desc, dace.data.Array)
                 code.append(f"assert field_utils.verify_device_field_type({arg}, {_cb_device})")
                 code.append(
-                    f"assert isinstance({_cb_last_call_args}[{sdfg_arg_index}], ctypes.c_void_p)"
+                    f"assert isinstance({_cb_sdfg_call_args}[{sdfg_arg_index}], ctypes.c_void_p)"
                 )
+                code.append(f"{arg}_buffer_info = {arg}.__gt_buffer_info__")
+
                 code.append(
-                    f"{_cb_last_call_args}[{sdfg_arg_index}].value = {arg}._data_buffer_ptr_"
+                    f"{_cb_sdfg_call_args}[{sdfg_arg_index}].value = {arg}_buffer_info.data_ptr"
                 )
                 for i, (dim, array_size) in enumerate(
                     zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
@@ -137,7 +133,7 @@ def _parse_gt_param(
                     if isinstance(array_size, int) or str(array_size).isdigit():
                         # The array shape in this dimension is set at compile-time.
                         code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.ndarray.shape[{i}]"
+                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}_buffer_info.shape[{i}]"
                         )
                     else:
                         # The array shape is defined as a sequence of expressions
@@ -146,29 +142,29 @@ def _parse_gt_param(
                         arg_range = f"{arg}.domain.ranges[{i}]"
                         rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
                         rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
-                        for suffix, symbol_name in [("start", rstart), ("stop", rstop)]:
+                        for suffix, sdfg_range_symbol in [("start", rstart), ("stop", rstop)]:
                             _parse_gt_param(
-                                param_name=symbol_name,
-                                param_type=FIELD_SYMBOL_GT_TYPE,
+                                param_name=sdfg_range_symbol.name,
+                                param_type=gtx_dace_utils.as_itir_type(sdfg_range_symbol.dtype),
                                 arg=f"{arg_range}.{suffix}",
                                 code=code,
                                 sdfg_arglist=sdfg_arglist,
                             )
-                for i, array_stride in enumerate(sdfg_arg_desc.strides):
-                    arg_stride = f"{_cb_get_stride}({arg}.ndarray, {i})"
+                for i, (dim, array_stride) in enumerate(
+                    zip(param_type.dims, sdfg_arg_desc.strides, strict=True)
+                ):
+                    arg_stride = f"{arg}_buffer_info.elem_strides[{i}]"
                     if isinstance(array_stride, int) or str(array_stride).isdigit():
                         # The array stride is set to constant value in this dimension.
                         code.append(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {arg_stride}"
                         )
                     else:
-                        symbol_name = gtx_dace_utils.field_stride_symbol_name(param_name, i)
-                        assert str(array_stride) == symbol_name
-                        # The strides of a global array are defined by a sequence
-                        # of SDFG symbols.
+                        # The strides of a global array are defined by a sequence of SDFG symbols.
+                        assert array_stride == gtx_dace_utils.field_stride_symbol(param_name, dim)
                         _parse_gt_param(
-                            param_name=symbol_name,
-                            param_type=FIELD_SYMBOL_GT_TYPE,
+                            param_name=array_stride.name,
+                            param_type=gtx_dace_utils.as_itir_type(array_stride.dtype),
                             arg=arg_stride,
                             code=code,
                             sdfg_arglist=sdfg_arglist,
@@ -215,19 +211,13 @@ def _create_sdfg_bindings(
     code.append("import ctypes")
     code.append("from gt4py.next import common as gtx_common, field_utils")
     code.empty_line()
-    code.append(f"""\
-def {_cb_get_stride}(ndarray, dim_index):
-    assert divmod(ndarray.strides[dim_index], ndarray.itemsize)[1] == 0
-    return ndarray.strides[dim_index] // ndarray.itemsize
-""")
-    code.empty_line()
     code.append(
         "def {funname}({arg0}, {arg1}, {arg2}, {arg3}):".format(
             funname=bind_func_name,
             arg0=_cb_device,
             arg1=_cb_sdfg_argtypes,
             arg2=_cb_args,
-            arg3=_cb_last_call_args,
+            arg3=_cb_sdfg_call_args,
         )
     )
 

@@ -45,7 +45,7 @@ from gt4py.eve.extended_typing import (
     overload,
     runtime_checkable,
 )
-from gt4py.next import common, field_utils
+from gt4py.next import common, field_utils, utils
 from gt4py.next.embedded import (
     context as embedded_context,
     exceptions as embedded_exceptions,
@@ -1416,8 +1416,10 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
 
 
 @builtins.list_get.register(EMBEDDED)
-def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
-    return lst[i]
+def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT] | Undefined:
+    if i < len(lst.values):
+        return lst[i]
+    return _UNDEFINED  # might happen for lists originating from neighbors with skip values
 
 
 def _get_offset(*lists: _List | _ConstList) -> Optional[runtime.Offset]:
@@ -1629,8 +1631,13 @@ def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProvider
 
 
 @runtime.set_at.register(EMBEDDED)
-def set_at(expr: common.Field, domain: common.DomainLike, target: common.MutableField) -> None:
-    operators._tuple_assign_field(target, expr, common.domain(domain))
+def set_at(
+    expr: common.Field,
+    domain_like: xtyping.MaybeNestedInTuple[common.DomainLike],
+    target: common.MutableField,
+) -> None:
+    domain = utils.tree_map(common.domain)(domain_like)
+    operators._tuple_assign_field(target, expr, domain)
 
 
 @runtime.get_domain_range.register(EMBEDDED)

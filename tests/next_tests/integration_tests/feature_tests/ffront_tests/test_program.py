@@ -24,7 +24,7 @@ from next_tests.integration_tests.cases import (
     cartesian_case,
     exec_alloc_descriptor,
 )
-from next_tests.past_common_fixtures import (
+from next_tests.fixtures.past_common import (
     copy_program_def,
     copy_restrict_program_def,
     double_copy_program_def,
@@ -180,7 +180,7 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     assert np.allclose(
         (a[1:].asnumpy(), b[1:].asnumpy()), (out_a[1:].asnumpy(), out_b[1:].asnumpy())
     )
-    assert out_a[0] == 0 and out_b[0] == 0
+    assert out_a[0].as_scalar() == 0 and out_b[0].as_scalar() == 0
 
 
 def test_tuple_program_return_constructed_inside_nested(cartesian_case):

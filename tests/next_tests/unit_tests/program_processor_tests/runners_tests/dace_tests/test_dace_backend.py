@@ -9,6 +9,7 @@
 """Test the bindings stage of the dace backend workflow."""
 
 import pytest
+import typing
 import unittest.mock as mock
 
 dace = pytest.importorskip("dace")
@@ -46,8 +47,8 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     def testee(a: cases.IField, b: cases.IField, out: cases.IField):
         testee_op(a, b, out=out)
 
-    mock_top_level_dataflow_hook1 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookFun)
-    mock_top_level_dataflow_hook2 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookFun)
+    mock_top_level_dataflow_hook1 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookStage)
+    mock_top_level_dataflow_hook2 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookStage)
 
     if not auto_optimize:
         optimization_args = {}
@@ -116,9 +117,9 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
                 sdfg,
                 gpu=on_gpu,
                 constant_symbols={
-                    "__a_stride_0": 1,
-                    "__b_stride_0": 1,
-                    "__out_stride_0": 1,
+                    "__a_IDim_stride": 1,
+                    "__b_IDim_stride": 1,
+                    "__out_IDim_stride": 1,
                 },
                 make_persistent=optimization_args["make_persistent"],
                 gpu_block_size=optimization_args["gpu_block_size"],
