@@ -39,7 +39,6 @@ from next_tests.integration_tests.cases import (
     IDim,
     JDim,
     KDim,
-    Koff,
     V2EDim,
     Vertex,
     cartesian_case,
@@ -645,6 +644,9 @@ def test_type_constructor_alias(cartesian_case):
 
 @pytest.mark.uses_dynamic_offsets
 def test_offset_field(cartesian_case):
+    Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
+    Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
+
     ref = np.full(
         (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
     )
