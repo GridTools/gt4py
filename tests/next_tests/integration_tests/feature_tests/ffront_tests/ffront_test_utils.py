@@ -136,6 +136,8 @@ IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
+# Note: the offsets should only be used for cases where `as_offset` is used, in all other
+# cases the `IDim + 1` syntax should be used.
 Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
 Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
@@ -182,7 +184,6 @@ def simple_cartesian_grid(
         "Ioff": IDim,
         "Joff": JDim,
         "Koff": KDim,
-        "KHalfoff": KHalfDim,
     }
 
     return types.SimpleNamespace(

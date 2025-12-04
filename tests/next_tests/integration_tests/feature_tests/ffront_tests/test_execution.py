@@ -37,7 +37,6 @@ from next_tests.integration_tests.cases import (
     E2VDim,
     Edge,
     IDim,
-    Ioff,
     JDim,
     KDim,
     Koff,
@@ -119,7 +118,7 @@ def test_nan(cartesian_case):
 def test_cartesian_shift(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
-        return a(Ioff[1])
+        return a(IDim + 1)
 
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
@@ -205,8 +204,8 @@ def test_fold_shifts(cartesian_case):
 
     @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
-        tmp = a + b(Ioff[1])
-        return tmp(Ioff[1])
+        tmp = a + b(IDim + 1)
+        return tmp(IDim + 1)
 
     a = cases.allocate(cartesian_case, testee, "a").extend({cases.IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, testee, "b").extend({cases.IDim: (0, 2)})()
@@ -355,7 +354,7 @@ def test_scalar_arg_with_field(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
         tmp = b * a
-        return tmp(Ioff[1])
+        return tmp(IDim + 1)
 
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, testee, "b")()
@@ -452,7 +451,7 @@ def test_scalar_scan_vertical_offset(cartesian_case):
 
     @gtx.field_operator
     def testee(inp: gtx.Field[[KDim], float]) -> gtx.Field[[KDim], float]:
-        return testee_scan(inp(Koff[1]))
+        return testee_scan(inp(KDim + 1))
 
     inp = cases.allocate(
         cartesian_case,
@@ -656,8 +655,8 @@ def test_offset_field(cartesian_case):
         # note: this leads to an access to offset_field in
         # IDim: (0, out.size[I]), KDim: (0, out.size[K]+1)
         a_i_k = a_i(as_offset(Koff, offset_field))
-        b_i = a(Ioff[1])
-        b_i_k = b_i(Koff[1])
+        b_i = a(IDim + 1)
+        b_i_k = b_i(KDim + 1)
         return a_i_k == b_i_k
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
