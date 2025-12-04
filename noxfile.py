@@ -10,7 +10,7 @@
 #
 # Note:
 #   The explicit '--python 3.11' in the shebang is only needed due
-#   to the existance of the .python-versions file, which overrides
+#   to the existence of the .python-versions file, which overrides
 #   the PEP 723 'requires-python' metadata.
 # /// script
 # requires-python = ">=3.11"
@@ -132,10 +132,10 @@ def install_session_venv(
         "uv",
         "sync",
         "--python",
-        # uv does not yet combine explicit Python requests with the
-        # `requires-python` range in `pyproject.toml`, so we do it here.
+        # uv does not yet combine explicit python version requests with the
+        # `requires-python` range in `pyproject.toml`, so we do it manually.
         # See: https://github.com/astral-sh/uv/issues/16654
-        f"{REQUIRES_PYTHON}, =={session.python!s}",
+        f"{REQUIRES_PYTHON}, ~={session.python!s}.*",
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
