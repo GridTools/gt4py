@@ -9,9 +9,14 @@
 from typing import Optional
 import pytest
 import functools
+from gt4py.next import utils
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.transforms import global_tmps, infer_domain, collapse_tuple
+from gt4py.next.iterator.transforms import (
+    global_tmps,
+    infer_domain,
+    collapse_tuple as ct,
+)
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.ir_utils import (
@@ -53,7 +58,7 @@ def program_factory(
     )
 
 
-def test_trivial():
+def test_trivial(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -71,22 +76,22 @@ def test_trivial():
 
     expected = program_factory(
         params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
-        declarations=[itir.Temporary(id="__tmp_1", domain=domain, dtype=float_type)],
+        declarations=[itir.Temporary(id="__tmp_0", domain=domain, dtype=float_type)],
         body=[
             itir.SetAt(
-                target=im.ref("__tmp_1"), expr=im.as_fieldop("deref", domain)("inp"), domain=domain
+                target=im.ref("__tmp_0"), expr=im.as_fieldop("deref", domain)("inp"), domain=domain
             ),
             itir.SetAt(
-                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_1"), domain=domain
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_0"), domain=domain
             ),
         ],
     )
 
-    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
-def test_trivial_let():
+def test_trivial_let(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -106,18 +111,18 @@ def test_trivial_let():
 
     expected = program_factory(
         params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
-        declarations=[itir.Temporary(id="__tmp_1", domain=domain, dtype=float_type)],
+        declarations=[itir.Temporary(id="__tmp_0", domain=domain, dtype=float_type)],
         body=[
             itir.SetAt(
-                target=im.ref("__tmp_1"), expr=im.as_fieldop("deref", domain)("inp"), domain=domain
+                target=im.ref("__tmp_0"), expr=im.as_fieldop("deref", domain)("inp"), domain=domain
             ),
             itir.SetAt(
-                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_1"), domain=domain
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_0"), domain=domain
             ),
         ],
     )
 
-    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
@@ -151,7 +156,7 @@ def test_trivial_let():
         ),
     ],
 )
-def test_dont_extract_projector(projector_maker, inp_type, out_type):
+def test_dont_extract_projector(projector_maker, inp_type, out_type, uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     # this is a a scan, because we assert that we only extract projectors from scans
     scan = im.as_fieldop(
@@ -172,11 +177,11 @@ def test_dont_extract_projector(projector_maker, inp_type, out_type):
         ],
     )
 
-    actual = global_tmps.create_global_tmps(testee, offset_provider={})
+    actual = global_tmps.create_global_tmps(testee, offset_provider={}, uids=uids)
     assert actual == testee  # did not extract from projector
 
 
-def test_top_level_if():
+def test_top_level_if(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -228,11 +233,11 @@ def test_top_level_if():
         ],
     )
 
-    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
-def test_nested_if():
+def test_nested_if(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}
     testee = program_factory(
@@ -264,36 +269,36 @@ def test_nested_if():
             im.sym("inp2", i_field_type),
             im.sym("out", i_field_type),
         ],
-        declarations=[itir.Temporary(id="__tmp_1", domain=domain, dtype=float_type)],
+        declarations=[itir.Temporary(id="__tmp_0", domain=domain, dtype=float_type)],
         body=[
             itir.IfStmt(
                 cond=im.literal_from_value(True),
                 true_branch=[
                     itir.SetAt(
-                        target=im.ref("__tmp_1"),
+                        target=im.ref("__tmp_0"),
                         expr=im.as_fieldop("deref", domain)("inp1"),
                         domain=domain,
                     )
                 ],
                 false_branch=[
                     itir.SetAt(
-                        target=im.ref("__tmp_1"),
+                        target=im.ref("__tmp_0"),
                         expr=im.as_fieldop("deref", domain)("inp2"),
                         domain=domain,
                     )
                 ],
             ),
             itir.SetAt(
-                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_1"), domain=domain
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_0"), domain=domain
             ),
         ],
     )
 
-    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
-def test_tuple_different_domain():
+def test_tuple_different_domain(uids: utils.IDGeneratorPool):
     domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
     offset_provider = {"I": IDim}
@@ -329,32 +334,32 @@ def test_tuple_different_domain():
     expected = program_factory(
         params=params,
         declarations=[
-            itir.Temporary(id="__tmp_1", domain=domain01, dtype=float_type),
-            itir.Temporary(id="__tmp_2", domain=domain12, dtype=float_type),
+            itir.Temporary(id="__tmp_0", domain=domain01, dtype=float_type),
+            itir.Temporary(id="__tmp_1", domain=domain12, dtype=float_type),
         ],
         body=[
             itir.IfStmt(
                 cond=im.ref("cond"),
                 true_branch=[
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_1")),
+                        target=im.make_tuple(im.ref("__tmp_0")),
                         expr=im.make_tuple(im.ref("inp1")),
                         domain=domain01,
                     ),
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_2")),
+                        target=im.make_tuple(im.ref("__tmp_1")),
                         expr=im.make_tuple(im.ref("inp2")),
                         domain=domain12,
                     ),
                 ],
                 false_branch=[
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_1")),
+                        target=im.make_tuple(im.ref("__tmp_0")),
                         expr=im.make_tuple(im.ref("inp2")),
                         domain=domain01,
                     ),
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_2")),
+                        target=im.make_tuple(im.ref("__tmp_1")),
                         expr=im.make_tuple(im.ref("inp1")),
                         domain=domain12,
                     ),
@@ -363,20 +368,20 @@ def test_tuple_different_domain():
             itir.SetAt(
                 target=im.ref("out"),
                 expr=add_shifted(domain01)(
+                    im.ref("__tmp_0"),
                     im.ref("__tmp_1"),
-                    im.ref("__tmp_2"),
                 ),
                 domain=domain01,
             ),
         ],
     )
 
-    actual = global_tmps.create_global_tmps(testee, offset_provider)
-    actual = collapse_tuple.CollapseTuple.apply(actual)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    actual = ct.CollapseTuple.apply(actual, uids=uids)
     assert actual == expected
 
 
-def test_tuple_different_domain_nested():
+def test_tuple_different_domain_nested(uids: utils.IDGeneratorPool):
     domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
     domainm10 = im.domain("cartesian_domain", {IDim: (-1, 0)})
@@ -431,43 +436,43 @@ def test_tuple_different_domain_nested():
     expected = program_factory(
         params=params,
         declarations=[
-            itir.Temporary(id="__tmp_1", domain=domain01, dtype=float_type),
-            itir.Temporary(id="__tmp_2", domain=domain12, dtype=float_type),
-            itir.Temporary(id="__tmp_3", domain=domainm10, dtype=float_type),
+            itir.Temporary(id="__tmp_0", domain=domain01, dtype=float_type),
+            itir.Temporary(id="__tmp_1", domain=domain12, dtype=float_type),
+            itir.Temporary(id="__tmp_2", domain=domainm10, dtype=float_type),
         ],
         body=[
             itir.IfStmt(
                 cond=im.ref("cond"),
                 true_branch=[
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_1")),
+                        target=im.make_tuple(im.ref("__tmp_0")),
                         expr=im.make_tuple(im.ref("inp1")),
                         domain=domain01,
                     ),
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_2")),
+                        target=im.make_tuple(im.ref("__tmp_1")),
                         expr=im.make_tuple(im.ref("inp2")),
                         domain=domain12,
                     ),
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_3")),
+                        target=im.make_tuple(im.ref("__tmp_2")),
                         expr=im.make_tuple(im.ref("inp3")),
                         domain=domainm10,
                     ),
                 ],
                 false_branch=[
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_1")),
+                        target=im.make_tuple(im.ref("__tmp_0")),
                         expr=im.make_tuple(im.ref("inp4")),
                         domain=domain01,
                     ),
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_2")),
+                        target=im.make_tuple(im.ref("__tmp_1")),
                         expr=im.make_tuple(im.ref("inp5")),
                         domain=domain12,
                     ),
                     itir.SetAt(
-                        target=im.make_tuple(im.ref("__tmp_3")),
+                        target=im.make_tuple(im.ref("__tmp_2")),
                         expr=im.make_tuple(im.ref("inp1")),
                         domain=domainm10,
                     ),
@@ -476,21 +481,21 @@ def test_tuple_different_domain_nested():
             itir.SetAt(
                 target=im.ref("out"),
                 expr=add_shifted(domain01)(
+                    im.ref("__tmp_0"),
                     im.ref("__tmp_1"),
                     im.ref("__tmp_2"),
-                    im.ref("__tmp_3"),
                 ),
                 domain=domain01,
             ),
         ],
     )
 
-    actual = global_tmps.create_global_tmps(testee, offset_provider)
-    actual = collapse_tuple.CollapseTuple.apply(actual)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    actual = ct.CollapseTuple.apply(actual, uids=uids)
     assert actual == expected
 
 
-def test_domain_preservation():
+def test_domain_preservation(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 2)})
     domain_tb = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain_fb = im.domain("cartesian_domain", {IDim: (1, 2)})
@@ -514,33 +519,33 @@ def test_domain_preservation():
     expected = program_factory(
         params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
         declarations=[
-            itir.Temporary(id="__tmp_1", domain=domain_tb, dtype=float_type),
-            itir.Temporary(id="__tmp_2", domain=domain_fb, dtype=float_type),
+            itir.Temporary(id="__tmp_0", domain=domain_tb, dtype=float_type),
+            itir.Temporary(id="__tmp_1", domain=domain_fb, dtype=float_type),
         ],
         body=[
             itir.SetAt(
-                target=im.ref("__tmp_1"),
+                target=im.ref("__tmp_0"),
                 expr=im.as_fieldop("deref", domain_tb)("inp"),
                 domain=domain_tb,
             ),
             itir.SetAt(
-                target=im.ref("__tmp_2"),
+                target=im.ref("__tmp_1"),
                 expr=im.as_fieldop("deref", domain_fb)("inp"),
                 domain=domain_fb,
             ),
             itir.SetAt(
                 target=im.ref("out"),
-                expr=im.op_as_fieldop("plus", domain)("__tmp_1", "__tmp_2"),
+                expr=im.op_as_fieldop("plus", domain)("__tmp_0", "__tmp_1"),
                 domain=domain,
             ),
         ],
     )
 
-    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
-def test_non_scan_projector():
+def test_non_scan_projector(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 2)})
     offset_provider = {}
     stmt = itir.SetAt(
@@ -561,5 +566,5 @@ def test_non_scan_projector():
     projector, expr = ir_utils_misc.extract_projector(stmt.expr)
     assert projector is not None
 
-    actual = global_tmps.create_global_tmps(testee, offset_provider)
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == testee

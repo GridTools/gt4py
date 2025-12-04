@@ -32,7 +32,7 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 TRACING = "tracing"
 
-_tmp_id_generator = eve_utils.UIDGenerator(prefix="tmp")
+_tmp_id_generator = eve_utils.SequentialIDGenerator(prefix="tmp")
 
 
 def monkeypatch_method(cls):
@@ -260,7 +260,7 @@ def temporary(
     domain: itir.Expr,
     dtype: Callable,  # the gt4py type builtin
 ) -> itir.SymRef:
-    id_ = _tmp_id_generator.sequential_id()
+    id_ = next(_tmp_id_generator)
     TracerContext.add_declaration(
         itir.Temporary(
             id=id_,
