@@ -67,7 +67,7 @@ jobs:
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
           UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
-        run: uv run --script noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
+        run: ./noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
       - name: Notify slack
         if: ${{ failure() && (github.event_name == 'schedule') }}
