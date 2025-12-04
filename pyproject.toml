@@ -8,7 +8,7 @@ requires = ['cython>=3.0.0', 'setuptools>=77.0.3', 'versioningit>=3.1.1', 'wheel
 [dependency-groups]
 build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=77.0.3', 'wheel>=0.33.6']
 dace-cartesian = [
-  'dace>=1.0.2,<2'  # renfined in [tool.uv.sources]
+  'dace>=1.0.2,<2'  # refined in [tool.uv.sources]
 ]
 dace-next = [
   'dace==2025.11.26'  # refined in [tool.uv.sources]
@@ -129,7 +129,11 @@ license = 'BSD-3-Clause'
 license-files = ['LICENSE']
 name = 'gt4py'
 readme = 'README.md'
-requires-python = '>=3.10, <3.15'
+# TODO(egparedes): remove the exclusions when possible
+# 3.13.10, 3.14.1 excluded due to bugs breaking dataclasses for Networkx
+# - https://github.com/networkx/networkx/issues/8362
+# - https://github.com/python/cpython/issues/142214
+requires-python = '>=3.10, <3.15, !=3.13.10, !=3.14.1'
 
 [project.optional-dependencies]
 cartesian = ['gt4py[jax,standard,testing]']
