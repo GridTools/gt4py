@@ -130,6 +130,10 @@ license-files = ['LICENSE']
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.10, <3.15, !=3.13.10, !=3.14.1'
+# Excluded python patch versions due to bugs:
+# - 3.13.10, 3.14.1: bugs breaking dataclasses for NetworkX
+#   + https://github.com/networkx/networkx/issues/8362
+#   + https://github.com/python/cpython/issues/142214
 
 [project.optional-dependencies]
 cartesian = ['gt4py[jax,standard,testing]']
