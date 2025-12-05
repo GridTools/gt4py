@@ -34,12 +34,12 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
-from gt4py.next.program_processors.runners.dace import (
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_python_codegen,
     gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
-    utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import (
     type_info as ti,
@@ -346,7 +346,7 @@ DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
 
 def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
     assert isinstance(node.type, ts.ScalarType)
-    dc_dtype = gtx_dace_utils.as_dace_type(node.type)
+    dc_dtype = gtx_dace_args.as_dace_type(node.type)
 
     assert isinstance(node.fun, gtir.FunCall)
     assert len(node.fun.args) == 2
@@ -530,7 +530,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         src_connector: str,
         use_array: bool = False,
     ) -> ValueExpr:
-        data_type = gtx_dace_utils.as_itir_type(dc_dtype)
+        data_type = gtx_dace_args.as_itir_type(dc_dtype)
         if use_array:
             # In some cases, such as result data with list-type annotation, we want
             # that output data is represented as an array (single-element 1D array)
@@ -1009,7 +1009,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # initially, the storage for the connectivty tables is created as transient;
         # when the tables are used, the storage is changed to non-transient,
         # as the corresponding arrays are supposed to be allocated by the SDFG caller
-        conn_data = gtx_dace_utils.connectivity_identifier(offset)
+        conn_data = gtx_dace_args.connectivity_identifier(offset)
         conn_desc = self.sdfg.arrays[conn_data]
         conn_desc.transient = False
 
@@ -1125,7 +1125,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             raise ValueError(f"Unexpected argument type {type(src_arg)} in 'list_get' expression.")
 
         assert isinstance(src_arg.gt_dtype.element_type, ts.ScalarType)
-        assert src_desc.dtype == gtx_dace_utils.as_dace_type(src_arg.gt_dtype.element_type)
+        assert src_desc.dtype == gtx_dace_args.as_dace_type(src_arg.gt_dtype.element_type)
         dst, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, src_desc.dtype)
         dst_node = self.state.add_access(dst)
 
@@ -1201,7 +1201,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(node.fun.args) == 1  # the operation to be mapped on the arguments
 
         assert isinstance(node.type.element_type, ts.ScalarType)
-        dc_dtype = gtx_dace_utils.as_dace_type(node.type.element_type)
+        dc_dtype = gtx_dace_args.as_dace_type(node.type.element_type)
 
         input_connectors = [f"__arg{i}" for i in range(len(node.args))]
         output_connector = "__out"
@@ -1274,7 +1274,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if conn_type.has_skip_values:
             # In case the `map_` input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
-            conn_data = gtx_dace_utils.connectivity_identifier(offset_type.value)
+            conn_data = gtx_dace_args.connectivity_identifier(offset_type.value)
             conn_desc = self.sdfg.arrays[conn_data]
             conn_desc.transient = False
 
@@ -1359,7 +1359,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             and input_expr.gt_dtype.offset_type is not None
         )
         offset_type = input_expr.gt_dtype.offset_type
-        connectivity = gtx_dace_utils.connectivity_identifier(offset_type.value)
+        connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
         connectivity_node = self.state.add_access(connectivity)
         connectivity_desc = connectivity_node.desc(self.sdfg)
         connectivity_desc.transient = False
@@ -1716,7 +1716,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             # initially, the storage for the connectivity tables is created as transient;
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
-            offset_table = gtx_dace_utils.connectivity_identifier(offset)
+            offset_table = gtx_dace_args.connectivity_identifier(offset)
             self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
 
@@ -1784,13 +1784,13 @@ class LambdaToDataflow(eve.NodeVisitor):
             # Therefore we handle `ListType` as a single-element array with shape (1,)
             # that will be accessed in a map expression on a local domain.
             assert isinstance(node.type.element_type, ts.ScalarType)
-            dc_dtype = gtx_dace_utils.as_dace_type(node.type.element_type)
+            dc_dtype = gtx_dace_args.as_dace_type(node.type.element_type)
             # In order to ease the lowring of the parent expression on local dimension,
             # we represent the scalar value as a single-element 1D array.
             use_array = True
         else:
             assert isinstance(node.type, ts.ScalarType)
-            dc_dtype = gtx_dace_utils.as_dace_type(node.type)
+            dc_dtype = gtx_dace_args.as_dace_type(node.type)
             use_array = False
 
         return self._construct_tasklet_result(
@@ -1895,7 +1895,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
-        dc_dtype = gtx_dace_utils.as_dace_type(node.type)
+        dc_dtype = gtx_dace_args.as_dace_type(node.type)
         return SymbolExpr(node.value, dc_dtype)
 
     def visit_SymRef(self, node: gtir.SymRef) -> MaybeNestedInTuple[IteratorExpr | DataExpr]:

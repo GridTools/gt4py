@@ -13,8 +13,8 @@ from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
+    sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
-    utils as gtx_dace_utils,
 )
 
 
@@ -533,7 +533,7 @@ def _gt_map_strides_into_nested_sdfg(
                 # Map a symbolic expression such as `value1 - value2` to a new stride symbol.
                 dim_istride = nsdfg_node.sdfg.add_symbol(
                     f"__{inner_data}_stride_{i}",
-                    gtx_dace_utils.FIELD_SYMBOL_DTYPE,
+                    gtx_dace_args.FIELD_SYMBOL_DTYPE,
                     find_new_name=True,
                 )
             new_strides[i] = dace.symbolic.pystr_to_symbolic(dim_istride)
