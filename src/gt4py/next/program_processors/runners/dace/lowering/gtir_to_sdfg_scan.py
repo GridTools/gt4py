@@ -362,7 +362,7 @@ def _lower_lambda_to_nested_sdfg(
     lambda_sdfg.using_explicit_control_flow = True
 
     # We use the entry state for initialization of the scan carry variable.
-    init_state = lambda_sdfg.add_state("init")
+    init_state = lambda_sdfg.add_state("init", is_start_block=True)
 
     # use the vertical dimension in the domain as scan dimension
     scan_domain = next(r for r in field_domain if sdfg_builder.is_column_axis(r.dim))

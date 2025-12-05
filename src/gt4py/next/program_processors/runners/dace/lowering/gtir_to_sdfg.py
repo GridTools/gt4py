@@ -208,11 +208,12 @@ class SubgraphContext:
                 )
             else:
                 flat_scope_symbols.append(im.sym(sym_name, sym_type))
-        scope_symbols = set(str(sym.id) for sym in flat_scope_symbols)
+        data_names = set(str(sym.id) for sym in flat_scope_symbols)
+        assert len(data_names) == len(flat_scope_symbols)
         isolated_nodes = [
             access_node
             for access_node in self.state.data_nodes()
-            if access_node.data in scope_symbols and self.state.degree(access_node) == 0
+            if access_node.data in data_names and self.state.degree(access_node) == 0
         ]
         self.state.remove_nodes_from(isolated_nodes)
 
@@ -384,7 +385,9 @@ class SDFGBuilder(DataflowBuilder, Protocol):
                 GTIR symbols defined in the parent scope.
 
         Returns:
-            The nested SDFG context.
+            - The new SDFG in which to lower a nested expression.
+            - The list of input parameters, which includes both the parameter list
+              of the given expression and symbols captured from the current context.
         """
         ...
 
@@ -1235,7 +1238,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             symbolic_inputs=set(symbolic_args.keys()),
             capture_scope_symbols=True,
         )
-        lambda_state = lambda_sdfg.add_state("lambda")
+        lambda_state = lambda_sdfg.add_state("lambda", is_start_block=True)
 
         with self.setup_ctx(lambda_sdfg, lambda_state, lambda_params) as lambda_ctx:
             lambda_result = self.visit(node.expr, ctx=lambda_ctx)
@@ -1264,55 +1267,55 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
                 ctx.state.add_edge(src_node, None, nsdfg_node, input_connector, memlet)
 
-            def construct_output_for_nested_sdfg(
-                inner_data: gtir_to_sdfg_types.FieldopData,
-            ) -> gtir_to_sdfg_types.FieldopData:
-                """
-                This function makes a data container that lives inside a nested SDFG, denoted by `inner_data`,
-                available in the parent SDFG.
-                In order to achieve this, the data container inside the nested SDFG is marked as non-transient
-                (in other words, externally allocated - a requirement of the SDFG IR) and a new data container
-                is created within the parent SDFG, with the same properties (shape, stride, etc.) of `inner_data`
-                but appropriatly remapped using the symbol mapping table.
-                For lambda arguments that are simply returned by the lambda, the `inner_data` was already mapped
-                to a parent SDFG data container, therefore it can be directly accessed in the parent SDFG.
-                The same happens to symbols available in the lambda context but not explicitly passed as lambda
-                arguments, that are simply returned by the lambda: it can be directly accessed in the parent SDFG.
-                """
-                if not inner_data.dc_node.desc(lambda_sdfg).transient:
-                    # This is inout data: some global associated to an input connector
-                    # is also a sink node of the lambda dataflow. This can happen, for
-                    # example, when the lambda constructs a tuple of some input fields.
-                    # We copy this data to a new node, which we use as output.
-                    nsdfg_node.remove_out_connector(inner_data.dc_node.data)
-                    inner_data = lambda_ctx.copy_data(self, inner_data, domain=None)
-                    nsdfg_node.add_out_connector(inner_data.dc_node.data)
-                elif lambda_ctx.state.degree(inner_data.dc_node) == 0:
-                    # Isolated access node will make validation fail.
-                    # Isolated access nodes can be found in the join-state of an if-expression.
-                    lambda_ctx.state.remove_node(inner_data.dc_node)
+        def construct_output_for_nested_sdfg(
+            inner_data: gtir_to_sdfg_types.FieldopData,
+        ) -> gtir_to_sdfg_types.FieldopData:
+            """
+            This function makes a data container that lives inside a nested SDFG, denoted by `inner_data`,
+            available in the parent SDFG.
+            In order to achieve this, the data container inside the nested SDFG is marked as non-transient
+            (in other words, externally allocated - a requirement of the SDFG IR) and a new data container
+            is created within the parent SDFG, with the same properties (shape, stride, etc.) of `inner_data`
+            but appropriatly remapped using the symbol mapping table.
+            For lambda arguments that are simply returned by the lambda, the `inner_data` was already mapped
+            to a parent SDFG data container, therefore it can be directly accessed in the parent SDFG.
+            The same happens to symbols available in the lambda context but not explicitly passed as lambda
+            arguments, that are simply returned by the lambda: it can be directly accessed in the parent SDFG.
+            """
+            if not inner_data.dc_node.desc(lambda_sdfg).transient:
+                # This is inout data: some global associated to an input connector
+                # is also a sink node of the lambda dataflow. This can happen, for
+                # example, when the lambda constructs a tuple of some input fields.
+                # We copy this data to a new node, which we use as output.
+                nsdfg_node.remove_out_connector(inner_data.dc_node.data)
+                inner_data = lambda_ctx.copy_data(self, inner_data, domain=None)
+                nsdfg_node.add_out_connector(inner_data.dc_node.data)
+            elif lambda_ctx.state.degree(inner_data.dc_node) == 0:
+                # Isolated access node will make validation fail.
+                # Isolated access nodes can be found in the join-state of an if-expression.
+                lambda_ctx.state.remove_node(inner_data.dc_node)
 
-                # Transient data nodes only exist within the nested SDFG. In order to return some result data,
-                # the corresponding data container inside the nested SDFG has to be changed to non-transient,
-                # that is externally allocated, as required by the SDFG IR. An output edge will write the result
-                # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
-                outer_data = ctx.map_nsdfg_field(
-                    sdfg_builder=self,
-                    nsdfg_field=inner_data,
-                    nsdfg=lambda_sdfg,
-                    symbol_mapping=nsdfg_node.symbol_mapping,
-                )
-                ctx.state.add_edge(
-                    nsdfg_node,
-                    inner_data.dc_node.data,
-                    outer_data.dc_node,
-                    None,
-                    ctx.sdfg.make_array_memlet(outer_data.dc_node.data),
-                )
+            # Transient data nodes only exist within the nested SDFG. In order to return some result data,
+            # the corresponding data container inside the nested SDFG has to be changed to non-transient,
+            # that is externally allocated, as required by the SDFG IR. An output edge will write the result
+            # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
+            outer_data = ctx.map_nsdfg_field(
+                sdfg_builder=self,
+                nsdfg_field=inner_data,
+                nsdfg=lambda_sdfg,
+                symbol_mapping=nsdfg_node.symbol_mapping,
+            )
+            ctx.state.add_edge(
+                nsdfg_node,
+                inner_data.dc_node.data,
+                outer_data.dc_node,
+                None,
+                ctx.sdfg.make_array_memlet(outer_data.dc_node.data),
+            )
 
-                return outer_data
+            return outer_data
 
-            return gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
+        return gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
 
     def visit_Literal(
         self,
