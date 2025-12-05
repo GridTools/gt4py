@@ -891,7 +891,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=nsdfg)
         fstate = else_body.add_state("false_branch", is_start_block=True)
-        if_region.add_branch(dace.sdfg.state.CodeBlock("not (__cond)"), else_body)
+        if_region.add_branch(None, else_body)  # `None` corresponds to else-branch, unconditionally executed
 
         input_memlets: dict[str, MemletExpr | ValueExpr] = {}
         nsdfg_symbols_mapping: Optional[dict[str, dace.symbol]] = None
