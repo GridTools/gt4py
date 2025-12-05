@@ -527,6 +527,7 @@ def _lower_lambda_to_nested_sdfg(
 
 
 def _handle_dataflow_result_of_nested_sdfg(
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     nsdfg_node: dace.nodes.NestedSDFG,
     inner_ctx: gtir_to_sdfg.SubgraphContext,
     outer_ctx: gtir_to_sdfg.SubgraphContext,
@@ -542,7 +543,7 @@ def _handle_dataflow_result_of_nested_sdfg(
         # The field is used outside the nested SDFG, therefore it needs to be copied
         # to a temporary array in the parent SDFG (outer context).
         inner_desc.transient = False
-        outer_dataname, outer_desc = outer_ctx.sdfg.add_temp_transient_like(inner_desc)
+        outer_dataname, outer_desc = sdfg_builder.add_temp_array_like(outer_ctx.sdfg, inner_desc)
         outer_node = outer_ctx.state.add_access(outer_dataname)
         outer_ctx.state.add_edge(
             nsdfg_node,
@@ -684,6 +685,7 @@ def translate_scan(
     # results of a column slice for each point in the horizontal domain
     output_tree = gtx_utils.tree_map(
         lambda output_data, output_domain: _handle_dataflow_result_of_nested_sdfg(
+            sdfg_builder=sdfg_builder,
             nsdfg_node=nsdfg_node,
             inner_ctx=lambda_ctx,
             outer_ctx=ctx,

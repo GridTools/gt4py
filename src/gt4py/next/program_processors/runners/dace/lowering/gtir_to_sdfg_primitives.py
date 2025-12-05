@@ -269,7 +269,7 @@ def translate_as_fieldop(
             # on the given domain. It copies a subset of the source field.
             arg = sdfg_builder.visit(node.args[0], ctx=ctx)
             assert isinstance(arg, gtir_to_sdfg_types.FieldopData)
-            return ctx.copy_data(arg, domain=field_domain)
+            return ctx.copy_data(sdfg_builder, arg, domain=field_domain)
     elif isinstance(fieldop_expr, gtir.Lambda):
         # Default case, handled below: the argument expression is a lambda function
         # representing the stencil operation to be computed over the field domain.

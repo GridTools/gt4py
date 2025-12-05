@@ -83,23 +83,27 @@ class DataflowBuilder(Protocol):
     @abc.abstractmethod
     def unique_tasklet_name(self, name: str) -> str: ...
 
+    @abc.abstractmethod
+    def unique_temp_name(self) -> str: ...
+
     def add_temp_array(
         self, sdfg: dace.SDFG, shape: Sequence[Any], dtype: dace.dtypes.typeclass
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary array to the SDFG."""
-        return sdfg.add_temp_transient(shape, dtype)
+        temp_name = self.unique_temp_name()
+        return sdfg.add_transient(temp_name, shape, dtype)
 
     def add_temp_array_like(
         self, sdfg: dace.SDFG, datadesc: dace.data.Array
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary array to the SDFG."""
-        return sdfg.add_temp_transient_like(datadesc)
+        return sdfg.add_temp_transient_like(datadesc, name=self.unique_temp_name())
 
     def add_temp_scalar(
         self, sdfg: dace.SDFG, dtype: dace.dtypes.typeclass
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary scalar to the SDFG."""
-        temp_name = sdfg.temp_data_name()
+        temp_name = self.unique_temp_name()
         return sdfg.add_scalar(temp_name, dtype, transient=True)
 
     def add_map(
@@ -214,6 +218,7 @@ class SubgraphContext:
 
     def copy_data(
         self,
+        sdfg_builder: SDFGBuilder,
         src: gtir_to_sdfg_types.FieldopData,
         domain: gtir_domain.FieldopDomain | None,
     ) -> gtir_to_sdfg_types.FieldopData:
@@ -236,13 +241,13 @@ class SubgraphContext:
         data_desc = src.dc_node.desc(self.sdfg)
         if isinstance(src.gt_type, ts.FieldType):
             if domain is None:
-                out, out_desc = self.sdfg.add_temp_transient_like(data_desc)
+                out, out_desc = sdfg_builder.add_temp_array_like(self.sdfg, data_desc)
                 out_origin = list(src.origin)
                 src_subset = ",".join(f"0:{size}" for size in data_desc.shape)
             else:
                 out_dims, out_origin, out_shape = gtir_domain.get_field_layout(domain)
                 assert out_dims == src.gt_type.dims
-                out, out_desc = self.sdfg.add_temp_transient(out_shape, data_desc.dtype)
+                out, out_desc = sdfg_builder.add_temp_array(self.sdfg, out_shape, data_desc.dtype)
                 src_subset = ",".join(
                     f"{dst_origin - src_origin}:{dst_origin - src_origin + size}"
                     for dst_origin, src_origin, size in zip(
@@ -252,7 +257,7 @@ class SubgraphContext:
         else:
             assert domain is None
             assert isinstance(data_desc, dace.data.Scalar)
-            out, out_desc = self.sdfg.add_temp_transient_like(data_desc)
+            out, out_desc = sdfg_builder.add_temp_array_like(self.sdfg, data_desc)
             out_origin = []
             src_subset = "0"
 
@@ -801,6 +806,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def unique_tasklet_name(self, name: str) -> str:
         return f"{next(self.uids['tlet'])}_{name}"
 
+    def unique_temp_name(self) -> str:
+        return f"{next(self.uids['gtir_tmp'])}"
+
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
     ) -> tuple[list[dace.symbolic.SymbolicType], list[dace.symbolic.SymbolicType]]:
@@ -966,7 +974,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         if use_temp:  # copy the full shape of global data to temporary storage
             return gtx_utils.tree_map(
-                lambda x: x if x.dc_node.desc(ctx.sdfg).transient else ctx.copy_data(x, domain=None)
+                lambda x: x
+                if x.dc_node.desc(ctx.sdfg).transient
+                else ctx.copy_data(self, x, domain=None)
             )(result)
         else:
             return result
@@ -1275,7 +1285,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     # example, when the lambda constructs a tuple of some input fields.
                     # We copy this data to a new node, which we use as output.
                     nsdfg_node.remove_out_connector(inner_data.dc_node.data)
-                    inner_data = lambda_ctx.copy_data(inner_data, domain=None)
+                    inner_data = lambda_ctx.copy_data(self, inner_data, domain=None)
                     nsdfg_node.add_out_connector(inner_data.dc_node.data)
 
                 # Transient data nodes only exist within the nested SDFG. In order to return some result data,
