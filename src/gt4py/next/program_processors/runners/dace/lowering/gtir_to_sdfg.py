@@ -399,7 +399,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         state: dace.SDFGState,
         params: Iterable[gtir.Sym],
     ) -> Generator[SubgraphContext, None, None]:
-        "Allocate scope symbols for given parameters in context."
+        "Setup a lowering context with the given parameters in scope."
         ...
 
     @abc.abstractmethod
@@ -409,7 +409,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ctx: SubgraphContext,
         state: dace.SDFGState,
     ) -> Generator[SubgraphContext, Any, Any]:
-        "Allocate scope symbols of the given context inside a new state."
+        "Setup same lowering context inside a new state, by copying all symbols in current scope."
         ...
 
     @abc.abstractmethod
@@ -776,9 +776,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         state: dace.SDFGState,
         params: Iterable[gtir.Sym],
     ) -> Generator[SubgraphContext, Any, Any]:
-        "Create access nodes to global data for given parameters in context."
+        assert all(isinstance(p.type, ts.DataType) for p in params)
         scope_symbols = {str(p.id): p.type for p in params}
-        assert all(isinstance(sym_type, ts.DataType) for sym_type in scope_symbols.values())
         ctx = SubgraphContext(sdfg, state, scope_symbols)  # type: ignore[arg-type]
         try:
             yield ctx
@@ -1294,7 +1293,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # Isolated access node will make validation fail.
                 # Isolated access nodes can be found in the join-state of an if-expression.
                 lambda_ctx.state.remove_node(inner_data.dc_node)
-
             # Transient data nodes only exist within the nested SDFG. In order to return some result data,
             # the corresponding data container inside the nested SDFG has to be changed to non-transient,
             # that is externally allocated, as required by the SDFG IR. An output edge will write the result

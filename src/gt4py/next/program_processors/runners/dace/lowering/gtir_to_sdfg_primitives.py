@@ -655,16 +655,12 @@ def translate_scalar_expr(
     scalar_expr_args = []
 
     for i, arg_expr in enumerate(node.args):
-        visit_expr = True
         if isinstance(arg_expr, gtir.SymRef):
-            try:
-                # check if symbol is defined in the GT4Py program, throws `KeyError` exception if undefined
-                sym_name = str(arg_expr.id)
-                ctx.scope_symbols[sym_name]
-            except KeyError:
-                # all `SymRef` should refer to symbols defined in the program, except in case of non-variable argument,
-                # e.g. the type name `float64` used in casting expressions like `cast_(variable, float64)`
-                visit_expr = False
+            # all `SymRef` should refer to symbols defined in the program, except in case of non-variable argument,
+            # e.g. the type name `float64` used in casting expressions like `cast_(variable, float64)`
+            visit_expr = str(arg_expr.id) in ctx.scope_symbols
+        else:
+            visit_expr = True
 
         if visit_expr:
             # we visit the argument expression and obtain the access node to
