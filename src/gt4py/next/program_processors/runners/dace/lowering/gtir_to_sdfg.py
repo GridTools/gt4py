@@ -15,8 +15,21 @@ Note: this module covers the fieldview flavour of GTIR.
 from __future__ import annotations
 
 import abc
+import contextlib
 import dataclasses
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import dace
 from dace import subsets as dace_subsets
@@ -26,7 +39,11 @@ from gt4py import eve
 from gt4py.eve import concepts
 from gt4py.next import common as gtx_common, config as gtx_config, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
@@ -176,8 +193,26 @@ class SubgraphContext:
 
     sdfg: dace.SDFG
     state: dace.SDFGState
+    scope_symbols: dict[str, ts.DataType]
 
-    def copy_field(
+    def remove_isolated_nodes(self) -> None:
+        flat_scope_symbols: list[gtir.Sym] = []
+        for sym_name, sym_type in self.scope_symbols.items():
+            if isinstance(sym_type, ts.TupleType):
+                flat_scope_symbols.extend(
+                    gtir_to_sdfg_utils.flatten_tuple_fields(sym_name, sym_type)
+                )
+            else:
+                flat_scope_symbols.append(im.sym(sym_name, sym_type))
+        scope_symbols = set(str(sym.id) for sym in flat_scope_symbols)
+        isolated_nodes = [
+            access_node
+            for access_node in self.state.data_nodes()
+            if access_node.data in scope_symbols and self.state.degree(access_node) == 0
+        ]
+        self.state.remove_nodes_from(isolated_nodes)
+
+    def copy_data(
         self,
         src: gtir_to_sdfg_types.FieldopData,
         domain: gtir_domain.FieldopDomain | None,
@@ -310,17 +345,12 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ...
 
     @abc.abstractmethod
-    def get_symbol_type(self, symbol_name: str) -> ts.DataType:
-        """Retrieve the GT4Py type of a symbol used in the SDFG."""
-        ...
-
-    @abc.abstractmethod
     def is_column_axis(self, dim: gtx_common.Dimension) -> bool:
         """Check if the given dimension is the column axis."""
         ...
 
     @abc.abstractmethod
-    def setup_nested_context(
+    def setup_nested_sdfg(
         self,
         expr: gtir.Lambda,
         sdfg_name: str,
@@ -328,7 +358,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         params: Iterable[gtir.Sym],
         symbolic_inputs: set[str],
         capture_scope_symbols: bool,
-    ) -> tuple[SDFGBuilder, SubgraphContext]:
+    ) -> tuple[dace.SDFG, list[gtir.Sym]]:
         """
         Create an nested SDFG context to lower a lambda expression, indipendent
         from the current context where the parent expression is being translated.
@@ -349,8 +379,29 @@ class SDFGBuilder(DataflowBuilder, Protocol):
                 GTIR symbols defined in the parent scope.
 
         Returns:
-            A visitor object implementing the `SDFGBuilder` protocol.
+            The nested SDFG context.
         """
+        ...
+
+    @abc.abstractmethod
+    @contextlib.contextmanager
+    def setup_ctx(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        params: Iterable[gtir.Sym],
+    ) -> Generator[SubgraphContext, None, None]:
+        "Allocate scope symbols for given parameters in context."
+        ...
+
+    @abc.abstractmethod
+    @contextlib.contextmanager
+    def setup_ctx_in_new_state(
+        self,
+        ctx: SubgraphContext,
+        state: dace.SDFGState,
+    ) -> Generator[SubgraphContext, Any, Any]:
+        "Allocate scope symbols of the given context inside a new state."
         ...
 
     @abc.abstractmethod
@@ -483,7 +534,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     offset_provider_type: gtx_common.OffsetProviderType
     column_axis: Optional[gtx_common.Dimension]
-    scope_symbols: dict[str, ts.DataType]
     uids: gtx_utils.IDGeneratorPool = dataclasses.field(
         init=False, repr=False, default_factory=lambda: gtx_utils.IDGeneratorPool()
     )
@@ -522,14 +572,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
         return gtir_to_sdfg_types.FieldopData(data_node, field_type, field_origin)
 
-    def get_symbol_type(self, symbol_name: str) -> ts.DataType:
-        return self.scope_symbols[symbol_name]
-
     def is_column_axis(self, dim: gtx_common.Dimension) -> bool:
         assert self.column_axis
         return dim == self.column_axis
 
-    def setup_nested_context(
+    def setup_nested_sdfg(
         self,
         expr: gtir.Lambda,
         sdfg_name: str,
@@ -537,7 +584,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         params: Iterable[gtir.Sym],
         symbolic_inputs: set[str],
         capture_scope_symbols: bool,
-    ) -> tuple[SDFGBuilder, SubgraphContext]:
+    ) -> tuple[dace.SDFG, list[gtir.Sym]]:
         assert symbolic_inputs.issubset(str(p.id) for p in params) and all(
             isinstance(p.type, ts.ScalarType) for p in params if str(p.id) in symbolic_inputs
         )
@@ -549,8 +596,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # then we add or override symbols defined as lambda parameters.
         if capture_scope_symbols:
             lambda_symbols = {
-                sym: self.scope_symbols[sym]
-                for sym in symbol_ref_utils.collect_symbol_refs(expr, self.scope_symbols.keys())
+                sym: parent_ctx.scope_symbols[sym]
+                for sym in symbol_ref_utils.collect_symbol_refs(
+                    expr, parent_ctx.scope_symbols.keys()
+                )
             }
         else:
             lambda_symbols = {}
@@ -588,13 +637,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         sdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, sdfg_name))
         sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(expr, default=parent_ctx.sdfg.debuginfo)
-        state = sdfg.add_state(f"{sdfg_name}_entry")
-        nested_ctx = SubgraphContext(sdfg, state)
-        nsdfg_builder = GTIRToSDFG(
-            offset_provider_type=self.offset_provider_type,
-            column_axis=self.column_axis,
-            scope_symbols=lambda_symbols,
-        )
 
         # All GTIR-symbols accessed in domain expressions by the lambda need to be
         # represented as dace symbols.
@@ -615,13 +657,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # When they are accessed, the corresponding data descriptor (scalar or array)
         # will be turned into global by setting `transient=False`. In this way, we remove
         # all unused (and possibly undefined) input arguments.
-        nsdfg_builder._add_sdfg_params(
+        self._add_sdfg_params(
             sdfg,
             node_params=input_params,
             symbolic_params=(domain_symbols | mapped_symbols | symbolic_inputs),
             use_transient_storage=True,
         )
-        return nsdfg_builder, nested_ctx
+        return sdfg, input_params
 
     def add_nested_sdfg(
         self,
@@ -718,6 +760,34 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
 
         return nsdfg_node, input_memlets
+
+    @contextlib.contextmanager
+    def setup_ctx(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        params: Iterable[gtir.Sym],
+    ) -> Generator[SubgraphContext, Any, Any]:
+        "Create access nodes to global data for given parameters in context."
+        scope_symbols = {str(p.id): p.type for p in params}
+        assert all(isinstance(sym_type, ts.DataType) for sym_type in scope_symbols.values())
+        ctx = SubgraphContext(sdfg, state, scope_symbols)  # type: ignore[arg-type]
+        try:
+            yield ctx
+        finally:
+            ctx.remove_isolated_nodes()
+
+    @contextlib.contextmanager
+    def setup_ctx_in_new_state(
+        self,
+        ctx: SubgraphContext,
+        state: dace.SDFGState,
+    ) -> Generator[SubgraphContext, Any, Any]:
+        new_ctx = SubgraphContext(ctx.sdfg, state, ctx.scope_symbols.copy())
+        try:
+            yield new_ctx
+        finally:
+            new_ctx.remove_isolated_nodes()
 
     def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
         nsdfg_list = [
@@ -861,19 +931,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         raise RuntimeError(f"Data type '{type(gt_type)}' not supported.")
 
-    def _add_storage_for_temporary(self, temp_decl: gtir.Temporary) -> dict[str, str]:
-        """
-        Add temporary storage (aka transient) for data containers used as GTIR temporaries.
-
-        Assume all temporaries to be fields, therefore represented as dace arrays.
-        """
-        raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
-
     def _visit_expression(
         self,
         node: gtir.Expr,
-        sdfg: dace.SDFG,
-        head_state: dace.SDFGState,
+        ctx: SubgraphContext,
         use_temp: bool = True,
     ) -> gtir_to_sdfg_types.FieldopResult:
         """
@@ -895,20 +956,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             The nodes are organized in tree form, in case of tuples.
         """
 
-        ctx = SubgraphContext(sdfg, head_state)
         result = self.visit(node, ctx=ctx)
 
         # sanity check: each statement should preserve the property of single exit state (aka head state),
         # i.e. eventually only introduce internal branches, and keep the same head state
-        sink_states = sdfg.sink_nodes()
+        sink_states = ctx.sdfg.sink_nodes()
         assert len(sink_states) == 1
-        assert sink_states[0] == head_state
+        assert sink_states[0] == ctx.state
 
         if use_temp:  # copy the full shape of global data to temporary storage
             return gtx_utils.tree_map(
-                lambda x: x
-                if x.dc_node.desc(ctx.sdfg).transient
-                else ctx.copy_field(x, domain=None)
+                lambda x: x if x.dc_node.desc(ctx.sdfg).transient else ctx.copy_data(x, domain=None)
             )(result)
         else:
             return result
@@ -984,23 +1042,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(node)
 
         # start block of the stateful graph
-        entry_state = sdfg.add_state("program_entry", is_start_block=True)
-
-        # declarations of temporaries result in transient array definitions in the SDFG
-        if node.declarations:
-            temp_symbols: dict[str, str] = {}
-            for decl in node.declarations:
-                temp_symbols |= self._add_storage_for_temporary(decl)
-
-            # define symbols for shape and offsets of temporary arrays as interstate edge symbols
-            head_state = sdfg.add_state_after(entry_state, "init_temps", assignments=temp_symbols)
-        else:
-            head_state = entry_state
+        head_state = sdfg.add_state("program_entry", is_start_block=True)
 
         # By passing `symbolic_arguments=None` all scalars are represented as dace symbols.
         #   We do this to allow lowering of scalar expressions in let-statements,
         #   that only depend on scalar parameters, as dace symbolic expressions
         #   mapped to symbols on a nested SDFG.
+        assert all(isinstance(p.type, ts.DataType) for p in node.params)
         sdfg_arg_names = self._add_sdfg_params(
             sdfg, node.params, symbolic_params=None, use_transient_storage=False
         )
@@ -1010,7 +1058,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
             head_state._debuginfo = gtir_to_sdfg_utils.debug_info(stmt, default=sdfg.debuginfo)
-            head_state = self.visit(stmt, sdfg=sdfg, state=head_state)
+            with self.setup_ctx(sdfg, head_state, node.params) as ctx:
+                head_state = self.visit(stmt, ctx=ctx)
 
         # remove unused connectivity tables (by design, arrays are marked as non-transient when they are used)
         for nsdfg in sdfg.all_sdfgs_recursive():
@@ -1030,12 +1079,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         #  the arguments created by the translation process, must be passed as keyword arguments.
         sdfg.arg_names = sdfg_arg_names
 
-        sdfg.validate()
         return sdfg
 
-    def visit_SetAt(
-        self, stmt: gtir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState
-    ) -> dace.SDFGState:
+    def visit_SetAt(self, stmt: gtir.SetAt, ctx: SubgraphContext) -> dace.SDFGState:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of dataflow gragh writing to temporary storage.
@@ -1045,77 +1091,48 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
           The SDFG head state, eventually updated if the target write requires a new state.
         """
 
-        # Visit the domain expression.
-        domain = gtir_domain.extract_target_domain(stmt.domain)
-
-        # Visit the field operator expression.
-        source_tree = self._visit_expression(stmt.expr, sdfg, state)
-
-        # The target expression could be a `SymRef` to an output field or a `make_tuple`
-        # expression in case the statement returns more than one field.
-        target_tree = self._visit_expression(stmt.target, sdfg, state, use_temp=False)
-
-        expr_input_args = {
-            sym_id
-            for sym in eve.walk_values(stmt.expr).if_isinstance(gtir.SymRef)
-            if (sym_id := str(sym.id)) in sdfg.arrays
-        }
-        state_input_data = {
-            node.data
-            for node in state.data_nodes()
-            if node.data in expr_input_args and state.degree(node) != 0
-        }
-
-        # For inout argument, write the result in separate next state
-        # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
-        # If this state is not used, we remove it before returning from the function.
-        target_state = sdfg.add_state_after(state, f"post_{state.label}")
-
         def _visit_target(
             source: gtir_to_sdfg_types.FieldopData,
             target: gtir_to_sdfg_types.FieldopData,
             target_domain: domain_utils.SymbolicDomain,
             target_state: dace.SDFGState,
         ) -> None:
-            target_desc = sdfg.arrays[target.dc_node.data]
-            assert not target_desc.transient
-
             assert source.gt_type == target.gt_type
             field_domain = gtir_domain.get_field_domain(target_domain)
             source_subset = _make_access_index_for_field(field_domain, source)
             target_subset = _make_access_index_for_field(field_domain, target)
 
-            if target.dc_node.data in state_input_data:
-                # create new access nodes in the target state
-                target_state.add_nedge(
-                    target_state.add_access(source.dc_node.data),
-                    target_state.add_access(target.dc_node.data),
-                    dace.Memlet(
-                        data=target.dc_node.data, subset=target_subset, other_subset=source_subset
-                    ),
-                )
-                # remove isolated access node
-                state.remove_node(target.dc_node)
-            else:
-                state.add_nedge(
-                    source.dc_node,
-                    target.dc_node,
-                    dace.Memlet(
-                        data=target.dc_node.data, subset=target_subset, other_subset=source_subset
-                    ),
-                )
-
-        gtx_utils.tree_map(
-            lambda source, target, target_domain: _visit_target(
-                source, target, target_domain, target_state
+            target_state.add_nedge(
+                # create in the target state new access nodes to the field operator result
+                target_state.add_access(source.dc_node.data),
+                target.dc_node,
+                dace.Memlet(
+                    data=target.dc_node.data, subset=target_subset, other_subset=source_subset
+                ),
             )
-        )(source_tree, target_tree, domain)
+            if ctx.state.degree(source.dc_node) == 0:
+                ctx.state.remove_node(source.dc_node)
 
-        if target_state.is_empty():
-            sdfg.remove_node(target_state)
-            return state
-        else:
-            return target_state
+        # Visit the domain expression.
+        domain = gtir_domain.extract_target_domain(stmt.domain)
+
+        # Visit the field operator expression.
+        source_tree = self._visit_expression(stmt.expr, ctx)
+
+        # In order to support inout argument, write the result in separate next state
+        # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
+        target_state = ctx.sdfg.add_state_after(ctx.state, f"post_{ctx.state.label}")
+        with self.setup_ctx_in_new_state(ctx, target_state) as target_ctx:
+            # The target expression could be a `SymRef` to an output field or a `make_tuple`
+            # expression in case the statement returns more than one field.
+            target_tree = self._visit_expression(stmt.target, target_ctx, use_temp=False)
+            gtx_utils.tree_map(
+                lambda source, target, target_domain: _visit_target(
+                    source, target, target_domain, target_state
+                )
+            )(source_tree, target_tree, domain)
+
+        return target_state
 
     def visit_FunCall(
         self,
@@ -1200,7 +1217,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         lambda_arg_nodes, symbolic_args = flatten_tuple_args(args.items())
 
         # lower let-statement lambda node as a nested SDFG
-        lambda_translator, lambda_ctx = self.setup_nested_context(
+        lambda_sdfg, lambda_params = self.setup_nested_sdfg(
             expr=node,
             sdfg_name="lambda",
             parent_ctx=ctx,
@@ -1208,94 +1225,83 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             symbolic_inputs=set(symbolic_args.keys()),
             capture_scope_symbols=True,
         )
+        lambda_state = lambda_sdfg.add_state("lambda")
 
-        lambda_result = lambda_translator.visit(node.expr, ctx=lambda_ctx)
+        with self.setup_ctx(lambda_sdfg, lambda_state, lambda_params) as lambda_ctx:
+            lambda_result = self.visit(node.expr, ctx=lambda_ctx)
 
-        # A let-lambda is allowed to capture GTIR-symbols from the outer scope,
-        # therefore we call `add_nested_sdfg()` with `capture_outer_data=True`.
-        nsdfg_node, input_memlets = self.add_nested_sdfg(
-            node=node,
-            inner_ctx=lambda_ctx,
-            outer_ctx=ctx,
-            symbolic_args=symbolic_args,
-            data_args=lambda_arg_nodes,
-            inner_result=lambda_result,
-            capture_outer_data=True,
-        )
-
-        # In this loop we call `pop()`, whenever an argument is connected to an input
-        # connector on the nested SDFG, so the corresponding node is removed from the dictionary.
-        for input_connector, memlet in input_memlets.items():
-            if input_connector in lambda_arg_nodes:
-                arg_node = lambda_arg_nodes.pop(input_connector)
-                assert arg_node is not None
-                src_node = arg_node.dc_node
-            else:
-                src_node = ctx.state.add_access(memlet.data)
-
-            ctx.state.add_edge(src_node, None, nsdfg_node, input_connector, memlet)
-
-        # We can now safely remove all remaining arguments, because unused. Note
-        # that we only consider global access nodes, because the only goal of this
-        # cleanup is to remove isolated nodes. At this stage, temporary input nodes
-        # should not appear as isolated nodes, because they are supposed to contain
-        # the result of some argument expression.
-        if unused_access_nodes := [
-            arg_node.dc_node
-            for arg_node in lambda_arg_nodes.values()
-            if not (arg_node is None or arg_node.dc_node.desc(ctx.sdfg).transient)
-        ]:
-            assert all(ctx.state.degree(access_node) == 0 for access_node in unused_access_nodes)
-            ctx.state.remove_nodes_from(unused_access_nodes)
-
-        def construct_output_for_nested_sdfg(
-            inner_data: gtir_to_sdfg_types.FieldopData,
-        ) -> gtir_to_sdfg_types.FieldopData:
-            """
-            This function makes a data container that lives inside a nested SDFG, denoted by `inner_data`,
-            available in the parent SDFG.
-            In order to achieve this, the data container inside the nested SDFG is marked as non-transient
-            (in other words, externally allocated - a requirement of the SDFG IR) and a new data container
-            is created within the parent SDFG, with the same properties (shape, stride, etc.) of `inner_data`
-            but appropriatly remapped using the symbol mapping table.
-            For lambda arguments that are simply returned by the lambda, the `inner_data` was already mapped
-            to a parent SDFG data container, therefore it can be directly accessed in the parent SDFG.
-            The same happens to symbols available in the lambda context but not explicitly passed as lambda
-            arguments, that are simply returned by the lambda: it can be directly accessed in the parent SDFG.
-            """
-            if not inner_data.dc_node.desc(lambda_ctx.sdfg).transient:
-                # This is inout data: some global associated to an input connector
-                # is also a sink node of the lambda dataflow. This can happen, for
-                # example, when the lambda constructs a tuple of some input fields.
-                # We copy this data to a new node, which we use as output.
-                nsdfg_node.remove_out_connector(inner_data.dc_node.data)
-                inner_data = lambda_ctx.copy_field(inner_data, domain=None)
-                nsdfg_node.add_out_connector(inner_data.dc_node.data)
-            elif lambda_ctx.state.degree(inner_data.dc_node) == 0:
-                # Isolated access node will make validation fail.
-                # Isolated access nodes can be found in the join-state of an if-expression.
-                lambda_ctx.state.remove_node(inner_data.dc_node)
-            # Transient data nodes only exist within the nested SDFG. In order to return some result data,
-            # the corresponding data container inside the nested SDFG has to be changed to non-transient,
-            # that is externally allocated, as required by the SDFG IR. An output edge will write the result
-            # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
-            outer_data = ctx.map_nsdfg_field(
-                sdfg_builder=self,
-                nsdfg_field=inner_data,
-                nsdfg=lambda_ctx.sdfg,
-                symbol_mapping=nsdfg_node.symbol_mapping,
-            )
-            ctx.state.add_edge(
-                nsdfg_node,
-                inner_data.dc_node.data,
-                outer_data.dc_node,
-                None,
-                ctx.sdfg.make_array_memlet(outer_data.dc_node.data),
+            # A let-lambda is allowed to capture GTIR-symbols from the outer scope,
+            # therefore we call `add_nested_sdfg()` with `capture_outer_data=True`.
+            nsdfg_node, input_memlets = self.add_nested_sdfg(
+                node=node,
+                inner_ctx=lambda_ctx,
+                outer_ctx=ctx,
+                symbolic_args=symbolic_args,
+                data_args=lambda_arg_nodes,
+                inner_result=lambda_result,
+                capture_outer_data=True,
             )
 
-            return outer_data
+            # In this loop we call `pop()`, whenever an argument is connected to an input
+            # connector on the nested SDFG, so the corresponding node is removed from the dictionary.
+            for input_connector, memlet in input_memlets.items():
+                if input_connector in lambda_arg_nodes:
+                    arg_node = lambda_arg_nodes.pop(input_connector)
+                    assert arg_node is not None
+                    src_node = arg_node.dc_node
+                else:
+                    src_node = ctx.state.add_access(memlet.data)
 
-        return gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
+                ctx.state.add_edge(src_node, None, nsdfg_node, input_connector, memlet)
+
+            def construct_output_for_nested_sdfg(
+                inner_data: gtir_to_sdfg_types.FieldopData,
+            ) -> gtir_to_sdfg_types.FieldopData:
+                """
+                This function makes a data container that lives inside a nested SDFG, denoted by `inner_data`,
+                available in the parent SDFG.
+                In order to achieve this, the data container inside the nested SDFG is marked as non-transient
+                (in other words, externally allocated - a requirement of the SDFG IR) and a new data container
+                is created within the parent SDFG, with the same properties (shape, stride, etc.) of `inner_data`
+                but appropriatly remapped using the symbol mapping table.
+                For lambda arguments that are simply returned by the lambda, the `inner_data` was already mapped
+                to a parent SDFG data container, therefore it can be directly accessed in the parent SDFG.
+                The same happens to symbols available in the lambda context but not explicitly passed as lambda
+                arguments, that are simply returned by the lambda: it can be directly accessed in the parent SDFG.
+                """
+                if not inner_data.dc_node.desc(lambda_sdfg).transient:
+                    # This is inout data: some global associated to an input connector
+                    # is also a sink node of the lambda dataflow. This can happen, for
+                    # example, when the lambda constructs a tuple of some input fields.
+                    # We copy this data to a new node, which we use as output.
+                    nsdfg_node.remove_out_connector(inner_data.dc_node.data)
+                    inner_data = lambda_ctx.copy_data(inner_data, domain=None)
+                    nsdfg_node.add_out_connector(inner_data.dc_node.data)
+                elif lambda_ctx.state.degree(inner_data.dc_node) == 0:
+                    # Isolated access node will make validation fail.
+                    # Isolated access nodes can be found in the join-state of an if-expression.
+                    lambda_ctx.state.remove_node(inner_data.dc_node)
+                # Transient data nodes only exist within the nested SDFG. In order to return some result data,
+                # the corresponding data container inside the nested SDFG has to be changed to non-transient,
+                # that is externally allocated, as required by the SDFG IR. An output edge will write the result
+                # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
+                outer_data = ctx.map_nsdfg_field(
+                    sdfg_builder=self,
+                    nsdfg_field=inner_data,
+                    nsdfg=lambda_sdfg,
+                    symbol_mapping=nsdfg_node.symbol_mapping,
+                )
+                ctx.state.add_edge(
+                    nsdfg_node,
+                    inner_data.dc_node.data,
+                    outer_data.dc_node,
+                    None,
+                    ctx.sdfg.make_array_memlet(outer_data.dc_node.data),
+                )
+
+                return outer_data
+
+            return gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
 
     def visit_Literal(
         self,
@@ -1334,6 +1340,8 @@ def build_sdfg_from_gtir(
 
     if ir.function_definitions:
         raise NotImplementedError("Functions expected to be inlined as lambda calls.")
+    if ir.declarations:
+        raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
@@ -1344,9 +1352,9 @@ def build_sdfg_from_gtir(
     # Here we find new names for invalid symbols present in the IR.
     ir = gtir_to_sdfg_utils.replace_invalid_symbols(ir)
 
-    global_symbols = {str(p.id): p.type for p in ir.params if isinstance(p.type, ts.DataType)}
-    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis, global_symbols)
+    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 
+    sdfg.validate()
     return sdfg
