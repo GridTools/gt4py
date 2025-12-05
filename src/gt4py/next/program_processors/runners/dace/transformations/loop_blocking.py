@@ -686,12 +686,17 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if any(self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect):
             return False
 
-        if (
-            isinstance(edge.dst, dace_nodes.Tasklet)
-            and self.blocking_parameter in edge.dst.code.get_free_symbols()
-            and not edge.data.data.startswith("gt_conn_")
-        ):
+        if isinstance(edge.dst, dace_nodes.Tasklet) and not edge.data.data.startswith("gt_conn_"):
+            # TODO(iomaganaris): This check is done for tesklets that have as input a field
+            # (connection name: `__tlet_field`) and one or two offsets
+            # (connection name: `__tlet_index_Cell` and `__tlet_index_K`).
+            # If there is no `K` dependent offset if we have blocking on `K`, we can promote the memlet.
+            # If there is no `Cell` dependent offset if we have blocking on `Cell`, we can promote the memlet.
+            # However above require checking the tasklet internals without being sure of these conventions.
+            # For that purpose we choose to promote only memlets that are passed to tasklets only
+            # if they are connectivities.
             return False
+
         return True
 
     def _prepare_independent_memlets(
@@ -709,8 +714,25 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         for in_edge in self._memlet_to_promote:
             # Create a temporary AccessNode that will be used to promote the memlet
+            independent_outer_map_indexes = [
+                index for index in outer_map_entry.map.params if index != self.blocking_parameter
+            ]
+            independent_outer_map_as_range = dace_subsets.Range(
+                ranges=[
+                    in_edge.data.subset.ranges[outer_map_entry.map.params.index(idx)]
+                    for idx in independent_outer_map_indexes
+                ]
+            )
+            new_subset = []
+            for subset_range in in_edge.data.subset.ranges:
+                if subset_range not in independent_outer_map_as_range.ranges:
+                    new_subset.append(subset_range)
+            assert len(new_subset) > 0, (
+                "After removing the independent dimensions there should be at least one dimension left to promote."
+            )
+            new_subset_as_range = dace_subsets.Range(ranges=new_subset)
             promoted_name, promoted_desc = sdfg.add_temp_transient(
-                shape=(in_edge.data.volume,),
+                shape=new_subset_as_range.size(),
                 dtype=sdfg.arrays[in_edge.data.data].dtype,
             )
             promoted_anode = state.add_access(promoted_name)
