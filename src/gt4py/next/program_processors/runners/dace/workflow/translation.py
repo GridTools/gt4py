@@ -381,7 +381,6 @@ class DaCeTranslator(
             ir, sdfg, offset_provider_type, self.disable_field_origin_on_program_arguments
         )
 
-        return sdfg
         if self.auto_optimize:
             auto_optimize_args = {} if self.auto_optimize_args is None else self.auto_optimize_args
 
