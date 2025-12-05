@@ -1287,6 +1287,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     nsdfg_node.remove_out_connector(inner_data.dc_node.data)
                     inner_data = lambda_ctx.copy_data(self, inner_data, domain=None)
                     nsdfg_node.add_out_connector(inner_data.dc_node.data)
+                elif lambda_ctx.state.degree(inner_data.dc_node) == 0:
+                    # Isolated access node will make validation fail.
+                    # Isolated access nodes can be found in the join-state of an if-expression.
+                    lambda_ctx.state.remove_node(inner_data.dc_node)
 
                 # Transient data nodes only exist within the nested SDFG. In order to return some result data,
                 # the corresponding data container inside the nested SDFG has to be changed to non-transient,
