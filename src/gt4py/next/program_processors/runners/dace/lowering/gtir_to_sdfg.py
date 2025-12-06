@@ -1012,11 +1012,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def visit_SetAt(self, stmt: gtir.SetAt, ctx: SubgraphContext) -> dace.SDFGState:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
-        Each statement expression results in some sort of dataflow gragh writing to temporary storage.
-        The translation of `SetAt` ensures that the result is written back to the target external storage.
+        Each statement expression results in some sort of dataflow gragh writing to temporary
+        storage, inside the current state. The translation of `SetAt` ensures that the result
+        is written back to the target external storage, in a new state after the current one,
+        which will become the new head state.
 
         Returns:
-          The SDFG head state, eventually updated if the target write requires a new state.
+          The new SDFG head state, where the target fields are written.
         """
 
         def _visit_target(
