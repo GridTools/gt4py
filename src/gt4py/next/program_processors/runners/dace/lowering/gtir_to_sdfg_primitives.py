@@ -426,34 +426,34 @@ def translate_if(
 
     # expect true branch as second argument
     true_state = ctx.sdfg.add_state(ctx.state.label + "_true_branch")
+    tbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, true_state, ctx.scope_symbols)
     ctx.sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=if_stmt))
     ctx.sdfg.add_edge(true_state, ctx.state, dace.InterstateEdge())
 
     # and false branch as third argument
     false_state = ctx.sdfg.add_state(ctx.state.label + "_false_branch")
+    fbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, false_state, ctx.scope_symbols)
     ctx.sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=f"not({if_stmt})"))
     ctx.sdfg.add_edge(false_state, ctx.state, dace.InterstateEdge())
 
-    with sdfg_builder.setup_ctx_in_new_state(ctx, true_state) as tbranch_ctx:
-        with sdfg_builder.setup_ctx_in_new_state(ctx, false_state) as fbranch_ctx:
-            true_br_result = sdfg_builder.visit(true_expr, ctx=tbranch_ctx)
-            false_br_result = sdfg_builder.visit(false_expr, ctx=fbranch_ctx)
+    true_br_result = sdfg_builder.visit(true_expr, ctx=tbranch_ctx)
+    false_br_result = sdfg_builder.visit(false_expr, ctx=fbranch_ctx)
 
-            node_output = gtx_utils.tree_map(
-                lambda domain, true_br, false_br: _construct_if_branch_output(
-                    ctx, sdfg_builder, domain, true_br, false_br
-                )
-            )(
-                node.annex.domain,
-                true_br_result,
-                false_br_result,
-            )
-            gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(tbranch_ctx, src, dst))(
-                true_br_result, node_output
-            )
-            gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(fbranch_ctx, src, dst))(
-                false_br_result, node_output
-            )
+    node_output = gtx_utils.tree_map(
+        lambda domain, true_br, false_br: _construct_if_branch_output(
+            ctx, sdfg_builder, domain, true_br, false_br
+        )
+    )(
+        node.annex.domain,
+        true_br_result,
+        false_br_result,
+    )
+    gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(tbranch_ctx, src, dst))(
+        true_br_result, node_output
+    )
+    gtx_utils.tree_map(lambda src, dst: _write_if_branch_output(fbranch_ctx, src, dst))(
+        false_br_result, node_output
+    )
 
     return node_output
 
