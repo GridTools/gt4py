@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import copy
 import warnings
-from typing import Any, Callable, Final, Optional, Sequence, Union
+from typing import Any, Callable, ClassVar, Final, Optional, Sequence, Union
 
 import dace
 from dace import (
@@ -21,7 +21,7 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.codegen.targets import cpp as dace_cpp
-from dace.sdfg import memlet_utils as dace_mutils, nodes as dace_nodes
+from dace.sdfg import memlet_utils as dace_mutils, nodes as dace_nodes, state as dace_state
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -767,6 +767,71 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             gpu_map.gpu_maxnreg = self.maxnreg
         elif launch_bounds is not None:  # Note: empty string has a meaning in DaCe
             gpu_map.gpu_launch_bounds = launch_bounds
+
+
+@dace_properties.make_properties
+class GPUScanLoopUnrolling(dace_transformation.MultiStateTransformation):
+    """
+    Unrolls loops that are part of a GPU scan operation.
+    """
+
+    _default_unroll_factor: Final[int] = 4
+    unroll = dace_properties.Property(
+        dtype=bool,
+        default=True,
+        desc="Whether to unroll GPU scan loops.",
+    )
+    unroll_factor = dace_properties.Property(
+        dtype=int,
+        default=_default_unroll_factor,
+        desc="The unroll factor to use when unrolling GPU scan loops.",
+    )
+    scan_loop_region = dace_transformation.PatternNode(dace_state.LoopRegion)
+    applied_scans: ClassVar[set[dace_state.LoopRegion]] = set()
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [dace.sdfg.utils.node_path_graph(cls.scan_loop_region)]
+
+    def __init__(
+        self,
+        unroll: Optional[bool] = None,
+        unroll_factor: Optional[int] = None,
+    ) -> None:
+        super().__init__()
+        if unroll is not None:
+            self.unroll = unroll
+        if unroll_factor is not None and unroll_factor > 0:
+            self.unroll = True
+            self.unroll_factor = unroll_factor
+        elif unroll_factor is not None and unroll_factor == 0:
+            self.unroll = True
+            self.unroll_factor = 0
+        elif unroll_factor is not None and unroll_factor < 0:
+            self.unroll = False
+
+    def can_be_applied(
+        self,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        if self.scan_loop_region in self.applied_scans:
+            return False
+        if not self.scan_loop_region.label.startswith("scan_"):
+            return False
+        return self.unroll
+
+    def apply(
+        self,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        sdfg: dace.SDFG,
+    ) -> None:
+        loop_region: dace_state.LoopRegion = self.scan_loop_region
+        loop_region.unroll_factor = self.unroll_factor
+        loop_region.unroll = True
+        self.applied_scans.add(loop_region)
 
 
 def gt_remove_trivial_gpu_maps(
