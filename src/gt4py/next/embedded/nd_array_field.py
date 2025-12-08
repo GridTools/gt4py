@@ -973,6 +973,15 @@ def _intersect_multiple(
     )
 
 
+def _size0_field(
+    nd_array_class: type[NdArrayField], dims: tuple[common.Dimension, ...], dtype: core_defs.DType
+) -> NdArrayField:
+    return nd_array_class.from_array(
+        nd_array_class.array_ns.empty((0,) * len(dims), dtype=dtype.scalar_type),
+        domain=common.Domain(dims=dims, ranges=(common.UnitRange(0, 0),) * len(dims)),
+    )
+
+
 def _concat_where(
     masks: common.Domain | tuple[common.Domain, ...],
     true_field: common.Field,
@@ -996,6 +1005,10 @@ def _concat_where(
     false_domains = _intersect_multiple(f_broadcasted.domain, inverted_masks)
     f_slices = tuple(f_broadcasted[d] for d in false_domains)
 
+    if len(t_slices) + len(f_slices) == 0:
+        # no data to concatenate, return an empty field
+        nd_array_class = _get_nd_array_class(true_field, false_field)
+        return _size0_field(nd_array_class, dims=t_broadcasted.domain.dims, dtype=true_field.dtype)
     return _concat(*f_slices, *t_slices, dim=mask_dim)
 
 
