@@ -135,7 +135,7 @@ def install_session_venv(
         # uv does not yet combine explicit python version requests with the
         # `requires-python` range in `pyproject.toml`, so we do it manually.
         # See: https://github.com/astral-sh/uv/issues/16654
-        f"{REQUIRES_PYTHON}, =={session.python!s}.*",
+        f"{REQUIRES_PYTHON}, >={session.python!s}.0",
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
