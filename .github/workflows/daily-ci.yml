@@ -20,6 +20,9 @@ jobs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Use a deep clone to get target PR branch
+
       - id: get-versions
         uses: ./.github/actions/get-python-versions
         with:
@@ -47,7 +50,6 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
-          #python-version: ${{ matrix.python-version }}
 
       - name: Configure OpenMP for macos clang
         if: ${{ matrix.os == 'macos-latest' }}
