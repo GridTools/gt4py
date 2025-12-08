@@ -21,6 +21,7 @@ from .auto_optimize import (
 )
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
 from .gpu_utils import (
+    GPUScanLoopUnrolling,
     GPUSetBlockSize,
     gt_gpu_transform_non_standard_memlet,
     gt_gpu_transformation,
@@ -82,6 +83,7 @@ from .utils import gt_make_transients_persistent
 __all__ = [
     "CopyChainRemover",
     "DoubleWriteRemover",
+    "GPUScanLoopUnrolling",
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
