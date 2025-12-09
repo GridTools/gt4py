@@ -17,7 +17,6 @@ from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
 from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
 
 
 MATH_BUILTINS_MAPPING = {
@@ -76,28 +75,28 @@ MATH_BUILTINS_MAPPING = {
 }
 
 
-def builtin_cast(val: str, target_type: str) -> str:
+def _builtin_cast(val: str, target_type: str) -> str:
     assert target_type in builtins.TYPE_BUILTINS
     return MATH_BUILTINS_MAPPING[target_type].format(val)
 
 
-def builtin_get_domain_range(field: str, axis: str) -> str:
+def _builtin_get_domain_range(field: str, axis: str) -> str:
     # The builtin function returns a tuple of two values, the range start and stop.
     # Here we return part of the symbol name: the full name also contains an
     # additional suffix '_0' for range start or '_1' for stop, which is obtained
     # from to the `tuple_get` index.
-    return gtx_dace_utils.range_symbol(field, axis)
+    return f"__{field}_{axis}_range"
 
 
-def builtin_if(cond: str, true_val: str, false_val: str) -> str:
+def _builtin_if(cond: str, true_val: str, false_val: str) -> str:
     return f"{true_val} if {cond} else {false_val}"
 
 
-def builtin_tuple_get(index: str, tuple_name: str) -> str:
+def _builtin_tuple_get(index: str, tuple_name: str) -> str:
     return f"{tuple_name}_{index}"
 
 
-def make_const_list(arg: str) -> str:
+def _builtin_make_const_list(arg: str) -> str:
     """
     Takes a single scalar argument and broadcasts this value on the local dimension
     of map expression. In a dataflow, we represent it as a tasklet that writes
@@ -107,11 +106,11 @@ def make_const_list(arg: str) -> str:
 
 
 GENERAL_BUILTIN_MAPPING: dict[str, Callable[..., str]] = {
-    "cast_": builtin_cast,
-    "get_domain_range": builtin_get_domain_range,
-    "if_": builtin_if,
-    "make_const_list": make_const_list,
-    "tuple_get": builtin_tuple_get,
+    "cast_": _builtin_cast,
+    "get_domain_range": _builtin_get_domain_range,
+    "if_": _builtin_if,
+    "make_const_list": _builtin_make_const_list,
+    "tuple_get": _builtin_tuple_get,
 }
 
 

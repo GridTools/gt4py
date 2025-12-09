@@ -41,7 +41,7 @@ def _init_async_compilation_pool() -> None:
 _init_async_compilation_pool()
 
 ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
-CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], common.OffsetProviderType]
+CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int]
 ArgumentDescriptors: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
@@ -68,22 +68,8 @@ def wait_for_compilation() -> None:
         _init_async_compilation_pool()
 
 
-def _hash_compiled_program_unsafe(cp_key: CompiledProgramsKey) -> int:
-    values, offset_provider = cp_key
-    assert common.is_offset_provider_type(offset_provider)
-    return hash((values, id(offset_provider)))
-
-
 def _make_tuple_expr(el_exprs: list[str]) -> str:
     return "".join((f"{el},") for el in el_exprs)
-
-
-def _convert_pascal_to_snake_name(name: str) -> str:
-    return eve_utils.CaseStyleConverter.convert(
-        name,
-        eve_utils.CaseStyleConverter.CASE_STYLE.PASCAL,
-        eve_utils.CaseStyleConverter.CASE_STYLE.SNAKE,
-    )
 
 
 def _make_param_context_from_func_type(
@@ -236,15 +222,15 @@ class CompiledProgramsPool:
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
 
-    _compiled_programs: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(_hash_compiled_program_unsafe),
-        init=False,
-    )
+    # cache the compiled programs
+    compiled_programs: dict[
+        CompiledProgramsKey,
+        stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
+    ] = dataclasses.field(default_factory=dict, init=False)
 
-    _offset_provider_type_cache: eve_utils.CustomMapping = dataclasses.field(
-        default_factory=lambda: eve_utils.CustomMapping(common.hash_offset_provider_unsafe),
-        init=False,
-    )  # cache the offset provider type in order to avoid recomputing it at each program call
+    @functools.cached_property
+    def _primitive_values_extractor(self) -> Callable | None:
+        return arguments.make_primitive_value_args_extractor(self.program_type.definition)
 
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
@@ -252,6 +238,9 @@ class CompiledProgramsPool:
         assert not self.program_type.definition.kw_only_args
         assert not self.program_type.definition.pos_only_args
         self._validate_argument_descriptor_mapping()
+
+        # Force initialization of all cached properties here to minimize first-time call overhead
+        self._primitive_values_extractor  # noqa: B018
 
     def __call__(
         self, *args: Any, offset_provider: common.OffsetProvider, enable_jit: bool, **kwargs: Any
@@ -263,19 +252,21 @@ class CompiledProgramsPool:
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
-        args, kwargs = type_info.canonicalize_arguments(self.program_type, args, kwargs)
+        canonical_args, canonical_kwargs = self._args_canonicalizer(*args, **kwargs)
+        if (extractor := self._primitive_values_extractor) is not None:
+            args, kwargs = extractor(*canonical_args, **canonical_kwargs)
+        else:
+            args, kwargs = canonical_args, canonical_kwargs
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
-        # TODO(tehrengruber): Dispatching over offset provider type is wrong, especially when we
-        #  use compile time domains.
-        key = (static_args_values, self._offset_provider_to_type_unsafe(offset_provider))
+        key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
 
         try:
-            program = self._compiled_programs[key]
+            program = self.compiled_programs[key]
             if config.COLLECT_METRICS_LEVEL:
                 metrics_source = metrics.get_current_source()
                 metrics_source.key = self._metrics_key_from_pool_key(key)
 
-            program(*args, **kwargs, offset_provider=offset_provider)
+            program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator]  # the Future case is handled below
 
         except TypeError as e:
             if "program" in locals() and isinstance(program, concurrent.futures.Future):
@@ -294,20 +285,25 @@ class CompiledProgramsPool:
                         self.program_type, self.argument_descriptor_mapping, args, kwargs
                     ),
                     offset_provider=offset_provider,
+                    call_key=key,
                 )
                 return self(
-                    *args, offset_provider=offset_provider, enable_jit=False, **kwargs
+                    *canonical_args,
+                    offset_provider=offset_provider,
+                    enable_jit=False,
+                    **canonical_kwargs,
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
+
+    @functools.cached_property
+    def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+        return gtx_utils.make_args_canonicalizer_for_function(self.definition_stage.definition)
 
     @functools.cached_property
     def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:
         prefix = f"{self.definition_stage.definition.__name__}<{self.backend.name}>"
 
-        def key_to_str(key: CompiledProgramsKey) -> str:
-            return f"{prefix}[{self._compiled_programs.internal_key(key)}]"
-
-        return key_to_str
+        return lambda key: f"{prefix}[{hash(key)}]"
 
     @functools.cached_property
     def _argument_descriptor_cache_key_from_args(
@@ -397,7 +393,16 @@ class CompiledProgramsPool:
         self,
         argument_descriptors: ArgumentDescriptors,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
+        call_key: CompiledProgramsKey | None = None,
     ) -> None:
+        if not common.is_offset_provider(offset_provider):
+            if common.is_offset_provider_type(offset_provider):
+                raise ValueError(
+                    "Variant compilation of programs with 'OffsetProviderType' is not yet supported."
+                )
+            else:
+                raise ValueError(f"Invalid 'offset_provider': {offset_provider}")
+
         self._initialize_argument_descriptor_mapping(argument_descriptors)
         _validate_argument_descriptors(self.program_type, argument_descriptors)
 
@@ -406,9 +411,11 @@ class CompiledProgramsPool:
         )
         key = (
             self._argument_descriptor_cache_key_from_descriptors(argument_descriptor_contexts),
-            self._offset_provider_to_type_unsafe(offset_provider),
+            common.hash_offset_provider_items_by_id(offset_provider),
         )
-        if key in self._compiled_programs:
+        assert call_key is None or call_key == key
+
+        if key in self.compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
 
         # If we are collecting metrics, create a new metrics entity for this compiled program
@@ -417,15 +424,15 @@ class CompiledProgramsPool:
             metrics_source.metadata |= dict(
                 name=self.definition_stage.definition.__name__,
                 backend=self.backend.name,
-                compiled_program_pool_key=self._compiled_programs.internal_key(key),
+                compiled_program_pool_key=hash(key),
                 **{
-                    f"{_convert_pascal_to_snake_name(key.__name__)}s": value
+                    f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
                     for key, value in argument_descriptors.items()
                 },
             )
 
         compile_time_args = arguments.CompileTimeArgs(
-            offset_provider=offset_provider,  # type:ignore[arg-type] # TODO(havogt): resolve OffsetProviderType vs OffsetProvider
+            offset_provider=offset_provider,
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
             args=tuple(self.program_type.definition.pos_only_args)
             + tuple(self.program_type.definition.pos_or_kw_args.values()),
@@ -437,24 +444,9 @@ class CompiledProgramsPool:
         )
         if _async_compilation_pool is None:
             # synchronous compilation
-            self._compiled_programs[key] = compile_call()
+            self.compiled_programs[key] = compile_call()
         else:
-            self._compiled_programs[key] = _async_compilation_pool.submit(compile_call)
-
-    def _offset_provider_to_type_unsafe(
-        self,
-        offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    ) -> common.OffsetProviderType:
-        try:
-            op_type = self._offset_provider_type_cache[offset_provider]
-        except KeyError:
-            op_type = (
-                offset_provider
-                if common.is_offset_provider_type(offset_provider)
-                else common.offset_provider_to_type(offset_provider)
-            )
-            self._offset_provider_type_cache[offset_provider] = op_type
-        return op_type
+            self.compiled_programs[key] = _async_compilation_pool.submit(compile_call)
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
     #  domains.
@@ -491,8 +483,8 @@ class CompiledProgramsPool:
                 )
 
     def _resolve_future(self, key: CompiledProgramsKey) -> stages.CompiledProgram:
-        program = self._compiled_programs[key]
+        program = self.compiled_programs[key]
         assert isinstance(program, concurrent.futures.Future)
         result = program.result()
-        self._compiled_programs[key] = result
+        self.compiled_programs[key] = result
         return result

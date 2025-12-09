@@ -108,19 +108,6 @@ class Program:
             static_params=static_params,
         )
 
-    # needed in testing
-    @property
-    def definition(self) -> types.FunctionType:
-        return self.definition_stage.definition
-
-    @functools.cached_property
-    def past_stage(self) -> ffront_stages.PRG:
-        # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.CompilableProgram(
-            self.definition_stage, arguments.CompileTimeArgs.empty()
-        )
-        return self._frontend_transforms.func_to_past(no_args_def).data
-
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
         no_args_past = toolchain.CompilableProgram(
@@ -142,6 +129,18 @@ class Program:
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
     @property
+    def definition(self) -> types.FunctionType:
+        return self.definition_stage.definition
+
+    @functools.cached_property
+    def past_stage(self) -> ffront_stages.PAST_PRG:
+        # backwards compatibility for backends that do not support the full toolchain
+        no_args_def = toolchain.CompilableProgram(
+            self.definition_stage, arguments.CompileTimeArgs.empty()
+        )
+        return self._frontend_transforms.func_to_past(no_args_def).data
+
+    @property
     def _frontend_transforms(self) -> next_backend.Transforms:
         if self.backend is None:
             return next_backend.DEFAULT_TRANSFORMS
@@ -149,6 +148,43 @@ class Program:
         #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
         assert isinstance(self.backend.transforms, next_backend.Transforms)
         return self.backend.transforms
+
+    @functools.cached_property
+    def _all_closure_vars(self) -> dict[str, Any]:
+        return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
+
+    @functools.cached_property
+    def gtir(self) -> itir.Program:
+        no_args_past = toolchain.CompilableProgram(
+            data=ffront_stages.PastProgramDefinition(
+                past_node=self.past_stage.past_node,
+                closure_vars=self.past_stage.closure_vars,
+                grid_type=self.definition_stage.grid_type,
+            ),
+            args=arguments.CompileTimeArgs.empty(),
+        )
+        return self._frontend_transforms.past_to_itir(no_args_past).data
+
+    @functools.cached_property
+    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
+        if self.backend is None or self.backend == eve.NOTHING:
+            raise RuntimeError("Cannot compile a program without backend.")
+
+        if self.static_params is None:
+            object.__setattr__(self, "static_params", ())
+
+        argument_descriptor_mapping = {
+            arguments.StaticArg: self.static_params,
+        }
+
+        program_type = self.past_stage.past_node.type
+        assert isinstance(program_type, ts_ffront.ProgramType)
+        return compiled_program.CompiledProgramsPool(
+            backend=self.backend,
+            definition_stage=self.definition_stage,
+            program_type=program_type,
+            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
+        )
 
     def with_backend(self, backend: next_backend.Backend) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -213,43 +249,6 @@ class Program:
             },
         )
 
-    @functools.cached_property
-    def _all_closure_vars(self) -> dict[str, Any]:
-        return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
-
-    @functools.cached_property
-    def gtir(self) -> itir.Program:
-        no_args_past = toolchain.CompilableProgram(
-            data=ffront_stages.PastProgramDefinition(
-                past_node=self.past_stage.past_node,
-                closure_vars=self.past_stage.closure_vars,
-                grid_type=self.definition_stage.grid_type,
-            ),
-            args=arguments.CompileTimeArgs.empty(),
-        )
-        return self._frontend_transforms.past_to_itir(no_args_past).data
-
-    @functools.cached_property
-    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
-        if self.backend is None or self.backend == eve.NOTHING:
-            raise RuntimeError("Cannot compile a program without backend.")
-
-        if self.static_params is None:
-            object.__setattr__(self, "static_params", ())
-
-        argument_descriptor_mapping = {
-            arguments.StaticArg: self.static_params,
-        }
-
-        program_type = self.past_stage.past_node.type
-        assert isinstance(program_type, ts_ffront.ProgramType)
-        return compiled_program.CompiledProgramsPool(
-            backend=self.backend,
-            definition_stage=self.definition_stage,
-            program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
-        )
-
     def __call__(
         self,
         *args: Any,
@@ -266,7 +265,7 @@ class Program:
 
         with metrics.collect() as metrics_source:
             if collect_info_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO):
-                start = time.time()
+                start = time.perf_counter()
 
             if __debug__:
                 # TODO: remove or make dependency on self.past_stage optional
@@ -300,7 +299,7 @@ class Program:
 
             if collect_info_metrics:
                 assert metrics_source is not None
-                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.time() - start)
+                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.perf_counter() - start)
 
     def compile(
         self,
@@ -363,7 +362,7 @@ class FrozenProgram:
     Does not work in embedded execution.
     """
 
-    program: ffront_stages.DSL_PRG | ffront_stages.PRG
+    program: ffront_stages.DSL_PRG | ffront_stages.PAST_PRG
     backend: next_backend.Backend
     _compiled_program: Optional[stages.CompiledProgram] = dataclasses.field(
         init=False, default=None
@@ -714,8 +713,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
             if "domain" in kwargs:
-                domain = common.domain(kwargs.pop("domain"))
-                out = utils.tree_map(lambda f: f[domain])(out)
+                domain = utils.tree_map(common.domain)(kwargs.pop("domain"))
+                if not isinstance(domain, tuple):
+                    domain = utils.tree_map(lambda _: domain)(out)
+                out = utils.tree_map(lambda f, dom: f[dom])(out, domain)
 
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs

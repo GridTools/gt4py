@@ -52,20 +52,18 @@ def find_constant_symbols(
                     raise NotImplementedError(
                         f"Unsupported field with multiple horizontal dimensions '{p}'."
                     )
-                if isinstance(p.type.dtype, ts.ListType):
-                    assert p.type.dtype.offset_type is not None
-                    full_dims = common.order_dimensions([*p.type.dims, p.type.dtype.offset_type])
-                    dim_index = full_dims.index(dim)
-                else:
-                    dim_index = p.type.dims.index(dim)
-                stride_name = gtx_dace_utils.field_stride_symbol_name(p.id, dim_index)
-                constant_symbols[stride_name] = 1
+                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(str(p.id), dim)
+                constant_symbols[sdfg_stride_symbol.name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
-        for conn, desc in sdfg.arrays.items():
-            if gtx_dace_utils.is_connectivity_identifier(conn, offset_provider_type):
-                assert not desc.transient
-                stride_name = gtx_dace_utils.field_stride_symbol_name(conn, 0)
-                constant_symbols[stride_name] = 1
+        connectivity_types = gtx_dace_utils.filter_connectivity_types(offset_provider_type)
+        for offset, conn_type in connectivity_types.items():
+            if (conn_id := gtx_dace_utils.connectivity_identifier(offset)) in sdfg.arrays:
+                assert not sdfg.arrays[conn_id].transient
+                assert conn_type.source_dim.kind == common.DimensionKind.HORIZONTAL
+                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(
+                    conn_id, conn_type.source_dim, connectivity_types
+                )
+                constant_symbols[sdfg_stride_symbol.name] = 1
 
     if disable_field_origin_on_program_arguments:
         # collect symbols used as range start for all program arguments
@@ -85,11 +83,12 @@ def find_constant_symbols(
                 if len(psymbol.type.dims) == 0:
                     # zero-dimensional field
                     continue
-                dataname = str(psymbol.id)
                 # set all range start symbols to constant value 0
-                constant_symbols |= {
-                    gtx_dace_utils.range_start_symbol(dataname, dim): 0 for dim in psymbol.type.dims
-                }
+                sdfg_origin_symbols = [
+                    gtx_dace_utils.range_start_symbol(str(psymbol.id), dim)
+                    for dim in psymbol.type.dims
+                ]
+                constant_symbols |= {sdfg_symbol.name: 0 for sdfg_symbol in sdfg_origin_symbols}
 
     return constant_symbols
 
@@ -140,6 +139,25 @@ def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
     )
 
 
+def _make_if_region_for_metrics_collection(
+    name: str,
+    metrics_level: str,
+    sdfg: dace.SDFG,
+) -> tuple[dace.state.ConditionalBlock, dace.state.SDFGState]:
+    """
+    Helper function to create a conditional block in the given SDFG, with only one
+    branch to be executed if 'metric_level >= metrics.PERFORMANCE' is true.
+    """
+    if_region = dace.sdfg.state.ConditionalBlock(name)
+    sdfg.add_node(if_region, ensure_unique_name=True)
+    then_body = dace.sdfg.state.ControlFlowRegion(f"{if_region.label}_collect_metrics", sdfg=sdfg)
+    then_state = then_body.add_state(f"{if_region.label}_collect_metrics")
+    if_region.add_branch(
+        dace.sdfg.state.CodeBlock(f"{metrics_level} >= {metrics.PERFORMANCE}"), then_body
+    )
+    return if_region, then_state
+
+
 def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     """
     Instrument SDFG with measurement of total execution time.
@@ -149,10 +167,10 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     time, it does not include the overhead of calling the SDFG from Python.
 
     The execution time is measured in seconds and represented as a 'float64' value.
-    It is returned from the SDFG as a one-element array in the '__return' data node.
+    It is written to the global array 'SDFG_ARG_METRIC_COMPUTE_TIME'.
     """
-    output, _ = sdfg.add_array("__return", [1], dace.float64)
-    start_time, _ = sdfg.add_scalar("gt_start_time", dace.float64, transient=True)
+    output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
+    start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
 
     #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
@@ -174,32 +192,27 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         has_side_effects = False
 
     #### 2. Timestamp the SDFG entry point.
-    entry_state = sdfg.add_state("gt_timer_entry")
-    begin_state = sdfg.add_state_after(
-        entry_state, "gt_timer_begin", condition=f"{metrics_level} >= {metrics.PERFORMANCE}"
+    entry_if_region, begin_state = _make_if_region_for_metrics_collection(
+        "program_entry", metrics_level, sdfg
     )
 
     for source_state in sdfg.source_nodes():
-        if source_state is entry_state:
+        if source_state is entry_if_region:
             continue
-        sdfg.add_edge(
-            entry_state,
-            source_state,
-            dace.InterstateEdge(condition=f"{metrics_level} < {metrics.PERFORMANCE}"),
-        )
-        sdfg.add_edge(begin_state, source_state, dace.InterstateEdge())
-    assert sdfg.out_degree(begin_state) > 0
-    assert sdfg.out_degree(entry_state) > 1
+        sdfg.add_edge(entry_if_region, source_state, dace.InterstateEdge())
+        source_state.is_start_block = False
+    assert sdfg.out_degree(entry_if_region) > 0
+    entry_if_region.is_start_block = True
 
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
         outputs={"time"},
         code="""\
-time = static_cast<double>(
-    std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
-) / 1e9;
+auto now = std::chrono::high_resolution_clock::now();
+time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()
+    ).count();
         """,
         language=dace.dtypes.Language.CPP,
     )
@@ -212,28 +225,28 @@ time = static_cast<double>(
     )
 
     #### 3. Collect the SDFG end timestamp and produce the compute metric.
-    end_state = sdfg.add_state("gt_timer_end")
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is end_state:
-            continue
-        sdfg.add_edge(
-            sink_state,
-            end_state,
-            dace.InterstateEdge(condition=f"{metrics_level} >= {metrics.PERFORMANCE}"),
-        )
-    assert sdfg.in_degree(end_state) > 0
+    exit_if_region, end_state = _make_if_region_for_metrics_collection(
+        "program_exit", metrics_level, sdfg
+    )
 
+    for sink_state in sdfg.sink_nodes():
+        if sink_state is exit_if_region:
+            continue
+        sdfg.add_edge(sink_state, exit_if_region, dace.InterstateEdge())
+    assert sdfg.in_degree(exit_if_region) > 0
+
+    # Populate the branch that computes the stencil time metric
     tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
         outputs={"duration"},
         code=sync_code
         + """
-double run_cpp_end_time = static_cast<double>(
-    std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count()
-) / 1e9;
-duration = run_cpp_end_time - run_cpp_start_time;
+auto now = std::chrono::high_resolution_clock::now();
+auto run_cpp_end_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()
+    ).count();
+duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         """,
         language=dace.dtypes.Language.CPP,
         side_effects=has_side_effects,
@@ -246,9 +259,17 @@ duration = run_cpp_end_time - run_cpp_start_time;
         dace.Memlet(f"{start_time}[0]"),
     )
     end_state.add_edge(
-        tlet_stop_timer, "duration", end_state.add_access(output), None, dace.Memlet(f"{output}[0]")
+        tlet_stop_timer,
+        "duration",
+        end_state.add_access(output),
+        None,
+        dace.Memlet(f"{output}[0]"),
     )
-    # Check SDFG validity after applying the above changes.
+    # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
+    #  the wrapper provided by `DataflowBuilder`, that modifies the tasklet connectors
+    #  to avoid name conflicts with program symbols. However, this method is not
+    #  available here, so we have to call the underlying DaCe function directly.
+    #  We now run `validate()` to make sure that no name conflict was introduced.
     sdfg.validate()
 
 
@@ -380,6 +401,7 @@ class DaCeTranslator(
                 sdfg, constant_symbols, validate=True
             )
             gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+
         elif len(constant_symbols) != 0:
             # Target CPU without SDFG transformations, but still replace constant symbols.
             # Replacing the SDFG symbols for field origin in global arrays is strictly

@@ -120,6 +120,7 @@ def test_compile_kwargs(cartesian_case, compile_testee):
     assert np.allclose(kwargs["out"].ndarray, a.ndarray + b.ndarray)
 
 
+@pytest.mark.uses_scan
 def test_compile_scan(cartesian_case, compile_testee_scan):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")

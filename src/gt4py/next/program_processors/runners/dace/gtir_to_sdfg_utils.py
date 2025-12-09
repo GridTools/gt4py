@@ -8,16 +8,21 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, TypeVar
+from typing import Dict, Final, Optional, TypeVar
 
 import dace
 
 from gt4py import eve
+from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.program_processors.runners.dace import gtir_python_codegen, gtir_to_sdfg_types
+from gt4py.next.program_processors.runners.dace import gtir_python_codegen
 from gt4py.next.type_system import type_specifications as ts
+
+
+_TASKLET_CONNECTOR_PREFIX: Final[str] = "__tlet_"
+"""Prefix string to be used for tasklet connectors."""
 
 
 def debug_info(
@@ -36,33 +41,6 @@ def debug_info(
     return default
 
 
-def get_arg_symbol_mapping(
-    dataname: str, arg: gtir_to_sdfg_types.FieldopResult, sdfg: dace.SDFG
-) -> dict[str, dace.symbolic.SymExpr]:
-    """
-    Helper method to build the mapping from inner to outer SDFG of all symbols
-    used for storage of a field or a tuple of fields.
-
-    Args:
-        dataname: The storage name inside the nested SDFG.
-        arg: The argument field in the parent SDFG.
-        sdfg: The parent SDFG where the argument field lives.
-
-    Returns:
-        A mapping from inner symbol names to values or symbolic definitions
-        in the parent SDFG.
-    """
-    if isinstance(arg, gtir_to_sdfg_types.FieldopData):
-        return arg.get_symbol_mapping(dataname, sdfg)
-
-    symbol_mapping: dict[str, dace.symbolic.SymExpr] = {}
-    for i, elem in enumerate(arg):
-        dataname_elem = f"{dataname}_{i}"
-        symbol_mapping |= get_arg_symbol_mapping(dataname_elem, elem, sdfg)
-
-    return symbol_mapping
-
-
 def get_map_variable(dim: gtx_common.Dimension) -> str:
     """
     Format map variable name based on the naming convention for application-specific SDFG transformations.
@@ -71,7 +49,16 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
 
-def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.Sym, ...]:
+def make_tasklet_connector_for(name: str) -> str:
+    """
+    Format tasklet connector name based on the naming convention to avoid conflicts with GTIR program symbols.
+    """
+    assert _TASKLET_CONNECTOR_PREFIX.startswith("__")
+    assert not name.startswith(_TASKLET_CONNECTOR_PREFIX)
+    return f"{_TASKLET_CONNECTOR_PREFIX}{name.lstrip('_')}"
+
+
+def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> NestedTuple[gtir.Sym]:
     """
     Creates a tree representation of the symbols corresponding to the tuple fields.
     The constructed tree preserves the nested nature of the tuple type, if any.
@@ -89,7 +76,7 @@ def make_symbol_tree(tuple_name: str, tuple_type: ts.TupleType) -> tuple[gtir.Sy
     assert all(isinstance(t, ts.DataType) for t in tuple_type.types)
     fields = [(f"{tuple_name}_{i}", field_type) for i, field_type in enumerate(tuple_type.types)]
     return tuple(
-        make_symbol_tree(field_name, field_type)  # type: ignore[misc]
+        make_symbol_tree(field_name, field_type)
         if isinstance(field_type, ts.TupleType)
         else im.sym(field_name, field_type)
         for field_name, field_type in fields
@@ -143,12 +130,19 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
     if not all(dace.dtypes.validate_name(str(sym.id)) for sym in ir.params):
         raise ValueError("Invalid symbol in program parameters.")
 
-    ir_sym_ids = {str(sym.id) for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()}
-    ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_tmp")
+    # check there are no conflicts with the connctor names generated in the lowering
+    if any(str(sym.id).startswith(_TASKLET_CONNECTOR_PREFIX) for sym in ir.params):
+        raise ValueError(
+            f"Unexpectd symbol with prefix '{_TASKLET_CONNECTOR_PREFIX}' in program parameters."
+        )
 
+    ir_sym_ids = {str(sym.id) for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()}
+    ir_ssa_uuid = eve.utils.UIDGenerator(prefix="gtir_var")
+
+    # note: traverse in alphabetical order to generate UIDs in deterministic way
     invalid_symbols_mapping = {
         sym_id: ir_ssa_uuid.sequential_id()
-        for sym_id in ir_sym_ids
+        for sym_id in sorted(ir_sym_ids)
         if not dace.dtypes.validate_name(sym_id)
     }
     if len(invalid_symbols_mapping) == 0:

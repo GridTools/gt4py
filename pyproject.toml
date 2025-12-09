@@ -11,7 +11,7 @@ dace-cartesian = [
   'dace>=1.0.2,<2'  # renfined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace>=1.0.0'  # refined in [tool.uv.sources]
+  'dace==2025.11.05'  # refined in [tool.uv.sources]
 ]
 dev = [
   {include-group = 'build'},
@@ -42,7 +42,7 @@ lint = [
   'tach>=0.23.0',
   'validate-pyproject-schema-store[all]>=2025.06.13'
 ]
-scripts = ["pyyaml>=6.0.1", "typer>=0.12.3"]
+scripts = ["pyyaml>=6.0.1", "typer>=0.12.3", "packaging"]
 test = [
   'coverage[toml]>=7.6.1',
   'hypothesis>=6.0.0',
@@ -143,9 +143,6 @@ rocm6_0 = ['cupy>=13.4.1']
 standard = ['clang-format>=18.1', 'scipy>=1.14.1']
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
-[project.scripts]
-gtpyc = 'gt4py.cartesian.cli:gtpyc'
-
 [project.urls]
 Documentation = 'https://gridtools.github.io/gt4py'
 Homepage = 'https://gridtools.github.io/'
@@ -244,11 +241,6 @@ disallow_untyped_defs = false
 module = 'gt4py.next.iterator.*'
 
 [[tool.mypy.overrides]]
-disallow_incomplete_defs = false
-disallow_untyped_defs = false
-module = 'gt4py.next.program_processors.runners.dace_iterator.*'
-
-[[tool.mypy.overrides]]
 ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
 
@@ -305,6 +297,8 @@ markers = [
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
+python_files = ['test_*.py', '*_test.py', 'benchmark_*.py']
+python_functions = ['test_*', 'benchmark_*']
 testpaths = 'tests'
 xfail_strict = true
 
@@ -454,12 +448,12 @@ url = 'https://test.pypi.org/simple'
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-roundtrip", group = "dace-cartesian"},
-  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_09_25", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2025_11_05", group = "dace-next"}
 ]
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "0.0.0+missing.version.info"
+default-version = "1.1.0+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty

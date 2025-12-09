@@ -146,8 +146,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             rows=3,
             cols=2,
             gt_conn_E2V=e2v,
-            __gt_conn_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-            __gt_conn_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+            __gt_conn_E2V_source_stride=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+            __gt_conn_E2V_neighbor_stride=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
         )
 
         e2v_np = e2v.asnumpy()
@@ -167,8 +167,8 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             rows=3,
             cols=2,
             gt_conn_E2V=e2v,
-            __gt_conn_E2V_stride_0=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-            __gt_conn_E2V_stride_1=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+            __gt_conn_E2V_source_stride=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
+            __gt_conn_E2V_neighbor_stride=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
         )
 
         e2v_np = e2v.asnumpy()

@@ -44,7 +44,7 @@ from gt4py.cartesian.frontend.exceptions import (
     GTScriptSyntaxError,
     GTScriptValueError,
 )
-from gt4py.cartesian.utils import meta as gt_meta
+from gt4py.cartesian.utils import meta as gt_meta, warn_experimental_feature
 
 
 PYTHON_AST_VERSION: Final = (3, 10)
@@ -436,6 +436,7 @@ class CallInliner(ast.NodeTransformer):
     def visit_Call(self, node: ast.Call, *, target_node=None):  # Cyclomatic complexity too high
         if _filter_absolute_K_index_method(node):
             return node
+
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
         if call_name in self.call_stack:
@@ -710,6 +711,20 @@ def _is_datadims_indexing_name(name: str):
     return name.endswith(f".{_DATADIMS_INDEXER}")
 
 
+def _is_iterator_access(name: str, loc: nodes.Location) -> bool:
+    if name != "K":
+        raise GTScriptSyntaxError(
+            f"Parallel axis {name} can't be queried - only K - at line {loc.line} (column {loc.column})",
+            loc=loc,
+        )
+
+    gt_utils.warn_experimental_feature(
+        feature="Iterator access in K", ADR="experimental/iteration-index-k.md"
+    )
+
+    return name == "K"
+
+
 def _trim_indexing_symbol(name: str):
     return name[: -1 * (len(_DATADIMS_INDEXER) + 1)]
 
@@ -733,7 +748,7 @@ class IRMaker(ast.NodeVisitor):
         domain: nodes.Domain,
         options: gt_definitions.BuildOptions,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
-        dtypes: Optional[Dict[Type, Type]] = None,
+        dtypes: Optional[Dict[Type | str, Type]] = None,
     ):
         fields = fields or {}
         parameters = parameters or {}
@@ -807,7 +822,14 @@ class IRMaker(ast.NodeVisitor):
             "round_away_from_zero": nodes.NativeFunction.ROUND_AWAY_FROM_ZERO,
         }  # Conversion table for functions to NativeFunctions
 
-        self.temporary_type_to_native_type = {
+        # Filter the field type from `dtypes`
+        self.temporary_field_type = {}
+        if self.dtypes:
+            for name, _type in self.dtypes.items():
+                if isinstance(_type, gtscript._FieldDescriptor):
+                    self.temporary_field_type[name] = _type
+
+        self.temporary_type_as_str_to_native_type = {
             "int32": nodes.DataType.INT32,
             "int64": nodes.DataType.INT64,
             "float32": nodes.DataType.FLOAT32,
@@ -1052,12 +1074,12 @@ class IRMaker(ast.NodeVisitor):
             if self.dtypes and type(value) in self.dtypes.keys():
                 value_type = self.dtypes[type(value)]
             else:
-                if isinstance(value, int):
+                if hasattr(value, "dtype") and isinstance(value.dtype, np.dtype):
+                    value_type = value.dtype
+                elif isinstance(value, int):
                     value_type = np.dtype(f"i{int(self.literal_int_precision / 8)}")
                 elif isinstance(value, float):
                     value_type = np.dtype(f"f{int(self.literal_float_precision / 8)}")
-                elif hasattr(value, "dtype") and isinstance(value.dtype, np.dtype):
-                    value_type = value.dtype
                 else:
                     raise GTScriptSyntaxError(
                         f"Unexpected constant type `{type(value)}`. Expected integer or float."
@@ -1090,26 +1112,32 @@ class IRMaker(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> nodes.Ref:
         symbol = node.id
         if self._is_field(symbol):
-            result = nodes.FieldRef.at_center(
+            return nodes.FieldRef.at_center(
                 symbol,
                 axes=self.fields[symbol].axes,
                 loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
             )
-        elif self._is_parameter(symbol):
-            result = nodes.VarRef(
+
+        if self._is_parameter(symbol):
+            return nodes.VarRef(
                 name=symbol, loc=nodes.Location.from_ast_node(node, scope=self.stencil_name)
             )
-        elif self._is_local_symbol(symbol):
+
+        if self._is_local_symbol(symbol):
             raise AssertionError("Logic error")
-        elif _is_datadims_indexing_name(symbol):
-            result = nodes.FieldRef.datadims_index(
+
+        if _is_datadims_indexing_name(symbol):
+            return nodes.FieldRef.datadims_index(
                 name=_trim_indexing_symbol(symbol),
                 loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
             )
-        else:
-            raise AssertionError(f"Missing '{symbol}' symbol definition")
 
-        return result
+        if _is_iterator_access(symbol, nodes.Location.from_ast_node(node)):
+            value_type = np.dtype(f"i{int(self.literal_int_precision / 8)}")
+            data_type = nodes.DataType.from_dtype(value_type)
+            return nodes.IteratorAccess(name="K", data_type=data_type)
+
+        raise AssertionError(f"Missing '{symbol}' symbol definition")
 
     def visit_Index(self, node: ast.Index):
         index = self.visit(node.value)
@@ -1492,8 +1520,19 @@ class IRMaker(ast.NodeVisitor):
                 "a list of values, e.g. `.at(K=..., ddim=[...])`.",
                 loc=nodes.Location.from_ast_node(node),
             )
-
         k_offset_value = self.visit(node.keywords[0].value)
+        if isinstance(k_offset_value, nodes.IteratorAccess) and k_offset_value.name == "K":
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, you cannot write `.at(K=K)` since `.at` denotes "
+                "an absolute index, this is equivalent to `field[0, 0, 0]` or simply `field`.",
+                loc=nodes.Location.from_ast_node(node),
+            )
+        if isinstance(k_offset_value, nodes.IteratorAccess):
+            raise GTScriptSyntaxError(
+                message="Absolute K index: bad syntax, you cannot use parallel axis in absolute, "
+                f"e.g. no `.at(K={k_offset_value.name})`",
+                loc=nodes.Location.from_ast_node(node),
+            )
         field = self.visit(node.func.value)
         assert isinstance(field, nodes.FieldRef)
         field.offset = nodes.AbsoluteKIndex(k=k_offset_value)
@@ -1560,6 +1599,19 @@ class IRMaker(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign, **kwargs) -> list:
         return self._resolve_assign(node, node.targets)
 
+    def _domain_from_gtscript_axis(self, gt_axis: list[gtscript.Axis]) -> nodes.Domain:
+        sequential_axis = None
+        parallel_axes = []
+        for axis in gt_axis:
+            if axis in (gtscript.I, gtscript.J):
+                parallel_axes.append(nodes.Axis(name=axis.name))
+            else:
+                sequential_axis = nodes.Axis(name=axis.name)
+        return nodes.Domain(
+            parallel_axes=parallel_axes,
+            sequential_axis=sequential_axis,
+        )
+
     def _resolve_assign(
         self,
         node: Union[ast.AnnAssign, ast.Assign],
@@ -1607,20 +1659,52 @@ class IRMaker(ast.NodeVisitor):
                             loc=nodes.Location.from_ast_node(t, scope=self.stencil_name),
                         )
                     dtype = nodes.DataType.AUTO
+                    axes = nodes.Domain.LatLonGrid().axes_names
                     if target_annotation is not None:
                         source = ast.unparse(target_annotation)
                         try:
-                            dtype = eval(source, self.temporary_type_to_native_type)
+                            dtype_or_field_desc = eval(
+                                source,
+                                self.temporary_type_as_str_to_native_type
+                                | self.temporary_field_type
+                                | gtscript.__dict__,
+                            )
                         except NameError:
                             raise GTScriptSyntaxError(
                                 message=f"Failed to recognize type {source} for local symbol {name}."
-                                f"Available types are {self.temporary_type_to_native_type.keys()}",
+                                f"Available types are {self.temporary_type_as_str_to_native_type.keys()}, {self.dtypes}, "
+                                "or `Field[IJ, dtype]`.",
                                 loc=nodes.Location.from_ast_node(t),
                             ) from None
+                        # If Field, we have to expand to resolve axes and true type
+                        if isinstance(dtype_or_field_desc, gtscript._FieldDescriptor):
+                            field_desc = dtype_or_field_desc
+                            if field_desc.axes != gtscript.IJ:
+                                raise GTScriptSyntaxError(
+                                    message=f"Typed temporaries must be IJ, temporaries for axes {field_desc.axes}"
+                                    " is not yet available. Contact the team.",
+                                    loc=nodes.Location.from_ast_node(t),
+                                ) from None
+                            if self.backend_name.startswith("gt:"):
+                                raise NotImplementedError(
+                                    "2D temporaries (e.g. `tmp: Field[IJ, float] = ...) is an experimental feature "
+                                    "and not yet implemented for the `gt:X` backends."
+                                )
+                            warn_experimental_feature(
+                                feature="2D temporaries", ADR="experimental/2d-temporaries.md"
+                            )
+
+                            axes = self._domain_from_gtscript_axis(field_desc.axes).axes_names
+                            dtype = nodes.DataType.from_dtype(field_desc.dtype)
+                        elif isinstance(dtype_or_field_desc, nodes.DataType):
+                            dtype = dtype_or_field_desc
+                        else:
+                            # If all failed, expect a proper type and try to convert it
+                            dtype = nodes.DataType.from_dtype(dtype_or_field_desc)
                     field_decl = nodes.FieldDecl(
                         name=name,
                         data_type=dtype,
-                        axes=nodes.Domain.LatLonGrid().axes_names,
+                        axes=axes,
                         is_api=False,
                         loc=nodes.Location.from_ast_node(t, scope=self.stencil_name),
                     )

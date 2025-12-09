@@ -187,6 +187,12 @@ class GTIRToOIR(eve.NodeTranslator):
 
         return statements
 
+    def visit_IteratorAccess(self, iterator_access: gtir.IteratorAccess) -> oir.IteratorAccess:
+        return oir.IteratorAccess(
+            name=oir.IteratorAccess.AxisName(iterator_access.name.value),
+            dtype=iterator_access.dtype,
+        )
+
     # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
     # This is not meant to be set in stone...
     def visit_ScalarIfStmt(
