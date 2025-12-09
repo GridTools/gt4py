@@ -7,9 +7,9 @@ on:
 
   ## COMMENTED OUT: only for testing CI action changes.
   ## It only works for PRs to `main` branch from branches in the upstream gt4py repo.
-  pull_request:
-    branches:
-      - main
+  # pull_request:
+  #   branches:
+  #     - main
   ## END
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Use a deep clone to get target PR branch
+          fetch-depth: 0 # Use a deep clone to get all tags
 
       - id: get-versions
         uses: ./.github/actions/get-python-versions
