@@ -114,7 +114,7 @@ def set_dace_config(
         dace.Config.set("compiler.cuda.backend", value="cuda")
 
     # Instrumentation of SDFG timers
-    dace.Config.set("instrumentation", "report_each_invocation", value=True)
+    dace.Config.set("instrumentation", "report_each_invocation", value=False)
 
     # we are not interested in storing the history of SDFG transformations.
     dace.Config.set("store_history", value=False)
