@@ -112,7 +112,7 @@ def test_cartesian_half_shift_plus1(cartesian_case):
     def testee(a: cases.IHalfField) -> cases.IHalfField:
         return a(IHalfDim + 1)  # always pass an IHalf-index to an IHalfField
 
-    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
+    a = cases.allocate(cartesian_case, testee, "a")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(cartesian_case, testee, a, out=out[:-1], ref=a[1:], offset_provider={})
@@ -138,7 +138,7 @@ def test_cartesian_half_shift_half2center(cartesian_case):
     def testee(a: cases.IHalfField) -> cases.IField:
         return 2 * a(IDim + 0.5)  # always pass an IHalf-index to an IHalfField
 
-    a = cases.allocate(cartesian_case, testee, "a")()
+    a = cases.allocate(cartesian_case, testee, "a").extend({IHalfDim: (0, 1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(cartesian_case, testee, a, out=out, ref=2 * a[:], offset_provider={})
