@@ -92,10 +92,31 @@ def _name_from_named_range(named_range_call: itir.FunCall) -> str:
     return named_range_call.args[0].value
 
 
+class FlipStaggeredDims(eve.NodeTranslator):
+    def flip_to_nonstaggered(self, axis_literal: itir.AxisLiteral) -> itir.AxisLiteral:
+        dim = common.Dimension(value=axis_literal.value, kind=axis_literal.kind)
+        return im.axis_literal(
+            common.flip_staggered(dim) if dim.value.startswith(common._STAGGERED_PREFIX) else dim
+        )
+
+    def visit_CartesianOffset(self, node: itir.CartesianOffset) -> itir.CartesianOffset:
+        return itir.CartesianOffset(
+            domain=self.flip_to_nonstaggered(node.domain),
+            codomain=self.flip_to_nonstaggered(node.codomain),
+        )
+
+    def visit_AxisLiteral(self, node: itir.AxisLiteral) -> itir.AxisLiteral:
+        return self.flip_to_nonstaggered(node)
+
+
+def flip_staggered_offsets(node: itir.Node) -> itir.Node:
+    return FlipStaggeredDims().visit(node)
+
+
 def _collect_dimensions_from_domain(
     body: Iterable[itir.Stmt],
 ) -> dict[str, TagDefinition]:
-    domains = _get_domains(body)
+    domains = flip_staggered_offsets(_get_domains(body))
     offset_definitions = {}
     for domain in domains:
         if domain.fun == itir.SymRef(id="cartesian_domain"):
@@ -132,6 +153,17 @@ def _collect_offset_definitions(
     grid_type: common.GridType,
     offset_provider_type: common.OffsetProviderType,
 ) -> dict[str, TagDefinition]:
+    offset_definitions = {}
+
+    expr = flip_staggered_offsets(node.body[0].expr)
+    cartesian_offset_tags: set[str] = set()
+    for v in expr.walk_values():
+        if isinstance(v, itir.CartesianOffset):
+            cartesian_offset_tags.add(v.domain.value)
+            cartesian_offset_tags.add(v.codomain.value)
+    for offset_name in cartesian_offset_tags:
+        offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
+
     used_offset_tags: set[str] = (
         node.walk_values()
         .if_isinstance(itir.OffsetLiteral)
@@ -143,7 +175,6 @@ def _collect_offset_definitions(
         offset_name: common.get_offset_type(offset_provider_type, offset_name)
         for offset_name in used_offset_tags
     } | {**offset_provider_type}
-    offset_definitions = {}
 
     for offset_name, dim_or_connectivity_type in offset_provider_type.items():
         if isinstance(dim_or_connectivity_type, common.Dimension):
