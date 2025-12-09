@@ -126,7 +126,7 @@ def gt_simplify(
             validate=False,
             validate_all=validate_all,
             verbose=False,
-            skip=(skip | {"FuseStates", "InlineSDFGs"}),
+            skip=(skip | {"InlineSDFGs"}),
         ).apply_pass(sdfg, {})
 
         if simplify_res is not None:
@@ -134,9 +134,10 @@ def gt_simplify(
             result = result or {}
             result.update(simplify_res)
 
-        # The DaCe state fusion pass was skipped above, and we rely on GT4Py state
-        #  fusion, because of incorrect SDFG results (we observed that double buffer
-        #  was removed, where needed).
+        # Note that it is not nice that we run the state fusion twice, but to be fully
+        #  effective there are some preparatory transformations that are run in DaCe
+        #  simplify. So the GT4Py transformation is more like a clean up to handle
+        #  the parts DaCe is not able to do.
         if "FuseStates" not in skip:
             fuse_state_res = sdfg.apply_transformations_repeated(
                 [gtx_transformations.GT4PyStateFusion],
