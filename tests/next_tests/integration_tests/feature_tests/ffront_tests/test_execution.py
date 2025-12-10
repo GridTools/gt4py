@@ -484,7 +484,7 @@ def test_scan_unused_parameter(cartesian_case):
 
     inp = cases.allocate(cartesian_case, testee, "inp")()
     unused = cases.allocate(cartesian_case, testee, "unused")()
-    out = cases.allocate(cartesian_case, testee, "inp").zeros()()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN).zeros()()
 
     cases.verify(
         cartesian_case,
