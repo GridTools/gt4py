@@ -1918,30 +1918,28 @@ class LambdaToDataflow(eve.NodeVisitor):
         `visit_let()` until the stencil expression is found. At that point, it falls
         back to the `visit()` function.
         """
-        flat_arg_nodes: list[dace.nodes.AccessNode] = []
 
         # lambda arguments are mapped to symbols defined in lambda scope.
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
-            flat_arg_nodes.extend(
-                x.field if isinstance(x, IteratorExpr) else x.dc_node  # type: ignore[attr-defined]
-                for x in gtx_utils.flatten_nested_tuple((arg,))
-            )
 
         if cpm.is_let(node.expr):
             let_node = node.expr
             let_args = [self.visit(arg) for arg in let_node.args]
             assert isinstance(let_node.fun, gtir.Lambda)
-            output = self.visit_let(let_node.fun, args=let_args)
+            return self.visit_let(let_node.fun, args=let_args)
         else:
             # this lambda node is not a let-statement, but a stencil expression
             output = self.visit(node)
-
-        # remove access nodes to lambda arguments which are not used
-        self.state.remove_nodes_from(
-            [node for node in flat_arg_nodes if self.state.degree(node) == 0]
-        )
-        return output
+            # remove access nodes to lambda arguments which are not used
+            flat_arg_nodes = [
+                x.field if isinstance(x, IteratorExpr) else x.dc_node  # type: ignore[attr-defined]
+                for x in gtx_utils.flatten_nested_tuple(tuple(self.symbol_map.values()))
+            ]
+            self.state.remove_nodes_from(
+                [node for node in flat_arg_nodes if self.state.degree(node) == 0]
+            )
+            return output
 
 
 def translate_lambda_to_dataflow(
