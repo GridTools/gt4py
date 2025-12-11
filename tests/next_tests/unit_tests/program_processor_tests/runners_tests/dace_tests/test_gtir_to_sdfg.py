@@ -2270,13 +2270,16 @@ def test_gtir_scan(id, use_symbolic_column_size):
                     im.scan(
                         im.lambda_("state", "inp")(
                             im.if_(
+                                # we use a let expression inside this if-branch to cover a lowering case
                                 im.tuple_get(1, "state"),
                                 im.make_tuple(
-                                    im.plus(VAL, im.deref("inp")),
+                                    im.let("val", VAL)(im.plus("val", im.deref("inp"))),
                                     False,
                                 ),
                                 im.make_tuple(
-                                    im.plus(im.tuple_get(0, "state"), im.deref("inp")),
+                                    im.let("val", im.tuple_get(0, "state"))(
+                                        im.plus("val", im.deref("inp"))
+                                    ),
                                     False,
                                 ),
                             )
