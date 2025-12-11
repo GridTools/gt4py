@@ -1843,9 +1843,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         elif cpm.is_applied_shift(node):
             return self._visit_shift(node)
 
-        elif isinstance(node.fun, gtir.Lambda):
-            # Lambda node should be visited with 'visit_let()' method.
-            raise ValueError(f"Unexpected lambda in 'FunCall' node: {node}.")
+        elif cpm.is_let(node):
+            let_node = node.fun
+            let_args = [self.visit(arg) for arg in node.args]
+            for p, arg in zip(node.fun.params, let_args, strict=True):
+                self.symbol_map[str(p.id)] = arg
+            return self.visit(let_node.expr)
 
         elif isinstance(node.fun, gtir.SymRef):
             return self._visit_generic_builtin(node)
@@ -1906,39 +1909,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert param in gtir_python_codegen.MATH_BUILTINS_MAPPING
         return SymbolExpr(param, dace.string)
 
-    def visit_let(
-        self,
-        node: gtir.Lambda,
-        args: Sequence[MaybeNestedInTuple[IteratorExpr | MemletExpr | ValueExpr]],
-    ) -> MaybeNestedInTuple[DataflowOutputEdge]:
-        """
-        Maps lambda arguments to internal parameters.
-
-        This method is responsible to recognize the usage of the `Lambda` node,
-        which can be either a let-statement or the stencil expression in local view.
-        The usage of a `Lambda` as let-statement corresponds to computing some results
-        and making them available inside the lambda scope, represented as a nested SDFG.
-        All let-statements, if any, are supposed to be encountered before the stencil
-        expression. In other words, the `Lambda` node representing the stencil expression
-        is always the innermost node.
-        Therefore, the lowering of let-statements results in recursive calls to
-        `visit_let()` until the stencil expression is found. At that point, it falls
-        back to the `visit()` function.
-        """
-
-        # lambda arguments are mapped to symbols defined in lambda scope.
-        for p, arg in zip(node.params, args, strict=True):
-            self.symbol_map[str(p.id)] = arg
-
-        if cpm.is_let(node.expr):
-            let_node = node.expr
-            let_args = [self.visit(arg) for arg in let_node.args]
-            assert isinstance(let_node.fun, gtir.Lambda)
-            return self.visit_let(let_node.fun, args=let_args)
-        else:
-            # this lambda node is not a let-statement, but a stencil expression
-            return self.visit(node)
-
 
 def translate_lambda_to_dataflow(
     sdfg: dace.SDFG,
@@ -1968,6 +1938,8 @@ def translate_lambda_to_dataflow(
         - Tree representation of output data connections.
     """
     taskgen = LambdaToDataflow(sdfg, state, sdfg_builder)
-    lambda_output = taskgen.visit_let(node, args)
+    for p, arg in zip(node.params, args, strict=True):
+        taskgen.symbol_map[str(p.id)] = arg
 
+    lambda_output = taskgen.visit(node)
     return taskgen.input_edges, lambda_output
