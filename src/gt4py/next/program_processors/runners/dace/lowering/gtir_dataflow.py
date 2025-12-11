@@ -1738,11 +1738,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 connector = f"arg{i}"
                 node_connections[connector] = arg_expr
                 node_internals.append(connector)
-            elif isinstance(arg_expr, SymbolExpr):
+            else:
+                assert isinstance(arg_expr, SymbolExpr)
                 # use the argument value without adding any connector
                 node_internals.append(arg_expr.value)
-            else:
-                raise ValueError(f"Unexpected argument type '{type(arg_expr)}'.")
 
         assert isinstance(node.fun, gtir.SymRef)
         builtin_name = str(node.fun.id)
