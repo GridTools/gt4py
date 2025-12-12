@@ -161,6 +161,8 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
     def visit(self, node: itir.Node, is_let_form: bool = False, **kwargs) -> None:  # type: ignore[override] # supertype accepts any node, but we want to be more specific here.
         # do not descent into un-applied lambda
         can_collect_children = not isinstance(node, itir.Lambda) or is_let_form
+        if cpm.is_call_to(node, "scan"):
+            can_collect_children = False
 
         if (
             can_collect_children
