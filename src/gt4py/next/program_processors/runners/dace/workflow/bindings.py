@@ -14,7 +14,7 @@ import dace
 
 from gt4py.eve import codegen
 from gt4py.next.otf import languages, stages
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -140,12 +140,12 @@ def _parse_gt_param(
                         # like 'range_stop - range_start', where 'range_start' and
                         # 'range_stop' are the SDFG symbols for the domain range.
                         arg_range = f"{arg}.domain.ranges[{i}]"
-                        rstart = gtx_dace_utils.range_start_symbol(param_name, dim)
-                        rstop = gtx_dace_utils.range_stop_symbol(param_name, dim)
+                        rstart = gtx_dace_args.range_start_symbol(param_name, dim)
+                        rstop = gtx_dace_args.range_stop_symbol(param_name, dim)
                         for suffix, sdfg_range_symbol in [("start", rstart), ("stop", rstop)]:
                             _parse_gt_param(
                                 param_name=sdfg_range_symbol.name,
-                                param_type=gtx_dace_utils.as_itir_type(sdfg_range_symbol.dtype),
+                                param_type=gtx_dace_args.as_itir_type(sdfg_range_symbol.dtype),
                                 arg=f"{arg_range}.{suffix}",
                                 code=code,
                                 sdfg_arglist=sdfg_arglist,
@@ -161,10 +161,10 @@ def _parse_gt_param(
                         )
                     else:
                         # The strides of a global array are defined by a sequence of SDFG symbols.
-                        assert array_stride == gtx_dace_utils.field_stride_symbol(param_name, dim)
+                        assert array_stride == gtx_dace_args.field_stride_symbol(param_name, dim)
                         _parse_gt_param(
                             param_name=array_stride.name,
-                            param_type=gtx_dace_utils.as_itir_type(array_stride.dtype),
+                            param_type=gtx_dace_args.as_itir_type(array_stride.dtype),
                             arg=arg_stride,
                             code=code,
                             sdfg_arglist=sdfg_arglist,

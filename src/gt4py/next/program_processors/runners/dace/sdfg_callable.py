@@ -15,17 +15,16 @@ import dace
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, field_utils
-
-from . import utils as gtx_dace_utils
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 
 
 def get_field_domain_symbols(name: str, domain: gtx_common.Domain) -> dict[str, int]:
     assert gtx_common.Domain.is_finite(domain)
     return {
-        gtx_dace_utils.range_start_symbol(name, dim).name: r.start
+        gtx_dace_args.range_start_symbol(name, dim).name: r.start
         for dim, r in zip(domain.dims, domain.ranges, strict=True)
     } | {
-        gtx_dace_utils.range_stop_symbol(name, dim).name: r.stop
+        gtx_dace_args.range_stop_symbol(name, dim).name: r.stop
         for dim, r in zip(domain.dims, domain.ranges, strict=True)
     }
 
@@ -96,7 +95,7 @@ def get_sdfg_conn_args(
     """
     connectivity_args = {}
     for offset, connectivity in offset_provider.items():
-        name = gtx_dace_utils.connectivity_identifier(offset)
+        name = gtx_dace_args.connectivity_identifier(offset)
         if name in sdfg.arrays:
             assert gtx_common.is_neighbor_connectivity(connectivity)
             assert field_utils.verify_device_field_type(

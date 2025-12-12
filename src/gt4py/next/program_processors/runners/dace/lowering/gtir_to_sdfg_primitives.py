@@ -22,24 +22,24 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import infer_domain
-from gt4py.next.program_processors.runners.dace import (
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_dataflow,
     gtir_domain,
     gtir_python_codegen,
     gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
-    utils as gtx_dace_utils,
 )
-from gt4py.next.program_processors.runners.dace.gtir_to_sdfg_concat_where import (
+from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_concat_where import (
     translate_concat_where,
 )
-from gt4py.next.program_processors.runners.dace.gtir_to_sdfg_scan import translate_scan
+from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_scan import translate_scan
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 if TYPE_CHECKING:
-    from gt4py.next.program_processors.runners.dace import gtir_to_sdfg
+    from gt4py.next.program_processors.runners.dace.lowering import gtir_to_sdfg
 
 
 class PrimitiveTranslator(Protocol):
@@ -311,7 +311,7 @@ def _construct_if_branch_output(
     out_type = true_br.gt_type
 
     if isinstance(out_type, ts.ScalarType):
-        dtype = gtx_dace_utils.as_dace_type(out_type)
+        dtype = gtx_dace_args.as_dace_type(out_type)
         out, _ = sdfg_builder.add_temp_scalar(ctx.sdfg, dtype)
         out_node = ctx.state.add_access(out)
         return gtir_to_sdfg_types.FieldopData(out_node, out_type, origin=())
@@ -322,12 +322,12 @@ def _construct_if_branch_output(
     assert dims == out_type.dims
 
     if isinstance(out_type.dtype, ts.ScalarType):
-        dtype = gtx_dace_utils.as_dace_type(out_type.dtype)
+        dtype = gtx_dace_args.as_dace_type(out_type.dtype)
     else:
         assert isinstance(out_type.dtype, ts.ListType)
         assert out_type.dtype.offset_type is not None
         assert isinstance(out_type.dtype.element_type, ts.ScalarType)
-        dtype = gtx_dace_utils.as_dace_type(out_type.dtype.element_type)
+        dtype = gtx_dace_args.as_dace_type(out_type.dtype.element_type)
         offset_provider_type = sdfg_builder.get_offset_provider_type(
             out_type.dtype.offset_type.value
         )
@@ -479,7 +479,7 @@ def translate_index(
     index_node = ctx.state.add_access(index_data)
     index_value = gtir_dataflow.ValueExpr(
         dc_node=index_node,
-        gt_dtype=gtx_dace_utils.as_itir_type(gtir_to_sdfg_types.INDEX_DTYPE),
+        gt_dtype=gtx_dace_args.as_itir_type(gtir_to_sdfg_types.INDEX_DTYPE),
     )
     index_write_tasklet, connector_mapping = sdfg_builder.add_tasklet(
         name="index",
@@ -557,7 +557,7 @@ def _get_symbolic_value(
     )
     temp_name, _ = sdfg.add_scalar(
         temp_name or sdfg.temp_data_name(),
-        gtx_dace_utils.as_dace_type(scalar_type),
+        gtx_dace_args.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,
     )
@@ -703,7 +703,7 @@ def translate_scalar_expr(
             dace.Memlet(data=arg_node.data, subset="0"),
         )
     # finally, create temporary for the result value
-    temp_name, _ = sdfg_builder.add_temp_scalar(ctx.sdfg, gtx_dace_utils.as_dace_type(node.type))
+    temp_name, _ = sdfg_builder.add_temp_scalar(ctx.sdfg, gtx_dace_args.as_dace_type(node.type))
     temp_node = ctx.state.add_access(temp_name)
     ctx.state.add_edge(
         tasklet_node,

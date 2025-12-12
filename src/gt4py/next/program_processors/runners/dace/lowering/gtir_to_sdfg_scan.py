@@ -37,7 +37,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import infer_domain
-from gt4py.next.program_processors.runners.dace import (
+from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_dataflow,
     gtir_domain,
     gtir_to_sdfg,
@@ -522,17 +522,6 @@ def _lower_lambda_to_nested_sdfg(
     lambda_output = gtx_utils.tree_map(connect_scan_output)(
         lambda_result, lambda_result_shape, scan_carry_input
     )
-
-    # Corner case where the scan computation, on one level, does not depend on
-    # the result from previous level. In this case, the state information from
-    # previous level is not used, therefore we could find isolated access nodes.
-    # In case of tuples, it might be that only some of the fields are used.
-    # In case of scalars, this is probably a misuse of scan in application code:
-    # it could have been represented as a pure field operator.
-    for arg in gtx_utils.flatten_nested_tuple((stencil_args[0],)):
-        state_node = arg.dc_node
-        if compute_state.degree(state_node) == 0:
-            compute_state.remove_node(state_node)
 
     return lambda_ctx, lambda_output
 

@@ -19,7 +19,7 @@ from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
-from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils
+from gt4py.next.program_processors.runners.dace.lowering import gtir_to_sdfg_utils
 
 
 @dataclasses.dataclass(frozen=True)

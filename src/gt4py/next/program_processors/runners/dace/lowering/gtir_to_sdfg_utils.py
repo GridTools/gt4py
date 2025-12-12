@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Final, Optional, TypeVar
+from typing import Dict, Final, Mapping, Optional, TypeVar
 
 import dace
 
@@ -17,7 +17,7 @@ from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.program_processors.runners.dace import gtir_python_codegen
+from gt4py.next.program_processors.runners.dace.lowering import gtir_python_codegen
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -162,3 +162,27 @@ def get_symbolic(ir: gtir.Expr) -> dace.symbolic.SymbolicType:
     """
     python_source = gtir_python_codegen.get_source(ir)
     return dace.symbolic.pystr_to_symbolic(python_source)
+
+
+def safe_replace_symbolic(
+    val: dace.symbolic.SymbolicType,
+    symbol_mapping: Mapping[dace.symbolic.SymbolicType | str, dace.symbolic.SymbolicType | str],
+) -> dace.symbolic.SymbolicType:
+    """
+    Replace free symbols in a dace symbolic expression, using `safe_replace()`
+    in order to avoid clashes in case the new symbol value is also a free symbol
+    in the original exoression.
+
+    Args:
+        val: The symbolic expression where to apply the replacement.
+        symbol_mapping: The mapping table for symbol replacement.
+
+    Returns:
+        A new symbolic expression as result of symbol replacement.
+    """
+    # The list `x` is needed because `subs()` returns a new object and can not handle
+    # replacement dicts of the form `{'x': 'y', 'y': 'x'}`.
+    # The utility `safe_replace()` will call `subs()` twice in case of such dicts.
+    x = [val]
+    dace.symbolic.safe_replace(symbol_mapping, lambda m, xx=x: xx.append(xx[-1].subs(m)))
+    return x[-1]
