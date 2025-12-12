@@ -1379,7 +1379,7 @@ def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> Car
     if isinstance(offset, float):
         integral_offset, half = divmod(offset, 1)
         assert half == 0.5
-        if dim.value.startswith(_STAGGERED_PREFIX):
+        if not dim.value.startswith(_STAGGERED_PREFIX):
             integral_offset += 1
         return CartesianConnectivity(dim, int(integral_offset), codomain=flip_staggered(dim))
     else:
