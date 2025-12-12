@@ -487,6 +487,14 @@ def is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec) -> bool:
             return False
         for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
             is_compatible &= is_compatible_type(el_type_a, el_type_b)
+    elif isinstance(type_a, ts.NamedCollectionType) and isinstance(type_b, ts.NamedCollectionType):
+        # NOTE: we are not checking if the `original_python_type` is compatible, this is a feature
+        # as it allows compatibility between named collections of scalars and their structurally
+        # equivalent collection of fields.
+        if type_a.keys != type_b.keys:
+            return False
+        for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
+            is_compatible &= is_compatible_type(el_type_a, el_type_b)
     elif isinstance(type_a, ts.FunctionType) and isinstance(type_b, ts.FunctionType):
         for arg_a, arg_b in zip(type_a.pos_only_args, type_b.pos_only_args, strict=True):
             is_compatible &= is_compatible_type(arg_a, arg_b)
