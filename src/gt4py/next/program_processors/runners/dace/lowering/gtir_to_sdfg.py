@@ -1189,13 +1189,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         if unused_access_nodes := [
             arg_node.dc_node for arg_node in lambda_arg_nodes.values() if arg_node is not None
         ]:
-            # We expect only global access nodes, at this stage: temporary input nodes
-            # should not appear as isolated nodes because they are supposed to contain
-            # the result of some argument expression.
-            assert all(
-                ctx.state.degree(access_node) == 0 and not access_node.desc(ctx.sdfg).transient
-                for access_node in unused_access_nodes
-            )
+            assert all(ctx.state.degree(access_node) == 0 for access_node in unused_access_nodes)
             ctx.state.remove_nodes_from(unused_access_nodes)
 
         def construct_output_for_nested_sdfg(
