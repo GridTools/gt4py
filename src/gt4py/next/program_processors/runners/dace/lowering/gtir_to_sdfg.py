@@ -1235,6 +1235,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
             ctx.state.add_edge(src_node, None, nsdfg_node, input_connector, memlet)
 
+        # We can now safely remove all remaining arguments, because unused.
+        if unused_access_nodes := [
+            arg_node.dc_node for arg_node in lambda_arg_nodes.values() if arg_node is not None
+        ]:
+            assert all(ctx.state.degree(access_node) == 0 for access_node in unused_access_nodes)
+            ctx.state.remove_nodes_from(unused_access_nodes)
+
         def construct_output_for_nested_sdfg(
             inner_data: gtir_to_sdfg_types.FieldopData,
         ) -> gtir_to_sdfg_types.FieldopData:
