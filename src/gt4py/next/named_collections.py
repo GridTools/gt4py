@@ -25,7 +25,7 @@ from gt4py.eve.extended_typing import (
     TypeGuard,
     TypeVar,
 )
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -375,3 +375,42 @@ def make_constructor_expr(
 
     # We don't need to construct anything, just return the argument as is
     return value_expr
+
+
+_T = TypeVar("_T")
+
+
+def identity(x: _T) -> _T:
+    return x
+
+
+# typing of this function is sketchy
+def tree_map_named_collection(
+    fun: Callable[utils._P, utils._R],
+) -> Callable[..., utils._R | NamedCollection]:  # nested NamedCollection[_R]
+    def impl(
+        *args: Any | NamedCollection,
+    ) -> utils._R | NamedCollection:  # type annotation for human...
+        # TODO assert all inputs have the same (nested) collection structure
+        if is_named_collection_type(type(args[0])):
+            extract = make_named_collection_extractor(type(args[0]))  # type: ignore[arg-type]
+            construct = make_named_collection_constructor(type(args[0]), nested=True)  # type: ignore[arg-type]
+        else:
+            extract = identity
+            construct = identity
+        plain_tuples = (extract(arg) for arg in args)
+        result = utils.tree_map(fun=fun)(*plain_tuples)
+        return construct(result)  # type: ignore[arg-type]
+
+    return impl
+
+
+# TODO: should be like this, but tree_map assumes the collection is Iterable
+# tree_map_named_collection = functools.partial(
+#     utils.tree_map,
+#     collection_type=tuple((*named_collections.CUSTOM_NAMED_COLLECTION_TYPES, tuple)),
+#     result_collection_constructor=lambda orig_type,
+#     *elts: named_collections.make_named_collection_constructor(type(orig_type), nested=False)(
+#         tuple(*elts)
+#     ),
+# )

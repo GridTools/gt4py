@@ -12,7 +12,7 @@ from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVa
 from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
-from gt4py.next import common, errors, field_utils, utils
+from gt4py.next import common, errors, field_utils, named_collections, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 from gt4py.next.field_utils import get_array_ns
 from gt4py.next.otf import arguments
@@ -188,7 +188,7 @@ def _tuple_at(
     pos: Sequence[common.NamedIndex],
     field: xtyping.MaybeNestedInTuple[common.Field | core_defs.Scalar],
 ) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
-    @utils.tree_map
+    @named_collections.tree_map_named_collection
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
         res = field[pos].as_scalar() if isinstance(field, common.Field) else field
         assert core_defs.is_scalar_type(res)
