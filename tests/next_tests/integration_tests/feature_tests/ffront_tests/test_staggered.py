@@ -55,6 +55,31 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 @pytest.mark.uses_cartesian_shift
+def test_copy_half_field(cartesian_case):
+    @gtx.field_operator
+    def testee(a: cases.IHalfField) -> cases.IHalfField:
+        field_tuple = (a, a)
+        field_0 = field_tuple[0]
+        field_1 = field_tuple[1]
+        return field_0
+
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a, offset_provider={})
+
+
+@pytest.mark.uses_cartesian_shift
+def test_cartesian_shift_plus(cartesian_case):
+    # TODO: center inlining probably doesn't work
+    @gtx.field_operator
+    def testee(a: cases.IField) -> cases.IField:
+        return a(IDim + 1)  # always pass an I-index to an IField
+
+    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(cartesian_case, testee, a, out=out, ref=a[1:], offset_provider={})
+
+
+@pytest.mark.uses_cartesian_shift
 def test_cartesian_half_shift_plus(cartesian_case):
     # TODO: center inlining probably doesn't work
     @gtx.field_operator
@@ -64,7 +89,33 @@ def test_cartesian_half_shift_plus(cartesian_case):
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (-1, 0)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, a, out=out, ref=a)
+    cases.verify(cartesian_case, testee, a, out=out, ref=a, offset_provider={})
+
+
+@pytest.mark.uses_cartesian_shift
+def test_cartesian_half_shift_back(cartesian_case):
+    # TODO: center inlining probably doesn't work
+    @gtx.field_operator
+    def testee(a: cases.IHalfField) -> cases.IHalfField:
+        return a(IDim + 0.5)(IHalfDim - 0.5)  # always pass an I-index to an IField
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(cartesian_case, testee, a, out=out, ref=a, offset_provider={})
+
+
+@pytest.mark.uses_cartesian_shift
+def test_cartesian_half_shift_plus1(cartesian_case):
+    # TODO: center inlining probably doesn't work
+    @gtx.field_operator
+    def testee(a: cases.IHalfField) -> cases.IHalfField:
+        return a(IHalfDim + 1)  # always pass an IHalf-index to an IHalfField
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(cartesian_case, testee, a, out=out[:-1], ref=a[1:], offset_provider={})
 
 
 @pytest.mark.uses_cartesian_shift
@@ -77,7 +128,7 @@ def test_cartesian_half_shift_minus(cartesian_case):
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, -1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, a, out=out, ref=a[:])
+    cases.verify(cartesian_case, testee, a, out=out, ref=a[:], offset_provider={})
 
 
 @pytest.mark.uses_cartesian_shift
@@ -87,7 +138,7 @@ def test_cartesian_half_shift_half2center(cartesian_case):
     def testee(a: cases.IHalfField) -> cases.IField:
         return 2 * a(IDim + 0.5)  # always pass an IHalf-index to an IHalfField
 
-    a = cases.allocate(cartesian_case, testee, "a")()
+    a = cases.allocate(cartesian_case, testee, "a").extend({IHalfDim: (0, 1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, a, out=out, ref=2 * a[:])
+    cases.verify(cartesian_case, testee, a, out=out, ref=2 * a[:], offset_provider={})
