@@ -723,6 +723,8 @@ def translate_symbol_ref(
 ) -> gtir_to_sdfg_types.FieldopResult:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
+    if getattr(node.annex, "domain", None) == infer_domain.DomainAccessDescriptor.NEVER:
+        return None
 
     symbol_name = str(node.id)
     # we retrieve the type of the symbol in the GT4Py prgram
