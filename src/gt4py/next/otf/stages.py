@@ -55,10 +55,11 @@ def fingerprint_compilable_program(inp: CompilableProgram) -> str:
     offset_provider: common.OffsetProvider = inp.args.offset_provider
     column_axis: Optional[common.Dimension] = inp.args.column_axis
 
+    offset_provider_arrays = {key: value.ndarray if hasattr(value, "ndarray") else value}
     program_hash = utils.content_hash(
         (
             program.fingerprint(),
-            sorted(offset_provider.items(), key=lambda el: el[0]),
+            sorted(offset_provider_arrays.items(), key=lambda el: el[0]),
             column_axis,
         )
     )
