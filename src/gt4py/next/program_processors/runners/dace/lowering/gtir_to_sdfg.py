@@ -80,7 +80,8 @@ class DataflowBuilder(Protocol):
         self, sdfg: dace.SDFG, datadesc: dace.data.Array
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary array to the SDFG."""
-        return sdfg.add_temp_transient_like(datadesc, name=self.unique_temp_name())
+        temp_name = self.unique_temp_name()
+        return sdfg.add_temp_transient_like(datadesc, name=temp_name)
 
     def add_temp_scalar(
         self, sdfg: dace.SDFG, dtype: dace.dtypes.typeclass
@@ -181,6 +182,9 @@ class SubgraphContext:
     sdfg: dace.SDFG
     state: dace.SDFGState
     scope_symbols: dict[str, ts.DataType]
+
+    def get_symbol_type(self, symbol_name: str) -> ts.DataType:
+        return self.scope_symbols[symbol_name]
 
     def copy_data(
         self,
@@ -585,8 +589,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             gtir.Sym(id=name, type=lambda_symbols[name]) for name in sorted(lambda_symbols.keys())
         ]
 
-        sdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, sdfg_name))
-        sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(expr, default=parent_ctx.sdfg.debuginfo)
+        nsdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, sdfg_name))
+        nsdfg.debuginfo = gtir_to_sdfg_utils.debug_info(expr, default=parent_ctx.sdfg.debuginfo)
 
         # All GTIR-symbols accessed in domain expressions by the lambda need to be
         # represented as dace symbols.
@@ -608,14 +612,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # will be turned into global by setting `transient=False`. In this way, we remove
         # all unused (and possibly undefined) input arguments.
         self._add_sdfg_params(
-            sdfg,
+            nsdfg,
             node_params=input_params,
             symbolic_params=(domain_symbols | mapped_symbols | symbolic_inputs),
             use_transient_storage=True,
         )
 
-        state = sdfg.add_state(f"{sdfg_name}_entry")
-        return SubgraphContext(sdfg, state, lambda_symbols)
+        nsdfg_entry_state = nsdfg.add_state(f"{sdfg_name}_entry", is_start_block=True)
+        return SubgraphContext(nsdfg, nsdfg_entry_state, lambda_symbols)
 
     def add_nested_sdfg(
         self,
@@ -1018,7 +1022,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         which will become the new head state.
 
         Returns:
-          The new SDFG head state, where the target fields are written.
+          The new SDFG head state, where the writes to the AccessNodes of the field operator results are located.
         """
 
         def _visit_target(
@@ -1050,7 +1054,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         source_tree = self._visit_expression(stmt.expr, ctx)
 
         # In order to support inout argument, write the result in separate next state
-        # this is needed to avoid undefined behavior for expressions like: X, Y = X + 1, X
+        # this is needed to avoid indeterministic behavior for expressions like: X, Y = X + 1, X
         target_state = ctx.sdfg.add_state_after(ctx.state, f"post_{ctx.state.label}")
         # The target expression could be a `SymRef` to an output field or a `make_tuple`
         # expression in case the statement returns more than one field.

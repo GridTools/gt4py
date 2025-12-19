@@ -728,7 +728,7 @@ def translate_symbol_ref(
 
     symbol_name = str(node.id)
     # we retrieve the type of the symbol in the GT4Py prgram
-    gt_symbol_type = ctx.scope_symbols[symbol_name]
+    gt_symbol_type = ctx.get_symbol_type(symbol_name)
 
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
