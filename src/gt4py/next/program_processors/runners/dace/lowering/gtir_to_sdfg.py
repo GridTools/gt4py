@@ -476,6 +476,10 @@ def flatten_tuple_args(
 class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
 
+    A single instance of this visitor is used for the entire lowering, across all
+    levels of nested SDFGs. For each nested level, a new `SubgraphContext` is setup
+    with the data symbols in scope.
+
     This class is responsible for translation of `ir.Program`, that is the top level representation
     of a GT4Py program as a sequence of `ir.Stmt` (aka statement) expressions.
     Each statement is translated to a taskgraph inside a separate state. Statement states are chained
