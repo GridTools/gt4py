@@ -26,7 +26,11 @@ from gt4py import eve
 from gt4py.eve import concepts
 from gt4py.next import common as gtx_common, config as gtx_config, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    domain_utils,
+    ir_makers as im,
+)
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
@@ -185,6 +189,19 @@ class SubgraphContext:
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.scope_symbols[symbol_name]
+
+    def input_data(self) -> set[str]:
+        flat_symbols = []
+        for sym_name, sym_type in self.scope_symbols.items():
+            if isinstance(sym_type, ts.TupleType):
+                flat_symbols.extend(gtir_to_sdfg_utils.flatten_tuple_fields(sym_name, sym_type))
+            else:
+                flat_symbols.append(im.sym(sym_name, sym_type))
+
+        used_data = {access_node.data for access_node in self.state.data_nodes()}
+        input_data = {data_name for sym in flat_symbols if (data_name := str(sym.id)) in used_data}
+        assert not any(self.sdfg.arrays[data_name].transient for data_name in input_data)
+        return input_data
 
     def copy_data(
         self,
@@ -1034,28 +1051,40 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             target: gtir_to_sdfg_types.FieldopData,
             target_domain: domain_utils.SymbolicDomain,
             target_state: dace.SDFGState,
+            is_target_inout: bool,
         ) -> None:
+            assert source.dc_node.desc(ctx.sdfg).transient
             assert source.gt_type == target.gt_type
             field_domain = gtir_domain.get_field_domain(target_domain)
             source_subset = _make_access_index_for_field(field_domain, source)
             target_subset = _make_access_index_for_field(field_domain, target)
 
-            target_state.add_nedge(
-                # create in the target state new access nodes to the field operator result
-                target_state.add_access(source.dc_node.data),
-                target.dc_node,
-                dace.Memlet(
-                    data=target.dc_node.data, subset=target_subset, other_subset=source_subset
-                ),
-            )
-            if ctx.state.degree(source.dc_node) == 0:
-                ctx.state.remove_node(source.dc_node)
+            if is_target_inout:
+                # write the field operator result in the separate target state
+                target_state.add_nedge(
+                    target_state.add_access(source.dc_node.data),
+                    target.dc_node,
+                    dace.Memlet(
+                        data=target.dc_node.data, subset=target_subset, other_subset=source_subset
+                    ),
+                )
+            else:
+                # do not use the target state, write the result inside the current context
+                ctx.state.add_nedge(
+                    source.dc_node,
+                    ctx.state.add_access(target.dc_node.data),
+                    dace.Memlet(
+                        data=target.dc_node.data, subset=target_subset, other_subset=source_subset
+                    ),
+                )
+                target_state.remove_node(target.dc_node)
 
         # Visit the domain expression.
         domain = gtir_domain.extract_target_domain(stmt.domain)
 
         # Visit the field operator expression.
         source_tree = self._visit_expression(stmt.expr, ctx)
+        ctx_input_data = ctx.input_data()
 
         # In order to support inout argument, write the result in separate next state
         # this is needed to avoid indeterministic behavior for expressions like: X, Y = X + 1, X
@@ -1069,11 +1098,19 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
         gtx_utils.tree_map(
             lambda source, target, target_domain: _visit_target(
-                source, target, target_domain, target_state
+                source,
+                target,
+                target_domain,
+                target_state,
+                is_target_inout=(target.dc_node.data in ctx_input_data),
             )
         )(source_tree, target_tree, domain)
 
-        return target_state
+        if target_state.is_empty():
+            ctx.sdfg.remove_node(target_state)
+            return ctx.state
+        else:
+            return target_state
 
     def visit_FunCall(
         self,
