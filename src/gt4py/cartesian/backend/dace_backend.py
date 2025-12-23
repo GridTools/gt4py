@@ -385,14 +385,25 @@ class SDFGManager:
                 SDFGManager._loaded_sdfgs[path] = sdfg
                 return sdfg
 
-        # Create SDFG
+        # Get the schedule tree:
+        #  - we expect all 3-loops to be singled maps/for
+        #  - we expect the layout to be K-JI
+        #  - we expect all non-cartesian control flow to be innermost
         stree = self.schedule_tree()
 
-        if self.builder.backend.name.endswith("_kfirst"):
-            # re-order loops to match loops with memory layout
+        # Re-order cartesian loops to match loops with memory layout
+        # - layout is _always_ given I-J-K
+        # - layout is reversed, inner is higher numbers, e.g K-J-I is I=2, J=1, K=0
+        layout = self.builder.backend.storage_info["layout_map"](("I", "J", "K"))
+        if layout[0] < layout[1]:
+            flipper = passes.SwapHorizontalMaps()
+            flipper.visit(stree)
+
+        if layout[2] != 0:
             flipper = passes.PushVerticalMapDown()
             flipper.visit(stree)
 
+        # Create SDFG
         sdfg = stree.as_sdfg(
             validate=validate,
             simplify=simplify,
@@ -852,7 +863,7 @@ class DaceCPUBackend(BaseDaceBackend):
     storage_info: ClassVar[layout.LayoutInfo] = {
         "alignment": 1,
         "device": "cpu",
-        "layout_map": layout.layout_maker_factory((1, 2, 0)),
+        "layout_map": layout.layout_maker_factory((1, 2, 0)),  # K-J-I
         "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((1, 2, 0))),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
@@ -870,8 +881,26 @@ class DaceCPUKFirstBackend(BaseDaceBackend):
     storage_info: ClassVar[layout.LayoutInfo] = {
         "alignment": 1,
         "device": "cpu",
-        "layout_map": layout.layout_maker_factory((0, 1, 2)),
+        "layout_map": layout.layout_maker_factory((0, 1, 2)),  # I-J-K
         "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((0, 1, 2))),
+    }
+    MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
+
+    options = BaseGTBackend.GT_BACKEND_OPTS
+
+    def generate_extension(self) -> None:
+        return self.make_extension(uses_cuda=False)
+
+
+@register
+class DaceCPU_KJI(BaseDaceBackend):
+    name = "dace:cpu_KJI"
+    languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
+    storage_info: ClassVar[layout.LayoutInfo] = {
+        "alignment": 1,
+        "device": "cpu",
+        "layout_map": layout.layout_maker_factory((2, 1, 0)),  # K-J-I
+        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((2, 1, 0))),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
@@ -890,7 +919,7 @@ class DaceGPUBackend(BaseDaceBackend):
     storage_info: ClassVar[layout.LayoutInfo] = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": layout.layout_maker_factory((2, 1, 0)),
+        "layout_map": layout.layout_maker_factory((2, 1, 0)),  # K-J-I
         "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((2, 1, 0))),
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator

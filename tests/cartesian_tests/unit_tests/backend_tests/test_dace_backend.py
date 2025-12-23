@@ -30,6 +30,7 @@ pytestmark = pytest.mark.requires_dace
     [
         ("dace:cpu", "cpu"),
         ("dace:cpu_kfirst", "cpu"),
+        ("dace:cpu_KJI", "cpu"),
         pytest.param("dace:gpu", "gpu", marks=[pytest.mark.requires_gpu]),
     ],
 )
@@ -99,3 +100,35 @@ def test_dace_cpu_kfirst_loop_structure():
         True,
         True,
     ]
+
+
+def test_dace_cpu_KJI_loop_structure():
+    builder = StencilBuilder(copy_stencil, backend="dace:cpu_KJI")
+    manager = SDFGManager(builder)
+
+    sdfg = manager.sdfg_via_schedule_tree()
+    state = sdfg.states()[0]
+
+    assert [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)] == [
+        ["__k_0"],
+        ["__j", "__i"],
+    ]
+
+    builder = StencilBuilder(copy_forward_stencil, backend="dace:cpu_KJI")
+    manager = SDFGManager(builder)
+
+    sdfg = manager.sdfg_via_schedule_tree()
+    state = sdfg.states()[0]
+
+    # Expect top-level for loop guards (4)
+    assert [isinstance(node, dace_sdfg.SDFGState) for node in sdfg.states()] == [
+        True,
+        True,
+        True,
+        True,
+    ]
+
+    # Expect IJ Map and in loop_body state (#2)
+    assert [
+        node.map.params for node in sdfg.states()[2].nodes() if isinstance(node, nodes.MapEntry)
+    ] == [["__j", "__i"]]
