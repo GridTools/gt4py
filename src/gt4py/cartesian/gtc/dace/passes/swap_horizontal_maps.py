@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2025, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
 # Please, refer to the LICENSE file in the root directory.
@@ -30,9 +30,9 @@ class SwapHorizontalMaps(tn.ScheduleNodeVisitor):
     """
 
     def visit_MapScope(self, node: tn.MapScope):
-        if node.node.params[0].startswith(
-            Axis.J.iteration_symbol()
-        ) and node.node.params[1].startswith(Axis.I.iteration_symbol()):
+        if node.node.params[0].startswith(Axis.J.iteration_symbol()) and node.node.params[
+            1
+        ].startswith(Axis.I.iteration_symbol()):
             # Swap params
             tmp_index = node.node.params[0]
             node.node.params[0] = node.node.params[1]
