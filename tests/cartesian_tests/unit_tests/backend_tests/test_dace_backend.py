@@ -14,11 +14,13 @@ pytest.importorskip("dace")
 
 from dace import nodes
 from dace import sdfg as dace_sdfg
+import dace.sdfg.analysis.schedule_tree.treenodes as tn
 
 from gt4py.cartesian import backend
 from gt4py.cartesian.backend.dace_backend import SDFGManager
 from gt4py.cartesian.gtscript import computation, PARALLEL, interval, Field
 from gt4py.cartesian.stencil_builder import StencilBuilder
+from gt4py.cartesian.gtc.dace.treeir import Axis
 
 # Because "dace tests" filter by `requires_dace`, we still need to add the marker.
 # This global variable adds the marker to all test functions in this module.
@@ -54,6 +56,30 @@ def copy_forward_stencil(
 ):
     with computation(FORWARD), interval(...):
         out_field = in_field
+
+
+def test_default_schedule_is_KIJ():
+    builder = StencilBuilder(copy_stencil, backend="dace:cpu")
+    manager = SDFGManager(builder)
+
+    stree = manager.schedule_tree()
+
+    expected_K_map = stree.get_root().children[0]
+
+    assert (
+        isinstance(expected_K_map, tn.MapScope)
+        and len(expected_K_map.node.params) == 1
+        and expected_K_map.node.params[0].startswith(Axis.K.iteration_symbol())
+    )
+
+    expected_JI = expected_K_map.children[0]
+
+    assert (
+        isinstance(expected_JI, tn.MapScope)
+        and len(expected_JI.node.params) == 2
+        and expected_JI.node.params[0].startswith(Axis.J.iteration_symbol())
+        and expected_JI.node.params[1].startswith(Axis.I.iteration_symbol())
+    )
 
 
 def test_dace_cpu_loop_structure():
