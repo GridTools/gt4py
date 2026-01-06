@@ -61,7 +61,6 @@ class OIRToTreeIR(eve.NodeVisitor):
         self._device_type = device_type_translate[device_type.upper()]
         self._api_signature = builder.gtir.api_signature
         self._k_bounds = compute_k_boundary(builder.gtir)
-        self._vloop_sections = 0
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         dace_tasklet, inputs, outputs = oir_to_tasklet.OIRToTasklet().visit_CodeBlock(
@@ -272,9 +271,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
 
         loop = tir.VerticalLoop(
-            iteration_variable=eve.SymbolRef(
-                f"{tir.Axis.K.iteration_symbol()}_{self._vloop_sections}"
-            ),
+            iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
             loop_order=loop_order,
             bounds_k=bounds,
             schedule=self._vertical_loop_schedule(),
@@ -284,8 +281,6 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         with loop.scope(ctx):
             self.visit(node.horizontal_executions, ctx=ctx)
-
-        self._vloop_sections += 1
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, ctx: tir.Context) -> None:
         if node.caches:
