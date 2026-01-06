@@ -149,6 +149,76 @@ def test_named_collection_constructed_inside(cartesian_case, testee):
     )
 
 
+@gtx.program
+def constructed_inside_named_tuple_program_with_domain(
+    vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
+    isize: gtx.int32,
+    jsize: gtx.int32,
+    out: NamedTupleNamedCollection,
+):
+    constructed_inside_named_tuple(
+        vel,
+        out=out,
+        domain=({IDim: (0, isize), JDim: (0, jsize)}, {IDim: (0, isize - 1), JDim: (0, jsize - 1)}),
+    )
+
+
+@gtx.program
+def constructed_inside_dataclass_program_with_domain(
+    vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
+    isize: gtx.int32,
+    jsize: gtx.int32,
+    out: DataclassNamedCollection,
+):
+    constructed_inside_dataclass(
+        vel,
+        out=out,
+        domain=({IDim: (0, isize), JDim: (0, jsize)}, {IDim: (0, isize - 1), JDim: (0, jsize - 1)}),
+    )
+
+
+@pytest.mark.parametrize(
+    "testee",
+    [
+        constructed_inside_named_tuple_program_with_domain,
+        constructed_inside_dataclass_program_with_domain,
+    ],
+)
+def test_named_collection_with_multiple_output_domains(cartesian_case, testee):
+    vel = cases.allocate(cartesian_case, testee, "vel")()
+    out = cases.allocate(
+        cartesian_case, testee, "out" if isinstance(testee, decorator.Program) else cases.RETURN
+    )()
+    container_type = out.__class__
+    out = container_type(
+        u=cases.allocate(
+            cartesian_case,
+            testee,
+            "vel",
+            strategy=cases.ZeroInitializer(),
+        )()[0],
+        v=cases.allocate(
+            cartesian_case,
+            testee,
+            "vel",
+            strategy=cases.ZeroInitializer(),
+            extend={IDim: (0, -1), JDim: (0, -1)},
+        )()[0],
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        vel,
+        cartesian_case.default_sizes[IDim],
+        cartesian_case.default_sizes[JDim],
+        out=out,
+        ref=out.__class__(
+            u=vel[0].asnumpy() + vel[1].asnumpy(), v=(vel[0].asnumpy() - vel[1].asnumpy())[:-1, :-1]
+        ),
+    )
+
+
 @dataclasses.dataclass
 class NestedNamedCollection:
     a: tuple[gtx.Field[[IDim, JDim], gtx.float32], NamedTupleNamedCollection]
