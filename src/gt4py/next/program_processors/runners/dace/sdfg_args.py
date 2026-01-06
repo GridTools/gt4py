@@ -9,14 +9,14 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal, Mapping, Union
+from typing import Final, Literal
 
 import dace
 
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins as gtir_builtins
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.program_processors.runners.dace import gtir_python_codegen
+from gt4py.next.program_processors.runners.dace.lowering import gtir_python_codegen
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -60,29 +60,21 @@ def connectivity_identifier(name: str) -> str:
 def is_connectivity_identifier(
     name: str, offset_provider_type: gtx_common.OffsetProviderType | None = None
 ) -> bool:
-    m = CONNECTIVITY_INDENTIFIER_RE.match(name)
-    if m is None:
+    if (m := CONNECTIVITY_INDENTIFIER_RE.match(name)) is None:
         return False
-    if offset_provider_type is None:
+    elif offset_provider_type is None:
         # If no offset provider type is provided, we assume there is a connectivity identifier
         # that matches the CONNECTIVITY_INDENTIFIER_RE.
         return True
-    return gtx_common.has_offset(offset_provider_type, m[1])
-
-
-def is_connectivity_symbol(name: str, offset_provider_type: gtx_common.OffsetProviderType) -> bool:
-    if (m_symbol := FIELD_SYMBOL_RE.match(name)) is None:
-        return False
-    if (m := CONNECTIVITY_INDENTIFIER_RE.match(m_symbol[1])) is None:
-        return False
-    return gtx_common.has_offset(offset_provider_type, m[1])
+    else:
+        return gtx_common.has_offset(offset_provider_type, m[1])
 
 
 def _field_symbol(
     field_name: str,
     dim: gtx_common.Dimension,
     sym: Literal["size", "stride"],
-    offset_provider_type: Mapping[str, gtx_common.NeighborConnectivityType] | None,
+    offset_provider_type: gtx_common.OffsetProviderType | None,
 ) -> dace.symbol:
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
         name = f"__{field_name}_{dim.value}_{sym}"
@@ -91,6 +83,7 @@ def _field_symbol(
         assert m[1] in offset_provider_type
         offset = m[1]
         conn_type = offset_provider_type[offset]
+        assert isinstance(conn_type, gtx_common.NeighborConnectivityType)
         if dim == conn_type.source_dim:
             name = f"__{field_name}_source_{sym}"
         elif dim == conn_type.neighbor_dim:
@@ -103,7 +96,7 @@ def _field_symbol(
 def field_size_symbol(
     field_name: str,
     dim: gtx_common.Dimension,
-    offset_provider_type: Mapping[str, gtx_common.NeighborConnectivityType],
+    offset_provider_type: gtx_common.OffsetProviderType,
 ) -> dace.symbol:
     return _field_symbol(field_name, dim, "size", offset_provider_type)
 
@@ -111,7 +104,7 @@ def field_size_symbol(
 def field_stride_symbol(
     field_name: str,
     dim: gtx_common.Dimension,
-    offset_provider_type: Mapping[str, gtx_common.NeighborConnectivityType] | None = None,
+    offset_provider_type: gtx_common.OffsetProviderType | None = None,
 ) -> dace.symbol:
     return _field_symbol(field_name, dim, "stride", offset_provider_type)
 
@@ -148,29 +141,3 @@ def filter_connectivity_types(
         for offset, conn in offset_provider_type.items()
         if isinstance(conn, gtx_common.NeighborConnectivityType)
     }
-
-
-def safe_replace_symbolic(
-    val: dace.symbolic.SymbolicType,
-    symbol_mapping: Mapping[
-        Union[dace.symbolic.SymbolicType, str], Union[dace.symbolic.SymbolicType, str]
-    ],
-) -> dace.symbolic.SymbolicType:
-    """
-    Replace free symbols in a dace symbolic expression, using `safe_replace()`
-    in order to avoid clashes in case the new symbol value is also a free symbol
-    in the original exoression.
-
-    Args:
-        val: The symbolic expression where to apply the replacement.
-        symbol_mapping: The mapping table for symbol replacement.
-
-    Returns:
-        A new symbolic expression as result of symbol replacement.
-    """
-    # The list `x` is needed because `subs()` returns a new object and can not handle
-    # replacement dicts of the form `{'x': 'y', 'y': 'x'}`.
-    # The utility `safe_replace()` will call `subs()` twice in case of such dicts.
-    x = [val]
-    dace.symbolic.safe_replace(symbol_mapping, lambda m, xx=x: xx.append(xx[-1].subs(m)))
-    return x[-1]

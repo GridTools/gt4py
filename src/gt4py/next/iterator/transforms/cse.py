@@ -20,9 +20,9 @@ from gt4py.eve import (
     PreserveLocationVisitor,
     SymbolTableTrait,
     VisitorWithSymbolTableTrait,
+    utils as eve_utils,
 )
-from gt4py.eve.utils import UIDGenerator
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
@@ -81,16 +81,16 @@ def _is_collectable_expr(node: itir.Node) -> bool:
     if isinstance(node, itir.FunCall):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
-        # do also not collect reduce nodes if they are left in the IR at this point, this may lead to
+        # do also not collect reduce, map_ and neighbors nodes if they are left in the IR at this point, this may lead to
         #  conceptual problems (other parts of the tool chain rely on the arguments being present directly
         #  on the reduce FunCall node (connectivity deduction)), as well as problems with the imperative backend
-        #  backend (single pass eager depth first visit approach)
+        #  backend (single pass eager depth first visit approach), see also https://github.com/GridTools/gt4py/issues/1795
         # do also not collect lifts or applied lifts as they become invisible to the lift inliner
         #  otherwise
         # do also not collect index nodes because otherwise the right hand side of SetAts becomes a let statement
         #  instead of an as_fieldop
         if cpm.is_call_to(
-            node, ("lift", "shift", "reduce", "map_", "index")
+            node, ("lift", "shift", "neighbors", "reduce", "map_", "index")
         ) or cpm.is_applied_lift(node):
             return False
         return True
@@ -265,7 +265,7 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
 def extract_subexpression(
     node: itir.Expr,
     predicate: Callable[[itir.Expr, int], bool],
-    uid_generator: UIDGenerator,
+    prefixed_uids: eve_utils.SequentialIDGenerator,
     once_only: bool = False,
     deepest_expr_first: bool = False,
 ) -> tuple[itir.Expr, Union[dict[itir.Sym, itir.Expr], None], bool]:
@@ -292,17 +292,17 @@ def extract_subexpression(
     Examples:
         Default case for `(x+y) + ((x+y)+z)`:
 
-        >>> from gt4py.eve.utils import UIDGenerator
+        >>> from gt4py.eve.utils import SequentialIDGenerator
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
         >>> predicate = lambda subexpr, num_occurences: num_occurences > 1
         >>> new_expr, extracted_subexprs, _ = extract_subexpression(
-        ...     expr, predicate, UIDGenerator(prefix="_subexpr")
+        ...     expr, predicate, SequentialIDGenerator("_subexpr")
         ... )
         >>> print(new_expr)
-        _subexpr_1 + (_subexpr_1 + z)
+        _subexpr_0 + (_subexpr_0 + z)
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_1`: `x + y`
+        `_subexpr_0`: `x + y`
 
         The order of the extraction can be configured using `deepest_expr_first`. By default, the nodes
         closer to the root are eliminated first:
@@ -312,13 +312,16 @@ def extract_subexpression(
         ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
         ... )
         >>> new_expr, extracted_subexprs, ignored_children = extract_subexpression(
-        ...     expr, predicate, UIDGenerator(prefix="_subexpr"), deepest_expr_first=False
+        ...     expr,
+        ...     predicate,
+        ...     SequentialIDGenerator("_subexpr"),
+        ...     deepest_expr_first=False,
         ... )
         >>> print(new_expr)
-        _subexpr_1 + _subexpr_1
+        _subexpr_0 + _subexpr_0
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_1`: `x + y + (x + y)`
+        `_subexpr_0`: `x + y + (x + y)`
 
         Since `(x+y)` is a child of one of the expressions it is ignored:
 
@@ -334,15 +337,15 @@ def extract_subexpression(
         >>> new_expr, extracted_subexprs, _ = extract_subexpression(
         ...     expr,
         ...     predicate,
-        ...     UIDGenerator(prefix="_subexpr"),
+        ...     SequentialIDGenerator("_subexpr"),
         ...     once_only=True,
         ...     deepest_expr_first=True,
         ... )
         >>> print(new_expr)
-        _subexpr_1 + _subexpr_1 + (_subexpr_1 + _subexpr_1)
+        _subexpr_0 + _subexpr_0 + (_subexpr_0 + _subexpr_0)
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_1`: `x + y`
+        `_subexpr_0`: `x + y`
 
         Note that this requires `once_only` to be set right now.
     """
@@ -396,7 +399,7 @@ def extract_subexpression(
         if not eligible_ids:
             continue
 
-        expr_id = uid_generator.sequential_id()
+        expr_id = next(prefixed_uids)
         extracted[itir.Sym(id=expr_id)] = expr
         expr_ref = itir.SymRef(id=expr_id)
         for id_ in eligible_ids:
@@ -423,8 +426,12 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         >>> x = itir.SymRef(id="x")
         >>> plus = lambda a, b: itir.FunCall(fun=itir.SymRef(id=("plus")), args=[a, b])
         >>> expr = plus(plus(x, x), plus(x, x))
-        >>> print(CommonSubexpressionElimination.apply(expr, within_stencil=True))
-        (λ(_cs_1) → _cs_1 + _cs_1)(x + x)
+        >>> print(
+        ...     CommonSubexpressionElimination.apply(
+        ...         expr, within_stencil=True, uids=utils.IDGeneratorPool()
+        ...     )
+        ... )
+        (λ(_cs_0) → _cs_0 + _cs_0)(x + x)
 
     The pass visits the tree top-down starting from the root node, e.g. an itir.Program.
     For each node we extract (eligible) subexpressions occuring more than once using
@@ -433,11 +440,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     top-down, extracted expressions always land up in the outermost scope they can appear in.
     """
 
-    # we use one UID generator per instance such that the generated ids are
-    # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_cs")
-    )
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     collect_all: bool = dataclasses.field(default=False)
 
@@ -447,6 +450,8 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         node: ProgramOrExpr,
         within_stencil: bool | None = None,
         offset_provider_type: common.OffsetProviderType | None = None,
+        *,
+        uids: utils.IDGeneratorPool,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, itir.Program)
         if is_program:
@@ -461,7 +466,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         node = itir_type_inference.infer(
             node, offset_provider_type=offset_provider_type, allow_undeclared_symbols=not is_program
         )
-        return cls().visit(node, within_stencil=within_stencil)
+        return cls(uids=uids).visit(node, within_stencil=within_stencil)
 
     def generic_visit(self, node, **kwargs):
         if cpm.is_call_to(node, "as_fieldop"):
@@ -503,7 +508,9 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
                         return True
             return False
 
-        new_expr, extracted, ignored_children = extract_subexpression(node, predicate, self.uids)
+        new_expr, extracted, ignored_children = extract_subexpression(
+            node, predicate, self.uids["_cs"]
+        )
 
         if not extracted:
             return self.generic_visit(node, **kwargs)

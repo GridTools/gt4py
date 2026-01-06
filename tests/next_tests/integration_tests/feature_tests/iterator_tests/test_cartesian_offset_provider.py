@@ -42,13 +42,13 @@ def test_cartesian_offset_provider():
     out = gtx.as_field([I_loc, J_loc], np.asarray([[-1]]))
 
     fencil(out, inp)
-    assert out[0][0] == 42
+    assert out[0][0].as_scalar() == 42
 
     fencil_swapped(out, inp)
-    assert out[0][0] == 1
+    assert out[0][0].as_scalar() == 1
 
     fencil(out, inp, backend=roundtrip.default)
-    assert out[0][0] == 42
+    assert out[0][0].as_scalar() == 42
 
     fencil(out, inp, backend=double_roundtrip.backend)
-    assert out[0][0] == 42
+    assert out[0][0].as_scalar() == 42

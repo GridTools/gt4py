@@ -321,4 +321,4 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
     )
 
     if validate:
-        assert out[0] == True
+        assert out[0].as_scalar()

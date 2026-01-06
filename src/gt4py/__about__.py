@@ -35,7 +35,7 @@ __version_info__: pkg_version.Version
 # run for any reason, the fallback value defined here would be used,
 # so, for consistency, it should be set to the same value as the one
 # in `tool.versioningit.default-version` in pyproject.toml.
-on_build_version: Final = "1.1.0+unknown.version.details"
+on_build_version: Final = "1.1.2+unknown.version.details"
 
 _static_version: tuple[str, pkg_version.Version] | None = None
 _dir: list[str] | None = None
@@ -125,6 +125,7 @@ def __dir__() -> list[str]:
         import sys
 
         # Add virtual attributes (e.g. __version__, __version_info__) to the list
-        _dir = list(set(__annotations__.keys()) | vars(sys.modules[__name__]).keys())
+        annotations = globals().get("__annotations__", {})
+        _dir = list(set(annotations.keys()) | vars(sys.modules[__name__]).keys())
 
     return _dir

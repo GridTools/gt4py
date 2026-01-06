@@ -98,16 +98,21 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
     ) -> None:
         for loop in stencil.vertical_loops:
             for section in loop.sections:
-                with self.create_k_loop_code(section, loop):
-                    for execution in section.horizontal_executions:
-                        with self.generate_ij_loop(block_extents, execution):
+                for execution in section.horizontal_executions:
+                    with self.generate_ij_loop(block_extents, execution):
+                        with self.create_k_loop_code(section, loop, symtable=symtable):
                             self.visit(execution, symtable=symtable)
 
     @contextmanager
     def create_k_loop_code(
-        self, section: oir.VerticalLoopSection, loop: oir.VerticalLoop
+        self,
+        section: oir.VerticalLoopSection,
+        loop: oir.VerticalLoop,
+        symtable: Mapping[str, oir.FieldDecl],
     ) -> Generator:
-        loop_bounds: str = self.visit(section.interval, var="k", direction=loop.loop_order)
+        loop_bounds: str = self.visit(
+            section.interval, var="k", direction=loop.loop_order, symtable=symtable
+        )
         increment = "-1" if loop.loop_order == gtc_common.LoopOrder.BACKWARD else "1"
         loop_code = f"for k in range( {loop_bounds} , {increment}):"
         self.body.append(loop_code)
@@ -190,6 +195,9 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
             return f"{kwargs['var']}_0 + {axis_bound.offset}"
         if axis_bound.level == gtc_common.LevelMarker.END:
             return f"{kwargs['var']}_size + {axis_bound.offset}"
+
+    def visit_RuntimeAxisBound(self, axis_bound: gtc_common.RuntimeAxisBound, **kwargs) -> str:
+        return f"int({kwargs['var']}_0 + {self.visit(axis_bound.offset, **kwargs)})"
 
     def visit_Interval(self, interval: oir.Interval, **kwargs) -> str:
         if kwargs["direction"] == gtc_common.LoopOrder.BACKWARD:
