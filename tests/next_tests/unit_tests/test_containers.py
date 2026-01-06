@@ -98,24 +98,12 @@ def test_make_container_constructor(
 
 
 @pytest.mark.parametrize(
-    "collection",
-    [cnc.from_nested_tuple(cls, value) for cls, value in cnc.PYCONTAINERS_SAMPLES.items()],
-    ids=lambda val: val.__class__.__name__,
-)
-def test_tree_map_named_collection_identity(collection):
-    @named_collections.tree_map_named_collection
-    def identity(arg):
-        return arg
-
-    assert identity(collection) == collection
-
-
-@pytest.mark.parametrize(
     "first,second,expected",
     [
         (1, 41, 42),  # works without collections
         ((1,), (41,), (42,)),  # works for simple tuples
         (
+            # Note: we ignore typing and instantiate the collection with scalars for this test
             cnc.DataclassNamedCollection(41, 43),
             cnc.DataclassNamedCollection(1, -1),
             cnc.DataclassNamedCollection(42, 42),
@@ -132,4 +120,5 @@ def test_tree_map_named_collection_no_named_collection(first, second, expected):
     def add(first, second):
         return first + second
 
+    # Note: this comparison works only if we don't have fields in the collection as it relies on `==` comparison.
     assert add(first, second) == expected

@@ -388,6 +388,8 @@ def identity(x: _T) -> _T:
 def tree_map_named_collection(
     fun: Callable[utils._P, utils._R],
 ) -> Callable[..., utils._R | NamedCollection]:  # nested NamedCollection[_R]
+    # TODO(havogt): if we figure out the concept of the collection category that tree_map accepts, we could simplify this implementation,
+    # currently `tree_map` requires `Iterable` collections, therefore we have to manually extract/construct here.
     def impl(
         *args: Any | NamedCollection,
     ) -> utils._R | NamedCollection:  # type annotation for human...
@@ -403,14 +405,3 @@ def tree_map_named_collection(
         return construct(result)  # type: ignore[arg-type]
 
     return impl
-
-
-# TODO: should be like this, but tree_map assumes the collection is Iterable
-# tree_map_named_collection = functools.partial(
-#     utils.tree_map,
-#     collection_type=tuple((*named_collections.CUSTOM_NAMED_COLLECTION_TYPES, tuple)),
-#     result_collection_constructor=lambda orig_type,
-#     *elts: named_collections.make_named_collection_constructor(type(orig_type), nested=False)(
-#         tuple(*elts)
-#     ),
-# )
