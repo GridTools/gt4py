@@ -618,8 +618,8 @@ def translate_tuple_get(
     index = int(node.args[0].value)
 
     data_nodes = sdfg_builder.visit(node.args[1], ctx=ctx)
-    if isinstance(data_nodes, gtir_to_sdfg_types.FieldopData):
-        raise ValueError(f"Invalid tuple expression {node}")
+    if not isinstance(data_nodes, tuple):
+        raise ValueError(f"Invalid tuple expression {node}.")
     # Now we remove the tuple fields that are not used, to avoid an SDFG validation
     # error because of isolated access nodes.
     unused_data_nodes = gtx_utils.flatten_nested_tuple(
@@ -723,6 +723,11 @@ def translate_symbol_ref(
 ) -> gtir_to_sdfg_types.FieldopResult:
     """Generates the dataflow subgraph for a `ir.SymRef` node."""
     assert isinstance(node, gtir.SymRef)
+
+    # If the symbol is not used, the domain is set to 'NEVER' in node annex.
+    node_domain = getattr(node.annex, "domain", infer_domain.DomainAccessDescriptor.UNKNOWN)
+    if node_domain == infer_domain.DomainAccessDescriptor.NEVER:
+        return None
 
     symbol_name = str(node.id)
     # we retrieve the type of the symbol in the GT4Py prgram
