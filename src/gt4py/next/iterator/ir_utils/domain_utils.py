@@ -76,14 +76,8 @@ def _unstructured_translate_range_statically(
 
     # fold & convert expr into actual integers
     start_expr, stop_expr = range_.start, range_.stop
-    start_expr, stop_expr = (  # type: ignore[assignment]  # mypy not smart enough
-        collapse_tuple.CollapseTuple.apply(
-            expr,
-            within_stencil=False,
-            allow_undeclared_symbols=True,
-        )
-        for expr in (start_expr, stop_expr)
-    )
+    # note: if you find tuple expressions on literals here, you likely forgot to collapse tuple
+    # expressions beforehand
     assert isinstance(start_expr, itir.Literal) and isinstance(stop_expr, itir.Literal)
     start, stop = int(start_expr.value), int(stop_expr.value)
 
