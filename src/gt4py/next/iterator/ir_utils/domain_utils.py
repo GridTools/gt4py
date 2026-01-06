@@ -18,7 +18,7 @@ import numpy as np
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.transforms import collapse_tuple, trace_shifts
+from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 

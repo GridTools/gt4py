@@ -125,7 +125,9 @@ def test_inlining_of_scalar_works_integration():
     _verify_program_has_expected_true_value(hijacked_program.data)
 
 
-def _verify_program_has_expected_domain(program: itir.Program, expected_domain: gtx.Domain, uids: utils.IDGeneratorPool):
+def _verify_program_has_expected_domain(
+    program: itir.Program, expected_domain: gtx.Domain, uids: utils.IDGeneratorPool
+):
     assert isinstance(program.body[0], itir.SetAt)
     assert isinstance(program.body[0].expr, itir.FunCall)
     assert program.body[0].expr.fun == itir.SymRef(id="fop")
