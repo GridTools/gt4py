@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, Typ
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.definitions import CenteredExtent, Extent
 from gt4py.cartesian.gtc.passes.horizontal_masks import mask_overlap_with_extent
 
 
@@ -39,21 +39,31 @@ class GenericAccess(Generic[OffsetT]):
     def is_read(self) -> bool:
         return not self.is_write
 
-    def to_extent(self, horizontal_extent: Extent) -> Optional[Extent]:
+    def to_extent(
+        self,
+        horizontal_extent: Extent,
+        centered: bool = False,
+        ignore_horizontal_mask: bool = False,
+    ) -> Optional[Extent]:
         """
         Convert the access to an extent provided a horizontal extent for the access.
 
-        This returns None if no overlap exists between the horizontal mask and interval.
+        This returns None if no overlap exists between the horizontal mask and interval if
+        `ignore_horizontal_mask` is not set.
         """
-        offset_as_extent = Extent.from_offset(cast(Tuple[int, int, int], self.offset)[:2])
+        if centered:
+            offset_as_extent = CenteredExtent.from_offset(
+                cast(Tuple[int, int, int], self.offset)[:2]
+            )
+        else:
+            offset_as_extent = Extent.from_offset(cast(Tuple[int, int, int], self.offset)[:2])
         zeros = Extent.zeros(ndims=2)
-        if self.horizontal_mask:
+        if self.horizontal_mask and not ignore_horizontal_mask:
             if dist_from_edge := mask_overlap_with_extent(self.horizontal_mask, horizontal_extent):
                 return ((horizontal_extent - dist_from_edge) + offset_as_extent) | zeros
-            else:
-                return None
-        else:
-            return horizontal_extent + offset_as_extent
+            return None
+
+        return horizontal_extent + offset_as_extent
 
 
 class CartesianAccess(GenericAccess[Tuple[int, int, int]]):
@@ -105,6 +115,10 @@ class AccessCollector(eve.NodeVisitor):
 
     def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs: Any) -> None:
         self.visit(node.body, horizontal_mask=node.mask, **kwargs)
+
+    def visit_Interval(self, node: oir.Interval, **kwargs: Any) -> None:
+        self.visit(node.start, is_write=False, **kwargs)
+        self.visit(node.end, is_write=False, **kwargs)
 
     @dataclass
     class GenericAccessCollection(Generic[AccessT, OffsetT]):
@@ -220,13 +234,29 @@ def collect_symbol_names(node: eve.RootNode) -> Set[str]:
 
 
 class StencilExtentComputer(eve.NodeVisitor):
+    """Compute extent for fields and horizontal blocks.
+
+    Args:
+        add_k: Add an extent for the K axis. Defaults to `False`.
+        centered_extent: Center the extent on 0 (negative left, positive right). Defaults to `False`.
+        ignore_horizontal_mask: When computing extent, do not restrict it by reading the masks of
+            horizontal regions. Defaults to `False`.
+    """
+
     @dataclass
     class Context:
         fields: Dict[str, Extent] = dataclasses.field(default_factory=dict)
         blocks: Dict[int, Extent] = dataclasses.field(default_factory=dict)
 
-    def __init__(self, add_k: bool = False):
+    def __init__(
+        self,
+        add_k: bool = False,
+        centered_extent: bool = False,
+        ignore_horizontal_mask: bool = False,
+    ):
         self.add_k = add_k
+        self.centered_extent = centered_extent
+        self.ignore_horizontal_mask = ignore_horizontal_mask
         self.zero_extent = Extent.zeros(ndims=2)
 
     def visit_Stencil(self, node: oir.Stencil) -> Context:
@@ -255,7 +285,11 @@ class StencilExtentComputer(eve.NodeVisitor):
         ctx.blocks[id(node)] = horizontal_extent
 
         for access in results.ordered_accesses():
-            extent = access.to_extent(horizontal_extent)
+            extent = access.to_extent(
+                horizontal_extent,
+                centered=self.centered_extent,
+                ignore_horizontal_mask=self.ignore_horizontal_mask,
+            )
             if extent is None:
                 continue
 

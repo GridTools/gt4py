@@ -14,12 +14,14 @@ from typing import Any, Dict, Final, List, Optional, Tuple, Union, cast
 
 import numpy as np
 
+from gt4py.cartesian import utils
 from gt4py.cartesian.frontend.node_util import (
     IRNodeMapper,
     IRNodeVisitor,
     location_to_source_location,
 )
 from gt4py.cartesian.frontend.nodes import (
+    AbsoluteKIndex,
     ArgumentInfo,
     Assign,
     AxisBound,
@@ -39,10 +41,12 @@ from gt4py.cartesian.frontend.nodes import (
     HorizontalIf,
     If,
     IterationOrder,
+    IteratorAccess,
     LevelMarker,
     NativeFuncCall,
     NativeFunction,
     Node,
+    RuntimeAxisBound,
     ScalarLiteral,
     StencilDefinition,
     TernaryOpExpr,
@@ -340,11 +344,32 @@ class DefIRToGTIR(IRNodeVisitor):
         NativeFunction.FLOOR: common.NativeFunction.FLOOR,
         NativeFunction.CEIL: common.NativeFunction.CEIL,
         NativeFunction.TRUNC: common.NativeFunction.TRUNC,
+        NativeFunction.INT32: common.NativeFunction.INT32,
+        NativeFunction.INT64: common.NativeFunction.INT64,
+        NativeFunction.FLOAT32: common.NativeFunction.FLOAT32,
+        NativeFunction.FLOAT64: common.NativeFunction.FLOAT64,
+        NativeFunction.ERF: common.NativeFunction.ERF,
+        NativeFunction.ERFC: common.NativeFunction.ERFC,
+        NativeFunction.ROUND: common.NativeFunction.ROUND,
+        NativeFunction.ROUND_AWAY_FROM_ZERO: common.NativeFunction.ROUND_AWAY_FROM_ZERO,
     }
 
     GT4PY_BUILTIN_TO_GTIR: Final[dict[Builtin, common.BuiltInLiteral]] = {
         Builtin.TRUE: common.BuiltInLiteral.TRUE,
         Builtin.FALSE: common.BuiltInLiteral.FALSE,
+    }
+
+    GT4PY_DTYPE_TO_GTIR_DTYPE: Final[dict[DataType, common.DataType]] = {
+        DataType.INVALID: common.DataType.INVALID,
+        DataType.AUTO: common.DataType.AUTO,
+        DataType.DEFAULT: common.DataType.DEFAULT,
+        DataType.BOOL: common.DataType.BOOL,
+        DataType.INT8: common.DataType.INT8,
+        DataType.INT16: common.DataType.INT16,
+        DataType.INT32: common.DataType.INT32,
+        DataType.INT64: common.DataType.INT64,
+        DataType.FLOAT32: common.DataType.FLOAT32,
+        DataType.FLOAT64: common.DataType.FLOAT64,
     }
 
     @classmethod
@@ -404,6 +429,12 @@ class DefIRToGTIR(IRNodeVisitor):
             body=stmts,
             temporaries=temporaries,
             loc=location_to_source_location(node.loc),
+        )
+
+    def visit_IteratorAccess(self, iterator_access: IteratorAccess) -> gtir.IteratorAccess:
+        return gtir.IteratorAccess(
+            name=gtir.IteratorAccess.AxisName(iterator_access.name),
+            dtype=self.GT4PY_DTYPE_TO_GTIR_DTYPE[iterator_access.data_type],
         )
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
@@ -500,7 +531,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.FieldIfStmt:
+    def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.HorizontalRestriction:
         def make_bound_or_level(bound: AxisBound, level) -> Optional[common.AxisBound]:
             if (level == LevelMarker.START and bound.offset <= -10000) or (
                 level == LevelMarker.END and bound.offset >= 10000
@@ -543,6 +574,15 @@ class DefIRToGTIR(IRNodeVisitor):
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )
 
+    def visit_RuntimeAxisBound(self, node: RuntimeAxisBound) -> gtir.RuntimeAxisBound:
+        utils.warn_experimental_feature(
+            feature="Runtime Interval Bounds", ADR="experimental/runtime-intervals.md"
+        )
+        return gtir.RuntimeAxisBound(
+            level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level],
+            offset=self.visit(node.offset),
+        )
+
     def visit_FieldDecl(self, node: FieldDecl) -> gtir.FieldDecl:
         dimension_names = ["I", "J", "K"]
         dimensions = tuple(dim in node.axes for dim in dimension_names)
@@ -564,12 +604,16 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def transform_offset(
-        self, offset: Dict[str, Union[int, Expr]], **kwargs: Any
-    ) -> Union[common.CartesianOffset, gtir.VariableKOffset]:
+        self, offset: dict[str, int | Expr | AbsoluteKIndex], **kwargs: Any
+    ) -> common.CartesianOffset | gtir.VariableKOffset | gtir.AbsoluteKIndex:
+        if isinstance(offset, AbsoluteKIndex):
+            return gtir.AbsoluteKIndex(k=self.visit(offset.k, **kwargs))
+
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
             return common.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
+
         if isinstance(k_val, Expr):
             return gtir.VariableKOffset(k=self.visit(k_val, **kwargs))
 
-        raise TypeError("Unrecognized vertical offset type")
+        raise TypeError("Unrecognized vertical offset type.")

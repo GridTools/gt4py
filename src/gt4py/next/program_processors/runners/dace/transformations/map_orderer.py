@@ -13,7 +13,7 @@ from dace import properties as dace_properties, transformation as dace_transform
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import gtir_sdfg_utils
+from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowering
 
 
 def gt_set_iteration_order(
@@ -130,7 +130,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
             self.unit_strides_dims = [
                 unit_strides_dim
                 if isinstance(unit_strides_dim, str)
-                else gtir_sdfg_utils.get_map_variable(unit_strides_dim)
+                else gtx_dace_lowering.get_map_variable(unit_strides_dim)
                 for unit_strides_dim in unit_strides_dims
             ]
         elif unit_strides_kind is not None:

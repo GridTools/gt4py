@@ -8,14 +8,16 @@
 
 import dataclasses
 from collections import ChainMap
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, TypeVar, cast
 
 from gt4py import eve
+from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
+from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -28,15 +30,17 @@ class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
     >>> testee1 = im.lambda_("a")(im.plus("a", "b"))
     >>> cannonicalized_testee1 = CannonicalizeBoundSymbolNames.apply(testee1)
     >>> str(cannonicalized_testee1)
-    'λ(_csym_1) → _csym_1 + b'
+    'λ(_csym_0) → _csym_0 + b'
 
     >>> testee2 = im.lambda_("c")(im.plus("c", "b"))
     >>> cannonicalized_testee2 = CannonicalizeBoundSymbolNames.apply(testee2)
     >>> assert cannonicalized_testee1 == cannonicalized_testee2
     """
 
-    _uids: eve_utils.UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: eve_utils.UIDGenerator(prefix="_csym")
+    _uids: eve_utils.SequentialIDGenerator = dataclasses.field(
+        init=False,
+        repr=False,
+        default_factory=lambda: eve_utils.SequentialIDGenerator(prefix="_csym"),
     )
 
     @classmethod
@@ -46,7 +50,7 @@ class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
     def visit_Lambda(self, node: itir.Lambda, *, sym_map: ChainMap) -> itir.Lambda:
         sym_map = sym_map.new_child()
         for param in node.params:
-            sym_map[str(param.id)] = self._uids.sequential_id()
+            sym_map[str(param.id)] = next(self._uids)
 
         return im.lambda_(*sym_map.values())(self.visit(node.expr, sym_map=sym_map))
 
@@ -227,9 +231,20 @@ def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
         return common.GridType.UNSTRUCTURED
 
 
+def _flatten_tuple_expr(expr: itir.Expr) -> tuple[itir.Expr]:
+    if cpm.is_call_to(expr, "make_tuple"):
+        return sum(
+            (_flatten_tuple_expr(arg) for arg in expr.args), start=cast(tuple[itir.Expr], ())
+        )
+    else:
+        return (expr,)
+
+
 def grid_type_from_program(program: itir.Program) -> common.GridType:
-    domains = program.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
-    grid_types = {grid_type_from_domain(d) for d in domains}
+    domain_exprs = program.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+    domains = sum((_flatten_tuple_expr(domain_expr) for domain_expr in domain_exprs), start=())
+    assert all(isinstance(d, itir.FunCall) for d in domains)
+    grid_types = {grid_type_from_domain(d) for d in domains}  # type: ignore[arg-type] # checked above
     if len(grid_types) != 1:
         raise ValueError(
             f"Found 'set_at' with more than one 'GridType': '{grid_types}'. This is currently not supported."
@@ -253,3 +268,10 @@ def unique_symbol(sym: SymOrStr, reserved_names: Iterable[str]) -> SymOrStr:
         name = name + "_"
 
     return name
+
+
+def value_from_literal(literal: itir.Literal) -> core_defs.Scalar:
+    if literal.type.kind == ts.ScalarKind.BOOL:
+        assert literal.value in ["True", "False"]
+        return literal.value == "True"
+    return getattr(embedded, str(literal.type))(literal.value)

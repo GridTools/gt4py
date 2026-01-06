@@ -17,6 +17,7 @@ import dataclasses
 import enum
 import functools
 import hashlib
+import io
 import itertools
 import operator
 import pickle
@@ -24,8 +25,6 @@ import pprint
 import re
 import types
 import typing
-import uuid
-import warnings
 
 import deepdiff
 import xxhash
@@ -261,7 +260,7 @@ _K = TypeVar("_K")
 _V = TypeVar("_V")
 
 
-class CustomDefaultDictBase(collections.UserDict[_K, _V]):
+class CustomDefaultDictBase(collections.defaultdict[_K, _V]):
     """
     Base dict-like class using a value factory to compute default values per key.
 
@@ -282,16 +281,16 @@ class CustomDefaultDictBase(collections.UserDict[_K, _V]):
 
     """
 
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+    def __missing__(self, key: _K) -> _V:
+        self[key] = value = self.value_factory(key)
+        return value
+
     @abc.abstractmethod
     def value_factory(self, key: _K) -> _V:
         raise NotImplementedError
-
-    def __getitem__(self, key: _K) -> _V:
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            self.data[key] = (value := self.value_factory(key))
-            return value
 
 
 class CustomMapping(collections.abc.MutableMapping[_K, _V]):
@@ -350,6 +349,10 @@ class CustomMapping(collections.abc.MutableMapping[_K, _V]):
             + ", ".join(f"{self.key_map[k]!r}: {self.value_map[k]!r}" for k in self.key_map)
             + "}"
         )
+
+    def internal_key(self, key: _K) -> int:
+        """Return the internal key used to store the value associated with `key`."""
+        return self.key_func(key)
 
 
 class HashableBy(Generic[_T]):
@@ -438,7 +441,10 @@ def optional_lru_cache(
     """
 
     def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
-        cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
+        if maxsize is None and not typed:
+            cached = functools.cache(func)
+        else:
+            cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
 
         @functools.wraps(func)
         def inner(*args: Any, **kwargs: Any) -> Any:
@@ -610,7 +616,11 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
     return "__noninstantiable__" in cls.__dict__
 
 
-def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | None = None) -> str:
+def content_hash(
+    *args: Any,
+    hash_algorithm: str | xtyping.HashlibAlgorithm | None = None,
+    pickler: type = pickle.Pickler,
+) -> str:
     """Stable content-based hash function using instance serialization data.
 
     It provides a customizable hash function for any kind of data.
@@ -633,7 +643,10 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
     else:
         hasher = hash_algorithm
 
-    hasher.update(pickle.dumps(args))
+    buf = io.BytesIO()
+    pickler(buf).dump(args)
+
+    hasher.update(buf.getvalue())
     result = hasher.hexdigest()
     assert isinstance(result, str)
 
@@ -856,64 +869,22 @@ class FrozenNamespace(Namespace[T]):
         return self.__cached_hash_value__
 
 
-@dataclasses.dataclass
-class UIDGenerator:
-    """Simple unique id generator using different methods."""
+@dataclasses.dataclass(frozen=True)
+class SequentialIDGenerator:
+    """Simple sequential ID generator."""
 
-    prefix: Optional[str] = dataclasses.field(default=None, kw_only=True)
-    width: Optional[int] = dataclasses.field(default=None, kw_only=True)
-    warn_unsafe: Optional[bool] = dataclasses.field(default=None, kw_only=True)
+    prefix: str = ""
+    counter: Iterator[int] = dataclasses.field(default_factory=itertools.count)
+    #: A string to be used as template for the new ids.
+    #: It should contain the `{prefix}`and `{id}` format keys.
+    format: str = "{prefix}_{id}"
 
-    _counter: Iterator[int] = dataclasses.field(
-        default_factory=functools.partial(itertools.count, 1), init=False
-    )
-    """Constantly increasing counter for generation of sequential unique ids."""
+    def __next__(self) -> str:
+        return self.format.format(prefix=self.prefix, id=next(self.counter))
 
-    def random_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a random globally unique id."""
-        width = width or self.width or 8
-        if width <= 4:
-            raise ValueError(f"Width must be a positive number > 4 ({width} provided).")
-        prefix = prefix or self.prefix
-        u = uuid.uuid4()
-        s = str(u).replace("-", "")[:width]
-        return f"{prefix}_{s}" if prefix else f"{s}"
+    def next(self) -> str:
+        return self.__next__()
 
-    def sequential_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a sequential unique id (for the current session)."""
-        width = width or self.width
-        if width is not None and width < 1:
-            raise ValueError(f"Width must be a positive number ({width} provided).")
-        prefix = prefix or self.prefix
-        count = next(self._counter)
-        s = f"{count:0{width}}" if width else f"{count}"
-        return f"{prefix}_{s}" if prefix else f"{s}"
-
-    def reset_sequence(self, start: int = 1, *, warn_unsafe: Optional[bool] = None) -> UIDGenerator:
-        """Reset generator counter.
-
-        It returns the same instance to allow resetting at initialization:
-
-        Example:
-            >>> generator = UIDGenerator().reset_sequence(3)
-
-        Notes:
-            If the new start value is lower than the last generated UID, new
-            IDs are not longer guaranteed to be unique.
-
-        """
-        if start < 0:
-            raise ValueError(f"Starting value must be a positive number ({start} provided).")
-        if warn_unsafe is None:
-            warn_unsafe = self.warn_unsafe
-        if warn_unsafe and start < next(self._counter):
-            warnings.warn("Unsafe reset of UIDGenerator ({self})", stacklevel=2)
-        self._counter = itertools.count(start)
-
-        return self
-
-
-UIDs = UIDGenerator()
 
 # -- Iterators --
 S = TypeVar("S")

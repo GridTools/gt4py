@@ -271,7 +271,7 @@ def test_adr13_wrong_return_type_annotation():
     def wrong_return_type_annotation() -> gtx.Field[[], float]:
         return 1.0
 
-    with pytest.raises(errors.DSLError, match=r"expected 'float.*'"):
+    with pytest.raises(errors.DSLError, match=r"got 'float.*'"):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
 
@@ -402,3 +402,13 @@ def test_field_chained_comparison_failure():
         match=r".*chain.*not.*allowed(?s:.)*\(0.0 < cond\) & \(cond < 42.0\).*",
     ):
         _ = FieldOperatorParser.apply_to_function(comparison)
+
+
+def test_tuple_index_failure():
+    def tuple_index_failure(
+        a: tuple[gtx.Field[[TDim], float], gtx.Field[[TDim], float]], index: int
+    ) -> gtx.Field[[TDim], float]:
+        return a[index]
+
+    with pytest.raises(errors.DSLError, match=r"need .* literal"):
+        _ = FieldOperatorParser.apply_to_function(tuple_index_failure)

@@ -12,7 +12,6 @@ import copy
 
 from typing import Optional
 
-
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 from dace import data as dace_data
@@ -34,13 +33,17 @@ def _make_if_block(
     b2_name: str = "__arg2",
     cond_name: str = "__cond",
     output_name: str = "__output",
+    b1_type: dace.typeclass = dace.float64,
+    b2_type: dace.typeclass = dace.float64,
+    output_type: dace.typeclass = dace.float64,
 ) -> dace_nodes.NestedSDFG:
     inner_sdfg = dace.SDFG(util.unique_name("inner_sdfg"))
 
+    types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
     for name in {b1_name, b2_name, cond_name, output_name}:
         inner_sdfg.add_scalar(
             name,
-            dtype=dace.bool_ if name == "__cond" else dace.float64,
+            dtype=types[name],
             transient=False,
         )
 
@@ -68,7 +71,6 @@ def _make_if_block(
 
     return state.add_nested_sdfg(
         sdfg=inner_sdfg,
-        parent=outer_sdfg,
         inputs={b1_name, b2_name, cond_name},
         outputs={output_name},
     )
@@ -78,7 +80,7 @@ def _perform_test(
     sdfg: dace.SDFG,
     explected_applies: int,
     if_block: Optional[dace_nodes.NestedSDFG] = None,
-) -> None:
+) -> dace.SDFG:
     if if_block is not None:
         # The test should be applied in a specific location.
         assert 0 <= explected_applies <= 1
@@ -88,15 +90,10 @@ def _perform_test(
             if_block=if_block,
         )
         assert can_be_applied_ref == can_be_applied_res
-        return
+        return sdfg
 
     # General case, run the SDFG first and then compare the result.
-    ref = {
-        name: np.array(np.random.rand(*desc.shape), copy=True, dtype=desc.dtype.as_numpy_dtype())
-        for name, desc in sdfg.arrays.items()
-        if not desc.transient
-    }
-    res = copy.deepcopy(ref)
+    ref, res = util.make_sdfg_args(sdfg)
 
     if explected_applies != 0:
         util.compile_and_run_sdfg(sdfg, **ref)
@@ -109,10 +106,11 @@ def _perform_test(
     assert nb_apply == explected_applies
 
     if explected_applies == 0:
-        return
+        return sdfg
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
+    return sdfg
 
 
 def test_if_mover_independent_branches():
@@ -946,3 +944,106 @@ def test_if_mover_chain():
         sdfg,
         explected_applies=2,
     )
+
+
+def test_if_mover_symbolic_tasklet():
+    sdfg = dace.SDFG(util.unique_name("if_mover_symbols_in_tasklets"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for i in [1, 2]:
+        sdfg.add_symbol(f"symbol_{i}", dace.float64)
+        sdfg.add_scalar(f"scalar_{i}", dace.float64, transient=True)
+
+    snames = ["output", "tmp1", "tmp2"]
+    for name in snames:
+        sdfg.add_scalar(name, dace.float64, transient=True)
+
+    anames = ["cond", "a", "b"]
+    for name in anames:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=(dace.bool_ if name == "cond" else dace.float64),
+            transient=False,
+        )
+    cond, a, b = (state.add_access(name) for name in anames)
+    scalar_1, scalar_2 = (state.add_access(f"scalar_{i}") for i in [1, 2])
+    output, tmp1, tmp2 = (state.add_access(name) for name in snames)
+    me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
+
+    tlet_sym_to_scal_1 = state.add_tasklet(
+        "symbol1_to_scalar1",
+        inputs={},
+        outputs={"__out"},
+        code="__out = symbol_1",
+    )
+    tlet_sym_to_scal_2 = state.add_tasklet(
+        "symbol2_to_scalar2",
+        inputs={},
+        outputs={"__out"},
+        code="__out = symbol_2",
+    )
+    tlet_true_comp = state.add_tasklet(
+        "true_comp",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
+    )
+    tlet_false_comp = state.add_tasklet(
+        "false_comp",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
+    )
+
+    # Connect the input.
+    state.add_edge(a, None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(cond, None, me, "IN_cond", dace.Memlet("cond[0:10]"))
+    me.add_scope_connectors("a")
+    me.add_scope_connectors("cond")
+
+    # Turn symbols to sclars, inside the Map.
+    state.add_nedge(me, tlet_sym_to_scal_1, dace.Memlet())
+    state.add_edge(tlet_sym_to_scal_1, "__out", scalar_1, None, dace.Memlet("scalar_1[0]"))
+    state.add_nedge(me, tlet_sym_to_scal_2, dace.Memlet())
+    state.add_edge(tlet_sym_to_scal_2, "__out", scalar_2, None, dace.Memlet("scalar_2[0]"))
+
+    # Make the computations.
+    state.add_edge(me, "OUT_a", tlet_true_comp, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(scalar_1, None, tlet_true_comp, "__in2", dace.Memlet("scalar_1[0]"))
+    state.add_edge(tlet_true_comp, "__out", tmp1, None, dace.Memlet("tmp1[0]"))
+
+    state.add_edge(me, "OUT_a", tlet_false_comp, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(scalar_2, None, tlet_false_comp, "__in2", dace.Memlet("scalar_2[0]"))
+    state.add_edge(tlet_false_comp, "__out", tmp2, None, dace.Memlet("tmp2[0]"))
+
+    # Create the top `if_block`
+    if_block = _make_if_block(state, sdfg)
+
+    # Connect the inputs to the if block.
+    state.add_edge(tmp1, None, if_block, "__arg1", dace.Memlet("tmp1[0]"))
+    state.add_edge(tmp2, None, if_block, "__arg2", dace.Memlet("tmp2[0]"))
+    state.add_edge(me, "OUT_cond", if_block, "__cond", dace.Memlet("cond[__i]"))
+
+    # Connect the output.
+    state.add_edge(if_block, "__output", output, None, dace.Memlet("output[0]"))
+    state.add_edge(output, None, mx, "IN_b", dace.Memlet("b[__i]"))
+    state.add_edge(mx, "OUT_b", b, None, dace.Memlet("b[0:10]"))
+    mx.add_scope_connectors("b")
+
+    sdfg.validate()
+
+    assert len(if_block.sdfg.symbols) == 0
+    assert len(if_block.symbol_mapping) == 0
+
+    sdfg = _perform_test(
+        sdfg,
+        explected_applies=1,
+    )
+    expected_symb = {"symbol_1", "symbol_2"}
+
+    assert if_block.sdfg.symbols.keys() == expected_symb.union(["__i"])
+    assert all(if_block.sdfg.symbols[sym] == dace.float64 for sym in expected_symb)
+    assert if_block.sdfg.symbols["__i"] in {dace.int32, dace.int64}
+    assert if_block.symbol_mapping.keys() == expected_symb.union(["__i"])
+    assert all(str(sym) == str(symval) for sym, symval in if_block.symbol_mapping.items())

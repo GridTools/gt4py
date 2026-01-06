@@ -1,187 +1,178 @@
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
 include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+  - local: 'ci/cscs-ci-ext-config.yml'
 
-.py313: &py313
-  PYVERSION_PREFIX: py313
-  PYVERSION: 3.13.3
-.py310: &py310
-  PYVERSION_PREFIX: py310
-  PYVERSION: 3.10.9
+# Note:
+#   block-name-with-dashes      -> defined in remote cscs-ci ext include
+#   block_name_with_underscores -> defined in this file or other file in this repo
 
+variables:  # Default values for base variables (can be overridden in jobs definitions)
+  CUDA_VERSION: '12.6.2'
+  ROCM_VERSION: '6.2.4'
+  UBUNTU_VERSION: '24.04'
+  UV_VERSION: '0.6.12'
+
+.test_python_versions: &test_python_versions ['3.10', '3.13']
 
 stages:
-  - baseimage
-  - image
+  - build
   - test
 
-.build_baseimage:
-  stage: baseimage
-  # we create a tag that depends on the SHA value of ci/base.Dockerfile, this way
-  # a new base image is only built when the SHA of this file changes
-  # If there are more dependency files that should change the tag-name of the base container
-  # image, they can be added too.
-  # Since the base image name is runtime dependent, we need to carry the value of it to
-  # the following jobs via a dotenv file.
-  before_script:
-  # include build arguments in hash since we use a parameterized Docker file
-    - DOCKER_TAG=`echo "$(cat $DOCKERFILE) $DOCKER_BUILD_ARGS" | sha256sum | head -c 16`
-    - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/public/$ARCH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
-    - echo "BASE_IMAGE_${PYVERSION_PREFIX}=$PERSIST_IMAGE_NAME" >> build.env
-  artifacts:
-    reports:
-      dotenv: build.env
+# -- Build stage --
+# The build job creates the base image for the CSCS CI only if the external
+# dependencies or the pipeline definition change. The actual repository is
+# cloned at the test stage.
+.build_common:
+  stage: build
+  extends:
+    - .dynamic-image-name # Creates a tag (exported as DOCKER_TAG) depending on the files in WATCH_FILECHANGES
   variables:
-    DOCKERFILE: ci/base.Dockerfile
-    # change to 'always' if you want to rebuild, even if target tag exists already (if-not-exists is the default, i.e. we could also skip the variable)
-    CSCS_REBUILD_POLICY: if-not-exists
-    DOCKER_BUILD_ARGS: '["CUDA_VERSION=$CUDA_VERSION", "CUPY_PACKAGE=$CUPY_PACKAGE", "CUPY_VERSION=$CUPY_VERSION", "UBUNTU_VERSION=$UBUNTU_VERSION", "PYVERSION=$PYVERSION"]'
-.build_baseimage_x86_64:
-  extends: [.container-builder-cscs-zen2, .build_baseimage]
+    # jfrog.svc.cscs.ch/dockerhub/ubuntu is the cached version of docker.io/ubuntu
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION}
+    # CSCS_REBUILD_POLICY: 'always' => rebuild even if target tag exists already
+    CSCS_REBUILD_POLICY: if-not-exists  # default, i.e. we could also skip the variable
+    DOCKERFILE: ci/Dockerfile
+    # We pass the build arguments to the Dockerfile as a JSON array of names.
+    # The actual values will be taken from environment variables with the same
+    # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
+    # To override the defaults, just define these variables in the actual job.
+    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
+    PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}  # The $DOCKER_TAG tag is added in the before_script of .dynamic-image-name
+    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
+  parallel:
+    matrix:
+      - PY_VERSION: *test_python_versions
+
+.build_extra_cuda:
   variables:
-    CUDA_VERSION: 11.4.3
-    CUPY_PACKAGE: cupy-cuda11x
-    CUPY_VERSION: 12.3.0 # latest version that supports cuda 11
-    UBUNTU_VERSION: 20.04  # 22.04 hangs on daint in some tests for unknown reasons.
-.build_baseimage_aarch64:
-  extends: [.container-builder-cscs-gh200, .build_baseimage]
+    # jfrog.svc.cscs.ch/dockerhub/nvidia is the cached version of docker.io/nvidia
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
+    EXTRA_UV_SYNC_ARGS: "--extra cuda12"
+
+.build_extra_rocm:
   variables:
-    CUDA_VERSION: 12.6.2
-    CUPY_PACKAGE: cupy-cuda12x
-    CUPY_VERSION: 13.4.1
-    UBUNTU_VERSION: 22.04
+    # jfrog.svc.cscs.ch/dockerhub/rocm is the cached version of docker.io/rocm
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
+    EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
+    EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx942 ROCM_HOME=/opt/rocm"
+    UBUNTU_VERSION: '22.04'
 
-# build_py313_baseimage_x86_64:
-#   extends: .build_baseimage_x86_64
-#   variables:
-#     <<: *py313
-build_py313_baseimage_aarch64:
-  extends: .build_baseimage_aarch64
-  variables:
-    <<: *py313
+build_cscs_gh200:
+  extends:
+    - .container-builder-cscs-gh200
+    - .build_common
+    - .build_extra_cuda
+  needs: []
 
-# build_py310_baseimage_x86_64:
-#   extends: .build_baseimage_x86_64
-#   variables:
-#     <<: *py310
-build_py310_baseimage_aarch64:
-  extends: .build_baseimage_aarch64
-  variables:
-    <<: *py310
+build_cscs_amd_rocm:
+  extends:
+    - .container-builder-cscs-zen2
+    - .build_common
+    - .build_extra_rocm
+  needs: []
 
-
-.build_image:
-  stage: image
-  variables:
-    # make sure we use a unique name here, otherwise we could create a race condition, when multiple pipelines
-    # are running.
-    PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
-    DOCKERFILE: ci/checkout.Dockerfile
-    DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "BASE_IMAGE=${BASE_IMAGE_${PYVERSION_PREFIX}}"]'
-.build_image_x86_64:
-  extends: [.container-builder-cscs-zen2, .build_image]
-.build_image_aarch64:
-  extends: [.container-builder-cscs-gh200, .build_image]
-
-
-# build_py313_image_x86_64:
-#   extends: .build_image_x86_64
-#   needs: [build_py313_baseimage_x86_64]
-#   variables:
-#     <<: *py313
-build_py313_image_aarch64:
-  extends: .build_image_aarch64
-  needs: [build_py313_baseimage_aarch64]
-  variables:
-    <<: *py313
-
-# build_py310_image_x86_64:
-#   extends: .build_image_x86_64
-#   needs: [build_py310_baseimage_x86_64]
-#   variables:
-#     <<: *py310
-build_py310_image_aarch64:
-  extends: .build_image_aarch64
-  needs: [build_py310_baseimage_aarch64]
-  variables:
-    <<: *py310
-
-
-.test_helper:
+# -- Test stage --
+.test_common:
   stage: test
-  image: $CSCS_REGISTRY_PATH/public/$ARCH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
-  script:
-    - cd /gt4py.src
-    - echo "CI_COMMIT_BRANCH=${CI_COMMIT_BRANCH}"
-    - export GITHUB_PR="${CI_COMMIT_BRANCH#__CSCSCI__pr}"
-    - echo "GITHUB_PR=${GITHUB_PR}"
-    - export CI_NOX_RUN_ONLY_IF_CHANGED_FROM="gh/$(curl https://api.github.com/repos/gridtools/gt4py/pulls/${GITHUB_PR} 2>/dev/null | jq -r '.base.ref')"
-    - echo "CI_NOX_RUN_ONLY_IF_CHANGED_FROM=${CI_NOX_RUN_ONLY_IF_CHANGED_FROM}"
-    - NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-    - nox -s "test_$SUBPACKAGE-${PYVERSION:0:4}$NOX_SESSION_ARGS"
+  image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
+    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6_0) to test 
     CSCS_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
-    SLURM_GPUS_PER_NODE: 1
     SLURM_TIMELIMIT: 5
-    SLURM_PARTITION: "shared"
-    PYENV_VERSION: $PYVERSION
-    VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
-    CI_NOX_VERBOSE: 1
-# .test_helper_x86_64:
-#   extends: [.container-runner-daint-gpu, .test_helper]
-#   parallel:
-#     matrix:
-#     - SUBPACKAGE: [cartesian, storage]
-#       VARIANT: [-internal, -dace]
-#       SUBVARIANT: [-cuda11x, -cpu]
-#     - SUBPACKAGE: eve
-#     - SUBPACKAGE: next
-#       VARIANT: [-nomesh, -atlas]
-#       SUBVARIANT: [-cuda11x, -cpu]
-.test_helper_aarch64:
-  extends: [.container-runner-santis-gh200, .test_helper]
   parallel:
     matrix:
       - SUBPACKAGE: [cartesian]
         VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'cpu']
+        SUBVARIANT: ['cuda12', 'rocm6_0', 'cpu']
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
         VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'cpu']
-        DETAIL: ['nomesh', 'atlas']
+        SUBVARIANT: ['cuda12', 'rocm6_0', 'cpu']
+        DETAIL: ["nomesh", "atlas"]
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: [storage]
-        VARIANT: ['cuda12', 'cpu']
+        VARIANT: ['cuda12', 'rocm6_0', 'cpu']
+        PY_VERSION: *test_python_versions
+  rules: &exclude_variants_rules
+    # Extended jobs should reference this list anchor at the proper position of their
+    # `rules` section, and also add an extra `- when: on_success` rule at the end.
+    - if: '($SUBVARIANT == "cpu" || ($SUBPACKAGE == "storage" && $VARIANT == "cpu")) && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
+      when: never
+    - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
+      when: never
+    - if: '($SUBVARIANT == "rocm6_0" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm6_0")) && ($TEST_VARIANTS !~ /(^|\s)rocm6_0(\s|$)/)'
+      when: never
+
+  script:
+    # Since the image does not contain the repo, we need to clone it before running the tests.
+    # The output folder is inside the docker image (${WORKDIR}/gt4py), so it won't take up
+    # space on $SCRATCH but in a ephemeral tmpfs mount in the running node.
+    # for git>=2.49: mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 --revision "${CI_COMMIT_SHA}" "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
+    - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
+    - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
+    - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
+    - cd "${WORKDIR}/gt4py" && ./noxfile.py -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
+
+test_cscs_gh200:
+  extends:
+    - .container-runner-santis-gh200
+    - .test_common
+  needs:
+    - build_cscs_gh200
+  variables:
+    TEST_VARIANTS: 'cpu cuda12'
+    SLURM_GPUS_PER_NODE: 1
+    SLURM_PARTITION: 'shared'
+    GT4PY_BUILD_JOBS: 8
+    # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
+    - *exclude_variants_rules
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
-        SLURM_TIMELIMIT: '00:15:00'
+        SLURM_TIMELIMIT: "00:15:00"
+    - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'cuda12'
+      variables:
+        SLURM_TIMELIMIT: "00:10:00"
     - when: on_success
+
+test_cscs_amd_rocm:
+  extends:
+    - .tds-container-runner-beverin-mi200
+    - .test_common
+  needs:
+    - build_cscs_amd_rocm
   variables:
+    TEST_VARIANTS: 'cpu rocm6_0'
+    SLURM_GPUS_PER_NODE: 4
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    SLURM_PARTITION: mi300
+    CMAKE_PREFIX_PATH: /opt/rocm # for next
+    CUDA_HOME: /opt/rocm # for cartesian
+    SLURM_TIMELIMIT: 20 # relaxed relative to gh200 as there is no pressure on the queue
+  rules:
+    - *exclude_variants_rules
+    - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
+      variables:
+        CXX: g++
+    - when: on_success
+      variables:
+        CXX: /opt/rocm/bin/hipcc
 
-# test_py313_x86_64:
-#   extends: [.test_helper_x86_64]
-#   needs: [build_py313_image_x86_64]
-#   variables:
-#     <<: *py313
-test_py313_aarch64:
-  extends: [.test_helper_aarch64]
-  needs: [build_py313_image_aarch64]
-  variables:
-    <<: *py313
-
-# test_py310_x86_64:
-#   extends: [.test_helper_x86_64]
-#   needs: [build_py310_image_x86_64]
-#   variables:
-#     <<: *py310
-test_py310_aarch64:
-  extends: [.test_helper_aarch64]
-  needs: [build_py310_image_aarch64]
-  variables:
-    <<: *py310

@@ -9,7 +9,7 @@
 import dataclasses
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.eve.utils import UIDGenerator
+from gt4py.next import utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms import inline_lambdas
@@ -34,13 +34,11 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
         reduce(λ(x, y, z) → f(x, g(y, z)), init)(a, b)
     """
 
-    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     def _as_lambda(self, fun: ir.SymRef | ir.Lambda, param_count: int) -> ir.Lambda:
         # if fun is already a Lambda we still wrap it to get unique symbol names to avoid symbol clashes
-        params = [
-            ir.Sym(id=self.uids.sequential_id(prefix="_fuse_maps")) for _ in range(param_count)
-        ]
+        params = [ir.Sym(id=next(self.uids["_fuse_maps"])) for _ in range(param_count)]
         return ir.Lambda(
             params=params,
             expr=ir.FunCall(fun=fun, args=[ir.SymRef(id=p.id) for p in params]),

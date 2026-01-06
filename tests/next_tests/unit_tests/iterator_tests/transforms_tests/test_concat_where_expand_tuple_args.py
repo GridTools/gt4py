@@ -5,13 +5,11 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-from gt4py.next import common
-import pytest
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im, domain_utils
 from gt4py.next.iterator.transforms import (
     concat_where,
-    inline_lambdas,
     infer_domain,
     collapse_tuple,
 )
@@ -23,7 +21,7 @@ IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
 field_type = ts.FieldType(dims=[IDim], dtype=int_type)
 
 
-def test_trivial():
+def test_trivial(uids: utils.IDGeneratorPool):
     cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)})
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 2)})
     symbolic_domain = domain_utils.SymbolicDomain.from_expr(domain)
@@ -47,7 +45,47 @@ def test_trivial():
     )
 
     actual = collapse_tuple.CollapseTuple.apply(
-        actual, allow_undeclared_symbols=True, within_stencil=False
+        actual, allow_undeclared_symbols=True, within_stencil=False, uids=uids
+    )
+
+    assert actual == expected
+
+
+def test_nested(uids: utils.IDGeneratorPool):
+    cond = im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)})
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 2)})
+    symbolic_domain = domain_utils.SymbolicDomain.from_expr(domain)
+
+    testee = im.concat_where(
+        cond,
+        im.make_tuple(
+            im.ref("a", field_type), im.make_tuple(im.ref("c", field_type), im.ref("e", field_type))
+        ),
+        im.make_tuple(
+            im.ref("b", field_type), im.make_tuple(im.ref("d", field_type), im.ref("f", field_type))
+        ),
+    )
+    testee, _ = infer_domain.infer_expr(
+        testee,
+        (symbolic_domain, symbolic_domain),
+        keep_existing_domains=True,
+        offset_provider={},
+    )
+
+    expected = im.make_tuple(
+        im.concat_where(cond, "a", "b"),
+        im.make_tuple(
+            im.concat_where(cond, "c", "d"),
+            im.concat_where(cond, "e", "f"),
+        ),
+    )
+
+    actual = concat_where.expand_tuple_args(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True
+    )
+
+    actual = collapse_tuple.CollapseTuple.apply(
+        actual, allow_undeclared_symbols=True, within_stencil=False, uids=uids
     )
 
     assert actual == expected

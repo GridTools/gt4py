@@ -26,10 +26,12 @@ def get_closure(func, *, include_globals=True, included_nonlocals=True, include_
         closure.update(closure_vars.globals)
     else:
         unbound |= set(closure_vars.globals.keys())
+
     if included_nonlocals:
         closure.update(closure_vars.nonlocals)
     else:
         unbound |= set(closure_vars.nonlocals.keys())
+
     if include_builtins:
         closure.update(closure_vars.builtins)
     else:
@@ -287,10 +289,10 @@ class ASTEvaluator(ASTPass):
         return self.context[node.id]
 
     def visit_Num(self, node):
-        return node.n
+        return node.value
 
     def visit_Constant(self, node):
-        return node.n
+        return node.value
 
     def visit_NameConstant(self, node):
         return node.value
@@ -349,6 +351,14 @@ class AssignTargetsCollector(ASTPass):
         self.defs = []
         self.visit(ast_root)
         return self.assign_targets
+
+    def visit_AnnAssign(self, node: ast.AnnAssign):
+        if isinstance(node.target, ast.Tuple):
+            for t in node.target.elts:
+                assert isinstance(t, ast.Name)
+                self.assign_targets.append(t)
+        else:
+            self.assign_targets.append(node.target)
 
     def visit_Assign(self, node: ast.Assign):
         if len(node.targets) > 1 and not self.allow_multiple_targets:

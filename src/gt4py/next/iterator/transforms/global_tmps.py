@@ -9,10 +9,8 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Sequence
 from typing import Callable, Literal, Optional, cast
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next import common, utils as next_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
@@ -30,7 +28,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 def select_elems_by_domain(
     select_domain: SymbolicDomain,
     target: itir.Expr,
-    args: Sequence[itir.Expr],
+    source: itir.Expr,
     domains: tuple[SymbolicDomain, ...],
 ):
     """
@@ -40,12 +38,12 @@ def select_elems_by_domain(
     """
     new_targets = []
     new_els = []
-    for i, (el, el_domain) in enumerate(zip(args, domains)):
+    for i, el_domain in enumerate(domains):
         current_target = im.tuple_get(i, target)
+        current_source = im.tuple_get(i, source)
         if isinstance(el_domain, tuple):
-            assert cpm.is_call_to(el, "make_tuple")
             more_targets, more_els = select_elems_by_domain(
-                select_domain, current_target, el.args, el_domain
+                select_domain, current_target, current_source, el_domain
             )
             new_els.extend(more_els)
             new_targets.extend(more_targets)
@@ -53,16 +51,15 @@ def select_elems_by_domain(
             assert isinstance(el_domain, SymbolicDomain)
             if el_domain == select_domain:
                 new_targets.append(current_target)
-                new_els.append(el)
+                new_els.append(current_source)
     return new_targets, new_els
 
 
 def _set_at_for_domain(stmt: itir.SetAt, domain: SymbolicDomain) -> itir.SetAt:
     """Extract all elements with given domain into a new `SetAt` statement."""
     tuple_expr = stmt.expr
-    assert cpm.is_call_to(tuple_expr, "make_tuple")
     targets, expr_els = select_elems_by_domain(
-        domain, stmt.target, tuple_expr.args, stmt.expr.annex.domain
+        domain, stmt.target, tuple_expr, stmt.expr.annex.domain
     )
     new_expr = im.make_tuple(*expr_els)
     new_expr.annex.domain = domain
@@ -123,7 +120,9 @@ def _is_as_fieldop_of_scan(expr: itir.Expr) -> bool:
 
 
 def _transform_if(
-    stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
+    stmt: itir.Stmt,
+    declarations: list[itir.Temporary],
+    uids: next_utils.IDGeneratorPool,
 ) -> Optional[list[itir.Stmt]]:
     if isinstance(stmt, itir.SetAt) and cpm.is_call_to(stmt.expr, "if_"):
         cond, true_val, false_val = stmt.expr.args
@@ -149,7 +148,7 @@ def _transform_by_pattern(
     stmt: itir.Stmt,
     predicate: Callable[[itir.Expr, int], bool],
     declarations: list[itir.Temporary],
-    uids: eve_utils.UIDGenerator,
+    uids: next_utils.IDGeneratorPool,
 ) -> Optional[list[itir.Stmt]]:
     if not isinstance(stmt, itir.SetAt):
         return None
@@ -157,15 +156,10 @@ def _transform_by_pattern(
     # hide projector from extraction
     projector, expr = ir_utils_misc.extract_projector(stmt.expr)
 
-    # If we extracted a projector and the expression is not an as_fieldop of a scan,
-    # collapse tuple did not work as expected. We would expect that collapse
-    # tuple eleminated all top-level tuple expressions for non-scans.
-    assert projector is None or _is_as_fieldop_of_scan(expr)
-
     new_expr, extracted_fields, _ = cse.extract_subexpression(
         expr,
         predicate=predicate,
-        uid_generator=eve_utils.UIDGenerator(prefix="__tmp_subexpr"),
+        prefixed_uids=uids["__tmp_subexpr"],
         # TODO(tehrengruber): extracting the deepest expression first would allow us to fuse
         #  the extracted expressions resulting in fewer kernel calls & better data-locality.
         #  Extracting multiple expressions deepest-first is however not supported right now.
@@ -182,7 +176,7 @@ def _transform_by_pattern(
         for tmp_sym, tmp_expr in extracted_fields.items():
             assert isinstance(tmp_expr.type, ts.TypeSpec)
             tmp_names: str | tuple[str | tuple, ...] = type_info.apply_to_primitive_constituents(
-                lambda x: uids.sequential_id(),
+                lambda x: next(uids["__tmp"]),
                 tmp_expr.type,
                 tuple_constructor=lambda *elements: tuple(elements),
             )
@@ -241,7 +235,7 @@ def _transform_by_pattern(
             #  `make_tuple` expression.
             target_expr: itir.Expr = next_utils.tree_map(
                 lambda name, domain: im.ref(name, annex={"domain": domain}),
-                result_collection_constructor=lambda els: im.make_tuple(*els),
+                result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
             )(tmp_names, tmp_domains)  # type: ignore[assignment]  # typing of tree_map does not reflect action of `result_collection_constructor` yet
 
             # note: the let would be removed automatically by the `cse.extract_subexpression`, but
@@ -276,7 +270,9 @@ def _transform_by_pattern(
 
 
 def _transform_stmt(
-    stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
+    stmt: itir.Stmt,
+    declarations: list[itir.Temporary],
+    uids: next_utils.IDGeneratorPool,
 ) -> list[itir.Stmt]:
     unprocessed_stmts: list[itir.Stmt] = [stmt]
     stmts: list[itir.Stmt] = []
@@ -321,7 +317,7 @@ def create_global_tmps(
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     *,
-    uids: Optional[eve_utils.UIDGenerator] = None,
+    uids: next_utils.IDGeneratorPool,
 ) -> itir.Program:
     """
     Given an `itir.Program` create temporaries for intermediate values.
@@ -329,14 +325,21 @@ def create_global_tmps(
     This pass looks at all `as_fieldop` calls and transforms field-typed subexpressions of its
     arguments into temporaries.
     """
-    offset_provider_type = common.offset_provider_to_type(offset_provider)
     program = infer_domain.infer_program(
-        program, offset_provider=offset_provider, symbolic_domain_sizes=symbolic_domain_sizes
+        program,
+        offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
+        # Previous passes are allowed to create expressions without domains, but we must not
+        # overwrite other domains here. Instead, only reinfer expressions without a domain. We must
+        # not overwrite them since e.g. a `concat_where` expression might be rewritten into an
+        # `if_(cond, tb, fb)` expression where re-inference might extend the domain of tb and fb.
+        # See :class:`infer_domain.infer_expr` for details.
+        keep_existing_domains=True,
     )
-    program = type_inference.infer(program, offset_provider_type=offset_provider_type)
+    program = type_inference.infer(
+        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
+    )
 
-    if not uids:
-        uids = eve_utils.UIDGenerator(prefix="__tmp")
     declarations = program.declarations.copy()
     new_body = []
 

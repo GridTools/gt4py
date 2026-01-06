@@ -95,6 +95,7 @@ class Cast(common.Cast[Expr], Expr):
 class Temporary(LocNode):
     name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
+    dimensions: tuple[bool, bool, bool] = (True, True, True)
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 

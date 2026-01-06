@@ -239,8 +239,7 @@ def make_dir(dir_name, *, mode=0o777, is_package=False, is_cache=False):
     if is_cache:
         with open(os.path.join(dir_name, "CACHEDIR.TAG"), "w") as f:
             f.write(
-                """Signature: 8
-a477f597d28d172789f06886806bc55
+                """Signature: 8a477f597d28d172789f06886806bc55
 # This file is a cache directory tag created by GT4Py.
 # For information about cache directory tags, see:
 #	http://www.brynosaurus.com/cachedir/
@@ -439,3 +438,30 @@ class UniqueIdGenerator:
     @property
     def current(self):
         return self._current
+
+
+def warn_experimental_feature(*, feature: str, ADR: str) -> None:
+    """Warning message for experimental features.
+
+    Experimental features are required to print a (one-time) warning message such that users
+    know what to expect. We facilitate consistent warnings by providing this convenience
+    function.
+
+    Args:
+        feature (str): Name of the experimental feature.
+        ADR (str): Path to the associated ADR, relative to `docs/development/ADRs/cartesian/`
+
+    Raises:
+        ValueError: In case the the `ADR` can't be found.
+    """
+
+    # be nice and remove a potential `/` prefixed
+    ADR = ADR.removeprefix("/")
+
+    warnings.warn(
+        f"{feature} is an experimental feature. Please read "
+        f"<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/{ADR}> "
+        "to understand the consequences.",
+        category=UserWarning,
+        stacklevel=2,
+    )

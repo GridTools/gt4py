@@ -94,7 +94,7 @@ def zeros(
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     """Create a Field containing all zeros using the given (or device-default) allocator.
@@ -121,7 +121,7 @@ def ones(
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     """Create a Field containing all ones using the given (or device-default) allocator.
@@ -149,7 +149,7 @@ def full(
     dtype: Optional[core_defs.DTypeLike] = None,
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     """Create a Field where all values are set to `fill_value` using the given (or device-default) allocator.
@@ -187,7 +187,7 @@ def as_field(
     *,
     origin: Optional[Mapping[common.Dimension, int]] = None,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
     # TODO: copy=False
 ) -> nd_array_field.NdArrayField:
@@ -290,7 +290,7 @@ def as_connectivity(
     data: core_defs.NDArrayObject,
     dtype: Optional[core_defs.DType] = None,
     *,
-    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
     skip_value: core_defs.IntegralScalar | eve.NothingType | None = eve.NOTHING,
     # TODO: copy=False

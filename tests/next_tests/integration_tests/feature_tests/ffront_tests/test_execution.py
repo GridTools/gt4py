@@ -5,8 +5,10 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+import functools
+import math
 from functools import reduce
+from typing import TypeAlias
 
 import numpy as np
 import pytest
@@ -69,6 +71,48 @@ def test_multicopy(cartesian_case):
         return a, b
 
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
+
+
+def test_infinity(cartesian_case):
+    # TODO(tehrengruber): We actually want a GTIR test with a `nan` literal. This would then
+    #  also not raise a ZeroDivisionError error in embedded and roundtrip.
+    @gtx.field_operator
+    def testee() -> cases.IFloatField:
+        return broadcast(1.0 / 0.0, (IDim,))
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    try:
+        cases.verify(
+            cartesian_case,
+            testee,
+            out=out,
+            comparison=np.array_equal,
+            ref=np.full(out.ndarray.shape, math.inf),
+        )
+    except ZeroDivisionError:
+        pass
+
+
+def test_nan(cartesian_case):
+    # TODO(tehrengruber): We actually want a GTIR test with a `nan` literal. This would then
+    #  also not raise a ZeroDivisionError error in embedded and roundtrip.
+    @gtx.field_operator
+    def testee() -> cases.IFloatField:
+        return broadcast(0.0 / 0.0, (IDim,))
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    try:
+        cases.verify(
+            cartesian_case,
+            testee,
+            out=out,
+            comparison=functools.partial(np.array_equal, equal_nan=True),
+            ref=np.full(out.ndarray.shape, math.nan),
+        )
+    except ZeroDivisionError:
+        pass
 
 
 @pytest.mark.uses_cartesian_shift
@@ -321,7 +365,6 @@ def test_scalar_arg_with_field(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
-@pytest.mark.uses_tuple_args
 def test_double_use_scalar(cartesian_case):
     # TODO(tehrengruber): This should be a regression test on ITIR level, but tracing doesn't
     #  work for this case.
@@ -369,15 +412,15 @@ def test_scalar_scan(cartesian_case):
 
     qc = cases.allocate(cartesian_case, testee, "qc").zeros()()
     scalar = 1.0
+    isize = cartesian_case.default_sizes[IDim]
     ksize = cartesian_case.default_sizes[KDim]
-    expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
+    expected = np.full((isize, ksize), np.arange(start=1, stop=ksize + 1, step=1).astype(float64))
 
     cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
-@pytest.mark.uses_tuple_iterator
 def test_tuple_scalar_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
@@ -393,8 +436,9 @@ def test_tuple_scalar_scan(cartesian_case):
 
     qc = cases.allocate(cartesian_case, testee_op, "qc").zeros()()
     tuple_scalar = (1.0, (1.0, 0.0))
+    isize = cartesian_case.default_sizes[IDim]
     ksize = cartesian_case.default_sizes[KDim]
-    expected = np.full((ksize, ksize), np.arange(start=1.0, stop=11.0), dtype=float)
+    expected = np.full((isize, ksize), np.arange(start=1.0, stop=ksize + 1), dtype=float)
     cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
@@ -424,6 +468,32 @@ def test_scalar_scan_vertical_offset(cartesian_case):
     cases.run(cartesian_case, testee, inp, out=out)
 
     cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
+
+
+@pytest.mark.uses_scan
+def test_scan_unused_parameter(cartesian_case):
+    @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
+    def testee_scan(state: float, inp: float, unused: float) -> float:
+        return state + inp
+
+    @gtx.field_operator
+    def testee(
+        inp: gtx.Field[[KDim], float], unused: gtx.Field[[KDim], float]
+    ) -> gtx.Field[[KDim], float]:
+        return testee_scan(inp, unused)
+
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    unused = cases.allocate(cartesian_case, testee, "unused")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN).zeros()()
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        inp,
+        unused,
+        out=out,
+        ref=np.cumsum(inp.asnumpy(), axis=0),
+    )
 
 
 def test_single_value_field(cartesian_case):
@@ -564,6 +634,39 @@ def test_astype_float(cartesian_case):
         testee,
         ref=lambda a: a.astype(np.float32),
         comparison=lambda a, b: np.all(a == b),
+    )
+
+
+int_alias: TypeAlias = int64
+
+
+def test_astype_alias(cartesian_case):
+    @gtx.field_operator
+    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int_alias]:
+        b = astype(a, int_alias)
+        return b
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a: a.astype(int_alias),
+        comparison=lambda a, b: np.all(a == b),
+    )
+
+
+def test_type_constructor_alias(cartesian_case):
+    @gtx.field_operator
+    def testee() -> gtx.Field[[IDim], int_alias]:
+        return broadcast(int_alias(42), (IDim,))
+
+    ref = cases.allocate(
+        cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
+    )()
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda: ref,
     )
 
 
@@ -720,7 +823,7 @@ def test_tuple_arg(cartesian_case):
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
-    expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
+    expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[KDim], 1)
     out = cartesian_case.as_field([KDim], np.zeros((cartesian_case.default_sizes[KDim],)))
 
     if not forward:
@@ -896,7 +999,6 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_tuple_args
-@pytest.mark.uses_tuple_iterator
 def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
@@ -925,7 +1027,6 @@ def test_scan_nested_tuple_input(cartesian_case):
 
 
 @pytest.mark.uses_scan
-@pytest.mark.uses_tuple_iterator
 def test_scan_different_domain_in_tuple(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
@@ -965,7 +1066,6 @@ def test_scan_different_domain_in_tuple(cartesian_case):
 
 
 @pytest.mark.uses_scan
-@pytest.mark.uses_tuple_iterator
 def test_scan_tuple_field_scalar_mixed(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
@@ -1018,22 +1118,22 @@ def test_domain(cartesian_case):
         return a + a
 
     @gtx.program
-    def program_domain(a: cases.IField, out: cases.IField):
-        fieldop_domain(a, out=out, domain={IDim: (minimum(1, 2), 9)})
+    def program_domain(a: cases.IField, size: int32, out: cases.IField):
+        fieldop_domain(a, out=out, domain={IDim: (minimum(1, 2), size)})
 
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
-
+    size = cartesian_case.default_sizes[IDim]
     ref = out.asnumpy().copy()  # ensure we are not writing to out outside the domain
-    ref[1:9] = a.asnumpy()[1:9] * 2
+    ref[1:size] = a.asnumpy()[1:size] * 2
 
-    cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
+    cases.verify(cartesian_case, program_domain, a, size, out, inout=out, ref=ref)
 
 
 @pytest.mark.uses_floordiv
 def test_domain_input_bounds(cartesian_case):
     lower_i = 1
-    upper_i = 10
+    upper_i = cartesian_case.default_sizes[IDim] + 1
 
     @gtx.field_operator
     def fieldop_domain(a: cases.IField) -> cases.IField:
@@ -1056,9 +1156,9 @@ def test_domain_input_bounds(cartesian_case):
 
 def test_domain_input_bounds_1(cartesian_case):
     lower_i = 1
-    upper_i = 9
-    lower_j = 4
-    upper_j = 6
+    upper_i = cartesian_case.default_sizes[IDim]
+    lower_j = cartesian_case.default_sizes[JDim] - 3
+    upper_j = cartesian_case.default_sizes[JDim] - 1
 
     @gtx.field_operator
     def fieldop_domain(a: cases.IJField) -> cases.IJField:
@@ -1108,19 +1208,30 @@ def test_domain_tuple(cartesian_case):
 
     @gtx.program
     def program_domain_tuple(
-        inp0: cases.IJField, inp1: cases.IJField, out0: cases.IJField, out1: cases.IJField
+        inp0: cases.IJField,
+        inp1: cases.IJField,
+        out0: cases.IJField,
+        out1: cases.IJField,
+        isize: int32,
+        jsize: int32,
     ):
-        fieldop_domain_tuple(inp0, inp1, out=(out0, out1), domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_domain_tuple(
+            inp0, inp1, out=(out0, out1), domain={IDim: (1, isize), JDim: (jsize - 2, jsize)}
+        )
 
     inp0 = cases.allocate(cartesian_case, program_domain_tuple, "inp0")()
     inp1 = cases.allocate(cartesian_case, program_domain_tuple, "inp1")()
     out0 = cases.allocate(cartesian_case, program_domain_tuple, "out0")()
     out1 = cases.allocate(cartesian_case, program_domain_tuple, "out1")()
 
+    isize = cartesian_case.default_sizes[IDim]
+    jsize = cartesian_case.default_sizes[JDim] - 1
     ref0 = out0.asnumpy().copy()
-    ref0[1:9, 4:6] = inp0.asnumpy()[1:9, 4:6] + inp1.asnumpy()[1:9, 4:6]
+    ref0[1:isize, jsize - 2 : jsize] = (
+        inp0.asnumpy()[1:isize, jsize - 2 : jsize] + inp1.asnumpy()[1:isize, jsize - 2 : jsize]
+    )
     ref1 = out1.asnumpy().copy()
-    ref1[1:9, 4:6] = inp1.asnumpy()[1:9, 4:6]
+    ref1[1:isize, jsize - 2 : jsize] = inp1.asnumpy()[1:isize, jsize - 2 : jsize]
 
     cases.verify(
         cartesian_case,
@@ -1129,6 +1240,8 @@ def test_domain_tuple(cartesian_case):
         inp1,
         out0,
         out1,
+        isize,
+        jsize,
         inout=(out0, out1),
         ref=(ref0, ref1),
     )
@@ -1258,4 +1371,25 @@ def test_constant_closure_vars(cartesian_case):
 
     cases.verify_with_default_data(
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+    )
+
+
+def test_local_index_premapped_field(request, unstructured_case):
+    if request.node.get_closest_marker(pytest.mark.uses_mesh_with_skip_values.name):
+        pytest.skip("This test only works with non-skip value meshes.")
+
+    @gtx.field_operator
+    def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
+        shifted = inp(V2E)
+        return shifted[V2EDim(0)] + shifted[V2EDim(1)] + shifted[V2EDim(2)] + shifted[V2EDim(3)]
+
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    cases.verify(
+        unstructured_case,
+        testee,
+        inp,
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
+        ref=np.sum(inp.asnumpy()[v2e_table], axis=1),
     )

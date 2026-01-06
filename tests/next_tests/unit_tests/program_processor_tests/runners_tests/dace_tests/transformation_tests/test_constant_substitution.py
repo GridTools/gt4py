@@ -36,7 +36,7 @@ def test_constant_substitution():
     assert "One" in sdfg.used_symbols(True)
 
     # Now replace `One` with 1
-    gtx_transformations.gt_substitute_compiletime_symbols(sdfg, {"One": 1}, simplify_at_entry=True)
+    gtx_transformations.gt_substitute_compiletime_symbols(sdfg, {"One": 1}, simplify_at_entry=False)
 
     assert len(sdfg.symbols) == 1
     assert len(nsdfg.sdfg.symbols) == 1
@@ -99,7 +99,6 @@ def _make_sdfg() -> tuple[dace.SDFG, dace.nodes.NestedSDFG]:
     nested_sdfg: dace.SDFG = _make_nested_sdfg()
     nsdfg = first_state.add_nested_sdfg(
         nested_sdfg,
-        parent=sdfg,
         inputs={"A", "B"},
         outputs={"C"},
         symbol_mapping={"One": "One", "N": "N"},

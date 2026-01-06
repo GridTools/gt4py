@@ -40,7 +40,7 @@ def compilation_hash(otf_closure: CompilableProgram) -> int:
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
             utils.content_hash(tuple(arg for arg in otf_closure.args.args)),
-            common.hash_offset_provider_unsafe(offset_provider) if offset_provider else None,
+            common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
             otf_closure.args.column_axis,
         )
     )
@@ -57,7 +57,7 @@ def fingerprint_compilable_program(inp: CompilableProgram) -> str:
 
     program_hash = utils.content_hash(
         (
-            program,
+            program.fingerprint(),
             sorted(offset_provider.items(), key=lambda el: el[0]),
             column_axis,
         )
@@ -82,7 +82,6 @@ class ProgramSource(Generic[SrcL, SettingT]):
     library_deps: tuple[interface.LibraryDependency, ...]
     language: type[SrcL]
     language_settings: SettingT
-    implicit_domain: bool
 
     def __post_init__(self) -> None:
         if not isinstance(self.language_settings, self.language.settings_class):
@@ -142,12 +141,6 @@ class CompiledProgram(Protocol):
     """Executable python representation of a program."""
 
     def __call__(self, *args: Any, **kwargs: Any) -> None: ...
-
-
-class ExtendedCompiledProgram(CompiledProgram, Protocol):
-    """Executable python representation of a program with extra info."""
-
-    implicit_domain: bool
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

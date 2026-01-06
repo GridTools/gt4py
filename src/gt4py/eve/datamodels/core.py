@@ -1024,9 +1024,9 @@ def _make_datamodel(
     """
     mro_bases: Tuple[Type, ...] = cls.__mro__[1:]
 
-    if "__annotations__" not in cls.__dict__:
+    if "__annotations__" not in cls.__dict__ and "__annotate_func__" not in cls.__dict__:
         cls.__annotations__ = {}
-    annotations = cls.__dict__["__annotations__"]
+    annotations = cls.__annotations__
     resolved_annotations = xtyping.get_partial_type_hints(cls)
     annotations_with_extras = xtyping.get_partial_type_hints(cls, include_extras=True)
 
@@ -1169,11 +1169,11 @@ def _make_datamodel(
             generic = True
         else:
             # For any other subclass, add the proper __class_getitem__ method
-            if not issubclass(cls, (typing.Generic, xtyping.Generic)):  # type: ignore[arg-type]  # Generic is not considered a type
+            if not issubclass(cls, (typing.Generic, xtyping.Generic)):
                 raise TypeError(
                     f"'{cls.__name__}' cannot be converted to a GenericDataModel because it is not a generic class."
                 )
-            cls.__class_getitem__ = _make_data_model_class_getitem()  # type: ignore[attr-defined]  # adding new attribute
+            cls.__class_getitem__ = _make_data_model_class_getitem()  # type: ignore[method-assign,assignment]  # adding new attribute
 
     # TODO(egparedes): consider the use of the field_transformer hook available in attrs:
     #   https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification
@@ -1240,6 +1240,11 @@ def _make_datamodel(
     new_cls.update_forward_refs = classmethod(update_forward_refs)
 
     return new_cls
+
+
+class _DataModelGenericNameProperty:
+    def __get__(self, instance: Any, owner_class: type | None = None) -> str | None:
+        return owner_class.__name__.split("__")[0] if owner_class is not None else None
 
 
 @utils.optional_lru_cache(maxsize=None, typed=True)
@@ -1309,6 +1314,9 @@ def _make_concrete_with_cache(
         **new_field_c_attrs,
     }
     concrete_cls = type(class_name, (datamodel_cls,), namespace)
+    concrete_cls.__datamodel_generic_name__ = (  # type: ignore[attr-defined]  # adding new attribute
+        _DataModelGenericNameProperty()
+    )
 
     # Update the tuple of generic parameters in the new class, in case
     # this is a partial concretization

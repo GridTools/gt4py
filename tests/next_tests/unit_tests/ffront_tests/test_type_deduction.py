@@ -7,7 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
-from typing import Optional, Pattern
+import dataclasses
+from typing import NamedTuple, TypeAlias
+from collections.abc import Sequence
 
 import pytest
 
@@ -19,7 +21,6 @@ from gt4py.next import (
     FieldOffset,
     astype,
     broadcast,
-    common,
     errors,
     float32,
     float64,
@@ -32,7 +33,9 @@ from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
+
+from next_tests.artifacts import custom_named_collections as cnc
 
 # Meaningless dimensions, used for tests.
 TDim = Dimension("TDim")
@@ -473,14 +476,18 @@ def test_astype_dtype():
     )
 
 
+@dataclasses.dataclass
+class WrongConstructorType:
+    foo: int
+
+
 def test_astype_wrong_dtype():
     def simple_astype(a: Field[[TDim], float64]):
-        # we just use broadcast here, but anything with type function is fine
-        return astype(a, broadcast)
+        return astype(a, WrongConstructorType)
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Invalid call to 'astype': second argument must be a scalar type, got.",
+        match=r"Invalid ",
     ):
         _ = FieldOperatorParser.apply_to_function(simple_astype)
 
@@ -537,3 +544,201 @@ def test_as_offset_dtype():
 
     with pytest.raises(errors.DSLError, match=f"expected integer for offset field dtype"):
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)
+
+
+vpfloat: TypeAlias = float32
+wpfloat: TypeAlias = float64
+
+
+@pytest.mark.parametrize(
+    "test_input,expected", [(vpfloat, ts.ScalarKind.FLOAT32), (wpfloat, ts.ScalarKind.FLOAT64)]
+)
+def test_type_alias(test_input: TypeAlias, expected: ts.ScalarKind):
+    def fieldop_with_typealias(a: Field[[TDim], test_input]) -> Field[[TDim], test_input]:
+        return test_input("3.1418") + astype(a, test_input)
+
+    foast_tree = FieldOperatorParser.apply_to_function(fieldop_with_typealias)
+
+    assert (
+        foast_tree.body.stmts[0].value.left.func.type.definition.returns.kind == expected
+        and foast_tree.body.stmts[0].value.right.args[1].type.definition.returns.kind == expected
+    )
+
+
+def test_unexpected_closure_var_error():
+    class _UnexpectedClosureVar: ...
+
+    def unexpected_closure_var(a: Field[[TDim], float64]):
+        b = _UnexpectedClosureVar()
+        return a + b
+
+    with pytest.raises(errors.DSLError, match=r"Unexpected object.*'_UnexpectedClosureVar'"):
+        _ = FieldOperatorParser.apply_to_function(unexpected_closure_var)
+
+
+def _expected_named_tuple_type_maker(original_python_type: type) -> ts.NamedCollectionType:
+    return ts.NamedCollectionType(
+        types=[
+            ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+            ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+        ],
+        keys=["x", "y"],
+        original_python_type=f"{original_python_type.__module__}:{original_python_type.__qualname__}",
+    )
+
+
+def _expected_nested_named_tuple_type_maker(
+    original_python_type: type, element_types: Sequence[type]
+) -> ts.NamedCollectionType:
+    inner_types = [_expected_named_tuple_type_maker(elem) for elem in element_types]
+
+    return ts.NamedCollectionType(
+        types=inner_types,
+        keys=["a", "b", "c"],
+        original_python_type=f"{original_python_type.__module__}:{original_python_type.__qualname__}",
+    )
+
+
+@pytest.mark.parametrize(
+    "named_collection",
+    [
+        cnc.NamedTupleNamedCollection,
+        cnc.DataclassNamedCollection,
+    ],
+)
+def test_named_collections(named_collection):
+    def named_collections(a: named_collection) -> named_collection:
+        return named_collection(x=a.x, y=a.y)
+
+    parsed = FieldOperatorParser.apply_to_function(named_collections)
+
+    expected = _expected_named_tuple_type_maker(named_collection)
+    assert parsed.params[0].type == expected
+    assert parsed.body.stmts[-1].value.type == expected
+
+
+@pytest.mark.parametrize(
+    "named_collection, nested_types",
+    [
+        (cnc.NestedDataclassNamedCollection, [cnc.DataclassNamedCollection] * 3),
+        (cnc.NestedNamedTupleDataclassNamedCollection, [cnc.DataclassNamedCollection] * 3),
+        (cnc.NestedDataclassNamedTupleNamedCollection, [cnc.NamedTupleNamedCollection] * 3),
+        (
+            cnc.NestedMixedTupleNamedCollection,
+            [
+                cnc.NamedTupleNamedCollection,
+                cnc.DataclassNamedCollection,
+                cnc.NamedTupleNamedCollection,
+            ],
+        ),
+    ],
+)
+def test_nested_named_collections(named_collection, nested_types):
+    def named_collections(cont: named_collection) -> named_collection:
+        return named_collection(a=cont.a, b=cont.b, c=cont.c)
+
+    parsed = FieldOperatorParser.apply_to_function(named_collections)
+
+    expected = _expected_nested_named_tuple_type_maker(named_collection, nested_types)
+    assert parsed.params[0].type == expected
+    assert parsed.body.stmts[-1].value.type == expected
+
+
+def test_tuples_and_named_collections():
+    DeeplyNestedNamedCollection = cnc.DeeplyNestedNamedCollection
+    ScalarsNamedCollection = cnc.ScalarsNamedCollection
+    NamedTupleNamedCollection = cnc.NamedTupleNamedCollection
+    DataclassNamedCollection = cnc.DataclassNamedCollection
+
+    def testee(data: DeeplyNestedNamedCollection) -> DeeplyNestedNamedCollection:
+        return DeeplyNestedNamedCollection(
+            a=(data.a[0], data.a[1]),
+            b=ScalarsNamedCollection(
+                a=(data.b.a[0], data.b.a[1]),
+                b=((data.b.b[0][0], data.b.b[0][1]), (data.b.b[1][0], data.b.b[1][1])),
+            ),
+            c=(
+                (
+                    NamedTupleNamedCollection(x=data.c[0][0].x, y=data.c[0][0].y),
+                    DataclassNamedCollection(x=data.c[0][1].x, y=data.c[0][1].y),
+                ),
+                data.c[1],
+            ),
+        )
+
+    parsed = FieldOperatorParser.apply_to_function(testee)
+    expected = ts.NamedCollectionType(
+        types=[
+            ts.TupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                    ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                ]
+            ),
+            ts.NamedCollectionType(
+                types=[
+                    ts.TupleType(
+                        types=[
+                            ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                            ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                        ]
+                    ),
+                    ts.TupleType(
+                        types=[
+                            ts.TupleType(
+                                types=[
+                                    ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                                    ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
+                                ]
+                            ),
+                            ts.TupleType(
+                                types=[
+                                    ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                                    ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                                ]
+                            ),
+                        ]
+                    ),
+                ],
+                keys=["a", "b"],
+                original_python_type="next_tests.artifacts.custom_named_collections:ScalarsNamedCollection",
+            ),
+            ts.TupleType(
+                types=[
+                    ts.TupleType(
+                        types=[
+                            ts.NamedCollectionType(
+                                types=[
+                                    ts.FieldType(
+                                        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+                                    ),
+                                    ts.FieldType(
+                                        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+                                    ),
+                                ],
+                                keys=["x", "y"],
+                                original_python_type="next_tests.artifacts.custom_named_collections:NamedTupleNamedCollection",
+                            ),
+                            ts.NamedCollectionType(
+                                types=[
+                                    ts.FieldType(
+                                        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+                                    ),
+                                    ts.FieldType(
+                                        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+                                    ),
+                                ],
+                                keys=["x", "y"],
+                                original_python_type="next_tests.artifacts.custom_named_collections:DataclassNamedCollection",
+                            ),
+                        ]
+                    ),
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
+                ]
+            ),
+        ],
+        keys=["a", "b", "c"],
+        original_python_type="next_tests.artifacts.custom_named_collections:DeeplyNestedNamedCollection",
+    )
+    assert parsed.params[0].type == expected
+    assert parsed.body.stmts[-1].value.type == expected

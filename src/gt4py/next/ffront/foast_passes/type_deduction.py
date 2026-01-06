@@ -19,7 +19,7 @@ from gt4py.next.ffront import (  # noqa
     type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.foast_passes.utils import compute_assign_indices
+from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.iterator import builtins
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -369,10 +369,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         TargetType: TypeAlias = list[foast.Starred | foast.Symbol]
         values = self.visit(node.value, **kwargs)
 
-        if isinstance(values.type, ts.TupleType):
+        if isinstance(values.type, ts.COLLECTION_TYPE_SPECS):
             num_elts: int = len(values.type.types)
             targets: TargetType = node.targets
-            indices: list[tuple[int, int] | int] = compute_assign_indices(targets, num_elts)
+            indices: list[tuple[int, int] | int] = foast_utils.compute_assign_indices(
+                targets, num_elts
+            )
 
             if not any(isinstance(i, tuple) for i in indices) and len(targets) != num_elts:
                 raise errors.DSLError(
@@ -397,7 +399,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]  # type: ignore[assignment] # see check in next line
+                    new_type = values.type.types[index]
                     assert isinstance(new_type, ts.DataType)
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
@@ -486,10 +488,19 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
+        new_index = self.visit(node.index, **kwargs)
         new_type: Optional[ts.TypeSpec] = None
+
         match new_value.type:
             case ts.TupleType(types=types):
-                new_type = types[node.index]
+                try:
+                    index = foast_utils.expr_to_index(node.index)
+                except ValueError as ex:
+                    raise errors.DSLError(
+                        node.location,
+                        f"Tuples need to be indexed with literal integers, got '{node.index}'.",
+                    ) from ex
+                new_type = types[index]
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
@@ -506,13 +517,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         "Source and target must be equal for offsets with a single target.",
                     )
                 new_type = new_value.type
+            case ts.FieldType(dims=dims, dtype=dtype):
+                # e.g. `field[LocalDim(42)]`
+                new_type = ts.FieldType(
+                    dims=[d for d in dims if d != new_index.type.dim],
+                    dtype=dtype,
+                )
             case _:
                 raise errors.DSLError(
                     new_value.location, "Could not deduce type of subscript expression."
                 )
 
         return foast.Subscript(
-            value=new_value, index=node.index, type=new_type, location=node.location
+            value=new_value,
+            index=new_index,
+            type=new_type,
+            location=node.location,
         )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> foast.BinOp:
@@ -738,7 +758,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         if isinstance(
             new_func.type,
-            (ts.FunctionType, ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
+            (
+                ts.FunctionType,
+                ts_ffront.FieldOperatorType,
+                ts_ffront.ScanOperatorType,
+                ts.ConstructorType,
+            ),
         ):
             # Since we use the `id` attribute in the latter part of the toolchain ensure we
             # have the proper format here.
@@ -749,6 +774,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 raise errors.DSLError(node.location, "Functions can only be called directly.")
         elif isinstance(new_func.type, ts.FieldType):
             pass
+        elif isinstance(new_func.type, ts.DimensionType):
+            assert new_func.type.dim.kind == DimensionKind.LOCAL
+            return foast.Call(
+                func=new_func,
+                args=new_args,
+                kwargs=new_kwargs,
+                location=node.location,
+                type=ts.IndexType(dim=new_func.type.dim),
+            )
         else:
             raise errors.DSLError(
                 node.location,
@@ -892,23 +926,26 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return self._visit_reduction(node, **kwargs)
 
     def _visit_astype(self, node: foast.Call, **kwargs: Any) -> foast.Call:
-        value, new_type = node.args
+        value, new_type_constructor = node.args
         assert isinstance(
             value.type, (ts.FieldType, ts.ScalarType, ts.TupleType)
         )  # already checked using generic mechanism
 
-        if not isinstance(new_type, foast.Name) or new_type.id.upper() not in [
-            kind.name for kind in ts.ScalarKind
-        ]:
+        # Note: the type to convert to is uniquely identified by its GT4Py type (`ConstructorType`),
+        # not by e.g. its name.
+        if not (
+            isinstance(new_type_constructor.type, ts.ConstructorType)
+            and isinstance(new_type_constructor.type.definition.returns, ts.ScalarType)
+        ):
             raise errors.DSLError(
                 node.location,
-                f"Invalid call to 'astype': second argument must be a scalar type, got '{new_type}'.",
+                f"Invalid call to 'astype': second argument must be a scalar type, got '{new_type_constructor}'.",
             )
 
+        new_type = new_type_constructor.type.definition.returns
+
         return_type = type_info.apply_to_primitive_constituents(
-            lambda primitive_type: with_altered_scalar_kind(
-                primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
-            ),
+            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind),
             value.type,
         )
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
@@ -1007,7 +1044,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         @utils.tree_map(
             collection_type=ts.TupleType,
-            result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
+            result_collection_constructor=lambda _, elts: ts.TupleType(types=list(elts)),
         )
         def deduce_return_type(
             tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType

@@ -205,7 +205,7 @@ def if_(
     if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
         return tree_map(
             collection_type=ts.TupleType,
-            result_collection_constructor=lambda elts: ts.TupleType(types=[*elts]),
+            result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
         )(functools.partial(if_, pred))(true_branch, false_branch)
 
     assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
@@ -223,7 +223,7 @@ def if_(
 @_register_builtin_type_synthesizer
 def make_const_list(scalar: ts.ScalarType) -> ts.ListType:
     assert isinstance(scalar, ts.ScalarType)
-    return ts.ListType(element_type=scalar)
+    return ts.ListType(element_type=scalar, offset_type=None)
 
 
 @_register_builtin_type_synthesizer
@@ -274,7 +274,7 @@ def concat_where(
 
     @utils.tree_map(
         collection_type=ts.TupleType,
-        result_collection_constructor=lambda el: ts.TupleType(types=list(el)),
+        result_collection_constructor=lambda _, elts: ts.TupleType(types=list(elts)),
     )
     def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
         if any(isinstance(b, ts.DeferredType) for b in [tb, fb]):
@@ -325,7 +325,7 @@ def neighbors(
         offset_literal.value, str
     )
     assert isinstance(it, it_ts.IteratorType)
-    conn_type = offset_provider_type[offset_literal.value]
+    conn_type = common.get_offset_type(offset_provider_type, offset_literal.value)
     assert isinstance(conn_type, common.NeighborConnectivityType)
     return ts.ListType(element_type=it.element_type, offset_type=conn_type.neighbor_dim)
 
@@ -511,7 +511,8 @@ def _resolve_dimensions(
         for off_literal in reversed(
             shift_tuple[::2]
         ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
-            offset_type = offset_provider_type[off_literal.value]  # type: ignore [index] # ensured by accessing only every second element
+            assert isinstance(off_literal.value, str)
+            offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
             if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
                 continue  # No shift applied
             if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
@@ -589,6 +590,14 @@ def as_fieldop(
 
 
 @_register_builtin_type_synthesizer
+def get_domain_range(field: ts.FieldType, dim: ts.DimensionType) -> ts.TupleType:
+    return ts.TupleType(
+        types=[ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))]
+        * 2
+    )
+
+
+@_register_builtin_type_synthesizer
 def scan(
     scan_pass: TypeSynthesizer, direction: ts.ScalarType, init: ts.ScalarType
 ) -> TypeSynthesizer:
@@ -616,8 +625,8 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         arg_el_types = [arg.element_type for arg in args]
         el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
-        offset_types = [arg.offset_type for arg in args if arg.offset_type]
-        offset_type = offset_types[0] if offset_types else None
+        offset_types = [arg.offset_type for arg in args if arg.offset_type is not None]
+        offset_type = offset_types[0]
         assert all(offset_type == arg for arg in offset_types)
         return ts.ListType(element_type=el_type, offset_type=offset_type)
 
@@ -629,6 +638,9 @@ def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @type_synthesizer
     def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):
         assert all(isinstance(arg, ts.ListType) for arg in args)
+        assert any(
+            arg.offset_type is not None for arg in args
+        )  # we only have `make_const_list`s in the reduce which is not allowed
         return op(
             init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
         )
@@ -655,7 +667,7 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                     offset_axis.value, str
                 )
-                type_ = offset_provider_type[offset_axis.value]
+                type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
                 if isinstance(type_, common.Dimension):
                     pass
                 elif isinstance(type_, common.NeighborConnectivityType):

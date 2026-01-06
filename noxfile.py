@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q --script
+#! /usr/bin/env -S uv run -q --script --python 3.11
 #
 # GT4Py - GridTools Framework
 #
@@ -8,19 +8,23 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 #
+# Note:
+#   The explicit '--python 3.11' in the shebang is only needed due
+#   to the existence of the .python-versions file, which overrides
+#   the PEP 723 'requires-python' metadata.
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
 from __future__ import annotations
 
 import pathlib
-import types
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
 
 import nox
+import tomllib
 
 
 # This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
@@ -38,10 +42,13 @@ nox.options.sessions = [
     "test_cartesian-3.12(dace, cpu)",
     "test_cartesian-3.13(internal, cpu)",
     "test_cartesian-3.13(dace, cpu)",
+    "test_cartesian-3.14(internal, cpu)",
+    "test_cartesian-3.14(dace, cpu)",
     "test_eve-3.10",
     "test_eve-3.11",
     "test_eve-3.12",
     "test_eve-3.13",
+    "test_eve-3.14",
     "test_next-3.10(internal, cpu, nomesh)",
     "test_next-3.10(dace, cpu, nomesh)",
     "test_next-3.11(internal, cpu, nomesh)",
@@ -50,46 +57,58 @@ nox.options.sessions = [
     "test_next-3.12(dace, cpu, nomesh)",
     "test_next-3.13(internal, cpu, nomesh)",
     "test_next-3.13(dace, cpu, nomesh)",
+    "test_next-3.14(internal, cpu, nomesh)",
+    "test_next-3.14(dace, cpu, nomesh)",
     "test_package-3.10",
     "test_package-3.11",
     "test_package-3.12",
     "test_package-3.13",
+    "test_package-3.14",
     "test_storage-3.10(cpu)",
     "test_storage-3.11(cpu)",
     "test_storage-3.12(cpu)",
     "test_storage-3.13(cpu)",
+    "test_storage-3.14(cpu)",
 ]
 
-
-PYTHON_VERSIONS: Final[list[str]] = pathlib.Path(".python-versions").read_text().splitlines()
+REPO_ROOT: Final = pathlib.Path(__file__).parent.resolve().absolute()
+PYTHON_VERSIONS: Final[list[str]] = [
+    v
+    for line in (REPO_ROOT / ".python-versions").read_text().splitlines()
+    if (v := line.strip()) and not v.startswith("#")
+]
+REQUIRES_PYTHON = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"][
+    "requires-python"
+]
 
 # -- Parameter sets --
-DeviceOption: TypeAlias = Literal["cpu", "cuda11", "cuda12", "rocm4_3", "rocm5_0"]
-DeviceNoxParam: Final = types.SimpleNamespace(
-    **{device: nox.param(device, id=device, tags=[device]) for device in DeviceOption.__args__}
-)
-DeviceTestSettings: Final[dict[str, dict[str, list[str]]]] = {
+DeviceOption: TypeAlias = Literal["cpu", "cuda12", "rocm6_0"]
+DeviceNoxParam: Final[dict[DeviceOption, nox.param]] = {
+    device: nox.param(device, id=device, tags=[device]) for device in DeviceOption.__args__
+}
+DeviceTestSettings: Final[dict[DeviceOption, dict[str, list[str]]]] = {
     "cpu": {"extras": [], "markers": ["not requires_gpu"]},
     **{
         device: {"extras": [device], "markers": ["requires_gpu"]}
-        for device in ["cuda11", "cuda12", "rocm4_3", "rocm5_0"]
+        for device in DeviceOption.__args__
+        if device != "cpu"
     },
 }
 
 CodeGenOption: TypeAlias = Literal["internal", "dace"]
-CodeGenNoxParam: Final = types.SimpleNamespace(
-    **{
-        codegen: nox.param(codegen, id=codegen, tags=[codegen])
-        for codegen in CodeGenOption.__args__
-    }
-)
-CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": [], "markers": ["not requires_dace"]},
-    "dace": {"extras": ["dace"], "markers": ["requires_dace"]},
+CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
+    codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
-# Use dace-next for GT4Py-next, to install a different dace version than in cartesian
+CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
+    "internal": {"extras": [], "markers": ["not requires_dace"]}
+}
+# Use dace-cartesian group to select the appropriate dace version
+CodeGenCartesianTestSettings = CodeGenTestSettings | {
+    "dace": {"extras": [], "groups": ["dace-cartesian"], "markers": ["requires_dace"]},
+}
+# Install dace-next group to select the appropriate dace version
 CodeGenNextTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": ["dace-next"], "markers": ["requires_dace"]},
+    "dace": {"extras": [], "groups": ["dace-next"], "markers": ["requires_dace"]},
 }
 
 
@@ -113,7 +132,10 @@ def install_session_venv(
         "uv",
         "sync",
         "--python",
-        str(session.python),
+        # uv does not yet combine explicit python version requests with the
+        # `requires-python` range in `pyproject.toml`, so we do it manually.
+        # See: https://github.com/astral-sh/uv/issues/16654
+        f"{REQUIRES_PYTHON}, >={session.python!s}.0",
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
@@ -131,8 +153,8 @@ def install_session_venv(
 
 # -- Sessions --
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian"])
-@nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
-@nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+@nox.parametrize("codegen", [*CodeGenNoxParam.values()])
 def test_cartesian(
     session: nox.Session,
     codegen: CodeGenOption,
@@ -140,19 +162,17 @@ def test_cartesian(
 ) -> None:
     """Run selected 'gt4py.cartesian' tests."""
 
-    codegen_settings = CodeGenTestSettings[codegen]
+    codegen_settings = CodeGenCartesianTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
+    extras = [
+        "standard",
+        "testing",
+        *codegen_settings.get("extras", []),
+        *device_settings.get("extras", []),
+    ]
+    groups = ["test", *codegen_settings.get("groups", []), *device_settings.get("groups", [])]
 
-    install_session_venv(
-        session,
-        extras=[
-            "performance",
-            "testing",
-            *codegen_settings["extras"],
-            *device_settings["extras"],
-        ],
-        groups=["test"],
-    )
+    install_session_venv(session, extras=extras, groups=groups)
 
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
@@ -215,8 +235,8 @@ def test_examples(session: nox.Session) -> None:
         nox.param("atlas", id="atlas", tags=["atlas"]),
     ],
 )
-@nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
-@nox.parametrize("codegen", [CodeGenNoxParam.internal, CodeGenNoxParam.dace])
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+@nox.parametrize("codegen", [*CodeGenNoxParam.values()])
 def test_next(
     session: nox.Session,
     codegen: CodeGenOption,
@@ -227,7 +247,13 @@ def test_next(
 
     codegen_settings = CodeGenNextTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
-    groups: list[str] = ["test"]
+    extras = [
+        "standard",
+        "testing",
+        *codegen_settings.get("extras", []),
+        *device_settings.get("extras", []),
+    ]
+    groups = ["test", *codegen_settings.get("groups", []), *device_settings.get("groups", [])]
     mesh_markers: list[str] = []
 
     match meshlib:
@@ -237,11 +263,7 @@ def test_next(
             mesh_markers.append("requires_atlas")
             groups.append("frameworks")
 
-    install_session_venv(
-        session,
-        extras=["performance", "testing", *codegen_settings["extras"], *device_settings["extras"]],
-        groups=groups,
-    )
+    install_session_venv(session, extras=extras, groups=groups)
 
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
@@ -280,7 +302,7 @@ def test_package(session: nox.Session) -> None:
 
 
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "next"])
-@nox.parametrize("device", [DeviceNoxParam.cpu, DeviceNoxParam.cuda12])
+@nox.parametrize("device", [*DeviceNoxParam.values()])
 def test_storage(
     session: nox.Session,
     device: DeviceOption,
@@ -290,7 +312,7 @@ def test_storage(
     device_settings = DeviceTestSettings[device]
 
     install_session_venv(
-        session, extras=["performance", "testing", *device_settings["extras"]], groups=["test"]
+        session, extras=["standard", "testing", *device_settings["extras"]], groups=["test"]
     )
 
     markers = " and ".join(device_settings["markers"])

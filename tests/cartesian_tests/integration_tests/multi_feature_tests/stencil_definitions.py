@@ -27,6 +27,8 @@ from gt4py.cartesian.gtscript import (
     computation,
     cos,
     cosh,
+    erf,
+    erfc,
     exp,
     floor,
     gamma,
@@ -39,6 +41,8 @@ from gt4py.cartesian.gtscript import (
     log10,
     mod,
     region,
+    round,
+    round_away_from_zero,
     sin,
     sinh,
     sqrt,
@@ -150,7 +154,7 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         tanh_res = tanh(acosh_res)
         atanh_res = atanh(tanh_res)
         sqrt_res = a_gtscript_function(atanh_res)
-        pow10_res = 10 ** (atanh_res)
+        pow10_res = 10 ** (sqrt_res)
         log10_res = log10(pow10_res)
         exp_res = exp(log10_res)
         log_res = log(exp_res)
@@ -159,13 +163,17 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         floor_res = floor(cbrt_res)
         ceil_res = ceil(floor_res)
         trunc_res = trunc(ceil_res)
+        round_res = round(trunc_res)
+        round_afz_res = round_away_from_zero(round_res)
+        erf_res = erf(round_afz_res)
+        erfc_res = erfc(erf_res)
         field_b = (
             trunc_res
-            if isfinite(trunc_res)
+            if isfinite(erfc_res)
             else field_a
-            if isinf(trunc_res)
+            if isinf(erfc_res)
             else field_b
-            if isnan(trunc_res)
+            if isnan(erfc_res)
             else 0.0
         )
 

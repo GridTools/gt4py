@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.otf import arguments, languages, stages, step_types, workflow
+from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
@@ -85,7 +85,6 @@ class GTFNTranslationStep(
         arg_exprs: list[str] = []
 
         for arg_type, program_param in zip(arg_types, program.params, strict=True):
-            arg_type = arg_type.type_ if isinstance(arg_type, arguments.StaticArg) else arg_type
             # parameter
             parameter = get_param_description(program_param.id, arg_type)
             parameters.append(parameter)
@@ -102,7 +101,7 @@ class GTFNTranslationStep(
                     ):
                         # translate sparse dimensions to tuple dtype
                         dim_name = dim.value
-                        connectivity = offset_provider_type[dim_name]
+                        connectivity = common.get_offset_type(offset_provider_type, dim_name)
                         assert isinstance(connectivity, common.NeighborConnectivityType)
                         size = connectivity.max_neighbors
                         arg = f"gridtools::sid::dimension_to_tuple_like<generated::{dim_name}_t, {size}>({arg})"
@@ -163,8 +162,6 @@ class GTFNTranslationStep(
             pass_manager.apply_common_transforms,
             extract_temporaries=True,
             offset_provider=offset_provider,
-            # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
-            unconditionally_collapse_tuples=True,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
         )
 
@@ -216,9 +213,7 @@ class GTFNTranslationStep(
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
-        arg_types = tuple(
-            arg.type_ if isinstance(arg, arguments.StaticArg) else arg for arg in inp.args.args
-        )
+        arg_types = inp.args.args
         regular_parameters, regular_args_expr = self._process_regular_arguments(
             program, arg_types, inp.args.offset_provider_type
         )
@@ -263,7 +258,6 @@ class GTFNTranslationStep(
             source_code=source_code,
             language=self._language(),
             language_settings=self._language_settings(),
-            implicit_domain=inp.data.implicit_domain,
         )
         return module
 
@@ -318,13 +312,13 @@ class GTFNTranslationStep(
         )
 
 
-class GTFNTranslationStepFactory(factory.Factory):
+class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):
     class Meta:
         model = GTFNTranslationStep
 
 
-translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()
+translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
 
-translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(
+translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
     device_type=core_defs.DeviceType.CUDA
 )

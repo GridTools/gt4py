@@ -11,7 +11,8 @@
 import collections
 import copy
 import uuid
-from typing import Any, Final, Iterable, Optional, TypeAlias
+import warnings
+from typing import Any, Iterable, Optional, TypeAlias
 
 import dace
 from dace import (
@@ -20,25 +21,16 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes
+from dace.cli import progress as dace_cliprogress
+from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 from dace.transformation import (
     dataflow as dace_dataflow,
+    interstate as dace_interstate,
     pass_pipeline as dace_ppl,
     passes as dace_passes,
 )
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-
-
-GT_SIMPLIFY_DEFAULT_SKIP_SET: Final[set[str]] = {"ScalarToSymbolPromotion", "ConstantPropagation"}
-"""Set of simplify passes `gt_simplify()` skips by default.
-
-The following passes are included:
-- `ScalarToSymbolPromotion`: The lowering has sometimes to turn a scalar into a
-    symbol or vice versa and at a later point to invert this again. However, this
-    pass has some problems with this pattern so for the time being it is disabled.
-- `ConstantPropagation`: Same reasons as `ScalarToSymbolPromotion`.
-"""
 
 
 def gt_simplify(
@@ -71,6 +63,10 @@ def gt_simplify(
         `concat_where` built-in function.
     - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
         which removes more dead dataflow than the native DaCe version.
+    - `MapToCopy`: Called to remove some slices.
+    - `canonicalize_memlet_trees()`: A free function that will canonicalize all Memlets.
+        It is run after the inlining and can not be disabled.
+    - `TrivialTaskletElimination`: Removing trivial copies.
 
     Furthermore, by default, or if `None` is passed for `skip` the passes listed in
     `GT_SIMPLIFY_DEFAULT_SKIP_SET` will be skipped.
@@ -89,7 +85,7 @@ def gt_simplify(
         that `gt_simplify()` results in a fix point.
     """
     # Ensure that `skip` is a `set`
-    skip = GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
+    skip = gtx_transformations.constants.GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
 
     result: Optional[dict[str, Any]] = None
 
@@ -110,7 +106,7 @@ def gt_simplify(
                 sdfg=sdfg,
                 multistate=True,
                 permissive=False,
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if inline_res is not None:
@@ -118,8 +114,16 @@ def gt_simplify(
                 result = result or {}
                 result.update(inline_res)
 
+        # Ensure that we have canonical Memelts.
+        canoncialize_memlet_result = dace_sdutils.canonicalize_memlet_trees(sdfg)
+        if canoncialize_memlet_result:
+            result = result or {}
+            if "canonicalize_memlet_trees" not in result:
+                result["canonicalize_memlet_trees"] = 0
+            result["canonicalize_memlet_trees"] += canoncialize_memlet_result
+
         simplify_res = dace_passes.SimplifyPass(
-            validate=validate,
+            validate=False,
             validate_all=validate_all,
             verbose=False,
             skip=(skip | {"InlineSDFGs"}),
@@ -136,7 +140,9 @@ def gt_simplify(
         #  the parts DaCe is not able to do.
         if "FuseStates" not in skip:
             fuse_state_res = sdfg.apply_transformations_repeated(
-                [gtx_transformations.GT4PyStateFusion]
+                [gtx_transformations.GT4PyStateFusion],
+                validate=False,
+                validate_all=validate_all,
             )
             if fuse_state_res:
                 at_least_one_xtrans_run = True
@@ -144,6 +150,23 @@ def gt_simplify(
                 if "FuseStates" not in result:
                     result["FuseStates"] = 0
                 result["FuseStates"] += fuse_state_res
+
+        if "MapToCopy" not in skip:
+            find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+            removed_maps = sdfg.apply_transformations_once_everywhere(
+                gtx_transformations.MapToCopy(
+                    single_use_data=single_use_data,
+                ),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if removed_maps:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "MapToCopy" not in result:
+                    result["MapToCopy"] = 0
+                result["MapToCopy"] += removed_maps
 
         if "GT4PyDeadDataflowElimination" not in skip:
             eliminate_dead_dataflow_res = gtx_transformations.gt_eliminate_dead_dataflow(
@@ -159,10 +182,23 @@ def gt_simplify(
                     result["GT4PyDeadDataflowElimination"] = 0
                 result["GT4PyDeadDataflowElimination"] += eliminate_dead_dataflow_res
 
+        if "TrivialTaskletElimination" not in skip:
+            eliminated_trivial_tasklets = sdfg.apply_transformations_once_everywhere(
+                dace.transformation.dataflow.TrivialTaskletElimination(),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if eliminated_trivial_tasklets:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "TrivialTaskletElimination" not in result:
+                    result["TrivialTaskletElimination"] = 0
+                result["TrivialTaskletElimination"] += eliminated_trivial_tasklets
+
         if "CopyChainRemover" not in skip:
             copy_chain_remover_result = gtx_transformations.gt_remove_copy_chain(
                 sdfg=sdfg,
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if copy_chain_remover_result is not None:
@@ -175,7 +211,7 @@ def gt_simplify(
         if "SingleStateGlobalDirectSelfCopyElimination" not in skip:
             direct_self_copy_removal_result = sdfg.apply_transformations_repeated(
                 gtx_transformations.SingleStateGlobalDirectSelfCopyElimination(),
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if direct_self_copy_removal_result > 0:
@@ -190,7 +226,7 @@ def gt_simplify(
         if "SingleStateGlobalSelfCopyElimination" not in skip:
             self_copy_removal_result = sdfg.apply_transformations_repeated(
                 gtx_transformations.SingleStateGlobalSelfCopyElimination(),
-                validate=validate,
+                validate=False,
                 validate_all=validate_all,
             )
             if self_copy_removal_result > 0:
@@ -213,6 +249,9 @@ def gt_simplify(
                     result["MultiStateGlobalSelfCopyElimination"] = set()
                 result["MultiStateGlobalSelfCopyElimination"].update(distributed_self_copy_result)
 
+    if validate:
+        sdfg.validate()
+
     return result
 
 
@@ -222,6 +261,7 @@ def gt_inline_nested_sdfg(
     permissive: bool = False,
     validate: bool = True,
     validate_all: bool = False,
+    progress: Optional[bool] = None,
 ) -> Optional[dict[str, int]]:
     """Perform inlining of nested SDFG into their parent SDFG.
 
@@ -237,48 +277,71 @@ def gt_inline_nested_sdfg(
         validate: Perform validation after the transformation has finished.
         validate_all: Performs extensive validation.
     """
-    first_iteration = True
+
     nb_preproccess_total = 0
     nb_inlines_total = 0
-    while True:
-        # TODO(edopao): we call `reset_cfg_list()` as temporary workaround for a
-        # dace issue with pattern matching. Any time the SDFG's CFG-tree is modified,
-        # i.e. a loop is added/removed or something similar, the CFG list needs
-        # to be updated accordingly. Otherwise, all ID-based accesses are not going
-        # to work (which is what pattern matching attempts to do).
-        sdfg.reset_cfg_list()
-        nb_preproccess = sdfg.apply_transformations_repeated(
-            [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors],
-            validate=False,
-            validate_all=validate_all,
+    nsdfgs = [n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, dace_nodes.NestedSDFG)]
+    for nsdfg_node in dace_cliprogress.optional_progressbar(
+        reversed(nsdfgs), title="Inlining SDFGs", n=len(nsdfgs), progress=progress
+    ):
+        nsdfg: dace.SDFG = nsdfg_node.sdfg
+        parent_state = nsdfg.parent
+        parent_sdfg = parent_state.sdfg
+        parent_state_id = parent_state.block_id
+
+        # Clean the symbols and connectors of the nested SDFG.
+        for xform in [dace_dataflow.PruneSymbols, dace_dataflow.PruneConnectors]:
+            candidate = {xform.nsdfg: nsdfg_node}
+            cleaner = xform()
+            cleaner.setup_match(
+                sdfg=parent_sdfg,
+                cfg_id=parent_state.parent_graph.cfg_id,
+                state_id=parent_state_id,
+                subgraph=candidate,
+                expr_index=0,
+                override=True,
+            )
+            if cleaner.can_be_applied(parent_state, 0, parent_sdfg, permissive=False):
+                cleaner.apply(parent_state, parent_sdfg)
+                nb_preproccess_total += 1
+
+        # NOTE: In [PR#2178](https://github.com/GridTools/gt4py/pull/2178) this function was
+        #   modified to be more efficient. It also changed the order in which the inlining
+        #   transformations of DaCe were applied. Instead of trying `InlineMultistateSDFG`
+        #   it changed that such that `InlineSDFG` was used. However, this triggered
+        #   [issue#2108](https://github.com/spcl/dace/issues/2108) which lead to the removals
+        #   of some writes. As a temporary solution we no longer use `InlineSDFG` but only
+        #   the multistate version.
+        # TODO(phimuell): As soon as the DaCe issue is resolved start using `InlineSDFG` again.
+        multi_state_candidate = {dace_interstate.InlineMultistateSDFG.nested_sdfg: nsdfg_node}
+        multi_state_inliner = dace_interstate.InlineMultistateSDFG()
+        multi_state_inliner.setup_match(
+            sdfg=parent_sdfg,
+            cfg_id=parent_state.parent_graph.cfg_id,
+            state_id=parent_state_id,
+            subgraph=multi_state_candidate,
+            expr_index=0,
+            override=True,
         )
-        nb_preproccess_total += nb_preproccess
-        if (nb_preproccess == 0) and (not first_iteration):
-            break
-
-        # Create and configure the inline pass
-        inline_sdfg = dace_passes.InlineSDFGs()
-        inline_sdfg.progress = False
-        inline_sdfg.permissive = permissive
-        inline_sdfg.multistate = multistate
-
-        # Apply the inline pass
-        #  The pass returns `None` no indicate "nothing was done"
-        nb_inlines = inline_sdfg.apply_pass(sdfg, {}) or 0
-        nb_inlines_total += nb_inlines
-
-        # Check result, if needed and test if we can stop
-        if validate_all or validate:
-            sdfg.validate()
-        if nb_inlines == 0:
-            break
-        first_iteration = False
+        if multi_state_inliner.can_be_applied(parent_state, 0, parent_sdfg, permissive=permissive):
+            multi_state_inliner.apply(parent_state, parent_sdfg)
+            nb_inlines_total += 1
+            if nsdfg_node.label.startswith("scan_"):
+                # See `gtir_to_sdfg_scan.py::translate_scan()` for more information.
+                warnings.warn(
+                    f"Inlined '{nsdfg_node.label}' which might be a scan, this might leads to errors during simplification.",
+                    stacklevel=0,
+                )
 
     result: dict[str, int] = {}
     if nb_inlines_total != 0:
         result["InlineSDFGs"] = nb_inlines_total
     if nb_preproccess_total != 0:
         result["PruneSymbols|PruneConnectors"] = nb_preproccess_total
+
+    if validate or validate_all:
+        sdfg.validate()
+
     return result if result else None
 
 
@@ -286,7 +349,8 @@ def gt_substitute_compiletime_symbols(
     sdfg: dace.SDFG,
     repl: dict[str, Any],
     simplify: bool = False,
-    validate: bool = False,
+    skip: Optional[set[str]] = None,
+    validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
 ) -> None:
@@ -300,6 +364,8 @@ def gt_substitute_compiletime_symbols(
         sdfg: The SDFG to process.
         repl: Maps the name of the symbol to the value it should be replaced with.
         simplify: If `False` do not call `gt_simplify()` after the substitution.
+        skip: List of simplify stages that should not run. Is passed to the `skip` argument
+            of `gt_simplify()`.
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
 
@@ -319,13 +385,14 @@ def gt_substitute_compiletime_symbols(
     #   we initially call simplify and hope for the best.
     # For testing purposes we need to be able to disable this initial simplify.
     #  This is an implementation detail that we should get rid of.
-    if not kwargs.get("simplify_at_entry", False):
+    if kwargs.get("simplify_at_entry", True):
         # NOTE: To ensure uniform behaviour and as a performance optimization,
         #   `gt_auto_optimizer()` performs the initial simplification before this
         #   function is called. If something is changed here then the change might
         #   be necessary to be applied there as well.
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
+            skip=skip,
             validate=False,
             validate_all=validate_all,
         )
@@ -348,14 +415,22 @@ def gt_substitute_compiletime_symbols(
     if simplify:
         gt_simplify(
             sdfg=sdfg,
-            validate=validate,
+            skip=skip,
+            validate=False,
             validate_all=validate_all,
         )
+    else:
+        dace_sdutils.canonicalize_memlet_trees(sdfg)
     dace.sdfg.propagation.propagate_memlets_sdfg(sdfg)
+
+    if validate:
+        sdfg.validate()
 
 
 def gt_reduce_distributed_buffering(
     sdfg: dace.SDFG,
+    validate: bool = True,
+    validate_all: bool = False,
 ) -> Optional[dict[dace.SDFG, dict[dace.SDFGState, set[str]]]]:
     """Removes distributed write back buffers."""
     pipeline = dace_ppl.Pipeline([DistributedBufferRelocator()])
@@ -366,8 +441,14 @@ def gt_reduce_distributed_buffering(
         if ret is not None:
             all_result[rsdfg] = ret
 
+        if validate_all:
+            rsdfg.validate()
+
     if len(all_result) == 0:
         return None
+
+    if validate:
+        sdfg.validate()
 
     return all_result
 
@@ -413,6 +494,7 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             transient this is okay, as our rule guarantees this.
 
     Todo:
+        - Completely remove `temp_storage`, i.e. write directly into `dest_storage`.
         - Allow that `dest_storage` can also be transient.
         - Allow that `dest_storage` does not need to be a sink node, this is most
             likely most relevant if it is transient.
@@ -474,10 +556,12 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             final_dest_name: str = wb_edge.dst.data
 
             for def_an, def_state in def_locations:
+                # TODO(phimuell): Do not create a copy from `temp_storage` to the newly
+                #   created `dest_storage`. Instead bypass `temp_storage` fully.
                 def_state.add_edge(
                     def_an,
                     wb_edge.src_conn,
-                    def_state.add_access(final_dest_name),
+                    def_state.add_access(final_dest_name, copy.copy(wb_edge.dst.debuginfo)),
                     wb_edge.dst_conn,
                     copy.deepcopy(wb_memlet),
                 )
@@ -890,7 +974,9 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         )
         inner_desc: dace_data.Scalar = access_desc.clone()
         inner_data_name: str = sdfg.add_datadesc(access_node.data, inner_desc, find_new_name=True)
-        inner_an: dace_nodes.AccessNode = graph.add_access(inner_data_name)
+        inner_an: dace_nodes.AccessNode = graph.add_access(
+            inner_data_name, copy.copy(access_node.debuginfo)
+        )
 
         # Connect the tasklet with the map entry and the access node.
         graph.add_nedge(map_entry, inner_tasklet, dace.Memlet())

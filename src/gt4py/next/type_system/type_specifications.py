@@ -6,9 +6,15 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Iterator, Optional, Sequence, Union
+from __future__ import annotations
 
-from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
+from typing import Final, Iterator, Optional, Sequence, TypeVar
+
+from gt4py.eve import (
+    datamodels as eve_datamodels,
+    extended_typing as xtyping,
+    type_definitions as eve_types,
+)
 from gt4py.next import common
 
 
@@ -23,7 +29,7 @@ class DataType(TypeSpec):
     """
 
 
-class CallableType:
+class CallableType(TypeSpec):
     """
     A base type for all types are callable.
 
@@ -51,6 +57,17 @@ class DimensionType(TypeSpec):
 
     def __str__(self) -> str:
         return str(self.dim)
+
+
+class IndexType(TypeSpec):
+    """
+    Represents the type of an index into a dimension.
+    """
+
+    dim: common.Dimension
+
+    def __str__(self) -> str:
+        return f"Index[{self.dim}]"
 
 
 class OffsetType(TypeSpec):
@@ -91,12 +108,13 @@ class ScalarType(DataType):
 class ListType(DataType):
     """Represents a neighbor list in the ITIR representation.
 
-    Note: not used in the frontend. The concept is represented as Field with local Dimension.
+    Note:
+      - not used in the frontend. The concept is represented as Field with local Dimension.
+      - `None` is used to describe lists originating from `make_const_list`.
     """
 
     element_type: DataType
-    # TODO(tehrengruber): make `offset_type` mandatory
-    offset_type: Optional[common.Dimension] = None
+    offset_type: common.Dimension | None
 
 
 class FieldType(DataType, CallableType):
@@ -130,17 +148,61 @@ class TupleType(DataType):
         return len(self.types)
 
 
-class FunctionType(TypeSpec, CallableType):
+class NamedCollectionType(DataType):
+    types: list[DataType | DimensionType | DeferredType]
+    keys: list[str]
+    #: The original python type. It should be only used in the boundaries between
+    #: Python and GT4Py DSL, that is, `type translation` and in constructor/extractor
+    #: steps for custom containers.
+    #: It uses the "entry-point"-like format required by `pkgutil.resolve_name()`:
+    #:   '__module__:__qualname__'
+    original_python_type: (
+        str  # Format: '__module__:__qualname__' (as required by `pkgutil.resolve_name()`)
+    )
+
+    def __getattr__(self, name: str) -> DataType | DimensionType | DeferredType:
+        keys = object.__getattribute__(self, "keys")
+        if name in keys:
+            return self.types[keys.index(name)]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def __str__(self) -> str:
+        return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
+
+    def __iter__(self) -> Iterator[DataType | DimensionType | DeferredType]:
+        # Note: Unlike `Mapping`s, we iterate the values (not the keys) by default.
+        yield from self.types
+
+    def __len__(self) -> int:
+        return len(self.types)
+
+
+CollectionTypeSpecT = TypeVar("CollectionTypeSpecT", TupleType, NamedCollectionType)
+CollectionTypeSpec = TupleType | NamedCollectionType
+COLLECTION_TYPE_SPECS: Final[tuple[type[CollectionTypeSpec], ...]] = xtyping.get_args(
+    CollectionTypeSpec
+)
+
+
+class FunctionType(CallableType):
     pos_only_args: Sequence[TypeSpec]
     pos_or_kw_args: dict[str, TypeSpec]
     kw_only_args: dict[str, TypeSpec]
-    returns: Union[TypeSpec]
+    returns: TypeSpec
 
     def __str__(self) -> str:
         arg_strs = [str(arg) for arg in self.pos_only_args]
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+
+class ConstructorType(CallableType):
+    definition: FunctionType
+
+    @property
+    def constructed_type(self) -> TypeSpec:
+        return self.definition.returns
 
 
 class DomainType(DataType):
