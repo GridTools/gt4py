@@ -70,7 +70,7 @@ def promote_zero_dims(
                     # the argument unpromoted and let the further error handling take care of printing
                     # a meaningful error.
                     return arg_el
-                param_el = param_el.types[idx]  # type: ignore[attr-defined] # checked in conditiona above
+                param_el = param_el.types[idx]  # type: ignore[attr-defined] # checked in condition above
 
             if _is_zero_dim_field(param_el) and (
                 type_info.is_number(arg_el) or type_info.is_logical(arg_el)
