@@ -13,7 +13,12 @@ that explains the general structure and requirements on the SDFGs.
 """
 
 from . import constants, splitting_tools
-from .auto_optimize import GT4PyAutoOptHook, GT4PyAutoOptHookFun, gt_auto_optimize
+from .auto_optimize import (
+    GT4PyAutoOptHook,
+    GT4PyAutoOptHookFun,
+    GT4PyAutoOptHookStage,
+    gt_auto_optimize,
+)
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
 from .gpu_utils import (
     GPUSetBlockSize,
@@ -80,6 +85,7 @@ __all__ = [
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
+    "GT4PyAutoOptHookStage",
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",

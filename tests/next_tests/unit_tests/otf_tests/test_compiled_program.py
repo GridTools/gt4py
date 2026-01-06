@@ -9,6 +9,7 @@
 import pytest
 
 from gt4py import eve, next as gtx
+from gt4py.next import utils
 from gt4py.next import errors, backend, broadcast, common
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -23,7 +24,15 @@ def test_static_arg_from_enum():
         FOO = 1
 
     static_arg = arguments.StaticArg(value=SomeEnum.FOO)
-    assert static_arg.value == 1
+    assert static_arg.value == 1 and type(static_arg.value) is int
+
+
+def test_static_arg_from_enum_tuple():
+    class SomeEnum(eve.IntEnum):
+        FOO = 1
+
+    static_arg = arguments.StaticArg(value=(SomeEnum.FOO, SomeEnum.FOO))
+    assert static_arg.value == (1, 1) and all(type(val) is int for val in static_arg.value)
 
 
 def test_static_args_non_scalar_type():
@@ -116,15 +125,15 @@ def test_inlining_of_scalar_works_integration():
     _verify_program_has_expected_true_value(hijacked_program.data)
 
 
-def _verify_program_has_expected_domain(program: itir.Program, expected_domain: gtx.Domain):
+def _verify_program_has_expected_domain(program: itir.Program, expected_domain: gtx.Domain, uids: utils.IDGeneratorPool):
     assert isinstance(program.body[0], itir.SetAt)
     assert isinstance(program.body[0].expr, itir.FunCall)
     assert program.body[0].expr.fun == itir.SymRef(id="fop")
-    domain = CollapseTuple.apply(program.body[0].domain, within_stencil=False)
+    domain = CollapseTuple.apply(program.body[0].domain, within_stencil=False, uids=uids)
     assert domain == im.domain(common.GridType.CARTESIAN, expected_domain)
 
 
-def test_inlining_of_static_domain_works():
+def test_inlining_of_static_domain_works(uids: utils.IDGeneratorPool):
     domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
     input_pair = toolchain.CompilableProgram(
         data=prog.definition_stage,
@@ -140,4 +149,4 @@ def test_inlining_of_static_domain_works():
     )
 
     transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
-    _verify_program_has_expected_domain(transformed, domain)
+    _verify_program_has_expected_domain(transformed, domain, uids)

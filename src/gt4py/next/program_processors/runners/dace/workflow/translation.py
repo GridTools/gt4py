@@ -21,10 +21,9 @@ from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
-    gtir_to_sdfg,
-    gtir_to_sdfg_utils,
+    lowering as gtx_dace_lowering,
+    sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
-    utils as gtx_dace_utils,
 )
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
@@ -52,16 +51,18 @@ def find_constant_symbols(
                     raise NotImplementedError(
                         f"Unsupported field with multiple horizontal dimensions '{p}'."
                     )
-                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(str(p.id), dim)
+                sdfg_stride_symbol = gtx_dace_args.field_stride_symbol(str(p.id), dim)
                 constant_symbols[sdfg_stride_symbol.name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
-        connectivity_types = gtx_dace_utils.filter_connectivity_types(offset_provider_type)
-        for offset, conn_type in connectivity_types.items():
-            if (conn_id := gtx_dace_utils.connectivity_identifier(offset)) in sdfg.arrays:
+        for offset, conn_type in offset_provider_type.items():
+            if (
+                isinstance(conn_type, common.NeighborConnectivityType)
+                and (conn_id := gtx_dace_args.connectivity_identifier(offset)) in sdfg.arrays
+            ):
                 assert not sdfg.arrays[conn_id].transient
                 assert conn_type.source_dim.kind == common.DimensionKind.HORIZONTAL
-                sdfg_stride_symbol = gtx_dace_utils.field_stride_symbol(
-                    conn_id, conn_type.source_dim, connectivity_types
+                sdfg_stride_symbol = gtx_dace_args.field_stride_symbol(
+                    conn_id, conn_type.source_dim, offset_provider_type
                 )
                 constant_symbols[sdfg_stride_symbol.name] = 1
 
@@ -71,7 +72,7 @@ def find_constant_symbols(
             if isinstance(p.type, ts.TupleType):
                 psymbols = [
                     sym
-                    for sym in gtir_to_sdfg_utils.flatten_tuple_fields(p.id, p.type)
+                    for sym in gtx_dace_lowering.flatten_tuple_fields(p.id, p.type)
                     if isinstance(sym.type, ts.FieldType)
                 ]
             elif isinstance(p.type, ts.FieldType):
@@ -85,7 +86,7 @@ def find_constant_symbols(
                     continue
                 # set all range start symbols to constant value 0
                 sdfg_origin_symbols = [
-                    gtx_dace_utils.range_start_symbol(str(psymbol.id), dim)
+                    gtx_dace_args.range_start_symbol(str(psymbol.id), dim)
                     for dim in psymbol.type.dims
                 ]
                 constant_symbols |= {sdfg_symbol.name: 0 for sdfg_symbol in sdfg_origin_symbols}
@@ -379,7 +380,7 @@ class DaCeTranslator(
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
-        sdfg = gtir_to_sdfg.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
+        sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
             ir, sdfg, offset_provider_type, self.disable_field_origin_on_program_arguments

@@ -26,8 +26,8 @@ from dace.transformation.dataflow import map_fusion_helper as dace_mfhelper
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import (
+    sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
-    utils as gtx_dace_utils,
 )
 from gt4py.next.program_processors.runners.dace.transformations import (
     map_fusion_utils as gtx_mfutils,
@@ -698,7 +698,7 @@ class VerticalSplitMapRange(SplitMapRange):
                     edge.data.data for edge in second_map_subgraph.in_edges(second_map_node)
                 ]
                 if self.access_node.data in nested_map_input_edges_data and any(
-                    gtx_dace_utils.is_connectivity_identifier(data)
+                    gtx_dace_args.is_connectivity_identifier(data)
                     for data in nested_map_input_edges_data
                 ):
                     return False

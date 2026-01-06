@@ -41,4 +41,4 @@ jobs:
 
       - name: Run 'package' tests with nox
         shell: bash
-        run: uv run --script noxfile.py -s test_package-${{ matrix.python-version }}
+        run: ./noxfile.py -s test_package-${{ matrix.python-version }}
