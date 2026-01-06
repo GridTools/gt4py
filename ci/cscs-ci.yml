@@ -88,7 +88,6 @@ build_cscs_amd_rocm:
   variables:
     TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6_0) to test 
     CSCS_CUDA_MPS: 1
-    SLURM_GPUS_PER_NODE: 4
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
   parallel:
@@ -125,7 +124,7 @@ build_cscs_amd_rocm:
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
     - export NOX_SESSION_ARGS="${VARIANT:+($VARIANT}${SUBVARIANT:+, $SUBVARIANT}${DETAIL:+, $DETAIL}${VARIANT:+)}"
-    - cd "${WORKDIR}/gt4py" && uv run --script noxfile.py -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
+    - cd "${WORKDIR}/gt4py" && ./noxfile.py -s "test_${SUBPACKAGE}-${PY_VERSION}${NOX_SESSION_ARGS}"
 
 test_cscs_gh200:
   extends:
@@ -135,6 +134,8 @@ test_cscs_gh200:
     - build_cscs_gh200
   variables:
     TEST_VARIANTS: 'cpu cuda12'
+    SLURM_GPUS_PER_NODE: 1
+    SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
@@ -158,6 +159,7 @@ test_cscs_amd_rocm:
     - build_cscs_amd_rocm
   variables:
     TEST_VARIANTS: 'cpu rocm6_0'
+    SLURM_GPUS_PER_NODE: 4
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
