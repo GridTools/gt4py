@@ -15,7 +15,7 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
     """
     Given a schedule tree with K-JI loops, push the K-loop down into the JI-loops to
     achieve a loop structure suitable for a "K-first" memory layout, or a layout
-    where K is the higher value in the layout_map.
+    where K is the highest value in the layout_map.
 
     Expected input is something like
 

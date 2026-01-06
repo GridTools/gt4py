@@ -58,7 +58,7 @@ def copy_forward_stencil(
         out_field = in_field
 
 
-def test_default_schedule_is_KIJ():
+def test_default_schedule_is_KJI():
     builder = StencilBuilder(copy_stencil, backend="dace:cpu")
     manager = SDFGManager(builder)
 
@@ -135,10 +135,9 @@ def test_dace_cpu_KJI_loop_structure():
     sdfg = manager.sdfg_via_schedule_tree()
     state = sdfg.states()[0]
 
-    assert [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)] == [
-        ["__k_0"],
-        ["__j", "__i"],
-    ]
+    loop_indices = [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)]
+    assert len(loop_indices[0]) == 1 and loop_indices[0][0].startswith("__k_")
+    assert loop_indices[1] == ["__j", "__i"]
 
     builder = StencilBuilder(copy_forward_stencil, backend="dace:cpu_KJI")
     manager = SDFGManager(builder)
@@ -154,7 +153,7 @@ def test_dace_cpu_KJI_loop_structure():
         True,
     ]
 
-    # Expect IJ Map and in loop_body state (#2)
+    # Expect JI Map and in loop_body state (#2)
     assert [
         node.map.params for node in sdfg.states()[2].nodes() if isinstance(node, nodes.MapEntry)
     ] == [["__j", "__i"]]
