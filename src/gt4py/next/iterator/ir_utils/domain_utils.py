@@ -176,7 +176,7 @@ class SymbolicDomain:
         offset_provider: common.OffsetProvider | common.OffsetProviderType,
         #: A dictionary mapping axes names to their length. See
         #: func:`gt4py.next.iterator.transforms.infer_domain.infer_expr` for more details.
-        symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]] = None,
+        symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     ) -> SymbolicDomain:
         offset_provider_type = common.offset_provider_to_type(offset_provider)
 

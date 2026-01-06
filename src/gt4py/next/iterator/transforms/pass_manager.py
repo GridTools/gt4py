@@ -84,9 +84,9 @@ def _has_dynamic_domains(ir: itir.Program) -> bool:
 def _process_symbolic_domains_option(
     ir: itir.Program,
     offset_provider: common.OffsetProvider,
-    symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]],
+    symbolic_domain_sizes: Optional[dict[str, itir.Expr]],
     use_max_domain_range_on_unstructured_shift: Optional[bool],
-) -> Optional[dict[str, str | itir.Expr]]:
+) -> Optional[dict[str, itir.Expr]]:
     """
     Given a program, offset_provider and some configuration options determine how domains are
     inferred.
@@ -143,7 +143,7 @@ def apply_common_transforms(
     force_inline_lambda_args=False,
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
-    symbolic_domain_sizes: Optional[dict[str, str | itir.Expr]] = None,
+    symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     # TODO(tehrengruber): Remove this option again as soon as we have the necessary builtins
     #  to work with / translate domains.
     use_max_domain_range_on_unstructured_shift: Optional[bool] = None,
