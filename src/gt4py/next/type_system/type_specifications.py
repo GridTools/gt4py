@@ -148,6 +148,20 @@ class TupleType(DataType):
         return len(self.types)
 
 
+class AnyPythonType:
+    """Marker type representing any Python type which cannot be used for instantiation.
+
+    This is used as a workaround for missing generic support in the case of passing
+    a named collection of fields to a scan where it becomes a named collection of scalars.
+    """
+
+    def __init__(self) -> None:
+        raise AssertionError("Internal Error: The 'AnyPythonType' should never be instantiated.")
+
+
+ANY_PYTHON_TYPE_NAME: Final[str] = "gt4py.next.type_system.type_specifications:AnyPythonType"
+
+
 class NamedCollectionType(DataType):
     types: list[DataType | DimensionType | DeferredType]
     keys: list[str]

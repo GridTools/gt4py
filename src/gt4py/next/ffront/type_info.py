@@ -173,6 +173,19 @@ def function_signature_incompatibilities_fieldop(
     )
 
 
+def _tree_map_type_constructor_drop_python_type(
+    value: ts.CollectionTypeSpecT,
+    elems: NestedTuple[ts.DataType],
+) -> ts.CollectionTypeSpecT:
+    return (
+        ts.NamedCollectionType(
+            keys=value.keys, original_python_type=ts.ANY_PYTHON_TYPE_NAME, types=list(elems)
+        )
+        if isinstance(value, ts.NamedCollectionType)
+        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
+    )
+
+
 def _scan_param_promotion(
     param: ts.TypeSpec, arg: ts.TypeSpec
 ) -> ts.FieldType | ts.TupleType | ts.NamedCollectionType:
@@ -210,7 +223,15 @@ def _scan_param_promotion(
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    res = tree_map_type(_as_field, with_path_arg=True)(param)
+    # Note: In the promotion of the scalar type to field type we drop the information about
+    # the original python type in NamedCollections as we want to be able to express compatibility
+    # between named collections of scalars and their structurally equivalent collection of fields.
+    # Once we support generic named collections, this special case will disappear.
+    res = tree_map_type(
+        _as_field,
+        result_collection_constructor=_tree_map_type_constructor_drop_python_type,
+        with_path_arg=True,
+    )(param)
     assert isinstance(res, (ts.FieldType, ts.TupleType, ts.NamedCollectionType))
     return res
 
