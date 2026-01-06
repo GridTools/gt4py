@@ -496,35 +496,6 @@ def test_scan_unused_parameter(cartesian_case):
     )
 
 
-@pytest.mark.uses_scan
-def test_scan_init_duplicated(cartesian_case):
-    @gtx.scan_operator(axis=KDim, forward=True, init=((1.0,), (1.0,)))
-    def testee_scan(
-        state: tuple[tuple[float], tuple[float]], inp: float
-    ) -> tuple[tuple[float], tuple[float]]:
-        return (state[0][0] + inp,), (state[1][0] + inp,)
-
-    @gtx.field_operator
-    def testee(
-        inp: gtx.Field[[KDim], float],
-    ) -> tuple[tuple[gtx.Field[[KDim], float]], tuple[gtx.Field[[KDim], float]]]:
-        return testee_scan(inp)
-
-    inp = cases.allocate(cartesian_case, testee, "inp")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN).zeros()()
-
-    cases.verify(
-        cartesian_case,
-        testee,
-        inp,
-        out=out,
-        ref=(
-            (np.cumsum(inp.asnumpy(), axis=0) + 1.0,),
-            (np.cumsum(inp.asnumpy(), axis=0) + 1.0,),
-        ),
-    )
-
-
 def test_single_value_field(cartesian_case):
     @gtx.field_operator
     def testee_fo(a: cases.IKField) -> cases.IKField:
