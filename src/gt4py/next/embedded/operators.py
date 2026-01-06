@@ -59,7 +59,7 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
             # even if the scan dimension is not in the input, we can scan over it
             out_domain = common.Domain(*out_domain, (scan_range))
 
-        xp = get_array_ns(*all_args)
+        xp = get_array_ns(*(arguments.extract(arg) for arg in all_args))
         init_type = type_translation.from_value(self.init)
         assert isinstance(init_type, ts.TupleType | ts.ScalarType | ts.NamedCollectionType)
         res = field_utils.field_from_typespec(init_type, out_domain, xp)
