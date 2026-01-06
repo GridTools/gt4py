@@ -19,6 +19,12 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 @pytest.mark.uses_scan
 def test_scan_init_duplicated(cartesian_case):
+    """
+    Tests that a non-trivial duplicated expression in the `init` argument of a scan operator works.
+
+    GTFN currently doesn't like if the expression gets cse-extracted.
+    """
+
     @gtx.scan_operator(axis=KDim, forward=True, init=((1.0,), (1.0,)))
     def testee_scan(
         state: tuple[tuple[float], tuple[float]], inp: float
