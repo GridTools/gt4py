@@ -879,10 +879,10 @@ class ConnectivityKind(enum.Flag):
     - `ALTER_DIMS`: change the dimensions of the data field domain.
     - `ALTER_STRUCT`: transform structured of the data inside the field (non-compact transformation).
 
-    | Dims \ Struct |    No                    |    Yes                   |
-    | ------------- | ------------------------ | ------------------------ |
-    |   No          | Translation (I -> I)     | Reshuffling (I x K -> K) |
-    |   Yes         | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
+    | Dims \\ Struct |    No                    |    Yes                   |
+    | -------------- | ------------------------ | ------------------------ |
+    |   No           | Translation (I -> I)     | Reshuffling (I x K -> K) |
+    |   Yes          | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
 
     """
 

@@ -487,6 +487,19 @@ def is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec) -> bool:
             return False
         for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
             is_compatible &= is_compatible_type(el_type_a, el_type_b)
+    elif isinstance(type_a, ts.NamedCollectionType) and isinstance(type_b, ts.NamedCollectionType):
+        if type_a.keys != type_b.keys:
+            return False
+        if (
+            not any(
+                python_type is ts.ANY_PYTHON_TYPE_NAME
+                for python_type in [type_a.original_python_type, type_b.original_python_type]
+            )
+            and type_a.original_python_type != type_b.original_python_type
+        ):
+            return False
+        for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
+            is_compatible &= is_compatible_type(el_type_a, el_type_b)
     elif isinstance(type_a, ts.FunctionType) and isinstance(type_b, ts.FunctionType):
         for arg_a, arg_b in zip(type_a.pos_only_args, type_b.pos_only_args, strict=True):
             is_compatible &= is_compatible_type(arg_a, arg_b)
