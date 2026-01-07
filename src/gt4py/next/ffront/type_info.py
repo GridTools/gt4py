@@ -12,6 +12,7 @@ from typing import Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
+from gt4py.eve import datamodels
 from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common, utils
 from gt4py.next.type_system import type_info
@@ -70,7 +71,7 @@ def promote_zero_dims(
                     # the argument unpromoted and let the further error handling take care of printing
                     # a meaningful error.
                     return arg_el
-                param_el = param_el.types[idx]  # type: ignore[attr-defined] # checked in conditiona above
+                param_el = param_el.types[idx]  # type: ignore[attr-defined] # checked in condition above
 
             if _is_zero_dim_field(param_el) and (
                 type_info.is_number(arg_el) or type_info.is_logical(arg_el)
@@ -173,6 +174,16 @@ def function_signature_incompatibilities_fieldop(
     )
 
 
+def _tree_map_type_constructor_drop_python_type(
+    value: ts.CollectionTypeSpecT,
+    elems: NestedTuple[ts.DataType],
+) -> ts.CollectionTypeSpecT:
+    result = _tree_map_type_constructor(value, elems)
+    if isinstance(value, ts.NamedCollectionType):
+        result = datamodels.evolve(result, original_python_type=ts.ANY_PYTHON_TYPE_NAME)
+    return result
+
+
 def _scan_param_promotion(
     param: ts.TypeSpec, arg: ts.TypeSpec
 ) -> ts.FieldType | ts.TupleType | ts.NamedCollectionType:
@@ -210,7 +221,15 @@ def _scan_param_promotion(
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    res = tree_map_type(_as_field, with_path_arg=True)(param)
+    # Note: In the promotion of the scalar type to field type we drop the information about
+    # the original python type in NamedCollections as we want to be able to express compatibility
+    # between named collections of scalars and their structurally equivalent collection of fields.
+    # Once we support generic named collections, this special case will disappear.
+    res = tree_map_type(
+        _as_field,
+        result_collection_constructor=_tree_map_type_constructor_drop_python_type,
+        with_path_arg=True,
+    )(param)
     assert isinstance(res, (ts.FieldType, ts.TupleType, ts.NamedCollectionType))
     return res
 

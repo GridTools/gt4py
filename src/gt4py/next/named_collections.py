@@ -377,13 +377,6 @@ def make_constructor_expr(
     return value_expr
 
 
-_T = TypeVar("_T")
-
-
-def identity(x: _T) -> _T:
-    return x
-
-
 # typing of this function is sketchy
 def tree_map_named_collection(
     fun: Callable[utils._P, utils._R],
@@ -398,8 +391,7 @@ def tree_map_named_collection(
             extract = make_named_collection_extractor(type(args[0]))  # type: ignore[arg-type]
             construct = make_named_collection_constructor(type(args[0]), nested=True)  # type: ignore[arg-type]
         else:
-            extract = identity
-            construct = identity
+            extract = construct = lambda x: x
         plain_tuples = (extract(arg) for arg in args)
         result = utils.tree_map(fun=fun)(*plain_tuples)
         return construct(result)  # type: ignore[arg-type]
