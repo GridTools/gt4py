@@ -177,13 +177,10 @@ def _tree_map_type_constructor_drop_python_type(
     value: ts.CollectionTypeSpecT,
     elems: NestedTuple[ts.DataType],
 ) -> ts.CollectionTypeSpecT:
-    return (
-        ts.NamedCollectionType(
-            keys=value.keys, original_python_type=ts.ANY_PYTHON_TYPE_NAME, types=list(elems)
-        )
-        if isinstance(value, ts.NamedCollectionType)
-        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
-    )
+    result = _tree_map_type_constructor(value, elems)
+    if isinstance(value, ts.NamedCollectionType):
+        result = datamodels.evolve(result, original_python_type=ts.ANY_PYTHON_TYPE_NAME)
+    return result
 
 
 def _scan_param_promotion(
