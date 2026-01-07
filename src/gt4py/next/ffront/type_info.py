@@ -12,6 +12,7 @@ from typing import Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
+from gt4py.eve import datamodels
 from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common, utils
 from gt4py.next.type_system import type_info
