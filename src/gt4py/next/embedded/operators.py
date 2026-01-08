@@ -151,7 +151,7 @@ def _tuple_assign_field(
     source: xtyping.MaybeNestedInTuple[common.Field],
     domain: xtyping.MaybeNestedInTuple[common.Domain],
 ) -> None:
-    @utils.tree_map
+    @named_collections.tree_map_named_collection
     def impl(target: common.MutableField, source: common.Field, domain: common.Domain) -> None:
         if isinstance(source, common.Field):
             target[domain] = source[domain]
@@ -160,7 +160,7 @@ def _tuple_assign_field(
             target[domain] = source
 
     if not isinstance(domain, tuple):
-        domain = utils.tree_map(lambda _: domain)(target)
+        domain = named_collections.tree_map_named_collection(lambda _: domain)(target)  # type: ignore[assignment] # typing not precise enough
     impl(target, source, domain)
 
 
