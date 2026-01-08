@@ -152,28 +152,34 @@ def test_named_collection_constructed_inside(cartesian_case, testee):
 @gtx.program
 def constructed_inside_named_tuple_program_with_domain(
     vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
-    isize: gtx.int32,
-    jsize: gtx.int32,
+    i_size: gtx.int32,
+    j_size: gtx.int32,
     out: NamedTupleNamedCollection,
 ):
     constructed_inside_named_tuple(
         vel,
         out=out,
-        domain=({IDim: (0, isize), JDim: (0, jsize)}, {IDim: (0, isize - 1), JDim: (0, jsize - 1)}),
+        domain=(
+            {IDim: (0, i_size), JDim: (0, j_size)},
+            {IDim: (0, i_size - 1), JDim: (0, j_size - 1)},
+        ),
     )
 
 
 @gtx.program
 def constructed_inside_dataclass_program_with_domain(
     vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
-    isize: gtx.int32,
-    jsize: gtx.int32,
+    i_size: gtx.int32,
+    j_size: gtx.int32,
     out: DataclassNamedCollection,
 ):
     constructed_inside_dataclass(
         vel,
         out=out,
-        domain=({IDim: (0, isize), JDim: (0, jsize)}, {IDim: (0, isize - 1), JDim: (0, jsize - 1)}),
+        domain=(
+            {IDim: (0, i_size), JDim: (0, j_size)},
+            {IDim: (0, i_size - 1), JDim: (0, j_size - 1)},
+        ),
     )
 
 
@@ -213,7 +219,7 @@ def test_named_collection_with_multiple_output_domains(cartesian_case, testee):
         cartesian_case.default_sizes[IDim],
         cartesian_case.default_sizes[JDim],
         out=out,
-        ref=out.__class__(
+        ref=container_type(
             u=vel[0].asnumpy() + vel[1].asnumpy(), v=(vel[0].asnumpy() - vel[1].asnumpy())[:-1, :-1]
         ),
     )
