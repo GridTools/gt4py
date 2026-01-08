@@ -1647,6 +1647,38 @@ def test_gtir_let_lambda():
     assert np.allclose(b, ref)
 
 
+def test_gtir_let_lambda_unused_arg():
+    testee = gtir.Program(
+        id="let_lambda_unused_arg",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="z", type=IFTYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                # Arg 'xᐞ1' is used inside the let-lambda, 'yᐞ1' is not.
+                expr=im.let(("xᐞ1", im.op_as_fieldop("multiplies")("x", 3.0)), ("yᐞ1", "y"))(
+                    im.op_as_fieldop("multiplies")("xᐞ1", 2.0)
+                ),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim]),
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    c = np.random.rand(N)
+
+    sdfg = build_dace_sdfg(testee, {})
+
+    sdfg(a, b, c, **FSYMBOLS)
+    assert np.allclose(c, a * 6.0)
+
+
 def test_gtir_let_lambda_scalar_expression():
     domain_inner = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, "size_inner")})
     domain_outer = im.get_field_domain(

@@ -253,11 +253,53 @@ def test_scan(cartesian_case, testee):
     )
 
 
+@dataclasses.dataclass
+class ScalarNamedCollection:
+    value: gtx.float32
+
+
+@dataclasses.dataclass
+class FieldNamedCollection:
+    value: gtx.Field[[KDim], gtx.float32]
+
+
+@gtx.scan_operator(axis=cases.KDim, forward=True, init=gtx.float32(0.0))
+def scan_with_scalar_named_collection(
+    state: gtx.float32,
+    inp: ScalarNamedCollection,
+    scalar: ScalarNamedCollection,
+) -> gtx.float32:
+    return inp.value * scalar.value + state
+
+
+@gtx.field_operator
+def scan_with_scalar_named_collection_wrapper(
+    inp: FieldNamedCollection,
+    scalar: ScalarNamedCollection,
+) -> gtx.Field[[KDim], gtx.float32]:
+    return scan_with_scalar_named_collection(inp, scalar=scalar)
+
+
+def test_scan_with_scalar_named_collection(cartesian_case):
+    inp = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, "inp")()
+    out = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, cases.RETURN)()
+    scalar = ScalarNamedCollection(value=gtx.float32(2.0))
+
+    cases.verify(
+        cartesian_case,
+        scan_with_scalar_named_collection_wrapper,
+        inp,
+        scalar,
+        out=out,
+        ref=np.cumsum(inp.value.asnumpy() * 2.0, axis=0),
+    )
+
+
 @pytest.mark.xfail(
     reason="We store the qualified name to the actual Python type in the `NamedTupleType`."
 )
 def test_locally_defined_named_collection(cartesian_case):
-    # We could fix this pattern by storing the actual type (instead of a the qualified name).
+    # We could fix this pattern by storing the actual type (instead of the qualified name).
     @dataclasses.dataclass
     class LocalNamedCollection:  # not at global scope!
         u: gtx.Field[[IDim, JDim], gtx.float32]
