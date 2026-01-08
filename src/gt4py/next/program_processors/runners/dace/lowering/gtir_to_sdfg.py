@@ -190,7 +190,13 @@ class SubgraphContext:
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         return self.scope_symbols[symbol_name]
 
-    def input_data(self) -> set[str]:
+    def get_input_data(self) -> set[str]:
+        """Retrieve the names of arrays and scalars which are input data to this context.
+
+        Note that only the data that is currently used in this context, in other words
+        accessed in this SDFG state, is included in the returned set.
+        """
+
         flat_symbols = []
         for sym_name, sym_type in self.scope_symbols.items():
             if isinstance(sym_type, ts.TupleType):
@@ -494,8 +500,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
 
     A single instance of this visitor is used for the entire lowering, across all
-    levels of nested SDFGs. For each nested level, a new `SubgraphContext` is setup
-    with the data symbols in scope.
+    levels of nested SDFGs. The level-specific information, including the data symbols
+    available in the lowering scope, is stored inside a `SubgraphContext` object
+    that can be accessed by the visitor methods.
 
     This class is responsible for translation of `ir.Program`, that is the top level representation
     of a GT4Py program as a sequence of `ir.Stmt` (aka statement) expressions.
@@ -1051,7 +1058,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             target: gtir_to_sdfg_types.FieldopData,
             target_domain: domain_utils.SymbolicDomain,
             target_state: dace.SDFGState,
-            is_target_inout: bool,
+            target_is_also_used_as_input: bool,
         ) -> None:
             assert source.dc_node.desc(ctx.sdfg).transient
             assert source.gt_type == target.gt_type
@@ -1059,13 +1066,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             source_subset = _make_access_index_for_field(field_domain, source)
             target_subset = _make_access_index_for_field(field_domain, target)
 
-            if is_target_inout:
-                # write the field operator result in the separate target state
+            if target_is_also_used_as_input:
+                # write the field operator result in the separate target state,
+                # in order to ensure the correct dataflow for write after read
                 target_state.add_nedge(
                     target_state.add_access(source.dc_node.data),
                     target.dc_node,
                     dace.Memlet(
-                        data=target.dc_node.data, subset=target_subset, other_subset=source_subset
+                        data=source.dc_node.data, subset=source_subset, other_subset=target_subset
                     ),
                 )
             else:
@@ -1074,7 +1082,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     source.dc_node,
                     ctx.state.add_access(target.dc_node.data),
                     dace.Memlet(
-                        data=target.dc_node.data, subset=target_subset, other_subset=source_subset
+                        data=source.dc_node.data, subset=source_subset, other_subset=target_subset
                     ),
                 )
                 target_state.remove_node(target.dc_node)
@@ -1084,7 +1092,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Visit the field operator expression.
         source_tree = self._visit_expression(stmt.expr, ctx)
-        ctx_input_data = ctx.input_data()
+        ctx_input_data = ctx.get_input_data()
 
         # In order to support inout argument, write the result in separate next state
         # this is needed to avoid indeterministic behavior for expressions like: X, Y = X + 1, X
@@ -1102,7 +1110,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 target,
                 target_domain,
                 target_state,
-                is_target_inout=(target.dc_node.data in ctx_input_data),
+                target_is_also_used_as_input=(target.dc_node.data in ctx_input_data),
             )
         )(source_tree, target_tree, domain)
 

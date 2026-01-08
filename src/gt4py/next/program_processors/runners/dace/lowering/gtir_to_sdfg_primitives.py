@@ -660,6 +660,7 @@ def translate_scalar_expr(
             # e.g. the type name `float64` used in casting expressions like `cast_(variable, float64)`
             visit_expr = str(arg_expr.id) in ctx.scope_symbols
         else:
+            # any other kind of node should always be visited
             visit_expr = True
 
         if visit_expr:
