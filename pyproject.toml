@@ -11,7 +11,7 @@ dace-cartesian = [
   'dace>=1.0.2,<2'  # refined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace==43!2025.12.17'  # uses custom index at 'https://github.com/GridTools/python-pkg-index'
+  'dace==43!2025.12.17'  # uses custom index at 'https://github.com/GridTools/pypi'
 ]
 dev = [
   {include-group = 'build'},
@@ -456,15 +456,15 @@ url = 'https://test.pypi.org/simple'
 
 [[tool.uv.index]]
 explicit = true
-name = 'gt4py_python_index'
-url = 'https://gridtools.github.io/python-pkg-index/'
+name = 'gridtools'
+url = 'https://gridtools.github.io/pypi/'
 
 # -- versioningit --
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-roundtrip", group = "dace-cartesian"},
-  {index = "gt4py_python_index"}
+  {index = "gridtools", group = "dace-next"}
 ]
 
 [tool.versioningit]

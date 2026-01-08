@@ -1170,7 +1170,7 @@ dependencies = [
 [[package]]
 name = "dace"
 version = "43!2025.12.17"
-source = { registry = "https://gridtools.github.io/python-pkg-index/" }
+source = { registry = "https://gridtools.github.io/pypi/" }
 resolution-markers = [
     "python_full_version >= '3.14'",
     "python_full_version == '3.13.*'",
@@ -1196,7 +1196,7 @@ dependencies = [
     { name = "sympy" },
 ]
 wheels = [
-    { url = "https://gridtools.github.io/python-pkg-index/dace/dace-43!2025.12.17-py3-none-any.whl", hash = "sha256:ee12ebca7fb369ae2de0d3853ced8fb54ad6920a7b5238119bc0e9eb040bc90a" },
+    { url = "https://gridtools.github.io/pypi/dace/dace-43!2025.12.17-py3-none-any.whl", hash = "sha256:ee12ebca7fb369ae2de0d3853ced8fb54ad6920a7b5238119bc0e9eb040bc90a" },
 ]
 
 [[package]]
@@ -1718,7 +1718,7 @@ dace-cartesian = [
     { name = "dace", version = "1.0.2", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip#4a9f46027147a52e2b0ac9eedeb101c3ab27d0bf" } },
 ]
 dace-next = [
-    { name = "dace", version = "43!2025.12.17", source = { registry = "https://gridtools.github.io/python-pkg-index/" } },
+    { name = "dace", version = "43!2025.12.17", source = { registry = "https://gridtools.github.io/pypi/" } },
 ]
 dev = [
     { name = "atlas4py" },
@@ -1863,11 +1863,8 @@ build = [
     { name = "setuptools", specifier = ">=77.0.3" },
     { name = "wheel", specifier = ">=0.33.6" },
 ]
-dace-cartesian = [
-    { name = "dace", specifier = ">=1.0.2,<2", index = "https://gridtools.github.io/python-pkg-index/" },
-    { name = "dace", git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip" },
-]
-dace-next = [{ name = "dace", specifier = "==43!2025.12.17", index = "https://gridtools.github.io/python-pkg-index/" }]
+dace-cartesian = [{ name = "dace", git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip" }]
+dace-next = [{ name = "dace", specifier = "==43!2025.12.17", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
 dev = [
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
