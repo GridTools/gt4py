@@ -29,13 +29,13 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
-from gt4py.next.program_processors.runners.dace import (
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
     gtir_to_sdfg_concat_where,
     gtir_to_sdfg_primitives,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
-    utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
@@ -270,7 +270,7 @@ class SubgraphContext:
             )
             # Same applies to the symbols used as field origin (the domain range start)
             outer_origin = [
-                gtx_dace_utils.safe_replace_symbolic(val, symbol_mapping)
+                gtir_to_sdfg_utils.safe_replace_symbolic(val, symbol_mapping)
                 for val in nsdfg_field.origin
             ]
 
@@ -518,7 +518,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 "Fields with more than one local dimension are not supported."
             )
         field_origin = tuple(
-            gtx_dace_utils.range_start_symbol(data_node.data, dim) for dim in field_type.dims
+            gtx_dace_args.range_start_symbol(data_node.data, dim) for dim in field_type.dims
         )
         return gtir_to_sdfg_types.FieldopData(data_node, field_type, field_origin)
 
@@ -668,8 +668,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 nsdfg_symbols_mapping |= arg.get_symbol_mapping(gt_symbol, outer_ctx.sdfg)
 
         connectivity_arrays = {
-            gtx_dace_utils.connectivity_identifier(offset)
-            for offset in gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
+            gtx_dace_args.connectivity_identifier(offset)
+            for offset in gtx_dace_args.filter_connectivity_types(self.offset_provider_type)
         }
 
         inner_ctx_globals = [
@@ -748,28 +748,28 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
-        neighbor_table_types = gtx_dace_utils.filter_connectivity_types(self.offset_provider_type)
+        neighbor_table_types = gtx_dace_args.filter_connectivity_types(self.offset_provider_type)
         shape = []
         for dim in dims:
             if dim.kind == gtx_common.DimensionKind.LOCAL:
                 # for local dimension, the size is taken from the associated connectivity type
                 shape.append(neighbor_table_types[dim.value].max_neighbors)
-            elif gtx_dace_utils.is_connectivity_identifier(name, self.offset_provider_type):
+            elif gtx_dace_args.is_connectivity_identifier(name, self.offset_provider_type):
                 # we use symbolic size for the global dimension of a connectivity
-                shape.append(gtx_dace_utils.field_size_symbol(name, dim, neighbor_table_types))
+                shape.append(gtx_dace_args.field_size_symbol(name, dim, neighbor_table_types))
             else:
                 # the size of global dimensions for a regular field is the symbolic
                 # expression of domain range 'stop - start'
                 shape.append(
                     dace.symbolic.pystr_to_symbolic(
                         "{} - {}".format(
-                            gtx_dace_utils.range_stop_symbol(name, dim),
-                            gtx_dace_utils.range_start_symbol(name, dim),
+                            gtx_dace_args.range_stop_symbol(name, dim),
+                            gtx_dace_args.range_start_symbol(name, dim),
                         )
                     )
                 )
         strides = [
-            gtx_dace_utils.field_stride_symbol(name, dim, neighbor_table_types) for dim in dims
+            gtx_dace_args.field_stride_symbol(name, dim, neighbor_table_types) for dim in dims
         ]
         return shape, strides
 
@@ -835,13 +835,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                     transient=transient,
                 )
             if isinstance(gt_type.dtype, ts.ScalarType):
-                dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype)
+                dc_dtype = gtx_dace_args.as_dace_type(gt_type.dtype)
                 all_dims = gt_type.dims
             else:  # for 'ts.ListType' use 'offset_type' as local dimension
                 assert gt_type.dtype.offset_type is not None
                 assert gt_type.dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
                 assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
-                dc_dtype = gtx_dace_utils.as_dace_type(gt_type.dtype.element_type)
+                dc_dtype = gtx_dace_args.as_dace_type(gt_type.dtype.element_type)
                 all_dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
 
             # Use symbolic shape, which allows to invoke the program with fields of different size;
@@ -851,7 +851,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             return [(name, gt_type)]
 
         elif isinstance(gt_type, ts.ScalarType):
-            dc_dtype = gtx_dace_utils.as_dace_type(gt_type)
+            dc_dtype = gtx_dace_args.as_dace_type(gt_type)
             if symbolic_params is None or name in symbolic_params:
                 sdfg.add_symbol(name, dc_dtype)
             else:
@@ -948,7 +948,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             )
 
         # add SDFG storage for connectivity tables
-        for offset, connectivity_type in gtx_dace_utils.filter_connectivity_types(
+        for offset, connectivity_type in gtx_dace_args.filter_connectivity_types(
             self.offset_provider_type
         ).items():
             gt_type = ts.FieldType(
@@ -963,7 +963,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self._add_storage(
                 sdfg=sdfg,
                 symbolic_params=symbolic_params,
-                name=gtx_dace_utils.connectivity_identifier(offset),
+                name=gtx_dace_args.connectivity_identifier(offset),
                 gt_type=gt_type,
                 transient=True,
             )
@@ -1017,7 +1017,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             unused_connectivities = [
                 data
                 for data, datadesc in nsdfg.arrays.items()
-                if gtx_dace_utils.is_connectivity_identifier(data, self.offset_provider_type)
+                if gtx_dace_args.is_connectivity_identifier(data, self.offset_provider_type)
                 and datadesc.transient
             ]
             for data in unused_connectivities:
@@ -1235,11 +1235,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
             ctx.state.add_edge(src_node, None, nsdfg_node, input_connector, memlet)
 
-        # We can now safely remove all remaining arguments, because unused. Note
-        # that we only consider global access nodes, because the only goal of this
-        # cleanup is to remove isolated nodes. At this stage, temporary input nodes
-        # should not appear as isolated nodes, because they are supposed to contain
-        # the result of some argument expression.
+        # We can now safely remove all remaining arguments, because unused.
+        # It can happen that a let-lambda argument is not used, in which case it
+        # should be `None` at this stage, but the symbol passed as argument is captured
+        # by the let-lambda expression and thus can be accessed directly inside the
+        # inner scope. The domain in the annex of this symbol is not `NEVER`, and
+        # an access node is created, so we find an isolated access node here.
         if unused_access_nodes := [
             arg_node.dc_node
             for arg_node in lambda_arg_nodes.values()

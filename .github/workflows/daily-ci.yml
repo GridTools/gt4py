@@ -9,7 +9,7 @@ on:
   ## It only works for PRs to `main` branch from branches in the upstream gt4py repo.
   # pull_request:
   #   branches:
-  #   - main
+  #     - main
   ## END
 
 jobs:
@@ -20,6 +20,9 @@ jobs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Use a deep clone to get all tags
+
       - id: get-versions
         uses: ./.github/actions/get-python-versions
         with:
@@ -47,7 +50,6 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
-          python-version: ${{ matrix.python-version }}
 
       - name: Configure OpenMP for macos clang
         if: ${{ matrix.os == 'macos-latest' }}
@@ -67,7 +69,10 @@ jobs:
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
           UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
-        run: ./noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
+          UV_PYTHON_PREFERENCE: only-managed
+        run: |
+          uv python upgrade ${{ matrix.python-version }}
+          ./noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
       - name: Notify slack
         if: ${{ failure() && (github.event_name == 'schedule') }}
