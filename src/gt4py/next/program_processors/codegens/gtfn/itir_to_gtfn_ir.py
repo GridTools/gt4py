@@ -206,16 +206,27 @@ def _bool_from_literal(node: itir.Node) -> bool:
 
 class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
     def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
-        if node.fun == itir.SymRef(id="unstructured_domain") and len(node.args) == 2:
+        if cpm.is_call_to(node, "unstructured_domain"):
             # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
             assert isinstance(node.args[0], itir.FunCall)
             first_axis_literal = node.args[0].args[0]
             assert isinstance(first_axis_literal, itir.AxisLiteral)
-            if first_axis_literal.kind == itir.DimensionKind.VERTICAL:
-                assert isinstance(node.args[1], itir.FunCall)
-                assert isinstance(node.args[1].args[0], itir.AxisLiteral)
-                assert node.args[1].args[0].kind == itir.DimensionKind.HORIZONTAL
-                return itir.FunCall(fun=node.fun, args=[node.args[1], node.args[0]])
+            if len(node.args) == 1:
+                if first_axis_literal.kind == itir.DimensionKind.VERTICAL:
+                    # a horizontal domain is needed in unstructured, so we convert a K-only domain to cartesian
+                    dim = common.Dimension(first_axis_literal.value, first_axis_literal.kind)
+                    return im.domain(
+                        common.GridType.CARTESIAN,
+                        {dim: (node.args[0].args[1], node.args[0].args[2])},
+                    )
+            elif len(node.args) == 2:
+                if first_axis_literal.kind == itir.DimensionKind.VERTICAL:
+                    assert isinstance(node.args[1], itir.FunCall)
+                    assert isinstance(node.args[1].args[0], itir.AxisLiteral)
+                    assert node.args[1].args[0].kind == itir.DimensionKind.HORIZONTAL
+                    return itir.FunCall(fun=node.fun, args=[node.args[1], node.args[0]])
+            else:
+                raise NotImplementedError("Only up to two dimensional domains are supported.")
         return node
 
     @classmethod
