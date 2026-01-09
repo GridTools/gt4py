@@ -719,7 +719,7 @@ def infer_type(
         Result: ...Callable[..., int]
 
         >>> print("Result:", infer_type(Dict[int, Union[int, float]]))
-        Result: ...ict[int, typing.Union[int, float]]
+        Result: ...ict[int, ...int...float...]
 
     For advanced cases, using :func:`functools.singledispatch` with custom hooks
     is a simple way to extend and customize this base implementation.

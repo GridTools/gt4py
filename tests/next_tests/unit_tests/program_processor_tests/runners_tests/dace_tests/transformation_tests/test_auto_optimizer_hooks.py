@@ -14,7 +14,6 @@ from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
-    gtir_to_sdfg_utils as gtx_sdfg_utils,
     transformations as gtx_transformations,
 )
 
