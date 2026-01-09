@@ -30,9 +30,6 @@ __all__ = [
     "IDim",
     "JDim",
     "KDim",
-    "Ioff",
-    "Joff",
-    "Koff",
     "Vertex",
     "Edge",
     "Cell",
@@ -138,9 +135,6 @@ JDim = gtx.Dimension("JDim")
 JHalfDim = common.flip_staggered(JDim)
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 KHalfDim = common.flip_staggered(KDim)
-Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
-Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
-Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
 
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")
@@ -180,11 +174,7 @@ def simple_cartesian_grid(
         sizes = (sizes,) * 3
     assert len(sizes) == 3, "sizes must be a tuple of three integers"
 
-    offset_provider = {
-        "Ioff": IDim,
-        "Joff": JDim,
-        "Koff": KDim,
-    }
+    offset_provider = {}
 
     return types.SimpleNamespace(
         name="simple_cartesian_grid",

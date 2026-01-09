@@ -21,11 +21,8 @@ from next_tests.integration_tests.cases import (
     V2E,
     Edge,
     IDim,
-    Ioff,
     JDim,
-    Joff,
     KDim,
-    Koff,
     V2EDim,
     Vertex,
     cartesian_case,
@@ -146,7 +143,7 @@ def test_reduction_execution_with_offset(unstructured_case_3d):
     @gtx.field_operator
     def fencil_op(edge_f: EKField) -> VKField:
         red = reduction(edge_f)
-        return red(Koff[1])
+        return red(KDim + 1)
 
     @gtx.program
     def fencil(edge_f: EKField, out: VKField):
@@ -377,7 +374,7 @@ def test_broadcast_shifted(cartesian_case):
     @gtx.field_operator
     def simple_broadcast(inp: cases.IField) -> cases.IJField:
         bcasted = broadcast(inp, (IDim, JDim))
-        return bcasted(Joff[1])
+        return bcasted(JDim + 1)
 
     cases.verify_with_default_data(
         cartesian_case, simple_broadcast, ref=lambda inp: inp[:, np.newaxis]
@@ -439,7 +436,7 @@ def test_conditional_shifted(cartesian_case):
         mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
     ) -> gtx.Field[[IDim], float64]:
         tmp = where(mask, a, b)
-        return tmp(Ioff[1])
+        return tmp(IDim + 1)
 
     @gtx.program
     def conditional_program(
