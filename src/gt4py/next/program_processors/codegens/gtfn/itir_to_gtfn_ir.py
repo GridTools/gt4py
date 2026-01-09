@@ -206,13 +206,12 @@ def _bool_from_literal(node: itir.Node) -> bool:
 
 class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
     def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
-        if node.fun == itir.SymRef(id="unstructured_domain"):
+        if node.fun == itir.SymRef(id="unstructured_domain") and len(node.args) == 2:
             # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
             assert isinstance(node.args[0], itir.FunCall)
             first_axis_literal = node.args[0].args[0]
             assert isinstance(first_axis_literal, itir.AxisLiteral)
             if first_axis_literal.kind == itir.DimensionKind.VERTICAL:
-                assert len(node.args) == 2
                 assert isinstance(node.args[1], itir.FunCall)
                 assert isinstance(node.args[1].args[0], itir.AxisLiteral)
                 assert node.args[1].args[0].kind == itir.DimensionKind.HORIZONTAL
