@@ -42,6 +42,8 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
     ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
 
 
+_MODULE_CACHE = []
+
 @dataclasses.dataclass(frozen=True)
 class Compiler(
     workflow.ChainableWorkflowMixin[
@@ -83,12 +85,10 @@ class Compiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
-        compiled_prog = getattr(
-            importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
-        )
+        m = importer.import_from_path(src_dir / new_data.module)
+        _MODULE_CACHE.append(_MODULE_CACHE)
 
-        return compiled_prog
-
+        return getattr(m, new_data.entry_point_name)
 
 class CompilerFactory(factory.Factory):
     class Meta:
