@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
+import types
 from typing import Protocol, TypeVar
 
 import factory
@@ -42,7 +43,8 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
     ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
 
 
-_MODULE_CACHE = []
+_MODULES: list[types.ModuleType] = []
+
 
 @dataclasses.dataclass(frozen=True)
 class Compiler(
@@ -86,9 +88,12 @@ class Compiler(
                 )
 
         m = importer.import_from_path(src_dir / new_data.module)
-        _MODULE_CACHE.append(_MODULE_CACHE)
+        # Keep a reference to the module so they are not garbage collected. This avoids a SEGFAULT
+        # in nanobind when calling the compiled program.
+        _MODULES.append(m)
 
         return getattr(m, new_data.entry_point_name)
+
 
 class CompilerFactory(factory.Factory):
     class Meta:

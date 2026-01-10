@@ -42,12 +42,6 @@ def convert_arg(arg: Any) -> Any:
     return arg
 
 
-import faulthandler
-import signal
-faulthandler.enable()
-faulthandler.register(signal.SIGUSR1)
-
-
 def convert_args(
     inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
@@ -59,7 +53,7 @@ def convert_args(
         # Note: this function is on the hot path and needs to have minimal overhead.
         if out is not None:
             args = (*args, out)
-        converted_args = [convert_arg(arg) for arg in args]
+        converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
 
         opt_kwargs: dict[str, Any] = {}
