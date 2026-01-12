@@ -59,6 +59,7 @@ jobs:
         # Set 'NUMEXPR_NUM_THREADS=1' in order to avoid error 'libc++abi: terminating due to uncaught exception
         # of type std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
         run: |
+          otool -L $(python -c "import numpy; print(numpy.__file__)")
           gcc --version
           echo "CC=gcc" >> $GITHUB_ENV
           echo "CXX=g++" >> $GITHUB_ENV
@@ -67,6 +68,9 @@ jobs:
           echo "CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw" >> $GITHUB_ENV
           echo "OPENMP_CPPFLAGS=-Xclang -fopenmp -Xclang -I$(brew --prefix libomp)/include" >> $GITHUB_ENV
           echo "OPENMP_LDFLAGS=-Xclang -fopenmp $(brew --prefix libomp)/lib/libomp.dylib" >> $GITHUB_ENV
+          echo "OMP_NUM_THREADS=1" >> $GITHUB_ENV
+          echo "MKL_NUM_THREADS=1" >> $GITHUB_ENV
+          echo "OPENBLAS_NUM_THREADS=1" >> $GITHUB_ENV
           echo "NUMEXPR_NUM_THREADS=1" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
