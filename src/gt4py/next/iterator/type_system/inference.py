@@ -33,7 +33,7 @@ def _is_representable_as_int(s: int | str) -> bool:
 
 
 def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
-    if node.type:
+    if node.type and not isinstance(type_, ts.DeferredType):
         assert type_info.is_compatible_type(node.type, type_), (
             f"Node {node!s} already has a type {node.type} which differs from {type_}."
         )

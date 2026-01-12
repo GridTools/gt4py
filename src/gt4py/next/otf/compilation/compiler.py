@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
+import types
 from typing import Protocol, TypeVar
 
 import factory
@@ -40,6 +41,9 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
         source: stages.CompilableSource[SrcL, LS, TgtL],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
+
+
+_MODULES: list[types.ModuleType] = []
 
 
 @dataclasses.dataclass(frozen=True)
@@ -83,11 +87,12 @@ class Compiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
-        compiled_prog = getattr(
-            importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
-        )
+        m = importer.import_from_path(src_dir / new_data.module)
+        # Keep a reference to the module so they are not garbage collected. This avoids a SEGFAULT
+        # in nanobind when calling the compiled program.
+        _MODULES.append(m)
 
-        return compiled_prog
+        return getattr(m, new_data.entry_point_name)
 
 
 class CompilerFactory(factory.Factory):

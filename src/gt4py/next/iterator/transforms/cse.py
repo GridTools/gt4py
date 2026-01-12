@@ -30,6 +30,17 @@ from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
+def _is_literal_expr(node: itir.Node) -> bool:
+    """Return if node is a `Literal` or a tuple thereof."""
+    if isinstance(node, itir.Literal):
+        return True
+    if cpm.is_call_to(node, "make_tuple") and all(_is_literal_expr(arg) for arg in node.args):
+        return True
+    if cpm.is_call_to(node, "tuple_get") and _is_literal_expr(node.args[1]):
+        return True
+    return False
+
+
 def _is_trivial_tuple_expr(node: itir.Expr):
     """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
     if cpm.is_call_to(node, "make_tuple") and all(
@@ -78,6 +89,9 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
 
 
 def _is_collectable_expr(node: itir.Node) -> bool:
+    if _is_literal_expr(node):
+        # do not collect literal expressions
+        return False
     if isinstance(node, itir.FunCall):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
