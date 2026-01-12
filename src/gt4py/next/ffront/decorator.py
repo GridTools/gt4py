@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import functools
 import time
@@ -45,13 +46,36 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.gtcallable import GTCallable
-from gt4py.next.instrumentation import metrics
+from gt4py.next.instrumentation import metrics, _hook_machinery
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, stages, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
+
+
+@_hook_machinery.ContextHook
+def program_call_hook(
+    program: Program,
+    args: tuple[Any, ...],
+    offset_provider: common.OffsetProvider,
+    enable_jit: bool,
+    kwargs: dict[str, Any],
+) -> contextlib.AbstractContextManager:
+    """Hook called at the beginning and end of a program call."""
+    ...
+
+
+@_hook_machinery.ContextHook
+def embedded_program_call_hook(
+    program: Program,
+    args: tuple[Any, ...],
+    offset_provider: common.OffsetProvider,
+    kwargs: dict[str, Any],
+) -> contextlib.AbstractContextManager:
+    """Hook called at the beginning and end of an embedded program call."""
+    ...
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -275,27 +299,30 @@ class Program:
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
 
-            if self.backend is not None:
-                self._compiled_programs(
-                    *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
-                )
-            else:
-                # Embedded execution.
-                # Metrics source key needs to be setup here, since embedded programs
-                # don't have variants and thus there's no other place we could do this.
-                if config.COLLECT_METRICS_LEVEL:
-                    assert metrics_source is not None
-                    metrics_source.key = (
-                        f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
+            with program_call_hook(self, args, offset_provider, enable_jit, kwargs):
+                if self.backend is not None:
+                    self._compiled_programs(
+                        *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                     )
-                warnings.warn(
-                    UserWarning(
-                        f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
-                    ),
-                    stacklevel=2,
-                )
-                with next_embedded.context.update(offset_provider=offset_provider):
-                    self.definition_stage.definition(*args, **kwargs)
+                else:
+                    # Embedded execution.
+                    warnings.warn(
+                        UserWarning(
+                            f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
+                        ),
+                        stacklevel=2,
+                    )
+
+                    # Metrics source key needs to be setup here, since embedded programs
+                    # don't have variants so there's no other place to do it.
+                    if config.COLLECT_METRICS_LEVEL:
+                        assert metrics_source is not None
+                        metrics.set_current_source_key(
+                            f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
+                        )
+
+                    with next_embedded.context.update(offset_provider=offset_provider):
+                        self.definition_stage.definition(*args, **kwargs)
 
             if collect_info_metrics:
                 assert metrics_source is not None

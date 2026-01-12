@@ -116,94 +116,91 @@ class Source:
     metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
     metrics: MetricsCollection = dataclasses.field(default_factory=MetricsCollection)
 
+    assigned_key: str | None = dataclasses.field(default=None, init=False)
+
 
 #: Global store for all measurements.
 sources: collections.defaultdict[str, Source] = collections.defaultdict(Source)
 
-
-class SourceHandler:
-    """
-    A handler to manage addition of metrics sources to the global store.
-
-    This object is used to collect metrics for a specific source (e.g., a program)
-    before a final key is assigned to it. The key is typically set when the program
-    is first executed or compiled, and it uniquely identifies the source in the
-    global metrics store.
-    """
-
-    def __init__(self, source: Source | None = None) -> None:
-        if source is not None:
-            self.source = source
-
-    @property
-    def key(self) -> str | None:
-        return self.__dict__.get("_key", None)
-
-    @key.setter
-    def key(self, value: str) -> None:
-        # The key can only be set once, and if it matches an existing source
-        # in the global store, it must be the same object.
-        if self.key is not None and self.key != value:
-            raise RuntimeError("Metrics source key is already set.")
-
-        if value not in sources:
-            sources[value] = self.source
-        else:
-            source_in_store = sources[value]
-            if self.__dict__.setdefault("source", source_in_store) is not source_in_store:
-                raise RuntimeError("Conflicting metrics source data found in the global store.")
-
-        self._key = value
-
-    # The following attributes are implemented as `cached_properties`
-    # for efficiency and to be able to initialize them lazily when needed,
-    # even if the key is not set.
-    @functools.cached_property
-    def source(self) -> Source:
-        return Source()
-
-    @functools.cached_property
-    def metrics(self) -> MetricsCollection:
-        return self.source.metrics
-
-    @functools.cached_property
-    def metadata(self) -> dict[str, Any]:
-        return self.source.metadata
-
-
 # Context variable storing the active collection context.
-_source_cvar: contextvars.ContextVar[SourceHandler | None] = contextvars.ContextVar(
-    "source", default=None
-)
+_source_cvar: contextvars.ContextVar[Source | None] = contextvars.ContextVar("source", default=None)
 
 
-def in_collection_mode() -> bool:
+def get_current_source() -> Source:
+    """Retrieve the active metrics collection source."""
+    metrics_source = _source_cvar.get()
+    assert metrics_source is not None
+    return metrics_source
+
+
+def is_current_source_set() -> bool:
     """Check if there is an on-going metrics collection."""
     return _source_cvar.get() is not None
 
 
-def get_current_source() -> SourceHandler:
-    """Retrieve the active metrics collection source."""
-    source_handler = _source_cvar.get()
-    assert source_handler is not None
-    return source_handler
+def set_current_source_key(key: str) -> Source:
+    if not is_current_source_set():
+        raise RuntimeError("No active metrics collection to assign source to.")
 
+    metrics_source = get_current_source()
+    if key in sources and metrics_source is not sources[key]:
+        # The key can only be set once, and if it matches an existing entry
+        # in the global store, then it must be exactly the same source object.
+        raise RuntimeError("Conflicting metrics source data found in the global store.")
 
-def get_source(key: str, *, assign_current: bool = True) -> Source:
-    """
-    Retrieve a metrics source by its key, optionally associating it to the current context.
-    """
-    if in_collection_mode() and assign_current:
-        metrics_source_handler = get_current_source()
-        # Set the key if not already set, which will also add the
-        # source to the global store. Note that if the key is already set,
-        # this will only succeed if the same object.
-        metrics_source_handler.key = key
-        metrics_source = metrics_source_handler.source
-    else:
-        metrics_source = sources[key]
-
+    sources[key] = metrics_source
+    metrics_source.assigned_key = key
     return metrics_source
+
+
+# class SourceHandler:
+#     """
+#     A handler to manage addition of metrics sources to the global store.
+
+#     This object is used to collect metrics for a specific source (e.g., a program)
+#     before a final key is assigned to it. The key is typically set when the program
+#     is first executed or compiled, and it uniquely identifies the source in the
+#     global metrics store.
+#     """
+
+#     def __init__(self, source: Source | None = None) -> None:
+#         if source is not None:
+#             self.source = source
+
+#     @property
+#     def key(self) -> str | None:
+#         return self.__dict__.get("_key", None)
+
+#     @key.setter
+#     def key(self, value: str) -> None:
+#         # The key can only be set once, and if it matches an existing source
+#         # in the global store, it must be the same object.
+#         if self.key is not None and self.key != value:
+#             raise RuntimeError("Metrics source key is already set.")
+
+#         if value not in sources:
+#             sources[value] = self.source
+#         else:
+#             source_in_store = sources[value]
+#             if self.__dict__.setdefault("source", source_in_store) is not source_in_store:
+#                 raise RuntimeError("Conflicting metrics source data found in the global store.")
+
+#         self._key = value
+
+#     # The following attributes are implemented as `cached_properties`
+#     # for efficiency and to be able to initialize them lazily when needed,
+#     # even if the key is not set.
+#     @functools.cached_property
+#     def source(self) -> Source:
+#         return Source()
+
+#     @functools.cached_property
+#     def metrics(self) -> MetricsCollection:
+#         return self.source.metrics
+
+#     @functools.cached_property
+#     def metadata(self) -> dict[str, Any]:
+#         return self.source.metadata
 
 
 class CollectorContextManager(contextlib.AbstractContextManager):
@@ -221,19 +218,19 @@ class CollectorContextManager(contextlib.AbstractContextManager):
         of renewing the generator inside `contextlib.contextmanager`.
     """
 
-    __slots__ = ("previous_collector_token", "source_handler")
+    __slots__ = ("previous_collector_token", "source")
 
-    source_handler: SourceHandler | None
+    source: Source | None
     previous_collector_token: contextvars.Token | None
 
-    def __enter__(self) -> SourceHandler | None:
+    def __enter__(self) -> Source | None:
         if config.COLLECT_METRICS_LEVEL > 0:
             assert _source_cvar.get() is None
-            self.source_handler = SourceHandler()
-            self.previous_collector_token = _source_cvar.set(self.source_handler)
-            return self.source_handler
+            self.source = new_source = Source()
+            self.previous_collector_token = _source_cvar.set(new_source)
+            return new_source
         else:
-            self.source_handler = self.previous_collector_token = None
+            self.source = self.previous_collector_token = None
             return None
 
     def __exit__(
@@ -244,13 +241,11 @@ class CollectorContextManager(contextlib.AbstractContextManager):
     ) -> None:
         if self.previous_collector_token is not None:
             _source_cvar.reset(self.previous_collector_token)
-            if type_ is None:
-                if self.source_handler is not None and self.source_handler.key is None:
-                    raise RuntimeError("Metrics source key was not set during collection.")
+            if type_ is None and self.source is not None and self.source.assigned_key is None:
+                raise RuntimeError("Metrics source key was not set during collection.")
 
 
-def collect() -> CollectorContextManager:
-    return CollectorContextManager()
+collect = CollectorContextManager
 
 
 def dumps(metric_sources: Mapping[str, Source] | None = None) -> str:

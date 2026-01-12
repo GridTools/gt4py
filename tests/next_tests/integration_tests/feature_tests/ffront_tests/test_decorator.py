@@ -93,7 +93,7 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
 
     with (
         mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level),
-        mock.patch("gt4py.next.metrics.sources", collections.defaultdict(metrics.Source)),
+        mock.patch("gt4py.next.instrumentation.metrics.sources", collections.defaultdict(metrics.Source)),
     ):
         testee = testee.with_backend(cartesian_case.backend).with_grid_type(
             cartesian_case.grid_type
