@@ -80,7 +80,9 @@ jobs:
           uv python upgrade ${{ matrix.python-version }}
           uv venv
           uv pip install numpy
-          uv run otool -L $(python -c "import numpy; print(numpy.__file__)")
+          source .venv/bin/activate
+          otool -L $(python -c "import numpy; print(numpy.__file__)")
+          deactivate
           ./noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
       - name: Notify slack
