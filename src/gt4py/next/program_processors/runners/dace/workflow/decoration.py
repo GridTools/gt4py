@@ -14,7 +14,8 @@ from typing import Any, Sequence
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
+from gt4py.next import common as gtx_common, config, utils as gtx_utils
+from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable
 from gt4py.next.program_processors.runners.dace.workflow import (

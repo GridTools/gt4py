@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from gt4py.next import metrics
+from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import arguments
 
 

@@ -32,7 +32,6 @@ from gt4py.next import (
     config,
     embedded as next_embedded,
     errors,
-    metrics,
     utils,
 )
 from gt4py.next.embedded import operators as embedded_operators
@@ -46,6 +45,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.gtcallable import GTCallable
+from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, stages, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation

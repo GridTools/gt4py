@@ -13,8 +13,9 @@ import unittest.mock as mock
 import pytest
 
 from gt4py import next as gtx
+from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
-from gt4py.next import common as gtx_common, metrics
+from gt4py.next import common as gtx_common
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
