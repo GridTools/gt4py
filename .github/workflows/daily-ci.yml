@@ -56,6 +56,8 @@ jobs:
         # Note that the compiler flag 'CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw'
         # is only needed in cartesian dace backend. For next, a proper fix has been merged
         # to dace main branch, see https://github.com/spcl/dace/pull/2084
+        # Limit OpenMP threads to 1 to avoid error 'libc++abi: terminating due to uncaught exception
+        # of type std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
         run: |
           gcc --version
           echo "CC=gcc" >> $GITHUB_ENV
@@ -65,8 +67,7 @@ jobs:
           echo "CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw" >> $GITHUB_ENV
           echo "OPENMP_CPPFLAGS=-Xclang -fopenmp -Xclang -I$(brew --prefix libomp)/include" >> $GITHUB_ENV
           echo "OPENMP_LDFLAGS=-Xclang -fopenmp $(brew --prefix libomp)/lib/libomp.dylib" >> $GITHUB_ENV
-          echo "OMP_MAX_ACTIVE_LEVELS=1" >> $GITHUB_ENV
-          echo "PYTEST_XDIST_AUTO_NUM_WORKERS=1" >> $GITHUB_ENV
+          echo "OMP_NUM_THREADS=1" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
