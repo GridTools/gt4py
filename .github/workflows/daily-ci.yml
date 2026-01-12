@@ -59,7 +59,6 @@ jobs:
         # Set 'NUMEXPR_NUM_THREADS=1' in order to avoid error 'libc++abi: terminating due to uncaught exception
         # of type std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
         run: |
-          otool -L $(python -c "import numpy; print(numpy.__file__)")
           gcc --version
           echo "CC=gcc" >> $GITHUB_ENV
           echo "CXX=g++" >> $GITHUB_ENV
@@ -79,6 +78,7 @@ jobs:
           UV_PYTHON_PREFERENCE: only-managed
         run: |
           uv python upgrade ${{ matrix.python-version }}
+          otool -L $(python -c "import numpy; print(numpy.__file__)")
           ./noxfile.py -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
 
       - name: Notify slack
