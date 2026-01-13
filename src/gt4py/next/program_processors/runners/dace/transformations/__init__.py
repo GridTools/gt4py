@@ -21,7 +21,6 @@ from .auto_optimize import (
 )
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
 from .gpu_utils import (
-    GPUScanLoopUnrolling,
     GPUSetBlockSize,
     gt_gpu_transform_non_standard_memlet,
     gt_gpu_transformation,
@@ -55,6 +54,7 @@ from .multi_state_global_self_copy_elimination import (
 from .redundant_array_removers import CopyChainRemover, DoubleWriteRemover, gt_remove_copy_chain
 from .remove_access_node_copies import RemoveAccessNodeCopies
 from .remove_views import RemovePointwiseViews
+from .scan_loop_unrolling import ScanLoopUnrolling
 from .simplify import (
     GT4PyMapBufferElimination,
     GT4PyMoveTaskletIntoMap,
@@ -83,7 +83,6 @@ from .utils import gt_make_transients_persistent
 __all__ = [
     "CopyChainRemover",
     "DoubleWriteRemover",
-    "GPUScanLoopUnrolling",
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
@@ -106,6 +105,7 @@ __all__ = [
     "MultiStateGlobalSelfCopyElimination2",
     "RemoveAccessNodeCopies",
     "RemovePointwiseViews",
+    "ScanLoopUnrolling",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
