@@ -116,70 +116,70 @@ class SymbolicDomain:
         #: func:`gt4py.next.iterator.transforms.infer_domain.infer_expr` for more details.
         symbolic_domain_sizes: Optional[dict[str, str]] = None,
     ) -> SymbolicDomain:
-        offset_provider_type = common.offset_provider_to_type(offset_provider)
-
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
         if len(shift) == 0:
             return self
         if len(shift) == 2:
             off, val = shift
+
+            connectivity: common.Connectivity
             if isinstance(off, itir.CartesianOffset):
-                old_dim = common.Dimension(value=off.domain.value, kind=off.domain.kind)
-                new_dim = common.Dimension(value=off.codomain.value, kind=off.codomain.kind)
-                new_range = SymbolicRange.translate(self.ranges[old_dim], val.value)
+                domain = common.Dimension(value=off.domain.value, kind=off.domain.kind)
+                codomain = common.Dimension(value=off.domain.value, kind=off.domain.kind)
+                connectivity = common.CartesianConnectivity(domain, codomain=codomain)
+            elif isinstance(off, itir.OffsetLiteral):
+                assert isinstance(off.value, str)
+                connectivity = common.get_offset(offset_provider, off.value)
+            else:
+                raise AssertionError()
+
+            if isinstance(connectivity, common.CartesianConnectivity):
+                if val is trace_shifts.Sentinel.VALUE:
+                    raise NotImplementedError("Dynamic offsets not supported.")
+                assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
+                assert len(connectivity.domain.dims) == 1
+                # cartesian offset
+                new_ranges[connectivity.codomain] = SymbolicRange.translate(
+                    self.ranges[connectivity.domain.dims[0]], connectivity.offset + val.value
+                )
+            elif isinstance(connectivity, common.NeighborConnectivity):
+                # unstructured shift
+                assert (
+                    isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
+                ) or val in [
+                    trace_shifts.Sentinel.ALL_NEIGHBORS,
+                    trace_shifts.Sentinel.VALUE,
+                ]
+                horizontal_sizes: dict[str, itir.Expr]
+                if symbolic_domain_sizes is not None:
+                    horizontal_sizes = {
+                        k: im.ensure_expr(v) for k, v in symbolic_domain_sizes.items()
+                    }
+                else:
+                    # note: ugly but cheap re-computation, but should disappear
+                    assert common.is_offset_provider(offset_provider)
+                    horizontal_sizes = {
+                        k: im.literal(str(v), builtins.INTEGER_INDEX_BUILTIN)
+                        for k, v in _max_domain_sizes_by_location_type(offset_provider).items()
+                    }
+
+                old_dim = connectivity.domain.dims[0]
+                new_dim = connectivity.codomain
+
+                assert new_dim not in new_ranges or old_dim == new_dim
+
+                new_range = SymbolicRange(
+                    im.literal("0", builtins.INTEGER_INDEX_BUILTIN),
+                    horizontal_sizes[new_dim.value],
+                )
                 new_ranges = dict(
                     (dim, range_) if dim != old_dim else (new_dim, new_range)
                     for dim, range_ in new_ranges.items()
                 )
             else:
-                assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
-                connectivity_type = common.get_offset_type(offset_provider_type, off.value)
-                if isinstance(connectivity_type, common.Dimension):
-                    if val is trace_shifts.Sentinel.VALUE:
-                        raise NotImplementedError("Dynamic offsets not supported.")
-                    assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
-                    current_dim = connectivity_type
-                    # cartesian offset
-                    new_ranges[current_dim] = SymbolicRange.translate(
-                        self.ranges[current_dim], val.value
-                    )
-                elif isinstance(connectivity_type, common.NeighborConnectivityType):
-                    # unstructured shift
-                    assert (
-                        isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
-                    ) or val in [
-                        trace_shifts.Sentinel.ALL_NEIGHBORS,
-                        trace_shifts.Sentinel.VALUE,
-                    ]
-                    horizontal_sizes: dict[str, itir.Expr]
-                    if symbolic_domain_sizes is not None:
-                        horizontal_sizes = {
-                            k: im.ensure_expr(v) for k, v in symbolic_domain_sizes.items()
-                        }
-                    else:
-                        # note: ugly but cheap re-computation, but should disappear
-                        assert common.is_offset_provider(offset_provider)
-                        horizontal_sizes = {
-                            k: im.literal(str(v), builtins.INTEGER_INDEX_BUILTIN)
-                            for k, v in _max_domain_sizes_by_location_type(offset_provider).items()
-                        }
+                raise AssertionError()
 
-                    old_dim = connectivity_type.source_dim
-                    new_dim = connectivity_type.codomain
-
-                    assert new_dim not in new_ranges or old_dim == new_dim
-
-                    new_range = SymbolicRange(
-                        im.literal("0", builtins.INTEGER_INDEX_BUILTIN),
-                        horizontal_sizes[new_dim.value],
-                    )
-                    new_ranges = dict(
-                        (dim, range_) if dim != old_dim else (new_dim, new_range)
-                        for dim, range_ in new_ranges.items()
-                    )
-                else:
-                    raise AssertionError()
             return SymbolicDomain(self.grid_type, new_ranges)
         elif len(shift) > 2:
             return self.translate(shift[0:2], offset_provider, symbolic_domain_sizes).translate(

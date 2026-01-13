@@ -575,7 +575,7 @@ def unstructured_case_3d(unstructured_case):
     return dataclasses.replace(
         unstructured_case,
         default_sizes={**unstructured_case.default_sizes, KDim: 10},
-        offset_provider={**unstructured_case.offset_provider, "Koff": KDim},
+        offset_provider={**unstructured_case.offset_provider},
     )
 
 
@@ -727,9 +727,9 @@ class Case:
                 IDim: grid_descriptor.sizes[0],
                 JDim: grid_descriptor.sizes[1],
                 KDim: grid_descriptor.sizes[2],
-                IHalfDim: grid_descriptor.sizes[0]-1,
-                JHalfDim: grid_descriptor.sizes[1]-1,
-                KHalfDim: grid_descriptor.sizes[2]-1,
+                IHalfDim: grid_descriptor.sizes[0] - 1,
+                JHalfDim: grid_descriptor.sizes[1] - 1,
+                KHalfDim: grid_descriptor.sizes[2] - 1,
             },
             grid_type=common.GridType.CARTESIAN,
             allocator=allocator,

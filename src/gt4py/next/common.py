@@ -910,12 +910,18 @@ class ConnectivityKind(enum.Flag):
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
     domain: tuple[Dimension, ...]
     codomain: Dimension
-    skip_value: Optional[core_defs.IntegralScalar]
+    skip_value: Optional[core_defs.IntegralScalar]  # TODO(tehrengruber): isn't this a value of the `NeighborConnectivityType` only
     dtype: core_defs.DType
 
     @property
     def has_skip_values(self) -> bool:
         return self.skip_value is not None
+
+
+@dataclasses.dataclass(frozen=True)
+class CartesianConnectivityType(ConnectivityType):
+    domain: tuple[Dimension]
+    offset: int
 
 
 @dataclasses.dataclass(frozen=True)
@@ -932,8 +938,7 @@ class NeighborConnectivityType(ConnectivityType):
         return self.domain[1]
 
 
-@runtime_checkable
-class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_co]):
+class Connectivity(Field[DimsT, core_defs.IntegralScalar], Generic[DimsT, DimT_co]):
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT_co:
@@ -947,22 +952,8 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
         Currently, this would just complicate implementation as we do not use this information.
         """
 
-    def __gt_type__(self) -> ConnectivityType:
-        if is_neighbor_connectivity(self):
-            return NeighborConnectivityType(
-                domain=self.domain.dims,
-                codomain=self.codomain,
-                dtype=self.dtype,
-                skip_value=self.skip_value,
-                max_neighbors=self.ndarray.shape[1],
-            )
-        else:
-            return ConnectivityType(
-                domain=self.domain.dims,
-                codomain=self.codomain,
-                dtype=self.dtype,
-                skip_value=self.skip_value,
-            )
+    @abc.abstractmethod
+    def __gt_type__(self) -> ConnectivityType: ...
 
     @property
     def kind(self) -> ConnectivityKind:
@@ -1034,137 +1025,6 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
         raise TypeError("'Connectivity' does not support this operation.")
 
 
-# Utility function to construct a `Field` from different buffer representations.
-# Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
-@functools.singledispatch
-def _field(
-    definition: Any,
-    /,
-    *,
-    domain: Optional[DomainLike] = None,
-    dtype: Optional[core_defs.DType] = None,
-) -> Field:
-    raise NotImplementedError
-
-
-# See comment for `_field`.
-@functools.singledispatch
-def _connectivity(
-    definition: Any,
-    /,
-    codomain: Dimension,
-    *,
-    domain: Optional[DomainLike] = None,
-    dtype: Optional[core_defs.DType] = None,
-    skip_value: Optional[core_defs.IntegralScalar] = None,
-) -> Connectivity:
-    raise NotImplementedError
-
-
-class NeighborConnectivity(Connectivity, Protocol):
-    # TODO(havogt): work towards encoding this properly in the type
-    def __gt_type__(self) -> NeighborConnectivityType: ...
-
-
-def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
-    if not isinstance(obj, Connectivity):
-        return False
-    domain_dims = obj.domain.dims
-    return (
-        len(domain_dims) == 2
-        and domain_dims[0].kind is DimensionKind.HORIZONTAL
-        and domain_dims[1].kind is DimensionKind.LOCAL
-    )
-
-
-class NeighborTable(
-    NeighborConnectivity, Protocol
-):  # TODO(havogt): try to express by inheriting from NdArrayConnectivityField (but this would require a protocol to move it out of `embedded.nd_array_field`)
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        # Note that this property is currently already there from inheriting from `Field`,
-        # however this seems wrong, therefore we explicitly introduce it here (or it should come
-        # implicitly from the `NdArrayConnectivityField` protocol).
-        ...
-
-
-def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
-    return is_neighbor_connectivity(obj) and hasattr(obj, "ndarray")
-
-
-OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
-OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
-# Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
-# use the `get_offset` and `get_offset_type` functions instead.
-OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
-OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
-
-
-def is_offset_provider(obj: Any) -> TypeGuard[OffsetProvider]:
-    if not isinstance(obj, Mapping):
-        return False
-    return all(isinstance(el, OffsetProviderElem) for el in obj.values())
-
-
-def is_offset_provider_type(obj: Any) -> TypeGuard[OffsetProviderType]:
-    if not isinstance(obj, Mapping):
-        return False
-    return all(isinstance(el, OffsetProviderTypeElem) for el in obj.values())
-
-
-def offset_provider_to_type(
-    offset_provider: OffsetProvider | OffsetProviderType,
-) -> OffsetProviderType:
-    return {
-        k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
-    }
-
-
-def _get_dimension_name_from_implicit_offset(offset: str) -> str:
-    assert offset.startswith(_IMPLICIT_OFFSET_PREFIX)
-    return offset[len(_IMPLICIT_OFFSET_PREFIX) :]
-
-
-def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
-    """
-    Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
-
-    Note: This function handles implicit offsets. All accesses of `OffsetProvider` or
-    `OffsetProviderType` should go through this function.
-    """
-    # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
-    if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
-        return Dimension(value=_get_dimension_name_from_implicit_offset(offset_tag))
-    if offset_tag not in offset_provider:
-        raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
-    return offset_provider[offset_tag]  # TODO return a valid dimension
-
-
-get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
-
-
-def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
-    """Determine if offset provider has an element for the given offset tag."""
-    try:
-        get_offset(offset_provider, offset_tag)  # type: ignore[arg-type]  # implementation is shared with `get_offset_type`, no need to duplicate the function
-    except KeyError:
-        return False
-    return True
-
-
-def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
-    """
-    Compute hash of an offset provider on the tuples of key and value id.
-
-    This function is unsafe since it uses the `id` of the values in the
-    offset provider, which could generate different hashes for two
-    offset providers that are semantically equal. It additionally relies
-    on the ordering of the items in the mapping, which could also lead to
-    different hashes for semantically equal offset providers.
-    """
-    return hash(tuple((k, id(v)) for k, v in offset_provider.items()))
-
-
 DomainDimT = TypeVar("DomainDimT", bound="Dimension")
 
 
@@ -1202,6 +1062,16 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     @property
     def __gt_origin__(self) -> Never:
         raise TypeError("'CartesianConnectivity' does not support this operation.")
+
+    def __gt_type__(self) -> CartesianConnectivityType:
+        assert len(self.domain.dims) == 1
+        return CartesianConnectivityType(
+            domain=self.domain.dims,
+            codomain=self.codomain,
+            dtype=self.dtype,
+            skip_value=self.skip_value,
+            offset=self.offset,
+        )
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
@@ -1264,14 +1134,149 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     __getitem__ = restrict
 
 
+# Utility function to construct a `Field` from different buffer representations.
+# Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
+@functools.singledispatch
+def _field(
+    definition: Any,
+    /,
+    *,
+    domain: Optional[DomainLike] = None,
+    dtype: Optional[core_defs.DType] = None,
+) -> Field:
+    raise NotImplementedError
+
+
+# See comment for `_field`.
+@functools.singledispatch
+def _connectivity(
+    definition: Any,
+    /,
+    codomain: Dimension,
+    *,
+    domain: Optional[DomainLike] = None,
+    dtype: Optional[core_defs.DType] = None,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
+) -> Connectivity:
+    raise NotImplementedError
+
+
+class NeighborConnectivity(Connectivity[DimsT, DimT_co]):
+    def __gt_type__(self) -> NeighborConnectivityType:
+        return NeighborConnectivityType(
+            domain=self.domain.dims,
+            codomain=self.codomain,
+            dtype=self.dtype,
+            skip_value=self.skip_value,
+            max_neighbors=self.ndarray.shape[1],
+        )
+
+
+def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
+    # TODO: reevaluate
+    if not isinstance(obj, Connectivity):
+        return False
+    domain_dims = obj.domain.dims
+    return (
+        len(domain_dims) == 2
+        and domain_dims[0].kind is DimensionKind.HORIZONTAL
+        and domain_dims[1].kind is DimensionKind.LOCAL
+    )
+
+
+class NeighborTable(
+    NeighborConnectivity
+):  # TODO(havogt): try to express by inheriting from NdArrayConnectivityField (but this would require a protocol to move it out of `embedded.nd_array_field`)
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        # Note that this property is currently already there from inheriting from `Field`,
+        # however this seems wrong, therefore we explicitly introduce it here (or it should come
+        # implicitly from the `NdArrayConnectivityField` protocol).
+        ...
+
+
+# TODO: delete. A protocol and duck typing in it's current form is not enough since we use the
+#  type of the connectivity to propagate structural information, e.g. that we have a cartesian
+#  and not a neighbor connectivity. We would need to extend the protocol for this
+# def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
+#    return is_neighbor_connectivity(obj) and hasattr(obj, "ndarray")
+
+
+OffsetProviderElem: TypeAlias = CartesianConnectivity | NeighborConnectivity
+OffsetProviderTypeElem: TypeAlias = CartesianConnectivityType | NeighborConnectivityType
+# Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
+# use the `get_offset` and `get_offset_type` functions instead.
+OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
+OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
+
+
+def is_offset_provider(obj: Any) -> TypeGuard[OffsetProvider]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderElem) for el in obj.values())
+
+
+def is_offset_provider_type(obj: Any) -> TypeGuard[OffsetProviderType]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderTypeElem) for el in obj.values())
+
+
+def offset_provider_to_type(
+    offset_provider: OffsetProvider | OffsetProviderType,
+) -> OffsetProviderType:
+    return {
+        k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
+    }
+
+
+def _get_dimension_name_from_implicit_offset(offset: str) -> str:
+    assert offset.startswith(_IMPLICIT_OFFSET_PREFIX)
+    return offset[len(_IMPLICIT_OFFSET_PREFIX) :]
+
+
+def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
+    """
+    Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
+
+    Note: This function handles implicit offsets. All accesses of `OffsetProvider` or
+    `OffsetProviderType` should go through this function.
+    """
+    # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
+    if offset_tag not in offset_provider:
+        raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
+    return offset_provider[offset_tag]  # TODO return a valid dimension
+
+
+get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
+
+
+def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
+    """Determine if offset provider has an element for the given offset tag."""
+    try:
+        get_offset(offset_provider, offset_tag)  # type: ignore[arg-type]  # implementation is shared with `get_offset_type`, no need to duplicate the function
+    except KeyError:
+        return False
+    return True
+
+
+def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
+    """
+    Compute hash of an offset provider on the tuples of key and value id.
+
+    This function is unsafe since it uses the `id` of the values in the
+    offset provider, which could generate different hashes for two
+    offset providers that are semantically equal. It additionally relies
+    on the ordering of the items in the mapping, which could also lead to
+    different hashes for semantically equal offset providers.
+    """
+    return hash(tuple((k, id(v)) for k, v in offset_provider.items()))
+
+
 @enum.unique
 class GridType(StrEnum):
     CARTESIAN = "cartesian"
     UNSTRUCTURED = "unstructured"
-
-
-def check_staggered(dim: Dimension) -> bool:
-    return dim.value.startswith(_STAGGERED_PREFIX)
 
 
 def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
@@ -1282,7 +1287,7 @@ def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
         dims,
         key=lambda dim: (
             _DIM_KIND_ORDER[dim.kind],
-            flip_staggered(dim).value if check_staggered(dim) else dim.value,
+            flip_staggered(dim).value if is_staggered(dim) else dim.value,
         ),
     )
 
@@ -1375,8 +1380,12 @@ _DEFAULT_SKIP_VALUE: Final[int] = -1
 _STAGGERED_PREFIX = "_Staggered"
 
 
+def is_staggered(dim: Dimension) -> bool:
+    return dim.value.startswith(_STAGGERED_PREFIX)
+
+
 def flip_staggered(dim: Dimension) -> Dimension:
-    if dim.value.startswith(_STAGGERED_PREFIX):
+    if is_staggered(dim):
         return Dimension(dim.value[len(_STAGGERED_PREFIX) :], dim.kind)
     else:
         return Dimension(f"{_STAGGERED_PREFIX}{dim.value}", dim.kind)

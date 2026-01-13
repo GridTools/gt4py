@@ -701,7 +701,10 @@ def test_offset_field(cartesian_case):
         a,
         offset_field,
         out=out,
-        offset_provider={"Ioff": IDim, "Koff": KDim},
+        offset_provider={
+            "Ioff": common.CartesianConnectivity(domain_dim=IDim),
+            "Koff": common.CartesianConnectivity(domain_dim=KDim),
+        },
         ref=ref,
         comparison=lambda out, ref: np.all(out == ref),
     )

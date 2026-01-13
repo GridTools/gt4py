@@ -84,7 +84,11 @@ def extract_connectivity_args(
     # Note: this function is on the hot path and needs to have minimal overhead.
     zero_origin = (0, 0)
     assert all(
-        hasattr(conn, "ndarray") or isinstance(conn, common.Dimension)
+        isinstance(conn, common.CartesianConnectivity)
+        or (
+            isinstance(conn, common.NeighborConnectivity)
+            and field_utils.verify_device_field_type(conn, device)
+        )
         for conn in offset_provider.values()
     )
     # Note: the order here needs to agree with the order of the generated bindings.
@@ -92,15 +96,10 @@ def extract_connectivity_args(
     # the keys' order is taken into account. Any modification to the hashing
     # of offset providers may break this assumption here.
     args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
-        (ndarray, zero_origin)
+        (conn.ndarray, zero_origin)
         for conn in offset_provider.values()
-        if (ndarray := getattr(conn, "ndarray", None)) is not None
+        if isinstance(conn, common.NeighborConnectivity)
     ]
-    assert all(
-        common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
-        for conn in offset_provider.values()
-        if hasattr(conn, "ndarray")
-    )
 
     return args
 

@@ -662,7 +662,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             and type_info.is_arithmetic(right.type)
         ):
             if not isinstance(right, foast.Constant):
-                raise NotImplementedError()
+                raise NotImplementedError(
+                    "Cartesian offsets are only supported with literal rhs, e.g. `IDim + 1`, but not `IDim + expr`."
+                )
             offset_index = right.value
             if node.op == dialect_ast_enums.BinaryOperator.SUB:
                 offset_index *= -1

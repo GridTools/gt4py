@@ -13,10 +13,12 @@ import functools
 import inspect
 from typing import TypeVar, cast, overload
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common, utils
 from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator.ir_utils import misc as ir_misc
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -544,12 +546,8 @@ def _resolve_dimensions(
             shift_tuple[::2]
         ):  # Only OffsetLiterals/CartesianOffsets are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
             if isinstance(off_literal, itir.CartesianOffset):
-                if resolved_dim == common.Dimension(
-                    value=off_literal.codomain.value, kind=off_literal.codomain.kind
-                ):
-                    resolved_dim = common.Dimension(
-                        value=off_literal.domain.value, kind=off_literal.domain.kind
-                    )
+                if resolved_dim == ir_misc.dim_from_axis_literal(off_literal.codomain):
+                    resolved_dim = ir_misc.dim_from_axis_literal(off_literal.domain)
             else:
                 assert isinstance(off_literal, itir.OffsetLiteral) and isinstance(
                     off_literal.value, str
@@ -706,29 +704,24 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
             new_position_dims = [*it.position_dims]
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
+                source_dim: common.Dimension
+                target_dim: common.Dimension
                 if isinstance(offset_axis, it_ts.CartesianOffsetType):
-                    found = False
-                    for i, dim in enumerate(new_position_dims):
-                        if dim == offset_axis.domain:
-                            assert not found
-                            new_position_dims[i] = offset_axis.codomain
-                            found = True
-                    assert found
-                elif isinstance(offset_axis, it_ts.OffsetLiteralType):
+                    source_dim, target_dim = offset_axis.domain, offset_axis.codomain
+                else:
+                    assert isinstance(offset_axis, it_ts.OffsetLiteralType)
                     assert isinstance(offset_axis.value, str)
                     type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
-                    if isinstance(type_, common.Dimension):
-                        pass
-                    elif isinstance(type_, common.NeighborConnectivityType):
-                        found = False
-                        for i, dim in enumerate(new_position_dims):
-                            if dim.value == type_.source_dim.value:
-                                assert not found
-                                new_position_dims[i] = type_.codomain
-                                found = True
-                        assert found
-                else:
-                    raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
+                    assert isinstance(type_, (common.CartesianConnectivityType, common.NeighborConnectivityType))
+                    source_dim, target_dim = type_.domain[0], type_.codomain
+
+                found = False
+                for i, dim in enumerate(new_position_dims):
+                    if dim == source_dim:
+                        assert not found
+                        new_position_dims[i] = target_dim
+                        found = True
+                assert found
         else:
             # during re-inference we don't have an offset provider type
             new_position_dims = "unknown"

@@ -475,11 +475,15 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     def visit_CartesianOffset(
         self, node: itir.CartesianOffset, *, ctx
-    ) -> it_ts.CartesianOffsetType:
+    ) -> it_ts.CartesianOffsetType | ts.DeferredType:
         self.visit(node.domain, ctx=ctx)
         self.visit(node.codomain, ctx=ctx)
+        domain, codomain = node.domain.type, node.codomain.type
+        if domain is None or codomain is None:
+            return ts.DeferredType(constraint=it_ts.CartesianOffsetType)
+        assert isinstance(domain, ts.DimensionType) and isinstance(codomain, ts.DimensionType)
         return it_ts.CartesianOffsetType(
-            domain=node.domain.type.dim, codomain=node.codomain.type.dim
+            domain=domain.dim, codomain=codomain.dim
         )
 
     def visit_Literal(self, node: itir.Literal, **kwargs) -> ts.ScalarType:

@@ -478,7 +478,7 @@ class NdArrayField(
 
 @dataclasses.dataclass(frozen=True)
 class NdArrayConnectivityField(
-    common.Connectivity[common.DimsT, common.DimT],
+    common.NeighborConnectivity[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
     _codomain: common.DimT
@@ -1017,7 +1017,7 @@ def _make_reduction(
         offset_definition = common.get_offset(
             current_offset_provider, axis.value
         )  # assumes offset and local dimension have same name
-        assert common.is_neighbor_table(offset_definition)
+        assert isinstance(offset_definition, common.NeighborConnectivity)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
         broadcast_slice = tuple(

@@ -207,7 +207,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
             dimensions=[
                 DimensionSpec(
                     name=dim.value
-                    if not common.check_staggered(dim)
+                    if not common.is_staggered(dim)
                     else common.flip_staggered(dim).value,
                     static_stride=1
                     if (
