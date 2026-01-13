@@ -68,7 +68,8 @@ def _validate_domain_out(
                 )
 
     elif isinstance(dom, past.TupleExpr):
-        if isinstance(out, ts.TupleType):
+        if isinstance(out, ts.CollectionTypeSpec):
+            # TODO(havogt): for NamedCollectionType, we assume the domain tuple is in element order
             out_elts = out.types
         else:
             raise ValueError(f"Tuple domain requires tuple output, got {type(out)}.")
