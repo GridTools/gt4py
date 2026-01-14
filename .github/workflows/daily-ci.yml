@@ -37,10 +37,7 @@ jobs:
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["highest"]
         gt4py-module: ["cartesian"]
-        # TODO: switch to macos-latest once macos-26 is default, we see failures with macos-15
-        # in cartesian tests: 'libc++abi: terminating due to uncaught exception of type
-        # std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
-        os: ["macos-26"]
+        os: ["macos-latest"]
         python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
 
@@ -55,19 +52,11 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Configure OpenMP for macos clang
-        if: ${{ matrix.os == 'macos-26' }}
-        # Note that the compiler flag 'CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw'
-        # is only needed in cartesian dace backend. For next, a proper fix has been merged
-        # to dace main branch, see https://github.com/spcl/dace/pull/2084
+        if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          gcc --version
-          echo "CC=gcc" >> $GITHUB_ENV
-          echo "CXX=g++" >> $GITHUB_ENV
-          brew install libomp
-          echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
-          echo "CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw -mmacosx-version-min=$(sw_vers -productVersion)" >> $GITHUB_ENV
-          echo "OPENMP_CPPFLAGS=-Xclang -fopenmp -Xclang -I$(brew --prefix libomp)/include" >> $GITHUB_ENV
-          echo "OPENMP_LDFLAGS=-Xclang -fopenmp $(brew --prefix libomp)/lib/libomp.dylib" >> $GITHUB_ENV
+          brew install gcc-15
+          echo "CC=gcc-15" >> $GITHUB_ENV
+          echo "CXX=g++-15" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
