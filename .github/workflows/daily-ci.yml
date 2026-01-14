@@ -39,12 +39,15 @@ jobs:
         gt4py-module: ["cartesian", "eve", "next", "storage"]
         os: ["ubuntu-latest", "macos-latest"]
         python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
+        exclude:
+          # TODO(edopao): re-enable this test configuration once the following issue
+          # is solved: 'libc++abi: terminating due to uncaught exception of type
+          # std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
+          - dependencies-strategy: "highest"
+            gt4py-module: "cartesian"
+            os: "macos-latest"
       fail-fast: false
 
-    # TODO(edopao): re-enable this test configuration once the following issue
-    # is solved: 'libc++abi: terminating due to uncaught exception of type
-    # std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
-    if: ${{ matrix.os != 'macos-latest' ||  matrix.dependencies-strategy != 'highest' || matrix.gt4py-module != 'cartesian' }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
