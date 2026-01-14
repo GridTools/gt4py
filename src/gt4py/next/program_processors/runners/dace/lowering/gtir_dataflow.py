@@ -774,7 +774,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     deref_on_input_memlet=deref_on_input_memlet: self._visit_if_branch_arg(
                         if_sdfg,
                         if_branch_state,
-                        tsym.id,
+                        str(tsym.id),
                         targ,
                         deref_on_input_memlet,
                         if_sdfg_input_memlets,
