@@ -17,7 +17,12 @@ from dace import (
     subsets as dace_sbs,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sutils
+from dace.sdfg import (
+    nodes as dace_nodes,
+    propagation as dace_propagation,
+    type_inference as dace_type_inference,
+    utils as dace_sutils,
+)
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -469,7 +474,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 #   in the `SDFGState.add_nested_sdfg()` function.
                 if_block.sdfg.add_symbol(
                     new_sym,
-                    dace.codegen.tools.type_inference.infer_expr_type(new_sym, parent_symbols)
+                    dace_type_inference.infer_expr_type(new_sym, parent_symbols)
                     or dace_dtypes.typeclass(int),
                 )
 
