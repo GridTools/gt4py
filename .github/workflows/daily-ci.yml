@@ -45,7 +45,7 @@ jobs:
           # std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
           - dependencies-strategy: "highest"
             gt4py-module: "cartesian"
-            os: macos-latest
+            os: "macos-latest"
             python-version: ["3.12", "3.13", "3.14"]
       fail-fast: false
 
