@@ -65,10 +65,10 @@ jobs:
           echo "CXX=g++" >> $GITHUB_ENV
           brew install libomp
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
+          echo "CMAKE_MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion)" >> $GITHUB_ENV
           echo "CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw" >> $GITHUB_ENV
           echo "OPENMP_CPPFLAGS=-Xclang -fopenmp -Xclang -I$(brew --prefix libomp)/include" >> $GITHUB_ENV
           echo "OPENMP_LDFLAGS=-Xclang -fopenmp $(brew --prefix libomp)/lib/libomp.dylib" >> $GITHUB_ENV
-          echo "MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion)" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
