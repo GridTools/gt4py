@@ -54,9 +54,9 @@ jobs:
       - name: Configure OpenMP for macos clang
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          brew install gcc-15
-          echo "CC=gcc-15" >> $GITHUB_ENV
-          echo "CXX=g++-15" >> $GITHUB_ENV
+          brew install gcc-14
+          echo "CC=gcc-14" >> $GITHUB_ENV
+          echo "CXX=g++-14" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
