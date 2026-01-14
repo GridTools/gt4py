@@ -89,15 +89,16 @@ def _apply_split_access_node_non_recursive(
     # Since the transformation only applies to single use data, the order in which the
     #  states are processed is irrelevant. Furthermore, the fragments generated through
     #  a node that was split, should never be split (as long as this function runs),
-    #  because otherwise that split should have been done in the initial split.
+    #  because otherwise that split should have been done the first time.
+    # TODO(phimuell): Find out if the last part is really true.
     for state in sdfg.states():
         state_cfg_id = state.parent_graph.cfg_id
         state_id = state.block_id
         scope_dict = state.scope_dict()
 
-        # Now find all single use data, located at the top level in this state.
-        #  Note single use data is classified by having only one node that is
-        #  referring to it, thus a `set` is safe.
+        # We can only split single use data that is also transient. Because GT4Py uses
+        #  an SSA style we know that there is only one AccessNode that refers to that
+        #  data. Thus, all AccessNodes that are stored refer to different data
         access_nodes_to_process = sorted(
             (
                 dnode
@@ -106,7 +107,9 @@ def _apply_split_access_node_non_recursive(
             ),
             key=lambda dnode: dnode.data,
         )
-        assert len(access_nodes_to_process) == len(set(access_nodes_to_process))
+        assert len(access_nodes_to_process) == len(
+            set(map(lambda ac: ac.data, access_nodes_to_process))
+        )
 
         if len(access_nodes_to_process) == 0:
             # Nothing to process in this state, continue.
