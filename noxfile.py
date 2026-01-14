@@ -176,10 +176,22 @@ def test_cartesian(
 
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
+    # We split the tests into multiple sessions as a workaround for an issue observed
+    # on macOS in daily CI: 'libc++abi: terminating due to uncaught exception of type
+    # std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
+    # TSS / TLS is the thread-local storage, and apparently the operating system refused
+    # to allocate a new thread-specific key. An explanation is that macOS has a low limit
+    # on TSS / TLS keys and, unlike Linux, macOS does not scale.
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
-        str(pathlib.Path("tests") / "cartesian_tests" / "integration_tests"),
+        str(pathlib.Path("tests") / "cartesian_tests" / "integration_tests" / "feature_tests"),
+        *session.posargs,
+    )
+    session.run(
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        *("-m", f"{markers}"),
+        str(pathlib.Path("tests") / "cartesian_tests" / "integration_tests" / "multi_feature_tests"),
         *session.posargs,
     )
     session.run(
