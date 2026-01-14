@@ -37,7 +37,7 @@ jobs:
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["highest"]
         gt4py-module: ["cartesian"]
-        os: ["macos-latest"]
+        os: ["macos-26"]
         python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
 
@@ -52,7 +52,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Configure OpenMP for macos clang
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == 'macos-26' }}
         # Note that the compiler flag 'CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw'
         # is only needed in cartesian dace backend. For next, a proper fix has been merged
         # to dace main branch, see https://github.com/spcl/dace/pull/2084
