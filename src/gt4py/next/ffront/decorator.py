@@ -46,7 +46,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.gtcallable import GTCallable
-from gt4py.next.instrumentation import metrics, _hook_machinery
+from gt4py.next.instrumentation import _hook_machinery, metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, stages, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -56,7 +56,7 @@ DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
 @_hook_machinery.ContextHook
-def program_call_hook(
+def program_call_hook(  # type: ignore[empty-body]
     program: Program,
     args: tuple[Any, ...],
     offset_provider: common.OffsetProvider,
@@ -68,7 +68,7 @@ def program_call_hook(
 
 
 @_hook_machinery.ContextHook
-def embedded_program_call_hook(
+def embedded_program_call_hook(  # type: ignore[empty-body]
     program: Program,
     args: tuple[Any, ...],
     offset_provider: common.OffsetProvider,

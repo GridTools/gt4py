@@ -35,16 +35,17 @@ def _get_unique_name(func: Callable) -> str:
 def _is_empty_function(func: Callable) -> bool:
     """Check if a callable object is empty (i.e., contains no statements)."""
     try:
+        assert callable(func)
         callable_src = (
             inspect.getsource(func)
             if isinstance(func, types.FunctionType)
-            else inspect.getsource(func.__call__)
+            else inspect.getsource(func.__call__)  # type: ignore[operator]  # asserted above
         )
         callable_ast = ast.parse(textwrap.dedent(callable_src))
         return all(
             isinstance(st, ast.Pass)
             or (isinstance(st, ast.Expr) and isinstance(st.value, ast.Constant))
-            for st in callable_ast.body[0].body
+            for st in typing.cast(ast.FunctionDef, callable_ast.body[0]).body
         )
     except Exception:
         return False
@@ -157,7 +158,7 @@ class ContextHook(
 ):
     """
     Context hook specification.
-    
+
     This hook type is used to define context managers that can be stacked together.
     """
 

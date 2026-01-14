@@ -12,7 +12,6 @@ import collections
 import contextlib
 import contextvars
 import dataclasses
-import functools
 import itertools
 import json
 import numbers
@@ -151,56 +150,6 @@ def set_current_source_key(key: str) -> Source:
     sources[key] = metrics_source
     metrics_source.assigned_key = key
     return metrics_source
-
-
-# class SourceHandler:
-#     """
-#     A handler to manage addition of metrics sources to the global store.
-
-#     This object is used to collect metrics for a specific source (e.g., a program)
-#     before a final key is assigned to it. The key is typically set when the program
-#     is first executed or compiled, and it uniquely identifies the source in the
-#     global metrics store.
-#     """
-
-#     def __init__(self, source: Source | None = None) -> None:
-#         if source is not None:
-#             self.source = source
-
-#     @property
-#     def key(self) -> str | None:
-#         return self.__dict__.get("_key", None)
-
-#     @key.setter
-#     def key(self, value: str) -> None:
-#         # The key can only be set once, and if it matches an existing source
-#         # in the global store, it must be the same object.
-#         if self.key is not None and self.key != value:
-#             raise RuntimeError("Metrics source key is already set.")
-
-#         if value not in sources:
-#             sources[value] = self.source
-#         else:
-#             source_in_store = sources[value]
-#             if self.__dict__.setdefault("source", source_in_store) is not source_in_store:
-#                 raise RuntimeError("Conflicting metrics source data found in the global store.")
-
-#         self._key = value
-
-#     # The following attributes are implemented as `cached_properties`
-#     # for efficiency and to be able to initialize them lazily when needed,
-#     # even if the key is not set.
-#     @functools.cached_property
-#     def source(self) -> Source:
-#         return Source()
-
-#     @functools.cached_property
-#     def metrics(self) -> MetricsCollection:
-#         return self.source.metrics
-
-#     @functools.cached_property
-#     def metadata(self) -> dict[str, Any]:
-#         return self.source.metadata
 
 
 class CollectorContextManager(contextlib.AbstractContextManager):
