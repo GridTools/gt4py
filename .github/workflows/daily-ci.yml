@@ -54,7 +54,7 @@ jobs:
       - name: Configure OpenMP for macos clang
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          brew install gcc-14
+          brew install gcc@14
           echo "CC=gcc-14" >> $GITHUB_ENV
           echo "CXX=g++-14" >> $GITHUB_ENV
 
