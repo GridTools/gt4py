@@ -37,6 +37,9 @@ jobs:
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["highest"]
         gt4py-module: ["cartesian"]
+        # TODO: switch to macos-latest once macos-26 is default, we see failures with macos-15
+        # in cartesian tests: 'libc++abi: terminating due to uncaught exception of type
+        # std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
         os: ["macos-26"]
         python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
@@ -56,8 +59,6 @@ jobs:
         # Note that the compiler flag 'CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw'
         # is only needed in cartesian dace backend. For next, a proper fix has been merged
         # to dace main branch, see https://github.com/spcl/dace/pull/2084
-        # Disable threading in cartesian to avoid error 'libc++abi: terminating due to uncaught exception
-        # of type std::runtime_error: thread_specific_storage constructor: could not initialize the TSS key!'
         run: |
           gcc --version
           echo "CC=gcc" >> $GITHUB_ENV
@@ -67,7 +68,7 @@ jobs:
           echo "CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw" >> $GITHUB_ENV
           echo "OPENMP_CPPFLAGS=-Xclang -fopenmp -Xclang -I$(brew --prefix libomp)/include" >> $GITHUB_ENV
           echo "OPENMP_LDFLAGS=-Xclang -fopenmp $(brew --prefix libomp)/lib/libomp.dylib" >> $GITHUB_ENV
-          echo "GT4PY_CARTESIAN_DEACTIVATE_THREADING=True" >> $GITHUB_ENV
+          echo "MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion)" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:

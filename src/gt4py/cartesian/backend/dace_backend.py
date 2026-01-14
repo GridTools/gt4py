@@ -418,11 +418,6 @@ class SDFGManager:
             skip={"ScalarToSymbolPromotion"},
         )
 
-        if gt_config.GT4PY_CARTESIAN_DEACTIVATE_THREADING:
-            for node, _state in sdfg.all_nodes_recursive():
-                if isinstance(node, nodes.MapEntry):
-                    node.map.schedule = dtypes.ScheduleType.Sequential
-
         if do_cache:
             self._save_sdfg(sdfg, path)
             SDFGManager._loaded_sdfgs[path] = sdfg
