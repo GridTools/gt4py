@@ -38,7 +38,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 dace = pytest.importorskip("dace")
-dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace")
+from gt4py.next.program_processors.runners.dace import lowering as dace_lowering
 
 
 @pytest.fixture
@@ -121,16 +121,16 @@ def build_dace_sdfg(
     offset_provider: gtx_common.OffsetProvider,
     skip_domain_inference: bool = False,
 ) -> Callable[..., Any]:
-    """Wrapper of `dace_backend.build_sdfg_from_gtir()` to run domain inference.
+    """Wrapper of `dace_lowering.build_sdfg_from_gtir()` to run domain inference.
 
-    Before calling `dace_backend.build_sdfg_from_gtir()`, it will infer the domain
+    Before calling `dace_lowering.build_sdfg_from_gtir()`, it will infer the domain
     of the given `ir`, unless called with `skip_domain_inference=True`.
     """
     if not skip_domain_inference:
         # run domain inference in order to add the domain annex information to the IR nodes
         ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     offset_provider_type = gtx_common.offset_provider_to_type(offset_provider)
-    return dace_backend.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
+    return dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
 
 
 def apply_margin_on_field_domain(
@@ -172,7 +172,7 @@ def test_gtir_broadcast():
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS, skip_domain_inference=True)
 
     sdfg(a, **FSYMBOLS)
-    np.testing.assert_array_equal(a, val)
+    assert np.allclose(a, np.full_like(a, val))
 
 
 def test_gtir_cast():
@@ -201,12 +201,12 @@ def test_gtir_cast():
 
     a = np.ones(N, dtype=np.float64) * np.sqrt(2.0)
     b = a.astype(np.float32)
-    c = np.empty_like(a, dtype=np.bool_)
+    c = np.full_like(a, False, dtype=np.bool_)
 
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     sdfg(a, b, c, **FSYMBOLS)
-    np.testing.assert_array_equal(c, True)
+    assert np.all(c)
 
 
 def test_gtir_copy_self():
@@ -708,7 +708,6 @@ def test_gtir_cond(s1, s2):
     assert np.allclose(d, (a + b + 1) if s1 > s2 else (a + c + 1))
 
 
-@pytest.mark.xfail(reason="requires function to retrieve the annex tuple domain")
 def test_gtir_cond_with_tuple_return():
     testee = gtir.Program(
         id="cond_with_tuple_return",
@@ -731,7 +730,14 @@ def test_gtir_cond_with_tuple_return():
                         im.make_tuple(im.make_tuple("y", "x"), "w"),
                     ),
                 ),
-                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim]),
+                domain=im.make_tuple(
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(0, "z"), [IDim]
+                    ),
+                    im.get_field_domain(
+                        gtx_common.GridType.CARTESIAN, im.tuple_get(1, "z"), [IDim]
+                    ),
+                ),
                 target=gtir.SymRef(id="z"),
             )
         ],
@@ -1641,6 +1647,38 @@ def test_gtir_let_lambda():
     assert np.allclose(b, ref)
 
 
+def test_gtir_let_lambda_unused_arg():
+    testee = gtir.Program(
+        id="let_lambda_unused_arg",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="z", type=IFTYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                # Arg 'xᐞ1' is used inside the let-lambda, 'yᐞ1' is not.
+                expr=im.let(("xᐞ1", im.op_as_fieldop("multiplies")("x", 3.0)), ("yᐞ1", "y"))(
+                    im.op_as_fieldop("multiplies")("xᐞ1", 2.0)
+                ),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim]),
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    c = np.random.rand(N)
+
+    sdfg = build_dace_sdfg(testee, {})
+
+    sdfg(a, b, c, **FSYMBOLS)
+    assert np.allclose(c, a * 6.0)
+
+
 def test_gtir_let_lambda_scalar_expression():
     domain_inner = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, "size_inner")})
     domain_outer = im.get_field_domain(
@@ -1693,7 +1731,7 @@ def test_gtir_let_lambda_scalar_expression():
     # to the symbol `inner_size` is preserved, for which we want to test the lowering.
     sdfg = build_dace_sdfg(testee, offset_provider=CARTESIAN_OFFSETS, skip_domain_inference=True)
 
-    sdfg(a, b, c, d, **(FSYMBOLS | {"__x_0_range_1": N + 1}))
+    sdfg(a, b, c, d, **(FSYMBOLS | {"__x_IDim_range_1": N + 1}))
     assert np.allclose(d, (a * a * b * b * c[1 : N + 1]))
 
 
@@ -2130,9 +2168,9 @@ def test_gtir_concat_where():
             id=f"gtir_concat_where_{suffix}",
             function_definitions=[],
             params=[
-                gtir.Sym(id="x", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
-                gtir.Sym(id="y", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
-                gtir.Sym(id="z", type=ts.FieldType(dims=[IDim], dtype=SIZE_TYPE)),
+                gtir.Sym(id="x", type=IFTYPE),
+                gtir.Sym(id="y", type=IFTYPE),
+                gtir.Sym(id="z", type=IFTYPE),
             ],
             declarations=[],
             body=[
@@ -2264,13 +2302,16 @@ def test_gtir_scan(id, use_symbolic_column_size):
                     im.scan(
                         im.lambda_("state", "inp")(
                             im.if_(
+                                # we use a let expression inside this if-branch to cover a lowering case
                                 im.tuple_get(1, "state"),
                                 im.make_tuple(
-                                    im.plus(VAL, im.deref("inp")),
+                                    im.let("val", VAL)(im.plus("val", im.deref("inp"))),
                                     False,
                                 ),
                                 im.make_tuple(
-                                    im.plus(im.tuple_get(0, "state"), im.deref("inp")),
+                                    im.let("val", im.tuple_get(0, "state"))(
+                                        im.plus("val", im.deref("inp"))
+                                    ),
                                     False,
                                 ),
                             )

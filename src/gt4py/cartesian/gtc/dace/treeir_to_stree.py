@@ -73,12 +73,12 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
         dace_map = nodes.Map(
             label=f"horizontal_loop_{id(node)}",
-            params=[axis.iteration_symbol() for axis in tir.Axis.dims_horizontal()],
+            params=[tir.Axis.J.iteration_symbol(), tir.Axis.I.iteration_symbol()],
             ndrange=subsets.Range(
                 [
                     # -1 because range bounds are inclusive
-                    (node.bounds_i.start, f"{node.bounds_i.end} - 1", 1),
                     (node.bounds_j.start, f"{node.bounds_j.end} - 1", 1),
+                    (node.bounds_i.start, f"{node.bounds_i.end} - 1", 1),
                 ]
             ),
             schedule=node.schedule,

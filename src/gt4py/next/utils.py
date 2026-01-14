@@ -11,21 +11,21 @@ from __future__ import annotations
 import functools
 import inspect
 import itertools
-from collections.abc import Mapping
+import types
 from typing import (
     Any,
     Callable,
     ClassVar,
-    NamedTuple,
     Optional,
     ParamSpec,
-    Protocol,
     Sequence,
     TypeGuard,
     TypeVar,
     cast,
     overload,
 )
+
+from gt4py.eve import utils as eve_utils
 
 
 class RecursionGuard:
@@ -285,213 +285,131 @@ def equalize_tuple_structure(
     return d1, d2
 
 
-class CanonicalizationOptions(NamedTuple):
-    function_name: str
-    allow_kwargs_mutation: bool
-    sort_kwargs: bool
-
-
-class CallArgsCanonicalizer(Protocol):
-    def __call__(self, args: tuple, kwargs: dict[str, Any]) -> tuple[tuple, dict[str, Any]]: ...
-
-    @property
-    def options(self) -> CanonicalizationOptions: ...
-
-    def cache_info(self) -> functools._CacheInfo: ...
-    def cache_clear(self) -> None: ...
-
-
-class CustomCallArgsCanonicalizerFactory(Protocol):
-    def __call__(
-        self, passed_pos_args_count: int, passed_kwargs_keys: tuple[str, ...]
-    ) -> CallArgsCanonicalizer: ...
-
-
-def make_args_canonicalizer_factory(
-    signature: inspect.Signature,
-    *,
-    name: str = "unknown",
-    allow_kwargs_mutation: bool = True,
-    sort_kwargs: bool = False,
-) -> CustomCallArgsCanonicalizerFactory:
-    """
-    Create a factory for functions that canonicalize call arguments for a given signature.
-
-    For a full description of what canonicalization means, see `make_args_canonicalizer`.
-
-    Returns:
-        A factory that creates canonicalizers for a given number of positional arguments
-        and a given set of keyword argument names.
-
-    Note:
-        `inspect.Signature.bind()` is not used here because it introduces too much overhead
-        on the hot path. Instead, this function generates specialized canonicalizer functions
-        for each combination of positional argument count and keyword argument names.
-    """
-    params: Mapping[str, inspect.Parameter] = signature.parameters
-    if inspect.Parameter.VAR_POSITIONAL in (p.kind for p in params.values()):
-        raise ValueError("Cannot create canonicalizer for functions with variadic parameters.")
-    if inspect.Parameter.VAR_KEYWORD in (p.kind for p in params.values()):
-        raise ValueError(
-            "Cannot create canonicalizer for functions with variadic keyword parameters."
-        )
-
-    pos_name_to_index = {
-        key: pos
-        for pos, key in enumerate(
-            key
-            for key, param in params.items()
-            if param.kind
-            in {inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD}
-        )
-    }
-    pos_args_names = {*pos_name_to_index.keys()}
-    pos_args_count = len(pos_name_to_index)
-    kwonly_names = [
-        key for key, param in params.items() if param.kind == inspect.Parameter.KEYWORD_ONLY
-    ]
-    all_keywords = {
-        key for key, param in params.items() if param.kind != inspect.Parameter.POSITIONAL_ONLY
-    }
-    all_args_count = len(params)
-
-    if allow_kwargs_mutation and not sort_kwargs:
-        # If we can mutate kwargs and don't need to sort them,
-        # we can use the passed kwargs dict, which should be
-        # in the correct order after popping the positional args.
-        canonical_kwargs_expr = "kwargs"
-    else:
-        kwargs_items_exprs = [f"{name!r}: kwargs[{name!r}]" for name in kwonly_names]
-        canonical_kwargs_expr = f"{{ {str.join(', ', kwargs_items_exprs)} }}"
-
-    @functools.cache
-    def canonicalizer_factory(
-        passed_pos_args_count: int, passed_kwargs_keys: tuple[str, ...]
-    ) -> CallArgsCanonicalizer:
-        # This function and the generated canonicalizer are optimized for performance
-        if passed_pos_args_count > pos_args_count:
-            raise ValueError(
-                f"Too many positional arguments (expected {pos_args_count}, got {passed_pos_args_count})."
-            )
-        passed_kwargs_set = {*passed_kwargs_keys}
-        if unexpected_kwargs := (passed_kwargs_set - all_keywords):
-            raise ValueError(f"Got unexpected keyword arguments: {unexpected_kwargs}.")
-        if missing_kwargs := ({*kwonly_names} - passed_kwargs_set):
-            raise ValueError(f"Missing keyword arguments: {missing_kwargs}.")
-        if (total_arg_count := (passed_pos_args_count + len(passed_kwargs_keys))) > all_args_count:
-            raise ValueError(
-                f"Too many total arguments for the passed signature (expected {all_args_count}, got {total_arg_count})."
-            )
-
-        if pos_args_names & passed_kwargs_set:
-            unpack_args_stmt = (
-                (f"{str.join(', ', (f'a{i}' for i in range(passed_pos_args_count)))}, = args")
-                if passed_pos_args_count
-                else "# No args to unpack"
-            )
-
-            passed_args_indices = iter(range(passed_pos_args_count))
-            if allow_kwargs_mutation:
-                canonical_args_comprehension = (
-                    f"kwargs.pop({key!r})"
-                    if key in passed_kwargs_keys
-                    else f"a{next(passed_args_indices)}"
-                    for key in pos_name_to_index
-                )
-            else:
-                canonical_args_comprehension = (
-                    f"kwargs[{key!r}]"
-                    if key in passed_kwargs_keys
-                    else f"a{next(passed_args_indices)}"
-                    for key in pos_name_to_index
-                )
-            canonical_args_expr = f"{str.join(', ', canonical_args_comprehension)},"
-
-        else:
-            unpack_args_stmt = "# No unpacking needed"
-            canonical_args_expr = "args"
-            if canonical_kwargs_expr == "kwargs":
-                # Args are already canonical, return identity
-                return cast(CallArgsCanonicalizer, lambda args, kwargs: (args, kwargs))
-
-        shortened_passed_kwargs_keys = str.join(
-            "_", (f"{key[:7]}{len(key)}" if len(key) > 8 else key for key in passed_kwargs_keys)
-        )
-        canonicalizer_func_name = (
-            f"canonicalizer_for_{name}_{passed_pos_args_count}__{shortened_passed_kwargs_keys}"
-        )
-        canonicalizer_src = f"""
-from __future__ import annotations
-
-def {canonicalizer_func_name}(
-    args: tuple, kwargs: dict[str, Any]
-) -> tuple[tuple, dict[str, Any]]:
-    try:
-        {unpack_args_stmt}
-        canonical_args = {canonical_args_expr}
-        canonical_kwargs = {canonical_kwargs_expr}
-        return canonical_args, canonical_kwargs
-    except ValueError as error:
-        raise ValueError("Error in arguments canonicalization.") from error
-"""
-        ns: dict[str, Any] = {}
-        exec(canonicalizer_src, ns)
-        return cast(CallArgsCanonicalizer, ns[canonicalizer_func_name])
-
-    return canonicalizer_factory
-
-
 def make_args_canonicalizer(
     signature: inspect.Signature,
     *,
-    name: str = "unknown",
-    allow_kwargs_mutation: bool = True,
-    sort_kwargs: bool = False,
-) -> CallArgsCanonicalizer:
+    name: str | None = None,
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
     """
     Create a call arguments canonicalizer function from a given signature.
 
-    The canonicalization means that the returned arguments are as all positional
-    arguments were passed positionally, and only keyword-only arguments appear
-    in the dictionary.
+    The canonicalizer returns the call arguments in a tuple with the
+    following two items:
+
+        - a tuple of values containing all the positional parameters
+        - a dictionary of parameter names to values for all keyword-only parameters
 
     Args:
         signature: The signature for which to create the canonicalizer.
 
     Keyword Args:
         name: Name of the function for which the canonicalizer is created.
-        allow_kwargs_mutation: If `True`, the `kwargs` dictionary passed to the canonicalizer
-            may be mutated. If `False`, the passed `kwargs` dictionary is copied first, which
-            may introduce extra overhead in the canonicalizer.
-        sort_kwargs: Select if the canonicalizer functions should order the keys of the output
-            `kwargs` dictionary by the order of set in the function signature.
+
+    """
+
+    params = []
+    pos_args = []
+    key_args = []
+    var_pos_arg: str | None = None
+    var_key_arg: str | None = None
+
+    for key, param in signature.parameters.items():
+        match param.kind:
+            case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
+                pos_args.append(f"{key}")
+            case inspect.Parameter.VAR_POSITIONAL:
+                var_pos_arg = key
+                pos_args.append(f"*{key}")
+            case inspect.Parameter.KEYWORD_ONLY:
+                key_args.append(f"'{key}': {key}")
+            case inspect.Parameter.VAR_KEYWORD:
+                var_key_arg = key
+                key_args.append(f"**{key}")
+
+        # Remove annotations to avoid issues in case `str(annotation)`
+        # produces incorrect python expressions
+        params.append(param.replace(annotation=param.empty))
+
+    canonicalizer_signature = inspect.Signature(parameters=params)
+
+    if len(pos_args) == 1:
+        if var_pos_arg:
+            # If there is only an '*args' parameter, we can just return it directly
+            pos_args_tuple_expr = var_pos_arg
+        else:
+            pos_args_tuple_expr = f"({pos_args[0]},)"  # Add trailing comma to make it a tuple
+    else:
+        # In the regular case, assemble the output tuple with all positional arguments
+        pos_args_tuple_expr = f"({str.join(', ', pos_args)})"
+
+    if len(key_args) == 1 and var_key_arg:
+        # If there is only a '**kwargs' parameter, we can just return it directly
+        key_args_dict_expr = var_key_arg
+    else:
+        # In the regular case, assemble the output dictionary with all keyword arguments
+        key_args_dict_expr = f"{{ {str.join(', ', key_args)} }}"
+
+    canonicalize_func_name = f"canonicalize_args_for_{name}" if name else "canonicalize_args"
+    canonicalizer_src = f"""
+def {canonicalize_func_name}{canonicalizer_signature!s}:
+    return {pos_args_tuple_expr}, {key_args_dict_expr}
+"""
+    namespace: dict[str, Any] = {}
+    exec(canonicalizer_src, namespace)
+    canonicalizer = namespace[canonicalize_func_name]
+
+    return cast(Callable[..., tuple[tuple, dict[str, Any]]], canonicalizer)
+
+
+@functools.cache
+def make_args_canonicalizer_for_function(
+    func: types.FunctionType,
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+    return make_args_canonicalizer(inspect.signature(func), name=func.__name__)
+
+
+def canonicalize_call_args(
+    func: Callable,
+    /,
+    args: tuple,
+    kwargs: dict[str, Any],
+) -> tuple[tuple, dict[str, Any]]:
+    """
+    Canonicalize call arguments for a given function.
+
+    Args:
+        func: The function for which to canonicalize the call arguments.
+        args: Positional arguments.
+        kwargs: Keyword arguments.
+
+    Returns:
+        A tuple of positional arguments and a dictionary with keyword arguments.
 
     Note:
-        This function does not support variadic parameters (i.e., `*args` or `**kwargs`)
-        nor parameters with default values in the signature. The implementation uses
-        `make_args_canonicalizer_factory` internally.
+        This is a convenience wrapper around `make_args_canonicalizer_for_function`.
     """
-    canonicalizer_factory: CustomCallArgsCanonicalizerFactory = make_args_canonicalizer_factory(
-        signature,
-        name=name,
-        allow_kwargs_mutation=allow_kwargs_mutation,
-        sort_kwargs=sort_kwargs,
-    )
 
-    def canonicalizer(args: tuple, kwargs: dict[str, Any]) -> tuple[tuple, dict[str, Any]]:
-        return canonicalizer_factory(
-            passed_pos_args_count=len(args), passed_kwargs_keys=tuple(sorted(kwargs.keys()))
-        )(args, kwargs)
+    return make_args_canonicalizer_for_function(func)(*args, **kwargs)
 
-    canonicalizer.options = CanonicalizationOptions(  # type: ignore[attr-defined] # adding new attribute
-        function_name=name,
-        allow_kwargs_mutation=allow_kwargs_mutation,
-        sort_kwargs=sort_kwargs,
-    )
 
-    # canonicalizer_factory() is a conventional functools.cache instance, but it is never
-    # exposed to the user. Here we expose its cache-related methods on the canonicalizer.
-    canonicalizer.cache_info = canonicalizer_factory.cache_info  # type: ignore[attr-defined] # adding new attribute
-    canonicalizer.cache_clear = canonicalizer_factory.cache_clear  # type: ignore[attr-defined] # adding new attribute
+class IDGeneratorPool(eve_utils.CustomDefaultDictBase):
+    """
+    Utility for providing unique IDs for each prefix.
 
-    return cast(CallArgsCanonicalizer, canonicalizer)
+    The use-case for this implementation is to provide a single IDGeneratorPool for the whole
+    transformation pipeline, which ensure unique names (prefix+counter) across all transformations.
+
+    The reason for this implementation of a single counter per prefix (over a global increasing counter)
+    is that parts of the IR might still be stable when comparing different versions of a transformation.
+
+    >>> uids = IDGeneratorPool()
+    >>> next(uids["foo"])
+    'foo_0'
+    >>> next(uids["foo"])
+    'foo_1'
+    >>> next(uids["bar"])
+    'bar_0'
+    """
+
+    def value_factory(self, prefix: str) -> eve_utils.SequentialIDGenerator:
+        return eve_utils.SequentialIDGenerator(prefix=prefix)

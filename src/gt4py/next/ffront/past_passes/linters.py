@@ -9,7 +9,7 @@
 from typing import Any
 
 from gt4py.next.ffront import gtcallable, stages as ffront_stages, transform_utils
-from gt4py.next.ffront.stages import AOT_PRG, PRG
+from gt4py.next.ffront.stages import AOT_PRG, PAST_PRG
 from gt4py.next.otf import toolchain, workflow
 
 
@@ -46,7 +46,9 @@ def lint_undefined_symbols(
     return inp
 
 
-def linter_factory(cached: bool = True, adapter: bool = True) -> workflow.Workflow[PRG, PRG]:
+def linter_factory(
+    cached: bool = True, adapter: bool = True
+) -> workflow.Workflow[PAST_PRG, PAST_PRG]:
     wf = lint_misnamed_functions.chain(lint_undefined_symbols)
     if cached:
         wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
