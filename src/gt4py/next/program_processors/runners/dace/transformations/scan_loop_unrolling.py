@@ -16,15 +16,10 @@ from dace.sdfg import state as dace_state
 @dace_properties.make_properties
 class ScanLoopUnrolling(dace_transformation.MultiStateTransformation):
     """
-    Unrolls loops that are part of a GPU scan operation.
+    Unrolls loop regions that are part of a GPU scan operation.
     """
 
-    _default_unroll_factor: Final[int] = 4
-    unroll = dace_properties.Property(
-        dtype=bool,
-        default=True,
-        desc="Whether to unroll GPU scan loops.",
-    )
+    _default_unroll_factor: Final[int] = 0
     unroll_factor = dace_properties.Property(
         dtype=int,
         default=_default_unroll_factor,
@@ -39,20 +34,13 @@ class ScanLoopUnrolling(dace_transformation.MultiStateTransformation):
 
     def __init__(
         self,
-        unroll: Optional[bool] = None,
         unroll_factor: Optional[int] = None,
     ) -> None:
         super().__init__()
-        if unroll is not None:
-            self.unroll = unroll
-        if unroll_factor is not None and unroll_factor > 0:
-            self.unroll = True
+        if unroll_factor is not None and unroll_factor >= 0:
             self.unroll_factor = unroll_factor
-        elif unroll_factor is not None and unroll_factor == 0:
-            self.unroll = True
-            self.unroll_factor = 0
         elif unroll_factor is not None and unroll_factor < 0:
-            self.unroll = False
+            raise ValueError("Unroll factor must be non-negative.")
 
     def can_be_applied(
         self,
@@ -61,11 +49,11 @@ class ScanLoopUnrolling(dace_transformation.MultiStateTransformation):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        if self.scan_loop_region in self.applied_scans:
-            return False
         if not self.scan_loop_region.label.startswith("scan_"):
             return False
-        return self.unroll
+        if self.scan_loop_region in self.applied_scans:
+            return False
+        return True
 
     def apply(
         self,

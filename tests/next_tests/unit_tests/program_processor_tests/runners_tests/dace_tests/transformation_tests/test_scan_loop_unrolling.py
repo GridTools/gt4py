@@ -75,7 +75,7 @@ def test_scan_loop_unrolling():
 
     # Apply the transformation.
     applied = sdfg.apply_transformations_once_everywhere(
-        gtx_transformations.ScanLoopUnrolling(unroll=True, unroll_factor=2),
+        gtx_transformations.ScanLoopUnrolling(unroll_factor=2),
         validate=True,
         validate_all=True,
     )

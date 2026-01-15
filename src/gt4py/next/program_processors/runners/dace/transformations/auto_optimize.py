@@ -722,13 +722,11 @@ def _gt_auto_process_dataflow_inside_maps(
     )
 
     if scan_loop_unrolling:
-      sdfg.apply_transformations_once_everywhere(
-          gtx_transformations.ScanLoopUnrolling(
-              unroll_factor=scan_loop_unrolling_factor
-          ),
-          validate=False,
-          validate_all=validate_all,
-      )
+        sdfg.apply_transformations_once_everywhere(
+            gtx_transformations.ScanLoopUnrolling(unroll_factor=scan_loop_unrolling_factor),
+            validate=False,
+            validate_all=validate_all,
+        )
 
     return sdfg
 
