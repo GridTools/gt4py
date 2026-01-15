@@ -69,16 +69,17 @@ def test_empty_function():
 
 class TestEventHook:
     def test_event_hook_call_with_no_callbacks(self):
-        def hook_def(x: int) -> None:
+        @EventHook
+        def hook(x: int) -> None:
             pass
 
-        hook = EventHook(definition=hook_def)
         hook(42)  # Should not raise
 
     def test_event_hook_call_with_callbacks(self):
         results = []
 
-        def hook_def(x: int) -> None:
+        @EventHook
+        def hook(x: int) -> None:
             pass
 
         def callback1(x: int) -> None:
@@ -87,7 +88,6 @@ class TestEventHook:
         def callback2(x: int) -> None:
             results.append(x * 2)
 
-        hook = EventHook(definition=hook_def)
         hook.register(callback1)
         hook.register(callback2)
         hook(5)
@@ -95,36 +95,35 @@ class TestEventHook:
         assert results == [5, 10]
 
     def test_event_hook_register_with_signature_mismatch(self):
-        def hook_def(x: int) -> None:
+        @EventHook
+        def hook(x: int) -> None:
             pass
 
         def bad_callback(x: int, y: int) -> None:
             pass
 
-        hook = EventHook(definition=hook_def)
         with pytest.raises(ValueError, match="Callback signature"):
             hook.register(bad_callback)
 
     def test_event_hook_register_with_annotation_mismatch(self):
-        def hook_def(x: int) -> None:
+        @EventHook
+        def hook(x: int) -> None:
             pass
 
         def weird_callback(x: str) -> None:
             pass
 
-        hook = EventHook(definition=hook_def)
-
         with pytest.warns(UserWarning, match="Callback annotations"):
             hook.register(weird_callback)
 
     def test_event_hook_register_with_name(self):
-        def hook_def(x: int) -> None:
+        @EventHook
+        def hook(x: int) -> None:
             pass
 
         def callback(x: int) -> None:
             pass
 
-        hook = EventHook(definition=hook_def)
         hook.register(callback, name="my_callback")
 
         assert "my_callback" in hook.registry
@@ -132,7 +131,8 @@ class TestEventHook:
     def test_event_hook_register_with_index(self):
         results = []
 
-        def hook_def(x: int) -> None:
+        @EventHook
+        def hook(x: int) -> None:
             pass
 
         def callback1(x: int) -> None:
@@ -141,7 +141,6 @@ class TestEventHook:
         def callback2(x: int) -> None:
             results.append(2)
 
-        hook = EventHook(definition=hook_def)
         hook.register(callback1)
         hook.register(callback2, index=0)
         hook(0)
@@ -151,13 +150,13 @@ class TestEventHook:
     def test_event_hook_remove_by_name(self):
         results = []
 
-        def hook_def(x: int) -> None:
+        @EventHook
+        def hook(x: int) -> None:
             pass
 
         def callback(x: int) -> None:
             results.append(x)
 
-        hook = EventHook(definition=hook_def)
         hook.register(callback, name="test_cb")
         hook(42)
         assert results == [42]
@@ -171,13 +170,13 @@ class TestEventHook:
     def test_event_hook_remove_by_callback(self):
         results = []
 
-        def hook_def(x: int) -> None:
+        @EventHook
+        def hook(x: int) -> None:
             pass
 
         def callback(x: int) -> None:
             results.append(x)
 
-        hook = EventHook(definition=hook_def)
         hook.register(callback)
         hook(42)
         assert results == [42]
@@ -189,10 +188,10 @@ class TestEventHook:
         assert results == []
 
     def test_event_hook_remove_nonexistent_raises(self):
-        def hook_def(x: int) -> None:
+        @EventHook
+        def hook(x: int) -> None:
             pass
 
-        hook = EventHook(definition=hook_def)
         with pytest.raises(KeyError):
             hook.remove("nonexistent")
 
@@ -202,7 +201,8 @@ class TestContextHook:
         enter_called = []
         exit_called = []
 
-        def hook_def() -> contextlib.AbstractContextManager:
+        @ContextHook
+        def hook() -> contextlib.AbstractContextManager:
             pass
 
         @contextlib.contextmanager
@@ -211,7 +211,6 @@ class TestContextHook:
             yield
             exit_called.append(True)
 
-        hook = ContextHook(definition=hook_def)
         hook.register(callback)
 
         with hook():
@@ -222,7 +221,8 @@ class TestContextHook:
     def test_context_hook_multiple_callbacks(self):
         order = []
 
-        def hook_def() -> contextlib.AbstractContextManager:
+        @ContextHook
+        def hook() -> contextlib.AbstractContextManager:
             pass
 
         @contextlib.contextmanager
@@ -237,7 +237,6 @@ class TestContextHook:
             yield
             order.append("exit2")
 
-        hook = ContextHook(definition=hook_def)
         hook.register(callback1)
         hook.register(callback2)
 
@@ -250,7 +249,8 @@ class TestContextHook:
     def test_context_hook_with_arguments(self):
         results = []
 
-        def hook_def(x: int) -> contextlib.AbstractContextManager:
+        @ContextHook
+        def hook(x: int) -> contextlib.AbstractContextManager:
             pass
 
         @contextlib.contextmanager
@@ -258,7 +258,6 @@ class TestContextHook:
             results.append(x)
             yield
 
-        hook = ContextHook(definition=hook_def)
         hook.register(callback)
 
         with hook(42):
