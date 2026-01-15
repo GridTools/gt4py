@@ -19,7 +19,7 @@ from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
 from gt4py.next.otf import arguments, recipes, toolchain
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -157,7 +157,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             conn_id: conn
             for offset, conn in self.connectivities.items()
             if gtx_common.is_neighbor_table(conn)
-            and (conn_id := gtx_dace_utils.connectivity_identifier(offset))
+            and (conn_id := gtx_dace_args.connectivity_identifier(offset))
             in self.sdfg_closure_cache["arrays"]
         }
 
@@ -171,27 +171,25 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # Build the closure dictionary
         closure_dict: dict[str, dace.data.Array] = {}
-        connectivity_types = gtx_dace_utils.filter_connectivity_types(
-            gtx_common.offset_provider_to_type(self.connectivities)
-        )
+        offset_provider_type = gtx_common.offset_provider_to_type(self.connectivities)
         for conn_id, conn in used_connectivities.items():
             if conn_id not in self.connectivity_tables_data_descriptors:
                 self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                     dtype=dace.dtypes.dtype_to_typeclass(conn.dtype.dtype.type),
                     shape=[
-                        gtx_dace_utils.field_size_symbol(
-                            conn_id, conn.domain.dims[0], connectivity_types
+                        gtx_dace_args.field_size_symbol(
+                            conn_id, conn.domain.dims[0], offset_provider_type
                         ),
-                        gtx_dace_utils.field_size_symbol(
-                            conn_id, conn.domain.dims[1], connectivity_types
+                        gtx_dace_args.field_size_symbol(
+                            conn_id, conn.domain.dims[1], offset_provider_type
                         ),
                     ],
                     strides=[
-                        gtx_dace_utils.field_stride_symbol(
-                            conn_id, conn.domain.dims[0], connectivity_types
+                        gtx_dace_args.field_stride_symbol(
+                            conn_id, conn.domain.dims[0], offset_provider_type
                         ),
-                        gtx_dace_utils.field_stride_symbol(
-                            conn_id, conn.domain.dims[1], connectivity_types
+                        gtx_dace_args.field_stride_symbol(
+                            conn_id, conn.domain.dims[1], offset_provider_type
                         ),
                     ],
                     storage=Program.connectivity_tables_data_descriptors["storage"],
@@ -212,7 +210,7 @@ def _crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: li
     ):
         match dace_parsed_arg:
             case dace.data.Scalar():
-                assert dace_parsed_arg.dtype == gtx_dace_utils.as_dace_type(gt4py_program_arg)
+                assert dace_parsed_arg.dtype == gtx_dace_args.as_dace_type(gt4py_program_arg)
             case bool() | np.bool_():
                 assert isinstance(gt4py_program_arg, ts.ScalarType)
                 assert gt4py_program_arg.kind == ts.ScalarKind.BOOL
@@ -229,7 +227,7 @@ def _crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: li
                 assert isinstance(gt4py_program_arg, ts.FieldType)
                 assert isinstance(gt4py_program_arg.dtype, ts.ScalarType)
                 assert len(dace_parsed_arg.shape) == len(gt4py_program_arg.dims)
-                assert dace_parsed_arg.dtype == gtx_dace_utils.as_dace_type(gt4py_program_arg.dtype)
+                assert dace_parsed_arg.dtype == gtx_dace_args.as_dace_type(gt4py_program_arg.dtype)
             case dace.data.Structure() | dict() | collections.OrderedDict():
                 # offset provider
                 pass

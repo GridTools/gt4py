@@ -41,4 +41,4 @@ jobs:
 
       - name: Run 'docs' nox session
         shell: bash
-        run: uv run --script noxfile.py -s 'test_examples-${{ matrix.python-version }}'
+        run: ./noxfile.py -s 'test_examples-${{ matrix.python-version }}'

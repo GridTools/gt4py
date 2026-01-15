@@ -6,10 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Optional
-
-from gt4py.eve import utils as eve_utils
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
@@ -19,7 +16,7 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 def dead_code_elimination(
     program: itir.Program,
     *,
-    collapse_tuple_uids: Optional[eve_utils.UIDGenerator] = None,
+    uids: utils.IDGeneratorPool,
     offset_provider_type: common.OffsetProviderType,
 ) -> itir.Program:
     """
@@ -76,7 +73,7 @@ def dead_code_elimination(
     program = CollapseTuple.apply(
         program,
         enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
-        uids=collapse_tuple_uids,
+        uids=uids,
         offset_provider_type=offset_provider_type,
     )  # type: ignore[assignment]  # always an itir.Program
 

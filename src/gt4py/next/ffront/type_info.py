@@ -6,32 +6,51 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from functools import reduce
+import functools
+from collections.abc import Callable
 from typing import Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next import common
+from gt4py.eve import datamodels
+from gt4py.eve.extended_typing import NestedTuple
+from gt4py.next import common, utils
 from gt4py.next.type_system import type_info
+
+
+def _tree_map_type_constructor(
+    value: ts.CollectionTypeSpecT,
+    elems: NestedTuple[ts.DataType],
+) -> ts.CollectionTypeSpecT:
+    return (
+        ts.NamedCollectionType(
+            keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
+        )
+        if isinstance(value, ts.NamedCollectionType)
+        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
+    )
+
+
+# TODO: Replace all occurrences of `apply_to_primitive_constituents` with this function,
+#   which also works with NamedCollections.
+tree_map_type = functools.partial(
+    utils.tree_map,
+    collection_type=ts.COLLECTION_TYPE_SPECS,
+    result_collection_constructor=_tree_map_type_constructor,
+)
+
+named_collections_to_tuple_types = cast(
+    Callable[..., ts.TupleType],
+    utils.tree_map(
+        lambda x: x,
+        collection_type=ts.COLLECTION_TYPE_SPECS,
+        result_collection_constructor=lambda _, elems: ts.TupleType(types=list(elems)),
+    ),
+)
 
 
 def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
     return isinstance(field, ts.FieldType) and len(field.dims) == 0
-
-
-def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
-    """
-    Promote scalar primitive constituents to zero dimensional fields.
-
-    E.g. all elements of a tuple which are scalars are promoted to a zero dimensional field.
-    """
-
-    def promote_el(type_el: ts.TypeSpec) -> ts.TypeSpec:
-        if isinstance(type_el, ts.ScalarType):
-            return ts.FieldType(dims=[], dtype=type_el)
-        return type_el
-
-    return type_info.apply_to_primitive_constituents(promote_el, type_)
 
 
 def promote_zero_dims(
@@ -47,12 +66,12 @@ def promote_zero_dims(
         def _as_field(arg_el: ts.TypeSpec, path: tuple[int, ...]) -> ts.TypeSpec:
             param_el = param
             for idx in path:
-                if not isinstance(param_el, ts.TupleType):
+                if not isinstance(param_el, ts.COLLECTION_TYPE_SPECS):
                     # The parameter has a different structure than the actual argument. Just return
                     # the argument unpromoted and let the further error handling take care of printing
                     # a meaningful error.
                     return arg_el
-                param_el = param_el.types[idx]
+                param_el = param_el.types[idx]  # type: ignore[attr-defined] # checked in condition above
 
             if _is_zero_dim_field(param_el) and (
                 type_info.is_number(arg_el) or type_info.is_logical(arg_el)
@@ -63,7 +82,9 @@ def promote_zero_dims(
                     raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
-        return type_info.apply_to_primitive_constituents(_as_field, arg, with_path_arg=True)
+        res = tree_map_type(_as_field, with_path_arg=True)(arg)
+        assert isinstance(res, ts.TypeSpec)
+        return res
 
     new_args = [*args]
     for i, (param, arg) in enumerate(
@@ -153,13 +174,25 @@ def function_signature_incompatibilities_fieldop(
     )
 
 
-def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType | ts.TupleType:
+def _tree_map_type_constructor_drop_python_type(
+    value: ts.CollectionTypeSpecT,
+    elems: NestedTuple[ts.DataType],
+) -> ts.CollectionTypeSpecT:
+    result = _tree_map_type_constructor(value, elems)
+    if isinstance(value, ts.NamedCollectionType):
+        result = datamodels.evolve(result, original_python_type=ts.ANY_PYTHON_TYPE_NAME)
+    return result
+
+
+def _scan_param_promotion(
+    param: ts.TypeSpec, arg: ts.TypeSpec
+) -> ts.FieldType | ts.TupleType | ts.NamedCollectionType:
     """
     Promote parameter of a scan pass to match dimensions of respective scan operator argument.
 
     More specifically: Given a scalar type `param` and a field type `arg` return a field with the
     dtype of the `param` and the dimensions of `arg`. If `param` is a composite of scalars
-    the promotion is element-wise.
+    the promotion is element-wise. If `arg` is a scalar, the result is a 0-d field.
 
     Example:
     --------
@@ -175,7 +208,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
     def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
         assert isinstance(dtype, ts.ScalarType)
         try:
-            el_type = reduce(
+            el_type = functools.reduce(
                 lambda type_, idx: type_.types[idx],  # type: ignore[attr-defined]
                 path,
                 arg,
@@ -188,8 +221,16 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    res = type_info.apply_to_primitive_constituents(_as_field, param, with_path_arg=True)
-    assert isinstance(res, (ts.FieldType, ts.TupleType))
+    # Note: In the promotion of the scalar type to field type we drop the information about
+    # the original python type in NamedCollections as we want to be able to express compatibility
+    # between named collections of scalars and their structurally equivalent collection of fields.
+    # Once we support generic named collections, this special case will disappear.
+    res = tree_map_type(
+        _as_field,
+        result_collection_constructor=_tree_map_type_constructor_drop_python_type,
+        with_path_arg=True,
+    )(param)
+    assert isinstance(res, (ts.FieldType, ts.TupleType, ts.NamedCollectionType))
     return res
 
 
@@ -304,6 +345,7 @@ def return_type_scanop(
         #  field
         [callable_type.axis],
     )
-    return type_info.apply_to_primitive_constituents(
-        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)), carry_dtype
+    return cast(
+        ts.TypeSpec,
+        tree_map_type(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype),
     )

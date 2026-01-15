@@ -21,7 +21,7 @@ from collections.abc import Iterable, Mapping, Sequence
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils
+from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -32,6 +32,7 @@ from gt4py.eve.extended_typing import (
     Literal,
     NamedTuple,
     Never,
+    NoReturn,
     Optional,
     ParamSpec,
     Protocol,
@@ -49,6 +50,7 @@ from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
+DimT_co = TypeVar("DimT_co", bound="Dimension", covariant=True)
 ShapeTs = TypeVarTuple("ShapeTs")
 
 
@@ -692,6 +694,11 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __str__(self) -> str:
         return f"⟨{self.domain!s} → {self.dtype}⟩"
 
+    def __bool__(self) -> NoReturn:
+        raise TypeError(
+            "The truth value of a Field is ambiguous. For one element Fields use '.as_scalar()'."
+        )
+
     @abc.abstractmethod
     def asnumpy(self) -> np.ndarray: ...
 
@@ -784,6 +791,20 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
+#: Type alias for primitive numeric values (i.e. scalars or fields).
+NumericValue: TypeAlias = core_defs.Scalar | Field
+NumericValueT = TypeVar("NumericValueT", bound=NumericValue)
+NUMERIC_VALUE_TYPES: Final[tuple[type[NumericValue], ...]] = xtyping.get_represented_types(
+    NumericValue
+)
+
+#: Type alias for any kind primitive value understood by GT4Py DSL.
+PrimitiveValue: TypeAlias = NumericValue  # For now, only numeric values, in the future it could include functions, enums, ...
+PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_represented_types(
+    PrimitiveValue
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class BufferInfo:
     """Holds information about a buffer in memory."""
@@ -858,10 +879,10 @@ class ConnectivityKind(enum.Flag):
     - `ALTER_DIMS`: change the dimensions of the data field domain.
     - `ALTER_STRUCT`: transform structured of the data inside the field (non-compact transformation).
 
-    | Dims \ Struct |    No                    |    Yes                   |
-    | ------------- | ------------------------ | ------------------------ |
-    |   No          | Translation (I -> I)     | Reshuffling (I x K -> K) |
-    |   Yes         | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
+    | Dims \\ Struct |    No                    |    Yes                   |
+    | -------------- | ------------------------ | ------------------------ |
+    |   No           | Translation (I -> I)     | Reshuffling (I x K -> K) |
+    |   Yes          | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
 
     """
 
@@ -912,10 +933,10 @@ class NeighborConnectivityType(ConnectivityType):
 
 
 @runtime_checkable
-class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
+class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_co]):
     @property
     @abc.abstractmethod
-    def codomain(self) -> DimT:
+    def codomain(self) -> DimT_co:
         """
         The `codomain` is the set of all indices in a certain `Dimension`.
 
