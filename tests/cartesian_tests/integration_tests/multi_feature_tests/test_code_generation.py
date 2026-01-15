@@ -1326,7 +1326,7 @@ def test_absolute_K_index(backend):
 
 @pytest.mark.parametrize(
     "backend",
-    ["debug", pytest.param("dace:cpu", marks=[pytest.mark.requires_dace])],
+    ["debug", "numpy", pytest.param("dace:cpu", marks=[pytest.mark.requires_dace])],
 )
 def test_iterator_access(backend: str) -> None:
     domain = (3, 4, 5)
@@ -1360,7 +1360,7 @@ def test_iterator_access(backend: str) -> None:
                 raises=NotImplementedError, reason="Iterator access (K) is not implemented for"
             ),
         )
-        for backend in ["gt:cpu_kfirst", "numpy"]
+        for backend in ["gt:cpu_kfirst"]
     ],
 )
 def test_iterator_access_raises_in_unsupported_backends(backend: str) -> None:
