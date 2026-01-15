@@ -322,7 +322,8 @@ class Program:
                         )
 
                     with next_embedded.context.update(offset_provider=offset_provider):
-                        self.definition_stage.definition(*args, **kwargs)
+                        with embedded_program_call_hook(self, args, offset_provider, kwargs):
+                            self.definition_stage.definition(*args, **kwargs)
 
             if collect_info_metrics:
                 assert metrics_source is not None
