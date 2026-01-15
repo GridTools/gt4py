@@ -44,16 +44,18 @@ def custom_program_callback(
 
     yield
 
-    callback_results.append((
-        "custom_program_callback",
-        {
-            "program": program.__name__,
-            "args": args,
-            "offset_provider": offset_provider.keys(),
-            "enable_jit": enable_jit,
-            "kwargs": kwargs.keys(),
-        },
-    ))
+    callback_results.append(
+        (
+            "custom_program_callback",
+            {
+                "program": program.__name__,
+                "args": args,
+                "offset_provider": offset_provider.keys(),
+                "enable_jit": enable_jit,
+                "kwargs": kwargs.keys(),
+            },
+        )
+    )
 
 
 @contextlib.contextmanager
@@ -67,15 +69,17 @@ def custom_embedded_program_callback(
 
     yield
 
-    embedded_callback_results.append((
-        "custom_embedded_program_callback",
-        {
-            "program": program.__name__,
-            "args": args,
-            "offset_provider": offset_provider.keys(),
-            "kwargs": kwargs.keys(),
-        },
-    ))
+    embedded_callback_results.append(
+        (
+            "custom_embedded_program_callback",
+            {
+                "program": program.__name__,
+                "args": args,
+                "offset_provider": offset_provider.keys(),
+                "kwargs": kwargs.keys(),
+            },
+        )
+    )
 
 
 # @hooks.compile_variant_hook.register
