@@ -48,7 +48,7 @@ def test_empty_function():
     assert _is_empty_function(empty) is True
 
     def non_empty():
-        x = 1
+        return 1
 
     assert _is_empty_function(non_empty) is False
 

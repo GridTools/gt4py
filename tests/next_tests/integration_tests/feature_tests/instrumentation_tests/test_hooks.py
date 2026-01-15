@@ -9,16 +9,13 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Hashable
-from typing import Any, Final
+from typing import Any
 
 import pytest
 
-from gt4py.next import Dims, gtfn_cpu, broadcast, typing as gtx_typing
 import gt4py.next as gtx
+from gt4py.next import common, Dims, gtfn_cpu, typing as gtx_typing
 from gt4py.next.instrumentation import hooks
-from gt4py.next import common, backend as gtx_backend
-from gt4py.next.typing import Program
 
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
@@ -34,7 +31,7 @@ embedded_callback_results = []
 
 @contextlib.contextmanager
 def custom_program_callback(
-    program: Program,
+    program: gtx_typing.Program,
     args: tuple[Any, ...],
     offset_provider: common.OffsetProvider,
     enable_jit: bool,
@@ -60,7 +57,7 @@ def custom_program_callback(
 
 @contextlib.contextmanager
 def custom_embedded_program_callback(
-    program: Program,
+    program: gtx_typing.Program,
     args: tuple[Any, ...],
     offset_provider: common.OffsetProvider,
     kwargs: dict[str, Any],

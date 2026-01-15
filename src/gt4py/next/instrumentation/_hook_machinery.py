@@ -110,7 +110,10 @@ class _BaseHook(Generic[T, P]):
                     stacklevel=2,
                 )
         except Exception:
+            # Ignore issues while checking type hints (e.g., forward references
+            # or missing imports); failure here should not prevent hook registration.
             pass
+
         name = name or _get_unique_name(callback)
 
         if index is None:
