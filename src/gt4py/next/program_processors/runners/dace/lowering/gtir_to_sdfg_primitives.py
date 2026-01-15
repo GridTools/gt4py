@@ -556,7 +556,7 @@ def _get_symbolic_value(
         code=f"out = {symbolic_expr}",
     )
     temp_name, _ = sdfg.add_scalar(
-        temp_name or sdfg.temp_data_name(),
+        temp_name or sdfg_builder.unique_temp_name(),
         gtx_dace_args.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,
