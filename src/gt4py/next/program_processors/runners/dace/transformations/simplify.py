@@ -273,20 +273,17 @@ def gt_inline_nested_sdfg(
         validate_all: Performs extensive validation.
 
     Note:
-        - This function grantees a stable processing order, if the name of the nested
+        - This function guarantees stable processing order, if the name of the nested
             SDFGs and the name of the state they are located in, is stable.
         - The `no_inline` attribute of the `NestedSDFG` flag only affects the inlining
-            of that specific node. The clearing transformations and the recursive
-            processing, i.e. inlining of NestedSDFGs inside the nested SDFG is still
-            performed.
+            of that specific node. The clean up and inlining of nested SDFGs inside
+            such an SDFG are still performed.
+        - DaCe has three(!) inliner. First `InlineMultistateSDFG`, that we employ,
+            secondly `InlineSDFG`, which is only capable of inlining a nested SDFG
+            with a single state and `InlineSDFGs` which combines the two. However,
+            `InlineSDFG` has a bug and the processing order of `InlineSDFGs` is not
+            stable. Thus GT4Py has to implement its own version.
     """
-
-    # NOTE: DaCe has three(!) inliner. First `InlineMultistateSDFG`, that we employ,
-    #   secondly `InlineSDFG`, which is only capable of inlining an SDFG with a single
-    #   state and `InlineSDFGs` which combines the two. However, `InlineSDFG` has a
-    #   bug and the processing order of `InlineSDFGs` is not stable. Thus GT4Py
-    #   implements its own version.
-
     # Finding all nested SDFGs on this level.
     nested_sdfgs_to_process: list[dace_nodes.NestedSDFG] = []
     for state in sdfg.states():
@@ -305,7 +302,7 @@ def gt_inline_nested_sdfg(
     nb_inlines_total = 0
 
     # Now we start inlining all the nested SDFGs.
-    #  Before a nested SDFG is inlined the function first tires to inline all
+    #  Before a nested SDFG is inlined the function first tries to inline all
     #  SDFGs that are nested inside it, i.e. they are processed in a stable
     #  DFS order.
     for nsdfg_node in nested_sdfgs_to_process:
