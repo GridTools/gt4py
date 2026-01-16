@@ -1126,6 +1126,14 @@ if jnp:
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
     common._connectivity.register(jnp.ndarray, JaxArrayConnectivityField.from_array)
 
+    def _flatten(v: JaxArrayField):
+        return (v.ndarray,), v.domain
+
+    def _unflatten(aux_data, children):
+        return JaxArrayField(aux_data, children[0])
+
+    jax.tree_util.register_pytree_node(JaxArrayField, _flatten, _unflatten)
+
 
 def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) -> common.Field:
     if field.domain.dims == new_dimensions:
