@@ -294,6 +294,7 @@ def test_nabla_sign(program_processor):
 
     pnabla_MXX = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
     pnabla_MYY = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
+    vertex_index = gtx.as_field([Vertex], np.arange(setup.nodes_size, dtype=np.int32))
 
     run_processor(
         nabla_sign,
@@ -305,7 +306,7 @@ def test_nabla_sign(program_processor):
         S_MXX,
         S_MYY,
         setup.vol_field,
-        embedded.index_field(Vertex),
+        vertex_index,  # TODO(havogt): should be an index function field
         setup.is_pole_edge_field,
         offset_provider={
             "E2V": setup.edges2node_connectivity,
