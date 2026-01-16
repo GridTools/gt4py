@@ -110,6 +110,9 @@ BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1
 #: impact on runtime performance.
 COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", default=0)
 
+#: Enable GPU trace (NVTX, ROC-TX) in the generated code, at compile time.
+ENABLE_GPU_TRACE: bool = env_flag_to_bool("GT4PY_ENABLE_GPU_TRACE", default=False)
+
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.
 ENABLE_JIT_DEFAULT: bool = env_flag_to_bool("GT4PY_ENABLE_JIT_DEFAULT", default=True)
