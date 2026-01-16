@@ -71,6 +71,7 @@ os.environ.setdefault("DACE_CONFIG", os.path.join(os.path.abspath("."), ".dace.c
 
 DACE_DEFAULT_BLOCK_SIZE: str = os.environ.get("DACE_DEFAULT_BLOCK_SIZE", "64,8,1")
 
+"""Remove all OpenMP threading in dace:X backends for gt4py.cartesian"""
 GT4PY_CARTESIAN_DEACTIVATE_THREADING = os.environ.get(
     "GT4PY_CARTESIAN_DEACTIVATE_THREADING", "False"
 ).lower() in ["true", "1"]
