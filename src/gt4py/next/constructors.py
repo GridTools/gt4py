@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Optional, cast
+from typing import Optional, Protocol, TypeGuard, cast
 
 import gt4py.eve as eve
 import gt4py.eve.extended_typing as xtyping
@@ -20,13 +20,33 @@ import gt4py.storage.cartesian.utils as storage_utils
 from gt4py._core import definitions as core_defs, ndarray_utils
 
 
+# TODO take from https://github.com/data-apis/array-api-typing/pull/56/
+# only added here for documentation purposes
+class NDArrayNamespace(Protocol): ...
+
+
+def is_array_namespace(obj: object) -> TypeGuard[NDArrayNamespace]:
+    """Check whether `obj` is an array namespace.
+
+    An array namespace is any module that follows the Array API standard
+    (https://data-apis.org/array-api/latest/).
+    """
+    return (
+        hasattr(obj, "empty")
+        and hasattr(obj, "zeros")
+        and hasattr(obj, "ones")
+        and hasattr(obj, "full")
+        and hasattr(obj, "asarray")
+    )
+
+
 @eve.utils.with_fluid_partial
 def empty(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil | NDArrayNamespace] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     """Create a `Field` of uninitialized (undefined) values using the given (or device-default) allocator.
@@ -77,6 +97,12 @@ def empty(
         (3, 3)
     """
     dtype = core_defs.dtype(dtype)
+    if allocator is not None and is_array_namespace(allocator):
+        domain = common.domain(domain)
+        shape = domain.shape
+        return common._field(
+            allocator.empty(shape, dtype=dtype.scalar_type), domain=domain
+        )  # TODO device
     if allocator is None and device is None:
         device = core_defs.Device(core_defs.DeviceType.CPU, device_id=0)
     buffer = next_allocators.allocate(
@@ -94,7 +120,7 @@ def zeros(
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil | NDArrayNamespace] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     """Create a Field containing all zeros using the given (or device-default) allocator.
@@ -108,6 +134,13 @@ def zeros(
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
+    if allocator is not None and is_array_namespace(allocator):
+        dtype = core_defs.dtype(dtype) if dtype is not None else None
+        domain = common.domain(domain)
+        shape = domain.shape
+        return common._field(
+            allocator.zeros(shape, dtype=dtype.scalar_type), domain=domain
+        )  # TODO device
     field = empty(
         domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
@@ -121,7 +154,7 @@ def ones(
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil | NDArrayNamespace] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     """Create a Field containing all ones using the given (or device-default) allocator.
@@ -135,6 +168,13 @@ def ones(
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
+    if allocator is not None and is_array_namespace(allocator):
+        dtype = core_defs.dtype(dtype) if dtype is not None else None
+        domain = common.domain(domain)
+        shape = domain.shape
+        return common._field(
+            allocator.ones(shape, dtype=dtype.scalar_type), domain=domain
+        )  # TODO device
     field = empty(
         domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
@@ -149,7 +189,7 @@ def full(
     dtype: Optional[core_defs.DTypeLike] = None,
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil | NDArrayNamespace] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     """Create a Field where all values are set to `fill_value` using the given (or device-default) allocator.
@@ -168,6 +208,13 @@ def full(
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
+    if allocator is not None and is_array_namespace(allocator):
+        dtype = core_defs.dtype(dtype) if dtype is not None else None
+        domain = common.domain(domain)
+        shape = domain.shape
+        return common._field(
+            allocator.full(shape, fill_value, dtype=dtype.scalar_type), domain=domain
+        )  # TODO device
     field = empty(
         domain=domain,
         dtype=dtype if dtype is not None else core_defs.dtype(type(fill_value)),
@@ -187,7 +234,7 @@ def as_field(
     *,
     origin: Optional[Mapping[common.Dimension, int]] = None,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil | NDArrayNamespace] = None,
     device: Optional[core_defs.Device] = None,
     # TODO: copy=False
 ) -> nd_array_field.NdArrayField:
@@ -267,6 +314,11 @@ def as_field(
     dtype = core_defs.dtype(dtype)
     assert dtype.tensor_shape == ()  # TODO
 
+    if allocator is not None and is_array_namespace(allocator):
+        return common._field(
+            allocator.asarray(data, dtype=dtype.scalar_type), domain=actual_domain
+        )  # TODO device
+
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
 
@@ -290,7 +342,7 @@ def as_connectivity(
     data: core_defs.NDArrayObject,
     dtype: Optional[core_defs.DType] = None,
     *,
-    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil | NDArrayNamespace] = None,
     device: Optional[core_defs.Device] = None,
     skip_value: core_defs.IntegralScalar | eve.NothingType | None = eve.NOTHING,
     # TODO: copy=False
@@ -348,6 +400,14 @@ def as_connectivity(
         dtype = storage_utils.asarray(data).dtype
     dtype = core_defs.dtype(dtype)
     assert dtype.tensor_shape == ()  # TODO
+
+    if allocator is not None and is_array_namespace(allocator):
+        # return common._field(
+        #     allocator.asarray(data, dtype=dtype.scalar_type), domain=actual_domain
+        # )  # TODO device
+        return common._connectivity(
+            data, codomain=codomain, domain=actual_domain, skip_value=skip_value
+        )
 
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
