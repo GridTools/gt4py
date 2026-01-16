@@ -62,7 +62,7 @@ class DataflowBuilder(Protocol):
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem: ...
 
     @abc.abstractmethod
-    def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str: ...
+    def unique_nsdfg_name(self, prefix: str) -> str: ...
 
     @abc.abstractmethod
     def unique_map_name(self, name: str) -> str: ...
@@ -617,7 +617,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             gtir.Sym(id=name, type=lambda_symbols[name]) for name in sorted(lambda_symbols.keys())
         ]
 
-        nsdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, sdfg_name))
+        nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg_name))
         nsdfg.debuginfo = gtir_to_sdfg_utils.debug_info(expr, default=parent_ctx.sdfg.debuginfo)
 
         # All GTIR-symbols accessed in domain expressions by the lambda need to be
@@ -745,11 +745,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         return nsdfg_node, input_memlets
 
-    def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
-        nsdfg_list = [
-            nsdfg.label for nsdfg in sdfg.all_sdfgs_recursive() if nsdfg.label.startswith(prefix)
-        ]
-        return f"{prefix}_{len(nsdfg_list)}"
+    def unique_nsdfg_name(self, prefix: str) -> str:
+        return next(self.uids[prefix])
 
     def unique_map_name(self, name: str) -> str:
         return f"{next(self.uids['map'])}_{name}"
@@ -999,7 +996,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         The temporary data is global, therefore available everywhere in the SDFG
         but not outside. Then, all statements are translated, one after the other.
         """
-        sdfg = dace.SDFG(node.id)
+        sdfg = dace.SDFG(str(node.id))
         sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(node)
 
         # start block of the stateful graph
