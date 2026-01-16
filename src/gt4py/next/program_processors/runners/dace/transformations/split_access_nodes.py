@@ -86,11 +86,11 @@ def _apply_split_access_node_non_recursive(
         assume_single_use_data=True,
     )
 
-    # Since the transformation only applies to single use data, the order in which the
-    #  states are processed is irrelevant. Furthermore, the fragments generated through
-    #  a node that was split, should never be split (as long as this function runs),
-    #  because otherwise that split should have been done the first time.
-    # TODO(phimuell): Find out if the last part is really true.
+    # The transformation only applies to transient single use data, thus the order
+    #  in which the states are provided are irrelevant. Furthermore, all fragments
+    #  that are generated does not need to be examined again, thus a one pass is
+    #  enough. This is because the `SplitAccessNode` transformation does not generates
+    #  new edges upon the split, it just reroutes them to the fragments.
     for state in sdfg.states():
         state_cfg_id = state.parent_graph.cfg_id
         state_id = state.block_id

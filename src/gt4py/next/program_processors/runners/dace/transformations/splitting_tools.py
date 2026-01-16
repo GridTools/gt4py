@@ -260,7 +260,7 @@ def split_node(
     # Sort the split descriptions such that they are processed in a deterministic way.
     # NOTE: Turning them into a string is the best solution is probably the only way
     #   to achieve some stability. The only downside is that the order now depends
-    #   on the specialization level that is used, i.e. to we have numbers or symbols.
+    #   on the specialization level that is used, i.e. if we have numbers or symbols.
     split_description = sorted(split_description, key=lambda split: str(split))
 
     desc_to_split = node_to_split.desc(sdfg)
@@ -379,8 +379,10 @@ def split_edge(
                 new_fully_splitted_subsets.append(consumer)
         fully_splitted_subsets = new_fully_splitted_subsets
 
-    # Allocate the return `dict` the order is important, first the reordered split
-    #  description followed by the `None` key.
+    # We already create the return `dict` and fill it with the sets. We do this to
+    #  ensure that if we iterate through it find the splits in the same order they
+    #  were _processed_. By convention we put `None`, which means "not associated
+    #  to any split" at the end.
     new_edges: dict[Union[dace_sbs.Range, None], dace_graph.MultiConnectorEdge] = {
         split: set() for split in split_description
     }
