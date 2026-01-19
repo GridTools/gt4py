@@ -487,10 +487,10 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        # NOTE: This is done to avoid a Memlet caching issue, that will lead to an
-        #   invalid SDFG if `propagate_memlets_sdfg()` is run, in certain cases.
-        #   At this point the SDFG passes validation, but become invalid after
-        #   the propagation.
+        # NOTE: There is a Memlet caching issue at work here, see DaCe issue 1703 and
+        #   1708. Without clearing the cache, which is done through a side effect of
+        #   `to_json()`, running `propagate_memlets_sdfg()` would lead to an invalid
+        #   SDFG.
         sdfg.to_json(hash=False)
 
         # Promote Maps. This will remove transients between 1D and 2D Maps, at the
