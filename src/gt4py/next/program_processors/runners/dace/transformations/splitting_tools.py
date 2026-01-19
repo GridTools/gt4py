@@ -999,6 +999,10 @@ def _perform_node_split_with_bypass_impl(
     # TODO(phimuell): Find a way to avoid doing the propagation here, where the
     #   dataflow might be in some invalid state.
     state.remove_edge(producer_edge)
+    if state.degree(producer_edge.src) == 0:
+        assert len(new_consumer_edges) == 0
+        state.remove_node(producer_edge.src)
+        return new_consumer_edges
     processed_nsdfgs: set = set()
     for new_consumer_edge in new_consumer_edges:
         gtx_transformations.gt_map_strides_to_dst_nested_sdfg(
