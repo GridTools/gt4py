@@ -487,6 +487,12 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
+        # NOTE: This is done to avoid a Memlet caching issue, that will lead to an
+        #   invalid SDFG if `propagate_memlets_sdfg()` is run, in certain cases.
+        #   At this point the SDFG passes validation, but become invalid after
+        #   the propagation.
+        sdfg.to_json(hash=False)
+
         # Promote Maps. This will remove transients between 1D and 2D Maps, at the
         #  cost of more data loads from memory. Empirical observations have shown
         #  that this is beneficial; especially for Nabla4-type kernel in conjunction
@@ -541,13 +547,6 @@ def _gt_auto_process_top_level_maps(
 
         if not disable_splitting:
             # TODO(phimuell): Implement a data cleaner.
-            # NOTE: There is some caching issue in DaCe related to the Memlets, see
-            #   DaCe issues 1703 and 1708, in `propagate_memlets_sdfg()`, which causes
-            #   a validation failure. This can be avoided by calling `to_json()`.
-            #   Calling `hash_sdfg()` would be also be possible, but more expensive.
-            #   Furthermore, it does not depends if `to_json()` is called before or
-            #   after `canonicalize_memlet_trees()`.
-            sdfg.to_json(hash=False)
             dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
             sdfg.apply_transformations_repeated(
