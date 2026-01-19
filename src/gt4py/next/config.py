@@ -89,14 +89,20 @@ BUILD_CACHE_LIFETIME: BuildCacheLifetime = BuildCacheLifetime[
 
 #: Build type to be used when CMake is used to compile generated code.
 #: Might have no effect when CMake is not used as part of the toolchain.
+# FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
 CMAKE_BUILD_TYPE: CMakeBuildType = CMakeBuildType[
     os.environ.get("GT4PY_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper()
 ]
 
 #: Experimental, use at your own risk: assume horizontal dimension has stride 1
+# FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
 UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
     "GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", default=False
 )
+
+#: Add GPU trace markers (NVTX, ROC-TX) to the generated code, at compile time.
+# FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
+ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", default=False)
 
 #: Number of threads to use to use for compilation (0 = synchronous compilation).
 #: Default:
@@ -109,9 +115,6 @@ BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1
 #: Enabling metrics collection will do extra synchronization and will have
 #: impact on runtime performance.
 COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", default=0)
-
-#: Enable GPU trace (NVTX, ROC-TX) in the generated code, at compile time.
-ENABLE_GPU_TRACE: bool = env_flag_to_bool("GT4PY_ENABLE_GPU_TRACE", default=False)
 
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.
