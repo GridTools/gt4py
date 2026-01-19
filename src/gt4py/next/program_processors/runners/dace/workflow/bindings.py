@@ -211,7 +211,7 @@ def _parse_gt_connectivities(
             _parse_gt_param(  # set the size in the horizontal dimension
                 param_name=origin_size_param,
                 param_type=gtx_dace_args.as_itir_type(gtx_dace_args.FIELD_SYMBOL_DTYPE),
-                arg=f"{conn}.ndarray.shape[0]",
+                arg=f"{conn}_buffer_info.shape[0]",
                 code=code,
                 sdfg_arglist=sdfg_arglist,
             )
