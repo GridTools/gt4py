@@ -74,7 +74,8 @@ def test_frozen(cartesian_case):
     "metrics_level,expected_names",
     [
         (metrics.DISABLED, ()),
-        (metrics.PERFORMANCE, ("compute",)),
+        (metrics.MINIMAL, ("total",)),
+        (metrics.PERFORMANCE, ("total", "compute")),
         (metrics.ALL, ("compute", "total")),
     ],
 )

@@ -8,10 +8,12 @@
 
 from __future__ import annotations
 
+import abc
 import collections
 import contextlib
 import contextvars
 import dataclasses
+import functools
 import itertools
 import json
 import numbers
@@ -19,7 +21,8 @@ import pathlib
 import sys
 import types
 import typing
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from typing import Generic, TypeVar, Protocol
 
 import numpy as np
 
@@ -42,6 +45,16 @@ PERFORMANCE: Final[int] = 10
 INFO: Final[int] = 30
 VERBOSE: Final[int] = 50
 ALL: Final[int] = 100
+
+
+def is_level_enabled(level: int = MINIMAL) -> bool:
+    """Check if a given metrics collection level is enabled."""
+    return config.COLLECT_METRICS_LEVEL >= level
+
+
+def get_current_level() -> int:
+    """Retrieve the current metrics collection level from the configuration."""
+    return config.COLLECT_METRICS_LEVEL
 
 
 @dataclasses.dataclass(frozen=True)
@@ -108,51 +121,90 @@ class MetricsCollection(utils.CustomDefaultDictBase[str, Metric]):
         return Metric(name=key)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class Source:
     """A source of metrics, typically associated with a program."""
 
     metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
     metrics: MetricsCollection = dataclasses.field(default_factory=MetricsCollection)
-
     assigned_key: str | None = dataclasses.field(default=None, init=False)
 
 
 #: Global store for all measurements.
 sources: collections.defaultdict[str, Source] = collections.defaultdict(Source)
 
-# Context variable storing the active collection context.
-_source_cvar: contextvars.ContextVar[Source | None] = contextvars.ContextVar("source", default=None)
+# Context variables storing the active source keys.
+_source_key_cvar: contextvars.ContextVar[str] = contextvars.ContextVar("source_key")
+
+
+def is_current_source_key_set() -> bool:
+    """Check if there is an on-going metrics collection."""
+    return _source_key_cvar.get(None) is not None
+
+
+def get_current_source_key() -> str:
+    """Retrieve the current source key for metrics collection."""
+    return _source_key_cvar.get()
+
+
+def set_current_source_key(key: str) -> Source:
+    """Set the current source key for metrics collection."""
+    assert _source_key_cvar.get(None) is None, "A source key is already set."
+    _source_key_cvar.set(key)
+    return sources[key]
 
 
 def get_current_source() -> Source:
     """Retrieve the active metrics collection source."""
-    metrics_source = _source_cvar.get()
-    assert metrics_source is not None
-    return metrics_source
+    return sources[_source_key_cvar.get()]
 
 
-def is_current_source_set() -> bool:
-    """Check if there is an on-going metrics collection."""
-    return _source_cvar.get() is not None
+def add_sample_to_current_source(metric_name: str, sample: float) -> None:
+    """Add a sample to a metric in the current source."""
+    return get_current_source().metrics[metric_name].add_sample(sample)
 
 
-def set_current_source_key(key: str) -> Source:
-    if not is_current_source_set():
-        raise RuntimeError("No active metrics collection to assign source to.")
+@dataclasses.dataclass(slots=True)
+class SourceKeyContextManager(contextlib.AbstractContextManager):
+    """
+    A context manager to handle metrics collection sources.
 
-    metrics_source = get_current_source()
-    if key in sources and metrics_source is not sources[key]:
-        # The key can only be set once, and if it matches an existing entry
-        # in the global store, then it must be exactly the same source object.
-        raise RuntimeError("Conflicting metrics source data found in the global store.")
+    When entering this context manager, it sets up a new source key for collection
+    of metrics in a module contextvar. Upon exiting the context, it resets the
+    contextvar to its previous state.
 
-    sources[key] = metrics_source
-    metrics_source.assigned_key = key
-    return metrics_source
+    Note:
+        This is implemented as a context manager class instead of a generator
+        function with `@contextlib.contextmanager` to avoid the extra overhead
+        of renewing the generator inside `contextlib.contextmanager`.
+    """
+
+    key: str | None = None
+    previous_cvar_token: contextvars.Token | None = dataclasses.field(default=None, init=False)
+
+    def __enter__(self) -> None:
+        if is_level_enabled() and self.key is not None:
+            self.previous_cvar_token = _source_key_cvar.set(self.key)
+        else:
+            self.previous_cvar_token = None
+
+    def __exit__(
+        self,
+        exc_type_: type[BaseException] | None,
+        value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        if self.previous_cvar_token is not None:
+            _source_key_cvar.reset(self.previous_cvar_token)
 
 
-class CollectorContextManager(contextlib.AbstractContextManager):
+# collection_source = SourceContextManager
+
+
+StateT = TypeVar("StateT")
+
+
+class AbstractCollectorContextManager(contextlib.AbstractContextManager, Generic[StateT]):
     """
     A context manager to handle metrics collection.
 
@@ -167,34 +219,46 @@ class CollectorContextManager(contextlib.AbstractContextManager):
         of renewing the generator inside `contextlib.contextmanager`.
     """
 
-    __slots__ = ("previous_collector_token", "source")
+    __slots__ = ("key", "previous_cvar_token", "enter_state")
 
-    source: Source | None
-    previous_collector_token: contextvars.Token | None
+    key: str | None
+    previous_cvar_token: contextvars.Token | None
+    enter_state: StateT | None
 
-    def __enter__(self) -> Source | None:
-        if config.COLLECT_METRICS_LEVEL > 0:
-            assert _source_cvar.get() is None
-            self.source = new_source = Source()
-            self.previous_collector_token = _source_cvar.set(new_source)
-            return new_source
+    @property
+    @abc.abstractmethod
+    def level(self) -> int: ...
+
+    @property
+    @abc.abstractmethod
+    def metric_name(self) -> str: ...
+
+    @abc.abstractmethod
+    def enter_collection_mode(self) -> StateT: ...
+
+    @abc.abstractmethod
+    def exit_collection_mode(self, enter_state: StateT) -> float: ...
+
+    def __enter__(self) -> None:
+        if is_level_enabled(self.level) and self.key is not None:
+            self.previous_cvar_token = _source_key_cvar.set(self.key)
+            self.enter_state = self.enter_collection_mode()
         else:
-            self.source = self.previous_collector_token = None
-            return None
+            self.previous_cvar_token = None
 
     def __exit__(
         self,
-        type_: type[BaseException] | None,
+        exc_type_: type[BaseException] | None,
         value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
-        if self.previous_collector_token is not None:
-            _source_cvar.reset(self.previous_collector_token)
-            if type_ is None and self.source is not None and self.source.assigned_key is None:
-                raise RuntimeError("Metrics source key was not set during collection.")
-
-
-collect = CollectorContextManager
+        if self.previous_cvar_token is not None:
+            assert is_current_source_key_set() is True
+            assert self.enter_state is not None
+            get_current_source().metrics[self.metric_name].add_sample(
+                self.exit_collection_mode(self.enter_state)
+            )
+            _source_key_cvar.reset(self.previous_cvar_token)
 
 
 def dumps(metric_sources: Mapping[str, Source] | None = None) -> str:

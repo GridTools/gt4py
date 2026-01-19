@@ -20,7 +20,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Sequence
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Final, Generic, Optional, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -55,8 +55,18 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
+class ProgramCallMetricsCollector(metrics.AbstractCollectorContextManager[float]):
+    metric_name: Final[str] = metrics.TOTAL_METRIC
+
+    def enter_collection_mode(self) -> float:
+        return time.perf_counter()
+
+    def exit_collection_mode(self, enter_state: float) -> float:
+        return time.perf_counter() - enter_state
+
+
 @_hook_machinery.ContextHook
-def program_call_hook(  # type: ignore[empty-body]
+def program_call_context(
     program: Program,
     args: tuple[Any, ...],
     offset_provider: common.OffsetProvider,
@@ -64,7 +74,7 @@ def program_call_hook(  # type: ignore[empty-body]
     kwargs: dict[str, Any],
 ) -> contextlib.AbstractContextManager:
     """Hook called at the beginning and end of a program call."""
-    ...
+    return ProgramCallMetricsCollector()
 
 
 @_hook_machinery.ContextHook
@@ -287,10 +297,7 @@ class Program:
                 self.enable_jit if self.enable_jit is not None else config.ENABLE_JIT_DEFAULT
             )
 
-        with metrics.collect() as metrics_source:
-            if collect_info_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO):
-                start = time.perf_counter()
-
+        with program_call_context(self, args, offset_provider, enable_jit, kwargs):
             if __debug__:
                 # TODO: remove or make dependency on self.past_stage optional
                 past_process_args._validate_args(
@@ -299,35 +306,30 @@ class Program:
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
 
-            with program_call_hook(self, args, offset_provider, enable_jit, kwargs):
-                if self.backend is not None:
-                    self._compiled_programs(
-                        *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
+            if self.backend is not None:
+                self._compiled_programs(
+                    *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
+                )
+            else:
+                # Embedded execution.
+                warnings.warn(
+                    UserWarning(
+                        f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
+                    ),
+                    stacklevel=2,
+                )
+
+                # Metrics source key needs to be setup here, since embedded programs
+                # don't have variants so there's no other place to do it.
+                if config.COLLECT_METRICS_LEVEL:
+                    #assert metrics_source is not None
+                    metrics.set_current_source_key(
+                        f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
                     )
-                else:
-                    # Embedded execution.
-                    warnings.warn(
-                        UserWarning(
-                            f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
-                        ),
-                        stacklevel=2,
-                    )
 
-                    # Metrics source key needs to be setup here, since embedded programs
-                    # don't have variants so there's no other place to do it.
-                    if config.COLLECT_METRICS_LEVEL:
-                        assert metrics_source is not None
-                        metrics.set_current_source_key(
-                            f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
-                        )
-
-                    with next_embedded.context.update(offset_provider=offset_provider):
-                        with embedded_program_call_hook(self, args, offset_provider, kwargs):
-                            self.definition_stage.definition(*args, **kwargs)
-
-            if collect_info_metrics:
-                assert metrics_source is not None
-                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.perf_counter() - start)
+                with next_embedded.context.update(offset_provider=offset_provider):
+                    with embedded_program_call_hook(self, args, offset_provider, kwargs):
+                        self.definition_stage.definition(*args, **kwargs)
 
     def compile(
         self,

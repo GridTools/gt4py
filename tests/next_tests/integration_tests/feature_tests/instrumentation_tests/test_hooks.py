@@ -128,7 +128,7 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
     embedded_callback_results.clear()
 
     # Add hooks and run the program again
-    hooks.program_call_hook.register(custom_program_callback)
+    hooks.program_call_context.register(custom_program_callback)
     hooks.embedded_program_call_hook.register(custom_embedded_program_callback)
     test_program(in_field, out=out_field)
 
@@ -156,7 +156,7 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
     embedded_callback_results.clear()
 
     # Remove hooks and call the program again
-    hooks.program_call_hook.remove(custom_program_callback)
+    hooks.program_call_context.remove(custom_program_callback)
     hooks.embedded_program_call_hook.remove(custom_embedded_program_callback)
     test_program(in_field, out=out_field)
 
