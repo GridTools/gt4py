@@ -564,7 +564,7 @@ def _gt_auto_process_top_level_maps(
             gtx_transformations.gt_split_access_nodes(
                 sdfg=sdfg,
                 validate=False,
-                validate_all=True,
+                validate_all=validate_all,
                 single_use_data=single_use_data,
             )
 
