@@ -487,6 +487,12 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
+        # NOTE: There is a Memlet caching issue at work here, see DaCe issue 1703 and
+        #   1708. Without clearing the cache, which is done through a side effect of
+        #   `to_json()`, running `propagate_memlets_sdfg()` would lead to an invalid
+        #   SDFG.
+        sdfg.to_json(hash=False)
+
         # Promote Maps. This will remove transients between 1D and 2D Maps, at the
         #  cost of more data loads from memory. Empirical observations have shown
         #  that this is beneficial; especially for Nabla4-type kernel in conjunction
@@ -564,7 +570,7 @@ def _gt_auto_process_top_level_maps(
             gtx_transformations.gt_split_access_nodes(
                 sdfg=sdfg,
                 validate=False,
-                validate_all=True,
+                validate_all=validate_all,
                 single_use_data=single_use_data,
             )
 
