@@ -9,14 +9,13 @@
 """Test the bindings stage of the dace backend workflow."""
 
 import functools
-from unittest import mock
 import numpy as np
 import pytest
 
 dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
-from gt4py.next import common as gtx_common, config, int32
+from gt4py.next import common as gtx_common, int32
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners import dace as dace_runner
 from gt4py.next.program_processors.runners.dace import workflow as dace_workflow
@@ -154,12 +153,12 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     )
 
 
-def _binding_source_unstructured(grid_has_session_lifetime: bool, use_metrics: bool) -> str:
+def _binding_source_unstructured(use_metrics: bool) -> str:
     metrics_arg_index = 2
     idx = [0, 4, 1, 5, 6, 7, 2, 9, 8, 3, 11, 10]
     if use_metrics:
         idx = [idx + 1 if idx >= metrics_arg_index else idx for idx in idx]
-    code = (
+    return (
         _bind_header
         + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provider):
@@ -172,12 +171,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     sdfg_call_args[{idx[2]}].value = args_1.__gt_buffer_info__.data_ptr
     sdfg_call_args[{idx[3]}] = ctypes.c_int(args_1.domain.ranges[0].start)
     sdfg_call_args[{idx[4]}] = ctypes.c_int(args_1.domain.ranges[0].stop)
-    sdfg_call_args[{idx[5]}] = ctypes.c_int(args_1.__gt_buffer_info__.elem_strides[0])\
-"""
-    )
-
-    if not grid_has_session_lifetime:
-        code += f"""
+    sdfg_call_args[{idx[5]}] = ctypes.c_int(args_1.__gt_buffer_info__.elem_strides[0])
     table_E2V = offset_provider["E2V"]
     sdfg_call_args[{idx[6]}].value = table_E2V.__gt_buffer_info__.data_ptr
     sdfg_call_args[{idx[7]}] = ctypes.c_int(table_E2V.__gt_buffer_info__.elem_strides[0])
@@ -187,17 +181,15 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     sdfg_call_args[{idx[10]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[0])
     sdfg_call_args[{idx[11]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[1])\
 """
-    return code
+    )
 
 
-def _binding_source_unstructured_with_zero_origin(
-    grid_has_session_lifetime: bool, use_metrics: bool
-) -> str:
+def _binding_source_unstructured_with_zero_origin(use_metrics: bool) -> str:
     metrics_arg_index = 2
     idx = [0, 4, 1, 5, 6, 2, 8, 7, 3, 10, 9]
     if use_metrics:
         idx = [idx + 1 if idx >= metrics_arg_index else idx for idx in idx]
-    code = (
+    return (
         _bind_header
         + f"""\
 def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provider):
@@ -209,12 +201,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     sdfg_call_args[{idx[1]}] = ctypes.c_int(args_0.__gt_buffer_info__.elem_strides[0])
     sdfg_call_args[{idx[2]}].value = args_1.__gt_buffer_info__.data_ptr
     sdfg_call_args[{idx[3]}] = ctypes.c_int(args_1.domain.ranges[0].stop)
-    sdfg_call_args[{idx[4]}] = ctypes.c_int(args_1.__gt_buffer_info__.elem_strides[0])\
-"""
-    )
-
-    if not grid_has_session_lifetime:
-        code += f"""
+    sdfg_call_args[{idx[4]}] = ctypes.c_int(args_1.__gt_buffer_info__.elem_strides[0])
     table_E2V = offset_provider["E2V"]
     sdfg_call_args[{idx[5]}].value = table_E2V.__gt_buffer_info__.data_ptr
     sdfg_call_args[{idx[6]}] = ctypes.c_int(table_E2V.__gt_buffer_info__.elem_strides[0])
@@ -224,7 +211,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     sdfg_call_args[{idx[9]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[0])
     sdfg_call_args[{idx[10]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[1])\
 """
-    return code
+    )
 
 
 # The difference between the two bindings versions is that one uses field domain
@@ -268,7 +255,6 @@ def mocked_compile_call_cartesian(
 def mocked_compile_call_unstructured(
     self,
     inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
-    grid_has_session_lifetime: bool,
     use_metrics: bool,
     use_zero_origin: bool,
 ):
@@ -277,7 +263,7 @@ def mocked_compile_call_unstructured(
         if use_zero_origin
         else _binding_source_unstructured
     )
-    return mocked_compile_call(self, inp, binding_ref_fun(grid_has_session_lifetime, use_metrics))
+    return mocked_compile_call(self, inp, binding_ref_fun(use_metrics))
 
 
 @pytest.mark.parametrize("use_metrics", [False, True], ids=["no_metrics", "use_metrics"])
@@ -347,16 +333,11 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     assert np.all(c.asnumpy() == ref)
 
 
-@pytest.mark.parametrize(
-    "grid_has_session_lifetime", [False, True], ids=["temp_grid", "session_grid"]
-)
 @pytest.mark.parametrize("use_metrics", [False, True], ids=["no_metrics", "use_metrics"])
 @pytest.mark.parametrize(
     "use_zero_origin", [False, True], ids=["no_zero_origin", "use_zero_origin"]
 )
-def test_unstructured_bind_sdfg(
-    grid_has_session_lifetime, use_metrics, use_zero_origin, monkeypatch
-):
+def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     @gtx.field_operator
     def testee_op(a: cases.VField) -> cases.VField:
         tmp = neighbor_sum(a(E2V), axis=E2VDim)
@@ -379,7 +360,6 @@ def test_unstructured_bind_sdfg(
         "__call__",
         functools.partialmethod(
             mocked_compile_call_unstructured,
-            grid_has_session_lifetime=grid_has_session_lifetime,
             use_metrics=use_metrics,
             use_zero_origin=use_zero_origin,
         ),
@@ -401,12 +381,10 @@ def test_unstructured_bind_sdfg(
     )
 
     static_args = {}
-    with mock.patch.object(config, "GRID_HAS_SESSION_LIFETIME", grid_has_session_lifetime):
-        program = (
-            testee.with_grid_type(gtx_common.GridType.UNSTRUCTURED)
-            .with_backend(backend)
-            .compile(enable_jit=False, offset_provider=offset_provider, **static_args)
-        )
-        program(a, b, offset_provider=offset_provider)
-
+    program = (
+        testee.with_grid_type(gtx_common.GridType.UNSTRUCTURED)
+        .with_backend(backend)
+        .compile(enable_jit=False, offset_provider=offset_provider, **static_args)
+    )
+    program(a, b, offset_provider=offset_provider)
     assert np.all(b.asnumpy() == ref)

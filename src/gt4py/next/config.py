@@ -119,8 +119,3 @@ COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", defa
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.
 ENABLE_JIT_DEFAULT: bool = env_flag_to_bool("GT4PY_ENABLE_JIT_DEFAULT", default=True)
-
-#: Whether connectivity fields have session lifetime, that is they are allocated
-#: at the beginning of the application and never reallocated. This allows to cache
-#: the array pointers of connectivities in program call.
-GRID_HAS_SESSION_LIFETIME: bool = env_flag_to_bool("GT4PY_GRID_HAS_SESSION_LIFETIME", default=False)
