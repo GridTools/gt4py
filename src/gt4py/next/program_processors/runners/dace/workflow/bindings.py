@@ -278,8 +278,9 @@ def _create_sdfg_bindings(
         # of the application and then used during its entire lifetime and never reallocated.
         # However, this might not be the case all the time, for example in unit tests
         # where, due to limited lifetime of the fixtures, the connectivity fields
-        # might get reallocated. In such cases, we update the connectivity arrays
-        # as well in SDFG fastcall.
+        # might get reallocated. We rely on a configuration variable to know whether
+        # the grid has session lifetime and the connectivity arrays can be cached.
+        # If the grid doesn't have session lifetime, the connectivity arrays are updated.
         if not config.GRID_HAS_SESSION_LIFETIME:
             _parse_gt_connectivities(code, sdfg_arglist)
 
