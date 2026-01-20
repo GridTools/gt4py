@@ -156,8 +156,8 @@ def get_current_source_key() -> str:
 
 def set_current_source_key(key: str) -> Source:
     """Set the current source key for metrics collection."""
-    assert _source_key_cvar.get(_NO_KEY_SET_MARKER_) is _NO_KEY_SET_MARKER_, (
-        "A source key is already set."
+    assert _source_key_cvar.get(_NO_KEY_SET_MARKER_) in {key, _NO_KEY_SET_MARKER_}, (
+        "A different source key has been already set."
     )
     _source_key_cvar.set(key)
     return sources[key]
@@ -241,7 +241,7 @@ class AbstractCollectorContextManager(contextlib.AbstractContextManager):
     )
 
     key: str | None = None
-    previous_cvar_token: contextvars.Token = dataclasses.field(init=False)
+    previous_cvar_token: contextvars.Token | None = dataclasses.field(init=False)
     enter_state: float | None = dataclasses.field(init=False)
 
     def __enter__(self) -> None:
@@ -249,7 +249,7 @@ class AbstractCollectorContextManager(contextlib.AbstractContextManager):
             self.enter_state = self.enter_collection_callback()
             self.previous_cvar_token = _source_key_cvar.set(self.key or _NO_KEY_SET_MARKER_)
         else:
-            self.enter_state = None
+            self.previous_cvar_token = None
 
     def __exit__(
         self,
@@ -257,8 +257,9 @@ class AbstractCollectorContextManager(contextlib.AbstractContextManager):
         value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
-        if self.enter_state is not None:
+        if self.previous_cvar_token is not None:
             assert is_current_source_key_set() is True
+            assert self.enter_state is not None
             sources[_source_key_cvar.get()].metrics[self.metric_name].add_sample(
                 self.exit_collection_callback(self.enter_state)
             )
