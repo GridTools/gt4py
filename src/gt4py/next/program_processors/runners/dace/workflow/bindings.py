@@ -26,16 +26,16 @@ _cb_neighbor_table: Final[str] = "table"
 _cb_offset_provider: Final[str] = "offset_provider"
 
 
-def _update_sdfg_array_ptr(arg: str, code: codegen.TextBlock, sdfg_arg_index: int) -> None:
+def _update_sdfg_array_ptr(code: codegen.TextBlock, arg: str, sdfg_arg_index: int) -> None:
     code.append(f"assert field_utils.verify_device_field_type({arg}, {_cb_device})")
     code.append(f"assert isinstance({_cb_sdfg_call_args}[{sdfg_arg_index}], ctypes.c_void_p)")
     code.append(f"{_cb_sdfg_call_args}[{sdfg_arg_index}].value = {arg}.__gt_buffer_info__.data_ptr")
 
 
 def _update_sdfg_array_strides(
-    arg: str,
     code: codegen.TextBlock,
     sdfg_arglist: dict[str, dace.data.Data],
+    arg: str,
     sdfg_arg_desc: dace.data.Array,
     sdfg_arg_index: int,
 ) -> None:
@@ -151,7 +151,7 @@ def _parse_gt_param(
                 )
             else:
                 assert isinstance(sdfg_arg_desc, dace.data.Array)
-                _update_sdfg_array_ptr(arg, code, sdfg_arg_index)
+                _update_sdfg_array_ptr(code, arg, sdfg_arg_index)
                 for i, (dim, array_size) in enumerate(
                     zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
                 ):
@@ -175,7 +175,7 @@ def _parse_gt_param(
                                 code=code,
                                 sdfg_arglist=sdfg_arglist,
                             )
-                _update_sdfg_array_strides(arg, code, sdfg_arglist, sdfg_arg_desc, sdfg_arg_index)
+                _update_sdfg_array_strides(code, sdfg_arglist, arg, sdfg_arg_desc, sdfg_arg_index)
 
         elif isinstance(param_type, ts.ScalarType):
             assert isinstance(sdfg_arg_desc, dace.data.Scalar)
@@ -203,20 +203,20 @@ def _parse_gt_connectivities(
             origin_size_param = next(iter(origin_size_arg.free_symbols))
             m = gtx_dace_args.CONNECTIVITY_INDENTIFIER_RE.match(arg_name)
             assert m is not None
-            conn = f"{_cb_neighbor_table}_{m[1]}"
-            code.append(f'{conn} = {_cb_offset_provider}["{m[1]}"]')
-            _update_sdfg_array_ptr(conn, code, sdfg_arg_index)
+            conn_arg = f"{_cb_neighbor_table}_{m[1]}"
+            code.append(f'{conn_arg} = {_cb_offset_provider}["{m[1]}"]')
+            _update_sdfg_array_ptr(code, conn_arg, sdfg_arg_index)
             _parse_gt_param(  # set the size in the horizontal dimension
                 param_name=origin_size_param,
                 param_type=gtx_dace_args.as_itir_type(gtx_dace_args.FIELD_SYMBOL_DTYPE),
-                arg=f"{conn}.__gt_buffer_info__.shape[0]",
+                arg=f"{conn_arg}.__gt_buffer_info__.shape[0]",
                 code=code,
                 sdfg_arglist=sdfg_arglist,
             )
             _update_sdfg_array_strides(
-                conn,
                 code,
                 sdfg_arglist,
+                conn_arg,
                 arg_desc,
                 sdfg_arg_index,
             )
@@ -273,9 +273,12 @@ def _create_sdfg_bindings(
             assert isinstance(param.type_, ts.DataType)
             _parse_gt_param(param.name, param.type_, arg, code, sdfg_arglist)
 
-        # In ICON4Py, or any driver code, if the scope of the grid fixture is at function
-        # level, it can happen that connectivity fields are reallocated during the application
-        # lifetime. This behavior has been observed in ICON4Py test sessions using MPI.
+        # In the regular case, the connectivity fields are allocated at the beginning
+        # of the application and then used during its entire lifetime and never reallocated.
+        # However, this might not be the case all the time, for example in unit tests
+        # where, due to limited lifetime of the fixtures, the connectivity fields
+        # might get reallocated. In order to avoid problems, we update the connectivity
+        # arrays as well in SDFG fastcall.
         _parse_gt_connectivities(code, sdfg_arglist)
 
     src = codegen.format_python_source(code.text)
