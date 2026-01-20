@@ -29,7 +29,7 @@ def convert_args(
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> stages.CompiledProgram:
     # Retieve metrics level from GT4Py environment variable.
-    collect_time = config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
+    collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
     collect_time_arg = np.array([1], dtype=np.float64)
     # We use the callback function provided by the compiled program to update the SDFG arglist.
     update_sdfg_call_args = functools.partial(

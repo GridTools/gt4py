@@ -19,7 +19,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
-from gt4py.next.instrumentation import _hook_machinery, metrics
+from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -53,17 +53,6 @@ def _init_async_compilation_pool() -> None:
 
 
 _init_async_compilation_pool()
-
-
-@_hook_machinery.EventHook
-def compile_variant_hook(
-    key: CompiledProgramsKey,
-    backend: gtx_backend.Backend,
-    program_definition: ffront_stages.ProgramDefinition,
-    compile_time_args: arguments.CompileTimeArgs,
-) -> None:
-    """Callback hook invoked before compiling a program variant."""
-    ...
 
 
 def wait_for_compilation() -> None:
@@ -274,7 +263,7 @@ class CompiledProgramsPool:
 
         try:
             program = self.compiled_programs[key]
-            if config.COLLECT_METRICS_LEVEL:
+            if metrics.is_level_enabled(metrics.MINIMAL):
                 metrics.set_current_source_key(self._metrics_key_from_pool_key(key))
 
             program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator]  # the Future case is handled below
@@ -430,7 +419,7 @@ class CompiledProgramsPool:
             raise ValueError(f"Program with key {key} already exists.")
 
         # If we are collecting metrics, create a new metrics entity for this compiled program
-        if config.COLLECT_METRICS_LEVEL:
+        if metrics.is_level_enabled(metrics.MINIMAL):
             metrics_source = metrics.set_current_source_key(self._metrics_key_from_pool_key(key))
             metrics_source.metadata |= dict(
                 name=self.definition_stage.definition.__name__,
@@ -453,7 +442,6 @@ class CompiledProgramsPool:
         compile_call = functools.partial(
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
         )
-        compile_variant_hook(key, self.backend, self.definition_stage, compile_time_args)
         if _async_compilation_pool is None:
             # synchronous compilation
             self.compiled_programs[key] = compile_call()

@@ -58,7 +58,7 @@ def convert_args(
         conn_args = extract_connectivity_args(offset_provider, device)
 
         opt_kwargs: dict[str, Any] = {}
-        if collect_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE):
+        if collect_metrics := metrics.is_level_enabled(metrics.PERFORMANCE):
             # If we are collecting metrics, we need to add the `exec_info` argument
             # to the `inp` call, which will be used to collect performance metrics.
             exec_info: dict[str, float] = {}

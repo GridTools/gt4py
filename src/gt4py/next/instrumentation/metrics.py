@@ -13,16 +13,16 @@ import collections
 import contextlib
 import contextvars
 import dataclasses
-import functools
 import itertools
 import json
 import numbers
 import pathlib
 import sys
+import time
 import types
 import typing
 from collections.abc import Callable, Mapping
-from typing import Generic, TypeVar, Protocol
+from typing import ClassVar
 
 import numpy as np
 
@@ -30,6 +30,9 @@ from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.eve.extended_typing import Any, Final
 from gt4py.next import config
 from gt4py.next.otf import arguments
+
+
+_NO_KEY_SET_MARKER_: Final[str] = sys.intern("@_NO_KEY_SET_MARKER_@")
 
 
 # Common metric names
@@ -47,7 +50,12 @@ VERBOSE: Final[int] = 50
 ALL: Final[int] = 100
 
 
-def is_level_enabled(level: int = MINIMAL) -> bool:
+def is_enabled() -> bool:
+    """Check if a given metrics collection level is enabled."""
+    return config.COLLECT_METRICS_LEVEL > DISABLED
+
+
+def is_level_enabled(level: int) -> bool:
     """Check if a given metrics collection level is enabled."""
     return config.COLLECT_METRICS_LEVEL >= level
 
@@ -139,7 +147,7 @@ _source_key_cvar: contextvars.ContextVar[str] = contextvars.ContextVar("source_k
 
 def is_current_source_key_set() -> bool:
     """Check if there is an on-going metrics collection."""
-    return _source_key_cvar.get(None) is not None
+    return _source_key_cvar.get(_NO_KEY_SET_MARKER_) is not _NO_KEY_SET_MARKER_
 
 
 def get_current_source_key() -> str:
@@ -149,7 +157,9 @@ def get_current_source_key() -> str:
 
 def set_current_source_key(key: str) -> Source:
     """Set the current source key for metrics collection."""
-    assert _source_key_cvar.get(None) is None, "A source key is already set."
+    assert _source_key_cvar.get(_NO_KEY_SET_MARKER_) is _NO_KEY_SET_MARKER_, (
+        "A source key is already set."
+    )
     _source_key_cvar.set(key)
     return sources[key]
 
@@ -180,11 +190,11 @@ class SourceKeyContextManager(contextlib.AbstractContextManager):
     """
 
     key: str | None = None
-    previous_cvar_token: contextvars.Token | None = dataclasses.field(default=None, init=False)
+    previous_cvar_token: contextvars.Token | None = dataclasses.field(init=False)
 
     def __enter__(self) -> None:
-        if is_level_enabled() and self.key is not None:
-            self.previous_cvar_token = _source_key_cvar.set(self.key)
+        if is_enabled():
+            self.previous_cvar_token = _source_key_cvar.set(self.key or _NO_KEY_SET_MARKER_)
         else:
             self.previous_cvar_token = None
 
@@ -198,13 +208,11 @@ class SourceKeyContextManager(contextlib.AbstractContextManager):
             _source_key_cvar.reset(self.previous_cvar_token)
 
 
-# collection_source = SourceContextManager
+metrics_context = SourceKeyContextManager
 
 
-StateT = TypeVar("StateT")
-
-
-class AbstractCollectorContextManager(contextlib.AbstractContextManager, Generic[StateT]):
+@dataclasses.dataclass(slots=True)
+class AbstractCollectorContextManager(contextlib.AbstractContextManager):
     """
     A context manager to handle metrics collection.
 
@@ -219,12 +227,6 @@ class AbstractCollectorContextManager(contextlib.AbstractContextManager, Generic
         of renewing the generator inside `contextlib.contextmanager`.
     """
 
-    __slots__ = ("key", "previous_cvar_token", "enter_state")
-
-    key: str | None
-    previous_cvar_token: contextvars.Token | None
-    enter_state: StateT | None
-
     @property
     @abc.abstractmethod
     def level(self) -> int: ...
@@ -233,18 +235,22 @@ class AbstractCollectorContextManager(contextlib.AbstractContextManager, Generic
     @abc.abstractmethod
     def metric_name(self) -> str: ...
 
-    @abc.abstractmethod
-    def enter_collection_mode(self) -> StateT: ...
+    enter_collection_callback: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
 
-    @abc.abstractmethod
-    def exit_collection_mode(self, enter_state: StateT) -> float: ...
+    exit_collection_callback: ClassVar[Callable[[float], float]] = staticmethod(
+        lambda enter_state: time.perf_counter() - enter_state
+    )
+
+    key: str | None = None
+    previous_cvar_token: contextvars.Token = dataclasses.field(init=False)
+    enter_state: float | None = dataclasses.field(init=False)
 
     def __enter__(self) -> None:
-        if is_level_enabled(self.level) and self.key is not None:
-            self.previous_cvar_token = _source_key_cvar.set(self.key)
-            self.enter_state = self.enter_collection_mode()
+        if is_level_enabled(self.level):
+            self.enter_state = self.enter_collection_callback()
+            self.previous_cvar_token = _source_key_cvar.set(self.key or _NO_KEY_SET_MARKER_)
         else:
-            self.previous_cvar_token = None
+            self.enter_state = None
 
     def __exit__(
         self,
@@ -252,11 +258,10 @@ class AbstractCollectorContextManager(contextlib.AbstractContextManager, Generic
         value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
-        if self.previous_cvar_token is not None:
+        if self.enter_state is not None:
             assert is_current_source_key_set() is True
-            assert self.enter_state is not None
-            get_current_source().metrics[self.metric_name].add_sample(
-                self.exit_collection_mode(self.enter_state)
+            sources[_source_key_cvar.get()].metrics[self.metric_name].add_sample(
+                self.exit_collection_callback(self.enter_state)
             )
             _source_key_cvar.reset(self.previous_cvar_token)
 

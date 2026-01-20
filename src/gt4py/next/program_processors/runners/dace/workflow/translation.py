@@ -268,7 +268,7 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         dace.Memlet(f"{output}[0]"),
     )
 
-    if (config.COLLECT_METRICS_LEVEL == metrics.GPU_TX_MARKERS) and gpu:
+    if metrics.is_level_enabled(metrics.GPU_TX_MARKERS) and gpu:
         sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
         for node, _ in sdfg.all_nodes_recursive():
             if isinstance(
