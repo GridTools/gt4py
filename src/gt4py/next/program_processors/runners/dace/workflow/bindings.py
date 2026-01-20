@@ -13,6 +13,7 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
+from gt4py.next import config
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.type_system import type_specifications as ts
@@ -277,9 +278,10 @@ def _create_sdfg_bindings(
         # of the application and then used during its entire lifetime and never reallocated.
         # However, this might not be the case all the time, for example in unit tests
         # where, due to limited lifetime of the fixtures, the connectivity fields
-        # might get reallocated. In order to avoid problems, we update the connectivity
-        # arrays as well in SDFG fastcall.
-        _parse_gt_connectivities(code, sdfg_arglist)
+        # might get reallocated. In such cases, we update the connectivity arrays
+        # as well in SDFG fastcall.
+        if not config.GRID_HAS_SESSION_LIFETIME:
+            _parse_gt_connectivities(code, sdfg_arglist)
 
     src = codegen.format_python_source(code.text)
     return stages.BindingSource(src, library_deps=tuple())
