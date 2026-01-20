@@ -248,7 +248,7 @@ def translate_as_fieldop(
         return translate_scan(node, ctx, sdfg_builder)
 
     if not isinstance(node.type, ts.FieldType):
-        raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
+        raise NotImplementedError("Unexpected 'as_fieldop' with tuple output in SDFG lowering.")
 
     # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)

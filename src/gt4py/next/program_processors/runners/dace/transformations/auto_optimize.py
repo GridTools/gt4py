@@ -487,6 +487,12 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
+        # NOTE: There is a Memlet caching issue at work here, see DaCe issue 1703 and
+        #   1708. Without clearing the cache, which is done through a side effect of
+        #   `to_json()`, running `propagate_memlets_sdfg()` would lead to an invalid
+        #   SDFG.
+        sdfg.to_json(hash=False)
+
         # Promote Maps. This will remove transients between 1D and 2D Maps, at the
         #  cost of more data loads from memory. Empirical observations have shown
         #  that this is beneficial; especially for Nabla4-type kernel in conjunction
@@ -559,18 +565,21 @@ def _gt_auto_process_top_level_maps(
             dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
 
-            sdfg.apply_transformations_repeated(
-                [
-                    # TODO(phimuell): The transformation is also active inside Maps.
-                    #   Which is against the description of this function, but it should
-                    #   not matter that much.
-                    gtx_transformations.SplitAccessNode(
-                        single_use_data=single_use_data,
-                    ),
-                    gtx_transformations.GT4PyMapBufferElimination(
-                        assume_pointwise=assume_pointwise,
-                    ),
-                ],
+            # Split the top level AccessNodes.
+            # NOTE: This function will also update `single_use_data`.
+            gtx_transformations.gt_split_access_nodes(
+                sdfg=sdfg,
+                validate=False,
+                validate_all=validate_all,
+                single_use_data=single_use_data,
+            )
+
+            # Perform buffer elimination.
+            # TODO(phimuell): Implement a faster matching.
+            sdfg.apply_transformations_once_everywhere(
+                gtx_transformations.GT4PyMapBufferElimination(
+                    assume_pointwise=assume_pointwise,
+                ),
                 validate=False,
                 validate_all=validate_all,
             )
