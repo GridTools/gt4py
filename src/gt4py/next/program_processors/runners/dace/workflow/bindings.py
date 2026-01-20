@@ -29,9 +29,7 @@ _cb_offset_provider: Final[str] = "offset_provider"
 def _update_sdfg_array_ptr(arg: str, code: codegen.TextBlock, sdfg_arg_index: int) -> None:
     code.append(f"assert field_utils.verify_device_field_type({arg}, {_cb_device})")
     code.append(f"assert isinstance({_cb_sdfg_call_args}[{sdfg_arg_index}], ctypes.c_void_p)")
-    code.append(f"{arg}_buffer_info = {arg}.__gt_buffer_info__")
-
-    code.append(f"{_cb_sdfg_call_args}[{sdfg_arg_index}].value = {arg}_buffer_info.data_ptr")
+    code.append(f"{_cb_sdfg_call_args}[{sdfg_arg_index}].value = {arg}.__gt_buffer_info__.data_ptr")
 
 
 def _update_sdfg_array_strides(
@@ -42,7 +40,7 @@ def _update_sdfg_array_strides(
     sdfg_arg_index: int,
 ) -> None:
     for i, array_stride in enumerate(sdfg_arg_desc.strides):
-        arg_stride = f"{arg}_buffer_info.elem_strides[{i}]"
+        arg_stride = f"{arg}.__gt_buffer_info__.elem_strides[{i}]"
         if isinstance(array_stride, int) or str(array_stride).isdigit():
             # The array stride is set to constant value in this dimension.
             code.append(
@@ -160,7 +158,7 @@ def _parse_gt_param(
                     if isinstance(array_size, int) or str(array_size).isdigit():
                         # The array shape in this dimension is set at compile-time.
                         code.append(
-                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}_buffer_info.shape[{i}]"
+                            f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.__gt_buffer_info__.shape[{i}]"
                         )
                     else:
                         # The array shape is defined as a sequence of expressions
@@ -199,10 +197,10 @@ def _parse_gt_connectivities(
         if gtx_dace_args.is_connectivity_identifier(arg_name):
             assert isinstance(arg_desc, dace.data.Array)
             assert len(arg_desc.shape) == 2
+            assert isinstance(arg_desc.shape[1], int) or str(arg_desc.shape[1]).isdigit()
             origin_size_arg = arg_desc.shape[0]
             assert len(origin_size_arg.free_symbols) == 1
             origin_size_param = next(iter(origin_size_arg.free_symbols))
-            assert isinstance(arg_desc.shape[1], int) or str(arg_desc.shape[1]).isdigit()
             m = gtx_dace_args.CONNECTIVITY_INDENTIFIER_RE.match(arg_name)
             assert m is not None
             conn = f"{_cb_neighbor_table}_{m[1]}"
@@ -211,12 +209,12 @@ def _parse_gt_connectivities(
             _parse_gt_param(  # set the size in the horizontal dimension
                 param_name=origin_size_param,
                 param_type=gtx_dace_args.as_itir_type(gtx_dace_args.FIELD_SYMBOL_DTYPE),
-                arg=f"{conn}_buffer_info.shape[0]",
+                arg=f"{conn}.__gt_buffer_info__.shape[0]",
                 code=code,
                 sdfg_arglist=sdfg_arglist,
             )
             _update_sdfg_array_strides(
-                arg_name,
+                conn,
                 code,
                 sdfg_arglist,
                 arg_desc,
