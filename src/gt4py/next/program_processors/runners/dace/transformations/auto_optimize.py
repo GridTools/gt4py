@@ -15,7 +15,7 @@ from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sdutils
-from dace.transformation import dataflow as dace_dataflow, pass_pipeline as dace_ppl
+from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -690,15 +690,9 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        dace_ppl.Pipeline(
-            [
-                gtx_transformations.GT4PyWriteBackBufferElimination(
-                    assume_pointwise=assume_pointwise,
-                )
-            ]
-        ).apply_pass(sdfg, {})
+        sdfg.apply_transformations_repeated(dace_dataflow.TaskletFusion, validate=True)
 
-        # TODO(phimuell): Figuring out if this is the correct location for doing it.
+        # TODO(phimuell): Figuring out if this is is the correct location for doing it.
         if GT4PyAutoOptHook.TopLevelDataFlowStep in optimization_hooks:
             optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowStep](sdfg)  # type: ignore[call-arg]
 
