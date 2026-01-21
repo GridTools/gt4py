@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import abc
 import collections
 import contextlib
 import contextvars
@@ -212,7 +211,7 @@ metrics_context = SourceKeyContextManager
 
 
 @dataclasses.dataclass(slots=True)
-class AbstractMetricsCollector(contextlib.AbstractContextManager):
+class BaseMetricsCollector(contextlib.AbstractContextManager):
     """
     A context manager to handle metrics collection.
 
@@ -227,21 +226,32 @@ class AbstractMetricsCollector(contextlib.AbstractContextManager):
         of renewing the generator inside `contextlib.contextmanager`.
     """
 
-    @property
-    @abc.abstractmethod
-    def level(self) -> int: ...
+    def __init_subclass__(
+        cls,
+        *,
+        level: int,
+        metric_name: str,
+        collect_enter_counter: Callable[[], float] | None = None,
+        collect_exit_counter: Callable[[], float] | None = None,
+        compute_metric: Callable[[float, float], float] | None = None,
+        **kwargs,
+    ) -> types.NoneType:
+        super(BaseMetricsCollector, cls).__init_subclass__(**kwargs)
+        cls.level = level
+        cls.metric_name = sys.intern(metric_name)
+        if collect_enter_counter is not None:
+            cls.collect_enter_counter = staticmethod(collect_enter_counter)
+        if collect_exit_counter is not None:
+            cls.collect_exit_counter = staticmethod(collect_exit_counter)
+        if compute_metric is not None:
+            cls.compute_metric = staticmethod(compute_metric)
 
-    @property
-    @abc.abstractmethod
-    def metric_name(self) -> str: ...
+    level: ClassVar[int]
+    metric_name: ClassVar[str]
 
     collect_enter_counter: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
     collect_exit_counter: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
     compute_metric: ClassVar[Callable[[float, float], float]] = staticmethod(operator.sub)
-
-    exit_collection_callback: ClassVar[Callable[[float], float]] = staticmethod(
-        lambda enter_state: time.perf_counter() - enter_state
-    )
 
     key: str | None = None
     previous_cvar_token: contextvars.Token | None = dataclasses.field(init=False)
@@ -249,8 +259,8 @@ class AbstractMetricsCollector(contextlib.AbstractContextManager):
 
     def __enter__(self) -> None:
         if is_level_enabled(self.level):
-            self.enter_counter = self.collect_enter_counter()  # type: ignore[misc] # mypy doesn't understand that this is a staticmethod
             self.previous_cvar_token = _source_key_cvar.set(self.key or _NO_KEY_SET_MARKER_)
+            self.enter_counter = self.collect_enter_counter()  # type: ignore[misc] # mypy doesn't understand that this is a staticmethod
         else:
             self.previous_cvar_token = None
 
@@ -262,11 +272,33 @@ class AbstractMetricsCollector(contextlib.AbstractContextManager):
     ) -> None:
         if self.previous_cvar_token is not None:
             assert is_current_source_key_set() is True
-            assert hasattr(self, "enter_state") and self.enter_counter is not None
+            assert hasattr(self, "enter_counter") and self.enter_counter is not None
             sources[_source_key_cvar.get()].metrics[self.metric_name].add_sample(
                 self.compute_metric(self.collect_exit_counter(), self.enter_counter)  # type: ignore[call-arg,misc] # mypy doesn't understand that this is a staticmethod
             )
             _source_key_cvar.reset(self.previous_cvar_token)
+
+
+def make_collector(
+    level: int,
+    metric_name: str,
+    *,
+    collect_enter_counter: Callable[[], float] | None = None,
+    collect_exit_counter: Callable[[], float] | None = None,
+    compute_metric: Callable[[float, float], float] | None = None,
+) -> type[BaseMetricsCollector]:
+    collector_kwds = dict(level=level, metric_name=metric_name) | {
+        key: value
+        for key in ["collect_enter_counter", "collect_exit_counter", "compute_metric"]
+        if (value := locals().get(key)) is not None
+    }
+
+    return types.new_class(
+        f"AutoMetricsCollectorFor_{metric_name}",
+        bases=(BaseMetricsCollector,),
+        kwds=collector_kwds,
+        exec_body=None,
+    )
 
 
 def dumps(metric_sources: Mapping[str, Source] | None = None) -> str:

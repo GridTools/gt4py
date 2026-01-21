@@ -18,7 +18,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Sequence
-from typing import Any, Final, Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -53,9 +53,9 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
-class ProgramCallMetricsCollector(metrics.AbstractMetricsCollector):
-    level: Final[int] = metrics.MINIMAL
-    metric_name: Final[str] = metrics.TOTAL_METRIC
+program_call_metrics_collector = metrics.make_collector(
+    level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
+)
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -267,7 +267,7 @@ class Program:
                 self.enable_jit if self.enable_jit is not None else config.ENABLE_JIT_DEFAULT
             )
 
-        with ProgramCallMetricsCollector():
+        with program_call_metrics_collector():
             if __debug__:
                 # TODO: remove or make dependency on self.past_stage optional
                 past_process_args._validate_args(
