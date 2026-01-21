@@ -690,10 +690,6 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        sdfg.apply_transformations_repeated(
-            dace_dataflow.TaskletFusion, validate=False, validate_all=validate_all
-        )
-
         # TODO(phimuell): Figuring out if this is is the correct location for doing it.
         if GT4PyAutoOptHook.TopLevelDataFlowStep in optimization_hooks:
             optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowStep](sdfg)  # type: ignore[call-arg]
@@ -752,36 +748,15 @@ def _gt_auto_process_dataflow_inside_maps(
     time, so the compiler will fully unroll them anyway.
     """
 
-    # Separate Tasklets into dependent and independent parts to promote data
-    #  reusability. It is important that this step has to be performed before
-    #  `TaskletFusion` is used.
-    if blocking_dims is not None and blocking_size > 0:
-        sdfg.apply_transformations_once_everywhere(
-            gtx_transformations.LoopBlocking(
-                blocking_size=blocking_size,
-                blocking_parameters=blocking_dims,
-                require_independent_nodes=blocking_only_if_independent_nodes,
-                promote_independent_memlets=promote_independent_memlets_for_blocking,
-                independent_node_threshold=blocking_independent_node_threshold,
-            ),
-            validate=False,
-            validate_all=validate_all,
-        )
-
-    # Merge Tasklets into bigger ones.
-    # NOTE: Empirical observation for Graupel have shown that this leads to an increase
-    #   in performance, however, it has to be run before `GT4PyMoveTaskletIntoMap`
-    #   (not fully clear why though, probably a compiler artefact) and as well as
-    #   `MoveDataflowIntoIfBody` (not fully clear either, it `TaskletFusion` makes
-    #   things simpler or prevent it from doing certain, negative, things).
-    # TODO(phimuell): Investigate more.
-    # TODO(phimuell): Restrict it to Tasklets only inside Maps.
-    if fuse_tasklets:
-        sdfg.apply_transformations_repeated(
-            dace_dataflow.TaskletFusion,
-            validate=False,
-            validate_all=validate_all,
-        )
+    # The SDFG might contain tasklets with no input connectors, which simply write
+    # a constant value into a scalar node. If these tasklets were moved into the map
+    # scope, they would require an empty memlet edge from MapEntry, for synchronization.
+    # Empty memlets are not properly handled in code generation, so it is better
+    # to avoid this pattern. Running `TaskletFusion` at this stage helps to inline
+    # these constant-write tasklets into compute-tasklets.
+    sdfg.apply_transformations_repeated(
+        dace_dataflow.TaskletFusion, validate=False, validate_all=validate_all
+    )
 
     # Constants (tasklets are needed to write them into a variable) should not be
     #  arguments to a kernel but be present inside the body.
