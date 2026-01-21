@@ -1170,7 +1170,7 @@ dependencies = [
 
 [[package]]
 name = "dace"
-version = "43!2026.1.13"
+version = "43!2026.1.21"
 source = { registry = "https://gridtools.github.io/pypi/" }
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -1197,7 +1197,7 @@ dependencies = [
     { name = "sympy" },
 ]
 wheels = [
-    { url = "https://gridtools.github.io/pypi/dace/dace-43!2026.1.13-py3-none-any.whl", hash = "sha256:0a0b6ea03254372043bd8c9532dffddfe336729efb9148195f2523d9aa8ed331" },
+    { url = "https://gridtools.github.io/pypi/dace/dace-43!2026.1.21-py3-none-any.whl", hash = "sha256:c72988e173bc07d59410fb32e7add2dbca498833e9e369fdff94e1971c5a6df5" },
 ]
 
 [[package]]
@@ -1719,7 +1719,7 @@ dace-cartesian = [
     { name = "dace", version = "1.0.2", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip#4a9f46027147a52e2b0ac9eedeb101c3ab27d0bf" } },
 ]
 dace-next = [
-    { name = "dace", version = "43!2026.1.13", source = { registry = "https://gridtools.github.io/pypi/" } },
+    { name = "dace", version = "43!2026.1.21", source = { registry = "https://gridtools.github.io/pypi/" } },
 ]
 dev = [
     { name = "atlas4py" },
@@ -1865,7 +1865,7 @@ build = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dace-cartesian = [{ name = "dace", git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip" }]
-dace-next = [{ name = "dace", specifier = "==43!2026.1.13", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
+dace-next = [{ name = "dace", specifier = "==43!2026.1.21", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
 dev = [
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
