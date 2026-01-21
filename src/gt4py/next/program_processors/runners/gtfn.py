@@ -72,8 +72,8 @@ def convert_args(
         )
 
         if collect_metrics:
-            metrics.get_current_source().metrics[metrics.COMPUTE_METRIC].add_sample(
-                exec_info["run_cpp_duration"]
+            metrics.add_sample_to_current_source(
+                metrics.COMPUTE_METRIC, exec_info["run_cpp_duration"]
             )
 
     return decorated_program

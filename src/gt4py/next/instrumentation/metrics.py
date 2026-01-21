@@ -123,13 +123,15 @@ class MetricsCollection(utils.CustomDefaultDictBase[str, Metric]):
         [0.1, 0.2]
     """
 
+    __slots__ = ()
+
     def value_factory(self, key: str) -> Metric:
         assert isinstance(key, str)
         return Metric(name=key)
 
 
 @dataclasses.dataclass(slots=True)
-class Source:
+class Source:  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
     """A source of metrics, typically associated with a program."""
 
     metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -169,11 +171,11 @@ def get_current_source() -> Source:
 
 def add_sample_to_current_source(metric_name: str, sample: float) -> None:
     """Add a sample to a metric in the current source."""
-    return get_current_source().metrics[metric_name].add_sample(sample)
+    return sources[_source_key_cvar.get()].metrics[metric_name].add_sample(sample)
 
 
 @dataclasses.dataclass(slots=True)
-class SourceKeyContextManager(contextlib.AbstractContextManager):
+class SourceKeyContextManager(contextlib.AbstractContextManager):  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
     """
     A context manager to handle metrics collection sources.
 
@@ -210,7 +212,7 @@ metrics_context = SourceKeyContextManager
 
 
 @dataclasses.dataclass(slots=True)
-class BaseMetricsCollector(contextlib.AbstractContextManager):
+class BaseMetricsCollector(contextlib.AbstractContextManager):  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
     """
     A context manager to handle metrics collection.
 

@@ -73,8 +73,6 @@ def convert_args(
         fun.fast_call()
 
         if collect_time:
-            metric_source = metrics.get_current_source()
-            assert metric_source is not None
-            metric_source.metrics[metrics.COMPUTE_METRIC].add_sample(collect_time_arg[0].item())
+            metrics.add_sample_to_current_source(metrics.COMPUTE_METRIC, collect_time_arg[0].item())
 
     return decorated_program
