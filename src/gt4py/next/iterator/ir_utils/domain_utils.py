@@ -51,7 +51,10 @@ class SymbolicRange:
         assert self.stop is not itir.InfinityLiteral.NEGATIVE
 
     def translate(self, distance: int) -> SymbolicRange:
-        return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
+        start = im.plus(self.start, distance)
+        # TODO(tehrengruber): temporary solution to avoid oob-access without concat_where
+        start = im.call("maximum")(0, start)
+        return SymbolicRange(start, im.plus(self.stop, distance))
 
     def empty(self) -> bool | None:
         if isinstance(self.start, itir.Literal) and isinstance(self.stop, itir.Literal):
