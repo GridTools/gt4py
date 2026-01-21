@@ -16,6 +16,7 @@ import dataclasses
 import itertools
 import json
 import numbers
+import operator
 import pathlib
 import sys
 import time
@@ -211,7 +212,7 @@ metrics_context = SourceKeyContextManager
 
 
 @dataclasses.dataclass(slots=True)
-class AbstractCollectorContextManager(contextlib.AbstractContextManager):
+class AbstractMetricsCollector(contextlib.AbstractContextManager):
     """
     A context manager to handle metrics collection.
 
@@ -234,7 +235,9 @@ class AbstractCollectorContextManager(contextlib.AbstractContextManager):
     @abc.abstractmethod
     def metric_name(self) -> str: ...
 
-    enter_collection_callback: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
+    collect_enter_counter: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
+    collect_exit_counter: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
+    compute_metric: ClassVar[Callable[[float, float], float]] = staticmethod(operator.sub)
 
     exit_collection_callback: ClassVar[Callable[[float], float]] = staticmethod(
         lambda enter_state: time.perf_counter() - enter_state
@@ -242,11 +245,11 @@ class AbstractCollectorContextManager(contextlib.AbstractContextManager):
 
     key: str | None = None
     previous_cvar_token: contextvars.Token | None = dataclasses.field(init=False)
-    enter_state: float | None = dataclasses.field(init=False)
+    enter_counter: float | None = dataclasses.field(init=False)
 
     def __enter__(self) -> None:
         if is_level_enabled(self.level):
-            self.enter_state = self.enter_collection_callback()
+            self.enter_counter = self.collect_enter_counter()  # type: ignore[misc] # mypy doesn't understand that this is a staticmethod
             self.previous_cvar_token = _source_key_cvar.set(self.key or _NO_KEY_SET_MARKER_)
         else:
             self.previous_cvar_token = None
@@ -259,9 +262,9 @@ class AbstractCollectorContextManager(contextlib.AbstractContextManager):
     ) -> None:
         if self.previous_cvar_token is not None:
             assert is_current_source_key_set() is True
-            assert self.enter_state is not None
+            assert hasattr(self, "enter_state") and self.enter_counter is not None
             sources[_source_key_cvar.get()].metrics[self.metric_name].add_sample(
-                self.exit_collection_callback(self.enter_state)
+                self.compute_metric(self.collect_exit_counter(), self.enter_counter)  # type: ignore[call-arg,misc] # mypy doesn't understand that this is a staticmethod
             )
             _source_key_cvar.reset(self.previous_cvar_token)
 

@@ -53,7 +53,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
-class ProgramCallMetricsCollector(metrics.AbstractCollectorContextManager):
+class ProgramCallMetricsCollector(metrics.AbstractMetricsCollector):
     level: Final[int] = metrics.MINIMAL
     metric_name: Final[str] = metrics.TOTAL_METRIC
 
