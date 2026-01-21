@@ -10,6 +10,7 @@ import enum
 import functools
 import os
 import platform
+import warnings
 from dataclasses import dataclass
 from typing import Literal, Tuple, Union
 
@@ -40,6 +41,28 @@ LITERAL_FLOAT_PRECISION = int(
     os.environ.get("GT4PY_LITERAL_FLOAT_PRECISION", default=_ARCHITECTURE_LITERAL_PRECISION)
 )
 """Default literal precision used for unspecific `float` types and casts."""
+
+
+def _check_boolean_env_var(name: str, default: bool) -> bool:
+    envvar = os.environ.get(name, default=default)
+    if type(envvar) is bool:
+        return envvar
+
+    if type(envvar) is str:
+        if envvar.lower() in ["true", "1"]:
+            return True
+        if envvar in ["false", "0"]:
+            return False
+
+    warnings.warn(
+        f"Could not match `{name}={envvar}` into a boolean value. Falling back to the default `{default}`.",
+        stacklevel=2,
+    )
+    return default
+
+
+FORCE_ANNOTATED_TEMPORARIES = _check_boolean_env_var("GT4PY_FORCE_ANNOTATED_TEMPORARIES", False)
+"""If True, forces all temporaries in stencils to have type annotations."""
 
 
 @enum.unique
@@ -123,6 +146,8 @@ class BuildOptions(AttributeClassLike):
     "Literal precision for `int` types and casts. Defaults to architecture precision unless overwritten by the environment variable `GT4PY_LITERAL_INT_PRECISION`."
     literal_float_precision = attribute(of=int, default=LITERAL_FLOAT_PRECISION)
     "Literal precision for `float` types and casts. Defaults to architecture precision unless overwritten by the environment variable `GT4PY_LITERAL_FLOAT_PRECISION`."
+    force_annotated_temporaries = attribute(of=bool, default=FORCE_ANNOTATED_TEMPORARIES)
+    "If True, enforce all temporaries to have type annotations. Defaults to False unless overwritten by the environment variable `GT4PY_FORCE_ANNOTATED_TEMPORARIES`."
 
     @property
     def qualified_name(self):
