@@ -15,7 +15,6 @@ from typing import Any
 import numpy as np
 import pytest
 
-from gt4py.next import config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import arguments
 
@@ -172,7 +171,6 @@ class TestBaseMetricsCollector:
             source = metrics.sources[key]
             assert "custom_metric" in source.metrics
             assert len(source.metrics["custom_metric"].samples) == 1
-            print(source.metrics["custom_metric"].samples[0])
             assert source.metrics["custom_metric"].samples[0] == 5.0
 
 

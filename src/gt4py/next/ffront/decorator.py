@@ -292,7 +292,6 @@ class Program:
                 # Metrics source key needs to be set here. Embedded programs
                 # don't have variants so there's no other place to do it.
                 if metrics.is_level_enabled(metrics.MINIMAL):
-                    # assert metrics_source is not None
                     metrics.set_current_source_key(
                         f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
                     )
