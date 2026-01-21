@@ -50,7 +50,7 @@ def convert_args(
             #   `fun.csdfg_args` is `None`
             # TODO(phimuell, edopao): Think about refactor the code such that the update
             #   of the argument vector is a Method of the `CompiledDaceProgram`.
-            update_sdfg_call_args(args, fun.csdfg_argv)  # type: ignore[arg-type]  # Will error out in first call.
+            update_sdfg_call_args(args, fun.csdfg_argv, offset_provider)  # type: ignore[arg-type]  # Will error out in first call.
 
         except TypeError:
             # First call. Construct the initial argument vector of the `CompiledDaceProgram`.
