@@ -18,7 +18,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import config
+from gt4py.next import common, config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
@@ -33,7 +33,13 @@ class CompiledDaceProgram(stages.CompiledProgram):
 
     # The compiled program contains a callable object to update the SDFG arguments list.
     update_sdfg_ctype_arglist: Callable[
-        [core_defs.DeviceType, Sequence[dace.dtypes.Data], Sequence[Any], MutableSequence[Any]],
+        [
+            core_defs.DeviceType,
+            Sequence[dace.dtypes.Data],
+            Sequence[Any],
+            MutableSequence[Any],
+            common.OffsetProvider,
+        ],
         None,
     ]
 
