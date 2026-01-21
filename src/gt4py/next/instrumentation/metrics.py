@@ -134,7 +134,6 @@ class Source:
 
     metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
     metrics: MetricsCollection = dataclasses.field(default_factory=MetricsCollection)
-    assigned_key: str | None = dataclasses.field(default=None, init=False)
 
 
 #: Global store for all measurements.
@@ -227,15 +226,15 @@ class BaseMetricsCollector(contextlib.AbstractContextManager):
     """
 
     def __init_subclass__(
-        cls,
+        cls: type[BaseMetricsCollector],
         *,
         level: int,
         metric_name: str,
         collect_enter_counter: Callable[[], float] | None = None,
         collect_exit_counter: Callable[[], float] | None = None,
         compute_metric: Callable[[float, float], float] | None = None,
-        **kwargs,
-    ) -> types.NoneType:
+        **kwargs: Any,
+    ) -> None:
         super(BaseMetricsCollector, cls).__init_subclass__(**kwargs)
         cls.level = level
         cls.metric_name = sys.intern(metric_name)
