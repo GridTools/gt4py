@@ -289,7 +289,7 @@ class Program:
                     stacklevel=2,
                 )
 
-                # Metrics source key needs to be setup here, since embedded programs
+                # Metrics source key needs to be set here. Embedded programs
                 # don't have variants so there's no other place to do it.
                 if metrics.is_level_enabled(metrics.MINIMAL):
                     # assert metrics_source is not None

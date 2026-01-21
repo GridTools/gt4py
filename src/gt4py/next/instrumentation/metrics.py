@@ -314,16 +314,17 @@ def make_collector(
     Returns:
         A new subclass of `BaseMetricsCollector` configured with the provided parameters.
     """
-    collector_kwds = dict(level=level, metric_name=metric_name) | {
-        key: value
-        for key in ["collect_enter_counter", "collect_exit_counter", "compute_metric"]
-        if (value := locals().get(key)) is not None
-    }
 
     return types.new_class(
         f"AutoMetricsCollectorFor_{metric_name}",
         bases=(BaseMetricsCollector,),
-        kwds=collector_kwds,
+        kwds=dict(
+            level=level,
+            metric_name=metric_name,
+            collect_enter_counter=collect_enter_counter,
+            collect_exit_counter=collect_exit_counter,
+            compute_metric=compute_metric,
+        ),
         exec_body=None,
     )
 
