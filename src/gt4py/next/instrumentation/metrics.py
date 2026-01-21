@@ -49,8 +49,8 @@ VERBOSE: Final[int] = 50
 ALL: Final[int] = 100
 
 
-def is_enabled() -> bool:
-    """Check if a given metrics collection level is enabled."""
+def is_any_level_enabled() -> bool:
+    """Check if any metrics collection level is enabled."""
     return config.COLLECT_METRICS_LEVEL > DISABLED
 
 
@@ -60,7 +60,7 @@ def is_level_enabled(level: int) -> bool:
 
 
 def get_current_level() -> int:
-    """Retrieve the current metrics collection level from the configuration."""
+    """Retrieve the current metrics collection level (from the configuration module)."""
     return config.COLLECT_METRICS_LEVEL
 
 
@@ -141,17 +141,17 @@ class Source:  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/pyt
 #: Global store for all measurements.
 sources: collections.defaultdict[str, Source] = collections.defaultdict(Source)
 
-# Context variables storing the active source keys.
+# Context variable storing the active source key.
 _source_key_cvar: contextvars.ContextVar[str] = contextvars.ContextVar("source_key")
 
 
 def is_current_source_key_set() -> bool:
-    """Check if there is an on-going metrics collection."""
+    """Check if there is a source key set for metrics collection."""
     return _source_key_cvar.get(_NO_KEY_SET_MARKER_) is not _NO_KEY_SET_MARKER_
 
 
 def get_current_source_key() -> str:
-    """Retrieve the current source key for metrics collection."""
+    """Retrieve the current source key for metrics collection (it must be set)."""
     return _source_key_cvar.get()
 
 
@@ -165,35 +165,33 @@ def set_current_source_key(key: str) -> Source:
 
 
 def get_current_source() -> Source:
-    """Retrieve the active metrics collection source."""
+    """Retrieve the active metrics collection source (a valid source key must be set)."""
     return sources[_source_key_cvar.get()]
 
 
 def add_sample_to_current_source(metric_name: str, sample: float) -> None:
-    """Add a sample to a metric in the current source."""
+    """Add a sample to a metric in the current source (a valid source key must be set)."""
     return sources[_source_key_cvar.get()].metrics[metric_name].add_sample(sample)
 
 
 @dataclasses.dataclass(slots=True)
 class SourceKeyContextManager(contextlib.AbstractContextManager):  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
     """
-    A context manager to handle metrics collection sources.
+    A context manager to handle metrics collection source keys.
 
     When entering this context manager, it sets up a new source key for collection
     of metrics in a module contextvar. Upon exiting the context, it resets the
     contextvar to its previous state.
-
-    Note:
-        This is implemented as a context manager class instead of a generator
-        function with `@contextlib.contextmanager` to avoid the extra overhead
-        of renewing the generator inside `contextlib.contextmanager`.
     """
 
     key: str | None = None
     previous_cvar_token: contextvars.Token | None = dataclasses.field(init=False)
 
+    # This class is implemented as a context manager class instead of a generator
+    # function with `@contextlib.contextmanager` to avoid the extra overhead
+    # of renewing the generator inside `contextlib.contextmanager`.
     def __enter__(self) -> None:
-        if is_enabled():
+        if is_any_level_enabled():
             self.previous_cvar_token = _source_key_cvar.set(self.key or _NO_KEY_SET_MARKER_)
         else:
             self.previous_cvar_token = None
@@ -216,15 +214,14 @@ class BaseMetricsCollector(contextlib.AbstractContextManager):  # type: ignore[m
     """
     A context manager to handle metrics collection.
 
-    This context manager sets up a new `SourceHandler` for collecting metrics
-    in a module contextvar when entering the context. Upon exiting the context,
-    it resets the contextvar to its previous state and checks that the collected
-    metrics have a proper form.
+    This is a base class for creating metrics collectors that measure
+    specific metrics during the execution of a code block. It provides
+    a convenient interface for managing the lifecycle of metrics collection.
 
-    Note:
-        This is implemented as a context manager class instead of a generator
-        function with `@contextlib.contextmanager` to avoid the extra overhead
-        of renewing the generator inside `contextlib.contextmanager`.
+    Subclasses need to define the `level` and `metric_name` attributes, and,
+    optionally override the methods for collecting counters and computing
+    the metric. This class offers a simple way to customize this class variables
+    accepting them as keyword arguments when creating the subclass.
     """
 
     def __init_subclass__(
@@ -247,13 +244,16 @@ class BaseMetricsCollector(contextlib.AbstractContextManager):  # type: ignore[m
         if compute_metric is not None:
             cls.compute_metric = staticmethod(compute_metric)
 
+    # Subclass must define these class variables
     level: ClassVar[int]
     metric_name: ClassVar[str]
 
+    # Default implementations for these methods can be overridden by subclasses
     collect_enter_counter: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
     collect_exit_counter: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
     compute_metric: ClassVar[Callable[[float, float], float]] = staticmethod(operator.sub)
 
+    # Instance state
     key: str | None = None
     previous_cvar_token: contextvars.Token | None = dataclasses.field(init=False)
     enter_counter: float | None = dataclasses.field(init=False)
@@ -288,6 +288,22 @@ def make_collector(
     collect_exit_counter: Callable[[], float] | None = None,
     compute_metric: Callable[[float, float], float] | None = None,
 ) -> type[BaseMetricsCollector]:
+    """
+    Create a custom metrics collector class.
+
+    This function generates a new subclass of `BaseMetricsCollector` with
+    the specified configuration for metrics collection.
+
+    Args:
+        level: The metrics collection level.
+        metric_name: The name of the metric to be collected.
+        collect_enter_counter: Optional function to collect the enter counter.
+        collect_exit_counter: Optional function to collect the exit counter.
+        compute_metric: Optional function to compute the metric from the counters.
+
+    Returns:
+        A new subclass of `BaseMetricsCollector` configured with the provided parameters.
+    """
     collector_kwds = dict(level=level, metric_name=metric_name) | {
         key: value
         for key in ["collect_enter_counter", "collect_exit_counter", "compute_metric"]
