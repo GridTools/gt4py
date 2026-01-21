@@ -156,7 +156,17 @@ def get_current_source_key() -> str:
 
 
 def set_current_source_key(key: str) -> Source:
-    """Set the current source key for metrics collection."""
+    """
+    Set the current source key for metrics collection.
+
+    It must be called only when no source key is set (or the same key is already set).
+
+    Args:
+        key: The source key to set.
+
+    Returns:
+        The `Source` object associated with the given key.
+    """
     assert _source_key_cvar.get(_NO_KEY_SET_MARKER_) in {key, _NO_KEY_SET_MARKER_}, (
         "A different source key has been already set."
     )
