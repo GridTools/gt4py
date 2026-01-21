@@ -807,10 +807,7 @@ def gt_remove_trivial_gpu_maps(
                 return False
             if _map.range[0][0] != _map.range[0][1]:
                 return False
-            if _map.schedule not in [
-                dace.dtypes.ScheduleType.GPU_Device,
-                dace.dtypes.ScheduleType.GPU_Default,
-            ]:
+            if _map.schedule != dace.dtypes.ScheduleType.GPU_Device:
                 return False
         return True
 
@@ -941,10 +938,7 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         # Check if only GPU maps are involved (this is more a testing debug feature).
         if self.only_gpu_maps:
             for map_to_check in [trivial_map, second_map]:
-                if map_to_check.schedule not in [
-                    dace.dtypes.ScheduleType.GPU_Device,
-                    dace.dtypes.ScheduleType.GPU_Default,
-                ]:
+                if map_to_check.schedule != dace.dtypes.ScheduleType.GPU_Device:
                     return False
 
         # Now we check if the two maps can be fused together. For that we have to
