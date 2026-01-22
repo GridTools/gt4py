@@ -752,6 +752,13 @@ def _gt_auto_process_dataflow_inside_maps(
             validate_all=validate_all,
         )
 
+    # Let's continue to see what happens if we now inline again.
+    sdfg.apply_transformations_repeated(
+        dace_dataflow.TaskletFusion,
+        validate=False,
+        validate_all=validate_all,
+    )
+
     return sdfg
 
 
