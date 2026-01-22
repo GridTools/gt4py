@@ -1033,34 +1033,62 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
-        cond_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)
+        if len(node.args) == 3 and not isinstance(node.args[0].type, ts.TupleType):
+            # classic case: concat_where(condition, true_branch, false_branch)
+            conditions = [node.args[0].type]
+            values = [node.args[1].type, node.args[2].type]
+        else:
+            # extended case: concat_where((cond1, val1), (cond2, val2), ..., default)
+            conditions = []
+            values = []
 
-        assert isinstance(cond_type, ts.DomainType)
+            for pair_arg in node.args[:-1]:
+                pair_type = pair_arg.type
+                assert isinstance(pair_type, ts.TupleType) and len(pair_type.types) == 2, (
+                    f"Each condition-value pair must be a 2-tuple, got {pair_type}"
+                )
+
+                cond_type, value_type = pair_type.types
+                assert isinstance(cond_type, ts.DomainType), (
+                    f"Condition must be a DomainType, got {cond_type}"
+                )
+
+                conditions.append(cond_type)
+                values.append(value_type)
+
+            values.append(node.args[-1].type)
+
+        assert all(isinstance(c, ts.DomainType) for c in conditions)
+
         assert all(
             isinstance(el, (ts.FieldType, ts.ScalarType))
-            for arg in (true_branch_type, false_branch_type)
-            for el in type_info.primitive_constituents(arg)
+            for value_type in values
+            for el in type_info.primitive_constituents(value_type)
         )
 
         @utils.tree_map(
             collection_type=ts.TupleType,
             result_collection_constructor=lambda _, elts: ts.TupleType(types=list(elts)),
         )
-        def deduce_return_type(
-            tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
-        ) -> ts.FieldType:
-            if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
+        def deduce_return_type(*value_types: ts.FieldType | ts.ScalarType) -> ts.FieldType:
+            dtypes = [type_info.extract_dtype(vt) for vt in value_types]
+            if not all(dtype == dtypes[0] for dtype in dtypes):
                 raise errors.DSLError(
                     node.location,
-                    f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'.",
+                    f"All field arguments must be of same dtype, got {dtypes}.",
                 )
-            return_dims = promote_dims(
-                cond_type.dims, type_info.extract_dims(type_info.promote(tb, fb))
-            )
-            return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
+
+            all_dims = [c.dims for c in conditions]
+            all_dims += [type_info.extract_dims(vt) for vt in value_types]
+
+            return_dims = all_dims[0]
+            for dims in all_dims[1:]:
+                return_dims = promote_dims(return_dims, dims)
+
+            return_type = ts.FieldType(dims=return_dims, dtype=dtypes[0])
             return return_type
 
-        return_type = deduce_return_type(true_branch_type, false_branch_type)
+        return_type = deduce_return_type(*values)
 
         return foast.Call(
             func=node.func,

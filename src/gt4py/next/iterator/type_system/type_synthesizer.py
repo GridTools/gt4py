@@ -264,8 +264,25 @@ def index(arg: ts.DimensionType) -> ts.FieldType:
 
 
 @_register_builtin_type_synthesizer
-def concat_where(
-    domain: ts.DomainType,
+def concat_where(first_arg, *args):  # TODO: fix annotations
+    """
+    classic form: (domain, true_field, false_field)
+    extended form: (domain, (cond1, val1), ..., default)
+    """
+    if isinstance(first_arg, (ts.DomainType, ts.DeferredType)) and len(args) == 2:
+        true_field, false_field = args
+        return _concat_where_type_classic(first_arg, true_field, false_field)
+    else:
+        *pairs, default = (first_arg, *args)
+        result = default
+        for pair in reversed(pairs):
+            cond, value = pair
+            result = _concat_where_type_classic(cond, value, result)
+        return result
+
+
+def _concat_where_type_classic(
+    domain: ts.DomainType | ts.DeferredType,
     true_field: ts.FieldType | ts.TupleType | ts.DeferredType,
     false_field: ts.FieldType | ts.TupleType | ts.DeferredType,
 ) -> ts.FieldType | ts.TupleType | ts.DeferredType:
@@ -277,7 +294,7 @@ def concat_where(
         result_collection_constructor=lambda _, elts: ts.TupleType(types=list(elts)),
     )
     def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
-        if any(isinstance(b, ts.DeferredType) for b in [tb, fb]):
+        if any(isinstance(b, ts.DeferredType) for b in [domain, tb, fb]):
             return ts.DeferredType(constraint=ts.FieldType)
 
         tb_dtype, fb_dtype = (type_info.extract_dtype(b) for b in [tb, fb])
@@ -290,8 +307,7 @@ def concat_where(
         return_dims = common.promote_dims(
             domain.dims, type_info.extract_dims(type_info.promote(tb, fb))
         )
-        return_type = ts.FieldType(dims=return_dims, dtype=dtype)
-        return return_type
+        return ts.FieldType(dims=return_dims, dtype=dtype)
 
     return deduce_return_type(true_field, false_field)
 

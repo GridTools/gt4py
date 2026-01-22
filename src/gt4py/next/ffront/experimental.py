@@ -6,11 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Tuple
+from typing import Tuple, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset, WhereBuiltinFunction
+from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset, WhereBuiltInFunction
 
 
 @BuiltInFunction
@@ -18,12 +18,21 @@ def as_offset(offset_: FieldOffset, field: common.Field, /) -> common.Connectivi
     raise NotImplementedError()
 
 
-@WhereBuiltinFunction
-def concat_where(
-    cond: common.Domain,
-    true_field: common.Field | core_defs.ScalarT | Tuple,
-    false_field: common.Field | core_defs.ScalarT | Tuple,
-    /,
+@WhereBuiltInFunction
+def concat_where(  # TODO: support variable argument numbers
+    first_arg: Union[common.Domain, tuple[common.Domain, common.Field | core_defs.ScalarT | Tuple]],
+    true_field: common.Domain
+    | common.Field
+    | core_defs.ScalarT
+    | Tuple
+    | tuple[common.Domain, common.Field | core_defs.ScalarT | Tuple],
+    false_field: common.Domain
+    | common.Field
+    | core_defs.ScalarT
+    | Tuple
+    | tuple[common.Domain, common.Field | core_defs.ScalarT | Tuple],
+    # further_field: common.Domain | common.Field | core_defs.ScalarT | Tuple | tuple[common.Domain, common.Field | core_defs.ScalarT | Tuple],
+    # *extra_pairs,  # TODO: this doesn't seem to work
 ) -> common.Field | Tuple:
     """
     Concatenates two field fields based on a 1D mask.

@@ -239,7 +239,10 @@ def test_concat_where_invalid_dtype():
 
     with pytest.raises(
         errors.DSLError,
-        match=re.escape("Field arguments must be of same dtype, got 'float64' != 'int32'."),
+        match=re.escape(
+            "All field arguments must be of same dtype, "
+            "got [ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None), ScalarType(kind=<ScalarKind.INT32: 6>, shape=None)]."
+        ),
     ):
         _ = FieldOperatorParser.apply_to_function(domain_comparison)
 
