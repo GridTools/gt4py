@@ -15,6 +15,7 @@ from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sdutils
+from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -674,13 +675,7 @@ def _gt_auto_process_dataflow_inside_maps(
     time, so the compiler will fully unroll them anyway.
     """
 
-    # Constants (tasklets are needed to write them into a variable) should not be
-    #  arguments to a kernel but be present inside the body.
-    sdfg.apply_transformations_once_everywhere(
-        gtx_transformations.GT4PyMoveTaskletIntoMap,
-        validate=False,
-        validate_all=validate_all,
-    )
+    # TODO(phimuell): Find out if needed.
     gtx_transformations.gt_simplify(
         sdfg,
         skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
@@ -736,6 +731,20 @@ def _gt_auto_process_dataflow_inside_maps(
             validate=False,
             validate_all=validate_all,
         )
+
+    sdfg.apply_transformations_repeated(
+        dace_dataflow.TaskletFusion,
+        validate=False,
+        validate_all=validate_all,
+    )
+
+    # Constants (tasklets are needed to write them into a variable) should not be
+    #  arguments to a kernel but be present inside the body.
+    sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.GT4PyMoveTaskletIntoMap,
+        validate=False,
+        validate_all=validate_all,
+    )
 
     return sdfg
 
