@@ -27,6 +27,7 @@ from .gpu_utils import (
     gt_set_gpu_blocksize,
 )
 from .inline_fuser import inline_dataflow_into_map
+from .kill_aliasing_scalars import KillAliasingScalars
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
 from .map_fusion import (
