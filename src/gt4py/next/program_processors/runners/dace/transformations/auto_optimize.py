@@ -708,13 +708,6 @@ def _gt_auto_process_dataflow_inside_maps(
         validate=False,
         validate_all=validate_all,
     )
-    # TODO(phimuell): figuring out if this is needed?
-    gtx_transformations.gt_simplify(
-        sdfg,
-        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
-        validate=False,
-        validate_all=validate_all,
-    )
 
     # Move dataflow into the branches of the `if` such that they are only evaluated
     #  if they are needed. Important to call it repeatedly.
@@ -731,11 +724,11 @@ def _gt_auto_process_dataflow_inside_maps(
     )
 
     # We also see a slowdown if this is at the end. Let's see if it also work here.
-    sdfg.apply_transformations_repeated(
-        dace_dataflow.TaskletFusion,
-        validate=False,
-        validate_all=validate_all,
-    )
+    #sdfg.apply_transformations_repeated(
+    #    dace_dataflow.TaskletFusion,
+    #    validate=False,
+    #    validate_all=validate_all,
+    #)
 
     gtx_transformations.gt_simplify(
         sdfg,
