@@ -189,9 +189,10 @@ class SourceKeyContextManager(contextlib.AbstractContextManager):  # type: ignor
     """
     A context manager to handle metrics collection source keys.
 
-    When entering this context manager, it sets up a new source key for collection
-    of metrics in a module contextvar. Upon exiting the context, it resets the
-    contextvar to its previous state.
+    When entering this context manager it saves the current source key
+    for metrics collection and sets the new source key if provided, or
+    a default marker indicating no key is set. Upon exiting the context,
+    it resets the source key to its previous state.
     """
 
     key: str | None = None
@@ -262,6 +263,7 @@ class BaseMetricsCollector(contextlib.AbstractContextManager):  # type: ignore[m
     collect_enter_counter: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
     collect_exit_counter: ClassVar[Callable[[], float]] = staticmethod(time.perf_counter)
     compute_metric: ClassVar[Callable[[float, float], float]] = staticmethod(operator.sub)
+    #: compute_metric(exit_counter, enter_counter) -> metric_value
 
     # Instance state
     key: str | None = None
