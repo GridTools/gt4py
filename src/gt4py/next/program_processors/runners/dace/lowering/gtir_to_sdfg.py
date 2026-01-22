@@ -31,7 +31,11 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
+from gt4py.next.iterator.transforms import (
+    inline_literal,
+    prune_casts as ir_prune_casts,
+    symbol_ref_utils,
+)
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
@@ -1338,6 +1342,7 @@ def build_sdfg_from_gtir(
     if ir.declarations:
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
+    ir = inline_literal.InlineLiteral().visit(ir)
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
 
