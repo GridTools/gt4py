@@ -696,6 +696,12 @@ def _gt_auto_process_dataflow_inside_maps(
             validate_all=validate_all,
         )
 
+    sdfg.apply_transformations_repeated(
+        dace_dataflow.TaskletFusion,
+        validate=False,
+        validate_all=validate_all,
+    )
+
     # Move dataflow into the branches of the `if` such that they are only evaluated
     #  if they are needed. Important to call it repeatedly.
     # TODO(phimuell): It is unclear if `MoveDataflowIntoIfBody` should be called
@@ -731,12 +737,6 @@ def _gt_auto_process_dataflow_inside_maps(
             validate=False,
             validate_all=validate_all,
         )
-
-    sdfg.apply_transformations_repeated(
-        dace_dataflow.TaskletFusion,
-        validate=False,
-        validate_all=validate_all,
-    )
 
     # Constants (tasklets are needed to write them into a variable) should not be
     #  arguments to a kernel but be present inside the body.
