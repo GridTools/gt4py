@@ -17,8 +17,6 @@ class ReplaceLiterals(eve.PreserveLocationVisitor, eve.NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type", "domain")
 
     def visit_FunCall(self, node: ir.FunCall, *, symbol_map: Mapping[str, ir.Literal]):
-        node = self.generic_visit(node, symbol_map=symbol_map)
-
         if cpm.is_call_to(node, "deref"):
             assert len(node.args) == 1
             if (
@@ -26,23 +24,38 @@ class ReplaceLiterals(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 and (symbol_name := str(node.args[0].id)) in symbol_map
             ):
                 return symbol_map[symbol_name]
-        return node
+
+        return self.generic_visit(node, symbol_map=symbol_map)
+
+    def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Mapping[str, ir.Literal]):
+        return symbol_map.get(str(node.id), node)
 
 
 class InlineLiteral(eve.NodeTranslator):
-    """Inline literal values (constants) into the lambda expression of field operators."""
+    """Inline literal arguments (constants) of field operators into the lambda expression."""
 
     PRESERVED_ANNEX_ATTRS = ("domain", "type")
 
     def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
         node = self.generic_visit(node)
 
-        if cpm.is_applied_as_fieldop(node) and isinstance(node.fun.args[0], ir.Lambda):
-            lambda_node = node.fun.args[0]
-            symbol_map = {}
-            fun_args = []
+        if cpm.is_applied_as_fieldop(node):
+            assert len(node.fun.args) in {1, 2}
+
             lambda_params = []
-            for lambda_param, fun_arg in zip(lambda_node.params, node.args, strict=True):
+            if isinstance(node.fun.args[0], ir.Lambda):
+                lambda_node = node.fun.args[0]
+            elif cpm.is_call_to(node.fun.args[0], "scan"):
+                assert isinstance(node.fun.args[0].args[0], ir.Lambda)
+                lambda_node = node.fun.args[0].args[0]
+                lambda_params.append(lambda_node.params[0])
+            else:
+                return node
+
+            fun_args = []
+            symbol_map = {}
+            pstart = len(lambda_params)
+            for lambda_param, fun_arg in zip(lambda_node.params[pstart:], node.args, strict=True):
                 if isinstance(fun_arg, ir.Literal):
                     symbol_name = str(lambda_param.id)
                     symbol_map[symbol_name] = fun_arg
@@ -51,9 +64,16 @@ class InlineLiteral(eve.NodeTranslator):
                     lambda_params.append(lambda_param)
 
             if symbol_map:
+                domain = node.fun.args[1] if len(node.fun.args) == 2 else None
                 lambda_expr = ReplaceLiterals().visit(lambda_node.expr, symbol_map=symbol_map)
-                return im.as_fieldop(im.lambda_(*lambda_params)(lambda_expr), node.fun.args[1])(*fun_args)
-
+                lambda_node = im.lambda_(*lambda_params)(lambda_expr)
+                if isinstance(node.fun.args[0], ir.Lambda):
+                    return im.as_fieldop(lambda_node, domain)(*fun_args)
+                else:
+                    scan_expr = im.scan(
+                        lambda_node, node.fun.args[0].args[1], node.fun.args[0].args[2]
+                    )
+                    return im.as_fieldop(scan_expr, domain)(*fun_args)
         return node
 
     @classmethod
