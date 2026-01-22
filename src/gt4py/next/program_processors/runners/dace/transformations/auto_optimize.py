@@ -688,6 +688,13 @@ def _gt_auto_process_dataflow_inside_maps(
             validate_all=validate_all,
         )
 
+    # Empirical observation in MuPhys have shown that running `TaskletFusion` increases
+    #  performance quite drastically. Thus it was added here. However, to ensure
+    #  that `LoopBlocking` still works, i.e. independent and dependent Tasklets are
+    #  not mixed it must run _after_ `LoopBlocking`. Furthermore, it has been shown
+    #  that it has to run _before_ `GT4PyMoveTaskletIntoMap`. The reasons are not
+    #  clear but it can be measured.
+    # TODO(phimuell): Restrict it to Tasklets only inside Maps.
     sdfg.apply_transformations_repeated(
         dace_dataflow.TaskletFusion,
         validate=False,
@@ -701,8 +708,13 @@ def _gt_auto_process_dataflow_inside_maps(
         validate=False,
         validate_all=validate_all,
     )
-
-    # TODO(phimuell): Do we need a simplify here.
+    # TODO(phimuell): figuring out if this is needed?
+    gtx_transformations.gt_simplify(
+        sdfg,
+        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
+        validate=False,
+        validate_all=validate_all,
+    )
 
     # Move dataflow into the branches of the `if` such that they are only evaluated
     #  if they are needed. Important to call it repeatedly.
