@@ -15,6 +15,7 @@ from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sdutils
+from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -673,6 +674,16 @@ def _gt_auto_process_dataflow_inside_maps(
     over a constant range, e.g. the number of neighbours, which is known at compile
     time, so the compiler will fully unroll them anyway.
     """
+
+    # The SDFG might contain tasklets with no input connectors, which simply write
+    # a constant value into a scalar node. If these tasklets were moved into the map
+    # scope, they would require an empty memlet edge from MapEntry, for synchronization.
+    # Empty memlets are not properly handled in code generation, so it is better
+    # to avoid this pattern. Running `TaskletFusion` at this stage helps to inline
+    # these constant-write tasklets into compute-tasklets.
+    sdfg.apply_transformations_repeated(
+        dace_dataflow.TaskletFusion, validate=False, validate_all=validate_all
+    )
 
     # Constants (tasklets are needed to write them into a variable) should not be
     #  arguments to a kernel but be present inside the body.
