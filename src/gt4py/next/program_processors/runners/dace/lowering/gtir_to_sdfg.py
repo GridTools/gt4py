@@ -1342,9 +1342,9 @@ def build_sdfg_from_gtir(
     if ir.declarations:
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
+    ir = inline_literal.InlineLiteral().visit(ir)
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
-    ir = inline_literal.InlineLiteral().visit(ir)
 
     # DaCe requires C-compatible strings for the names of data containers,
     # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name

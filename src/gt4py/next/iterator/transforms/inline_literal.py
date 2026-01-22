@@ -30,15 +30,14 @@ class ReplaceLiterals(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
 
 class InlineLiteral(eve.NodeTranslator):
-    """Inline literal values (constants) into lambda expressions."""
+    """Inline literal values (constants) into the lambda expression of field operators."""
 
     PRESERVED_ANNEX_ATTRS = ("domain", "type")
 
     def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
         node = self.generic_visit(node)
 
-        if cpm.is_applied_as_fieldop(node):
-            assert isinstance(node.fun.args[0], ir.Lambda)
+        if cpm.is_applied_as_fieldop(node) and isinstance(node.fun.args[0], ir.Lambda):
             lambda_node = node.fun.args[0]
             symbol_map = {}
             fun_args = []
@@ -53,7 +52,7 @@ class InlineLiteral(eve.NodeTranslator):
 
             if symbol_map:
                 lambda_expr = ReplaceLiterals().visit(lambda_node.expr, symbol_map=symbol_map)
-                return im.as_fieldop(im.lambda_(*lambda_params)(lambda_expr))(*fun_args)
+                return im.as_fieldop(im.lambda_(*lambda_params)(lambda_expr), node.fun.args[1])(*fun_args)
 
         return node
 
