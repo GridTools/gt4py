@@ -688,26 +688,6 @@ def _gt_auto_process_dataflow_inside_maps(
             validate_all=validate_all,
         )
 
-    # Move dataflow into the branches of the `if` such that they are only evaluated
-    #  if they are needed. Important to call it repeatedly.
-    # TODO(phimuell): It is unclear if `MoveDataflowIntoIfBody` should be called
-    #   before or after `LoopBlocking`. In cases where the condition is `False`
-    #   most of the times calling it before is better, but if the condition is
-    #   `True` then this order is better. Solve that issue.
-    sdfg.apply_transformations_repeated(
-        gtx_transformations.MoveDataflowIntoIfBody(
-            ignore_upstream_blocks=False,
-        ),
-        validate=False,
-        validate_all=validate_all,
-    )
-    gtx_transformations.gt_simplify(
-        sdfg,
-        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
-        validate=False,
-        validate_all=validate_all,
-    )
-
     # Empirical observation in MuPhys have shown that running `TaskletFusion` increases
     #  performance quite drastically. Thus it was added here. However, to ensure
     #  that `LoopBlocking` still works, i.e. independent and dependent Tasklets are
@@ -729,6 +709,26 @@ def _gt_auto_process_dataflow_inside_maps(
         validate_all=validate_all,
     )
     # TODO(phimuell): figuring out if this is needed?
+    gtx_transformations.gt_simplify(
+        sdfg,
+        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
+        validate=False,
+        validate_all=validate_all,
+    )
+
+    # Move dataflow into the branches of the `if` such that they are only evaluated
+    #  if they are needed. Important to call it repeatedly.
+    # TODO(phimuell): It is unclear if `MoveDataflowIntoIfBody` should be called
+    #   before or after `LoopBlocking`. In cases where the condition is `False`
+    #   most of the times calling it before is better, but if the condition is
+    #   `True` then this order is better. Solve that issue.
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.MoveDataflowIntoIfBody(
+            ignore_upstream_blocks=False,
+        ),
+        validate=False,
+        validate_all=validate_all,
+    )
     gtx_transformations.gt_simplify(
         sdfg,
         skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
