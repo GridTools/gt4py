@@ -31,7 +31,11 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
+from gt4py.next.iterator.transforms import (
+    inline_literal,
+    prune_casts as ir_prune_casts,
+    symbol_ref_utils,
+)
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
@@ -1340,6 +1344,7 @@ def build_sdfg_from_gtir(
 
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
+    ir = inline_literal.InlineLiteral().visit(ir)
 
     # DaCe requires C-compatible strings for the names of data containers,
     # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
