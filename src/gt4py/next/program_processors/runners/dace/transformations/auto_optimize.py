@@ -15,7 +15,6 @@ from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sdutils
-from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
