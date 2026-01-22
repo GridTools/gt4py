@@ -685,6 +685,10 @@ def translate_scan(
 
     # for output connections, we create temporary arrays that contain the computation
     # results of a column slice for each point in the horizontal domain
+    if isinstance(lambda_output, tuple) and not isinstance(node.annex.domain, tuple):
+        domain_tree = gtx_utils.tree_map(lambda x: node.annex.domain)(lambda_output)
+    else:
+        domain_tree = node.annex.domain
     output_tree = gtx_utils.tree_map(
         lambda output_data, output_domain: _handle_dataflow_result_of_nested_sdfg(
             sdfg_builder=sdfg_builder,
@@ -694,9 +698,9 @@ def translate_scan(
             inner_data=output_data,
             field_domain=output_domain,
         )
-    )(lambda_output, node.annex.domain)
+    )(lambda_output, domain_tree)
 
     # we call a helper method to create a map scope that will compute the entire field
     return _create_scan_field_operator(
-        ctx, field_domain, node.type, sdfg_builder, input_edges, output_tree, node.annex.domain
+        ctx, field_domain, node.type, sdfg_builder, input_edges, output_tree, domain_tree
     )
