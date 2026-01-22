@@ -675,10 +675,6 @@ def _gt_auto_process_dataflow_inside_maps(
     time, so the compiler will fully unroll them anyway.
     """
 
-    sdfg.apply_transformations_repeated(
-        dace_dataflow.TaskletFusion, validate=False, validate_all=validate_all
-    )
-
     # Constants (tasklets are needed to write them into a variable) should not be
     #  arguments to a kernel but be present inside the body.
     sdfg.apply_transformations_once_everywhere(
