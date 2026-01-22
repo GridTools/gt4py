@@ -83,6 +83,10 @@ no_backend = NoBackend(
             next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
         ),
         pytest.param(
+            next_tests.definitions.EmbeddedIds.JAX_NUMPY_EXECUTION,
+            marks=pytest.mark.requires_jax,
+        ),
+        pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
             marks=pytest.mark.requires_dace,
         ),
