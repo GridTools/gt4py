@@ -38,7 +38,7 @@ class InlineLiteral(eve.NodeTranslator):
         node = self.generic_visit(node)
 
         if cpm.is_applied_as_fieldop(node):
-            assert len(node.fun.args) == 1 and isinstance(node.fun.args[0], ir.Lambda)
+            assert isinstance(node.fun.args[0], ir.Lambda)
             lambda_node = node.fun.args[0]
             symbol_map = {}
             fun_args = []
