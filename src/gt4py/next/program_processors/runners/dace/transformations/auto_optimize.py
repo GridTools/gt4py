@@ -654,6 +654,29 @@ def _gt_auto_process_top_level_maps(
     return sdfg
 
 
+class TaskletFusion2(dace_dataflow.TaskletFusion):
+    """
+    Implementation for experiment, that ignores any Tasklet that has an empty Memlet.
+    Just for experimental reasons.
+    """
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        if any(
+            e.data.is_empty()
+            for e in list(graph.in_edges(self.t1)) + list(graph.out_edges(self.t1))
+        ):
+            return False
+        return super().can_be_applied(
+            graph=graph, expr_index=expr_index, sdfg=sdfg, permissive=permissive
+        )
+
+
 def _gt_auto_process_dataflow_inside_maps(
     sdfg: dace.SDFG,
     blocking_dim: Optional[gtx_common.Dimension],
@@ -688,6 +711,14 @@ def _gt_auto_process_dataflow_inside_maps(
             validate_all=validate_all,
         )
 
+    # Constants (tasklets are needed to write them into a variable) should not be
+    #  arguments to a kernel but be present inside the body.
+    sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.GT4PyMoveTaskletIntoMap,
+        validate=False,
+        validate_all=validate_all,
+    )
+
     # Empirical observation in MuPhys have shown that running `TaskletFusion` increases
     #  performance quite drastically. Thus it was added here. However, to ensure
     #  that `LoopBlocking` still works, i.e. independent and dependent Tasklets are
@@ -696,18 +727,11 @@ def _gt_auto_process_dataflow_inside_maps(
     #  clear but it can be measured.
     # TODO(phimuell): Restrict it to Tasklets only inside Maps.
     sdfg.apply_transformations_repeated(
-        dace_dataflow.TaskletFusion,
+        TaskletFusion2,
         validate=False,
         validate_all=validate_all,
     )
 
-    # Constants (tasklets are needed to write them into a variable) should not be
-    #  arguments to a kernel but be present inside the body.
-    sdfg.apply_transformations_once_everywhere(
-        gtx_transformations.GT4PyMoveTaskletIntoMap,
-        validate=False,
-        validate_all=validate_all,
-    )
     # TODO(phimuell): figuring out if this is needed?
     gtx_transformations.gt_simplify(
         sdfg,
