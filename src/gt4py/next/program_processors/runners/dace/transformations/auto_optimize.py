@@ -675,14 +675,6 @@ def _gt_auto_process_dataflow_inside_maps(
     time, so the compiler will fully unroll them anyway.
     """
 
-    # TODO(phimuell): Find out if needed.
-    gtx_transformations.gt_simplify(
-        sdfg,
-        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
-        validate=False,
-        validate_all=validate_all,
-    )
-
     # Blocking is performed first, because this ensures that as much as possible
     #  is moved into the k independent part.
     if blocking_dim is not None:
