@@ -723,16 +723,18 @@ def _gt_auto_process_dataflow_inside_maps(
         validate_all=validate_all,
     )
 
-    # We also see a slowdown if this is at the end. Let's see if it also work here.
-    sdfg.apply_transformations_repeated(
-        dace_dataflow.TaskletFusion,
-        validate=False,
-        validate_all=validate_all,
-    )
-
+    # We see slowdowns if at the end is a call to the TF transformation, see commit
+    #  `c40417421324dc274d3ce5fa01db21fa3b1b754e`. But if we put it just after
+    #  `MoveDataflowIntoIfBody` then nothing happens. We will now try to replacate
+    #  the earlier experiment by putting a simplify call in between.
     gtx_transformations.gt_simplify(
         sdfg,
         skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
+        validate=False,
+        validate_all=validate_all,
+    )
+    sdfg.apply_transformations_repeated(
+        dace_dataflow.TaskletFusion,
         validate=False,
         validate_all=validate_all,
     )
