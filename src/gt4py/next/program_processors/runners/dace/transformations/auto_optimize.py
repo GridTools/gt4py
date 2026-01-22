@@ -724,11 +724,11 @@ def _gt_auto_process_dataflow_inside_maps(
     )
 
     # We also see a slowdown if this is at the end. Let's see if it also work here.
-    #sdfg.apply_transformations_repeated(
-    #    dace_dataflow.TaskletFusion,
-    #    validate=False,
-    #    validate_all=validate_all,
-    #)
+    sdfg.apply_transformations_repeated(
+        dace_dataflow.TaskletFusion,
+        validate=False,
+        validate_all=validate_all,
+    )
 
     gtx_transformations.gt_simplify(
         sdfg,
