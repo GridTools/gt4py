@@ -675,12 +675,6 @@ def _gt_auto_process_dataflow_inside_maps(
     time, so the compiler will fully unroll them anyway.
     """
 
-    # The SDFG might contain tasklets with no input connectors, which simply write
-    # a constant value into a scalar node. If these tasklets were moved into the map
-    # scope, they would require an empty memlet edge from MapEntry, for synchronization.
-    # Empty memlets are not properly handled in code generation, so it is better
-    # to avoid this pattern. Running `TaskletFusion` at this stage helps to inline
-    # these constant-write tasklets into compute-tasklets.
     sdfg.apply_transformations_repeated(
         dace_dataflow.TaskletFusion, validate=False, validate_all=validate_all
     )
