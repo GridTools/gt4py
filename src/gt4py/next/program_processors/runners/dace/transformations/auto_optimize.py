@@ -664,7 +664,7 @@ class TaskletFusion2(dace_dataflow.TaskletFusion):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        if not any(e.data.is_empty() for e in graph.in_edges(self.t1)):
+        if any(e.data.is_empty() for e in graph.in_edges(self.t1)):
             return False
         return super().can_be_applied(
             graph=graph, expr_index=expr_index, sdfg=sdfg, permissive=permissive
