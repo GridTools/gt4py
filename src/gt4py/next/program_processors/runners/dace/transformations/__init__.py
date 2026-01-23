@@ -20,6 +20,7 @@ from .auto_optimize import (
     gt_auto_optimize,
 )
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
+from .fuse_horizontal_conditionblocks import FuseHorizontalConditionBlocks
 from .gpu_utils import (
     GPUSetBlockSize,
     gt_gpu_transform_non_standard_memlet,
