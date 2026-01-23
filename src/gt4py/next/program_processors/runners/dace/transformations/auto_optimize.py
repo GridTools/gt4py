@@ -655,7 +655,7 @@ def _gt_auto_process_top_level_maps(
 
 
 class TaskletFusion2(dace_dataflow.TaskletFusion):
-    """Version of TaskletFusion` that _only_ processes Tasklet that have an empty Memlet."""
+    """Version of TaskletFusion` that _only_ processes Tasklet that are not on the top level."""
 
     def can_be_applied(
         self,
@@ -664,7 +664,7 @@ class TaskletFusion2(dace_dataflow.TaskletFusion):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        if any(e.data.is_empty() for e in graph.in_edges(self.t1)):
+        if sdfg.parent is None:
             return False
         return super().can_be_applied(
             graph=graph, expr_index=expr_index, sdfg=sdfg, permissive=permissive
