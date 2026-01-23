@@ -654,6 +654,28 @@ def _gt_auto_process_top_level_maps(
     return sdfg
 
 
+class TaskletFusion2(dace_dataflow.TaskletFusion):
+    """
+    Implementation for experiment, that only processes Tasklets with no inputs and
+    that are not on the top level SDFG.
+    """
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        if sdfg.parent is None:
+            return False
+        if graph.in_degree(self.t1) > 0:
+            return False
+        return super().can_be_applied(
+            graph=graph, expr_index=expr_index, sdfg=sdfg, permissive=permissive
+        )
+
+
 def _gt_auto_process_dataflow_inside_maps(
     sdfg: dace.SDFG,
     blocking_dim: Optional[gtx_common.Dimension],
@@ -729,7 +751,7 @@ def _gt_auto_process_dataflow_inside_maps(
     #  SDFG and it was indicating that TF was not run for a second time. Thus
     #  I have to redo the experiment which is done here.
     sdfg.apply_transformations_repeated(
-        dace_dataflow.TaskletFusion,
+        TaskletFusion2,
         validate=False,
         validate_all=validate_all,
     )
