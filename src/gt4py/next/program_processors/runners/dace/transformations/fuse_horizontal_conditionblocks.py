@@ -148,7 +148,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
 
         second_to_first_connections = {}
         for node in nodes_renamed_map:
-            second_to_first_connections[node.data] = nodes_renamed_map[node].data
+            if isinstance(node, dace_nodes.AccessNode):
+                second_to_first_connections[node.data] = nodes_renamed_map[node].data
         for first_inner_state in first_conditional_block.all_states():
             first_inner_state_name = first_inner_state.name
             corresponding_state_in_second = None
@@ -166,7 +167,12 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                         new_memlet = copy.deepcopy(edge.data)
                         if edge.data.data in second_to_first_connections:
                             new_memlet.data = second_to_first_connections[edge.data.data]
-                        first_inner_state.add_edge(nodes_renamed_map[node], nodes_renamed_map[node].data, nodes_renamed_map[edge.dst], second_to_first_connections[node.data], new_memlet)
+                        first_inner_state.add_edge(
+                            nodes_renamed_map[node],
+                            nodes_renamed_map[node].data if isinstance(node, dace_nodes.AccessNode) and edge.src_conn else edge.src_conn,
+                            nodes_renamed_map[dst],
+                            second_to_first_connections[dst.data] if isinstance(edge.dst, dace_nodes.AccessNode) and edge.dst_conn else edge.dst_conn,
+                            new_memlet)
         for edge in list(graph.out_edges(access_node)):
             if edge.dst == second_cb:
                 graph.remove_edge(edge)
@@ -177,8 +183,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         graph.remove_node(second_conditional_block)
         graph.remove_node(second_cb)
 
-        sdfg.view()
-        breakpoint()
+        # sdfg.view()
+        # breakpoint()
 
         
         # print(f"Fused conditional blocks into: {new_nested_sdfg}", flush=True)
