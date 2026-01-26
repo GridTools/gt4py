@@ -267,7 +267,7 @@ def freeze_origin_domain_sdfg(
             if node.has_writes(inner_state):
                 outputs.add(node.data)
 
-    nsdfg = state.add_nested_sdfg(inner_sdfg, None, inputs, outputs)
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
         field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
