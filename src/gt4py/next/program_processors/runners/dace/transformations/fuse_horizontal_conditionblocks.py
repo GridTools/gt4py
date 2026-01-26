@@ -123,9 +123,13 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         nodes_renamed_map = {}
         for first_inner_state in first_conditional_block.all_states():
             first_inner_state_name = first_inner_state.name
+            true_branch = "true_branch" in first_inner_state_name
             corresponding_state_in_second = None
             for state in second_conditional_states:
-                if state.name == first_inner_state_name:
+                if true_branch and "true_branch" in state.name:
+                    corresponding_state_in_second = state
+                    break
+                elif not true_branch and "false_branch" in state.name:
                     corresponding_state_in_second = state
                     break
             if corresponding_state_in_second is None:
@@ -152,9 +156,13 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                 second_to_first_connections[node.data] = nodes_renamed_map[node].data
         for first_inner_state in first_conditional_block.all_states():
             first_inner_state_name = first_inner_state.name
+            true_branch = "true_branch" in first_inner_state_name
             corresponding_state_in_second = None
             for state in second_conditional_states:
-                if state.name == first_inner_state_name:
+                if true_branch and "true_branch" in state.name:
+                    corresponding_state_in_second = state
+                    break
+                elif not true_branch and "false_branch" in state.name:
                     corresponding_state_in_second = state
                     break
             if corresponding_state_in_second is None:
