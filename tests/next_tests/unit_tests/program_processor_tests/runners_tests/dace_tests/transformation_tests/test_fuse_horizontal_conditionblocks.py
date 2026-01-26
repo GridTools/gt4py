@@ -21,6 +21,70 @@ from .test_move_dataflow_into_if_body import _make_if_block
 
 import dace
 
+def _make_if_block_with_tasklet_and_nestedSDFG(
+    state: dace.SDFGState,
+    outer_sdfg: dace.SDFG,
+    b1_name: str = "__arg1",
+    b2_name: str = "__arg2",
+    cond_name: str = "__cond",
+    output_name: str = "__output",
+    b1_type: dace.typeclass = dace.float64,
+    b2_type: dace.typeclass = dace.float64,
+    output_type: dace.typeclass = dace.float64,
+) -> dace_nodes.NestedSDFG:
+    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
+
+    types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
+    for name in {b1_name, b2_name, cond_name, output_name}:
+        inner_sdfg.add_scalar(
+            name,
+            dtype=types[name],
+            transient=False,
+        )
+
+    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
+    inner_sdfg.add_node(if_region, is_start_block=True)
+
+    then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
+    tstate = then_body.add_state("true_branch", is_start_block=True)
+    tasklet = tstate.add_tasklet(
+        "true_tasklet",
+        inputs={"__tasklet_in"},
+        outputs={"__tasklet_out"},
+        code="__tasklet_out = __tasklet_in * 2.0",
+    )
+    tstate.add_edge(
+        tstate.add_access(b1_name),
+        None,
+        tasklet,
+        "__tasklet_in",
+        dace.Memlet(f"{b1_name}[0]"),
+    )
+    tstate.add_edge(
+        tasklet,
+        "__tasklet_out",
+        tstate.add_access(output_name),
+        None,
+        dace.Memlet(f"{output_name}[0]"),
+    )
+
+    else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
+    fstate = else_body.add_state("false_branch", is_start_block=True)
+    fstate.add_nedge(
+        fstate.add_access(b2_name),
+        fstate.add_access(output_name),
+        dace.Memlet(f"{b2_name}[0] -> [0]"),
+    )
+
+    if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
+    if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}"), else_body)
+
+    return state.add_nested_sdfg(
+        sdfg=inner_sdfg,
+        inputs={b1_name, b2_name, cond_name},
+        outputs={output_name},
+    )
+
 def _make_map_with_conditional_blocks() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapExit
 ]:
@@ -78,7 +142,7 @@ def _make_map_with_conditional_blocks() -> tuple[
         "tasklet_cond",
         inputs={"__in"},
         outputs={"__out"},
-        code="__out = __in <= 0.0",
+        code="__out = __in >= 0.5",
     )
     state.add_edge(tmp_a, None, tasklet_cond, "__in", dace.Memlet("tmp_a[0]"))
     state.add_edge(tasklet_cond, "__out", cond_var, None, dace.Memlet("cond_var"))
@@ -90,7 +154,7 @@ def _make_map_with_conditional_blocks() -> tuple[
     state.add_edge(if_block_0, "__output", tmp_c, None, dace.Memlet("tmp_c[0]"))
     state.add_edge(tmp_c, None, mx, "IN_c", dace.Memlet("c[__i]"))
 
-    if_block_1 = _make_if_block(state=state, outer_sdfg=sdfg)
+    if_block_1 = _make_if_block_with_tasklet_and_nestedSDFG(state=state, outer_sdfg=sdfg)
     state.add_edge(cond_var, None, if_block_1, "__cond", dace.Memlet("cond_var"))
     state.add_edge(tmp_a, None, if_block_1, "__arg1", dace.Memlet("tmp_a[0]"))
     state.add_edge(tmp_b, None, if_block_1, "__arg2", dace.Memlet("tmp_b[0]"))
@@ -106,6 +170,15 @@ def _make_map_with_conditional_blocks() -> tuple[
 def test_fuse_horizontal_condition_blocks():
     sdfg, state, me, mx = _make_map_with_conditional_blocks()
 
+    conditional_blocks = [
+        n
+        for n, _ in sdfg.all_nodes_recursive()
+        if isinstance(n, dace.sdfg.state.ConditionalBlock)
+    ]
+    assert len(conditional_blocks) == 2
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
     # sdfg.view()
     # breakpoint()
 
@@ -115,5 +188,15 @@ def test_fuse_horizontal_condition_blocks():
         validate_all=True,
     )
 
+    new_conditional_blocks = [
+        n
+        for n, _ in sdfg.all_nodes_recursive()
+        if isinstance(n, dace.sdfg.state.ConditionalBlock)
+    ]
+    assert len(new_conditional_blocks) == 1
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    breakpoint()
+    assert util.compare_sdfg_res(ref=ref, res=res)
     # sdfg.view()
     # breakpoint()
