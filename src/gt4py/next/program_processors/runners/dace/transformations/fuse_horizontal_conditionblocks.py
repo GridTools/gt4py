@@ -12,6 +12,7 @@ from dace import (
 from dace.sdfg import nodes as dace_nodes, graph as dace_graph
 from dace.transformation import helpers as dace_helpers
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from dace.sdfg import utils as sdutil
 
 @dace_properties.make_properties
 class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformation):
@@ -88,14 +89,38 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         sdfg: dace.SDFG,
     ) -> None:
         access_node: dace_nodes.AccessNode = self.access_node
-        first_cb: dace.sdfg.state.ConditionalBlock = self.first_conditional_block
-        second_cb: dace.sdfg.state.ConditionalBlock = self.second_conditional_block
+        first_cb: dace_nodes.NestedSDFG = self.first_conditional_block
+        second_cb: dace_nodes.NestedSDFG = self.second_conditional_block
 
         first_conditional_block = next(iter(first_cb.sdfg.nodes()))
         second_conditional_block = next(iter(second_cb.sdfg.nodes()))
 
         second_conditional_states = list(second_conditional_block.all_states())
 
+        in_connectors_to_move = {k: v for k, v in second_cb.in_connectors.items() if k != "__cond"}
+        out_connectors_to_move = second_cb.out_connectors
+        in_connectors_to_move_rename_map = {}
+        out_connectors_to_move_rename_map = {}
+        for k, v in in_connectors_to_move.items():
+            new_connector_name = k
+            if new_connector_name in first_cb.in_connectors:
+                new_connector_name = f"{k}_from_second"
+            in_connectors_to_move_rename_map[k] = new_connector_name
+            first_cb.add_in_connector(new_connector_name)
+            for edge in graph.in_edges(second_cb):
+                if edge.dst_conn == k:
+                    dace_helpers.redirect_edge(state=graph, edge=edge, new_dst_conn=new_connector_name, new_dst=first_cb)
+        for k, v in out_connectors_to_move.items():
+            new_connector_name = k
+            if new_connector_name in first_cb.out_connectors:
+                new_connector_name = f"{k}_from_second"
+            out_connectors_to_move_rename_map[k] = new_connector_name
+            first_cb.add_out_connector(new_connector_name)
+            for edge in graph.out_edges(second_cb):
+                if edge.src_conn == k:
+                    dace_helpers.redirect_edge(state=graph, edge=edge, new_src_conn=new_connector_name, new_src=first_cb)
+
+        nodes_renamed_map = {}
         for first_inner_state in first_conditional_block.all_states():
             first_inner_state_name = first_inner_state.name
             corresponding_state_in_second = None
@@ -106,9 +131,54 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             if corresponding_state_in_second is None:
                 raise RuntimeError(f"Could not find corresponding state in second conditional block for state {first_inner_state_name}")
             nodes_to_move = list(corresponding_state_in_second.nodes())
-            in_connectors_to_move = {k: v for k, v in second_cb.in_connectors.items() if k != "__cond"}
-            out_connectors_to_move = second_cb.out_connectors
-            breakpoint()
+            for node in nodes_to_move:
+                new_node = node
+                if isinstance(node, dace_nodes.AccessNode):
+                    if node.data in first_cb.in_connectors or node.data in first_cb.out_connectors:
+                        new_data_name = f"{node.data}_from_second"
+                        new_node = dace_nodes.AccessNode(new_data_name)
+                        new_desc = copy.deepcopy(node.desc(second_cb.sdfg))
+                        new_desc.name = new_data_name
+                        if new_data_name not in first_cb.sdfg.arrays:
+                            first_cb.sdfg.add_datadesc(new_data_name, new_desc)
+                    else:
+                        second_cb.sdfg.remove_data(node.data)
+                nodes_renamed_map[node] = new_node
+                first_inner_state.add_node(new_node)
+
+        second_to_first_connections = {}
+        for node in nodes_renamed_map:
+            second_to_first_connections[node.data] = nodes_renamed_map[node].data
+        for first_inner_state in first_conditional_block.all_states():
+            first_inner_state_name = first_inner_state.name
+            corresponding_state_in_second = None
+            for state in second_conditional_states:
+                if state.name == first_inner_state_name:
+                    corresponding_state_in_second = state
+                    break
+            if corresponding_state_in_second is None:
+                raise RuntimeError(f"Could not find corresponding state in second conditional block for state {first_inner_state_name}")
+            nodes_to_move = list(corresponding_state_in_second.nodes())
+            for node in nodes_to_move:
+                for edge in list(corresponding_state_in_second.out_edges(node)):
+                    dst = edge.dst
+                    if dst in nodes_to_move:
+                        new_memlet = copy.deepcopy(edge.data)
+                        if edge.data.data in second_to_first_connections:
+                            new_memlet.data = second_to_first_connections[edge.data.data]
+                        first_inner_state.add_edge(nodes_renamed_map[node], nodes_renamed_map[node].data, nodes_renamed_map[edge.dst], second_to_first_connections[node.data], new_memlet)
+        for edge in list(graph.out_edges(access_node)):
+            if edge.dst == second_cb:
+                graph.remove_edge(edge)
+
+        # TODO(iomaganaris): Figure out if I have to handle any symbols
+
+        # Need to remove both references to remove NestedSDFG from graph
+        graph.remove_node(second_conditional_block)
+        graph.remove_node(second_cb)
+
+        sdfg.view()
+        breakpoint()
 
         
         # print(f"Fused conditional blocks into: {new_nested_sdfg}", flush=True)
