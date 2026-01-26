@@ -675,8 +675,9 @@ def _gt_auto_process_dataflow_inside_maps(
     time, so the compiler will fully unroll them anyway.
     """
 
-    # Blocking is performed first, because this ensures that as much as possible
-    #  is moved into the k independent part.
+    # Separate Tasklets into dependent and independent parts to promote data
+    #  reusability. It is important that this step has to be performed before
+    #  `TaskletFusion` is used.
     if blocking_dim is not None:
         sdfg.apply_transformations_once_everywhere(
             gtx_transformations.LoopBlocking(
@@ -688,13 +689,14 @@ def _gt_auto_process_dataflow_inside_maps(
             validate_all=validate_all,
         )
 
-    # Empirical observation in MuPhys have shown that running `TaskletFusion` increases
-    #  performance quite drastically. Thus it was added here. However, to ensure
-    #  that `LoopBlocking` still works, i.e. independent and dependent Tasklets are
-    #  not mixed it must run _after_ `LoopBlocking`. Furthermore, it has been shown
-    #  that it has to run _before_ `GT4PyMoveTaskletIntoMap`. The reasons are not
-    #  clear but it can be measured.
+    # Merge Tasklets into bigger ones.
+    # NOTE: Empirical observation for Graupel have shown that this leads to an increase
+    #   in performance, however, it has to be run before `GT4PyMoveTaskletIntoMap`
+    #   (not fully clear why though, probably a compiler artefact) and as well as
+    #   `MoveDataflowIntoIfBody` (not fully clear either, it `TaskletFusion` makes
+    #   things simpler or prevent it from doing certain, negative, things).
     # TODO(phimuell): Restrict it to Tasklets only inside Maps.
+    # TODO(phimuell): Investigate more.
     sdfg.apply_transformations_repeated(
         dace_dataflow.TaskletFusion,
         validate=False,
@@ -708,6 +710,7 @@ def _gt_auto_process_dataflow_inside_maps(
         validate=False,
         validate_all=validate_all,
     )
+
     # TODO(phimuell): figuring out if this is needed?
     gtx_transformations.gt_simplify(
         sdfg,
@@ -729,6 +732,8 @@ def _gt_auto_process_dataflow_inside_maps(
         validate=False,
         validate_all=validate_all,
     )
+
+    # TODO(phimuell): figuring out if this is needed?
     gtx_transformations.gt_simplify(
         sdfg,
         skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
