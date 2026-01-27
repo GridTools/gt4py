@@ -58,7 +58,12 @@ DefinitionT = TypeVar(
 
 
 @dataclasses.dataclass(frozen=True)
-class _CommonProgramLike(Generic[DefinitionT]):
+class _ProgramLikeMixin(Generic[DefinitionT]):
+    """
+    Mixing used by program and program-like objects.
+
+    Contains functionality and configuration options common to all kinds of program-likes.
+    """
     definition_stage: DefinitionT
     backend: Optional[next_backend.Backend]
     compilation_options: options.CompilationOptions
@@ -158,7 +163,7 @@ program_call_metrics_collector = metrics.make_collector(
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
-class Program(_CommonProgramLike[ffront_stages.ProgramDefinition]):
+class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
     """
     Construct a program object from a PAST node.
 
@@ -493,7 +498,7 @@ OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 
 @dataclasses.dataclass(frozen=True)
 class FieldOperator(
-    _CommonProgramLike[ffront_stages.FieldOperatorDefinition], GTCallable, Generic[OperatorNodeT]
+    _ProgramLikeMixin[ffront_stages.FieldOperatorDefinition], GTCallable, Generic[OperatorNodeT]
 ):
     """
     Construct a field operator object from a FOAST node.
