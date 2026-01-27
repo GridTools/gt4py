@@ -482,7 +482,7 @@ class CompiledProgramsPool:
         if arg_types is None or kwarg_types is None:
             if self._is_generic:
                 raise ValueError(
-                    "Can not precompile generic program or scan without specified argument types."
+                    "Can not precompile generic program or scan operator without argument types."
                 )
             arg_types = tuple(self.program_type.definition.pos_only_args) + tuple(
                 self.program_type.definition.pos_or_kw_args.values()
