@@ -64,6 +64,7 @@ class _ProgramLikeMixin(Generic[DefinitionT]):
 
     Contains functionality and configuration options common to all kinds of program-likes.
     """
+
     definition_stage: DefinitionT
     backend: Optional[next_backend.Backend]
     compilation_options: options.CompilationOptions
