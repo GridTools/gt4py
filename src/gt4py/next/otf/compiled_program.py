@@ -311,8 +311,10 @@ class CompiledProgramsPool:
                     argument_descriptors=_make_argument_descriptors(
                         self.program_type, self.argument_descriptor_mapping, args, kwargs
                     ),
-                    arg_types=tuple(type_translation.from_value(arg) for arg in args),
-                    kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
+                    # note: it is important to use the args before named collections are extracted
+                    #  as otherwise the implicit program generation from an operator fails
+                    arg_types=tuple(type_translation.from_value(arg) for arg in canonical_args),
+                    kwarg_types={k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
                     offset_provider=offset_provider,
                     call_key=key,
                 )
