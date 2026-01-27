@@ -1,4 +1,5 @@
 import copy
+import uuid
 import warnings
 from typing import Any, Callable, Mapping, Optional, TypeAlias, Union
 
@@ -13,6 +14,14 @@ from dace.sdfg import nodes as dace_nodes, graph as dace_graph
 from dace.transformation import helpers as dace_helpers
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from dace.sdfg import utils as sdutil
+
+def unique_name(name: str) -> str:
+    """Adds a unique string to `name`."""
+    maximal_length = 200
+    unique_sufix = str(uuid.uuid1()).replace("-", "_")
+    if len(name) > (maximal_length - len(unique_sufix)):
+        name = name[: (maximal_length - len(unique_sufix) - 1)]
+    return f"{name}_{unique_sufix}"
 
 @dace_properties.make_properties
 class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformation):
@@ -80,6 +89,16 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         # breakpoint()
 
         # TODO(iomaganaris): Need to check also that first and second nested SDFGs are not reachable from each other
+        if gtx_transformations.utils.is_reachable(
+            start=first_cb,
+            target=second_cb,
+            state=graph,
+        ) or gtx_transformations.utils.is_reachable(
+            start=second_cb,
+            target=first_cb,
+            state=graph,
+        ):
+            return False
 
         return True
 
@@ -104,7 +123,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         for k, v in in_connectors_to_move.items():
             new_connector_name = k
             if new_connector_name in first_cb.in_connectors:
-                new_connector_name = f"{k}_from_second"
+                new_connector_name = unique_name(k)
             in_connectors_to_move_rename_map[k] = new_connector_name
             first_cb.add_in_connector(new_connector_name)
             for edge in graph.in_edges(second_cb):
@@ -113,7 +132,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         for k, v in out_connectors_to_move.items():
             new_connector_name = k
             if new_connector_name in first_cb.out_connectors:
-                new_connector_name = f"{k}_from_second"
+                new_connector_name = unique_name(k)
             out_connectors_to_move_rename_map[k] = new_connector_name
             first_cb.add_out_connector(new_connector_name)
             for edge in graph.out_edges(second_cb):
@@ -139,14 +158,12 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                 new_node = node
                 if isinstance(node, dace_nodes.AccessNode):
                     if node.data in first_cb.in_connectors or node.data in first_cb.out_connectors:
-                        new_data_name = f"{node.data}_from_second"
+                        new_data_name = unique_name(node.data)
                         new_node = dace_nodes.AccessNode(new_data_name)
                         new_desc = copy.deepcopy(node.desc(second_cb.sdfg))
                         new_desc.name = new_data_name
                         if new_data_name not in first_cb.sdfg.arrays:
                             first_cb.sdfg.add_datadesc(new_data_name, new_desc)
-                    else:
-                        second_cb.sdfg.remove_data(node.data)
                 nodes_renamed_map[node] = new_node
                 first_inner_state.add_node(new_node)
 
@@ -186,6 +203,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                 graph.remove_edge(edge)
 
         # TODO(iomaganaris): Figure out if I have to handle any symbols
+        sdfg.save(f"after_fuse_horizontal_conditionblocks_{first_cb}_{second_cb}.sdfg")
 
         # Need to remove both references to remove NestedSDFG from graph
         graph.remove_node(second_conditional_block)
