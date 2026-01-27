@@ -114,6 +114,30 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         first_conditional_block = next(iter(first_cb.sdfg.nodes()))
         second_conditional_block = next(iter(second_cb.sdfg.nodes()))
 
+        original_arrays_first_conditional_block = {}
+        for data_name, data_desc in first_conditional_block.sdfg.arrays.items():
+            original_arrays_first_conditional_block[data_name] = data_desc
+        original_arrays_second_conditional_block = {}
+        for data_name, data_desc in second_conditional_block.sdfg.arrays.items():
+            original_arrays_second_conditional_block[data_name] = data_desc
+        total_original_arrays = len(original_arrays_first_conditional_block) + len(original_arrays_second_conditional_block)
+
+        second_arrays_rename_map = {}
+        for data_name, data_desc in original_arrays_second_conditional_block.items():
+            if data_name == "__cond":
+                continue
+            if data_name in original_arrays_first_conditional_block:
+                new_data_name = unique_name(data_name)
+                second_arrays_rename_map[data_name] = new_data_name
+                data_desc_renamed = copy.deepcopy(data_desc)
+                data_desc_renamed.name = new_data_name
+                if new_data_name not in first_cb.sdfg.arrays:
+                    first_cb.sdfg.add_datadesc(new_data_name, data_desc_renamed)
+            else:
+                second_arrays_rename_map[data_name] = data_name
+                if data_name not in first_cb.sdfg.arrays:
+                    first_cb.sdfg.add_datadesc(data_name, copy.deepcopy(data_desc))
+
         second_conditional_states = list(second_conditional_block.all_states())
 
         in_connectors_to_move = {k: v for k, v in second_cb.in_connectors.items() if k != "__cond"}
@@ -123,7 +147,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         for k, v in in_connectors_to_move.items():
             new_connector_name = k
             if new_connector_name in first_cb.in_connectors:
-                new_connector_name = unique_name(k)
+                new_connector_name = second_arrays_rename_map[k]
             in_connectors_to_move_rename_map[k] = new_connector_name
             first_cb.add_in_connector(new_connector_name)
             for edge in graph.in_edges(second_cb):
@@ -132,7 +156,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         for k, v in out_connectors_to_move.items():
             new_connector_name = k
             if new_connector_name in first_cb.out_connectors:
-                new_connector_name = unique_name(k)
+                new_connector_name = second_arrays_rename_map[k]
             out_connectors_to_move_rename_map[k] = new_connector_name
             first_cb.add_out_connector(new_connector_name)
             for edge in graph.out_edges(second_cb):
@@ -158,12 +182,12 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                 new_node = node
                 if isinstance(node, dace_nodes.AccessNode):
                     if node.data in first_cb.in_connectors or node.data in first_cb.out_connectors:
-                        new_data_name = unique_name(node.data)
+                        new_data_name = second_arrays_rename_map[node.data]
                         new_node = dace_nodes.AccessNode(new_data_name)
                         new_desc = copy.deepcopy(node.desc(second_cb.sdfg))
                         new_desc.name = new_data_name
-                        if new_data_name not in first_cb.sdfg.arrays:
-                            first_cb.sdfg.add_datadesc(new_data_name, new_desc)
+                        # if new_data_name not in first_cb.sdfg.arrays:
+                        #     first_cb.sdfg.add_datadesc(new_data_name, new_desc)
                 nodes_renamed_map[node] = new_node
                 first_inner_state.add_node(new_node)
 
@@ -203,8 +227,11 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         graph.remove_node(second_conditional_block)
         graph.remove_node(second_cb)
 
-        sdfg.view()
-        breakpoint()
+        new_arrays = len(first_cb.sdfg.arrays)
+        assert new_arrays == total_original_arrays - 1, f"After fusion, expected {total_original_arrays - 1} arrays but found {new_arrays}"
+
+        # sdfg.view()
+        # breakpoint()
 
         
         # print(f"Fused conditional blocks into: {new_nested_sdfg}", flush=True)
