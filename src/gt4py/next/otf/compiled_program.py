@@ -457,7 +457,7 @@ class CompiledProgramsPool:
                 type_info.is_concrete(t) for t in itertools.chain(arg_types, kwarg_types.values())
             ):
                 raise ValueError(
-                    "Can not precompile generic program without specified argument types."
+                    "Can not precompile generic program or scan without specified argument types."
                 )
 
         compile_time_args = arguments.CompileTimeArgs(
@@ -477,7 +477,7 @@ class CompiledProgramsPool:
             self.compiled_programs[key] = _async_compilation_pool.submit(compile_call)
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
-    #  domains.
+    #  domains and of scans.
     def compile(
         self,
         offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
@@ -495,7 +495,6 @@ class CompiledProgramsPool:
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
-        # TODO: fail for scan operator
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
                 self._compile_variant(

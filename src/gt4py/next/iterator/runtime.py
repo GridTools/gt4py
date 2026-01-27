@@ -20,6 +20,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.iterator import builtins, dispatcher
 from gt4py.next.iterator.builtins import BackendNotSelectedError, builtin_dispatch
+from gt4py.next.otf import arguments
 from gt4py.next.program_processors import program_formatter
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
@@ -88,8 +89,8 @@ class FendefDispatcher:
 
             if isinstance(backend, next_backend.Backend):
                 assert isinstance(backend, next_backend.Backend)
-                compiled_program = backend.jit(
-                    itir_node, *args, offset_provider=offset_provider, column_axis=column_axis
+                compiled_program = backend.compile(
+                    itir_node, arguments.CompileTimeArgs.from_concrete(*args)
                 )
                 compiled_program(*args, offset_provider=offset_provider)
             elif isinstance(backend, program_formatter.ProgramFormatter):

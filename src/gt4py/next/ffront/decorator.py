@@ -38,7 +38,6 @@ from gt4py.next.ffront import (
     field_operator_ast as foast,
     foast_to_gtir,
     past_process_args,
-    signature,
     stages as ffront_stages,
     transform_utils,
     type_info as ffront_type_info,
@@ -47,7 +46,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, compiled_program, options, stages, toolchain
+from gt4py.next.otf import arguments, compiled_program, options, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -354,61 +353,6 @@ class Program(_CommonProgramLike[ffront_stages.ProgramDefinition]):
                 with next_embedded.context.update(offset_provider=offset_provider):
                     self.definition_stage.definition(*args, **kwargs)
 
-    def freeze(self) -> FrozenProgram:
-        if self.backend is None:
-            raise ValueError("Can not freeze a program without backend (embedded execution).")
-        return FrozenProgram(
-            self.definition_stage if self.definition_stage else self.past_stage,
-            backend=self.backend,
-        )
-
-
-@dataclasses.dataclass(frozen=True)
-class FrozenProgram:
-    """
-    Simplified program instance, which skips the whole toolchain after the first execution.
-
-    Does not work in embedded execution.
-    """
-
-    program: ffront_stages.DSL_PRG | ffront_stages.PAST_PRG
-    backend: next_backend.Backend
-    _compiled_program: Optional[stages.CompiledProgram] = dataclasses.field(
-        init=False, default=None
-    )
-
-    def __post_init__(self) -> None:
-        if self.backend is None:
-            raise ValueError("Can not JIT-compile programs without backend (embedded execution).")
-
-    @property
-    def definition(self) -> types.FunctionType:
-        # `PastProgramDefinition` doesn't have `definition`
-        assert isinstance(self.program, ffront_stages.ProgramDefinition)
-        return self.program.definition
-
-    def with_backend(self, backend: next_backend.Backend) -> FrozenProgram:
-        return self.__class__(program=self.program, backend=backend)
-
-    def with_grid_type(self, grid_type: common.GridType) -> FrozenProgram:
-        return self.__class__(
-            program=dataclasses.replace(self.program, grid_type=grid_type), backend=self.backend
-        )
-
-    def jit(
-        self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any
-    ) -> stages.CompiledProgram:
-        return self.backend.jit(self.program, *args, offset_provider=offset_provider, **kwargs)
-
-    def __call__(self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any) -> None:
-        args, kwargs = signature.convert_to_positional(self.program, *args, **kwargs)
-
-        if not self._compiled_program:
-            super().__setattr__(
-                "_compiled_program", self.jit(*args, offset_provider=offset_provider, **kwargs)
-            )
-        self._compiled_program(*args, offset_provider=offset_provider, **kwargs)  # type: ignore[misc] # _compiled_program is not None
-
 
 try:
     from gt4py.next.program_processors.runners.dace.program import (  # type: ignore[assignment]
@@ -416,42 +360,6 @@ try:
     )
 except ImportError:
     pass
-
-
-# TODO(tehrengruber): This class does not follow the Liskov-Substitution principle as it doesn't
-#  have a program definition. Revisit.
-@dataclasses.dataclass(frozen=True)
-class ProgramFromPast(Program):
-    """
-    This version of program has no DSL definition associated with it.
-
-    PAST nodes can be built programmatically from field operators or from scratch.
-    This wrapper provides the appropriate toolchain entry points.
-    """
-
-    past_stage: ffront_stages.PastProgramDefinition
-
-    @override
-    def __call__(
-        self, *args: Any, offset_provider: Optional[common.OffsetProvider] = None, **kwargs: Any
-    ) -> None:
-        if self.backend is None:
-            raise NotImplementedError(
-                "Programs created from a PAST node (without a function definition) can not be executed in embedded mode"
-            )
-
-        if offset_provider is None:
-            offset_provider = {}
-        # TODO(ricoh): add test that does the equivalent of IDim + 1 in a ProgramFromPast
-        self.backend(
-            self.past_stage,
-            *args,
-            **(kwargs | {"offset_provider": {**offset_provider}}),
-        )
-
-    # TODO(ricoh): linting should become optional, up to the backend.
-    def __post_init__(self) -> None:
-        self._frontend_transforms.past_lint(self.past_stage)  # type: ignore[arg-type] # ignored because the class has more TODO than code
 
 
 @dataclasses.dataclass(frozen=True)
@@ -536,7 +444,6 @@ def program(
     *,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-    frozen: bool,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> Callable[[types.FunctionType], Program]: ...
 
@@ -547,9 +454,8 @@ def program(
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
-    frozen: bool = False,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
-) -> Program | FrozenProgram | Callable[[types.FunctionType], Program | FrozenProgram]:
+) -> Program | Callable[[types.FunctionType], Program]:
     """
     Generate an implementation of a program from a Python function object.
 
@@ -577,8 +483,6 @@ def program(
             grid_type=grid_type,
             **compilation_options,
         )
-        if frozen:
-            return program.freeze()  # type: ignore[return-value] # TODO(havogt): Should `FrozenProgram` be a `Program`?
         return program
 
     return program_inner if definition is None else program_inner(definition)
@@ -686,24 +590,6 @@ class FieldOperator(
     def __gt_closure_vars__(self) -> dict[str, Any]:
         return self.foast_stage.closure_vars
 
-    def as_program(self, compiletime_args: arguments.CompileTimeArgs) -> Program:
-        foast_with_types = (
-            toolchain.CompilableProgram(
-                data=self.foast_stage,
-                args=compiletime_args,
-            ),
-        )
-
-        past_stage = self._frontend_transforms.field_view_op_to_prog.foast_to_past(  # type: ignore[attr-defined] # TODO(havogt): needs more work
-            foast_with_types
-        ).data
-        return ProgramFromPast(
-            definition_stage=None,  # type: ignore[arg-type] # ProgramFromPast needs to be fixed
-            past_stage=past_stage,
-            backend=self.backend,
-            compilation_options=self.compilation_options,
-        )
-
     def __call__(
         self, *args: Any, enable_jit: bool = options.CompilationOptions.enable_jit, **kwargs: Any
     ) -> Any:
@@ -748,6 +634,9 @@ class FieldOperator(
             return embedded_operators.field_operator_call(op, args, kwargs)
 
 
+# TODO(tehrengruber): This class does not follow the Liskov-Substitution principle as it doesn't
+#  have a field operator definition. Currently implementation is merely a hack to keep the only
+#  test relying on this working. Revisit.
 @dataclasses.dataclass(frozen=True)
 class FieldOperatorFromFoast(FieldOperator):
     """
@@ -763,7 +652,10 @@ class FieldOperatorFromFoast(FieldOperator):
     @override
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         assert self.backend is not None
-        return self.backend(self.foast_stage, *args, **kwargs)
+        compiled_fo = self.backend.compile(
+            self.foast_stage, arguments.CompileTimeArgs.from_concrete(*args, **kwargs)
+        )
+        return compiled_fo(*args, **kwargs)
 
 
 @typing.overload
@@ -915,10 +807,4 @@ def add_foast_fieldop_to_fingerprint(
 @ffront_stages.add_content_to_fingerprint.register
 def add_program_to_fingerprint(obj: Program, hasher: xtyping.HashlibAlgorithm) -> None:
     ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_past_program_to_fingerprint(obj: ProgramFromPast, hasher: xtyping.HashlibAlgorithm) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.past_stage, hasher)
     ffront_stages.add_content_to_fingerprint(obj.backend, hasher)

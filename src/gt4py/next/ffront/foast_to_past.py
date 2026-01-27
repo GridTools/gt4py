@@ -72,8 +72,8 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
 
         >>> compile_time_args = arguments.CompileTimeArgs(
         ...     args=(
-        ...       *(param.type for param in copy.foast_stage.foast_node.definition.params),
-        ...       copy.foast_stage.foast_node.definition.type.returns
+        ...         *(param.type for param in copy.foast_stage.foast_node.definition.params),
+        ...         copy.foast_stage.foast_node.definition.type.returns,
         ...     ),
         ...     kwargs={},
         ...     offset_provider={"I": IDim},
@@ -98,12 +98,6 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
-
-        # TODO(tehrengruber): This function used to be wrong. The kwarg_types here are
-        #  just ignored silently and the out argument of the field operator used to be passed here.
-        #  With the CompiledProgramPool the out argument is just the third argument (consistent
-        #  with the program definition below). So we just drop it now. In general this function
-        #  should be reworked or replaced. Decide in review.
         arg_types, kwarg_types = inp.args.args, inp.args.kwargs
         assert not kwarg_types
 
