@@ -34,7 +34,7 @@ from gt4py.next.utils import tree_map
 T = TypeVar("T")
 
 ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
-CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int]
+CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int, None | str]
 ArgumentDescriptors: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
@@ -243,11 +243,14 @@ class CompiledProgramsPool:
 
     @functools.cached_property
     def _is_generic(self) -> bool:
-        return not any(isinstance(t, ts.DeferredType) for t in (
-            self.program_type.definition.pos_only_args,
-            self.program_type.definition.pos_or_kw_args.values(),
-            self.program_type.definition.kw_only_args.values()
-        ))
+        return not any(
+            isinstance(t, ts.DeferredType)
+            for t in (
+                self.program_type.definition.pos_only_args,
+                self.program_type.definition.pos_or_kw_args.values(),
+                self.program_type.definition.kw_only_args.values(),
+            )
+        )
 
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
@@ -277,18 +280,23 @@ class CompiledProgramsPool:
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
 
         if self._is_generic:
-            warnings.warn("Calling generic programs / direct calls to scan operators are not been optimized. Consider calling a specialized version instead.", stacklevel=2)
-            arg_specialization_key = eve_utils.content_hash((
-                tuple(type_translation.from_value(arg) for arg in args),
-                {k: type_translation.from_value(v) for k, v in kwargs.items()}
-            ))
+            warnings.warn(
+                "Calling generic programs / direct calls to scan operators are not been optimized. Consider calling a specialized version instead.",
+                stacklevel=2,
+            )
+            arg_specialization_key = eve_utils.content_hash(
+                (
+                    tuple(type_translation.from_value(arg) for arg in args),
+                    {k: type_translation.from_value(v) for k, v in kwargs.items()},
+                )
+            )
         else:
             arg_specialization_key = None
 
         key = (
             static_args_values,
             common.hash_offset_provider_items_by_id(offset_provider),
-            arg_specialization_key
+            arg_specialization_key,
         )
 
         try:
@@ -450,7 +458,7 @@ class CompiledProgramsPool:
         key = (
             self._argument_descriptor_cache_key_from_descriptors(argument_descriptor_contexts),
             common.hash_offset_provider_items_by_id(offset_provider),
-            eve_utils.content_hash((arg_types, kwarg_types)) if self._is_generic else None
+            eve_utils.content_hash((arg_types, kwarg_types)) if self._is_generic else None,
         )
         assert call_key is None or call_key == key
 
