@@ -222,6 +222,8 @@ class CompiledProgramsPool:
 
     backend: gtx_backend.Backend
     definition_stage: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition
+    # Note: This type can be incomplete, i.e. contain DeferredType, whenever the operator is a
+    #  scan operator. In the future it could also be the type of a generic program.
     program_type: ts_ffront.ProgramType
     #: mapping from an argument descriptor type to a list of parameters or expression thereof
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
@@ -446,11 +448,17 @@ class CompiledProgramsPool:
             )
 
         assert (arg_types is None) == (kwarg_types is None)
-        if arg_types is None:
+        if arg_types is None or kwarg_types is None:
             arg_types = tuple(self.program_type.definition.pos_only_args) + tuple(
                 self.program_type.definition.pos_or_kw_args.values()
             )
             kwarg_types = self.program_type.definition.kw_only_args
+            if not all(
+                type_info.is_concrete(t) for t in itertools.chain(arg_types, kwarg_types.values())
+            ):
+                raise ValueError(
+                    "Can not precompile generic program without specified argument types."
+                )
 
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,

@@ -22,6 +22,7 @@ from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
+    KDim,
     V2E,
     cartesian_case,
     mesh_descriptor,
@@ -39,9 +40,14 @@ _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
 
 
-@pytest.fixture
-def compile_testee(cartesian_case):
-    @gtx.field_operator
+@pytest.fixture(
+    params=[
+        pytest.param(True, id="program"),
+        pytest.param(False, id="field-operator"),
+    ]
+)
+def compile_testee(request, cartesian_case):
+    @gtx.field_operator(backend=cartesian_case.backend)
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
         return a + b
 
@@ -49,7 +55,11 @@ def compile_testee(cartesian_case):
     def testee(a: cases.IField, b: cases.IField, out: cases.IField):
         testee_op(a, b, out=out)
 
-    return testee
+    wrap_in_program = request.param
+    if wrap_in_program:
+        return testee
+    else:
+        return testee_op
 
 
 @pytest.fixture
@@ -65,9 +75,14 @@ def compile_testee_domain(cartesian_case):
     return testee
 
 
-@pytest.fixture
-def compile_testee_scan(cartesian_case):
-    @gtx.scan_operator(axis=cases.KDim, forward=True, init=0)
+@pytest.fixture(
+    params=[
+        pytest.param(True, id="program"),
+        pytest.param(False, id="scan-operator"),
+    ]
+)
+def compile_testee_scan(request, cartesian_case):
+    @gtx.scan_operator(axis=cases.KDim, forward=True, init=0, backend=cartesian_case.backend)
     def testee_op(carry: gtx.int32, inp: gtx.int32) -> gtx.int32:
         return carry + inp
 
@@ -75,7 +90,11 @@ def compile_testee_scan(cartesian_case):
     def testee(a: cases.KField, out: cases.KField):
         testee_op(a, out=out)
 
-    return testee
+    wrap_in_program = request.param
+    if wrap_in_program:
+        return testee
+    else:
+        return testee_op
 
 
 def test_compile(cartesian_case, compile_testee):
@@ -128,13 +147,18 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
 
     compile_testee_scan.compile(offset_provider=cartesian_case.offset_provider)
 
-    args, kwargs = cases.get_default_data(cartesian_case, compile_testee_scan)
+    k_size = cartesian_case.default_sizes[KDim]
+    inp = cartesian_case.as_field([KDim], np.arange(k_size))
+    out = cartesian_case.as_field([KDim], np.zeros((k_size,)))
 
     # make sure the backend is never called
     object.__setattr__(compile_testee_scan, "backend", _raise_on_compile)
 
-    compile_testee_scan(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
-    assert np.allclose(kwargs["out"].ndarray, np.cumsum(args[0].ndarray))
+    if isinstance(compile_testee_scan, gtx.ffront.decorator.FieldOperator):
+        pytest.xfail(reason="Scan operators can not be precompiled yet.")
+
+    compile_testee_scan(inp, out=out, offset_provider=cartesian_case.offset_provider)
+    assert np.allclose(out.ndarray, np.cumsum(inp.ndarray))
 
 
 def test_compile_domain(cartesian_case, compile_testee_domain):

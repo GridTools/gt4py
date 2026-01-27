@@ -29,7 +29,6 @@ from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
     common,
-    config,
     embedded as next_embedded,
     errors,
     utils,
@@ -196,6 +195,7 @@ class Program(_CommonProgramLike[ffront_stages.ProgramDefinition]):
         )
 
     def __gt_type__(self) -> ts_ffront.ProgramType:
+        assert isinstance(self.past_stage.past_node.type, ts_ffront.ProgramType)
         return self.past_stage.past_node.type
 
     # TODO(ricoh): linting should become optional, up to the backend.
@@ -610,6 +610,7 @@ class FieldOperator(
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
     """
+
     @classmethod
     def from_function(
         cls,

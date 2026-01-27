@@ -144,6 +144,7 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     transforms: workflow.Workflow[CompilableDefinition, stages.CompilableProgram]
 
+    # TODO(tehrengruber): This is obselete right? Remove it.
     def __call__(
         self,
         program: IRDefinitionForm,

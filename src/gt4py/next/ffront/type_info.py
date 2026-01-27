@@ -425,7 +425,7 @@ def _signature_from_callable_in_program_context(
 
 
 def make_args_canonicalizer(
-    callable_type: ts.CallableType, **kwargs
+    callable_type: ts.CallableType, **kwargs: Any
 ) -> Callable[..., tuple[tuple, dict[str, Any]]]:
     """
     Create a call arguments canonicalizer function from a given signature.
