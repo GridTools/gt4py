@@ -241,17 +241,6 @@ class CompiledProgramsPool:
     def _primitive_values_extractor(self) -> Callable | None:
         return arguments.make_primitive_value_args_extractor(self.program_type.definition)
 
-    @functools.cached_property
-    def _is_generic(self) -> bool:
-        return not any(
-            isinstance(t, ts.DeferredType)
-            for t in (
-                self.program_type.definition.pos_only_args,
-                self.program_type.definition.pos_or_kw_args.values(),
-                self.program_type.definition.kw_only_args.values(),
-            )
-        )
-
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
@@ -334,6 +323,17 @@ class CompiledProgramsPool:
                     **canonical_kwargs,
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
             raise RuntimeError("No program compiled for this set of static arguments.") from e
+
+    @functools.cached_property
+    def _is_generic(self) -> bool:
+        return not any(
+            isinstance(t, ts.DeferredType)
+            for t in (
+                self.program_type.definition.pos_only_args,
+                self.program_type.definition.pos_or_kw_args.values(),
+                self.program_type.definition.kw_only_args.values(),
+            )
+        )
 
     @functools.cached_property
     def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
