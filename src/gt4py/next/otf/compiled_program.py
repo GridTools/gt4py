@@ -326,9 +326,9 @@ class CompiledProgramsPool:
 
     @functools.cached_property
     def _is_generic(self) -> bool:
-        return not any(
+        return any(
             isinstance(t, ts.DeferredType)
-            for t in (
+            for t in itertools.chain(
                 self.program_type.definition.pos_only_args,
                 self.program_type.definition.pos_or_kw_args.values(),
                 self.program_type.definition.kw_only_args.values(),
