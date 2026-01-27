@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from types import TracebackType
 
 from dace import dtypes, nodes, subsets
+from dace.properties import CodeBlock
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.state import LoopRegion
 
@@ -117,7 +118,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
     def visit_IfElse(self, node: tir.IfElse, ctx: Context) -> None:
         if_scope = tn.IfScope(
-            condition=node.if_condition_code,
+            condition=CodeBlock(node.if_condition_code),
             children=[],
         )
 
@@ -160,9 +161,9 @@ def _loop_region_for(node: tir.VerticalLoop) -> LoopRegion:
     return LoopRegion(
         label=f"vertical_loop_{id(node)}",
         loop_var=iteration_var,
-        initialize_expr=f"{iteration_var} = {node.bounds_k.start}",
-        condition_expr=f"{iteration_var} {comparison} {node.bounds_k.end}",
-        update_expr=f"{iteration_var} = {iteration_var} {plus_minus} 1",
+        initialize_expr=CodeBlock(f"{iteration_var} = {node.bounds_k.start}"),
+        condition_expr=CodeBlock(f"{iteration_var} {comparison} {node.bounds_k.end}"),
+        update_expr=CodeBlock(f"{iteration_var} = {iteration_var} {plus_minus} 1"),
     )
 
 
@@ -173,4 +174,4 @@ def _loop_region_while(node: tir.While) -> LoopRegion:
     :param node: While loop to translate
     :return: DaCe LoopRegion to use in `tn.WhileScope`
     """
-    return LoopRegion(label=f"while_loop_{id(node)}", condition_expr=node.condition_code)
+    return LoopRegion(label=f"while_loop_{id(node)}", condition_expr=CodeBlock(node.condition_code))
