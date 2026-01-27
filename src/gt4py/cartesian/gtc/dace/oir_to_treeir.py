@@ -61,7 +61,6 @@ class OIRToTreeIR(eve.NodeVisitor):
         self._device_type = device_type_translate[device_type.upper()]
         self._api_signature = builder.gtir.api_signature
         self._k_bounds = compute_k_boundary(builder.gtir)
-        self._vloop_sections = 0
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         dace_tasklet, inputs, outputs = oir_to_tasklet.OIRToTasklet().visit_CodeBlock(
@@ -226,11 +225,16 @@ class OIRToTreeIR(eve.NodeVisitor):
             groups = self._group_statements(node)
             self.visit(groups, ctx=ctx)
 
-    def visit_AxisBound(self, node: oir.AxisBound, axis_start: str, axis_end: str) -> str:
+    def visit_AxisBound(self, node: common.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:
             return f"({axis_start}) + ({node.offset})"
 
         return f"({axis_end}) + ({node.offset})"
+
+    def visit_RuntimeAxisBound(self, node: common.RuntimeAxisBound, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            "Runtime interval bounds (e.g. `with interval(0, field)`) is an experimental feature and not implemented for the `dace:X` backends."
+        )
 
     def visit_Interval(
         self, node: oir.Interval, loop_order: common.LoopOrder, axis_start: str, axis_end: str
@@ -267,9 +271,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
 
         loop = tir.VerticalLoop(
-            iteration_variable=eve.SymbolRef(
-                f"{tir.Axis.K.iteration_symbol()}_{self._vloop_sections}"
-            ),
+            iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
             loop_order=loop_order,
             bounds_k=bounds,
             schedule=self._vertical_loop_schedule(),
@@ -279,8 +281,6 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         with loop.scope(ctx):
             self.visit(node.horizontal_executions, ctx=ctx)
-
-        self._vloop_sections += 1
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, ctx: tir.Context) -> None:
         if node.caches:

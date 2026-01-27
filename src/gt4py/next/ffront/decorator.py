@@ -15,7 +15,6 @@ from __future__ import annotations
 import abc
 import dataclasses
 import functools
-import time
 import types
 import typing
 import warnings
@@ -33,7 +32,6 @@ from gt4py.next import (
     config,
     embedded as next_embedded,
     errors,
-    metrics,
     utils,
 )
 from gt4py.next.embedded import operators as embedded_operators
@@ -48,6 +46,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.gtcallable import GTCallable
+from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, options, stages, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -151,6 +150,11 @@ class _CommonProgramLike(Generic[DefinitionT]):
 
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self
+
+
+program_call_metrics_collector = metrics.make_collector(
+    level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
+)
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -318,10 +322,7 @@ class Program(_CommonProgramLike[ffront_stages.ProgramDefinition]):
             offset_provider = {}
         enable_jit = self.compilation_options.enable_jit if enable_jit is None else enable_jit
 
-        with metrics.collect() as metrics_source:
-            if collect_info_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.INFO):
-                start = time.perf_counter()
-
+        with program_call_metrics_collector():
             if __debug__:
                 # TODO: remove or make dependency on self.past_stage optional
                 past_process_args._validate_args(
@@ -336,19 +337,20 @@ class Program(_CommonProgramLike[ffront_stages.ProgramDefinition]):
                 )
             else:
                 # Embedded execution.
-                # Metrics source key needs to be setup here, since embedded programs
-                # don't have variants and thus there's no other place we could do this.
-                if config.COLLECT_METRICS_LEVEL:
-                    assert metrics_source is not None
-                    metrics_source.key = (
-                        f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
-                    )
                 warnings.warn(
                     UserWarning(
                         f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
                     ),
                     stacklevel=2,
                 )
+
+                # Metrics source key needs to be set here. Embedded programs
+                # don't have variants so there's no other place to do it.
+                if metrics.is_level_enabled(metrics.MINIMAL):
+                    metrics.set_current_source_key(
+                        f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
+                    )
+
                 with next_embedded.context.update(offset_provider=offset_provider):
                     self.definition_stage.definition(*args, **kwargs)
 

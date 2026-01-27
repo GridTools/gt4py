@@ -108,12 +108,13 @@ class ScalarType(DataType):
 class ListType(DataType):
     """Represents a neighbor list in the ITIR representation.
 
-    Note: not used in the frontend. The concept is represented as Field with local Dimension.
+    Note:
+      - not used in the frontend. The concept is represented as Field with local Dimension.
+      - `None` is used to describe lists originating from `make_const_list`.
     """
 
     element_type: DataType
-    # TODO(tehrengruber): make `offset_type` mandatory
-    offset_type: Optional[common.Dimension] = None
+    offset_type: common.Dimension | None
 
 
 class FieldType(DataType, CallableType):
@@ -145,6 +146,27 @@ class TupleType(DataType):
 
     def __len__(self) -> int:
         return len(self.types)
+
+
+class AnyPythonType:
+    """Marker type representing any Python type which cannot be used for instantiation.
+
+    This is used as a workaround for missing generic support in the case of passing
+    a named collection of fields to a scan where it becomes a named collection of scalars.
+    """
+
+    def __init__(self) -> None:
+        raise AssertionError("Internal Error: The 'AnyPythonType' should never be instantiated.")
+
+
+#: The 'ANY_PYTHON_TYPE_NAME' can be used in 'NamedCollectionType.original_python_type' to indicate
+#: that any original python type is acceptable that is structurally compatible.
+#: This is used as a workaround for missing generic support in the case of passing
+#: a named collection of fields to a scan where it becomes a named collection of scalars.
+#: Note: 'Any' cannot be instantiated and therefore should only be used for type-checking,
+#: but not in places where the original python type is actually needed,
+#: e.g. `make_named_collection_constructor_from_type_spec`.
+ANY_PYTHON_TYPE_NAME: Final[str] = "typing:Any"
 
 
 class NamedCollectionType(DataType):

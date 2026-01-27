@@ -116,6 +116,8 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
             *partial_program_type.definition.pos_or_kw_args.keys(),
             *partial_program_type.definition.kw_only_args.keys(),
         ]
+        if isinstance(inp.data.foast_node.type, ts_ffront.ScanOperatorType):
+            args_names = args_names[1:]  # carry argument is not in parameter list
         assert arg_types[-1] == type_info.return_type(
             type_, with_args=list(arg_types), with_kwargs=kwarg_types
         )

@@ -13,7 +13,12 @@ that explains the general structure and requirements on the SDFGs.
 """
 
 from . import constants, splitting_tools
-from .auto_optimize import GT4PyAutoOptHook, GT4PyAutoOptHookFun, gt_auto_optimize
+from .auto_optimize import (
+    GT4PyAutoOptHook,
+    GT4PyAutoOptHookFun,
+    GT4PyAutoOptHookStage,
+    gt_auto_optimize,
+)
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
 from .gpu_utils import (
     GPUSetBlockSize,
@@ -49,6 +54,7 @@ from .multi_state_global_self_copy_elimination import (
 from .redundant_array_removers import CopyChainRemover, DoubleWriteRemover, gt_remove_copy_chain
 from .remove_access_node_copies import RemoveAccessNodeCopies
 from .remove_views import RemovePointwiseViews
+from .scan_loop_unrolling import ScanLoopUnrolling
 from .simplify import (
     GT4PyMapBufferElimination,
     GT4PyMoveTaskletIntoMap,
@@ -80,6 +86,7 @@ __all__ = [
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
+    "GT4PyAutoOptHookStage",
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
@@ -98,6 +105,7 @@ __all__ = [
     "MultiStateGlobalSelfCopyElimination2",
     "RemoveAccessNodeCopies",
     "RemovePointwiseViews",
+    "ScanLoopUnrolling",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",

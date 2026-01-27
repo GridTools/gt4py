@@ -149,6 +149,82 @@ def test_named_collection_constructed_inside(cartesian_case, testee):
     )
 
 
+@gtx.program
+def constructed_inside_named_tuple_program_with_domain(
+    vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
+    i_size: gtx.int32,
+    j_size: gtx.int32,
+    out: NamedTupleNamedCollection,
+):
+    constructed_inside_named_tuple(
+        vel,
+        out=out,
+        domain=(
+            {IDim: (0, i_size), JDim: (0, j_size)},
+            {IDim: (0, i_size - 1), JDim: (0, j_size - 1)},
+        ),
+    )
+
+
+@gtx.program
+def constructed_inside_dataclass_program_with_domain(
+    vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
+    i_size: gtx.int32,
+    j_size: gtx.int32,
+    out: DataclassNamedCollection,
+):
+    constructed_inside_dataclass(
+        vel,
+        out=out,
+        domain=(
+            {IDim: (0, i_size), JDim: (0, j_size)},
+            {IDim: (0, i_size - 1), JDim: (0, j_size - 1)},
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "testee",
+    [
+        constructed_inside_named_tuple_program_with_domain,
+        constructed_inside_dataclass_program_with_domain,
+    ],
+)
+def test_named_collection_with_multiple_output_domains(cartesian_case, testee):
+    vel = cases.allocate(cartesian_case, testee, "vel")()
+    out = cases.allocate(
+        cartesian_case, testee, "out" if isinstance(testee, decorator.Program) else cases.RETURN
+    )()
+    container_type = out.__class__
+    out = container_type(
+        u=cases.allocate(
+            cartesian_case,
+            testee,
+            "vel",
+            strategy=cases.ZeroInitializer(),
+        )()[0],
+        v=cases.allocate(
+            cartesian_case,
+            testee,
+            "vel",
+            strategy=cases.ZeroInitializer(),
+            extend={IDim: (0, -1), JDim: (0, -1)},
+        )()[0],
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        vel,
+        cartesian_case.default_sizes[IDim],
+        cartesian_case.default_sizes[JDim],
+        out=out,
+        ref=container_type(
+            u=vel[0].asnumpy() + vel[1].asnumpy(), v=(vel[0].asnumpy() - vel[1].asnumpy())[:-1, :-1]
+        ),
+    )
+
+
 @dataclasses.dataclass
 class NestedNamedCollection:
     a: tuple[gtx.Field[[IDim, JDim], gtx.float32], NamedTupleNamedCollection]
@@ -249,7 +325,49 @@ def test_scan(cartesian_case, testee):
         testee,
         inp,
         out=out,
-        ref=np.cumsum(inp, axis=0),
+        ref=np.cumsum(inp.asnumpy(), axis=0),
+    )
+
+
+@dataclasses.dataclass
+class ScalarNamedCollection:
+    value: gtx.float32
+
+
+@dataclasses.dataclass
+class FieldNamedCollection:
+    value: gtx.Field[[KDim], gtx.float32]
+
+
+@gtx.scan_operator(axis=cases.KDim, forward=True, init=gtx.float32(0.0))
+def scan_with_scalar_named_collection(
+    state: gtx.float32,
+    inp: ScalarNamedCollection,
+    scalar: ScalarNamedCollection,
+) -> gtx.float32:
+    return inp.value * scalar.value + state
+
+
+@gtx.field_operator
+def scan_with_scalar_named_collection_wrapper(
+    inp: FieldNamedCollection,
+    scalar: ScalarNamedCollection,
+) -> gtx.Field[[KDim], gtx.float32]:
+    return scan_with_scalar_named_collection(inp, scalar=scalar)
+
+
+def test_scan_with_scalar_named_collection(cartesian_case):
+    inp = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, "inp")()
+    out = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, cases.RETURN)()
+    scalar = ScalarNamedCollection(value=gtx.float32(2.0))
+
+    cases.verify(
+        cartesian_case,
+        scan_with_scalar_named_collection_wrapper,
+        inp,
+        scalar,
+        out=out,
+        ref=np.cumsum(inp.value.asnumpy() * 2.0, axis=0),
     )
 
 
@@ -257,7 +375,7 @@ def test_scan(cartesian_case, testee):
     reason="We store the qualified name to the actual Python type in the `NamedTupleType`."
 )
 def test_locally_defined_named_collection(cartesian_case):
-    # We could fix this pattern by storing the actual type (instead of a the qualified name).
+    # We could fix this pattern by storing the actual type (instead of the qualified name).
     @dataclasses.dataclass
     class LocalNamedCollection:  # not at global scope!
         u: gtx.Field[[IDim, JDim], gtx.float32]

@@ -119,6 +119,8 @@ def gt_auto_optimize(
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
+    scan_loop_unrolling: bool = False,
+    scan_loop_unrolling_factor: int = 0,
     disable_splitting: bool = False,
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
@@ -179,6 +181,8 @@ def gt_auto_optimize(
         blocking_only_if_independent_nodes: If `True`, the default, only apply loop
             blocking if there are independent nodes in the Map, see the
             `require_independent_nodes` option of the `LoopBlocking` transformation.
+        scan_loop_unrolling: Whether to unroll scan loops.
+        scan_loop_unrolling_factor: The unroll factor to use when unrolling scan loops.
         disable_splitting: Disable the splitting transformations.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
@@ -318,6 +322,8 @@ def gt_auto_optimize(
             blocking_dim=blocking_dim,
             blocking_size=blocking_size,
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
+            scan_loop_unrolling=scan_loop_unrolling,
+            scan_loop_unrolling_factor=scan_loop_unrolling_factor,
             validate_all=validate_all,
         )
 
@@ -481,6 +487,12 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
+        # NOTE: There is a Memlet caching issue at work here, see DaCe issue 1703 and
+        #   1708. Without clearing the cache, which is done through a side effect of
+        #   `to_json()`, running `propagate_memlets_sdfg()` would lead to an invalid
+        #   SDFG.
+        sdfg.to_json(hash=False)
+
         # Promote Maps. This will remove transients between 1D and 2D Maps, at the
         #  cost of more data loads from memory. Empirical observations have shown
         #  that this is beneficial; especially for Nabla4-type kernel in conjunction
@@ -553,18 +565,21 @@ def _gt_auto_process_top_level_maps(
             dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
 
-            sdfg.apply_transformations_repeated(
-                [
-                    # TODO(phimuell): The transformation is also active inside Maps.
-                    #   Which is against the description of this function, but it should
-                    #   not matter that much.
-                    gtx_transformations.SplitAccessNode(
-                        single_use_data=single_use_data,
-                    ),
-                    gtx_transformations.GT4PyMapBufferElimination(
-                        assume_pointwise=assume_pointwise,
-                    ),
-                ],
+            # Split the top level AccessNodes.
+            # NOTE: This function will also update `single_use_data`.
+            gtx_transformations.gt_split_access_nodes(
+                sdfg=sdfg,
+                validate=False,
+                validate_all=validate_all,
+                single_use_data=single_use_data,
+            )
+
+            # Perform buffer elimination.
+            # TODO(phimuell): Implement a faster matching.
+            sdfg.apply_transformations_once_everywhere(
+                gtx_transformations.GT4PyMapBufferElimination(
+                    assume_pointwise=assume_pointwise,
+                ),
                 validate=False,
                 validate_all=validate_all,
             )
@@ -643,6 +658,8 @@ def _gt_auto_process_dataflow_inside_maps(
     blocking_dim: Optional[gtx_common.Dimension],
     blocking_size: int,
     blocking_only_if_independent_nodes: Optional[bool],
+    scan_loop_unrolling: bool,
+    scan_loop_unrolling_factor: int,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
@@ -712,6 +729,13 @@ def _gt_auto_process_dataflow_inside_maps(
         validate=False,
         validate_all=validate_all,
     )
+
+    if scan_loop_unrolling:
+        sdfg.apply_transformations_once_everywhere(
+            gtx_transformations.ScanLoopUnrolling(unroll_factor=scan_loop_unrolling_factor),
+            validate=False,
+            validate_all=validate_all,
+        )
 
     return sdfg
 

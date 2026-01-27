@@ -17,19 +17,33 @@ from typing import Any, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config, errors, metrics, utils as gtx_utils
+from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
     type_specifications as ts_ffront,
     type_translation,
 )
+from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
 
 T = TypeVar("T")
+
+ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
+CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int]
+ArgumentDescriptors: TypeAlias = dict[
+    type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
+]
+ArgumentDescriptorContext: TypeAlias = dict[
+    str, xtyping.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
+]
+ArgumentDescriptorContexts: TypeAlias = dict[
+    type[arguments.ArgStaticDescriptor],
+    ArgumentDescriptorContext,
+]
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
 _async_compilation_pool: concurrent.futures.Executor | None = None
@@ -44,19 +58,6 @@ def _init_async_compilation_pool() -> None:
 
 
 _init_async_compilation_pool()
-
-ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
-CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int]
-ArgumentDescriptors: TypeAlias = dict[
-    type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
-]
-ArgumentDescriptorContext: TypeAlias = dict[
-    str, xtyping.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
-]
-ArgumentDescriptorContexts: TypeAlias = dict[
-    type[arguments.ArgStaticDescriptor],
-    ArgumentDescriptorContext,
-]
 
 
 def wait_for_compilation() -> None:
@@ -268,9 +269,8 @@ class CompiledProgramsPool:
 
         try:
             program = self.compiled_programs[key]
-            if config.COLLECT_METRICS_LEVEL:
-                metrics_source = metrics.get_current_source()
-                metrics_source.key = self._metrics_key_from_pool_key(key)
+            if metrics.is_level_enabled(metrics.MINIMAL):
+                metrics.set_current_source_key(self._metrics_key_from_pool_key(key))
 
             program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator]  # the Future case is handled below
 
@@ -433,8 +433,8 @@ class CompiledProgramsPool:
             raise ValueError(f"Program with key {key} already exists.")
 
         # If we are collecting metrics, create a new metrics entity for this compiled program
-        if config.COLLECT_METRICS_LEVEL:
-            metrics_source = metrics.get_source(self._metrics_key_from_pool_key(key))
+        if metrics.is_level_enabled(metrics.MINIMAL):
+            metrics_source = metrics.set_current_source_key(self._metrics_key_from_pool_key(key))
             metrics_source.metadata |= dict(
                 name=self.definition_stage.definition.__name__,
                 backend=self.backend.name,

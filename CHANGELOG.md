@@ -2,6 +2,34 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.3] - 2026-01-19
+
+### Cartesian
+
+- New features:
+  - Support for K iterator access in `numpy` backend
+  - New `dace_KJI` backend that operates on fields with Fortran memory layout
+  - Automatic match for `dace:X` backends between layout and schedule, cache-optimal by default
+
+## [1.1.2] - 2025-12-08
+
+### General
+
+- Added support for Python 3.14.
+
+### Cartesian
+
+- New feature: Runtime Interval Bounds
+
+## [1.1.1] - 2025-11-13
+
+### Cartesian
+
+- Allow self-assignment with offset in K dimension in sequential vertical loops
+- Bug fixes:
+  - Skip implicit upcasting in (explicit) cast operations
+  - Respect precision of Constants
+
 ## [1.1.0] - 2025-11-05
 
 ### Cartesian

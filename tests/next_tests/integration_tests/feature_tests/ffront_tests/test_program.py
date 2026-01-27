@@ -180,7 +180,7 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     assert np.allclose(
         (a[1:].asnumpy(), b[1:].asnumpy()), (out_a[1:].asnumpy(), out_b[1:].asnumpy())
     )
-    assert out_a[0] == 0 and out_b[0] == 0
+    assert out_a[0].as_scalar() == 0 and out_b[0].as_scalar() == 0
 
 
 def test_tuple_program_return_constructed_inside_nested(cartesian_case):
@@ -279,12 +279,12 @@ def test_in_field_arg_with_non_zero_domain_start(cartesian_case, copy_program_de
     def copy_program(a: cases.IField, out: cases.IField):
         identity(a, out=out, domain={IDim: (1, 9)})
 
-    inp = constructors.empty(
+    inp = constructors.full(
         common.domain({IDim: (1, 9)}),
+        42,
         dtype=np.int32,
         allocator=cartesian_case.allocator,
     )
-    inp.ndarray[...] = 42
     out = cases.allocate(cartesian_case, copy_program, "out", sizes={IDim: 10})()
     ref = out.asnumpy().copy()  # ensure we are not writing to `out` outside the domain
     ref[1:9] = inp.asnumpy()

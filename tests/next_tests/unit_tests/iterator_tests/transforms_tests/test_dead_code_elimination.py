@@ -8,7 +8,7 @@
 
 import pytest
 
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator import ir as itir
@@ -46,7 +46,11 @@ def program_factory(expr: itir.Expr) -> itir.Program:
         (im.let("val", "inp1")(im.if_(im.and_(True, True), "val", "inp2")), im.ref("inp1")),
     ],
 )
-def test_let_constant_foldable_if(input, expected):
+def test_let_constant_foldable_if(
+    input: itir.Expr, expected: itir.Expr, uids: utils.IDGeneratorPool
+):
     input_program = program_factory(input)
-    inlined = dead_code_elimination.dead_code_elimination(input_program, offset_provider_type={})
+    inlined = dead_code_elimination.dead_code_elimination(
+        input_program, offset_provider_type={}, uids=uids
+    )
     assert inlined == program_factory(expected)

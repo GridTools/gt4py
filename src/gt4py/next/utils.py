@@ -25,6 +25,8 @@ from typing import (
     overload,
 )
 
+from gt4py.eve import utils as eve_utils
+
 
 class RecursionGuard:
     """
@@ -388,3 +390,26 @@ def canonicalize_call_args(
     """
 
     return make_args_canonicalizer_for_function(func)(*args, **kwargs)
+
+
+class IDGeneratorPool(eve_utils.CustomDefaultDictBase):
+    """
+    Utility for providing unique IDs for each prefix.
+
+    The use-case for this implementation is to provide a single IDGeneratorPool for the whole
+    transformation pipeline, which ensure unique names (prefix+counter) across all transformations.
+
+    The reason for this implementation of a single counter per prefix (over a global increasing counter)
+    is that parts of the IR might still be stable when comparing different versions of a transformation.
+
+    >>> uids = IDGeneratorPool()
+    >>> next(uids["foo"])
+    'foo_0'
+    >>> next(uids["foo"])
+    'foo_1'
+    >>> next(uids["bar"])
+    'bar_0'
+    """
+
+    def value_factory(self, prefix: str) -> eve_utils.SequentialIDGenerator:
+        return eve_utils.SequentialIDGenerator(prefix=prefix)
