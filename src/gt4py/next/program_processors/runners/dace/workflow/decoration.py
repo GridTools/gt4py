@@ -14,7 +14,8 @@ from typing import Any, Sequence
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, config, metrics, utils as gtx_utils
+from gt4py.next import common as gtx_common, config, utils as gtx_utils
+from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -28,7 +29,7 @@ def convert_args(
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> stages.CompiledProgram:
     # Retieve metrics level from GT4Py environment variable.
-    collect_time = config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE
+    collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
     collect_time_arg = np.array([1], dtype=np.float64)
     # We use the callback function provided by the compiled program to update the SDFG arglist.
     update_sdfg_call_args = functools.partial(
@@ -72,8 +73,6 @@ def convert_args(
         fun.fast_call()
 
         if collect_time:
-            metric_source = metrics.get_current_source()
-            assert metric_source is not None
-            metric_source.metrics[metrics.COMPUTE_METRIC].add_sample(collect_time_arg[0].item())
+            metrics.add_sample_to_current_source(metrics.COMPUTE_METRIC, collect_time_arg[0].item())
 
     return decorated_program

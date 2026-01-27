@@ -13,8 +13,9 @@ import unittest.mock as mock
 import pytest
 
 from gt4py import next as gtx
+from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
-from gt4py.next import common as gtx_common, metrics
+from gt4py.next import common as gtx_common
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -73,7 +74,8 @@ def test_frozen(cartesian_case):
     "metrics_level,expected_names",
     [
         (metrics.DISABLED, ()),
-        (metrics.PERFORMANCE, ("compute",)),
+        (metrics.MINIMAL, ("total",)),
+        (metrics.PERFORMANCE, ("total", "compute")),
         (metrics.ALL, ("compute", "total")),
     ],
 )
@@ -92,7 +94,9 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
 
     with (
         mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level),
-        mock.patch("gt4py.next.metrics.sources", collections.defaultdict(metrics.Source)),
+        mock.patch(
+            "gt4py.next.instrumentation.metrics.sources", collections.defaultdict(metrics.Source)
+        ),
     ):
         testee = testee.with_backend(cartesian_case.backend).with_grid_type(
             cartesian_case.grid_type
