@@ -493,10 +493,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             name, self.sdfg, self.state, map_ranges, inputs, code, outputs, **kwargs
         )
 
-    def unique_nsdfg_name(self, prefix: str) -> str:
-        """Utility function to generate a unique name for a nested SDFG, starting with the given prefix."""
-        return self.subgraph_builder.unique_nsdfg_name(self.sdfg, prefix)
-
     def _construct_local_view(self, field: MemletExpr | ValueExpr) -> ValueExpr:
         if isinstance(field, MemletExpr):
             desc = field.dc_node.desc(self.sdfg)
@@ -778,7 +774,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     deref_on_input_memlet=deref_on_input_memlet: self._visit_if_branch_arg(
                         if_sdfg,
                         if_branch_state,
-                        tsym.id,
+                        str(tsym.id),
                         targ,
                         deref_on_input_memlet,
                         if_sdfg_input_memlets,
@@ -869,7 +865,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             else (condition_value.dc_dtype == dace.dtypes.bool_)
         )
 
-        nsdfg = dace.SDFG(self.unique_nsdfg_name(prefix="if_stmt"))
+        nsdfg = dace.SDFG(self.subgraph_builder.unique_nsdfg_name("if_stmt"))
         nsdfg.debuginfo = gtir_to_sdfg_utils.debug_info(node, default=self.sdfg.debuginfo)
 
         # create states inside the nested SDFG for the if-branches
@@ -1371,7 +1367,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert desc.shape[local_dim_index] == offset_provider_type.max_neighbors
 
         # we lower the reduction map with WCR out memlet in a nested SDFG
-        nsdfg = dace.SDFG(name=self.unique_nsdfg_name("reduce_with_skip_values"))
+        nsdfg = dace.SDFG(self.subgraph_builder.unique_nsdfg_name("reduce_with_skip_values"))
         nsdfg.add_array(
             "values",
             (desc.shape[local_dim_index],),

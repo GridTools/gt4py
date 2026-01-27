@@ -248,7 +248,7 @@ def translate_as_fieldop(
         return translate_scan(node, ctx, sdfg_builder)
 
     if not isinstance(node.type, ts.FieldType):
-        raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
+        raise NotImplementedError("Unexpected 'as_fieldop' with tuple output in SDFG lowering.")
 
     # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
@@ -269,7 +269,7 @@ def translate_as_fieldop(
             # on the given domain. It copies a subset of the source field.
             arg = sdfg_builder.visit(node.args[0], ctx=ctx)
             assert isinstance(arg, gtir_to_sdfg_types.FieldopData)
-            return ctx.copy_field(arg, domain=field_domain)
+            return ctx.copy_data(sdfg_builder, arg, domain=field_domain)
     elif isinstance(fieldop_expr, gtir.Lambda):
         # Default case, handled below: the argument expression is a lambda function
         # representing the stencil operation to be computed over the field domain.
@@ -426,13 +426,13 @@ def translate_if(
 
     # expect true branch as second argument
     true_state = ctx.sdfg.add_state(ctx.state.label + "_true_branch")
-    tbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, true_state)
+    tbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, true_state, ctx.scope_symbols)
     ctx.sdfg.add_edge(cond_state, true_state, dace.InterstateEdge(condition=if_stmt))
     ctx.sdfg.add_edge(true_state, ctx.state, dace.InterstateEdge())
 
     # and false branch as third argument
     false_state = ctx.sdfg.add_state(ctx.state.label + "_false_branch")
-    fbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, false_state)
+    fbranch_ctx = gtir_to_sdfg.SubgraphContext(ctx.sdfg, false_state, ctx.scope_symbols)
     ctx.sdfg.add_edge(cond_state, false_state, dace.InterstateEdge(condition=f"not({if_stmt})"))
     ctx.sdfg.add_edge(false_state, ctx.state, dace.InterstateEdge())
 
@@ -556,7 +556,7 @@ def _get_symbolic_value(
         code=f"out = {symbolic_expr}",
     )
     temp_name, _ = sdfg.add_scalar(
-        temp_name or sdfg.temp_data_name(),
+        temp_name or sdfg_builder.unique_temp_name(),
         gtx_dace_args.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,
@@ -655,15 +655,13 @@ def translate_scalar_expr(
     scalar_expr_args = []
 
     for i, arg_expr in enumerate(node.args):
-        visit_expr = True
         if isinstance(arg_expr, gtir.SymRef):
-            try:
-                # check if symbol is defined in the GT4Py program, throws `KeyError` exception if undefined
-                sdfg_builder.get_symbol_type(arg_expr.id)
-            except KeyError:
-                # all `SymRef` should refer to symbols defined in the program, except in case of non-variable argument,
-                # e.g. the type name `float64` used in casting expressions like `cast_(variable, float64)`
-                visit_expr = False
+            # all `SymRef` should refer to symbols defined in the program, except in case of non-variable argument,
+            # e.g. the type name `float64` used in casting expressions like `cast_(variable, float64)`
+            visit_expr = str(arg_expr.id) in ctx.scope_symbols
+        else:
+            # any other kind of node should always be visited
+            visit_expr = True
 
         if visit_expr:
             # we visit the argument expression and obtain the access node to
@@ -731,7 +729,7 @@ def translate_symbol_ref(
 
     symbol_name = str(node.id)
     # we retrieve the type of the symbol in the GT4Py prgram
-    gt_symbol_type = sdfg_builder.get_symbol_type(symbol_name)
+    gt_symbol_type = ctx.get_symbol_type(symbol_name)
 
     # Create new access node in current state. It is possible that multiple
     # access nodes are created in one state for the same data container.
