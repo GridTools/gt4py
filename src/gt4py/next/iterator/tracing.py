@@ -14,7 +14,7 @@ from typing import Callable, ClassVar, List
 from gt4py._core import definitions as core_defs
 from gt4py.eve import Node, utils as eve_utils
 from gt4py.next import common, iterator
-from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator import builtins, ir as itir, runtime
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
