@@ -354,10 +354,6 @@ class Program(_CommonProgramLike[ffront_stages.ProgramDefinition]):
                 with next_embedded.context.update(offset_provider=offset_provider):
                     self.definition_stage.definition(*args, **kwargs)
 
-            if collect_info_metrics:
-                assert metrics_source is not None
-                metrics_source.metrics[metrics.TOTAL_METRIC].add_sample(time.perf_counter() - start)
-
     def freeze(self) -> FrozenProgram:
         if self.backend is None:
             raise ValueError("Can not freeze a program without backend (embedded execution).")
