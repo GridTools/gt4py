@@ -12,6 +12,7 @@ import concurrent.futures
 import dataclasses
 import functools
 import itertools
+import warnings
 from collections.abc import Callable, Hashable, Sequence
 from typing import Any, TypeAlias, TypeVar
 
@@ -240,6 +241,14 @@ class CompiledProgramsPool:
     def _primitive_values_extractor(self) -> Callable | None:
         return arguments.make_primitive_value_args_extractor(self.program_type.definition)
 
+    @functools.cached_property
+    def _is_generic(self) -> bool:
+        return not any(isinstance(t, ts.DeferredType) for t in (
+            self.program_type.definition.pos_only_args,
+            self.program_type.definition.pos_or_kw_args.values(),
+            self.program_type.definition.kw_only_args.values()
+        ))
+
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
@@ -266,8 +275,21 @@ class CompiledProgramsPool:
         else:
             args, kwargs = canonical_args, canonical_kwargs
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
-        # TODO: add arg types to key for scan
-        key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
+
+        if self._is_generic:
+            warnings.warn("Calling generic programs / direct calls to scan operators are not been optimized. Consider calling a specialized version instead.", stacklevel=2)
+            arg_specialization_key = eve_utils.content_hash((
+                tuple(type_translation.from_value(arg) for arg in args),
+                {k: type_translation.from_value(v) for k, v in kwargs.items()}
+            ))
+        else:
+            arg_specialization_key = None
+
+        key = (
+            static_args_values,
+            common.hash_offset_provider_items_by_id(offset_provider),
+            arg_specialization_key
+        )
 
         try:
             program = self.compiled_programs[key]
@@ -428,6 +450,7 @@ class CompiledProgramsPool:
         key = (
             self._argument_descriptor_cache_key_from_descriptors(argument_descriptor_contexts),
             common.hash_offset_provider_items_by_id(offset_provider),
+            eve_utils.content_hash((arg_types, kwarg_types)) if self._is_generic else None
         )
         assert call_key is None or call_key == key
 
@@ -449,16 +472,14 @@ class CompiledProgramsPool:
 
         assert (arg_types is None) == (kwarg_types is None)
         if arg_types is None or kwarg_types is None:
+            if self._is_generic:
+                raise ValueError(
+                    "Can not precompile generic program or scan without specified argument types."
+                )
             arg_types = tuple(self.program_type.definition.pos_only_args) + tuple(
                 self.program_type.definition.pos_or_kw_args.values()
             )
             kwarg_types = self.program_type.definition.kw_only_args
-            if not all(
-                type_info.is_concrete(t) for t in itertools.chain(arg_types, kwarg_types.values())
-            ):
-                raise ValueError(
-                    "Can not precompile generic program or scan without specified argument types."
-                )
 
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,
