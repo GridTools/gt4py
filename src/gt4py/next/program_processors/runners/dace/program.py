@@ -39,7 +39,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         if (self.backend is None) or "dace" not in self.backend.name.lower():
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
-        offset_provider: gtx_common.OffsetProvider = self.connectivities or {}
+        offset_provider: gtx_common.OffsetProvider = self.compilation_options.connectivities or {}
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.
@@ -150,12 +150,12 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         the offset providers are not part of GT4Py Program's arguments.
         Keep in mind, that `__sdfg_closure__` is called after `__sdfg__` method.
         """
-        if not self.connectivities:
+        if not self.compilation_options.connectivities:
             return {}
 
         used_connectivities: dict[str, gtx_common.NeighborConnectivity] = {
             conn_id: conn
-            for offset, conn in self.connectivities.items()
+            for offset, conn in self.compilation_options.connectivities.items()
             if gtx_common.is_neighbor_table(conn)
             and (conn_id := gtx_dace_args.connectivity_identifier(offset))
             in self.sdfg_closure_cache["arrays"]
@@ -171,7 +171,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # Build the closure dictionary
         closure_dict: dict[str, dace.data.Array] = {}
-        offset_provider_type = gtx_common.offset_provider_to_type(self.connectivities)
+        offset_provider_type = gtx_common.offset_provider_to_type(self.compilation_options.connectivities)
         for conn_id, conn in used_connectivities.items():
             if conn_id not in self.connectivity_tables_data_descriptors:
                 self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
