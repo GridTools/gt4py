@@ -33,37 +33,45 @@ inside the NestedSDFG.
 
 def gt_change_strides(
     sdfg: dace.SDFG,
-    gpu: bool,
 ) -> dace.SDFG:
     """Modifies the strides of transients.
 
     The function will analyse the access patterns and set the strides of
-    transients in the optimal way.
-    The function should run after all maps have been created.
+    transients in the optimal way. The function should run after _all_
+    Maps have been created.
+    After the adjustment of the strides they will be propagated into the nested
+    SDFGs, see `gt_propagate_strides_of()` for more.
 
-    After the strides have been adjusted the function will also propagate
-    the strides into nested SDFG, see `gt_propagate_strides_of()` for more.
     Args:
         sdfg: The SDFG to process.
-        gpu: If the SDFG is supposed to run on the GPU.
 
     Note:
         Currently the function will not scan the access pattern. Instead it will
-        either use FORTRAN order for GPU or C order. This function needs to be called
+        translate the memory layout such that the horizontal dimension has stride 1,
+        which is used by the GT4Py allocator. This function needs to be called
         for both CPU and GPU to handle strides of memlets inside nested SDFGs.
 
     Todo:
-        - Implement the estimation correctly.
+        - Update this function such that the memory order is computed based on the
+            access pattern. Probably also merge it with `gt_set_iteration_order()`
+            function as the task are related.
+        - Im
     """
-    # TODO(phimeull): Implement this function correctly.
+    # TODO(phimeull): Implement this function correctly, such that it decides the
+    #   order based on the access pattern. Probably also merge it with
+    #   `gt_set_iteration_order()` as the two things are related.
+    # NOTE: This function builds on the fact that in GT4Py the horizontal dimension
+    #   is always the first dimensions, i.e. column or FORTRAN order and that in
+    #   DaCe the default order (which the lowering uses), is row or C order.
+    #   Thus we just have to inverse the order for all transients and propagate
+    #   the new strides.
 
     for nsdfg in sdfg.all_sdfgs_recursive():
-        _gt_change_strides_non_recursive_impl(nsdfg, gpu)
+        _gt_change_strides_non_recursive_impl(nsdfg)
 
 
 def _gt_change_strides_non_recursive_impl(
     sdfg: dace.SDFG,
-    gpu: bool,
 ) -> None:
     """Set optimal strides of all access nodes in the SDFG.
 
@@ -103,7 +111,7 @@ def _gt_change_strides_non_recursive_impl(
         #  access nodes because the non-transients come from outside and have their
         #  own strides.
         # TODO(phimuell): Set the stride based on the actual access pattern.
-        if desc.transient and gpu:
+        if desc.transient:
             new_stride_order = list(range(ndim))
             desc.set_strides_from_layout(*new_stride_order)
 
@@ -124,7 +132,8 @@ def _gt_change_strides_non_recursive_impl(
             )
 
     # Now handle the views.
-    # TODO(phimuell): Remove once `gt_propagate_strides_from_access_node()` can handle views.
+    # TODO(phimuell): Remove once `gt_propagate_strides_from_access_node()` can
+    #   handle views. However, we should get to a point where we do not have views.
     _gt_modify_strides_of_views_non_recursive(sdfg)
 
 

@@ -762,12 +762,12 @@ def _gt_auto_configure_maps_and_strides(
     For a description of the arguments see the `gt_auto_optimize()` function.
     """
 
-    # We now set the iteration order of the Maps. For that we use `unit_strides_kind`
-    #  argument and if not supplied we guess depending if we are on the GPU or not.
+    # If no unit stride is given explicitly we assume that it is in the horizontal.
+    # NOTE: Before the optimizer assumed that the memory layout was different for
+    #   GPU (horizontal first) and CPU (vertical first). However this was wrong.
     if unit_strides_kind is None:
-        unit_strides_kind = (
-            gtx_common.DimensionKind.HORIZONTAL if gpu else gtx_common.DimensionKind.VERTICAL
-        )
+        unit_strides_kind = gtx_common.DimensionKind.HORIZONTAL
+
     # It is not possible to use the `unit_strides_dim` argument of the
     #  function, because `LoopBlocking`, if run, changed the name of the
     #  parameter but the dimension can still be identified by its "kind".
@@ -782,11 +782,10 @@ def _gt_auto_configure_maps_and_strides(
     #   get expanded, i.e. turned into Maps because no `cudaMemcpy*()` call exists,
     #   which requires that the final strides are there. Furthermore, Memlet expansion
     #   has to happen before the GPU block size is set. There are several possible
-    #   solutions for that, of which none is really good. The one that is the least
-    #   bad thing is to set the strides of the transients here. The main downside
-    #   is that this and the `_gt_auto_post_processing()` function has these weird
-    #   names.
-    gtx_transformations.gt_change_strides(sdfg, gpu=gpu)
+    #   solutions for that, of which none is really good. The least bad one is to
+    #   set the strides of the transients here. The main downside is that this and
+    #   the `_gt_auto_post_processing()` function has these weird names.
+    gtx_transformations.gt_change_strides(sdfg)
 
     if gpu:
         # TODO(phimuell): The GPU function might modify the map iteration order.
