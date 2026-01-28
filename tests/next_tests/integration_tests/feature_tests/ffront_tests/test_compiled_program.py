@@ -518,6 +518,9 @@ def test_compile_variants_config_default_disable_jit(cartesian_case):
     """
     # One of the 2 cases will be the non-default. The program has to be defined after the config
     # has been altered in order for the value to take effect.
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
     with mock.patch.object(config, "ENABLE_JIT_DEFAULT", True):
 
         @gtx.field_operator
@@ -576,7 +579,7 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
 
     # the compile_variants_testee has static_params set and is compiled (in a previous test)
-    assert len(compile_variants_testee.static_params) > 0
+    assert len(compile_variants_testee.compilation_options.static_params) > 0
     assert compile_variants_testee._compiled_programs is not None
 
     # but now we reset the compiled programs
@@ -883,7 +886,11 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
         a = cases.allocate(cartesian_case, compile_testee, "a")()
         b = cases.allocate(cartesian_case, compile_testee, "b")()
 
-        out = cases.allocate(cartesian_case, compile_testee, "out")()
+        if isinstance(compile_testee, gtx.ffront.decorator.FieldOperator):
+            out = cases.allocate(cartesian_case, compile_testee, cases.RETURN)()
+        else:
+            out = cases.allocate(cartesian_case, compile_testee, "out")()
+
         compile_testee(
             a,
             b,
