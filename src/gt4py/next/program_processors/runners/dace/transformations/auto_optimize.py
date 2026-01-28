@@ -763,17 +763,19 @@ def _gt_auto_configure_maps_and_strides(
     """
 
     # If no unit stride is given explicitly we assume that it is in the horizontal.
-    # NOTE: Before the optimizer assumed that the memory layout was different for
-    #   GPU (horizontal first) and CPU (vertical first). However this was wrong.
-    if unit_strides_kind is None:
-        unit_strides_kind = gtx_common.DimensionKind.HORIZONTAL
+    #  This has also technical reasons to avoid launch errors (on GPU we have to make
+    #  sure that the biggest dimension ends up on the `x` direction, which is most
+    #  likely the horizontal dimension).
+    prime_direction_kind = (
+        gtx_common.DimensionKind.HORIZONTAL if unit_strides_kind is None else unit_strides_kind
+    )
 
     # It is not possible to use the `unit_strides_dim` argument of the
     #  function, because `LoopBlocking`, if run, changed the name of the
     #  parameter but the dimension can still be identified by its "kind".
     gtx_transformations.gt_set_iteration_order(
         sdfg=sdfg,
-        unit_strides_kind=unit_strides_kind,
+        unit_strides_kind=prime_direction_kind,
         validate=False,
         validate_all=validate_all,
     )
