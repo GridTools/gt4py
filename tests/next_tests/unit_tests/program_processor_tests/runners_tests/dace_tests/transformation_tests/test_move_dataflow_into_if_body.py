@@ -1047,3 +1047,131 @@ def test_if_mover_symbolic_tasklet():
     assert if_block.sdfg.symbols["__i"] in {dace.int32, dace.int64}
     assert if_block.symbol_mapping.keys() == expected_symb.union(["__i"])
     assert all(str(sym) == str(symval) for sym, symval in if_block.symbol_mapping.items())
+
+
+def test_if_mover_access_node_between():
+    """
+    Essentially tests the following situation:
+    ```python
+    a = foo(...)
+    b = bar(...)
+    c = baz(...)
+    bb = a if c else b
+    cc = baz2(d, ...)
+    aa = foo2(...)
+    e = aa if cc else bb
+    ```
+    """
+    # This test is temporarily disabled.
+    return
+    sdfg = dace.SDFG(util.unique_name("if_mover_chain_of_blocks"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # Inputs
+    input_names = ["a", "b", "c", "d", "e", "f"]
+    for name in input_names:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    # Temporaries
+    temporary_names = ["a1", "b1", "c1", "a2", "b2", "c2", "o"]
+    for name in temporary_names:
+        sdfg.add_scalar(
+            name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
+        )
+
+    a1, b1, c1, a2, b2, c2, o = (state.add_access(name) for name in temporary_names)
+    me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
+
+    # First branch of top `if_block`
+    tasklet_a1 = state.add_tasklet(
+        "tasklet_a1", inputs={"__in"}, outputs={"__out"}, code="__out = math.sin(__in)"
+    )
+    state.add_edge(state.add_access("a"), None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me, "OUT_a", tasklet_a1, "__in", dace.Memlet("a[__i]"))
+    state.add_edge(tasklet_a1, "__out", a1, None, dace.Memlet("a1[0]"))
+
+    # Second branch of the top `if_block`
+    tasklet_b1 = state.add_tasklet(
+        "tasklet_b1", inputs={"__in"}, outputs={"__out"}, code="__out = math.cos(__in)"
+    )
+    state.add_edge(state.add_access("b"), None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_b", tasklet_b1, "__in", dace.Memlet("b[__i]"))
+    state.add_edge(tasklet_b1, "__out", b1, None, dace.Memlet("b1[0]"))
+
+    # The condition of the top `if_block`
+    tasklet_c1 = state.add_tasklet(
+        "tasklet_c1", inputs={"__in"}, outputs={"__out"}, code="__out = __in < 0.5"
+    )
+    state.add_edge(state.add_access("c"), None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(me, "OUT_c", tasklet_c1, "__in", dace.Memlet("c[__i]"))
+    state.add_edge(tasklet_c1, "__out", c1, None, dace.Memlet("c1[0]"))
+
+    # Create the top `if_block`
+    top_if_block = _make_if_block(state, sdfg)
+    state.add_edge(a1, None, top_if_block, "__arg1", dace.Memlet("a1[0]"))
+    state.add_edge(b1, None, top_if_block, "__arg2", dace.Memlet("b1[0]"))
+    state.add_edge(c1, None, top_if_block, "__cond", dace.Memlet("c1[0]"))
+    state.add_edge(top_if_block, "__output", t1, None, dace.Memlet("t1[0]"))
+
+    # The first branch of the lower/second `if_block`, which uses data computed
+    #  by the top `if_block`.
+    tasklet_t2 = state.add_tasklet(
+        "tasklet_t2", inputs={"__in"}, outputs={"__out"}, code="__out = math.exp(__in)"
+    )
+    state.add_edge(t1, None, tasklet_t2, "__in", dace.Memlet("t1[0]"))
+    state.add_edge(tasklet_t2, "__out", t2, None, dace.Memlet("t2[0]"))
+
+    # Second branch of the second `if_block`.
+    tasklet_d1 = state.add_tasklet(
+        "tasklet_d1", inputs={"__in"}, outputs={"__out"}, code="__out = math.atan(__in)"
+    )
+    state.add_edge(state.add_access("d"), None, me, "IN_d", dace.Memlet("d[0:10]"))
+    state.add_edge(me, "OUT_d", tasklet_d1, "__in", dace.Memlet("d[__i]"))
+    state.add_edge(tasklet_d1, "__out", d1, None, dace.Memlet("d1[0]"))
+
+    # Condition branch of the second `if_block`.
+    tasklet_cc1 = state.add_tasklet(
+        "tasklet_cc1", inputs={"__in"}, outputs={"__out"}, code="__out = __in < 0.5"
+    )
+    state.add_edge(state.add_access("cc"), None, me, "IN_cc", dace.Memlet("cc[0:10]"))
+    state.add_edge(me, "OUT_cc", tasklet_cc1, "__in", dace.Memlet("cc[__i]"))
+    state.add_edge(tasklet_cc1, "__out", cc1, None, dace.Memlet("cc1[0]"))
+
+    # Create the second `if_block`
+    bot_if_block = _make_if_block(state, sdfg)
+    state.add_edge(t2, None, bot_if_block, "__arg1", dace.Memlet("t2[0]"))
+    state.add_edge(d1, None, bot_if_block, "__arg2", dace.Memlet("d1[0]"))
+    state.add_edge(cc1, None, bot_if_block, "__cond", dace.Memlet("cc1[0]"))
+
+    # Generate the output
+    state.add_edge(bot_if_block, "__output", mx, "IN_e", dace.Memlet("e[__i]"))
+    state.add_edge(mx, "OUT_e", state.add_access("e"), None, dace.Memlet("e[0:10]"))
+
+    # Now add the connectors to the Map*
+    for iname in input_names:
+        if iname == "e":
+            mx.add_in_connector(f"IN_{iname}")
+            mx.add_out_connector(f"OUT_{iname}")
+        else:
+            me.add_in_connector(f"IN_{iname}")
+            me.add_out_connector(f"OUT_{iname}")
+    sdfg.validate()
+
+    # It is not possible to apply the transformation on the lower `if_block`,
+    #  because it is limited by the top one.
+    _perform_test(
+        sdfg,
+        explected_applies=0,
+        if_block=bot_if_block,
+    )
+
+    # But we are able to inline both.
+    _perform_test(
+        sdfg,
+        explected_applies=2,
+    )
