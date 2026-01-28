@@ -13,7 +13,6 @@ import functools
 import inspect
 from typing import TypeVar, cast, overload
 
-from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common, utils
@@ -712,7 +711,9 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
                     assert isinstance(offset_axis, it_ts.OffsetLiteralType)
                     assert isinstance(offset_axis.value, str)
                     type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
-                    assert isinstance(type_, (common.CartesianConnectivityType, common.NeighborConnectivityType))
+                    assert isinstance(
+                        type_, (common.CartesianConnectivityType, common.NeighborConnectivityType)
+                    )
                     source_dim, target_dim = type_.domain[0], type_.codomain
 
                 found = False

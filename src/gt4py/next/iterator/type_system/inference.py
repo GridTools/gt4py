@@ -482,9 +482,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         if domain is None or codomain is None:
             return ts.DeferredType(constraint=it_ts.CartesianOffsetType)
         assert isinstance(domain, ts.DimensionType) and isinstance(codomain, ts.DimensionType)
-        return it_ts.CartesianOffsetType(
-            domain=domain.dim, codomain=codomain.dim
-        )
+        return it_ts.CartesianOffsetType(domain=domain.dim, codomain=codomain.dim)
 
     def visit_Literal(self, node: itir.Literal, **kwargs) -> ts.ScalarType:
         assert isinstance(node.type, ts.ScalarType)

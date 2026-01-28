@@ -98,6 +98,7 @@ class FlipStaggeredDims(eve.NodeTranslator):
             return im.axis_literal(common.flip_staggered(dim))
         return node
 
+
 def _collect_dimensions_from_domain(
     body: Iterable[itir.Stmt],
 ) -> dict[str, TagDefinition]:

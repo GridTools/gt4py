@@ -126,7 +126,7 @@ class SymbolicDomain:
             connectivity: common.Connectivity
             if isinstance(off, itir.CartesianOffset):
                 domain = common.Dimension(value=off.domain.value, kind=off.domain.kind)
-                codomain = common.Dimension(value=off.domain.value, kind=off.domain.kind)
+                codomain = common.Dimension(value=off.codomain.value, kind=off.codomain.kind)
                 connectivity = common.CartesianConnectivity(domain, codomain=codomain)
             elif isinstance(off, itir.OffsetLiteral):
                 assert isinstance(off.value, str)
@@ -140,8 +140,18 @@ class SymbolicDomain:
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
                 assert len(connectivity.domain.dims) == 1
                 # cartesian offset
-                new_ranges[connectivity.codomain] = SymbolicRange.translate(
-                    self.ranges[connectivity.domain.dims[0]], connectivity.offset + val.value
+
+                old_dim = connectivity.domain.dims[0]
+                new_dim = connectivity.codomain
+
+                assert new_dim not in new_ranges or old_dim == new_dim
+
+                new_range = SymbolicRange.translate(
+                    self.ranges[old_dim], connectivity.offset + val.value
+                )
+                new_ranges = dict(
+                    (dim, range_) if dim != old_dim else (new_dim, new_range)
+                    for dim, range_ in new_ranges.items()
                 )
             elif isinstance(connectivity, common.NeighborConnectivity):
                 # unstructured shift

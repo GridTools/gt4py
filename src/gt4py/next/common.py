@@ -910,7 +910,9 @@ class ConnectivityKind(enum.Flag):
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
     domain: tuple[Dimension, ...]
     codomain: Dimension
-    skip_value: Optional[core_defs.IntegralScalar]  # TODO(tehrengruber): isn't this a value of the `NeighborConnectivityType` only
+    skip_value: Optional[
+        core_defs.IntegralScalar
+    ]  # TODO(tehrengruber): isn't this a value of the `NeighborConnectivityType` only
     dtype: core_defs.DType
 
     @property
