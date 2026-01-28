@@ -647,19 +647,6 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
             skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
-    sdfg.save("before_kill_aliasing_scalars_top_level.sdfg")
-
-    find_single_use_data = dace_analysis.FindSingleUseData()
-    single_use_data = find_single_use_data.apply_pass(sdfg, None)
-
-    sdfg.apply_transformations_repeated(
-        gtx_transformations.KillAliasingScalars(
-            single_use_data=single_use_data,
-        ),
-        validate=False,
-        validate_all=validate_all,
-    )
-    sdfg.save("after_kill_aliasing_scalars_top_level.sdfg")
 
     if GT4PyAutoOptHook.TopLevelDataFlowPost in optimization_hooks:
         optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPost](sdfg)  # type: ignore[call-arg]
@@ -731,6 +718,26 @@ def _gt_auto_process_dataflow_inside_maps(
         skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
         validate=False,
         validate_all=validate_all,
+    )
+
+    sdfg.save("before_kill_aliasing_scalars_top_level.sdfg")
+
+    find_single_use_data = dace_analysis.FindSingleUseData()
+    single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.KillAliasingScalars(
+            single_use_data=single_use_data,
+        ),
+        validate=False,
+        validate_all=validate_all,
+    )
+    sdfg.save("after_kill_aliasing_scalars_top_level.sdfg")
+
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.FuseHorizontalConditionBlocks(),
+        validate=True,
+        validate_all=True,
     )
 
     # Move dataflow into the branches of the `if` such that they are only evaluated

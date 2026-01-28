@@ -226,16 +226,14 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             if edge.dst == second_cb:
                 graph.remove_edge(edge)
 
-        # TODO(iomaganaris): Figure out if I have to handle any symbols
-        sdfg.save(f"after_fuse_horizontal_conditionblocks_{first_cb}_{second_cb}.sdfg")
-
         # Need to remove both references to remove NestedSDFG from graph
         graph.remove_node(second_conditional_block)
         graph.remove_node(second_cb)
 
         new_arrays = len(first_cb.sdfg.arrays)
         assert new_arrays == total_original_arrays - 1, f"After fusion, expected {total_original_arrays - 1} arrays but found {new_arrays}"
-
+        # TODO(iomaganaris): Figure out if I have to handle any symbols
+        sdfg.save(f"after_fuse_horizontal_conditionblocks_{first_cb}_{second_cb}.sdfg")
         # sdfg.view()
         # breakpoint()
 
