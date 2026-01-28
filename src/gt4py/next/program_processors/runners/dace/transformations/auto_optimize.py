@@ -739,6 +739,9 @@ def _gt_auto_process_dataflow_inside_maps(
     #   before or after `LoopBlocking`. In cases where the condition is `False`
     #   most of the times calling it before is better, but if the condition is
     #   `True` then this order is better. Solve that issue.
+    # TODO(phimuell): Because of the limitation that the transformation only works
+    #   for dataflow that is directly enclosed by a Map, the order in which it is
+    #   applied matters. Instead we have to run it into a topological order.
     sdfg.apply_transformations_repeated(
         gtx_transformations.MoveDataflowIntoIfBody(
             ignore_upstream_blocks=False,
