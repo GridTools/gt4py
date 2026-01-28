@@ -50,16 +50,15 @@ def gt_change_strides(
         translate the memory layout such that the horizontal dimension has stride 1,
         which is used by the GT4Py allocator. This function needs to be called
         for both CPU and GPU to handle strides of memlets inside nested SDFGs.
-
-    Todo:
-        - Update this function such that the memory order is computed based on the
-            access pattern. Probably also merge it with `gt_set_iteration_order()`
-            function as the task are related.
-        - Im
+        Furthermore, the current implementation assumes that there is only one
+        horizontal dimension.
     """
     # TODO(phimeull): Implement this function correctly, such that it decides the
     #   order based on the access pattern. Probably also merge it with
     #   `gt_set_iteration_order()` as the two things are related.
+    # TODO(phimuell): The current implementation assumes that there is only one
+    #   horizontal dimension. If there are multiple horizontal ones then we might
+    #   have a problem.
     # NOTE: This function builds on the fact that in GT4Py the horizontal dimension
     #   is always the first dimensions, i.e. column or FORTRAN order and that in
     #   DaCe the default order (which the lowering uses), is row or C order.
