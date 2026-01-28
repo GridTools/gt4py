@@ -26,7 +26,6 @@ from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 I = gtx.Dimension("I")
-Ioff = gtx.FieldOffset("Ioff", source=I, target=(I,))
 
 
 @fundef
@@ -80,7 +79,8 @@ def test_index_builtin(program_processor):
 def index_program_shift(out, size):
     set_at(
         as_fieldop(
-            lambda i: deref(i) + deref(shift(Ioff, 1)(i)), cartesian_domain(named_range(I, 0, size))
+            lambda i: deref(i) + deref(shift("Ioff", 1)(i)),
+            cartesian_domain(named_range(I, 0, size)),
         )(index(I)),
         cartesian_domain(named_range(I, 0, size)),
         out,
