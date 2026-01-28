@@ -630,7 +630,7 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
 
     # the compile_variants_testee has static_params set and is compiled (in a previous test)
-    assert len(compile_variants_testee.static_params) > 0
+    assert len(compile_variants_testee.compilation_options.static_params) > 0
     assert compile_variants_testee._compiled_programs is not None
 
     # but now we reset the compiled programs and fix to other static params

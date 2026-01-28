@@ -353,6 +353,27 @@ def return_type_scanop(
 
 
 def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.FunctionType:
+    """
+    Return the type of a callable when encountered in context of a program.
+
+    A callable can be a field-, scan-operator or a simple function (though the latter is not
+    implemented in the frontent). The program context is either inside of a program or even
+    outside the GT4Py where all callables behave as if they were called from inside a program.
+
+    For example a simple field operator like
+
+    ```
+    @field_operator
+    def identity(a: IField) -> IField: ...
+    ```
+
+    has the signature of the following program in the context of a program.
+
+    ```
+    @program
+    def identity(a: IField, *, out: IField) -> None: ...
+    ```
+    """
     if isinstance(callable_type, ts_ffront.FieldOperatorType):
         definition = callable_type.definition
         return ProgramType(
@@ -374,6 +395,8 @@ def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.
         return ProgramType(
             ts.FunctionType(
                 pos_only_args=[],
+                # TODO(tehrengruber): What we actually want is a generic type here, but we don't
+                #  have that concept yet.
                 pos_or_kw_args={
                     k: as_deferred_type_with_same_structure(t) for k, t in pos_or_kw_args.items()
                 },
@@ -395,11 +418,9 @@ def _signature_from_callable_in_program_context(
         return _signature_from_callable_in_program_context(callable_type.definition)
     elif isinstance(callable_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType):
         operator_signature = _signature_from_callable_in_program_context(callable_type.definition)
-        params = (
-            [*operator_signature.parameters.values()][1:]
-            if isinstance(callable_type, ts_ffront.ScanOperatorType)
-            else operator_signature.parameters.values()
-        )
+        params = list(operator_signature.parameters.values())
+        if isinstance(callable_type, ts_ffront.ScanOperatorType):
+            params = params[1:]  # Remove the carry state arg
         return inspect.Signature(
             parameters=[*params, inspect.Parameter("out", inspect.Parameter.KEYWORD_ONLY)],
             return_annotation=inspect.Signature.empty,
@@ -408,16 +429,18 @@ def _signature_from_callable_in_program_context(
     return inspect.Signature(
         parameters=(
             [
-                inspect.Parameter(name=str(i), kind=inspect.Parameter.POSITIONAL_ONLY)
-                for i, type_ in enumerate(callable_type.pos_only_args)
-            ]
-            + [
-                inspect.Parameter(name=name, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
-                for name, type_ in callable_type.pos_or_kw_args.items()
-            ]
-            + [
-                inspect.Parameter(name=name, kind=inspect.Parameter.KEYWORD_ONLY)
-                for name, type_ in callable_type.kw_only_args.items()
+                *(
+                    inspect.Parameter(name=str(i), kind=inspect.Parameter.POSITIONAL_ONLY)
+                    for i, type_ in enumerate(callable_type.pos_only_args)
+                ),
+                *(
+                    inspect.Parameter(name=name, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                    for name, type_ in callable_type.pos_or_kw_args.items()
+                ),
+                *(
+                    inspect.Parameter(name=name, kind=inspect.Parameter.KEYWORD_ONLY)
+                    for name, type_ in callable_type.kw_only_args.items()
+                ),
             ]
         ),
         return_annotation=callable_type.returns,

@@ -269,8 +269,13 @@ class CompiledProgramsPool:
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
 
         if self._is_generic:
+            # In case the program or operator is generic, i.e. callable for arguments of varying
+            # type, add the argument types to the cache key as the argument types are used during
+            # compilation. In case the program is not generic we can avoid the potentially
+            # expensive type deduction for all arguments and not include it in the key.
             warnings.warn(
-                "Calling generic programs / direct calls to scan operators are not been optimized. Consider calling a specialized version instead.",
+                "Calling generic programs / direct calls to scan operators are not optimized. "
+                "Consider calling a specialized version instead.",
                 stacklevel=2,
             )
             arg_specialization_key = eve_utils.content_hash(
@@ -313,10 +318,10 @@ class CompiledProgramsPool:
                     ),
                     # note: it is important to use the args before named collections are extracted
                     #  as otherwise the implicit program generation from an operator fails
-                    arg_types=tuple(type_translation.from_value(arg) for arg in canonical_args),
-                    kwarg_types={
-                        k: type_translation.from_value(v) for k, v in canonical_kwargs.items()
-                    },
+                    arg_specialization_info=(
+                        tuple(type_translation.from_value(arg) for arg in canonical_args),
+                        {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
+                    ),
                     offset_provider=offset_provider,
                     call_key=key,
                 )
@@ -330,6 +335,15 @@ class CompiledProgramsPool:
 
     @functools.cached_property
     def _is_generic(self) -> bool:
+        """
+        Is the operator or program generic in the sense that it can be called for different
+        argument types.
+
+        Right now this is only the case for scan operators.
+        """
+        # TODO(tehrengruber): This concept does not exist elsewhere and is not properly reflected
+        #  in the type system. For now we just use `DeferredType` to communicate between
+        #  here and `type_info.type_in_program_context`.
         return any(
             isinstance(t, ts.DeferredType)
             for t in itertools.chain(
@@ -439,8 +453,9 @@ class CompiledProgramsPool:
         self,
         argument_descriptors: ArgumentDescriptors,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
-        arg_types: tuple[ts.TypeSpec, ...] | None = None,
-        kwarg_types: dict[str, ts.TypeSpec] | None = None,
+        #: tuple consisting of the types of the positional and keyword arguments.
+        arg_specialization_info: tuple[tuple[ts.TypeSpec, ...], dict[str, ts.TypeSpec]]
+        | None = None,
         # argument used only to validate key computed in a call / dispatch agrees with the
         # key computed here
         call_key: CompiledProgramsKey | None = None,
@@ -462,7 +477,7 @@ class CompiledProgramsPool:
         key = (
             self._argument_descriptor_cache_key_from_descriptors(argument_descriptor_contexts),
             common.hash_offset_provider_items_by_id(offset_provider),
-            eve_utils.content_hash((arg_types, kwarg_types)) if self._is_generic else None,
+            eve_utils.content_hash(arg_specialization_info) if self._is_generic else None,
         )
         assert call_key is None or call_key == key
 
@@ -482,14 +497,16 @@ class CompiledProgramsPool:
                 },
             )
 
-        assert (arg_types is None) == (kwarg_types is None)
-        if arg_types is None or kwarg_types is None:
+        if arg_specialization_info:
+            arg_types, kwarg_types = arg_specialization_info
+        else:
             if self._is_generic:
                 raise ValueError(
                     "Can not precompile generic program or scan operator without argument types."
                 )
-            arg_types = tuple(self.program_type.definition.pos_only_args) + tuple(
-                self.program_type.definition.pos_or_kw_args.values()
+            arg_types = (
+                *self.program_type.definition.pos_only_args,
+                *self.program_type.definition.pos_or_kw_args.values(),
             )
             kwarg_types = self.program_type.definition.kw_only_args
 

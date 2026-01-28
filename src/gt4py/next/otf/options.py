@@ -25,12 +25,17 @@ class CompilationOptions:
     # Uses a factory to make changes to the config after module import time take effect. This is
     # mostly important for testing. Users should not rely on it.
     enable_jit: bool = dataclasses.field(default_factory=lambda: config.ENABLE_JIT_DEFAULT)
+
     #: if the user requests static params, they will be used later to initialize CompiledPrograms
     static_params: Sequence[str] | None = (
         None  # TODO: describe that this value will eventually be a sequence of strings
     )
+
     # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     #: A dictionary holding static/compile-time information about the offset providers.
     #: For now, it is used for ahead of time compilation in DaCe orchestrated programs,
     #: i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
     connectivities: common.OffsetProvider | None = None
+
+
+assert CompilationOptionsArgs.__annotations__.keys() == CompilationOptions.__annotations__.keys()

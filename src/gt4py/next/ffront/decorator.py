@@ -77,7 +77,7 @@ class _ProgramLikeMixin(Generic[DefinitionT]):
 
     def with_connectivities(
         self,
-        connectivities: common.OffsetProvider,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime informatio
+        connectivities: common.OffsetProvider,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     ) -> Self:
         return dataclasses.replace(
             self,
