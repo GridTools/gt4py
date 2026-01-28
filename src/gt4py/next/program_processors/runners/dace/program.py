@@ -171,7 +171,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # Build the closure dictionary
         closure_dict: dict[str, dace.data.Array] = {}
-        offset_provider_type = gtx_common.offset_provider_to_type(self.compilation_options.connectivities)
+        offset_provider_type = gtx_common.offset_provider_to_type(
+            self.compilation_options.connectivities
+        )
         for conn_id, conn in used_connectivities.items():
             if conn_id not in self.connectivity_tables_data_descriptors:
                 self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
