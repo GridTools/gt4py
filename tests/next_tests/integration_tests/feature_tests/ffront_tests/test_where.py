@@ -9,7 +9,7 @@
 import numpy as np
 from typing import Tuple
 import pytest
-from next_tests.integration_tests.cases import IDim, JDim, KDim, Koff, cartesian_case
+from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
 from gt4py import next as gtx
 from gt4py.next import int32
 from gt4py.next.ffront.fbuiltins import where, broadcast
@@ -25,7 +25,7 @@ def test_where_k_offset(cartesian_case):
     def fieldop_where_k_offset(
         inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
     ) -> cases.IKField:
-        return where(k_index > 0, inp(Koff[-1]), 2)
+        return where(k_index > 0, inp(KDim - 1), 2)
 
     @gtx.program
     def prog(
