@@ -52,20 +52,20 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
-DefinitionT = TypeVar(
-    "DefinitionT", ffront_stages.ProgramDefinition, ffront_stages.FieldOperatorDefinition
+ProgramLikeDefinitionT = TypeVar(
+    "ProgramLikeDefinitionT", ffront_stages.ProgramDefinition, ffront_stages.FieldOperatorDefinition
 )
 
 
 @dataclasses.dataclass(frozen=True)
-class _ProgramLikeMixin(Generic[DefinitionT]):
+class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
     """
     Mixing used by program and program-like objects.
 
     Contains functionality and configuration options common to all kinds of program-likes.
     """
 
-    definition_stage: DefinitionT
+    definition_stage: ProgramLikeDefinitionT
     backend: Optional[next_backend.Backend]
     compilation_options: options.CompilationOptions
 
