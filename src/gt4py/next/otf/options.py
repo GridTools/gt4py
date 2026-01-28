@@ -18,9 +18,13 @@ class CompilationOptionsArgs(TypedDict, total=False):
     connectivities: common.OffsetProvider
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class CompilationOptions:
-    enable_jit: bool = config.ENABLE_JIT_DEFAULT
+    #: Enable Just-in-Time compilation, otherwise a program has to be compiled manually by a call
+    #: to `compile` before calling.
+    # Uses a factory to make changes to the config after module import time take effect. This is
+    # mostly important for testing. Users should not rely on it.
+    enable_jit: bool = dataclasses.field(default_factory=lambda: config.ENABLE_JIT_DEFAULT)
     #: if the user requests static params, they will be used later to initialize CompiledPrograms
     static_params: Sequence[str] | None = (
         None  # TODO: describe that this value will eventually be a sequence of strings

@@ -16,7 +16,7 @@ import contextlib
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import errors, config
-from gt4py.next.otf import compiled_program
+from gt4py.next.otf import compiled_program, options
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
@@ -145,17 +145,17 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
+    if isinstance(compile_testee_scan, gtx.ffront.decorator.FieldOperator):
+        pytest.xfail(reason="Scan operators can not be precompiled yet.")
+
     compile_testee_scan.compile(offset_provider=cartesian_case.offset_provider)
 
     k_size = cartesian_case.default_sizes[KDim]
-    inp = cartesian_case.as_field([KDim], np.arange(k_size))
-    out = cartesian_case.as_field([KDim], np.zeros((k_size,)))
+    inp = cartesian_case.as_field([KDim], np.arange(k_size, dtype=np.int32))
+    out = cartesian_case.as_field([KDim], np.zeros(k_size, dtype=np.int32))
 
     # make sure the backend is never called
     object.__setattr__(compile_testee_scan, "backend", _raise_on_compile)
-
-    if isinstance(compile_testee_scan, gtx.ffront.decorator.FieldOperator):
-        pytest.xfail(reason="Scan operators can not be precompiled yet.")
 
     compile_testee_scan(inp, out=out, offset_provider=cartesian_case.offset_provider)
     assert np.allclose(out.ndarray, np.cumsum(inp.ndarray))
@@ -400,7 +400,11 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
-    assert compile_variants_testee.static_params == ("scalar_int", "scalar_float", "scalar_bool")
+    assert compile_variants_testee.compilation_options.static_params == (
+        "scalar_int",
+        "scalar_float",
+        "scalar_bool",
+    )
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -454,7 +458,7 @@ def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_teste
 
 
 def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
-    object.__setattr__(compile_variants_testee, "enable_jit", False)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -476,7 +480,7 @@ def test_compile_variants_not_compiled_but_jit_enabled_on_call(
     cartesian_case, compile_variants_testee
 ):
     # disable jit on the program
-    object.__setattr__(compile_variants_testee, "enable_jit", False)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -508,36 +512,52 @@ def test_compile_variants_not_compiled_but_jit_enabled_on_call(
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
-def test_compile_variants_config_default_disable_jit(cartesian_case, compile_variants_testee):
+def test_compile_variants_config_default_disable_jit(cartesian_case):
     """
     Checks that changing the config default will be picked up at call time.
     """
-    field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
-    field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
-    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
-
-    # One of the 2 cases will be the non-default.
+    # One of the 2 cases will be the non-default. The program has to be defined after the config
+    # has been altered in order for the value to take effect.
     with mock.patch.object(config, "ENABLE_JIT_DEFAULT", True):
-        compile_variants_testee(
-            field_a,
-            int32(3),  # variant does not exist
-            4.0,
-            False,
-            field_b,
+
+        @gtx.field_operator
+        def identity(a: cases.IField):
+            return a
+
+        @gtx.program(backend=cartesian_case.backend)
+        def testee(inp: cases.IField, out: cases.IField):
+            identity(inp, out=out)
+
+        assert testee.compilation_options.enable_jit == True
+
+        inp = cases.allocate(cartesian_case, testee, "inp")()
+        out = cases.allocate(cartesian_case, testee, "out")()
+
+        testee(
+            inp,
             out=out,
             offset_provider=cartesian_case.offset_provider,
         )
-        assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
-        assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
+        assert np.allclose(out.ndarray, inp.ndarray)
 
     with mock.patch.object(config, "ENABLE_JIT_DEFAULT", False):
         with pytest.raises(RuntimeError):
-            compile_variants_testee(
-                field_a,
-                int32(-42),  # other value than before
-                4.0,
-                False,
-                field_b,
+
+            @gtx.field_operator
+            def identity(a: cases.IField):
+                return a
+
+            @gtx.program(backend=cartesian_case.backend)
+            def testee(inp: cases.IField, out: cases.IField):
+                identity(inp, out=out)
+
+            assert testee.compilation_options.enable_jit == False
+
+            inp = cases.allocate(cartesian_case, testee, "inp")()
+            out = cases.allocate(cartesian_case, testee, "out")()
+
+            testee(
+                inp,
                 out=out,
                 offset_provider=cartesian_case.offset_provider,
             )
@@ -550,7 +570,7 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     This test ensures that after calling ".with_static_params(None)" the previously compiled programs are gone
     and we can compile for the generic version.
     """
-    object.__setattr__(compile_variants_testee, "enable_jit", True)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", True)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -601,7 +621,7 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
     This test ensures that after calling `with_static_params("scalar_float", "scalar_bool")`
     the previously compiled programs are gone and we can compile for the new `static_params`.
     """
-    object.__setattr__(compile_variants_testee, "enable_jit", False)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -647,7 +667,7 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
 
 
 def test_compile_variants_jit(cartesian_case, compile_variants_testee):
-    object.__setattr__(compile_variants_testee, "enable_jit", True)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", True)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -684,7 +704,7 @@ def test_compile_variants_jit(cartesian_case, compile_variants_testee):
 def test_compile_variants_with_static_params_jit(
     cartesian_case, compile_variants_testee_not_compiled
 ):
-    object.__setattr__(compile_variants_testee_not_compiled, "enable_jit", True)
+    object.__setattr__(compile_variants_testee_not_compiled.compilation_options, "enable_jit", True)
     testee_with_static_params = compile_variants_testee_not_compiled.with_static_params(
         "scalar_int", "scalar_float", "scalar_bool"
     )

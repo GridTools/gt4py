@@ -596,9 +596,7 @@ class FieldOperator(
     def __gt_closure_vars__(self) -> dict[str, Any]:
         return self.foast_stage.closure_vars
 
-    def __call__(
-        self, *args: Any, enable_jit: bool = options.CompilationOptions.enable_jit, **kwargs: Any
-    ) -> Any:
+    def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
             offset_provider = {**kwargs.pop("offset_provider", {})}
@@ -612,7 +610,13 @@ class FieldOperator(
                 out = utils.tree_map(lambda f, dom: f[dom])(out, domain)
 
             return self._compiled_programs(
-                *args, **kwargs, out=out, offset_provider=offset_provider, enable_jit=enable_jit
+                *args,
+                **kwargs,
+                out=out,
+                offset_provider=offset_provider,
+                enable_jit=self.compilation_options.enable_jit
+                if enable_jit is None
+                else enable_jit,
             )
         else:
             if not next_embedded.context.within_valid_context():
