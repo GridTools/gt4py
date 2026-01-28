@@ -91,7 +91,9 @@ class FendefDispatcher:
                 assert isinstance(backend, next_backend.Backend)
                 compiled_program = backend.compile(
                     itir_node,
-                    arguments.CompileTimeArgs.from_concrete(*args, offset_provider=offset_provider),
+                    arguments.CompileTimeArgs.from_concrete(
+                        *args, offset_provider=offset_provider, column_axis=column_axis
+                    ),
                 )
                 compiled_program(*args, offset_provider=offset_provider)
             elif isinstance(backend, program_formatter.ProgramFormatter):
