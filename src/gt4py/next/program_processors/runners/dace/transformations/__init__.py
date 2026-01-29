@@ -28,7 +28,6 @@ from .gpu_utils import (
     gt_set_gpu_blocksize,
 )
 from .inline_fuser import inline_dataflow_into_map
-from .remove_aliasing_scalars import RemoveAliasingScalars
 from .local_double_buffering import gt_create_local_double_buffering
 from .loop_blocking import LoopBlocking
 from .map_fusion import (
@@ -55,6 +54,7 @@ from .multi_state_global_self_copy_elimination import (
 )
 from .redundant_array_removers import CopyChainRemover, DoubleWriteRemover, gt_remove_copy_chain
 from .remove_access_node_copies import RemoveAccessNodeCopies
+from .remove_aliasing_scalars import RemoveAliasingScalars
 from .remove_views import RemovePointwiseViews
 from .scan_loop_unrolling import ScanLoopUnrolling
 from .simplify import (
@@ -95,7 +95,6 @@ __all__ = [
     "GT4PyStateFusion",
     "HorizontalMapFusionCallback",
     "HorizontalMapSplitCallback",
-    "RemoveAliasingScalars",
     "LoopBlocking",
     "MapFusionHorizontal",
     "MapFusionVertical",
@@ -108,6 +107,7 @@ __all__ = [
     "MultiStateGlobalSelfCopyElimination",
     "MultiStateGlobalSelfCopyElimination2",
     "RemoveAccessNodeCopies",
+    "RemoveAliasingScalars",
     "RemovePointwiseViews",
     "ScanLoopUnrolling",
     "SingleStateGlobalDirectSelfCopyElimination",

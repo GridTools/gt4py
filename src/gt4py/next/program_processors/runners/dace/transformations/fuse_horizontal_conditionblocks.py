@@ -8,7 +8,7 @@
 
 import copy
 import uuid
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 import dace
 from dace import properties as dace_properties, transformation as dace_transformation
