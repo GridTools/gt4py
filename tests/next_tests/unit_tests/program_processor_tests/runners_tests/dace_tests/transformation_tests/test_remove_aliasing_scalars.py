@@ -64,22 +64,23 @@ def _make_map_with_scalar_copies() -> tuple[
 def test_remove_double_write_single_consumer():
     sdfg, state, me, mx = _make_map_with_scalar_copies()
 
-    access_nodes_inside_original_map = util.count_nodes(state.scope_subgraph(me, include_entry=False, include_exit=False), dace_nodes.AccessNode)
+    access_nodes_inside_original_map = util.count_nodes(
+        state.scope_subgraph(me, include_entry=False, include_exit=False), dace_nodes.AccessNode
+    )
     assert access_nodes_inside_original_map == 3
 
-    sdfg.view()
-    breakpoint()
     find_single_use_data = dace_analysis.FindSingleUseData()
     single_use_data = find_single_use_data.apply_pass(sdfg, None)
     sdfg.apply_transformations_repeated(
-        gtx_transformations.KillAliasingScalars(
+        gtx_transformations.RemoveAliasingScalars(
             single_use_data=single_use_data,
             assume_single_use_data=False,
         ),
         validate=True,
         validate_all=True,
     )
-    sdfg.view()
-    breakpoint()
-    access_nodes_inside_new_map = util.count_nodes(state.scope_subgraph(me, include_entry=False, include_exit=False), dace_nodes.AccessNode)
+
+    access_nodes_inside_new_map = util.count_nodes(
+        state.scope_subgraph(me, include_entry=False, include_exit=False), dace_nodes.AccessNode
+    )
     assert access_nodes_inside_new_map == 1
