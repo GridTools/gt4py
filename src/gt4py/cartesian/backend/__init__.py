@@ -8,6 +8,8 @@
 
 from warnings import warn
 
+from gt4py.cartesian import config as gt_config
+
 from .base import REGISTRY, Backend, BaseBackend, BasePyExtBackend, from_name, register
 from .debug_backend import DebugBackend
 from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend
@@ -31,12 +33,13 @@ __all__ = [
 ]
 
 
-try:
-    from .dace_backend import DaceCPUBackend, DaceCPUKFirstBackend, DaceGPUBackend
+if gt_config.GT4PY_CART_ENABLE_DACE:
+    try:
+        from .dace_backend import DaceCPUBackend, DaceCPUKFirstBackend, DaceGPUBackend
 
-    __all__ += ["DaceCPUBackend", "DaceCPUKFirstBackend", "DaceGPUBackend"]
-except ImportError:
-    warn(
-        "GT4Py was unable to load DaCe. DaCe backends (`dace:cpu`, `dace:cpu_kfirst`, and `dace:gpu`) will not be available.",
-        stacklevel=2,
-    )
+        __all__ += ["DaceCPUBackend", "DaceCPUKFirstBackend", "DaceGPUBackend"]
+    except ImportError:
+        warn(
+            "GT4Py was unable to load DaCe. DaCe backends (`dace:cpu`, `dace:cpu_kfirst`, and `dace:gpu`) will not be available.",
+            stacklevel=2,
+        )
