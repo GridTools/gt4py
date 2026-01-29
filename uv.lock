@@ -1161,7 +1161,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.2"
-source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-v2#96f747f4ce38c78924f777dfa61f87edccd944bf" }
+source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-v2#aa1e4f4a872e3d96de2e6435e926c048a89241c2" }
 resolution-markers = [
     "python_full_version >= '3.14'",
     "python_full_version == '3.13.*'",
@@ -1185,6 +1185,7 @@ dependencies = [
     { name = "pyreadline", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm5-0' and extra == 'extra-5-gt4py-rocm6-0')" },
     { name = "pyyaml" },
     { name = "sympy" },
+    { name = "typing-extensions" },
 ]
 
 [[package]]
@@ -1706,7 +1707,7 @@ build = [
     { name = "wheel" },
 ]
 dace-cartesian = [
-    { name = "dace", version = "1.0.2", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-v2#96f747f4ce38c78924f777dfa61f87edccd944bf" } },
+    { name = "dace", version = "1.0.2", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-v2#aa1e4f4a872e3d96de2e6435e926c048a89241c2" } },
 ]
 dace-next = [
     { name = "dace", version = "43!2026.2.12", source = { registry = "https://gridtools.github.io/pypi/" } },
