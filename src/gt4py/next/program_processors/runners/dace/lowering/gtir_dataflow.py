@@ -1535,11 +1535,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         self, it: IteratorExpr, conn: gtx_common.CartesianConnectivityType, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        (offset_dim,) = conn.domain
-        assert conn.domain[0] == conn.codomain
-        assert any(dim == offset_dim for dim, _ in it.field_domain)
+        (old_dim,) = conn.domain
+        new_dim = conn.codomain
         new_index: SymbolExpr | ValueExpr
-        index_expr = it.indices[offset_dim]
+        index_expr = it.indices[old_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
             new_index = SymbolExpr(
@@ -1602,9 +1601,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
 
         # a new iterator with a shifted index along one dimension
-        shifted_indices = {
-            dim: (new_index if dim == offset_dim else index) for dim, index in it.indices.items()
-        }
+        shifted_indices = dict(
+            (new_dim, new_index) if dim == old_dim else (dim, index) for dim, index in it.indices.items()
+        )
         return IteratorExpr(it.field, it.gt_dtype, it.field_domain, shifted_indices)
 
     def _make_dynamic_neighbor_offset(
