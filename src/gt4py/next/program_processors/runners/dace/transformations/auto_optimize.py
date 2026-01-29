@@ -713,7 +713,8 @@ def _gt_auto_process_dataflow_inside_maps(
     #   chained. If the transformation is applied starting from the top most block
     #   then it is okay. If however, they are processed in reverse order, i.e.
     #   starting at the lowest, then transformation ends because all blocks will be
-    #   inlined and are thus no longer directly enclosed by a Map.
+    #   inlined and are thus no longer directly enclosed by a Map. To solve this we
+    #   should apply them in a topological order.
     sdfg.apply_transformations_repeated(
         gtx_transformations.MoveDataflowIntoIfBody(
             ignore_upstream_blocks=False,
