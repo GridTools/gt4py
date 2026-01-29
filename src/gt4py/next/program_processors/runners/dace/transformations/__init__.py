@@ -85,6 +85,7 @@ from .utils import gt_make_transients_persistent
 __all__ = [
     "CopyChainRemover",
     "DoubleWriteRemover",
+    "FuseHorizontalConditionBlocks",
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
