@@ -1,19 +1,21 @@
-import copy
-import warnings
-from typing import Any, Callable, Mapping, Optional, TypeAlias, Union
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from typing import Any, Optional, Union
 
 import dace
-from dace import (
-    properties as dace_properties,
-    subsets as dace_subsets,
-    transformation as dace_transformation,
-)
+from dace import properties as dace_properties, transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import helpers as dace_helpers
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+
 
 @dace_properties.make_properties
-class KillAliasingScalars(dace_transformation.SingleStateTransformation):
+class RemoveAliasingScalars(dace_transformation.SingleStateTransformation):
     first_access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     second_access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
@@ -59,40 +61,40 @@ class KillAliasingScalars(dace_transformation.SingleStateTransformation):
         scope_dict = graph.scope_dict()
         if first_node not in scope_dict or second_node not in scope_dict:
             return False
-    
+
+        # Make sure that both access nodes are in the same scope
         if scope_dict[first_node] != scope_dict[second_node]:
             return False
 
+        # Make sure that both access nodes are transients
         if not first_node_desc.transient or not second_node_desc.transient:
             return False
 
         edges = graph.edges_between(first_node, second_node)
         assert len(edges) == 1
         edge = next(iter(edges))
-        # Check if edge volume is 1
+
+        # Check if the edge transfers only one element
         if edge.data.num_elements() != 1:
             return False
         if edge.data.dynamic:
             return False
-        
+
+        # Check that all the outgoing edges of the second access node transfer only one element
         for out_edges in graph.out_edges(second_node):
             if out_edges.data.num_elements() != 1:
                 return False
-            # if out_edges.data.dynamic:
-            #     return False
-        # breakpoint()
-        # subset: dace_subsets.Subset = edge.data.get("subset", None)
-        # if subset is None:
-        #     return False
 
         # Make sure that the edge subset is 1
         if not isinstance(first_node_desc, dace.data.Scalar) or not isinstance(
-            second_node_desc, dace.data.Scalar):
+            second_node_desc, dace.data.Scalar
+        ):
             return False
 
         # Make sure that both access nodes are not views
         if isinstance(first_node_desc, dace.data.View) or isinstance(
-            second_node_desc, dace.data.View):
+            second_node_desc, dace.data.View
+        ):
             return False
 
         # Make sure that both access nodes are transients
@@ -101,7 +103,8 @@ class KillAliasingScalars(dace_transformation.SingleStateTransformation):
 
         if graph.in_degree(second_node) != 1:
             return False
-        
+
+        # Make sure that both access nodes are single use data
         if self.assume_single_use_data:
             single_use_data = {sdfg: {first_node.data}}
         if self._single_use_data is None:
@@ -111,7 +114,6 @@ class KillAliasingScalars(dace_transformation.SingleStateTransformation):
             single_use_data = self._single_use_data
         if first_node.data not in single_use_data[sdfg]:
             return False
-        
         if self.assume_single_use_data:
             single_use_data = {sdfg: {second_node.data}}
         if self._single_use_data is None:
@@ -123,7 +125,7 @@ class KillAliasingScalars(dace_transformation.SingleStateTransformation):
             return False
 
         return True
-    
+
     def apply(
         self,
         graph: Union[dace.SDFGState, dace.SDFG],
@@ -134,10 +136,12 @@ class KillAliasingScalars(dace_transformation.SingleStateTransformation):
 
         # Redirect all outcoming edges of the second access node to the first
         for edge in list(graph.out_edges(second_node)):
-            dace_helpers.redirect_edge(state=graph, edge=edge, new_src=first_node, new_data=first_node.data if edge.data.data == second_node.data else edge.data.data)
-            # edge.subset = first_node.desc(sdfg).get_subset()
-            # if edge.other_subset is not None:
-            #     edge.other_subset = edge.dst.desc(sdfg).get_subset()
+            dace_helpers.redirect_edge(
+                state=graph,
+                edge=edge,
+                new_src=first_node,
+                new_data=first_node.data if edge.data.data == second_node.data else edge.data.data,
+            )
 
         # Remove the second access node
         graph.remove_node(second_node)

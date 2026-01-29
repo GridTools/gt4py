@@ -733,7 +733,7 @@ def _gt_auto_process_dataflow_inside_maps(
     single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
     sdfg.apply_transformations_repeated(
-        gtx_transformations.KillAliasingScalars(
+        gtx_transformations.RemoveAliasingScalars(
             single_use_data=single_use_data,
         ),
         validate=False,
