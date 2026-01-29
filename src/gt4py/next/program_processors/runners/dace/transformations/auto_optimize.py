@@ -131,6 +131,7 @@ def gt_auto_optimize(
     assume_pointwise: bool = True,
     optimization_hooks: Optional[dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun]] = None,
     demote_fields: Optional[list[str]] = None,
+    compact_tasklets: bool = False,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -198,6 +199,7 @@ def gt_auto_optimize(
             see `GT4PyAutoOptHook` for more information.
         demote_fields: Consider these fields as transients for the purpose of optimization.
             Use at your own risk. See Notes for all implications.
+        compact_tasklets: Reduces the number of Tasklets by fusing them.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -325,6 +327,7 @@ def gt_auto_optimize(
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
             scan_loop_unrolling=scan_loop_unrolling,
             scan_loop_unrolling_factor=scan_loop_unrolling_factor,
+            compact_tasklets=compact_tasklets,
             validate_all=validate_all,
         )
 
@@ -661,6 +664,7 @@ def _gt_auto_process_dataflow_inside_maps(
     blocking_only_if_independent_nodes: Optional[bool],
     scan_loop_unrolling: bool,
     scan_loop_unrolling_factor: int,
+    compact_tasklets: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
@@ -695,13 +699,14 @@ def _gt_auto_process_dataflow_inside_maps(
     #   (not fully clear why though, probably a compiler artefact) and as well as
     #   `MoveDataflowIntoIfBody` (not fully clear either, it `TaskletFusion` makes
     #   things simpler or prevent it from doing certain, negative, things).
-    # TODO(phimuell): Restrict it to Tasklets only inside Maps.
     # TODO(phimuell): Investigate more.
-    sdfg.apply_transformations_repeated(
-        dace_dataflow.TaskletFusion,
-        validate=False,
-        validate_all=validate_all,
-    )
+    # TODO(phimuell): Restrict it to Tasklets only inside Maps.
+    if compact_tasklets:
+        sdfg.apply_transformations_repeated(
+            dace_dataflow.TaskletFusion,
+            validate=False,
+            validate_all=validate_all,
+        )
 
     # Constants (tasklets are needed to write them into a variable) should not be
     #  arguments to a kernel but be present inside the body.
