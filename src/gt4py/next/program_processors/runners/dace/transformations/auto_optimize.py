@@ -707,14 +707,15 @@ def _gt_auto_process_dataflow_inside_maps(
     #   before or after `LoopBlocking`. In cases where the condition is `False`
     #   most of the times calling it before is better, but if the condition is
     #   `True` then this order is better. Solve that issue.
-    # TODO(phimuell): Because of the limitation that the transformation only works
-    #   for dataflow that is directly enclosed by a Map. This means that the order
-    #   in which they applied matter. Consider the case were several `if` blocks are
-    #   chained. If the transformation is applied starting from the top most block
-    #   then it is okay. If however, they are processed in reverse order, i.e.
-    #   starting at the lowest, then transformation ends because all blocks will be
-    #   inlined and are thus no longer directly enclosed by a Map. To solve this we
-    #   should apply them in a topological order.
+    # NOTE: The transformation is currently only able to handle dataflow that is
+    #   _directly_ enclosed by a Map. Thus the order in which they (multiple blocks
+    #   in the same Map) are processed matter. Think of a chain of `if` blocks that
+    #   can be perfectly nested. If the last one is handled first, then all other
+    #   can not be processed anymore. This means it is important to set
+    #   `ignore_upstream_blocks` to `False`, thus the transformation will not apply
+    #   if the dataflow that should be relocated into an `if` block contains again
+    #   `if` blocks that can be relocated. It would be more efficient to process
+    #   them in the right order from the beginning.
     sdfg.apply_transformations_repeated(
         gtx_transformations.MoveDataflowIntoIfBody(
             ignore_upstream_blocks=False,
