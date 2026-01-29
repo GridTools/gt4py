@@ -762,34 +762,56 @@ def _gt_auto_configure_maps_and_strides(
     For a description of the arguments see the `gt_auto_optimize()` function.
     """
 
-    # If no unit stride is given explicitly we assume that it is in the horizontal.
-    #  This has also technical reasons to avoid launch errors (on GPU we have to make
-    #  sure that the biggest dimension ends up on the `x` direction, which is most
-    #  likely the horizontal dimension).
-    prime_direction_kind = (
-        gtx_common.DimensionKind.HORIZONTAL if unit_strides_kind is None else unit_strides_kind
-    )
+    # If `unit_strides_kind` is unknown we will not modify the Map order nor the
+    #  strides, except if we are on GPU. The reason for this is that the maximal
+    #  number of blocks is different for each dimension. If the largest dimension
+    #  is for example associated with the `z` dimension, we would get launch errors
+    #  at some point. Thus in that case we pretend that it is horizontal. Which is
+    #  a valid assumption for any ICON-like code or if the GT4Py allocator is used.
+    # TODO(phimuell): Make this selection more intelligent.
+    if unit_strides_kind is None and gpu:
+        prefered_direction_kind: Optional[gtx_common.DimensionKind] = (
+            gtx_common.DimensionKind.HORIZONTAL
+        )
+    else:
+        prefered_direction_kind = unit_strides_kind
 
-    # It is not possible to use the `unit_strides_dim` argument of the
-    #  function, because `LoopBlocking`, if run, changed the name of the
-    #  parameter but the dimension can still be identified by its "kind".
-    gtx_transformations.gt_set_iteration_order(
-        sdfg=sdfg,
-        unit_strides_kind=prime_direction_kind,
-        validate=False,
-        validate_all=validate_all,
-    )
+    # We should actually use a `gtx.Dimension` here and not a `gtx.DimensionKind`,
+    #  since they are unique. However at this stage, especially after the expansion
+    #  of non standard Memlets (which happens in the GPU transformation) associating
+    #  Map parameters with GT4Py dimension is very hard to impossible. At this stage
+    #  the kind is the most reliable indicator we have.
+    # NOTE: This is not the only location where we manipulate the Map order, we also
+    #   do it in the GPU transformation, where we have to set the order of the
+    #   expanded Memlets.
+    if prefered_direction_kind is not None:
+        gtx_transformations.gt_set_iteration_order(
+            sdfg=sdfg,
+            unit_strides_kind=prefered_direction_kind,
+            validate=False,
+            validate_all=validate_all,
+        )
 
     # NOTE: We have to set the strides of transients before the non-standard Memlets
-    #   get expanded, i.e. turned into Maps because no `cudaMemcpy*()` call exists,
-    #   which requires that the final strides are there. Furthermore, Memlet expansion
-    #   has to happen before the GPU block size is set. There are several possible
-    #   solutions for that, of which none is really good. The least bad one is to
-    #   set the strides of the transients here. The main downside is that this and
-    #   the `_gt_auto_post_processing()` function has these weird names.
-    gtx_transformations.gt_change_strides(sdfg)
+    #   get expanded, i.e. turned into Maps because no matching `cudaMemcpy*()` call
+    #   exists, which requires that the final strides are there. Furthermore, Memlet
+    #   expansion has to happen before the GPU block size is set. There are several
+    #   possible solutions for that, of which none is really good. The least bad one
+    #   is to set the strides of the transients here. The main downside is that we
+    #   slightly modify the SDFG in the GPU transformation after we have set the
+    #   strides.
+    if prefered_direction_kind is not None:
+        gtx_transformations.gt_change_strides(sdfg, prefered_direction_kind=prefered_direction_kind)
 
     if gpu:
+        if unit_strides_kind != gtx_common.DimensionKind.HORIZONTAL:
+            warnings.warn(
+                "The GT4Py DaCe backend assumes that in GPU mode the leading dimension"
+                f" is horizontal, but it was '{unit_strides_kind}', this might lead"
+                " to suboptimal performance",
+                stacklevel=2,
+            )
+
         # TODO(phimuell): The GPU function might modify the map iteration order.
         #   This is because how it is implemented (promotion and fusion). However,
         #   because of its current state, this should not happen, but we have to look
