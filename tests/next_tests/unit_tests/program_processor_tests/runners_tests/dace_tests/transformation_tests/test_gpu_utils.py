@@ -359,12 +359,8 @@ def test_set_gpu_maxnreg():
     state = sdfg.add_state(is_start_block=True)
     dim = 2
     shape = (10,) * (dim - 1) + (1,)
-    sdfg.add_array(
-        f"A_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global
-    )
-    sdfg.add_array(
-        f"B_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global
-    )
+    sdfg.add_array(f"A_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global)
+    sdfg.add_array(f"B_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global)
     _, me, _ = state.add_mapped_tasklet(
         f"map_{dim}",
         map_ranges={f"__i{i}": f"0:{s}" for i, s in enumerate(shape)},
