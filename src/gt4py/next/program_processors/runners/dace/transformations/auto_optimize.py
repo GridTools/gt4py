@@ -840,9 +840,10 @@ def _gt_auto_configure_maps_and_strides(
     if gpu:
         if unit_strides_kind != gtx_common.DimensionKind.HORIZONTAL:
             warnings.warn(
-                "The GT4Py DaCe backend assumes that in GPU mode the leading dimension"
-                f" is horizontal, but it was '{unit_strides_kind}', this might lead"
-                " to suboptimal performance",
+                "The GT4Py DaCe GPU backend assumes that the leading dimension, i.e."
+                " where stride is 1, is of kind 'HORIZONTAL', however it was"
+                f" '{unit_strides_kind}'. Furthermore, it should be the last dimension."
+                " Other configurations might lead to suboptimal performance.",
                 stacklevel=2,
             )
 
