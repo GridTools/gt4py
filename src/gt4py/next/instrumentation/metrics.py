@@ -210,7 +210,7 @@ class SourceKeyContextManager(contextlib.AbstractContextManager):  # type: ignor
     def __exit__(
         self,
         exc_type_: type[BaseException] | None,
-        value: BaseException | None,
+        exc_value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
         if self.previous_cvar_token is not None:
@@ -280,7 +280,7 @@ class BaseMetricsCollector(contextlib.AbstractContextManager):  # type: ignore[m
     def __exit__(
         self,
         exc_type_: type[BaseException] | None,
-        value: BaseException | None,
+        exc_value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
         if self.previous_cvar_token is not None:
