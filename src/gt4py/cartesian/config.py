@@ -30,6 +30,8 @@ GT_CPP_TEMPLATE_DEPTH: int = 1024
 GT4PY_COMPILE_OPT_LEVEL: str = os.environ.get("GT4PY_COMPILE_OPT_LEVEL", "3")
 GT4PY_EXTRA_COMPILE_OPT_FLAGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_OPT_FLAGS", "")
 
+GT4PY_CART_ENABLE_DACE: bool = bool(int(os.environ.get("GT4PY_CART_ENABLE_DACE", "1")))
+
 # Settings dict
 GT4PY_EXTRA_COMPILE_ARGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
 extra_compile_args: List[str] = (
