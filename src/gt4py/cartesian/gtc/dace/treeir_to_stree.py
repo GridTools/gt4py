@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import TracebackType
 
-from dace import dtypes, nodes, subsets
+from dace import nodes, subsets
 from dace.properties import CodeBlock
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.state import LoopRegion
@@ -67,10 +67,6 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         ctx.current_scope.children.append(tasklet)
 
     def visit_HorizontalLoop(self, node: tir.HorizontalLoop, ctx: Context) -> None:
-        # Define axis iteration symbols
-        for axis in tir.Axis.dims_horizontal():
-            ctx.tree.symbols[axis.iteration_symbol()] = dtypes.int32
-
         dace_map = nodes.Map(
             label=f"horizontal_loop_{id(node)}",
             params=[tir.Axis.J.iteration_symbol(), tir.Axis.I.iteration_symbol()],
@@ -89,9 +85,6 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             self.visit(node.children, ctx=ctx)
 
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
-        # In any case, define the iteration symbol
-        ctx.tree.symbols[node.iteration_variable] = dtypes.int32
-
         # For serial loops, create a ForScope and add it to the tree
         if node.loop_order != common.LoopOrder.PARALLEL:
             for_scope = tn.ForScope(loop=_loop_region_for(node), children=[])
