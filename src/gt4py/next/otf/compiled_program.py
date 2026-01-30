@@ -12,13 +12,19 @@ import concurrent.futures
 import dataclasses
 import functools
 import itertools
+import warnings
 from collections.abc import Callable, Hashable, Sequence
 from typing import Any, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
-from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
+from gt4py.next.ffront import (
+    stages as ffront_stages,
+    type_info as ffront_type_info,
+    type_specifications as ts_ffront,
+    type_translation,
+)
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -28,7 +34,7 @@ from gt4py.next.utils import tree_map
 T = TypeVar("T")
 
 ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
-CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int]
+CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int, None | str]
 ArgumentDescriptors: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
@@ -269,7 +275,9 @@ class CompiledProgramsPool:
     """
 
     backend: gtx_backend.Backend
-    definition_stage: ffront_stages.ProgramDefinition
+    definition_stage: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition
+    # Note: This type can be incomplete, i.e. contain DeferredType, whenever the operator is a
+    #  scan operator. In the future it could also be the type of a generic program.
     program_type: ts_ffront.ProgramType
     #: mapping from an argument descriptor type to a list of parameters or expression thereof
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
@@ -312,7 +320,31 @@ class CompiledProgramsPool:
         else:
             args, kwargs = canonical_args, canonical_kwargs
         static_args_values = self._argument_descriptor_cache_key_from_args(*args, **kwargs)
-        key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
+
+        if self._is_generic:
+            # In case the program or operator is generic, i.e. callable for arguments of varying
+            # type, add the argument types to the cache key as the argument types are used during
+            # compilation. In case the program is not generic we can avoid the potentially
+            # expensive type deduction for all arguments and not include it in the key.
+            warnings.warn(
+                "Calling generic programs / direct calls to scan operators are not optimized. "
+                "Consider calling a specialized version instead.",
+                stacklevel=2,
+            )
+            arg_specialization_key = eve_utils.content_hash(
+                (
+                    tuple(type_translation.from_value(arg) for arg in canonical_args),
+                    {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
+                )
+            )
+        else:
+            arg_specialization_key = None
+
+        key = (
+            static_args_values,
+            common.hash_offset_provider_items_by_id(offset_provider),
+            arg_specialization_key,
+        )
 
         try:
             compiled_program = self.compiled_programs[key]
@@ -333,6 +365,12 @@ class CompiledProgramsPool:
                     argument_descriptors=_make_argument_descriptors(
                         self.program_type, self.argument_descriptor_mapping, args, kwargs
                     ),
+                    # note: it is important to use the args before named collections are extracted
+                    #  as otherwise the implicit program generation from an operator fails
+                    arg_specialization_info=(
+                        tuple(type_translation.from_value(arg) for arg in canonical_args),
+                        {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
+                    ),
                     offset_provider=offset_provider,
                     call_key=key,
                 )
@@ -349,8 +387,30 @@ class CompiledProgramsPool:
         return arguments.make_primitive_value_args_extractor(self.program_type.definition)
 
     @functools.cached_property
+    def _is_generic(self) -> bool:
+        """
+        Is the operator or program generic in the sense that it can be called for different
+        argument types.
+
+        Right now this is only the case for scan operators.
+        """
+        # TODO(tehrengruber): This concept does not exist elsewhere and is not properly reflected
+        #  in the type system. For now we just use `DeferredType` to communicate between
+        #  here and `type_info.type_in_program_context`.
+        return any(
+            isinstance(t, ts.DeferredType)
+            for t in itertools.chain(
+                self.program_type.definition.pos_only_args,
+                self.program_type.definition.pos_or_kw_args.values(),
+                self.program_type.definition.kw_only_args.values(),
+            )
+        )
+
+    @functools.cached_property
     def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
-        return gtx_utils.make_args_canonicalizer_for_function(self.definition_stage.definition)
+        return ffront_type_info.make_args_canonicalizer(
+            self.program_type, name=self.definition_stage.definition.__name__
+        )
 
     @functools.cached_property
     def _argument_descriptor_cache_key_from_args(
@@ -440,6 +500,11 @@ class CompiledProgramsPool:
         self,
         argument_descriptors: ArgumentDescriptors,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
+        #: tuple consisting of the types of the positional and keyword arguments.
+        arg_specialization_info: tuple[tuple[ts.TypeSpec, ...], dict[str, ts.TypeSpec]]
+        | None = None,
+        # argument used only to validate key computed in a call / dispatch agrees with the
+        # key computed here
         call_key: CompiledProgramsKey | None = None,
     ) -> None:
         if not common.is_offset_provider(offset_provider):
@@ -459,18 +524,31 @@ class CompiledProgramsPool:
         key = (
             self._argument_descriptor_cache_key_from_descriptors(argument_descriptor_contexts),
             common.hash_offset_provider_items_by_id(offset_provider),
+            eve_utils.content_hash(arg_specialization_info) if self._is_generic else None,
         )
         assert call_key is None or call_key == key
 
         if key in self.compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
 
+        if arg_specialization_info:
+            arg_types, kwarg_types = arg_specialization_info
+        else:
+            if self._is_generic:
+                raise ValueError(
+                    "Can not precompile generic program or scan operator without argument types."
+                )
+            arg_types = (
+                *self.program_type.definition.pos_only_args,
+                *self.program_type.definition.pos_or_kw_args.values(),
+            )
+            kwarg_types = self.program_type.definition.kw_only_args
+
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
-            args=tuple(self.program_type.definition.pos_only_args)
-            + tuple(self.program_type.definition.pos_or_kw_args.values()),
-            kwargs=self.program_type.definition.kw_only_args,
+            args=arg_types,
+            kwargs=kwarg_types,
             argument_descriptor_contexts=argument_descriptor_contexts,
         )
         compile_call = functools.partial(
@@ -491,7 +569,7 @@ class CompiledProgramsPool:
             self.compiled_programs[key] = _async_compilation_pool.submit(compile_call)
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
-    #  domains.
+    #  domains and of scans.
     def compile(
         self,
         offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
