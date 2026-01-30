@@ -808,8 +808,8 @@ def _gt_auto_configure_maps_and_strides(
             warnings.warn(
                 "The GT4Py DaCe GPU backend assumes that the leading dimension, i.e."
                 " where stride is 1, is of kind 'HORIZONTAL', however it was"
-                f" '{unit_strides_kind}' and is the last index. Other configurations"
-                " might lead to suboptimal performance.",
+                f" '{unit_strides_kind}'. Furthermore, it should be the last dimension."
+                " Other configurations might lead to suboptimal performance.",
                 stacklevel=2,
             )
 
