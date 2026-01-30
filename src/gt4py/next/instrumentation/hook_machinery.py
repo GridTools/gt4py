@@ -60,7 +60,7 @@ class _BaseHook(Generic[T, P]):
     callbacks: tuple[Callable[P, T], ...] = dataclasses.field(default=(), init=False)
 
     @property
-    def __doc__(self) -> str | None:   # type: ignore[override]
+    def __doc__(self) -> str | None:  # type: ignore[override]
         return self.definition.__doc__
 
     def __post_init__(self) -> None:
