@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import functools
 import types
@@ -44,7 +45,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.gtcallable import GTCallable
-from gt4py.next.instrumentation import metrics
+from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, stages, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -53,9 +54,35 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
-program_call_metrics_collector = metrics.make_collector(
+ProgramCallMetricsCollector = metrics.make_collector(
     level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
 )
+
+
+@hook_machinery.ContextHook
+def program_call_context(
+    program: Program,
+    args: tuple[Any, ...],
+    offset_provider: common.OffsetProvider,
+    enable_jit: bool,
+    kwargs: dict[str, Any],
+) -> contextlib.AbstractContextManager:
+    """Hook called at the beginning and end of a program call."""
+    return ProgramCallMetricsCollector()
+
+
+@hook_machinery.EventHook
+def embedded_program_call_hook(
+    program: Program,
+    args: tuple[Any, ...],
+    offset_provider: common.OffsetProvider,
+    kwargs: dict[str, Any],
+) -> None:
+    """Hook called at the beginning and end of an embedded program call."""
+    # Metrics source key needs to be set here. Embedded programs
+    # don't have variants so there's no other place to do it.
+    if metrics.is_level_enabled(metrics.MINIMAL):
+        metrics.set_current_source_key(f"{program.__name__}<'<embedded>')>")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -267,7 +294,13 @@ class Program:
                 self.enable_jit if self.enable_jit is not None else config.ENABLE_JIT_DEFAULT
             )
 
-        with program_call_metrics_collector():
+        with program_call_context(
+            program=self,
+            args=args,
+            offset_provider=offset_provider,
+            enable_jit=enable_jit,
+            kwargs=kwargs,
+        ):
             if __debug__:
                 # TODO: remove or make dependency on self.past_stage optional
                 past_process_args._validate_args(
@@ -289,14 +322,8 @@ class Program:
                     stacklevel=2,
                 )
 
-                # Metrics source key needs to be set here. Embedded programs
-                # don't have variants so there's no other place to do it.
-                if metrics.is_level_enabled(metrics.MINIMAL):
-                    metrics.set_current_source_key(
-                        f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
-                    )
-
                 with next_embedded.context.update(offset_provider=offset_provider):
+                    embedded_program_call_hook(self, args, offset_provider, kwargs)
                     self.definition_stage.definition(*args, **kwargs)
 
     def compile(

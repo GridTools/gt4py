@@ -12,7 +12,7 @@ import contextlib
 
 import pytest
 
-from gt4py.next.instrumentation._hook_machinery import (
+from gt4py.next.instrumentation.hook_machinery import (
     EventHook,
     ContextHook,
     _get_unique_name,

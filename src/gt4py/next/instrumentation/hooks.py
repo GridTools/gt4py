@@ -12,4 +12,7 @@ from gt4py.next.ffront.decorator import (
     embedded_program_call_hook as embedded_program_call_hook,
     program_call_context as program_call_context,
 )
-from gt4py.next.otf.compiled_program import compile_variant_hook as compile_variant_hook
+from gt4py.next.otf.compiled_program import (
+    compiled_program_call_hook as compiled_program_call_hook,
+    compile_variant_hook as compile_variant_hook,
+)

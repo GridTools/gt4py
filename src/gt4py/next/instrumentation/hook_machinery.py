@@ -59,11 +59,9 @@ class _BaseHook(Generic[T, P]):
     registry: dict[str, Callable[P, T]] = dataclasses.field(default_factory=dict, kw_only=True)
     callbacks: tuple[Callable[P, T], ...] = dataclasses.field(default=(), init=False)
 
-    if not typing.TYPE_CHECKING:
-
-        @property
-        def __doc__(self) -> str | None:
-            return self.definition.__doc__
+    @property
+    def __doc__(self) -> str | None:   # type: ignore[override]
+        return self.definition.__doc__
 
     def __post_init__(self) -> None:
         # As an optimization to avoid an empty function call if no callbacks are

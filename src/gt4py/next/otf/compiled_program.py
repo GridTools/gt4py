@@ -19,7 +19,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import stages as ffront_stages, type_specifications as ts_ffront
-from gt4py.next.instrumentation import metrics
+from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -39,6 +39,59 @@ ArgumentDescriptorContexts: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor],
     ArgumentDescriptorContext,
 ]
+
+
+def _make_pool_root(
+    program_definition: ffront_stages.ProgramDefinition, backend: gtx_backend.Backend
+) -> tuple[str, str]:
+    return (program_definition.definition.__name__, backend.name)
+
+
+@functools.cache
+def _metrics_prefix_from_pool_root(root: tuple[str, str]) -> str:
+    """Generate a metrics prefix from a compiled programs pool root."""
+    return f"{root[0]}<{root[1]}>"
+
+
+@hook_machinery.EventHook
+def compiled_program_call_hook(
+    compiled_program: stages.CompiledProgram,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    offset_provider: common.OffsetProvider,
+    root: tuple[str, str],
+    key: CompiledProgramsKey,
+) -> None:
+    """Callback hook invoked before compiling a program variant."""
+    if metrics.is_level_enabled(metrics.MINIMAL):
+        metrics.set_current_source_key(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
+
+
+@hook_machinery.EventHook
+def compile_variant_hook(
+    program_definition: ffront_stages.ProgramDefinition,
+    backend: gtx_backend.Backend,
+    offset_provider: common.OffsetProviderType | common.OffsetProvider,
+    argument_descriptors: ArgumentDescriptors,
+    key: CompiledProgramsKey,
+) -> None:
+    """Callback hook invoked before compiling a program variant."""
+
+    if metrics.is_level_enabled(metrics.MINIMAL):
+        # Create a new metrics entity for this compiled program
+        metrics_source = metrics.set_current_source_key(
+            f"{_metrics_prefix_from_pool_root(_make_pool_root(program_definition, backend))}[{hash(key)}]"
+        )
+        metrics_source.metadata |= dict(
+            name=program_definition.definition.__name__,
+            backend=backend.name,
+            compiled_program_pool_key=hash(key),
+            **{
+                f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
+                for key, value in argument_descriptors.items()
+            },
+        )
+
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
 _async_compilation_pool: concurrent.futures.Executor | None = None
@@ -230,8 +283,8 @@ class CompiledProgramsPool:
     ] = dataclasses.field(default_factory=dict, init=False)
 
     @functools.cached_property
-    def _primitive_values_extractor(self) -> Callable | None:
-        return arguments.make_primitive_value_args_extractor(self.program_type.definition)
+    def root(self) -> tuple[str, str]:
+        return _make_pool_root(self.definition_stage, self.backend)
 
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
@@ -262,20 +315,16 @@ class CompiledProgramsPool:
         key = (static_args_values, common.hash_offset_provider_items_by_id(offset_provider))
 
         try:
-            program = self.compiled_programs[key]
-            if metrics.is_level_enabled(metrics.MINIMAL):
-                metrics.set_current_source_key(self._metrics_key_from_pool_key(key))
+            compiled_program = self.compiled_programs[key]
+            if not callable(compiled_program):
+                # 'Future' objects are not callable so we know they need to be resolved.
+                assert isinstance(compiled_program, concurrent.futures.Future)
+                compiled_program = self._resolve_future(key)
 
-            program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator]  # the Future case is handled below
-
-        except TypeError as e:
-            if "program" in locals() and isinstance(program, concurrent.futures.Future):
-                # 'Future' objects are not callable so they will generate a TypeError.
-                # Here we resolve the future and call it again.
-                program = self._resolve_future(key)
-                program(*args, **kwargs, offset_provider=offset_provider)
-            else:
-                raise e
+            compiled_program_call_hook(
+                compiled_program, args, kwargs, offset_provider, self.root, key
+            )
+            compiled_program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator]  # the Future case is handled below
 
         except KeyError as e:
             if enable_jit:
@@ -296,14 +345,12 @@ class CompiledProgramsPool:
             raise RuntimeError("No program compiled for this set of static arguments.") from e
 
     @functools.cached_property
-    def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
-        return gtx_utils.make_args_canonicalizer_for_function(self.definition_stage.definition)
+    def _primitive_values_extractor(self) -> Callable | None:
+        return arguments.make_primitive_value_args_extractor(self.program_type.definition)
 
     @functools.cached_property
-    def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:
-        prefix = f"{self.definition_stage.definition.__name__}<{self.backend.name}>"
-
-        return lambda key: f"{prefix}[{hash(key)}]"
+    def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+        return gtx_utils.make_args_canonicalizer_for_function(self.definition_stage.definition)
 
     @functools.cached_property
     def _argument_descriptor_cache_key_from_args(
@@ -418,19 +465,6 @@ class CompiledProgramsPool:
         if key in self.compiled_programs:
             raise ValueError(f"Program with key {key} already exists.")
 
-        # If we are collecting metrics, create a new metrics entity for this compiled program
-        if metrics.is_level_enabled(metrics.MINIMAL):
-            metrics_source = metrics.set_current_source_key(self._metrics_key_from_pool_key(key))
-            metrics_source.metadata |= dict(
-                name=self.definition_stage.definition.__name__,
-                backend=self.backend.name,
-                compiled_program_pool_key=hash(key),
-                **{
-                    f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
-                    for key, value in argument_descriptors.items()
-                },
-            )
-
         compile_time_args = arguments.CompileTimeArgs(
             offset_provider=offset_provider,
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
@@ -442,6 +476,14 @@ class CompiledProgramsPool:
         compile_call = functools.partial(
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
         )
+        compile_variant_hook(
+            self.definition_stage,
+            self.backend,
+            offset_provider=offset_provider,
+            argument_descriptors=argument_descriptors,
+            key=key,
+        )
+
         if _async_compilation_pool is None:
             # synchronous compilation
             self.compiled_programs[key] = compile_call()
