@@ -246,7 +246,11 @@ def make_primitive_value_args_extractor(
     The returned function has the signature `(*args, **kwargs) -> (args, kwargs)`,
     where `args` is a tuple of positional arguments and `kwargs` is a dictionary of
     keyword arguments containing the extracted primitive values where needed.
+
+    This function only uses structural information of the type, primitive values may be
+    passed as :ref:`ts.DeferredType`.
     """
+
     args_param = "args"
     kwargs_param = "kwargs"
     num_args_to_extract = 0
