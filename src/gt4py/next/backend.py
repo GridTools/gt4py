@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import typing
-from typing import Any, Generic
+from typing import Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
@@ -21,7 +21,6 @@ from gt4py.next.ffront import (
     func_to_past,
     past_process_args,
     past_to_itir,
-    signature,
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.ffront.stages import (
@@ -143,28 +142,6 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     executor: workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     transforms: workflow.Workflow[CompilableDefinition, stages.CompilableProgram]
-
-    def __call__(
-        self,
-        program: IRDefinitionForm,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        if not isinstance(program, itir.Program):
-            args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
-        # TODO(egparedes): this extraction is not strictly correct, as we should only
-        #   extract values from the correct container types, not from ANY container,
-        #   but that would require a larger refactoring and anyway this Backend class
-        #   should be removed in the future.
-        extracted_args = tuple(arguments.extract(a) for a in args)
-        extracted_kwargs = {k: arguments.extract(v) for k, v in kwargs.items()}
-        self.jit(program, *args, **kwargs)(*extracted_args, **extracted_kwargs)
-
-    def jit(self, program: IRDefinitionForm, *args: Any, **kwargs: Any) -> stages.CompiledProgram:
-        if not isinstance(program, itir.Program):
-            args, kwargs = signature.convert_to_positional(program, *args, **kwargs)
-        aot_args = arguments.CompileTimeArgs.from_concrete(*args, **kwargs)
-        return self.compile(program, aot_args)
 
     def compile(
         self, program: IRDefinitionForm, compile_time_args: arguments.CompileTimeArgs

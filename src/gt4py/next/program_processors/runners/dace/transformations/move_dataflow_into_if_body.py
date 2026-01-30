@@ -585,8 +585,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 that can be relocated, not yet filtered.
             non_relocatable_dataflow: The connectors and their associated dataflow
                 that can not be relocated.
-            enclosing_map: The limiting node, i.e. the MapEntry of the Map `if_block`
-                is located in.
+            enclosing_map: The limiting node, i.e. the MapEntry of the Map where
+                `if_block` is located in.
         """
 
         # Remove the parts of the dataflow that is unrelocatable.
@@ -624,6 +624,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 has_been_updated = False
 
                 for reloc_node in list(nodes_proposed_for_reloc):
+                    # The node was already handled in a previous iteration.
+                    if reloc_node not in nodes_proposed_for_reloc:
+                        continue
+
                     assert (
                         state.in_degree(reloc_node) > 0
                     )  # Because we are currently always inside a Map
@@ -636,17 +640,18 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         for oedge in state.out_edges(reloc_node)
                         if oedge.dst is not if_block
                     ):
-                        nodes_proposed_for_reloc.discard(reloc_node)
+                        nodes_proposed_for_reloc.remove(reloc_node)
                         has_been_updated = True
                         continue
 
                     # We do not look at all incoming nodes, but have to ignore some of them.
                     #  We ignore `enclosed_map` because it acts as boundary, and the node
-                    #  on the other side of it is mapped into the `if` body anyway. Then we
-                    #  have to ignore all AccessNodes, since they are either relocated into
-                    #  the `if` body or are mapped into. We then have to look only at the
-                    #  remaining nodes.
-                    incoming_nodes: set[dace_nodes.Node] = {
+                    #  on the other side of it is mapped into the `if` body anyway. We
+                    #  ignore the AccessNodes because they will either be relocated into
+                    #  the `if` body or be mapped (remain outside but made accessible
+                    #  inside), thus their relocation state is of no concern for
+                    #  `reloc_node`.
+                    non_mappable_incoming_nodes: set[dace_nodes.Node] = {
                         iedge.src
                         for iedge in state.in_edges(reloc_node)
                         if not (
@@ -654,26 +659,21 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                             or isinstance(iedge.src, dace_nodes.AccessNode)
                         )
                     }
-                    if incoming_nodes.issubset(nodes_proposed_for_reloc):
-                        # All nodes will be moved into the `if` body too, so no problem.
+                    if non_mappable_incoming_nodes.issubset(nodes_proposed_for_reloc):
+                        # All nodes that can not be mapped into the `if` body are
+                        #  currently scheduled to be relocated, thus there is not
+                        #  problem.
                         pass
 
-                    elif incoming_nodes.isdisjoint(nodes_proposed_for_reloc):
-                        # None of the incoming nodes will be moved into the if body,
-                        #  thus `reloc_node` is an interface node, it might be _mapped_
-                        #  into the `if` body (if it is an `AccessNode`), but the node
-                        #  itself will not be moved into the `if` body.
-                        nodes_proposed_for_reloc.discard(reloc_node)
-                        has_been_updated = True
-
                     else:
-                        # Only some of the incoming nodes will be moved into the `if`
-                        #  body. This is legal only if the not moved nodes are
-                        #  AccessNodes, because we have ignored them in the definition
-                        #  of `incoming_nodes`, `reloc_node` can not be moved into
-                        #  the `if` body and neither can the incoming nodes.
-                        nodes_proposed_for_reloc.difference_update(incoming_nodes)
-                        nodes_proposed_for_reloc.discard(reloc_node)
+                        # Only some of the non mappable nodes are selected to be
+                        #  moved inside the `if` body. This means that `reloc_node`
+                        #  can also not be moved because of its input dependencies.
+                        #  Since we can not relocate `reloc_node` this also implies
+                        #  that none of its input can. Thus we remove them from
+                        #  `nodes_proposed_for_reloc`.
+                        nodes_proposed_for_reloc.difference_update(non_mappable_incoming_nodes)
+                        nodes_proposed_for_reloc.remove(reloc_node)
                         has_been_updated = True
 
             return nodes_proposed_for_reloc

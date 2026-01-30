@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import Iterable, Sequence
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py import eve
 from gt4py.eve.extended_typing import MaybeNestedInTuple
@@ -92,7 +92,7 @@ def _create_scan_field_operator_impl(
     output_edge: gtir_dataflow.DataflowOutputEdge | None,
     output_domain: infer_domain.NonTupleDomainAccess,
     output_type: ts.FieldType,
-    map_exit: dace.nodes.MapExit | None,
+    map_exit: dace_nodes.MapExit | None,
 ) -> gtir_to_sdfg_types.FieldopData | None:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -180,7 +180,7 @@ def _create_scan_field_operator_impl(
     #  to modify the stride of the scan column array inside the nested SDFG to match
     #  the strides outside.
     nsdfg_scan = field_node_path[0].src
-    assert isinstance(nsdfg_scan, dace.nodes.NestedSDFG)
+    assert isinstance(nsdfg_scan, dace_nodes.NestedSDFG)
     inner_output_name = field_node_path[0].src_conn
     inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
     assert len(inner_output_desc.shape) == 1
@@ -530,7 +530,7 @@ def _lower_lambda_to_nested_sdfg(
 
 def _handle_dataflow_result_of_nested_sdfg(
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    nsdfg_node: dace.nodes.NestedSDFG,
+    nsdfg_node: dace_nodes.NestedSDFG,
     inner_ctx: gtir_to_sdfg.SubgraphContext,
     outer_ctx: gtir_to_sdfg.SubgraphContext,
     inner_data: gtir_to_sdfg_types.FieldopData,

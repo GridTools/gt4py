@@ -26,7 +26,7 @@ from typing import (
 )
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py import eve
 from gt4py.eve.extended_typing import MaybeNestedInTuple, NestedTuple
@@ -68,7 +68,7 @@ class ValueExpr:
         gt_dtype: GT4Py data type, which includes the `offset_type` local dimension for lists.
     """
 
-    dc_node: dace.nodes.AccessNode
+    dc_node: dace_nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
 
     def __post_init__(self) -> None:
@@ -89,7 +89,7 @@ class MemletExpr:
         subset: The memlet subset to retrieve the local data.
     """
 
-    dc_node: dace.nodes.AccessNode
+    dc_node: dace_nodes.AccessNode
     gt_field: ts.FieldType
     subset: dace_subsets.Range
 
@@ -131,7 +131,7 @@ class IteratorExpr:
             or the result of a tasklet computation like neighbors connectivity or dynamic offset.
     """
 
-    field: dace.nodes.AccessNode
+    field: dace_nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
     field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType]]
     indices: dict[gtx_common.Dimension, DataExpr]
@@ -195,7 +195,7 @@ class DataflowInputEdge(Protocol):
     """
 
     @abc.abstractmethod
-    def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None: ...
+    def connect(self, map_entry: Optional[dace_nodes.MapEntry]) -> None: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -208,12 +208,12 @@ class MemletInputEdge(DataflowInputEdge):
     """
 
     state: dace.SDFGState
-    source: dace.nodes.AccessNode
+    source: dace_nodes.AccessNode
     subset: dace_subsets.Range
-    dest: dace.nodes.AccessNode | dace.nodes.Tasklet
+    dest: dace_nodes.AccessNode | dace_nodes.Tasklet
     dest_conn: Optional[str]
 
-    def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
+    def connect(self, map_entry: Optional[dace_nodes.MapEntry]) -> None:
         memlet = dace.Memlet(data=self.source.data, subset=self.subset)
         if map_entry is None:
             self.state.add_edge(self.source, None, self.dest, self.dest_conn, memlet)
@@ -237,9 +237,9 @@ class EmptyInputEdge(DataflowInputEdge):
     """
 
     state: dace.SDFGState
-    node: dace.nodes.Tasklet
+    node: dace_nodes.Tasklet
 
-    def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
+    def connect(self, map_entry: Optional[dace_nodes.MapEntry]) -> None:
         if map_entry is None:
             # outside of a map scope it is possible to instantiate a tasklet node
             # without input connectors
@@ -266,8 +266,8 @@ class DataflowOutputEdge:
 
     def connect(
         self,
-        map_exit: Optional[dace.nodes.MapExit],
-        dest: dace.nodes.AccessNode,
+        map_exit: Optional[dace_nodes.MapExit],
+        dest: dace_nodes.AccessNode,
         dest_subset: dace_subsets.Range,
     ) -> bool:
         """Create a connection to the `dest` node, writing the given `dest_subset`.
@@ -281,11 +281,11 @@ class DataflowOutputEdge:
         write_edge = self.state.in_edges(self.result.dc_node)[0]
 
         # Check the kind of node which writes the result
-        if isinstance(write_edge.src, dace.nodes.Tasklet):
+        if isinstance(write_edge.src, dace_nodes.Tasklet):
             # The temporary data written by a tasklet can be safely deleted.
             assert map_exit is not None
             remove_last_node = True
-        elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
+        elif isinstance(write_edge.src, dace_nodes.NestedSDFG):
             if isinstance(dest_desc, dace.data.Scalar):
                 # We keep scalar temporary storage, as a general rule, since it
                 # does not affect performance of the generated code. This scalar
@@ -412,9 +412,9 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _add_input_data_edge(
         self,
-        src: dace.nodes.AccessNode,
+        src: dace_nodes.AccessNode,
         src_subset: dace_subsets.Range,
-        dst_node: dace.nodes.Node,
+        dst_node: dace_nodes.Node,
         dst_conn: Optional[str] = None,
     ) -> None:
         edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
@@ -439,7 +439,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             List[Tuple[str, Union[str, dace.subsets.Subset]]],
         ],
         **kwargs: Any,
-    ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
+    ) -> Tuple[dace_nodes.MapEntry, dace_nodes.MapExit]:
         """
         Helper method to add a map in current state.
 
@@ -455,7 +455,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         outputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
         code: str,
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dict[str, str]]:
+    ) -> tuple[dace_nodes.Tasklet, dict[str, str]]:
         """
         Helper method to add a tasklet in current state.
 
@@ -482,7 +482,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         code: str,
         outputs: Mapping[str, dace.Memlet],
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
+    ) -> tuple[dace_nodes.Tasklet, dace_nodes.MapEntry, dace_nodes.MapExit, dict[str, str]]:
         """
         Helper method to add a mapped tasklet in current state.
 
@@ -522,7 +522,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _construct_tasklet_result(
         self,
         dc_dtype: dace.typeclass,
-        src_node: dace.nodes.Tasklet,
+        src_node: dace_nodes.Tasklet,
         src_connector: str,
         use_array: bool = False,
     ) -> ValueExpr:
@@ -1327,7 +1327,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         reduce_init: SymbolExpr,
         reduce_identity: SymbolExpr,
         reduce_wcr: str,
-        result_node: dace.nodes.AccessNode,
+        result_node: dace_nodes.AccessNode,
     ) -> None:
         """
         Helper method to lower reduction on a local field containing skip values.
@@ -1600,7 +1600,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _make_dynamic_neighbor_offset(
         self,
         offset_expr: MemletExpr | ValueExpr,
-        offset_table_node: dace.nodes.AccessNode,
+        offset_table_node: dace_nodes.AccessNode,
         origin_index: SymbolExpr,
     ) -> ValueExpr:
         """
@@ -1647,7 +1647,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         self,
         it: IteratorExpr,
         conn_type: gtx_common.NeighborConnectivityType,
-        conn_node: dace.nodes.AccessNode,
+        conn_node: dace_nodes.AccessNode,
         offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""

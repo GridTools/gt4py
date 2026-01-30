@@ -14,7 +14,7 @@ import dataclasses
 from typing import Final, TypeAlias
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common
@@ -40,7 +40,7 @@ class FieldopData:
             Pass an empty tuple for `ScalarType` data or zero-dimensional fields.
     """
 
-    dc_node: dace.nodes.AccessNode
+    dc_node: dace_nodes.AccessNode
     gt_type: ts.FieldType | ts.ScalarType
     origin: tuple[dace.symbolic.SymbolicType, ...]
 

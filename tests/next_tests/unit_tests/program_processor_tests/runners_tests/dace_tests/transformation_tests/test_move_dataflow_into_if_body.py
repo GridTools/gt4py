@@ -1062,8 +1062,6 @@ def test_if_mover_access_node_between():
     e = aa if cc else bb
     ```
     """
-    # This test is temporarily disabled.
-    return
     sdfg = dace.SDFG(util.unique_name("if_mover_chain_of_blocks"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -1078,13 +1076,13 @@ def test_if_mover_access_node_between():
         )
 
     # Temporaries
-    temporary_names = ["a1", "b1", "c1", "a2", "b2", "c2", "o"]
+    temporary_names = ["a1", "b1", "c1", "a2", "b2", "c2"]
     for name in temporary_names:
         sdfg.add_scalar(
             name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
         )
 
-    a1, b1, c1, a2, b2, c2, o = (state.add_access(name) for name in temporary_names)
+    a1, b1, c1, a2, b2, c2 = (state.add_access(name) for name in temporary_names)
     me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
 
     # First branch of top `if_block`
@@ -1116,62 +1114,88 @@ def test_if_mover_access_node_between():
     state.add_edge(a1, None, top_if_block, "__arg1", dace.Memlet("a1[0]"))
     state.add_edge(b1, None, top_if_block, "__arg2", dace.Memlet("b1[0]"))
     state.add_edge(c1, None, top_if_block, "__cond", dace.Memlet("c1[0]"))
-    state.add_edge(top_if_block, "__output", t1, None, dace.Memlet("t1[0]"))
+    state.add_edge(top_if_block, "__output", a2, None, dace.Memlet("a2[0]"))
 
-    # The first branch of the lower/second `if_block`, which uses data computed
-    #  by the top `if_block`.
-    tasklet_t2 = state.add_tasklet(
-        "tasklet_t2", inputs={"__in"}, outputs={"__out"}, code="__out = math.exp(__in)"
+    # The first branch of the lower/second `if_block`
+    tasklet_b2 = state.add_tasklet(
+        "tasklet_b2", inputs={"__in"}, outputs={"__out"}, code="__out = math.atan(__in)"
     )
-    state.add_edge(t1, None, tasklet_t2, "__in", dace.Memlet("t1[0]"))
-    state.add_edge(tasklet_t2, "__out", t2, None, dace.Memlet("t2[0]"))
-
-    # Second branch of the second `if_block`.
-    tasklet_d1 = state.add_tasklet(
-        "tasklet_d1", inputs={"__in"}, outputs={"__out"}, code="__out = math.atan(__in)"
-    )
-    state.add_edge(state.add_access("d"), None, me, "IN_d", dace.Memlet("d[0:10]"))
-    state.add_edge(me, "OUT_d", tasklet_d1, "__in", dace.Memlet("d[__i]"))
-    state.add_edge(tasklet_d1, "__out", d1, None, dace.Memlet("d1[0]"))
+    state.add_edge(state.add_access("e"), None, me, "IN_e", dace.Memlet("e[0:10]"))
+    state.add_edge(me, "OUT_e", tasklet_b2, "__in", dace.Memlet("e[__i]"))
+    state.add_edge(tasklet_b2, "__out", b2, None, dace.Memlet("b2[0]"))
 
     # Condition branch of the second `if_block`.
-    tasklet_cc1 = state.add_tasklet(
-        "tasklet_cc1", inputs={"__in"}, outputs={"__out"}, code="__out = __in < 0.5"
+    tasklet_c2 = state.add_tasklet(
+        "tasklet_c2", inputs={"__in"}, outputs={"__out"}, code="__out = __in < 0.5"
     )
-    state.add_edge(state.add_access("cc"), None, me, "IN_cc", dace.Memlet("cc[0:10]"))
-    state.add_edge(me, "OUT_cc", tasklet_cc1, "__in", dace.Memlet("cc[__i]"))
-    state.add_edge(tasklet_cc1, "__out", cc1, None, dace.Memlet("cc1[0]"))
+    state.add_edge(state.add_access("d"), None, me, "IN_d", dace.Memlet("d[0:10]"))
+    state.add_edge(me, "OUT_d", tasklet_c2, "__in", dace.Memlet("d[__i]"))
+    state.add_edge(tasklet_c2, "__out", c2, None, dace.Memlet("c2[0]"))
 
     # Create the second `if_block`
     bot_if_block = _make_if_block(state, sdfg)
-    state.add_edge(t2, None, bot_if_block, "__arg1", dace.Memlet("t2[0]"))
-    state.add_edge(d1, None, bot_if_block, "__arg2", dace.Memlet("d1[0]"))
-    state.add_edge(cc1, None, bot_if_block, "__cond", dace.Memlet("cc1[0]"))
+    state.add_edge(a2, None, bot_if_block, "__arg1", dace.Memlet("a2[0]"))
+    state.add_edge(b2, None, bot_if_block, "__arg2", dace.Memlet("b2[0]"))
+    state.add_edge(c2, None, bot_if_block, "__cond", dace.Memlet("c2[0]"))
 
     # Generate the output
-    state.add_edge(bot_if_block, "__output", mx, "IN_e", dace.Memlet("e[__i]"))
-    state.add_edge(mx, "OUT_e", state.add_access("e"), None, dace.Memlet("e[0:10]"))
+    state.add_edge(bot_if_block, "__output", mx, "IN_f", dace.Memlet("f[__i]"))
+    state.add_edge(mx, "OUT_f", state.add_access("f"), None, dace.Memlet("f[0:10]"))
 
     # Now add the connectors to the Map*
     for iname in input_names:
-        if iname == "e":
-            mx.add_in_connector(f"IN_{iname}")
-            mx.add_out_connector(f"OUT_{iname}")
-        else:
-            me.add_in_connector(f"IN_{iname}")
-            me.add_out_connector(f"OUT_{iname}")
+        mq = mx if iname == "f" else me
+        mq.add_in_connector(f"IN_{iname}")
+        mq.add_out_connector(f"OUT_{iname}")
     sdfg.validate()
 
-    # It is not possible to apply the transformation on the lower `if_block`,
-    #  because it is limited by the top one.
+    # We can not process the bottom block, because this would also inline the top
+    #  block that in turn has dataflow that could be relocated.
     _perform_test(
         sdfg,
         explected_applies=0,
         if_block=bot_if_block,
     )
 
-    # But we are able to inline both.
+    # But we are able to process them that way, starting from the bottom.
     _perform_test(
         sdfg,
         explected_applies=2,
     )
+
+    expected_top_level_data: set[str] = {"a", "b", "c", "d", "e", "f", "c2"}
+    assert set(dnode.data for dnode in state.data_nodes()) == expected_top_level_data
+    assert sdfg.arrays.keys() == expected_top_level_data
+    assert set(tlet for tlet in state.nodes() if isinstance(tlet, dace_nodes.Tasklet)) == {
+        tasklet_c2
+    }
+    assert set(
+        if_block for if_block in state.nodes() if isinstance(if_block, dace_nodes.NestedSDFG)
+    ) == {bot_if_block}
+
+    expected_bot_if_block_data: set[str] = {
+        "a",
+        "b",
+        "c",
+        "e",
+        "c1",
+        "a2",
+        "b2",
+        "__arg1",
+        "__arg2",
+        "__output",
+        "__cond",
+    }
+    assert set(bot_if_block.sdfg.arrays.keys()) == expected_bot_if_block_data
+
+    expected_top_if_block_data: set[str] = {
+        "a",
+        "b",
+        "a1",
+        "b1",
+        "__arg1",
+        "__arg2",
+        "__output",
+        "__cond",
+    }
+    assert set(top_if_block.sdfg.arrays.keys()) == expected_top_if_block_data

@@ -243,6 +243,7 @@ def gt_gpu_transform_non_standard_memlet(
     if len(maps_to_modify) == 0:
         return sdfg
 
+    # NOTE: This inherently assumes a particular memory order, see `gt_change_strides()`.
     for me_to_modify in maps_to_modify:
         map_to_modify: dace_nodes.Map = me_to_modify.map
         map_to_modify.params = list(reversed(map_to_modify.params))
