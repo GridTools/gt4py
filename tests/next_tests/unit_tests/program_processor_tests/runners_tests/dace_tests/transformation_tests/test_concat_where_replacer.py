@@ -550,3 +550,90 @@ def test_concat_where_multiple_consumers_uniform_access(uniform_access: bool):
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_nested_scopes() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.MapEntry,
+    dace_nodes.MapEntry,
+    dace_nodes.Tasklet,
+]:
+    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_nested_consumer"))
+    state = sdfg.add_state()
+    for name in "abcd":
+        sdfg.add_array(
+            name=name,
+            shape=(10, 10),
+            dtype=dace.float64,
+            transient=(name == "c"),
+        )
+
+    a, b, c, d = (state.add_access(name) for name in "abcd")
+
+    me, mx = state.add_map("outer_map", ndrange={"__i": "0:10"})
+    nme, nmx = state.add_map("nested_map", ndrange={"__j": "0:10"})
+    tlet = state.add_tasklet(
+        "comp",
+        inputs={"__in0", "__in1"},
+        outputs={"__out"},
+        code="__out = __in0 + __in1",
+    )
+
+    state.add_nedge(a, c, dace.Memlet("a[1:6, 3:8] -> [0:5, 0:5]"))
+    state.add_nedge(a, c, dace.Memlet("a[4:9, 4:9] -> [5:10, 5:10]"))
+    state.add_nedge(b, c, dace.Memlet("b[0:5, 0:5] -> [0:5, 5:10]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8, 4:9] -> [5:10, 0:5]"))
+
+    for ac, conn in [(a, "__in0"), (c, "__in1")]:
+        state.add_edge(ac, None, me, f"IN_{ac.data}", dace.Memlet(f"{ac.data}[0:10, 0:10]"))
+        state.add_edge(
+            me, f"OUT_{ac.data}", nme, f"IN_{ac.data}", dace.Memlet(f"{ac.data}[__i, 0:10]")
+        )
+        state.add_edge(nme, f"OUT_{ac.data}", tlet, conn, dace.Memlet(f"{ac.data}[__i, __j]"))
+        me.add_scope_connectors(ac.data)
+        nme.add_scope_connectors(ac.data)
+
+    state.add_edge(tlet, "__out", nmx, "IN_d", dace.Memlet("d[__i, __j]"))
+    state.add_edge(nmx, "OUT_d", mx, "IN_d", dace.Memlet("d[__i, 0:10]"))
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10, 0:10]"))
+    mx.add_scope_connectors("d")
+    nmx.add_scope_connectors("d")
+
+    sdfg.validate()
+
+    return sdfg, state, c, me, nme, tlet
+
+
+def test_concat_where_nested_scopes():
+    sdfg, state, concat_node, me, nme, tlet = _make_concat_where_nested_scopes()
+
+    access_nodes_before = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(access_nodes_before) == 4
+    assert concat_node in access_nodes_before
+    assert set(util.count_nodes(state, dace_nodes.MapEntry, True)) == {me, nme}
+    assert util.count_nodes(state, dace_nodes.Tasklet, True) == [tlet]
+    assert state.scope_dict()[tlet] is nme
+    assert all(e.src is nme for e in state.in_edges(tlet))
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+        map_entry=me,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(access_nodes_after) == 4
+    assert concat_node not in access_nodes_after
+    new_ac = next(ac for ac in access_nodes_after if ac not in access_nodes_before)
+    assert any(e.src is new_ac for e in state.in_edges(tlet))
+    assert any(e.src is nme for e in state.in_edges(tlet))
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
