@@ -19,6 +19,7 @@ from .auto_optimize import (
     GT4PyAutoOptHookStage,
     gt_auto_optimize,
 )
+from .concat_where_mapper import gt_replace_concat_where_node
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
 from .gpu_utils import (
     GPUSetBlockSize,
@@ -130,6 +131,7 @@ __all__ = [
     "gt_reduce_distributed_buffering",
     "gt_remove_copy_chain",
     "gt_remove_map",
+    "gt_replace_concat_where_node",
     "gt_set_gpu_blocksize",
     "gt_set_iteration_order",
     "gt_simplify",

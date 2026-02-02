@@ -119,20 +119,26 @@ class ConcatWhereCopyToMap(dace_transformation.SingleStateTransformation):
         return True
 
 
-def replace_concat_where_node(
+def gt_replace_concat_where_node(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     concat_node: dace_nodes.AccessNode,
     map_entry: dace_nodes.MapEntry,
-) -> list[dace_graph.MultiDiConnectorGraph[dace.Memlet]]:
+) -> list[dace_graph.MultiConnectorEdge[dace.Memlet]]:
     """Performs the replacement"""
 
-    consumer_edges = _find_consumer_edges(state, concat_node, map_entry)
-    assert len(consumer_edges) > 0
-
+    # Find the producer nodes and ensure that we can access them inside the Map.
     producer_specs: list[_ProducerDesc] = []
     already_mapped_data: dict[str, int] = {}
-    for iedge in state.in_edges(concat_node):
+
+    incoming_edges: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = list(
+        state.in_edges(concat_node)
+    )
+    # TODO(phimuell): Lift this restriction by creating intermediate AccessNodes
+    assert all(isinstance(iedge.src, dace_nodes.AccessNode) for iedge in incoming_edges)
+    incoming_edges = sorted(incoming_edges, key=lambda iedge: iedge.src.data)
+
+    for iedge in incoming_edges:
         assert isinstance(iedge.src, dace_nodes.AccessNode)
         producer_node = iedge.src
         data_name = producer_node.data
@@ -144,6 +150,7 @@ def replace_concat_where_node(
         else:
             possible_edges_between_producer_and_map = state.edges_between(producer_node, map_entry)
             if len(possible_edges_between_producer_and_map) != 0:
+                # TODO(phimuell): Make sure that the whole thing is mapped into it.
                 reuse_this_connection = next(
                     e
                     for e in possible_edges_between_producer_and_map
@@ -156,12 +163,13 @@ def replace_concat_where_node(
                     producer_node,
                     None,
                     map_entry,
-                    new_conn_name,
+                    "IN_" + new_conn_name,
                     dace.Memlet(data=data_name, subset=copy.deepcopy(full_shape)),
                 )
                 # The out connector is dangling, but we will handle it later.
                 map_entry.add_scope_connectors(new_conn_name)
-            already_mapped_data[data_name] = prod_source
+                prod_source = ("OUT_" + new_conn_name, map_entry)
+            already_mapped_data[data_name] = len(producer_specs)  # Index in the future.
 
         producer_specs.append(
             _ProducerDesc(
@@ -173,7 +181,10 @@ def replace_concat_where_node(
             )
         )
 
-    new_consumers: list[dace_graph.MultiDiConnectorGraph[dace.Memlet]] = []
+    consumer_edges = _find_consumer_edges(state, concat_node, map_entry)
+    assert len(consumer_edges) > 0
+
+    new_consumers: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = []
     for consumer_edge in consumer_edges:
         new_consumer = _replace_single_read(
             state=state,
@@ -216,9 +227,9 @@ def _replace_single_read(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     concat_where_data: str,
-    consumer_edge: dace_graph.MultiDiConnectorGraph[dace.Memlet],
+    consumer_edge: dace_graph.MultiConnectorEdge[dace.Memlet],
     producer_specs: Sequence[_ProducerDesc],
-) -> dace_graph.MultiDiConnectorGraph[dace.Memlet]:
+) -> dace_graph.MultiConnectorEdge[dace.Memlet]:
     """Performs the replacement a single read.
 
     The function will examine the read defined by `consumer_edge`, which is the last
@@ -244,7 +255,6 @@ def _replace_single_read(
     tlet_inputs: list[str] = [f"__inp{i}" for i in range(len(producer_specs))]
     tlet_output = "__out"
 
-    # Start to compose the Tasklets body.
     select_conds: list[str] = []
     prod_accesses: list[str] = []
     consume_subset = consumer_edge.data.src_subset
@@ -257,7 +267,7 @@ def _replace_single_read(
         for dim in range(consume_subset.dims()):
             consumer_access = consume_subset[dim][0]
             prod_supply_start = prod_subset[dim][0]
-            prod_supply_end = prod_subset[dim][1]
+            prod_supply_end = prod_subset[dim][1]  # Inclusive end.
             prod_offset = prod_offsets[dim][0]
 
             this_select_cond.append(
@@ -291,7 +301,7 @@ def _replace_single_read(
     final_consumer = consumer_edge.dst
     for i in range(len(tlet_inputs)):
         producer_spec = producer_specs[i]
-        assert scope_dict[producer_spec.prod_source[1]] is scope_dict[final_consumer]
+        assert scope_dict[final_consumer] is producer_spec.prod_source[1]
         state.add_edge(
             producer_spec.prod_source[1],
             producer_spec.prod_source[0],
@@ -306,7 +316,7 @@ def _replace_single_read(
     # Instead of replacing `final_consumer` we create an intermediate output node.
     #  This removes the need to reconfigure the dataflow.
     intermediate_data, _ = sdfg.add_scalar(
-        name=sdfg.temp_data_name(),
+        name=f"__gt4py_concat_where_mapper_temp_for_{concat_where_data}",
         dtype=sdfg.arrays[consumer_edge.data.data].dtype,
         transient=True,
         find_new_name=True,
@@ -345,15 +355,15 @@ def _find_consumer_edges(
     state: dace.SDFGState,
     concat_node: dace_nodes.AccessNode,
     map_entry: dace_nodes.MapEntry,
-) -> list[dace_graph.MultiDiConnectorGraph[dace.Memlet]]:
+) -> list[dace_graph.MultiConnectorEdge[dace.Memlet]]:
     """Find all edges that reads from `concat_node` inside the Map defined by `map_entry`."""
     assert state.out_degree(concat_node) == 1
-    outer_edge: dace_graph.MultiDiConnectorGraph[dace.Memlet] = next(
-        state.edges_between(concat_node, map_entry)
-    )
+    outer_edge: dace_graph.MultiConnectorEdge[dace.Memlet] = state.edges_between(
+        concat_node, map_entry
+    )[0]
     assert outer_edge.dst_conn.startswith("IN_")
-    inner_edge: dace_graph.MultiDiConnectorGraph[dace.Memlet] = state.out_edges_by_connector(
-        map_entry, "OUT_" + outer_edge.dst_conn[3:]
-    )
 
-    return state.memlet_tree(inner_edge).leaves()
+    consumer_edges: list[dace_graph.MultiConnectorEdge] = []
+    for inner_edge in state.out_edges_by_connector(map_entry, "OUT_" + outer_edge.dst_conn[3:]):
+        consumer_edges.extend(state.memlet_tree(inner_edge).leaves())
+    return consumer_edges
