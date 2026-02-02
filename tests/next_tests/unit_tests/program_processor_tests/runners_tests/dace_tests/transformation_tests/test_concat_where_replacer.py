@@ -353,3 +353,103 @@ def test_concat_where_additional_mapping_needed():
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_non_canonical_memlet_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry, dace_nodes.AccessNode
+]:
+    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_non_canonical_memlet"))
+    state = sdfg.add_state()
+    for name in "abcd":
+        sdfg.add_array(
+            name=name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(name == "c"),
+        )
+    sdfg.add_array(
+        "t",
+        shape=(2,),
+        dtype=dace.float64,
+        transient=True,
+    )
+
+    a, b, c, d, t = (state.add_access(name) for name in "abcdt")
+
+    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
+
+    me, mx = state.add_map("comp_map", ndrange={"__i": "0:10"})
+    tlet = state.add_tasklet(
+        "comp_tlet",
+        inputs={"__in0", "__in1"},
+        outputs={"__out"},
+        code="__out = __in0 + __in1",
+    )
+
+    state.add_edge(c, None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(b, None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(
+        me,
+        "OUT_c",
+        t,
+        None,
+        dace.Memlet(
+            data="t",
+            subset="1",
+            other_subset="__i",
+        ),
+    )
+    state.add_edge(t, None, tlet, "__in0", dace.Memlet("t[1]"))
+    state.add_edge(me, "OUT_b", tlet, "__in1", dace.Memlet("b[__i]"))
+    state.add_edge(tlet, "__out", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
+    me.add_scope_connectors("c")
+    me.add_scope_connectors("b")
+    mx.add_scope_connectors("d")
+
+    sdfg.validate()
+
+    return sdfg, state, c, me, t
+
+
+def test_concat_where_non_canonical_memlet_sdfg():
+    sdfg, state, concat_node, me, t = _make_concat_where_non_canonical_memlet_sdfg()
+
+    access_nodes_before = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(access_nodes_before) == 5
+    assert concat_node in access_nodes_before
+    assert all(
+        iedge.src is me
+        and iedge.data.data == t.data
+        and str(iedge.data.other_subset) == "__i"
+        and str(iedge.data.subset) == "1"
+        for iedge in state.in_edges(t)
+    )
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+        map_entry=me,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(access_nodes_after) == 5
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
+    assert t in access_nodes_after
+    assert all(
+        iedge.data.data != t.data
+        and str(iedge.data.other_subset) == "1"
+        and str(iedge.data.subset) == "0"
+        and iedge.src is not me
+        for iedge in state.in_edges(t)
+    )
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)

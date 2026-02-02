@@ -129,7 +129,6 @@ def gt_replace_concat_where_node(
 
     Todo:
         - Reading a single element.
-        - Non canonical Memlets.
         - Multiple consumer.
         - Consumer in multiple scopes.
         - Nested Maps.
