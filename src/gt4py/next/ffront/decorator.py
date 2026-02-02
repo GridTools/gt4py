@@ -157,17 +157,12 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
         return self
 
 
-program_call_metrics_collector = metrics.make_collector(
-    level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
-)
-
-
 ProgramCallMetricsCollector = metrics.make_collector(
     level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
 )
 
 
-@hook_machinery.ContextHook
+@hook_machinery.context_hook
 def program_call_context(
     program: Program,
     args: tuple[Any, ...],
@@ -179,18 +174,25 @@ def program_call_context(
     return ProgramCallMetricsCollector()
 
 
-@hook_machinery.EventHook
-def embedded_program_call_hook(
+class EmbeddedProgramSourceMetricSetter(hook_machinery.ContextHookCallback):
+    program: Program
+
+    def __enter__(self) -> Any:
+        # Metrics source key needs to be set here. Embedded programs
+        # don't have variants so there's no other place to do it.
+        if metrics.is_level_enabled(metrics.MINIMAL):
+            metrics.set_current_source_key(f"{self.program.__name__}<'<embedded>')>")
+
+
+@hook_machinery.context_hook
+def embedded_program_call_context(
     program: Program,
     args: tuple[Any, ...],
     offset_provider: common.OffsetProvider,
     kwargs: dict[str, Any],
-) -> None:
+) -> contextlib.AbstractContextManager:
     """Hook called at the beginning and end of an embedded program call."""
-    # Metrics source key needs to be set here. Embedded programs
-    # don't have variants so there's no other place to do it.
-    if metrics.is_level_enabled(metrics.MINIMAL):
-        metrics.set_current_source_key(f"{program.__name__}<'<embedded>')>")
+    return EmbeddedProgramSourceMetricSetter(program)
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -388,8 +390,8 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
                 )
 
                 with next_embedded.context.update(offset_provider=offset_provider):
-                    embedded_program_call_hook(self, args, offset_provider, kwargs)
-                    self.definition_stage.definition(*args, **kwargs)
+                    with embedded_program_call_context(self, args, offset_provider, kwargs):
+                        self.definition_stage.definition(*args, **kwargs)
 
 
 try:

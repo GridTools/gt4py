@@ -20,6 +20,8 @@ import warnings
 from collections.abc import Callable
 from typing import Generic, ParamSpec, TypeVar
 
+from typing_extensions import dataclass_transform
+
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -159,6 +161,18 @@ class EventHook(_BaseHook[None, P]):
             func(*args, **kwargs)
 
 
+def event_hook(definition: Callable[P, None]) -> EventHook[P]:
+    """
+    Decorator to create an EventHook from a function definition.
+
+    Args:
+        definition: The function defining the hook signature.
+    Returns:
+        An EventHook instance.
+    """
+    return EventHook(definition)
+
+
 @dataclasses.dataclass(slots=True)
 class ContextHook(
     contextlib.AbstractContextManager, _BaseHook[contextlib.AbstractContextManager, P]
@@ -184,9 +198,47 @@ class ContextHook(
     def __exit__(
         self,
         type_: type[BaseException] | None,
-        value: BaseException | None,
+        exc_value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
         for ctx_manager in reversed(self.ctx_managers):
-            ctx_manager.__exit__(type_, value, traceback)
+            ctx_manager.__exit__(type_, exc_value, traceback)
         self.ctx_managers = ()
+
+
+def context_hook(definition: Callable[P, contextlib.AbstractContextManager]) -> ContextHook[P]:
+    """
+    Decorator to create a ContextHook from a function definition.
+
+    Args:
+        definition: The function defining the hook signature.
+    Returns:
+        A ContextHook instance.
+    """
+    return ContextHook(definition)
+
+
+@dataclass_transform()
+class ContextHookCallback(contextlib.AbstractContextManager):
+    """
+    Context callback hook specification.
+
+    This hook type is used to define context managers that can be stacked together.
+    It is functionally identical to `ContextHook` but serves to distinguish
+    different use cases.
+    """
+
+    def __init_subclass__(cls, slots: bool = False) -> None:
+        super().__init_subclass__()
+        cls = dataclasses.dataclass(cls, slots=slots)
+
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(
+        self,
+        type_: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        pass

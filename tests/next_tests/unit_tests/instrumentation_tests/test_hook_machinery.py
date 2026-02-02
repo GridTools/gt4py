@@ -9,8 +9,11 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 
 import pytest
+from gt4py.next.instrumentation.hook_machinery import ContextHookCallback
+from gt4py.next.instrumentation.hook_machinery import ContextHookCallback
 
 from gt4py.next.instrumentation.hook_machinery import (
     EventHook,
@@ -264,3 +267,45 @@ class TestContextHook:
             pass
 
         assert results == [42]
+
+
+def test_context_hook_callback_partial():
+    exit_called = []
+
+    class MyContextCallback(ContextHookCallback):
+        def __exit__(self, type_, exc_value, traceback):
+            exit_called.append(True)
+
+    assert dataclasses.is_dataclass(MyContextCallback) is True
+    assert len(MyContextCallback.__dataclass_fields__.keys()) == 0
+
+    with MyContextCallback():
+        assert len(exit_called) == 0
+
+    assert len(exit_called) == 1
+    assert exit_called[0] == True
+
+
+def test_context_hook_callback_full():
+    enter_called = []
+    exit_called = []
+
+    class MyContextCallback(ContextHookCallback, slots=True):
+        enter_value: int
+        exit_value: int
+
+        def __enter__(self):
+            enter_called.append(self.enter_value)
+
+        def __exit__(self, type_, exc_value, traceback):
+            exit_called.append(self.exit_value)
+
+    assert dataclasses.is_dataclass(MyContextCallback) is True
+    assert MyContextCallback.__dataclass_fields__.keys() == {"enter_value", "exit_value"}
+
+    with MyContextCallback(42, 43):
+        assert len(enter_called) == 1
+        assert enter_called[0] == 42
+
+    assert len(exit_called) == 1
+    assert exit_called[0] == 43

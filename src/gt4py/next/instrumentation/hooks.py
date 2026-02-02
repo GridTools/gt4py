@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from gt4py.next.ffront.decorator import (
-    embedded_program_call_hook as embedded_program_call_hook,
+    embedded_program_call_context as embedded_program_call_context,
     program_call_context as program_call_context,
 )
 from gt4py.next.otf.compiled_program import (

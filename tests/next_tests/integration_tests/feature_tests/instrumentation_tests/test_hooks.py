@@ -129,7 +129,7 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
 
     # Add hooks and run the program again
     hooks.program_call_context.register(custom_program_callback)
-    hooks.embedded_program_call_hook.register(custom_embedded_program_callback)
+    hooks.embedded_program_call_context.register(custom_embedded_program_callback)
     test_program(in_field, out=out_field)
 
     # Check that the callbacks were called
@@ -157,7 +157,7 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
 
     # Remove hooks and call the program again
     hooks.program_call_context.remove(custom_program_callback)
-    hooks.embedded_program_call_hook.remove(custom_embedded_program_callback)
+    hooks.embedded_program_call_context.remove(custom_embedded_program_callback)
     test_program(in_field, out=out_field)
 
     # Callbacks should not have been called
