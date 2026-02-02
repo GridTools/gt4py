@@ -92,5 +92,5 @@ def test_concat_where_different_inputs():
     assert util.count_nodes(state, dace_nodes.Tasklet) == 2
     assert state.in_degree(me) == 3
 
-    util.compile_and_run_sdfg(sdfg, **ref)
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
