@@ -125,7 +125,16 @@ def gt_replace_concat_where_node(
     concat_node: dace_nodes.AccessNode,
     map_entry: dace_nodes.MapEntry,
 ) -> list[dace_graph.MultiConnectorEdge[dace.Memlet]]:
-    """Performs the replacement"""
+    """Performs the replacement
+
+    Todo:
+        - Non canonical Memlets.
+        - Multiple producer.
+        - Multiple consumer.
+        - Nested Maps.
+        - Nested SDFG (1 level).
+        - Nested SDFG multiple levels.
+    """
 
     # Find the producer nodes and ensure that we can access them inside the Map.
     producer_specs: list[_ProducerDesc] = []
@@ -148,15 +157,22 @@ def gt_replace_concat_where_node(
         if data_name in already_mapped_data:
             prod_source = producer_specs[already_mapped_data[data_name]].prod_source
         else:
-            possible_edges_between_producer_and_map = state.edges_between(producer_node, map_entry)
-            if len(possible_edges_between_producer_and_map) != 0:
-                # TODO(phimuell): Make sure that the whole thing is mapped into it.
-                reuse_this_connection = next(
-                    e
-                    for e in possible_edges_between_producer_and_map
-                    if e.dst_conn and e.dst_conn.startswith("IN_")
-                )
-                prod_source = ("OUT_" + reuse_this_connection.dst_conn[3:], map_entry)
+            # Try to find an edge that maps the producer into the Map.
+            edge_that_maps_data_into_map = next(
+                (
+                    oedge
+                    for oedge in state.out_edges(producer_node)
+                    if (
+                        (not oedge.data.is_empty())
+                        and oedge.dst is map_entry
+                        and oedge.dst_conn.startswith("IN_")
+                        and oedge.data.get_src_subset(oedge, state).covers(full_shape)
+                    )
+                ),
+                None,
+            )
+            if edge_that_maps_data_into_map is not None:
+                prod_source = ("OUT_" + edge_that_maps_data_into_map.dst_conn[3:], map_entry)
             else:
                 new_conn_name = map_entry.next_connector(data_name)
                 state.add_edge(
@@ -192,20 +208,21 @@ def gt_replace_concat_where_node(
             concat_where_data=concat_node.data,
             consumer_edge=consumer_edge,
             producer_specs=producer_specs,
+            tag=map_entry.label,
         )
         new_consumers.append(new_consumer)
 
     assert state.out_degree(concat_node) == 0
     state.remove_node(concat_node)
 
+    # TODO(phimuell): Run Memlet propagation.
+
     return new_consumers
 
 
 @dataclasses.dataclass
 class _ProducerDesc:
-    """Describes a data producer over multiple levels.
-
-    It has the following attributes:
+    """Describes how a `concat_where` converges at a name.
 
     Args:
         data_name: The name of the data descriptor that provided the original information.
@@ -229,21 +246,27 @@ def _replace_single_read(
     concat_where_data: str,
     consumer_edge: dace_graph.MultiConnectorEdge[dace.Memlet],
     producer_specs: Sequence[_ProducerDesc],
+    tag: str,
 ) -> dace_graph.MultiConnectorEdge[dace.Memlet]:
-    """Performs the replacement a single read.
+    """Performs the replacement of a single read, defined by `consumer_edge`.
 
-    The function will examine the read defined by `consumer_edge`, which is the last
-    edge that performs the read from `concat_where_data` (which is the name of the
-    data where the concat where converges) with a controlled access, i.e. replaces
-    the edge with a Tasklet.
+    Essentially the function will replace the access to a converging `concat_where`
+    node, i.e. the node where multiple writes converges, with a Tasklet that selects
+    the data that should be read. This means only the read of a single element can
+    be handled in this way.
+
     Note that the destination of `consumer_edge` will remain in the SDFG, instead
     the function will create a new data descriptor, into which the result will be
     written that will then be connected to `consumer_edge`, however, `consumer_edge`
     will be removed.
 
-    Current limitations:
-    - The function assumes that the dataflow is in a canonical state.
-    - Only one element can be read.
+    Args:
+        state: The state in which we operate.
+        sdfg: The parent SDFG on which we operate.
+        concat_where_data: The name of the data descriptor where the `concat_where` converges.
+        consumer_edges: The consumer edge that should be replaced.
+        producer_specs: Descriptions of how the `concat_where` converges.
+        tag: Used to tag the newly created elements, used to create unique names.
     """
 
     assert consumer_edge.data.wcr is None
@@ -257,7 +280,7 @@ def _replace_single_read(
 
     select_conds: list[str] = []
     prod_accesses: list[str] = []
-    consume_subset = consumer_edge.data.src_subset
+    consume_subset = consumer_edge.data.get_src_subset(consumer_edge, state)
     for prod_spec in producer_specs:
         prod_subset = prod_spec.subset
         prod_offsets = prod_spec.offset
@@ -290,8 +313,14 @@ def _replace_single_read(
         tlet_code_lines.append(f"else:\n\t{tlet_output} = {tlet_inputs[-1]}[{prod_accesses[-1]}]")
         tlet_code = "\n".join(tlet_code_lines)
 
+    names_of_existing_tasklets = {
+        node.label for node in state.nodes() if isinstance(node, dace_nodes.Tasklet)
+    }
+    tasklet_name = dace.utils.find_new_name(
+        f"concat_where_taskelt_{concat_where_data}_{tag}", names_of_existing_tasklets
+    )
     concat_where_tasklet = state.add_tasklet(
-        "concat_where_taskelt_that_needs_a_unique_name",
+        tasklet_name,
         inputs=set(tlet_inputs),
         outputs={tlet_output},
         code=tlet_code,
@@ -316,7 +345,7 @@ def _replace_single_read(
     # Instead of replacing `final_consumer` we create an intermediate output node.
     #  This removes the need to reconfigure the dataflow.
     intermediate_data, _ = sdfg.add_scalar(
-        name=f"__gt4py_concat_where_mapper_temp_for_{concat_where_data}",
+        name=f"__gt4py_concat_where_mapper_temp_{concat_where_data}_{tag}",
         dtype=sdfg.arrays[consumer_edge.data.data].dtype,
         transient=True,
         find_new_name=True,
@@ -331,8 +360,8 @@ def _replace_single_read(
         dace.Memlet(data=intermediate_data, subset="0"),
     )
 
-    # Now connect the intermediate access with the final consumer.
-    #  The Memlet definition inherently assumes canonicalized Memlet trees.
+    # Create the edge between the new intermediate and the old consumer. We ignore
+    #  some properties of the Memlet here, such as dynamic (`wcr` was handled above).
     new_consumer_edge = state.add_edge(
         intermediate_node,
         None,
@@ -341,7 +370,9 @@ def _replace_single_read(
         dace.Memlet(
             data=intermediate_data,
             subset="0",
-            other_subset=consumer_edge.data.other_subset,
+            other_subset=consumer_edge.data.other_subset
+            if consumer_edge.data.data == concat_where_data
+            else consumer_edge.data.subset,
         ),
     )
 
@@ -366,4 +397,6 @@ def _find_consumer_edges(
     consumer_edges: list[dace_graph.MultiConnectorEdge] = []
     for inner_edge in state.out_edges_by_connector(map_entry, "OUT_" + outer_edge.dst_conn[3:]):
         consumer_edges.extend(state.memlet_tree(inner_edge).leaves())
-    return consumer_edges
+
+    # Sort the edges according to the destination.
+    return sorted(consumer_edges, key=lambda iedge: str(iedge.dst))
