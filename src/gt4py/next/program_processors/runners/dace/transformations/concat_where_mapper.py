@@ -204,10 +204,9 @@ def gt_replace_concat_where_node(
         new_consumer = _replace_single_read(
             state=state,
             sdfg=sdfg,
-            concat_where_data=concat_node.data,
             consumer_edge=consumer_edge,
             producer_specs=producer_specs,
-            tag=map_entry.label,
+            tag=f"{concat_node.data}_{map_entry.label}",
         )
         new_consumers.append(new_consumer)
 
@@ -243,7 +242,6 @@ class _ProducerDesc:
 def _replace_single_read(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
-    concat_where_data: str,
     consumer_edge: dace_graph.MultiConnectorEdge[dace.Memlet],
     producer_specs: Sequence[_ProducerDesc],
     tag: str,
@@ -263,16 +261,12 @@ def _replace_single_read(
     Args:
         state: The state in which we operate.
         sdfg: The parent SDFG on which we operate.
-        concat_where_data: The name of the data descriptor where the `concat_where` converges.
         consumer_edges: The consumer edge that should be replaced.
         producer_specs: Descriptions of how the `concat_where` converges.
-        tag: Used to tag the newly created elements, used to create unique names.
+        tag: Used to give newly created elements a unique name.
     """
 
     assert consumer_edge.data.wcr is None
-    assert (
-        consumer_edge.data.data == concat_where_data
-    )  # Avoids some nasty updates; ensured by canonicalization.
     assert consumer_edge.data.subset.num_elements() == 1
 
     tlet_inputs: list[str] = [f"__inp{i}" for i in range(len(producer_specs))]
@@ -317,7 +311,7 @@ def _replace_single_read(
         node.label for node in state.nodes() if isinstance(node, dace_nodes.Tasklet)
     }
     tasklet_name = dace.utils.find_new_name(
-        f"concat_where_taskelt_{concat_where_data}_{tag}", names_of_existing_tasklets
+        f"concat_where_taskelt_{tag}", names_of_existing_tasklets
     )
     concat_where_tasklet = state.add_tasklet(
         tasklet_name,
@@ -345,7 +339,7 @@ def _replace_single_read(
     # Instead of replacing `final_consumer` we create an intermediate output node.
     #  This removes the need to reconfigure the dataflow.
     intermediate_data, _ = sdfg.add_scalar(
-        name=f"__gt4py_concat_where_mapper_temp_{concat_where_data}_{tag}",
+        name=f"__gt4py_concat_where_mapper_temp_{tag}",
         dtype=sdfg.arrays[consumer_edge.data.data].dtype,
         transient=True,
         find_new_name=True,
