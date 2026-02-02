@@ -258,14 +258,14 @@ def freeze_origin_domain_sdfg(
 
     inputs = set()
     outputs = set()
-    for inner_state in inner_sdfg.nodes():
-        for node in inner_state.nodes():
-            if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
-                continue
-            if node.has_reads(inner_state):
-                inputs.add(node.data)
-            if node.has_writes(inner_state):
-                outputs.add(node.data)
+    for node, parent in inner_sdfg.all_nodes_recursive():
+        if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
+            continue
+
+        if node.has_reads(parent):
+            inputs.add(node.data)
+        if node.has_writes(parent):
+            outputs.add(node.data)
 
     nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
