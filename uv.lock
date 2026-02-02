@@ -1844,7 +1844,7 @@ requires-dist = [
     { name = "ninja", specifier = ">=1.11" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "packaging", specifier = ">=20.0" },
-    { name = "pybind11", specifier = ">=2.10.1" },
+    { name = "pybind11", specifier = ">=2.10.1,<3" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
     { name = "scipy", marker = "python_full_version >= '3.11' and extra == 'standard'", specifier = ">=1.16.1" },
     { name = "scipy", marker = "python_full_version < '3.11' and extra == 'standard'", specifier = ">=1.14.1" },
@@ -3845,11 +3845,11 @@ wheels = [
 
 [[package]]
 name = "pybind11"
-version = "3.0.1"
+version = "2.13.6"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/2f/7b/a6d8dcb83c457e24a9df1e4d8fd5fb8034d4bbc62f3c324681e8a9ba57c2/pybind11-3.0.1.tar.gz", hash = "sha256:9c0f40056a016da59bab516efb523089139fcc6f2ba7e4930854c61efb932051", size = 546914, upload-time = "2025-08-22T20:09:27.265Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d2/c1/72b9622fcb32ff98b054f724e213c7f70d6898baa714f4516288456ceaba/pybind11-2.13.6.tar.gz", hash = "sha256:ba6af10348c12b24e92fa086b39cfba0eff619b61ac77c406167d813b096d39a", size = 218403, upload-time = "2024-09-14T00:35:22.606Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cd/8a/37362fc2b949d5f733a8b0f2ff51ba423914cabefe69f1d1b6aab710f5fe/pybind11-3.0.1-py3-none-any.whl", hash = "sha256:aa8f0aa6e0a94d3b64adfc38f560f33f15e589be2175e103c0a33c6bce55ee89", size = 293611, upload-time = "2025-08-22T20:09:25.235Z" },
+    { url = "https://files.pythonhosted.org/packages/13/2f/0f24b288e2ce56f51c920137620b4434a38fd80583dbbe24fc2a1656c388/pybind11-2.13.6-py3-none-any.whl", hash = "sha256:237c41e29157b962835d356b370ededd57594a26d5894a795960f0047cb5caf5", size = 243282, upload-time = "2024-09-14T00:35:20.361Z" },
 ]
 
 [[package]]
