@@ -128,8 +128,10 @@ def gt_replace_concat_where_node(
     """Performs the replacement
 
     Todo:
+        - Reading a single element.
         - Non canonical Memlets.
         - Multiple consumer.
+        - Consumer in multiple scopes.
         - Nested Maps.
         - Nested SDFG (1 level).
         - Nested SDFG multiple levels.
@@ -198,6 +200,10 @@ def gt_replace_concat_where_node(
 
     consumer_edges = _find_consumer_edges(state, concat_node, map_entry)
     assert len(consumer_edges) > 0
+    # TODO(phimuell): Lift this.
+    assert (scope_dict := state.scope_dict()) and all(
+        scope_dict[consumer_edge.dst] is map_entry for consumer_edge in consumer_edges
+    )
 
     new_consumers: list[dace_graph.MultiConnectorEdge[dace.Memlet]] = []
     for consumer_edge in consumer_edges:
