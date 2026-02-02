@@ -308,7 +308,7 @@ def _replace_single_read(
         tlet_code_lines: list[str] = []
         for i in range(len(producer_specs) - 1):
             tlet_code_lines.append(
-                f"if ({select_conds[i]}):\n\t{tlet_output} = {tlet_inputs[i]}[{prod_accesses[i]}]"
+                f"{'if' if i == 0 else 'elif'} ({select_conds[i]}):\n\t{tlet_output} = {tlet_inputs[i]}[{prod_accesses[i]}]"
             )
         tlet_code_lines.append(f"else:\n\t{tlet_output} = {tlet_inputs[-1]}[{prod_accesses[-1]}]")
         tlet_code = "\n".join(tlet_code_lines)
