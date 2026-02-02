@@ -258,9 +258,7 @@ def test_concat_where_mixed_inputs():
         if ac.desc(sdfg).transient
     )
     assert util.count_nodes(state, dace_nodes.Tasklet) == 2
-    assert (
-        state.in_degree(me) == 2
-    )  # The transformation sees the `a` that goes into the Map and uses it.
+    assert state.in_degree(me) == 2  # Compaction and reusing of connections.
     assert {
         iedge.src.data
         for iedge in state.in_edges(me)
@@ -274,6 +272,84 @@ def test_concat_where_mixed_inputs():
     inner_map_a_edges = list(state.out_edges_by_connector(me, "OUT_" + a_to_me_edge.dst_conn[3:]))
     assert len(inner_map_a_edges) == 3
     assert len({e.dst for e in inner_map_a_edges if isinstance(e.dst, dace_nodes.Tasklet)}) == 2
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_no_mapping_reuse() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry, dace_nodes.AccessNode
+]:
+    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_no_mapping_reuse"))
+    state = sdfg.add_state()
+    for name in "abcd":
+        sdfg.add_array(
+            name=name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(name == "c"),
+        )
+    a, b, c, d = (state.add_access(name) for name in "abcd")
+
+    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
+
+    _, me, _ = state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in0": dace.Memlet("c[__i]"),
+            "__in1": dace.Memlet("a[2]"),
+        },
+        code="__out2 = __in1 + __in0",
+        outputs={"__out2": dace.Memlet("d[__i]")},
+        input_nodes={c, a},
+        output_nodes={d},
+        external_edges=True,
+        schedule=dace.dtypes.ScheduleType.Sequential,
+    )
+    sdfg.validate()
+
+    return sdfg, state, c, me, a
+
+
+def test_concat_where_additional_mapping_needed():
+    sdfg, state, concat_node, me, a = _make_concat_where_no_mapping_reuse()
+
+    access_nodes_before = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(access_nodes_before) == 4
+    assert concat_node.data == "c"
+    assert [ac for ac in access_nodes_before if ac.desc(sdfg).transient] == [concat_node]
+    assert util.count_nodes(state, dace_nodes.Tasklet) == 1
+    assert state.in_degree(me) == 2
+    assert state.out_degree(a) == 2
+    assert {iedge.src for iedge in state.in_edges(me)} == {a, concat_node}
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+        map_entry=me,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(access_nodes_after) == 4
+    assert state.out_degree(a) == 2
+    assert all(oedge.dst is me for oedge in state.out_edges(a))
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
+    assert all(
+        ac.data.startswith("__gt4py_concat_where_mapper_temp_c_")
+        for ac in access_nodes_after
+        if ac.desc(sdfg).transient
+    )
+    assert util.count_nodes(state, dace_nodes.Tasklet) == 2
+    assert state.in_degree(me) == 3
+    assert {iedge.src.data for iedge in state.in_edges(me)} == {a.data, "b"}
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
