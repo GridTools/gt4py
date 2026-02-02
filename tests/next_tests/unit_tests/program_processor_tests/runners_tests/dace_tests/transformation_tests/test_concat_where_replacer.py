@@ -376,9 +376,6 @@ def _make_concat_where_non_canonical_memlet_sdfg() -> tuple[
 
     a, b, c, d, t = (state.add_access(name) for name in "abcdt")
 
-    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
-    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
-
     me, mx = state.add_map("comp_map", ndrange={"__i": "0:10"})
     tlet = state.add_tasklet(
         "comp_tlet",
@@ -386,6 +383,9 @@ def _make_concat_where_non_canonical_memlet_sdfg() -> tuple[
         outputs={"__out"},
         code="__out = __in0 + __in1",
     )
+
+    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
 
     state.add_edge(c, None, me, "IN_c", dace.Memlet("c[0:10]"))
     state.add_edge(b, None, me, "IN_b", dace.Memlet("b[0:10]"))
@@ -450,6 +450,103 @@ def test_concat_where_non_canonical_memlet_sdfg():
         and iedge.src is not me
         for iedge in state.in_edges(t)
     )
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_multiple_consumers(
+    uniform_access: bool,
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry]:
+    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_multiple_consumer"))
+    state = sdfg.add_state()
+    for name in "abcde":
+        sdfg.add_array(
+            name=name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(name == "c"),
+        )
+
+    a, b, c = (state.add_access(name) for name in "abc")
+
+    me, mx = state.add_map("map", ndrange={"__i": "0:10"})
+    tlet1 = state.add_tasklet(
+        "tlet1",
+        inputs={"__in0", "__in1"},
+        outputs={"__out"},
+        code="__out = __in0 * __in1",
+    )
+    tlet2 = state.add_tasklet(
+        "tlet2",
+        inputs={"__in0", "__in1"},
+        outputs={"__out"},
+        code="__out = __in0 + __in1",
+    )
+
+    state.add_nedge(a, c, dace.Memlet("a[2:7] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
+
+    for ac in [a, b, c]:
+        state.add_edge(ac, None, me, "IN_" + ac.data, dace.Memlet(ac.data + "[0:10]"))
+
+    for tlet, inp, out in [(tlet1, "a", "d"), (tlet2, "b", "e")]:
+        concat_access = "9 - __i" if (not uniform_access) and inp == "a" else "__i"
+        state.add_edge(me, "OUT_c", tlet, "__in0", dace.Memlet(f"c[{concat_access}]"))
+        state.add_edge(me, "OUT_" + inp, tlet, "__in1", dace.Memlet(inp + "[__i]"))
+        state.add_edge(tlet, "__out", mx, "IN_" + out, dace.Memlet(out + "[__i]"))
+        state.add_edge(mx, "OUT_" + out, state.add_access(out), None, dace.Memlet(out + "[0:10]"))
+        mx.add_scope_connectors(out)
+        me.add_scope_connectors(inp)
+    me.add_scope_connectors("c")
+
+    sdfg.validate()
+    return sdfg, state, c, me
+
+
+@pytest.mark.parametrize("uniform_access", [True, False])
+def test_concat_where_multiple_consumers_uniform_access(uniform_access: bool):
+    sdfg, state, concat_node, me = _make_concat_where_multiple_consumers(
+        uniform_access=uniform_access
+    )
+
+    access_nodes_before = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    tasklets_before = util.count_nodes(state, dace_nodes.Tasklet, return_nodes=True)
+    assert len(access_nodes_before) == 5
+    assert concat_node in access_nodes_before
+    assert len(tasklets_before) == 2
+    assert all(all(e.src is me for e in state.in_edges(tlet)) for tlet in tasklets_before)
+    assert state.out_degree(concat_node) == 1
+    assert all(
+        e.dst is me and e.dst_conn == f"IN_{concat_node.data}" for e in state.out_edges(concat_node)
+    )
+    inner_concat_edges_before = list(state.out_edges_by_connector(me, f"OUT_{concat_node.data}"))
+    assert len(inner_concat_edges_before) == 2
+    assert all(isinstance(e.dst, dace_nodes.Tasklet) for e in inner_concat_edges_before)
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+        map_entry=me,
+    )
+    sdfg.validate()
+
+    # NOTE Currently there is no distinction between uniform access and non uniform
+    #   access. In the uniform case both accesses to the concat where node are on
+    #   the same index, thus it would be possible to only use one of them. However,
+    #   currently this is not done.
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    tasklets_after = util.count_nodes(state, dace_nodes.Tasklet, return_nodes=True)
+    assert len(access_nodes_after) == 6
+    assert concat_node not in access_nodes_after
+    assert len(tasklets_after) == 4
+    assert all(old_tlet in tasklets_after for old_tlet in tasklets_before)
+    new_tasklets = [tlet for tlet in tasklets_after if tlet not in tasklets_before]
+    assert len(new_tasklets) == 2
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)

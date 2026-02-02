@@ -128,9 +128,9 @@ def gt_replace_concat_where_node(
     """Performs the replacement
 
     Todo:
-        - Reading a single element.
-        - Multiple consumer.
+        - Nested scopes.
         - Consumer in multiple scopes.
+        - Multiple consumer in different scopes.
         - Nested Maps.
         - Nested SDFG (1 level).
         - Nested SDFG multiple levels.
