@@ -1527,7 +1527,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        assert any(dim == offset_dim for dim, _ in it.field_domain)
         new_index: SymbolExpr | ValueExpr
         index_expr = it.indices[offset_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
@@ -1599,9 +1598,9 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _make_dynamic_neighbor_offset(
         self,
-        offset_expr: MemletExpr | ValueExpr,
+        offset_expr: MemletExpr | ValueExpr | SymbolExpr,
         offset_table_node: dace.nodes.AccessNode,
-        origin_index: SymbolExpr,
+        origin_index: MemletExpr | ValueExpr | SymbolExpr,
     ) -> ValueExpr:
         """
         Implements access to neighbor connectivity table by means of a tasklet node.
@@ -1610,33 +1609,56 @@ class LambdaToDataflow(eve.NodeVisitor):
         or computed by another tasklet (`DataExpr`).
         """
         new_index_connector = "neighbor_index"
-        tasklet_node, connector_mapping = self._add_tasklet(
-            "dynamic_neighbor_offset",
-            {"table", "offset"},
-            {new_index_connector},
-            f"{new_index_connector} = table[{origin_index.value}, offset]",
-        )
+        if isinstance(offset_expr, SymbolExpr) and isinstance(origin_index, SymbolExpr):
+            tasklet_node, connector_mapping = self._add_tasklet(
+                "dynamic_neighbor_offset",
+                {"table"},
+                {new_index_connector},
+                f"{new_index_connector} = table[{origin_index.value}, {offset_expr.value}]",
+            )
+        elif isinstance(origin_index, SymbolExpr):
+            tasklet_node, connector_mapping = self._add_tasklet(
+                "dynamic_neighbor_offset",
+                {"table", "offset"},
+                {new_index_connector},
+                f"{new_index_connector} = table[{origin_index.value}, offset]",
+            )
+        elif isinstance(offset_expr, SymbolExpr):
+            tasklet_node, connector_mapping = self._add_tasklet(
+                "dynamic_neighbor_offset",
+                {"table", "origin"},
+                {new_index_connector},
+                f"{new_index_connector} = table[origin, {offset_expr.value}]",
+            )
+        else:
+            tasklet_node, connector_mapping = self._add_tasklet(
+                "dynamic_neighbor_offset",
+                {"table", "offset", "origin"},
+                {new_index_connector},
+                f"{new_index_connector} = table[origin, offset]",
+            )
         self._add_input_data_edge(
             offset_table_node,
             dace_subsets.Range.from_array(offset_table_node.desc(self.sdfg)),
             tasklet_node,
             connector_mapping["table"],
         )
-        if isinstance(offset_expr, MemletExpr):
-            self._add_input_data_edge(
-                offset_expr.dc_node,
-                offset_expr.subset,
-                tasklet_node,
-                connector_mapping["offset"],
-            )
-        else:
-            self._add_edge(
-                offset_expr.dc_node,
-                None,
-                tasklet_node,
-                connector_mapping["offset"],
-                dace.Memlet(data=offset_expr.dc_node.data, subset="0"),
-            )
+        for conn, input_expr in [("offset", offset_expr), ("origin", origin_index)]:
+            if isinstance(input_expr, MemletExpr):
+                self._add_input_data_edge(
+                    input_expr.dc_node,
+                    input_expr.subset,
+                    tasklet_node,
+                    connector_mapping[conn],
+                )
+            elif isinstance(input_expr, ValueExpr):
+                self._add_edge(
+                    input_expr.dc_node,
+                    None,
+                    tasklet_node,
+                    connector_mapping[conn],
+                    dace.Memlet(data=input_expr.dc_node.data, subset="0"),
+                )
 
         dc_dtype = offset_table_node.desc(self.sdfg).dtype
         return self._construct_tasklet_result(
@@ -1651,14 +1673,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
-        assert any(dim == conn_type.codomain for dim, _ in it.field_domain)
         neighbor_dim = conn_type.codomain
         origin_dim = conn_type.source_dim
         origin_index = it.indices[origin_dim]
-        assert isinstance(origin_index, SymbolExpr)
 
         shifted_indices = {dim: idx for dim, idx in it.indices.items() if dim != origin_dim}
-        if isinstance(offset_expr, SymbolExpr):
+        if isinstance(offset_expr, SymbolExpr) and isinstance(origin_index, SymbolExpr):
             # use memlet to retrieve the neighbor index
             shifted_indices[neighbor_dim] = MemletExpr(
                 dc_node=conn_node,
