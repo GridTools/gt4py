@@ -300,6 +300,7 @@ def _replace_single_read(
         tlet_code = f"{tlet_output} = {tlet_inputs[0]}[{prod_accesses[0]}] if ({select_conds[0]}) else {tlet_inputs[1]}[{prod_accesses[1]}]"
     else:
         tlet_code_lines: list[str] = []
+        # TODO(phimuell): Turn this into nested `?:` expressions.
         for i in range(len(producer_specs) - 1):
             tlet_code_lines.append(
                 f"{'if' if i == 0 else 'elif'} ({select_conds[i]}):\n\t{tlet_output} = {tlet_inputs[i]}[{prod_accesses[i]}]"
