@@ -129,7 +129,6 @@ def gt_replace_concat_where_node(
 
     Todo:
         - Non canonical Memlets.
-        - Multiple producer.
         - Multiple consumer.
         - Nested Maps.
         - Nested SDFG (1 level).
@@ -214,6 +213,7 @@ def gt_replace_concat_where_node(
 
     assert state.out_degree(concat_node) == 0
     state.remove_node(concat_node)
+    sdfg.remove_data(concat_node.data, validate=False)
 
     # TODO(phimuell): Run Memlet propagation.
 
