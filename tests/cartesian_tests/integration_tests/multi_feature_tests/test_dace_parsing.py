@@ -113,6 +113,45 @@ def test_ij_field(decorator, backend):
 @pytest.mark.parametrize(
     "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
 )
+def test_ij_field_reset(decorator, backend):
+    @decorator(backend=backend)
+    def reset_mask_field(
+        dp1: gtscript.Field[np.float32],
+        pe1: gtscript.Field[np.float32],
+        lev: gtscript.Field[gtscript.IJ, np.int32],
+    ):
+        with computation(PARALLEL), interval(0, -1):
+            dp1 = pe1[0, 0, 1] - pe1
+        with computation(FORWARD), interval(0, 1):
+            lev = 0
+
+    dp1 = OriginWrapper(
+        array=gt_storage.ones(dtype=np.float32, shape=(3, 5, 8), backend=backend),
+        origin=(0, 0, 0),
+    )
+    pe1 = OriginWrapper(
+        array=gt_storage.zeros(dtype=np.float32, shape=(3, 5, 8), backend=backend),
+        origin=(0, 0, 0),
+    )
+    lev = OriginWrapper(
+        array=gt_storage.ones(dtype=np.float32, shape=(3, 5), backend=backend),
+        origin=(0, 0),
+    )
+
+    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    def call_stencil_object_2(dp1, pe1, lev):
+        reset_mask_field(dp1, pe1, lev)
+
+    call_stencil_object_2(dp1, pe1, lev)
+
+    # Download the data from the wrapper cupy array to be compared on cpu
+    mask = storage_utils.cpu_copy(lev.array)
+    assert np.allclose(mask, 0)
+
+
+@pytest.mark.parametrize(
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
+)
 def test_k_field(decorator, backend):
     @decorator(backend=backend)
     def fill_3d_from_k(
