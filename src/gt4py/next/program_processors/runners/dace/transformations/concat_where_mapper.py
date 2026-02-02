@@ -360,6 +360,15 @@ def _replace_single_read(
         dace.Memlet(data=intermediate_data, subset="0"),
     )
 
+    # Find out what `other_subset` of the new Memlet should be.
+    if (
+        isinstance(consumer_edge.dst, dace_nodes.AccessNode)
+        and consumer_edge.dst.data == consumer_edge.data.data
+    ):
+        other_subset = consumer_edge.data.subset
+    else:
+        other_subset = consumer_edge.data.other_subset
+
     # Create the edge between the new intermediate and the old consumer. We ignore
     #  some properties of the Memlet here, such as dynamic (`wcr` was handled above).
     new_consumer_edge = state.add_edge(
@@ -370,9 +379,7 @@ def _replace_single_read(
         dace.Memlet(
             data=intermediate_data,
             subset="0",
-            other_subset=consumer_edge.data.other_subset
-            if consumer_edge.data.data == concat_where_data
-            else consumer_edge.data.subset,
+            other_subset=other_subset,
         ),
     )
 
