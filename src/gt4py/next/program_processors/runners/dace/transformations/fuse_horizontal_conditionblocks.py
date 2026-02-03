@@ -167,6 +167,13 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         ):
             return False
 
+        # TODO(iomaganaris): Currently we do not handle NestedSDFGs inside the conditional blocks
+        #  however this should be very close to handling Tasklets which is currently working. Since
+        #  a test is missing and there is no immediate need for this feature, we leave it for future work.
+        for node in second_cb.sdfg.nodes():
+            if isinstance(node, dace_nodes.NestedSDFG):
+                return False
+
         return True
 
     def apply(
