@@ -96,6 +96,12 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         if first_cb.sdfg.number_of_nodes() > 1 or second_cb.sdfg.number_of_nodes() > 1:
             return False
 
+        # Check that the symbol mappings are compatible
+        sym_map1 = first_cb.symbol_mapping
+        sym_map2 = second_cb.symbol_mapping
+        if any(str(sym_map1[sym]) != str(sym_map2[sym]) for sym in sym_map2 if sym in sym_map1):
+            return False
+
         # Get the actual conditional blocks
         first_conditional_block = next(iter(first_cb.sdfg.nodes()))
         second_conditional_block = next(iter(second_cb.sdfg.nodes()))
