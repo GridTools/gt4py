@@ -232,7 +232,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         # Then copy the edges
         second_to_first_connections = {}
         for node in nodes_renamed_map:
-            second_to_first_connections[node.data] = nodes_renamed_map[node].data
+            if isinstance(node, dace_nodes.AccessNode):
+                second_to_first_connections[node.data] = nodes_renamed_map[node].data
         for first_inner_state in first_conditional_block.all_states():
             corresponding_state_in_second = _find_corresponding_state_in_second(first_inner_state)
             nodes_to_move = list(corresponding_state_in_second.nodes())

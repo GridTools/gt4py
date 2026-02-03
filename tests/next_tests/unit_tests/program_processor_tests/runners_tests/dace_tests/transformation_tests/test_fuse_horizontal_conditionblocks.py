@@ -141,7 +141,7 @@ def _make_map_with_conditional_blocks() -> dace.SDFG:
         "tasklet_cond",
         inputs={"__in"},
         outputs={"__out"},
-        code="__out = __in <= 0.0",
+        code="__out = __in <= 0.5",
     )
     state.add_edge(tmp_a, None, tasklet_cond, "__in", dace.Memlet("tmp_a[0]"))
     state.add_edge(tasklet_cond, "__out", cond_var, None, dace.Memlet("cond_var"))
