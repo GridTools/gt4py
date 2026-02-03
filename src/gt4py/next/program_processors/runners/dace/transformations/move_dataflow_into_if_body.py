@@ -500,8 +500,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     ) -> bool:
         """Check if the relocation would cause any conflict, such as a symbol clash."""
 
-        # TODO: also names of data containers.
-
         # TODO(phimuell): There is an obscure case where the nested SDFG, on its own,
         #   defines a symbol that is also mapped, for example a dynamic Map range.
         #   It is probably not a problem, because of the scopes DaCe adds when
@@ -516,6 +514,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         subgraph_view = dace.sdfg.state.StateSubgraphView(state, all_relocated_dataflow)
         requiered_symbols: set[str] = subgraph_view.free_symbols
 
+        inner_data_names = if_block.sdfg.arrays.keys()
         for node_to_check in all_relocated_dataflow:
             if isinstance(node_to_check, dace_nodes.MapEntry):
                 # This means that a nested Map is fully relocated into the `if` block.
@@ -524,6 +523,16 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 #   to skip this step, i.e. not add them to the set.
                 assert node_to_check is not enclosing_map
                 requiered_symbols |= set(node_to_check.map.params)
+
+            if (
+                isinstance(node_to_check, dace_nodes.AccessNode)
+                and node_to_check.data in inner_data_names
+            ):
+                # There is already a data descriptor that is used on the inside as on
+                #  the outside. Thous we would have to perform some renaming, which we
+                #  currently does not.
+                # TODO(phimell): Handle this case.
+                return False
 
             for iedge in state.in_edges(node_to_check):
                 src_node = iedge.src
