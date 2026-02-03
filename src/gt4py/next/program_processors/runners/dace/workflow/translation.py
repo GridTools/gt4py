@@ -15,7 +15,8 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config, metrics
+from gt4py.next import common, config
+from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
