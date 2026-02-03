@@ -12,7 +12,7 @@ import dace
 from dace import properties as dace_properties, transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation import helpers as dace_helpers
-
+from dace.transformation.passes import analysis as dace_analysis
 
 @dace_properties.make_properties
 class RemoveScalarCopies(dace_transformation.SingleStateTransformation):
@@ -110,7 +110,7 @@ class RemoveScalarCopies(dace_transformation.SingleStateTransformation):
                 return False
 
         # Make sure that the data descriptors of both access nodes are scalars
-        # TODO(iomaganaris): We could extend this transfromation to handle AccessNodes that are arrays with 1 element as well.
+        # TODO(iomaganaris): We could extend this transfromation to handle AccessNodes that are arrays with 1 element as well
         if not isinstance(first_node_desc, dace.data.Scalar) or not isinstance(
             second_node_desc, dace.data.Scalar
         ):
@@ -122,20 +122,11 @@ class RemoveScalarCopies(dace_transformation.SingleStateTransformation):
         ):
             return False
 
-        # Make sure that both access nodes are single use data
-        if self.assume_single_use_data:
-            single_use_data = {sdfg: {first_node.data}}
-        if self._single_use_data is None:
-            find_single_use_data = first_node.FindSingleUseData()
-            single_use_data = find_single_use_data.apply_pass(sdfg, None)
-        else:
-            single_use_data = self._single_use_data
-        if first_node.data not in single_use_data[sdfg]:
-            return False
+        # Make sure that the second AccessNode data is single use data since we're only going to remove that one
         if self.assume_single_use_data:
             single_use_data = {sdfg: {second_node.data}}
         if self._single_use_data is None:
-            find_single_use_data = second_node.FindSingleUseData()
+            find_single_use_data = dace_analysis.FindSingleUseData()
             single_use_data = find_single_use_data.apply_pass(sdfg, None)
         else:
             single_use_data = self._single_use_data
