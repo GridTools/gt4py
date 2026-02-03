@@ -12,7 +12,7 @@ import abc
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
@@ -91,7 +91,7 @@ def _create_field_operator_impl(
     field_domain: gtir_domain.FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
-    map_exit: dace.nodes.MapExit,
+    map_exit: dace_nodes.MapExit,
 ) -> gtir_to_sdfg_types.FieldopData:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -546,7 +546,7 @@ def _get_symbolic_value(
     symbolic_expr: dace.symbolic.SymExpr,
     scalar_type: ts.ScalarType,
     temp_name: Optional[str] = None,
-) -> dace.nodes.AccessNode:
+) -> dace_nodes.AccessNode:
     tasklet_node, connector_mapping = sdfg_builder.add_tasklet(
         name="get_value",
         sdfg=sdfg,
