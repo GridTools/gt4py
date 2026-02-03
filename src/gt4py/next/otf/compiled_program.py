@@ -48,7 +48,7 @@ ArgumentDescriptorContexts: TypeAlias = dict[
 
 
 def _make_pool_root(
-    program_definition: ffront_stages.ProgramDefinition, backend: gtx_backend.Backend
+    program_definition: ffront_stages.DSLDefinitionForm, backend: gtx_backend.Backend
 ) -> tuple[str, str]:
     return (program_definition.definition.__name__, backend.name)
 
@@ -73,9 +73,9 @@ def compiled_program_call_hook(
         metrics.set_current_source_key(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
 
 
-@hook_machinery.EventHook
+@hook_machinery.event_hook
 def compile_variant_hook(
-    program_definition: ffront_stages.ProgramDefinition,
+    program_definition: ffront_stages.DSLDefinitionForm,
     backend: gtx_backend.Backend,
     offset_provider: common.OffsetProviderType | common.OffsetProvider,
     argument_descriptors: ArgumentDescriptors,
@@ -275,7 +275,7 @@ class CompiledProgramsPool:
     """
 
     backend: gtx_backend.Backend
-    definition_stage: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition
+    definition_stage: ffront_stages.DSLDefinitionForm
     # Note: This type can be incomplete, i.e. contain DeferredType, whenever the operator is a
     #  scan operator. In the future it could also be the type of a generic program.
     program_type: ts_ffront.ProgramType
@@ -284,10 +284,14 @@ class CompiledProgramsPool:
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
 
-    # cache the compiled programs
-    compiled_programs: dict[
-        CompiledProgramsKey,
-        stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
+    # store for the compiled programs
+    compiled_programs: dict[CompiledProgramsKey, stages.CompiledProgram] = dataclasses.field(
+        default_factory=dict, init=False
+    )
+
+    # store for the async compilation jobs
+    _compilation_jobs: dict[
+        CompiledProgramsKey, concurrent.futures.Future[stages.CompiledProgram]
     ] = dataclasses.field(default_factory=dict, init=False)
 
     @functools.cached_property
@@ -348,18 +352,16 @@ class CompiledProgramsPool:
 
         try:
             compiled_program = self.compiled_programs[key]
-            if not callable(compiled_program):
-                # 'Future' objects are not callable so we know they need to be resolved.
-                assert isinstance(compiled_program, concurrent.futures.Future)
-                compiled_program = self._resolve_future(key)
-
             compiled_program_call_hook(
                 compiled_program, args, kwargs, offset_provider, self.root, key
             )
-            compiled_program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator]  # the Future case is handled below
+            compiled_program(*args, **kwargs, offset_provider=offset_provider)
 
         except KeyError as e:
-            if enable_jit:
+            if compiled_program_future := self._compilation_jobs.pop(key, None):
+                assert isinstance(compiled_program_future, concurrent.futures.Future)
+                self.compiled_programs[key] = compiled_program_future.result()
+            elif enable_jit:
                 assert self.argument_descriptor_mapping is not None
                 self._compile_variant(
                     argument_descriptors=_make_argument_descriptors(
@@ -374,13 +376,15 @@ class CompiledProgramsPool:
                     offset_provider=offset_provider,
                     call_key=key,
                 )
-                return self(
-                    *canonical_args,
-                    offset_provider=offset_provider,
-                    enable_jit=False,
-                    **canonical_kwargs,
-                )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
-            raise RuntimeError("No program compiled for this set of static arguments.") from e
+            else:
+                raise RuntimeError("No program compiled for this set of static arguments.") from e
+
+            return self(
+                *canonical_args,
+                offset_provider=offset_provider,
+                enable_jit=False,
+                **canonical_kwargs,
+            )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
 
     @functools.cached_property
     def _primitive_values_extractor(self) -> Callable | None:
@@ -563,10 +567,9 @@ class CompiledProgramsPool:
         )
 
         if _async_compilation_pool is None:
-            # synchronous compilation
             self.compiled_programs[key] = compile_call()
         else:
-            self.compiled_programs[key] = _async_compilation_pool.submit(compile_call)
+            self._compilation_jobs[key] = _async_compilation_pool.submit(compile_call)
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
     #  domains and of scans.
@@ -601,10 +604,3 @@ class CompiledProgramsPool:
                     },
                     offset_provider=offset_provider,
                 )
-
-    def _resolve_future(self, key: CompiledProgramsKey) -> stages.CompiledProgram:
-        program = self.compiled_programs[key]
-        assert isinstance(program, concurrent.futures.Future)
-        result = program.result()
-        self.compiled_programs[key] = result
-        return result

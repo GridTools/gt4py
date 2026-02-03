@@ -76,6 +76,10 @@ PAST_PRG: typing.TypeAlias = PastProgramDefinition
 AOT_PRG: typing.TypeAlias = toolchain.CompilableProgram[PAST_PRG, arguments.CompileTimeArgs]
 
 
+DSLDefinitionForm: typing.TypeAlias = DSL_FOP | DSL_PRG
+FFrontDefinitionForm: typing.TypeAlias = DSLDefinitionForm | FOP | PAST_PRG
+
+
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
     hasher: xtyping.HashlibAlgorithm
     if not algorithm:

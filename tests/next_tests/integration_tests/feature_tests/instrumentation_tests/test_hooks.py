@@ -79,17 +79,6 @@ def custom_embedded_program_callback(
     )
 
 
-# @hooks.compile_variant_hook.register
-# def compile_variant_hook(
-#     key: tuple[tuple[Hashable, ...], int],
-#     backend: gtx_backend.Backend,
-#     program_definition: "ffront_stages.ProgramDefinition",
-#     compile_time_args: "arguments.CompileTimeArgs",
-# ) -> None:
-#     """Callback hook invoked before compiling a program variant."""
-#     ...
-
-
 Cell = gtx.Dimension("Cell")
 IDim = gtx.Dimension("IDim")
 
@@ -165,3 +154,14 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
     callback_results.clear()
     assert embedded_callback_results == []
     embedded_callback_results.clear()
+
+
+# @hooks.compile_variant_hook.register
+# def compile_variant_hook(
+#     key: tuple[tuple[Hashable, ...], int],
+#     backend: gtx_backend.Backend,
+#     program_definition: "ffront_stages.ProgramDefinition",
+#     compile_time_args: "arguments.CompileTimeArgs",
+# ) -> None:
+#     """Callback hook invoked before compiling a program variant."""
+#     ...
