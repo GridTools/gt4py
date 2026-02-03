@@ -1201,6 +1201,12 @@ def test_if_mover_access_node_between():
 
 
 def test_if_mover_symbol_aliasing():
+    """Tests if symbol clashes are detected.
+
+    Essentially there is a symbol `n` both in the parent SDFG and the `if_block`,
+    however, with different meanings. Thus the relocation will lead to invalid
+    behaviour and should be rejected.
+    """
     sdfg = dace.SDFG(util.unique_name("if_mover_symbol_alias"))
     state = sdfg.add_state(is_start_block=True)
 
