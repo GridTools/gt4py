@@ -46,10 +46,8 @@ def _make_map_with_scalar_copies() -> tuple[
     tmp0, tmp1, tmp2 = (state.add_access(f"tmp{i}") for i in range(3))
 
     me, mx = state.add_map("copy_map", ndrange={"__i": "0:10"})
-    me.add_in_connector("IN_a")
-    me.add_out_connector("OUT_a")
-    mx.add_in_connector("IN_b")
-    mx.add_out_connector("OUT_b")
+    me.add_scope_connectors("a")
+    mx.add_scope_connectors("b")
     state.add_edge(a, None, me, "IN_a", dace.Memlet("a[__i]"))
     state.add_edge(me, "OUT_a", tmp0, None, dace.Memlet("a[__i]"))
     state.add_edge(tmp0, None, tmp1, None, dace.Memlet("tmp1[0]"))
@@ -72,7 +70,7 @@ def test_remove_double_write_single_consumer():
     find_single_use_data = dace_analysis.FindSingleUseData()
     single_use_data = find_single_use_data.apply_pass(sdfg, None)
     sdfg.apply_transformations_repeated(
-        gtx_transformations.RemoveAliasingScalars(
+        gtx_transformations.RemoveScalarCopies(
             single_use_data=single_use_data,
             assume_single_use_data=False,
         ),

@@ -15,7 +15,27 @@ from dace.transformation import helpers as dace_helpers
 
 
 @dace_properties.make_properties
-class RemoveAliasingScalars(dace_transformation.SingleStateTransformation):
+class RemoveScalarCopies(dace_transformation.SingleStateTransformation):
+    """Removes copies between two scalar transient variables.
+    Exaxmple:
+     ___
+    /   \
+    | A |
+    \___/
+      |
+     \/
+     ___
+    /   \
+    | B |
+    \___/
+    is transformed to
+     ___
+    /   \
+    | A |
+    \___/
+    and all uses of B are replaced with A.
+    """
+
     first_access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     second_access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
 
@@ -59,20 +79,24 @@ class RemoveAliasingScalars(dace_transformation.SingleStateTransformation):
         second_node_desc = second_node.desc(sdfg)
 
         scope_dict = graph.scope_dict()
-        if first_node not in scope_dict or second_node not in scope_dict:
-            return False
 
         # Make sure that both access nodes are in the same scope
         if scope_dict[first_node] != scope_dict[second_node]:
             return False
 
         # Make sure that both access nodes are transients
-        if not first_node_desc.transient or not second_node_desc.transient:
+        if not (first_node_desc.transient and second_node_desc.transient):
             return False
 
-        edges = graph.edges_between(first_node, second_node)
-        assert len(edges) == 1
-        edge = next(iter(edges))
+        edges = list(graph.edges_between(first_node, second_node))
+        if len(edges) != 1:
+            return False
+
+        # Check that the second access node has only one incoming edge, which is the one from the first access node.
+        if graph.in_degree(second_node) != 1:
+            return False
+
+        edge = edges[0]
 
         # Check if the edge transfers only one element
         if edge.data.num_elements() != 1:
@@ -85,7 +109,8 @@ class RemoveAliasingScalars(dace_transformation.SingleStateTransformation):
             if out_edges.data.num_elements() != 1:
                 return False
 
-        # Make sure that the edge subset is 1
+        # Make sure that the data descriptors of both access nodes are scalars
+        # TODO(iomaganaris): We could extend this transfromation to handle AccessNodes that are arrays with 1 element as well.
         if not isinstance(first_node_desc, dace.data.Scalar) or not isinstance(
             second_node_desc, dace.data.Scalar
         ):
@@ -95,13 +120,6 @@ class RemoveAliasingScalars(dace_transformation.SingleStateTransformation):
         if isinstance(first_node_desc, dace.data.View) or isinstance(
             second_node_desc, dace.data.View
         ):
-            return False
-
-        # Make sure that both access nodes are transients
-        if not first_node_desc.transient or not second_node_desc.transient:
-            return False
-
-        if graph.in_degree(second_node) != 1:
             return False
 
         # Make sure that both access nodes are single use data

@@ -54,7 +54,7 @@ from .multi_state_global_self_copy_elimination import (
 )
 from .redundant_array_removers import CopyChainRemover, DoubleWriteRemover, gt_remove_copy_chain
 from .remove_access_node_copies import RemoveAccessNodeCopies
-from .remove_aliasing_scalars import RemoveAliasingScalars
+from .remove_scalar_copies import RemoveScalarCopies
 from .remove_views import RemovePointwiseViews
 from .scan_loop_unrolling import ScanLoopUnrolling
 from .simplify import (
@@ -107,8 +107,8 @@ __all__ = [
     "MultiStateGlobalSelfCopyElimination",
     "MultiStateGlobalSelfCopyElimination2",
     "RemoveAccessNodeCopies",
-    "RemoveAliasingScalars",
     "RemovePointwiseViews",
+    "RemoveScalarCopies",
     "ScanLoopUnrolling",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
