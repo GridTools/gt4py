@@ -289,7 +289,10 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             if edge.dst == second_cb:
                 graph.remove_edge(edge)
 
-        # Need to remove both references to remove NestedSDFG from graph
+        # TODO(iomaganaris): Atm need to remove both references to remove NestedSDFG from graph
+        #  second_conditional_block is inside the SDFG of NestedSDFG second_cb and removing only
+        #  one of them keeps a reference to the other one so none is properly deleted from the SDFG.
+        #  For now remove both but maybe this can be improved in the future.
         graph.remove_node(second_conditional_block)
         graph.remove_node(second_cb)
 
