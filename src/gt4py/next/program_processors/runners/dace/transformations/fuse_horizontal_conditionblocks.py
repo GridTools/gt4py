@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
-import uuid
 from typing import Any, Union
 
 import dace
@@ -18,31 +17,50 @@ from dace.transformation import helpers as dace_helpers
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
-def unique_name(name: str) -> str:
-    """Adds a unique string to `name`."""
-    maximal_length = 200
-    unique_sufix = str(uuid.uuid1()).replace("-", "_")
-    if len(name) > (maximal_length - len(unique_sufix)):
-        name = name[: (maximal_length - len(unique_sufix) - 1)]
-    return f"{name}_{unique_sufix}"
-
-
 @dace_properties.make_properties
 class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformation):
-    access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    """Fuses two conditional blocks that share the same condition variable and are
+    not dependent to each other (i.e. the output of one of them is used as input to the other)
+    into a single conditional block.
+    The motivation for this transformation is to reduce the number of conditional blocks
+    which generate if statements in the CPU or GPU code, which can lead to performance improvements.
+    Example:
+    Before fusion:
+    ```
+    if __cond:
+        __output1 = __arg1 * 2.0
+    else:
+        __output1 = __arg2 + 3.0
+    if __cond:
+        __output2 = __arg3 - 1.0
+    else:
+        __output2 = __arg4 / 4.0
+    ```
+    After fusion:
+    ```
+    if __cond:
+        __output1 = __arg1 * 2.0
+        __output2 = __arg3 - 1.0
+    else:
+        __output1 = __arg2 + 3.0
+        __output2 = __arg4 / 4.0
+    ```
+    """
+
+    conditional_access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     first_conditional_block = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
     second_conditional_block = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
 
     @classmethod
     def expressions(cls) -> Any:
-        map_fusion_parallel_match = dace_graph.OrderedMultiDiConnectorGraph()
-        map_fusion_parallel_match.add_nedge(
-            cls.access_node, cls.first_conditional_block, dace.Memlet()
+        conditionalblock_fusion_parallel_match = dace_graph.OrderedMultiDiConnectorGraph()
+        conditionalblock_fusion_parallel_match.add_nedge(
+            cls.conditional_access_node, cls.first_conditional_block, dace.Memlet()
         )
-        map_fusion_parallel_match.add_nedge(
-            cls.access_node, cls.second_conditional_block, dace.Memlet()
+        conditionalblock_fusion_parallel_match.add_nedge(
+            cls.conditional_access_node, cls.second_conditional_block, dace.Memlet()
         )
-        return [map_fusion_parallel_match]
+        return [conditionalblock_fusion_parallel_match]
 
     def can_be_applied(
         self,
@@ -51,11 +69,18 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
-        access_node: dace_nodes.AccessNode = self.access_node
-        access_node_desc = access_node.desc(sdfg)
+        conditional_access_node: dace_nodes.AccessNode = self.conditional_access_node
+        conditional_access_node_desc = conditional_access_node.desc(sdfg)
         first_cb: dace_nodes.NestedSDFG = self.first_conditional_block
         second_cb: dace_nodes.NestedSDFG = self.second_conditional_block
         scope_dict = graph.scope_dict()
+
+        # Check that the common access node is a boolean scalar
+        if (
+            not isinstance(conditional_access_node_desc, dace.data.Scalar)
+            or conditional_access_node_desc.dtype != dace.bool_
+        ):
+            return False
 
         # Check that both conditional blocks are in the same parent SDFG
         if first_cb.sdfg.parent != second_cb.sdfg.parent:
@@ -67,15 +92,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         ):
             return False
 
-        # Check that the common access node is a boolean scalar
-        if (
-            not isinstance(access_node_desc, dace.data.Scalar)
-            or access_node_desc.dtype != dace.bool_
-        ):
-            return False
-
         # Make sure that the conditional blocks contain only one conditional block each
-        if len(first_cb.sdfg.nodes()) > 1 or len(second_cb.sdfg.nodes()) > 1:
+        if first_cb.sdfg.number_of_nodes() > 1 or second_cb.sdfg.number_of_nodes() > 1:
             return False
 
         # Get the actual conditional blocks
@@ -83,7 +101,22 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         second_conditional_block = next(iter(second_cb.sdfg.nodes()))
         if not (
             isinstance(first_conditional_block, dace.sdfg.state.ConditionalBlock)
+            and len(first_conditional_block.sub_regions()) == 2
             and isinstance(second_conditional_block, dace.sdfg.state.ConditionalBlock)
+            and len(second_conditional_block.sub_regions()) == 2
+        ):
+            return False
+        first_conditional_block_state_names = [
+            state.name for state in first_conditional_block.all_states()
+        ]
+        second_conditional_block_state_names = [
+            state.name for state in second_conditional_block.all_states()
+        ]
+        if not (
+            "true_branch" in first_conditional_block_state_names
+            and "false_branch" in first_conditional_block_state_names
+            and "true_branch" in second_conditional_block_state_names
+            and "false_branch" in second_conditional_block_state_names
         ):
             return False
 
@@ -96,16 +129,23 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             return False
 
         # Check that there is an edge to the conditional blocks with dst_conn == "__cond"
-        cond_edges_first = [e for e in graph.in_edges(first_cb) if e.dst_conn == "__cond"]
+        cond_edges_first = [
+            e for e in graph.in_edges(first_cb) if e.dst_conn and e.dst_conn == "__cond"
+        ]
         if len(cond_edges_first) != 1:
             return False
-        cond_edges_second = [e for e in graph.in_edges(second_cb) if e.dst_conn == "__cond"]
+        cond_edges_second = [
+            e for e in graph.in_edges(second_cb) if e.dst_conn and e.dst_conn == "__cond"
+        ]
         if len(cond_edges_second) != 1:
             return False
         cond_edge_first = cond_edges_first[0]
         cond_edge_second = cond_edges_second[0]
-        if cond_edge_first.src != cond_edge_second.src and (
-            cond_edge_first.src != access_node or cond_edge_second.src != access_node
+        if cond_edge_first.data.is_empty() or cond_edge_second.data.is_empty():
+            return False
+        if not all(
+            cond_edge.src is conditional_access_node
+            for cond_edge in [cond_edge_first, cond_edge_second]
         ):
             return False
 
@@ -128,7 +168,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         graph: Union[dace.SDFGState, dace.SDFG],
         sdfg: dace.SDFG,
     ) -> None:
-        access_node: dace_nodes.AccessNode = self.access_node
+        conditional_access_node: dace_nodes.AccessNode = self.conditional_access_node
         first_cb: dace_nodes.NestedSDFG = self.first_conditional_block
         second_cb: dace_nodes.NestedSDFG = self.second_conditional_block
 
@@ -136,12 +176,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         second_conditional_block = next(iter(second_cb.sdfg.nodes()))
 
         # Store original arrays to check later that all the necessary arrays have been moved
-        original_arrays_first_conditional_block = {}
-        for data_name, data_desc in first_conditional_block.sdfg.arrays.items():
-            original_arrays_first_conditional_block[data_name] = data_desc
-        original_arrays_second_conditional_block = {}
-        for data_name, data_desc in second_conditional_block.sdfg.arrays.items():
-            original_arrays_second_conditional_block[data_name] = data_desc
+        original_arrays_first_conditional_block = first_conditional_block.sdfg.arrays.copy()
+        original_arrays_second_conditional_block = second_conditional_block.sdfg.arrays.copy()
         total_original_arrays = len(original_arrays_first_conditional_block) + len(
             original_arrays_second_conditional_block
         )
@@ -153,7 +189,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             if data_name == "__cond":
                 continue
             if data_name in original_arrays_first_conditional_block:
-                new_data_name = unique_name(data_name)
+                new_data_name = gtx_transformations.utils.unique_name(data_name) + "_from_cb_fusion"
                 second_arrays_rename_map[data_name] = new_data_name
                 data_desc_renamed = copy.deepcopy(data_desc)
                 data_desc_renamed.name = new_data_name
@@ -171,25 +207,25 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         out_connectors_to_move = second_cb.out_connectors
         in_connectors_to_move_rename_map = {}
         out_connectors_to_move_rename_map = {}
-        for k, _v in in_connectors_to_move.items():
-            new_connector_name = k
+        for original_in_connector_name, _v in in_connectors_to_move.items():
+            new_connector_name = original_in_connector_name
             if new_connector_name in first_cb.in_connectors:
-                new_connector_name = second_arrays_rename_map[k]
-            in_connectors_to_move_rename_map[k] = new_connector_name
+                new_connector_name = second_arrays_rename_map[original_in_connector_name]
+            in_connectors_to_move_rename_map[original_in_connector_name] = new_connector_name
             first_cb.add_in_connector(new_connector_name)
             for edge in graph.in_edges(second_cb):
-                if edge.dst_conn == k:
+                if edge.dst_conn == original_in_connector_name:
                     dace_helpers.redirect_edge(
                         state=graph, edge=edge, new_dst_conn=new_connector_name, new_dst=first_cb
                     )
-        for k, _v in out_connectors_to_move.items():
-            new_connector_name = k
+        for original_out_connector_name, _v in out_connectors_to_move.items():
+            new_connector_name = original_out_connector_name
             if new_connector_name in first_cb.out_connectors:
-                new_connector_name = second_arrays_rename_map[k]
-            out_connectors_to_move_rename_map[k] = new_connector_name
+                new_connector_name = second_arrays_rename_map[original_out_connector_name]
+            out_connectors_to_move_rename_map[original_out_connector_name] = new_connector_name
             first_cb.add_out_connector(new_connector_name)
             for edge in graph.out_edges(second_cb):
-                if edge.src_conn == k:
+                if edge.src_conn == original_out_connector_name:
                     dace_helpers.redirect_edge(
                         state=graph, edge=edge, new_src_conn=new_connector_name, new_src=first_cb
                     )
@@ -207,10 +243,6 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                 elif not true_branch and "false_branch" in state.name:
                     corresponding_state_in_second = state
                     break
-            if corresponding_state_in_second is None:
-                raise RuntimeError(
-                    f"Could not find corresponding state in second conditional block for state {inner_state_name}"
-                )
             return corresponding_state_in_second
 
         # Copy first the nodes from the second conditional block to the first
@@ -224,8 +256,6 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                     if node.data in first_cb.in_connectors or node.data in first_cb.out_connectors:
                         new_data_name = second_arrays_rename_map[node.data]
                         new_node = dace_nodes.AccessNode(new_data_name)
-                        new_desc = copy.deepcopy(node.desc(second_cb.sdfg))
-                        new_desc.name = new_data_name
                 nodes_renamed_map[node] = new_node
                 first_inner_state.add_node(new_node)
 
@@ -255,7 +285,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                             else edge.dst_conn,
                             new_memlet,
                         )
-        for edge in list(graph.out_edges(access_node)):
+        for edge in list(graph.out_edges(conditional_access_node)):
             if edge.dst == second_cb:
                 graph.remove_edge(edge)
 

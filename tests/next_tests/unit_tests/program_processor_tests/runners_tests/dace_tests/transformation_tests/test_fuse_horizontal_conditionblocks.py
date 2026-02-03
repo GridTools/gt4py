@@ -32,7 +32,7 @@ def _make_if_block_with_tasklet(
     b2_type: dace.typeclass = dace.float64,
     output_type: dace.typeclass = dace.float64,
 ) -> dace_nodes.NestedSDFG:
-    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
+    inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
 
     types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
     for name in {b1_name, b2_name, cond_name, output_name}:
@@ -42,7 +42,7 @@ def _make_if_block_with_tasklet(
             transient=False,
         )
 
-    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
+    if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
@@ -87,7 +87,7 @@ def _make_if_block_with_tasklet(
 
 
 def _make_map_with_conditional_blocks() -> dace.SDFG:
-    sdfg = dace.SDFG(util.unique_name("map_with_conditional_blocks"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("map_with_conditional_blocks"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(

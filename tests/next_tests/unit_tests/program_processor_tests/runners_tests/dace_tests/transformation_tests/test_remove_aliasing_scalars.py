@@ -24,7 +24,7 @@ import dace
 def _make_map_with_scalar_copies() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapExit
 ]:
-    sdfg = dace.SDFG(util.unique_name("scalar_elimination"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("scalar_elimination"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(

@@ -79,7 +79,7 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
-from .utils import gt_make_transients_persistent
+from .utils import gt_make_transients_persistent, unique_name
 
 
 __all__ = [
@@ -142,4 +142,5 @@ __all__ = [
     "gt_vertical_map_split_fusion",
     "inline_dataflow_into_map",
     "splitting_tools",
+    "unique_name",
 ]
