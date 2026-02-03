@@ -598,7 +598,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         dtype=int,
         allow_none=True,
         default=None,
-        desc="Set the maxnreg property for the GPU maps.",
+        desc="Set the maxnreg property for the GPU maps. Takes precedence over any launch_bounds.",
     )
 
     # Pattern matching
