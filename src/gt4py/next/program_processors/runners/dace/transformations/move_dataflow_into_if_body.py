@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 import dace
 from dace import (
+    data as dace_data,
     dtypes as dace_dtypes,
     properties as dace_properties,
     subsets as dace_sbs,
@@ -543,6 +544,15 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     # TODO(phimuell): Do we have to inspect the full Memlet path here?
                     assert isinstance(src_node, dace_nodes.AccessNode) or src_node is enclosing_map
                     requiered_symbols |= iedge.data.used_symbols(True, edge=iedge)
+
+        # The (beyond the enclosing Map) data is also mapped into the `if` block, so we
+        #  have to consider that as well.
+        for iedge in state.in_edges(if_block):
+            if iedge.src is enclosing_map and (not iedge.data.is_empty()):
+                outside_desc = sdfg.arrays[iedge.data.data]
+                if isinstance(outside_desc, dace_data.View):
+                    return False  # Handle this case.
+                requiered_symbols |= outside_desc.used_symbols(True)
 
         # A conflicting symbol is a free symbol of the relocatable dataflow, that is not a
         #  direct mapping. For example if there is a symbol `n` on the inside and outside
