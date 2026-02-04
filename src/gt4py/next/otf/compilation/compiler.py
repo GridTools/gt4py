@@ -93,8 +93,15 @@ class Compiler(
         # of the returned (nanobind) nbfunction object. As long as this object is alive,
         # the module reference is kept alive too, preventing the SEGFAULT.
         managed_entry_point = type(
-            f"{m.__name__}__{id(m)}", (), dict(__call__=func.__call__, module_ref=m, func_ref=func)
-        )()
+            f"{m.__name__}_managed_wrapper",
+            (),
+            dict(
+                __call__=func.__call__,
+                __doc__=getattr(func, "__doc__", None),
+                __hash__=func.__hash__,
+                __eq__=func.__eq__,
+            ),  
+        )(module_ref=m, func_ref=func)
 
         return cast(stages.CompiledProgram, managed_entry_point)
 
