@@ -1695,7 +1695,7 @@ def test_self_assignment_in_forward(backend: str) -> None:
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
-def test_upcasting_both_sides_of_assignment(backend: str) -> None:
+def test_reset_mask_2d(backend: str) -> None:
     domain = (5, 5, 5)
 
     input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
