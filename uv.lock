@@ -1161,7 +1161,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.2"
-source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-v2#491d74626720c1f604edd0ba941db6923bc76686" }
+source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-v2#970e7dc62e23dbeeb31fce82778cf45d61444c91" }
 resolution-markers = [
     "python_full_version >= '3.14'",
     "python_full_version == '3.13.*'",
@@ -1707,7 +1707,7 @@ build = [
     { name = "wheel" },
 ]
 dace-cartesian = [
-    { name = "dace", version = "1.0.2", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-v2#491d74626720c1f604edd0ba941db6923bc76686" } },
+    { name = "dace", version = "1.0.2", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-v2#970e7dc62e23dbeeb31fce82778cf45d61444c91" } },
 ]
 dace-next = [
     { name = "dace", version = "43!2026.2.12", source = { registry = "https://gridtools.github.io/pypi/" } },
