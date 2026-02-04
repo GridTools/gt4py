@@ -1836,13 +1836,8 @@ build = [
     { name = "setuptools", specifier = ">=77.0.3" },
     { name = "wheel", specifier = ">=0.33.6" },
 ]
-<<<<<<< HEAD
-dace-cartesian = [{ name = "dace", git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip" }]
-dace-next = [{ name = "dace", specifier = "==43!2026.2.3", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
-=======
 dace-cartesian = [{ name = "dace", git = "https://github.com/romanc/dace?branch=romanc%2Fstree-v2" }]
-dace-next = [{ name = "dace", specifier = "==43!2026.1.21", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
->>>>>>> 4da0c077 (WIP: Starting to work on DaCe v2 at the gt4py level)
+dace-next = [{ name = "dace", specifier = "==43!2026.2.3", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
 dev = [
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
