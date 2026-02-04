@@ -12,7 +12,7 @@ import abc
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
@@ -91,7 +91,7 @@ def _create_field_operator_impl(
     field_domain: gtir_domain.FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
-    map_exit: dace.nodes.MapExit,
+    map_exit: dace_nodes.MapExit,
 ) -> gtir_to_sdfg_types.FieldopData:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -120,8 +120,7 @@ def _create_field_operator_impl(
         # is set later depending on the element type (`ts.ListType` or `ts.ScalarType`)
         field_subset = dace_subsets.Range([])
     else:
-        field_indices = gtir_domain.get_domain_indices(field_dims, field_origin)
-        field_subset = dace_subsets.Range.from_indices(field_indices)
+        field_subset = gtir_domain.get_element_subset(field_dims, field_origin)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         if output_edge.result.gt_dtype != output_type.dtype:
@@ -248,7 +247,7 @@ def translate_as_fieldop(
         return translate_scan(node, ctx, sdfg_builder)
 
     if not isinstance(node.type, ts.FieldType):
-        raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
+        raise NotImplementedError("Unexpected 'as_fieldop' with tuple output in SDFG lowering.")
 
     # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
@@ -546,7 +545,7 @@ def _get_symbolic_value(
     symbolic_expr: dace.symbolic.SymExpr,
     scalar_type: ts.ScalarType,
     temp_name: Optional[str] = None,
-) -> dace.nodes.AccessNode:
+) -> dace_nodes.AccessNode:
     tasklet_node, connector_mapping = sdfg_builder.add_tasklet(
         name="get_value",
         sdfg=sdfg,
@@ -556,7 +555,7 @@ def _get_symbolic_value(
         code=f"out = {symbolic_expr}",
     )
     temp_name, _ = sdfg.add_scalar(
-        temp_name or sdfg.temp_data_name(),
+        temp_name or sdfg_builder.unique_temp_name(),
         gtx_dace_args.as_dace_type(scalar_type),
         find_new_name=True,
         transient=True,

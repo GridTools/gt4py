@@ -19,7 +19,7 @@ import dataclasses
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 from dace.frontend.python import astutils as dace_astutils
 
 from gt4py import eve
@@ -62,7 +62,7 @@ class DataflowBuilder(Protocol):
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem: ...
 
     @abc.abstractmethod
-    def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str: ...
+    def unique_nsdfg_name(self, prefix: str) -> str: ...
 
     @abc.abstractmethod
     def unique_map_name(self, name: str) -> str: ...
@@ -103,7 +103,7 @@ class DataflowBuilder(Protocol):
             List[Tuple[str, Union[str, dace.subsets.Subset]]],
         ],
         **kwargs: Any,
-    ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
+    ) -> Tuple[dace_nodes.MapEntry, dace_nodes.MapExit]:
         """Wrapper of `dace.SDFGState.add_map` that assigns unique name."""
         unique_name = self.unique_map_name(name)
         return state.add_map(unique_name, ndrange, **kwargs)
@@ -118,7 +118,7 @@ class DataflowBuilder(Protocol):
         code: str,
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
-    ) -> dace.nodes.Tasklet:
+    ) -> dace_nodes.Tasklet:
         """Wrapper of `dace.SDFGState.add_tasklet` that assigns a unique name.
 
         It also modifies the tasklet connectors by adding a prefix string (see
@@ -157,7 +157,7 @@ class DataflowBuilder(Protocol):
         outputs: Mapping[str, dace.Memlet],
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
+    ) -> tuple[dace_nodes.Tasklet, dace_nodes.MapEntry, dace_nodes.MapExit, dict[str, str]]:
         """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns a unique name.
 
         It also modifies the tasklet connectors, in the same way as `add_tasklet()`.
@@ -317,7 +317,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     @abc.abstractmethod
     def make_field(
         self,
-        data_node: dace.nodes.AccessNode,
+        data_node: dace_nodes.AccessNode,
         data_type: ts.FieldType,
     ) -> gtir_to_sdfg_types.FieldopData:
         """Retrieve the field descriptor of a data node, including the origin information.
@@ -391,7 +391,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         data_args: Mapping[str, gtir_to_sdfg_types.FieldopData | None],
         inner_result: gtir_to_sdfg_types.FieldopResult,
         capture_outer_data: bool,
-    ) -> tuple[dace.nodes.NestedSDFG, Mapping[str, dace.Memlet]]:
+    ) -> tuple[dace_nodes.NestedSDFG, Mapping[str, dace.Memlet]]:
         """
         Helper function that prepares the input connections and symbol mapping before
         calling `SDFG.add_nestd_sdfg()` to add the given SDFG as a nested SDFG node
@@ -525,7 +525,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def make_field(
         self,
-        data_node: dace.nodes.AccessNode,
+        data_node: dace_nodes.AccessNode,
         data_type: ts.FieldType,
     ) -> gtir_to_sdfg_types.FieldopData:
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
@@ -617,7 +617,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             gtir.Sym(id=name, type=lambda_symbols[name]) for name in sorted(lambda_symbols.keys())
         ]
 
-        nsdfg = dace.SDFG(name=self.unique_nsdfg_name(parent_ctx.sdfg, sdfg_name))
+        nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg_name))
         nsdfg.debuginfo = gtir_to_sdfg_utils.debug_info(expr, default=parent_ctx.sdfg.debuginfo)
 
         # All GTIR-symbols accessed in domain expressions by the lambda need to be
@@ -658,7 +658,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         data_args: Mapping[str, gtir_to_sdfg_types.FieldopData | None],
         inner_result: gtir_to_sdfg_types.FieldopResult,
         capture_outer_data: bool,
-    ) -> tuple[dace.nodes.NestedSDFG, Mapping[str, dace.Memlet]]:
+    ) -> tuple[dace_nodes.NestedSDFG, Mapping[str, dace.Memlet]]:
         assert data_args.keys().isdisjoint(symbolic_args.keys())
 
         # Collect the names of all output data, by flattening any tuple structure.
@@ -745,11 +745,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         return nsdfg_node, input_memlets
 
-    def unique_nsdfg_name(self, sdfg: dace.SDFG, prefix: str) -> str:
-        nsdfg_list = [
-            nsdfg.label for nsdfg in sdfg.all_sdfgs_recursive() if nsdfg.label.startswith(prefix)
-        ]
-        return f"{prefix}_{len(nsdfg_list)}"
+    def unique_nsdfg_name(self, prefix: str) -> str:
+        return next(self.uids[prefix])
 
     def unique_map_name(self, name: str) -> str:
         return f"{next(self.uids['map'])}_{name}"
@@ -999,7 +996,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         The temporary data is global, therefore available everywhere in the SDFG
         but not outside. Then, all statements are translated, one after the other.
         """
-        sdfg = dace.SDFG(node.id)
+        sdfg = dace.SDFG(str(node.id))
         sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(node)
 
         # start block of the stateful graph
