@@ -21,7 +21,9 @@ import dace
 
 
 def _make_transients_persistent_inner_access_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("transients_persistent_inner_access_sdfg"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("transients_persistent_inner_access_sdfg")
+    )
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abc":

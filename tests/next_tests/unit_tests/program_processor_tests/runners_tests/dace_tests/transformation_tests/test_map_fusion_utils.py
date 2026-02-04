@@ -15,6 +15,7 @@ from dace import subsets as dace_subsets
 
 from gt4py.next.program_processors.runners.dace.transformations import (
     map_fusion_utils as gtx_map_fusion_utils,
+    utils as gtx_transformations_utils,
 )
 
 import numpy as np
@@ -24,7 +25,7 @@ from . import util
 
 def test_copy_map_graph():
     N = dace.symbol("N", dace.int32)
-    sdfg = dace.SDFG(util.unique_name("copy_map_graph"))
+    sdfg = dace.SDFG(gtx_transformations_utils.unique_name("copy_map_graph"))
     A, A_desc = sdfg.add_array("A", [N], dtype=dace.float64)
     B = sdfg.add_datadesc("B", A_desc.clone())
     st = sdfg.add_state()
@@ -103,7 +104,7 @@ def test_copy_map_graph():
 def test_split_overlapping_map_range(map_ranges):
     first_ndrange, second_ndrange = map_ranges[0:2]
 
-    sdfg = dace.SDFG(util.unique_name("split_overlapping_map_range"))
+    sdfg = dace.SDFG(gtx_transformations_utils.unique_name("split_overlapping_map_range"))
     st = sdfg.add_state()
     first_map_entry, _ = st.add_map("first", first_ndrange)
     second_map_entry, _ = st.add_map("second", second_ndrange)
