@@ -292,41 +292,15 @@ def _create_prducer_specs(
 
     handled_scopes: set[dace_nodes.Node] = {map_entry}
 
-    def _recursive_thingy(
-        scope_to_handle: dace_nodes.Node,
-    ) -> None:
-        assert scope_to_handle not in handled_scopes
-        assert scope_to_handle is not None
-        assert isinstance(scope_to_handle, dace_nodes.MapEntry)
-
-        # Ensures that the parents are handled
-        parent_scope = scope_dict[scope_to_handle]
-        if parent_scope not in handled_scopes:
-            _recursive_thingy(parent_scope)
-        assert parent_scope in handled_scopes
-
-        # Now handle the actual scope.
-        for i, producer_spec in enumerate(producer_specs):
-            assert scope_to_handle not in producer_spec.data_source
-            source_conn = producer_spec.data_source[parent_scope]
-            new_conn_name = scope_to_handle.next_connector(producer_spec.data_name)
-            state.add_edge(
-                parent_scope,
-                source_conn,
-                scope_to_handle,
-                "IN_" + new_conn_name,
-                dace.Memlet(data=data_name, subset=copy.deepcopy(full_shape)),
-            )
-            # The out connector is dangling, but we will handle it later.
-            map_entry.add_scope_connectors(new_conn_name)
-
-            # Do we need to spare the pair, the connector name should be enough?
-            scope_sources[i][scope_to_handle] = f"OUT_{new_conn_name}"
-        handled_scopes.add(scope_to_handle)
-
     # Now process all scopes.
     for needed_scope in accessed_scopes:
-        _recursive_thingy(needed_scope)
+        _recursive_fill_scope_sources(
+            state=state,
+            producer_specs=producer_specs,
+            scope_sources=scope_sources,
+            scope_to_handle=needed_scope,
+            handled_scopes=handled_scopes,
+        )
 
     # Now fill in the data sources.
     for consumer_edge in consumer_edges:
@@ -339,6 +313,52 @@ def _create_prducer_specs(
             )
 
     return producer_specs
+
+
+def _recursive_fill_scope_sources(
+    state: dace.SDFGState,
+    producer_specs: list[_ProducerSpec],
+    scope_sources: list[dict[dace_nodes.Node, str]],
+    scope_to_handle: dace_nodes.Node,
+    handled_scopes: set[dace_nodes.Node],
+) -> None:
+    if scope_to_handle in handled_scopes:
+        return
+    assert scope_to_handle is not None
+    assert isinstance(scope_to_handle, dace_nodes.MapEntry)
+
+    # Ensures that the parents are handled
+    parent_scope = state.scope_dict()[scope_to_handle]
+    if parent_scope not in handled_scopes:
+        _recursive_fill_scope_sources(
+            state=state,
+            producer_specs=producer_specs,
+            scope_sources=scope_sources,
+            scope_to_handle=parent_scope,
+            handled_scopes=handled_scopes,
+        )
+    assert parent_scope in handled_scopes
+
+    # Now handle the actual scope.
+    for producer_spec, scope_source in zip(producer_specs, scope_sources):
+        assert scope_to_handle not in scope_source
+        source_conn = scope_source[parent_scope]
+        new_conn_name = scope_to_handle.next_connector(producer_spec.data_name)
+        state.add_edge(
+            parent_scope,
+            source_conn,
+            scope_to_handle,
+            "IN_" + new_conn_name,
+            dace.Memlet(
+                data=producer_spec.data_name, subset=copy.deepcopy(producer_spec.full_shape)
+            ),
+        )
+        # The out connector is dangling, but we will handle it later.
+        scope_to_handle.add_scope_connectors(new_conn_name)
+
+        # Do we need to spare the pair, the connector name should be enough?
+        scope_source[scope_to_handle] = f"OUT_{new_conn_name}"
+    handled_scopes.add(scope_to_handle)
 
 
 def _replace_single_read(
