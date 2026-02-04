@@ -100,8 +100,10 @@ class Compiler(
                 __doc__=getattr(func, "__doc__", None),
                 __hash__=func.__hash__,
                 __eq__=func.__eq__,
+                module_ref=m,
+                func_ref=func,
             ),
-        )(module_ref=m, func_ref=func)
+        )()
 
         return cast(stages.CompiledProgram, managed_entry_point)
 
