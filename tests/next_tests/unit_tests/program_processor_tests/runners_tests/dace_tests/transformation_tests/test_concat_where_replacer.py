@@ -629,11 +629,154 @@ def test_concat_where_nested_scopes():
     sdfg.validate()
 
     access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    tasklets_after = util.count_nodes(state, dace_nodes.Tasklet, True)
     assert len(access_nodes_after) == 4
     assert concat_node not in access_nodes_after
     new_ac = next(ac for ac in access_nodes_after if ac not in access_nodes_before)
     assert any(e.src is new_ac for e in state.in_edges(tlet))
     assert any(e.src is nme for e in state.in_edges(tlet))
+    assert len(tasklets_after) == 2
+    assert tlet in tasklets_after
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_multiple_nested_scopes(
+    access_in_both_scopes: bool,
+) -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.MapEntry,
+    dace_nodes.MapEntry,
+    dace_nodes.Tasklet,
+    dace_nodes.MapEntry,
+    dace_nodes.Tasklet,
+]:
+    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_nested_consumer"))
+    state = sdfg.add_state()
+    for name in "abcd":
+        sdfg.add_array(
+            name=name,
+            shape=(10, 10),
+            dtype=dace.float64,
+            transient=(name == "c"),
+        )
+
+    a, b, c, d = (state.add_access(name) for name in "abcd")
+
+    me, mx = state.add_map("outer_map", ndrange={"__i": "0:10"})
+
+    nested_ranges = ["0:6", "6:10"]
+    nmaps, tlets = [], []
+    for i, ndrange in enumerate(nested_ranges):
+        op_ = "*" if i % 2 == 0 else "+"
+        nmaps.append(state.add_map(f"nested_map{i}", ndrange={f"__j{i}": ndrange}))
+        tlets.append(
+            state.add_tasklet(
+                f"comp{i}",
+                inputs={"__in0", "__in1"},
+                outputs={"__out"},
+                code=f"__out = __in0 {op_} __in1",
+            )
+        )
+
+    # Perform the concat where.
+    state.add_nedge(a, c, dace.Memlet("a[1:6, 3:8] -> [0:5, 0:5]"))
+    state.add_nedge(a, c, dace.Memlet("a[4:9, 4:9] -> [5:10, 5:10]"))
+    state.add_nedge(b, c, dace.Memlet("b[0:5, 0:5] -> [0:5, 5:10]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8, 4:9] -> [5:10, 0:5]"))
+
+    wiring_specs = [[a, c], [b, (c if access_in_both_scopes else a)]]
+    for ac in [a, b, c]:
+        state.add_edge(ac, None, me, f"IN_{ac.data}", dace.Memlet(f"{ac.data}[0:10, 0:10]"))
+        me.add_scope_connectors(ac.data)
+
+    for ndrange, (nme, nmx), tlet, wspec in zip(nested_ranges, nmaps, tlets, wiring_specs):
+        for ac, conn in zip(wspec, ["__in0", "__in1"]):
+            state.add_edge(
+                me, f"OUT_{ac.data}", nme, f"IN_{ac.data}", dace.Memlet(f"{ac.data}[__i, 0:10]")
+            )
+            state.add_edge(
+                nme,
+                f"OUT_{ac.data}",
+                tlet,
+                conn,
+                dace.Memlet(f"{ac.data}[__i, {nme.map.params[0]}]"),
+            )
+            nme.add_scope_connectors(ac.data)
+        state.add_edge(tlet, "__out", nmx, "IN_d", dace.Memlet(f"d[__i, {nme.map.params[0]}]"))
+        state.add_edge(nmx, "OUT_d", mx, "IN_d", dace.Memlet("d[__i, 0:10]"))
+        nmx.add_scope_connectors("d")
+
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10, 0:10]"))
+    mx.add_scope_connectors("d")
+
+    sdfg.validate()
+    return sdfg, state, c, me, nmaps[0][0], tlets[0], nmaps[1][0], tlets[1]
+
+
+@pytest.mark.parametrize("access_in_both_scopes", [True, False])
+def test_concat_where_multiple_nested_scopes(access_in_both_scopes: bool):
+    """
+    Same as `test_concat_where_nested_scopes()` but with two nested Maps. Depending on
+    `access_in_both_scopes` the second nested Map does not use the concat where data.
+    """
+    sdfg, state, concat_node, me, nme1, tlet1, nme2, tlet2 = (
+        _make_concat_where_multiple_nested_scopes(access_in_both_scopes=access_in_both_scopes)
+    )
+
+    access_nodes_before = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(access_nodes_before) == 4
+    assert concat_node in access_nodes_before
+    assert set(util.count_nodes(state, dace_nodes.MapEntry, True)) == {me, nme1, nme2}
+    assert set(util.count_nodes(state, dace_nodes.Tasklet, True)) == {tlet1, tlet2}
+    assert (state.scope_dict()[tlet1] is nme1) and (state.scope_dict()[tlet2] is nme2)
+    assert all(e.src is nme1 for e in state.in_edges(tlet1))
+    assert all(e.src is nme2 for e in state.in_edges(tlet2))
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+        map_entry=me,
+    )
+    sdfg.validate()
+
+    scope_dict = state.scope_dict()
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    new_acs = [ac for ac in access_nodes_after if ac not in access_nodes_before]
+    tasklets_after = util.count_nodes(state, dace_nodes.Tasklet, True)
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
+    assert tlet1 in tasklets_after
+    assert tlet2 in tasklets_after
+
+    if access_in_both_scopes:
+        assert len(tasklets_after) == 4
+        assert len(access_nodes_after) == 5
+        assert len(new_acs) == 2
+
+        if scope_dict[new_acs[0]] is nme1:
+            new_ac1, new_ac2 = new_acs
+        else:
+            new_ac2, new_ac1 = new_acs
+        assert scope_dict[new_ac1] is nme1
+        assert scope_dict[new_ac2] is nme2
+        assert sum(1 for e in state.in_edges(tlet1) if e.src is new_ac1) == 1
+        assert sum(1 for e in state.in_edges(tlet2) if e.src is new_ac2) == 1
+
+    else:
+        assert len(tasklets_after) == 3
+        assert len(access_nodes_after) == 4
+        assert len(new_acs) == 1
+        new_ac = next(iter(new_acs))
+        assert scope_dict[new_ac] is nme1
+        assert sum(1 for e in state.in_edges(tlet1) if e.src is new_ac) == 1
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
