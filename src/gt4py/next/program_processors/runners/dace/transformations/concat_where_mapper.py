@@ -105,6 +105,7 @@ def gt_replace_concat_where_node(
     """Performs the replacement
 
     Todo:
+        - Symbol mapping.
         - On global scope read of single element (needed if it happens in the nested level).
         - Multiple consumer but same element, dedublication.
         - Nested Maps.
@@ -152,7 +153,9 @@ def gt_replace_concat_where_node(
 
 @dataclasses.dataclass(frozen=True)
 class _ScopeLocation:
-    """Denotes a scope location.
+    """Denotes a scope.
+
+    Usually in DaCe a scope is either `None`, for the global scope or a Map node.
 
     Essentially a pair consisting of the actual scope node or `None` if on global
     scope and the SDFG state where the node is located. The reason for not just
@@ -163,6 +166,10 @@ class _ScopeLocation:
     scope_node: Union[dace_nodes.AccessNode, dace_nodes.MapEntry, None]
     state: dace.SDFGState
 
+    @property
+    def sdfg(self) -> dace.SDFG:
+        return self.state.sdfg
+
     def __post_init__(self) -> None:
         assert self.scope_node is None or isinstance(
             self.scope_node, (dace_nodes.AccessNode, dace_nodes.MapEntry)
@@ -172,12 +179,12 @@ class _ScopeLocation:
         return hash((self.scope_node, self.state))
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, tuple):
+        if isinstance(other, _ScopeLocation):
+            return self.scope_node == other.scope_node and self.state == other.state
+        elif isinstance(other, tuple):
             assert len(other) == 2
             return self == _ScopeLocation(other[0], other[1])
-        elif not isinstance(other, _ScopeLocation):
-            return NotImplemented
-        return self.scope_node == other.scope_node and self.state == other.state
+        return NotImplemented
 
 
 @dataclasses.dataclass(frozen=True)
@@ -198,9 +205,9 @@ class _DataSource:
         return hash((self.node, self.conn))
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, _DataSource):
-            return NotImplemented
-        return self.node == other.node and self.conn == other.conn
+        if isinstance(other, _DataSource):
+            return self.node == other.node and self.conn == other.conn
+        return NotImplemented
 
 
 @dataclasses.dataclass(frozen=True)
@@ -225,6 +232,16 @@ class _FinalConsumerSpec:
     def consumer(self) -> dace_nodes.Node:
         return self.edge.dst
 
+    def __hash__(self) -> int:
+        return hash(self.edge)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, dace_graph.MultiConnectorEdge):
+            return self.edge == other
+        elif isinstance(other, _FinalConsumerSpec):
+            return self.edge == other.edge
+        return NotImplemented
+
 
 @dataclasses.dataclass(frozen=True)
 class _ProducerSpec:
@@ -241,7 +258,7 @@ class _ProducerSpec:
         data_source: Maps each consumer to the data source location.
 
     Note:
-        The format of `data_source` seems a bit redundant, however it ensures that
+        The format of `data_source` seems a bit redundant, however, it ensures that
         the information is there even if the SDFG is invalid, and also allows
         to operate in nested SDFG scenario.
     """
@@ -251,6 +268,186 @@ class _ProducerSpec:
     offset: dace_sbs.Range
     subset: dace_sbs.Range
     data_source: dict[_FinalConsumerSpec, _DataSource]
+
+
+def _setup_initial_producer_description(
+    state: dace.SDFGState,
+    converging_edges: Sequence[dace_graph.MultiConnectorEdge[dace.Memlet]],
+) -> tuple[list[_ProducerSpec], list[dict[_ScopeLocation, _DataSource]]]:
+    """Sets up the producer specs.
+
+    The function essentially populates all attribute of `_ProducerSpec` with the
+    exception of `.data_source` which is only partially populated.
+    Note that the function expects that `converting_edges` are AccessNode to AccessNode
+    connections and have the same target, the concat where node.
+    Furthermore, the order in which producer specifications are generated is the same
+    as in `converging_edges`, the sources do not need to be different.
+    In addition it is also important to realize that multiple producer specs might
+    refer to the same data.
+
+    It also sets up the scope source, like the returned producer specs it is also a
+    list with the same ordering. Each element is a `dict` that maps a scope to
+    where the full data of that scope can be found.
+    In the end it is a compressed version of `_ProducerSpec.data_source`, that however
+    needs that `scope_dict` is valid at every point. It will later be expanded.
+
+    Note:
+        This function can only be called on a valid SDFG. Furthermore, it only works
+        for a single state.
+    """
+    assert len(converging_edges) >= 2
+    assert isinstance(converging_edges[0].dst, dace_nodes.AccessNode)
+    assert state.scope_dict()[converging_edges[0].dst] is None
+    concat_node = converging_edges[0].dst
+
+    scope_sources: list[dict[_ScopeLocation, _DataSource]] = []
+    producer_specs: list[_ProducerSpec] = []
+    for converging_edge in converging_edges:
+        assert isinstance(converging_edge.src, dace_nodes.AccessNode)
+        assert converging_edge.dst is concat_node
+        producer_node = converging_edge.src
+        producer_specs.append(
+                _ProducerSpec(
+                    data_name=producer_node.data,
+                    full_shape=dace_sbs.Range.from_array(producer_node.desc(sdfg)),
+                    offset=copy.deepcopy(converging_edge.data.get_src_subset(converging_edge, state)),
+                    subset=copy.deepcopy(converging_edge.data.dst_subset),
+                    data_source={},
+                )
+        )
+        scope_sources.append({_ScopeLocation(None, state): _DataSource(producer_node, None)})
+
+    return producer_specs, scope_sources
+
+
+def _map_data_into_nested_scopes_impl(
+    state: dace.SDFGState,
+    scope_sources: list[dict[_ScopeLocation, _DataSource]],
+    producer_specs: list[_ProducerSpec],
+    consumer_specs: list[_FinalConsumerSpec],
+):
+    """Ensures that the producer data is available in every nested scope.
+
+    It is important that this function only processes the scope defined by the
+    consumer, `consumer_specs`. Which are further required to only reside inside
+    `state` (which includes nested SDFGs).
+
+    This function essentially finalizes, `producer_specs` which was obtained from
+    a previous call from `_setup_initial_producer_description()` as was `scope_sources`
+    which is modified, in the sense of a scratch pad.
+    """
+
+
+def _map_data_into_nested_scopes_impl_recursive(
+    state: dace.SDFGState,
+    scope_to_handle: _ScopeLocation,
+    producer_specs: list[_ProducerSpec],
+    scope_sources: list[dict[_ScopeLocation, _DataSource]],
+    handled_scopes: set[_ScopeLocation],
+) -> None:
+    """Helper function of `_map_data_into_nested_scopes_impl()` that populate nested scopes."""
+    if scope_to_handle in handled_scopes:
+        return
+
+    # The top level scope must always be handled outside.
+    assert isinstance(scope_to_handle.scope_node, dace_nodes.AccessNode)
+
+    # Check if the parent scope was handled before, if not handle it.
+    parent_scope = _ScopeLocation(
+        scope_to_handle.state.scope_dict()[scope_to_handle.scope_node], scope_to_handle.state
+    )
+    if parent_scope not in handled_scopes:
+        _map_data_into_nested_scopes_impl_recursive(
+            scope_to_handle=parent_scope,
+            producer_specs=producer_specs,
+            scope_sources=scope_sources,
+            handled_scopes=handled_scopes,
+        )
+    assert parent_scope in handled_scopes
+
+
+    if parent_scope.scope_node is None:
+        # Special case we try dedublication.
+        already_mapped_data: dict[str, int] = {}
+        for producer_spec, scope_source in zip(producer_specs, scope_sources):
+            if producer_spec.data_name in already_mapped_data:
+                data_source = scope_sources[already_mapped_data[data_name]][scope_to_handle]
+            else:
+                # Try to find an edge that maps the producer into the Map.
+                producer_node = scope_source[(None, state)].node
+                assert isinstance(producer_node, dace_nodes.AccessNode)
+                edge_that_goes_into_scope = next(
+                    (
+                        oedge
+                        for oedge in state.out_edges(producer_node)
+                        if (
+                            (not oedge.data.is_empty())
+                            and oedge.dst is scope_to_handle.scope_node
+                            and oedge.dst_conn.startswith("IN_")
+                            and oedge.data.get_src_subset(oedge, state).covers(full_shape)
+                        )
+                    ),
+                    None,
+                )
+                if edge_that_goes_into_scope is not None:
+                    scope_connector = "OUT_" + edge_that_maps_data_into_map.dst_conn[3:]
+                else:
+                    new_conn_name = map_entry.next_connector(data_name)
+                    state.add_edge(
+                        producer_node,
+                        None,
+                        scope_to_handle.scope_node,
+                        "IN_" + new_conn_name,
+                        dace.Memlet(data=data_name, subset=copy.deepcopy(full_shape)),
+                    )
+                    map_entry.add_scope_connectors(new_conn_name)
+                    scope_connector = "OUT_" + new_conn_name
+                already_mapped_data[data_name] = len(producer_specs)  # Index in the future.
+                data_source = _DataSource(node=scope_to_handle.scope_node, conn=scope_connector)
+            scope_source[scope_to_handle] = data_source
+
+
+
+
+
+
+
+    # Now handle the actual scope.
+    for producer_spec, scope_source in zip(producer_specs, scope_sources):
+        assert parent_scope in scope_source
+        assert scope_to_handle not in scope_source
+        parent_source = scope_source[parent_scope]
+        assert parent_source.node is not None and scope_to_handle.scope_node is not None
+        new_conn_name = scope_to_handle.scope_node.next_connector(producer_spec.data_name)
+        scope_to_handle.state.add_edge(
+            parent_source.node,
+            parent_source.conn,
+            scope_to_handle.scope_node,
+            "IN_" + new_conn_name,
+            dace.Memlet(
+                data=producer_spec.data_name, subset=copy.deepcopy(producer_spec.full_shape)
+            ),
+        )
+        scope_to_handle.scope_node.add_scope_connectors(new_conn_name)
+        scope_source[scope_to_handle] = _DataSource(
+            scope_to_handle.scope_node, f"OUT_{new_conn_name}"
+        )
+
+    handled_scopes.add(scope_to_handle)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def _create_prducer_specs(
@@ -285,11 +482,6 @@ def _create_prducer_specs(
     }
     assert not any(scope is None for scope in accessed_scopes)
 
-    # For each producer and scope describes where to find the data. The list has the
-    #  same order as `producer_specs`. The `dict`s map a scope location to the
-    #  location where the data can be found. In the end it is a compressed version
-    #  of `_ProducerSpec.data_source`, that however needs that `scope_dict` is
-    #  valid at every point. It will later be expanded.
     scope_sources: list[dict[_ScopeLocation, _DataSource]] = []
 
     # Set up the description of the concat where, with exception of the `data_source`
