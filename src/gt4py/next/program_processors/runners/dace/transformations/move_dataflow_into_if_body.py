@@ -156,7 +156,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             return False
 
         # Check if relatability is possible.
-        if not self._check_relocatability(
+        if not self._check_for_data_and_symbol_conflicts(
             sdfg=sdfg,
             state=graph,
             relocatable_dataflow=relocatable_dataflow,
@@ -491,7 +491,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     or dace_dtypes.typeclass(int),
                 )
 
-    def _check_relocatability(
+    def _check_for_data_and_symbol_conflicts(
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
@@ -512,14 +512,16 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         all_relocated_dataflow: set[dace_nodes.Node] = functools.reduce(
             lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), set()
         )
-        subgraph_view = dace.sdfg.state.StateSubgraphView(state, all_relocated_dataflow)
-        requiered_symbols: set[str] = subgraph_view.free_symbols
+        requiered_symbols: set[str] = dace.sdfg.state.StateSubgraphView(
+            state, all_relocated_dataflow
+        ).free_symbols
 
         inner_data_names = if_block.sdfg.arrays.keys()
         for node_to_check in all_relocated_dataflow:
             if isinstance(node_to_check, dace_nodes.MapEntry):
-                # This means that a nested Map is fully relocated into the `if` block.
-                #  When DaCe computes the free symbols, it removes these symbols.
+                # A Map is fully moved into the nested SDFG. `free_symbols` will ignore
+                #  the Map's parameter (while including the one from the ranges).
+                #  will now add them again to make sure that there are no clashes.
                 # TODO(phimuell): Because of C++ scoping rules it might be possible
                 #   to skip this step, i.e. not add them to the set.
                 assert node_to_check is not enclosing_map
@@ -530,8 +532,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 and node_to_check.data in inner_data_names
             ):
                 # There is already a data descriptor that is used on the inside as on
-                #  the outside. Thous we would have to perform some renaming, which we
-                #  currently does not.
+                #  the outside. Thus we would have to perform some renaming, which we
+                #  currently do not.
                 # TODO(phimell): Handle this case.
                 return False
 
