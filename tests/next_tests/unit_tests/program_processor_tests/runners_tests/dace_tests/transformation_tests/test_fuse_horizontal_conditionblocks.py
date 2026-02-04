@@ -46,7 +46,7 @@ def _make_if_block_with_tasklet(
     inner_sdfg.add_node(if_region, is_start_block=True)
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
-    tstate = then_body.add_state("true_branch", is_start_block=True)
+    tstate = then_body.add_state("true_branch_0_1_2_3_4", is_start_block=True)
     tasklet = tstate.add_tasklet(
         "true_tasklet",
         inputs={"__tasklet_in"},
@@ -69,7 +69,7 @@ def _make_if_block_with_tasklet(
     )
 
     else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
-    fstate = else_body.add_state("false_branch", is_start_block=True)
+    fstate = else_body.add_state("false_branch_0_1_2_3_4", is_start_block=True)
     fstate.add_nedge(
         fstate.add_access(b2_name),
         fstate.add_access(output_name),
