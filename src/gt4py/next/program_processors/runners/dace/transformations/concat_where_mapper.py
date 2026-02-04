@@ -196,6 +196,8 @@ class _ProducerSpec:
     Note:
         The format of `data_source` seems a bit redundant, however it ensures that
         the information is there even if the SDFG is invalid, i.e. during operation.
+        Furthermore, it also allows to handle cases that appears in nested SDFG
+        scenarios.
     """
 
     data_name: str
@@ -212,9 +214,10 @@ def _create_prducer_specs(
     converging_edges: list[dace_graph.MultiConnectorEdge[dace.Memlet]],
     map_entry: dace_nodes.MapEntry,
 ) -> list[_ProducerSpec]:
-    """Makes everything accessable.
+    """Helper function that creates the producer specifications.
 
-    Essentially generates the producer specs.
+    In addition this function will also ensure that the data can be accessed where
+    it is needed. This function should only be called on the top level state.
 
     Args:
         state: The state in which we operate.
@@ -233,12 +236,17 @@ def _create_prducer_specs(
     }
     assert not any(scope is None for scope in accessed_scopes)
 
-    # As a first step we now make the concat where data accessible inside the Map.
-    #  This is the only level were we do dedublication, i.e. reuse the edge if
-    #  one of the sources is already available at the top scope of the Map. The other
-    #  levels are handled by `_recursive_thingy()`.
+    # Describes where to find data. The list has the same order as `producer_specs`.
+    #  The `dict`s map a scope node SDFGState pair to the connector name, at that
+    #  scope node where the data can be found. Later it is the basis to compute the
+    #  `data_source` attribute.
+    scope_sources: list[dict[tuple[dace_nodes.Node, dace.SDFGState], str]] = []
+
+    # Set up the description of the concat where, with exception of the `data_source`
+    #  attribute which is populated later. Furthermore, we also map the producer data,
+    #  i.e. the data that composes the concat where, into `map_entry`. Nested levels
+    #  are handled later.
     producer_specs: list[_ProducerSpec] = []
-    scope_sources: list[dict[dace_nodes.Node, str]] = []
     already_mapped_data: dict[str, int] = {}
     for converging_edge in converging_edges:
         assert isinstance(converging_edge.src, dace_nodes.AccessNode)
@@ -248,7 +256,9 @@ def _create_prducer_specs(
         offset = copy.deepcopy(converging_edge.data.get_src_subset(converging_edge, state))
         subset = copy.deepcopy(converging_edge.data.dst_subset)
         if data_name in already_mapped_data:
-            top_level_data_source = scope_sources[already_mapped_data[data_name]][map_entry]
+            top_level_data_source = scope_sources[already_mapped_data[data_name]][
+                (map_entry, state)
+            ]
         else:
             # Try to find an edge that maps the producer into the Map.
             edge_that_maps_data_into_map = next(
@@ -288,11 +298,10 @@ def _create_prducer_specs(
                 data_source={},  # Filled in later.
             )
         )
-        scope_sources.append({map_entry: top_level_data_source})
+        scope_sources.append({(map_entry, state): top_level_data_source})
 
+    # Process the nested scopes.
     handled_scopes: set[dace_nodes.Node] = {map_entry}
-
-    # Now process all scopes.
     for needed_scope in accessed_scopes:
         _recursive_fill_scope_sources(
             state=state,
@@ -309,7 +318,7 @@ def _create_prducer_specs(
         for scope_source, producer_spec in zip(scope_sources, producer_specs):
             producer_spec.data_source[final_consumer] = (
                 consumer_scope,
-                scope_source[consumer_scope],
+                scope_source[(consumer_scope, state)],
             )
 
     return producer_specs
@@ -322,6 +331,7 @@ def _recursive_fill_scope_sources(
     scope_to_handle: dace_nodes.Node,
     handled_scopes: set[dace_nodes.Node],
 ) -> None:
+    """Helper function of `_create_prducer_specs()` that populate nested scopes."""
     if scope_to_handle in handled_scopes:
         return
     assert scope_to_handle is not None
@@ -341,8 +351,8 @@ def _recursive_fill_scope_sources(
 
     # Now handle the actual scope.
     for producer_spec, scope_source in zip(producer_specs, scope_sources):
-        assert scope_to_handle not in scope_source
-        source_conn = scope_source[parent_scope]
+        assert (scope_to_handle, state) not in scope_source
+        source_conn = scope_source[(parent_scope, state)]
         new_conn_name = scope_to_handle.next_connector(producer_spec.data_name)
         state.add_edge(
             parent_scope,
@@ -357,7 +367,7 @@ def _recursive_fill_scope_sources(
         scope_to_handle.add_scope_connectors(new_conn_name)
 
         # Do we need to spare the pair, the connector name should be enough?
-        scope_source[scope_to_handle] = f"OUT_{new_conn_name}"
+        scope_source[(scope_to_handle, state)] = f"OUT_{new_conn_name}"
     handled_scopes.add(scope_to_handle)
 
 
