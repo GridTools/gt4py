@@ -119,10 +119,10 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             state.name for state in second_conditional_block.all_states()
         ]
         if not (
-            "true_branch" in first_conditional_block_state_names
-            and "false_branch" in first_conditional_block_state_names
-            and "true_branch" in second_conditional_block_state_names
-            and "false_branch" in second_conditional_block_state_names
+            any("true_branch" in name for name in first_conditional_block_state_names)
+            and any("false_branch" in name for name in first_conditional_block_state_names)
+            and any("true_branch" in name for name in second_conditional_block_state_names)
+            and any("false_branch" in name for name in second_conditional_block_state_names)
         ):
             return False
 
