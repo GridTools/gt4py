@@ -73,7 +73,7 @@ def _create_sdfg_double_read_part_2(
 def _create_sdfg_double_read(
     version: int,
 ) -> dace.SDFG:
-    sdfg = dace.SDFG(util.unique_name(f"double_read_version_{version}"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"double_read_version_{version}"))
     state = sdfg.add_state(is_start_block=True)
     for name in "AB":
         sdfg.add_array(
@@ -98,7 +98,7 @@ def _create_sdfg_double_read(
 
 
 def _create_non_scalar_read() -> dace.SDFG:
-    sdfg = dace.SDFG(util.unique_name(f"non_scalar_read_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"non_scalar_read_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -145,7 +145,7 @@ def test_local_double_buffering_double_read_sdfg():
 
 def test_local_double_buffering_no_connection():
     """There is no direct connection between read and write."""
-    sdfg = dace.SDFG(util.unique_name("local_double_buffering_no_connection"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("local_double_buffering_no_connection"))
     state = sdfg.add_state(is_start_block=True)
     for name in "AB":
         sdfg.add_array(
@@ -212,7 +212,7 @@ def test_local_double_buffering_no_connection():
 
 def test_local_double_buffering_no_apply():
     """Here it does not apply, because are all distinct."""
-    sdfg = dace.SDFG(util.unique_name("local_double_buffering_no_apply"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("local_double_buffering_no_apply"))
     state = sdfg.add_state(is_start_block=True)
     for name in "AB":
         sdfg.add_array(
@@ -237,7 +237,7 @@ def test_local_double_buffering_no_apply():
 
 def test_local_double_buffering_already_buffered():
     """It is already buffered."""
-    sdfg = dace.SDFG(util.unique_name("local_double_buffering_no_apply"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("local_double_buffering_no_apply"))
     state = sdfg.add_state(is_start_block=True)
     sdfg.add_array(
         "A",

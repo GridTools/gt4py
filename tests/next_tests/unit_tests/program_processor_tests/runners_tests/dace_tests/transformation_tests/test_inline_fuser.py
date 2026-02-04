@@ -33,7 +33,7 @@ def _create_simple_fusable_sdfg() -> tuple[
     dace_nodes.AccessNode,
     dace_graph.MultiConnectorEdge[dace.Memlet],
 ]:
-    sdfg = dace.SDFG(util.unique_name(f"simple_fusable_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"simple_fusable_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abc":
@@ -121,7 +121,7 @@ def _make_laplap_sdfg(
     dace_graph.MultiConnectorEdge[dace.Memlet],
     dace_nodes.Tasklet,
 ]:
-    sdfg = dace.SDFG(util.unique_name(f"laplap1"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"laplap1"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -223,7 +223,7 @@ def _make_multiple_value_read_sdfg(
     dace_nodes.MapEntry,
     dace_graph.MultiConnectorEdge[dace.Memlet],
 ]:
-    sdfg = dace.SDFG(util.unique_name(f"multiple_value_generator"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"multiple_value_generator"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -367,7 +367,7 @@ def test_multiple_value_exchange_partial():
 
 
 def _make_sdfg_with_dref_tasklet():
-    sdfg = dace.SDFG(util.unique_name(f"sdfg_with_dref_target"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"sdfg_with_dref_target"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abc":
