@@ -151,6 +151,59 @@ def gt_replace_concat_where_node(
 
 
 @dataclasses.dataclass(frozen=True)
+class _ScopeLocation:
+    """Denotes a scope location.
+
+    Essentially a pair consisting of the actual scope node or `None` if on global
+    scope and the SDFG state where the node is located. The reason for not just
+    using the node is, because we might have multiple global scopes, which are
+    `None`, that we have to distinguish.
+    """
+
+    scope_node: Union[dace_nodes.AccessNode, dace_nodes.MapEntry, None]
+    state: dace.SDFGState
+
+    def __post_init__(self) -> None:
+        assert self.scope_node is None or isinstance(
+            self.scope_node, (dace_nodes.AccessNode, dace_nodes.MapEntry)
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.scope_node, self.state))
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, tuple):
+            assert len(other) == 2
+            return self == _ScopeLocation(other[0], other[1])
+        elif not isinstance(other, _ScopeLocation):
+            return NotImplemented
+        return self.scope_node == other.scope_node and self.state == other.state
+
+
+@dataclasses.dataclass(frozen=True)
+class _DataSource:
+    """Describes where (full producer) data can be found.
+
+    Essentially a pair consisting of a Node and the required connector that must be
+    used to access it.
+    """
+
+    node: Union[dace_nodes.AccessNode, dace_nodes.MapEntry]
+    conn: Union[str, None]
+
+    def __post_init__(self) -> None:
+        assert isinstance(self.node, (dace_nodes.AccessNode, dace_nodes.MapEntry))
+
+    def __hash__(self) -> int:
+        return hash((self.node, self.conn))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, _DataSource):
+            return NotImplemented
+        return self.node == other.node and self.conn == other.conn
+
+
+@dataclasses.dataclass(frozen=True)
 class _FinalConsumerSpec:
     """Describes the final consumer.
 
@@ -185,8 +238,7 @@ class _ProducerSpec:
         full_shape: The full shape of the data descriptor.
         offset: The range that is read from the data descriptor.
         subset: The range that is written into the `concat_where` node.
-        data_source: Maps consumer specifications to a `tuple[Node, str]` instance
-            that describes where the raw data of that producer can be obtained.
+        data_source: Maps each consumer to the data source location.
 
     Note:
         The format of `data_source` seems a bit redundant, however it ensures that
@@ -198,7 +250,7 @@ class _ProducerSpec:
     full_shape: dace_sbs.Range
     offset: dace_sbs.Range
     subset: dace_sbs.Range
-    data_source: dict[_FinalConsumerSpec, tuple[dace_nodes.Node, str]]
+    data_source: dict[_FinalConsumerSpec, _DataSource]
 
 
 def _create_prducer_specs(
@@ -233,11 +285,12 @@ def _create_prducer_specs(
     }
     assert not any(scope is None for scope in accessed_scopes)
 
-    # Describes where to find data. The list has the same order as `producer_specs`.
-    #  The `dict`s map a "scope node"-"SDFGState" pair to the connector name, at that
-    #  scope node where the data can be found. Later it is the basis to compute the
-    #  `data_source` attribute.
-    scope_sources: list[dict[tuple[Union[dace_nodes.Node, None], dace.SDFGState], str]] = []
+    # For each producer and scope describes where to find the data. The list has the
+    #  same order as `producer_specs`. The `dict`s map a scope location to the
+    #  location where the data can be found. In the end it is a compressed version
+    #  of `_ProducerSpec.data_source`, that however needs that `scope_dict` is
+    #  valid at every point. It will later be expanded.
+    scope_sources: list[dict[_ScopeLocation, _DataSource]] = []
 
     # Set up the description of the concat where, with exception of the `data_source`
     #  attribute which is populated later. Furthermore, we also map the producer data,
@@ -253,9 +306,9 @@ def _create_prducer_specs(
         offset = copy.deepcopy(converging_edge.data.get_src_subset(converging_edge, state))
         subset = copy.deepcopy(converging_edge.data.dst_subset)
         if data_name in already_mapped_data:
-            top_level_data_source = scope_sources[already_mapped_data[data_name]][
-                (map_entry, state)
-            ]
+            map_entry_connector = scope_sources[already_mapped_data[data_name]][
+                (map_entry, state)  # type: ignore[index]
+            ].conn
         else:
             # Try to find an edge that maps the producer into the Map.
             edge_that_maps_data_into_map = next(
@@ -272,7 +325,7 @@ def _create_prducer_specs(
                 None,
             )
             if edge_that_maps_data_into_map is not None:
-                top_level_data_source = "OUT_" + edge_that_maps_data_into_map.dst_conn[3:]
+                map_entry_connector = "OUT_" + edge_that_maps_data_into_map.dst_conn[3:]
             else:
                 new_conn_name = map_entry.next_connector(data_name)
                 state.add_edge(
@@ -284,7 +337,7 @@ def _create_prducer_specs(
                 )
                 # The out connector is dangling, but we will handle it later.
                 map_entry.add_scope_connectors(new_conn_name)
-                top_level_data_source = "OUT_" + new_conn_name
+                map_entry_connector = "OUT_" + new_conn_name
             already_mapped_data[data_name] = len(producer_specs)  # Index in the future.
         producer_specs.append(
             _ProducerSpec(
@@ -295,16 +348,16 @@ def _create_prducer_specs(
                 data_source={},  # Filled in later.
             )
         )
-        scope_sources.append({(map_entry, state): top_level_data_source})
+        top_level_source = _DataSource(node=map_entry, conn=map_entry_connector)
+        scope_sources.append({_ScopeLocation(map_entry, state): top_level_source})
 
     # Process the nested scopes.
-    handled_scopes: set[dace_nodes.Node] = {map_entry}
+    handled_scopes: set[_ScopeLocation] = {_ScopeLocation(map_entry, state)}
     for needed_scope in accessed_scopes:
         _recursive_fill_scope_sources(
-            state=state,
+            scope_to_handle=_ScopeLocation(needed_scope, state),
             producer_specs=producer_specs,
             scope_sources=scope_sources,
-            scope_to_handle=needed_scope,
             handled_scopes=handled_scopes,
         )
 
@@ -312,58 +365,59 @@ def _create_prducer_specs(
     for consumer_spec in consumer_specs:
         consumer_scope = scope_dict[consumer_spec.consumer]
         for scope_source, producer_spec in zip(scope_sources, producer_specs):
-            producer_spec.data_source[consumer_spec] = (
-                consumer_scope,
-                scope_source[(consumer_scope, consumer_spec.state)],
-            )
+            producer_spec.data_source[consumer_spec] = scope_source[
+                _ScopeLocation(consumer_scope, consumer_spec.state)
+            ]
 
     return producer_specs
 
 
 def _recursive_fill_scope_sources(
-    state: dace.SDFGState,
+    scope_to_handle: _ScopeLocation,
     producer_specs: list[_ProducerSpec],
-    scope_sources: list[dict[dace_nodes.Node, str]],
-    scope_to_handle: dace_nodes.Node,
-    handled_scopes: set[dace_nodes.Node],
+    scope_sources: list[dict[_ScopeLocation, _DataSource]],
+    handled_scopes: set[_ScopeLocation],
 ) -> None:
     """Helper function of `_create_prducer_specs()` that populate nested scopes."""
     if scope_to_handle in handled_scopes:
         return
-    assert scope_to_handle is not None
-    assert isinstance(scope_to_handle, dace_nodes.MapEntry)
+    assert scope_to_handle.scope_node is not None
+    assert isinstance(scope_to_handle.scope_node, dace_nodes.MapEntry)
 
-    # Ensures that the parents are handled
-    parent_scope = state.scope_dict()[scope_to_handle]
+    # Check if the parent scope was handled before, if not handle it.
+    parent_scope = _ScopeLocation(
+        scope_to_handle.state.scope_dict()[scope_to_handle.scope_node], scope_to_handle.state
+    )
     if parent_scope not in handled_scopes:
         _recursive_fill_scope_sources(
-            state=state,
+            scope_to_handle=parent_scope,
             producer_specs=producer_specs,
             scope_sources=scope_sources,
-            scope_to_handle=parent_scope,
             handled_scopes=handled_scopes,
         )
     assert parent_scope in handled_scopes
 
     # Now handle the actual scope.
     for producer_spec, scope_source in zip(producer_specs, scope_sources):
-        assert (scope_to_handle, state) not in scope_source
-        source_conn = scope_source[(parent_scope, state)]
-        new_conn_name = scope_to_handle.next_connector(producer_spec.data_name)
-        state.add_edge(
-            parent_scope,
-            source_conn,
-            scope_to_handle,
+        assert parent_scope in scope_source
+        assert scope_to_handle not in scope_source
+        parent_source = scope_source[parent_scope]
+        assert parent_source.node is not None and scope_to_handle.scope_node is not None
+        new_conn_name = scope_to_handle.scope_node.next_connector(producer_spec.data_name)
+        scope_to_handle.state.add_edge(
+            parent_source.node,
+            parent_source.conn,
+            scope_to_handle.scope_node,
             "IN_" + new_conn_name,
             dace.Memlet(
                 data=producer_spec.data_name, subset=copy.deepcopy(producer_spec.full_shape)
             ),
         )
-        # The out connector is dangling, but we will handle it later.
-        scope_to_handle.add_scope_connectors(new_conn_name)
+        scope_to_handle.scope_node.add_scope_connectors(new_conn_name)
+        scope_source[scope_to_handle] = _DataSource(
+            scope_to_handle.scope_node, f"OUT_{new_conn_name}"
+        )
 
-        # Do we need to spare the pair, the connector name should be enough?
-        scope_source[(scope_to_handle, state)] = f"OUT_{new_conn_name}"
     handled_scopes.add(scope_to_handle)
 
 
@@ -446,8 +500,8 @@ def _replace_single_read(
 
     for tlet_input, producer_spec in zip(tlet_inputs, producer_specs):
         consumer_spec.state.add_edge(
-            producer_spec.data_source[consumer_spec][0],
-            producer_spec.data_source[consumer_spec][1],
+            producer_spec.data_source[consumer_spec].node,
+            producer_spec.data_source[consumer_spec].conn,
             concat_where_tasklet,
             tlet_input,
             dace.Memlet(
