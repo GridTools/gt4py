@@ -518,15 +518,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         inner_data_names = if_block.sdfg.arrays.keys()
         for node_to_check in all_relocated_dataflow:
-            if isinstance(node_to_check, dace_nodes.MapEntry):
-                # A Map is fully moved into the nested SDFG. `free_symbols` will ignore
-                #  the Map's parameter (while including the one from the ranges).
-                #  will now add them again to make sure that there are no clashes.
-                # TODO(phimuell): Because of C++ scoping rules it might be possible
-                #   to skip this step, i.e. not add them to the set.
-                assert node_to_check is not enclosing_map
-                requiered_symbols |= set(node_to_check.map.params)
-
             if (
                 isinstance(node_to_check, dace_nodes.AccessNode)
                 and node_to_check.data in inner_data_names
