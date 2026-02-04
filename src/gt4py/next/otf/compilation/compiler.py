@@ -10,8 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-import types
-from typing import Protocol, TypeVar
+from typing import Protocol, TypeVar, cast
 
 import factory
 
@@ -41,9 +40,6 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
         source: stages.CompilableSource[SrcL, LS, TgtL],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
-
-
-_MODULES: list[types.ModuleType] = []
 
 
 @dataclasses.dataclass(frozen=True)
@@ -88,11 +84,19 @@ class Compiler(
                 )
 
         m = importer.import_from_path(src_dir / new_data.module)
-        # Keep a reference to the module so they are not garbage collected. This avoids a SEGFAULT
-        # in nanobind when calling the compiled program.
-        _MODULES.append(m)
+        func = getattr(m, new_data.entry_point_name)
 
-        return getattr(m, new_data.entry_point_name)
+        # Since nanobind 2.10, calling functions with ndarray args crashes (SEGFAULT)
+        # when there are not live references to their extension module (see: https://github.com/wjakob/nanobind/issues/1283)
+        # Here we dynamically create a new callable class holding a reference to the
+        # module and the function, whose `__call__` is exactly the `__call__` method
+        # of the returned (nanobind) nbfunction object. As long as this object is alive,
+        # the module reference is kept alive too, preventing the SEGFAULT.
+        managed_entry_point = type(
+            f"{m.__name__}__{id(m)}", (), dict(__call__=func.__call__, module_ref=m, func_ref=func)
+        )()
+
+        return cast(stages.CompiledProgram, managed_entry_point)
 
 
 class CompilerFactory(factory.Factory):
