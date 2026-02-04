@@ -120,7 +120,7 @@ def _create_field_operator_impl(
         # is set later depending on the element type (`ts.ListType` or `ts.ScalarType`)
         field_subset = dace_subsets.Range([])
     else:
-        field_subset = gtir_domain.get_domain_indices(field_dims, field_origin)
+        field_subset = gtir_domain.get_element_subset(field_dims, field_origin)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         if output_edge.result.gt_dtype != output_type.dtype:

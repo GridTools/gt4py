@@ -84,12 +84,12 @@ def extract_target_domain(node: gtir.Expr) -> TargetDomain:
     return TargetDomainParser().visit(node)
 
 
-def get_domain_indices(
+def get_element_subset(
     dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]]
 ) -> dace_subsets.Range:
     """
-    Helper function to construct the list of indices for a field domain, applying
-    an optional origin in each dimension as start index.
+    Helper function to construct the Memlet subset to access an element in the field
+    domain, applying an optional origin in each dimension as start index.
 
     Args:
         dims: The field dimensions.
