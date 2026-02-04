@@ -8,7 +8,7 @@
 
 import copy
 import dataclasses
-from typing import Any, Sequence, Union
+from typing import Any, Sequence, TypeAlias, Union
 
 import dace
 from dace import (
@@ -126,14 +126,17 @@ def gt_replace_concat_where_node(
     consumer_specs = _find_consumer_specs(state, concat_node, map_entry)
     assert len(consumer_specs) > 0
 
+    scope_dict = state.scope_dict()
     producer_specs, scope_sources = _setup_initial_producer_description(
         sdfg=sdfg,
         state=state,
+        scope_dict=scope_dict,
         converging_edges=converging_edges,
     )
 
     _map_data_into_nested_scopes(
         state=state,
+        scope_dict=scope_dict,
         producer_specs=producer_specs,  # Will be modified
         scope_sources=scope_sources,  # Will be modified
         consumer_specs=consumer_specs,
@@ -142,6 +145,8 @@ def gt_replace_concat_where_node(
     # Now process them.
     for consumer_spec in consumer_specs:
         _replace_single_read(
+            state=state,
+            sdfg=sdfg,
             consumer_spec=consumer_spec,
             producer_specs=producer_specs,
             tag=f"{concat_node.data}_{map_entry.label}",
@@ -154,40 +159,11 @@ def gt_replace_concat_where_node(
     # TODO(phimuell): Run Memlet propagation.
 
 
-@dataclasses.dataclass(frozen=True)
-class _ScopeLocation:
-    """Denotes a scope.
+_ScopeLocation: TypeAlias = Union[dace_nodes.MapEntry, None]
+"""Defines a scope in the DaCe term.
 
-    Usually in DaCe a scope is either `None`, for the global scope or a Map node.
-
-    Essentially a pair consisting of the actual scope node or `None` if on global
-    scope and the SDFG state where the node is located. The reason for not just
-    using the node is, because we might have multiple global scopes, which are
-    `None`, that we have to distinguish.
-    """
-
-    scope_node: Union[dace_nodes.AccessNode, dace_nodes.MapEntry, None]
-    state: dace.SDFGState
-
-    @property
-    def sdfg(self) -> dace.SDFG:
-        return self.state.sdfg
-
-    def __post_init__(self) -> None:
-        assert self.scope_node is None or isinstance(
-            self.scope_node, (dace_nodes.AccessNode, dace_nodes.MapEntry)
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.scope_node, self.state))
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, _ScopeLocation):
-            return self.scope_node == other.scope_node and self.state == other.state
-        elif isinstance(other, tuple):
-            assert len(other) == 2
-            return self == _ScopeLocation(other[0], other[1])
-        return NotImplemented
+This is either a `MapEntry` if nested or `None` if something is at the global scope.
+"""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -215,21 +191,9 @@ class _DataSource:
 
 @dataclasses.dataclass(frozen=True)
 class _FinalConsumerSpec:
-    """Describes the final consumer.
-
-    Attributes:
-        edge:  The final edge.
-        consumer: The final consumer node.
-        state: The state in which `edge` is.
-        sdfg:  The SDFG containing `state`.
-    """
+    """Describes the final consumer."""
 
     edge: dace_graph.MultiConnectorEdge[dace.Memlet]
-    state: dace.SDFGState
-
-    @property
-    def sdfg(self) -> dace.SDFG:
-        return self.state.sdfg
 
     @property
     def consumer(self) -> dace_nodes.Node:
@@ -256,6 +220,7 @@ class _ProducerSpec:
     Args:
         data_name: Name of the data descriptor.
         full_shape: The full shape of the data descriptor.
+        dtype: The Type of the data.
         offset: The range that is read from the data descriptor.
         subset: The range that is written into the `concat_where` node.
         data_source: Maps each consumer to the data source location.
@@ -268,14 +233,16 @@ class _ProducerSpec:
 
     data_name: str
     full_shape: dace_sbs.Range
+    dtype: dace.dtypes.typeclass
     offset: dace_sbs.Range
     subset: dace_sbs.Range
     data_source: dict[_FinalConsumerSpec, _DataSource]
 
     def __copy__(self) -> "_ProducerSpec":
         return _ProducerSpec(
-            data_name=copy.copy(self.data_name),
+            data_name=self.data_name,
             full_shape=copy.copy(self.full_shape),
+            dtype=self.dtype,
             offset=copy.copy(self.offset),
             subset=copy.copy(self.subset),
             data_source=self.data_source.copy(),
@@ -285,6 +252,7 @@ class _ProducerSpec:
 def _setup_initial_producer_description(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
+    scope_dict: Any,
     converging_edges: Sequence[dace_graph.MultiConnectorEdge[dace.Memlet]],
 ) -> tuple[list[_ProducerSpec], list[dict[_ScopeLocation, _DataSource]]]:
     """Sets up the producer specs.
@@ -310,8 +278,9 @@ def _setup_initial_producer_description(
     """
     assert len(converging_edges) >= 2
     assert isinstance(converging_edges[0].dst, dace_nodes.AccessNode)
-    assert state.scope_dict()[converging_edges[0].dst] is None
+    assert scope_dict[converging_edges[0].dst] is None
     concat_node = converging_edges[0].dst
+    concat_dtype = concat_node.desc(sdfg).dtype
 
     scope_sources: list[dict[_ScopeLocation, _DataSource]] = []
     producer_specs: list[_ProducerSpec] = []
@@ -323,18 +292,20 @@ def _setup_initial_producer_description(
             _ProducerSpec(
                 data_name=producer_node.data,
                 full_shape=dace_sbs.Range.from_array(producer_node.desc(sdfg)),
+                dtype=concat_dtype,
                 offset=copy.deepcopy(converging_edge.data.get_src_subset(converging_edge, state)),
                 subset=copy.deepcopy(converging_edge.data.dst_subset),
                 data_source={},
             )
         )
-        scope_sources.append({_ScopeLocation(None, state): _DataSource(producer_node, None)})
+        scope_sources.append({None: _DataSource(producer_node, None)})
 
     return producer_specs, scope_sources
 
 
 def _map_data_into_nested_scopes(
     state: dace.SDFGState,
+    scope_dict: Any,
     scope_sources: list[dict[_ScopeLocation, _DataSource]],
     producer_specs: list[_ProducerSpec],
     consumer_specs: list[_FinalConsumerSpec],
@@ -349,12 +320,8 @@ def _map_data_into_nested_scopes(
     a previous call from `_setup_initial_producer_description()` as was `scope_sources`
     which is modified, in the sense of a scratch pad.
     """
-    # No nested SDFGs scenario supported yet.
-    assert all(consumer_spec.state is state for consumer_spec in consumer_specs)
-
     # These are the scopes in which (legal) accesses to the `concat_where`. We now have
     #  to make the individual data, i.e. the producer available there.
-    scope_dict = state.scope_dict()
     accessed_scopes: set[dace_nodes.Node] = {
         scope_dict[consumer_spec.consumer] for consumer_spec in consumer_specs
     }
@@ -364,7 +331,8 @@ def _map_data_into_nested_scopes(
     for needed_scope in accessed_scopes:
         _map_data_into_nested_scopes_impl(
             state=state,
-            scope_to_handle=_ScopeLocation(needed_scope, state),
+            scope_dict=scope_dict,
+            scope_to_handle=needed_scope,
             producer_specs=producer_specs,
             scope_sources=scope_sources,
         )
@@ -373,15 +341,14 @@ def _map_data_into_nested_scopes(
     for consumer_spec in consumer_specs:
         consumer_scope = scope_dict[consumer_spec.consumer]
         for scope_source, producer_spec in zip(scope_sources, producer_specs):
-            producer_spec.data_source[consumer_spec] = scope_source[
-                _ScopeLocation(consumer_scope, consumer_spec.state)
-            ]
+            producer_spec.data_source[consumer_spec] = scope_source[consumer_scope]
 
     return None
 
 
 def _map_data_into_nested_scopes_impl(
     state: dace.SDFGState,
+    scope_dict: Any,
     scope_to_handle: _ScopeLocation,
     producer_specs: list[_ProducerSpec],
     scope_sources: list[dict[_ScopeLocation, _DataSource]],
@@ -391,12 +358,11 @@ def _map_data_into_nested_scopes_impl(
         return
 
     # Check if the parent scope was handled before, if not handle it.
-    parent_scope = _ScopeLocation(
-        scope_to_handle.state.scope_dict()[scope_to_handle.scope_node], scope_to_handle.state
-    )
+    parent_scope = scope_dict[scope_to_handle]
     if parent_scope not in scope_sources[0]:
         _map_data_into_nested_scopes_impl(
             state=state,
+            scope_dict=scope_dict,
             scope_to_handle=parent_scope,
             producer_specs=producer_specs,
             scope_sources=scope_sources,
@@ -406,24 +372,24 @@ def _map_data_into_nested_scopes_impl(
     # On the top level perform dedublication of inputs.
     already_mapped_data: dict[str, int] = {}
     for i, (producer_spec, scope_source) in enumerate(zip(producer_specs, scope_sources)):
-        if parent_scope.scope_node is not None:
+        if parent_scope is not None:
             # Nested scopes, just pipe them through.
             assert parent_scope in scope_source
             assert scope_to_handle not in scope_source
             parent_source = scope_source[parent_scope]
-            assert parent_source.node is not None and scope_to_handle.scope_node is not None
-            new_conn_name = scope_to_handle.scope_node.next_connector(producer_spec.data_name)
-            scope_to_handle.state.add_edge(
+            assert parent_source.node is not None and scope_to_handle is not None
+            new_conn_name = scope_to_handle.next_connector(producer_spec.data_name)
+            state.add_edge(
                 parent_source.node,
                 parent_source.conn,
-                scope_to_handle.scope_node,
+                scope_to_handle,
                 "IN_" + new_conn_name,
                 dace.Memlet(
                     data=producer_spec.data_name, subset=copy.deepcopy(producer_spec.full_shape)
                 ),
             )
-            scope_to_handle.scope_node.add_scope_connectors(new_conn_name)
-            data_source = _DataSource(scope_to_handle.scope_node, f"OUT_{new_conn_name}")
+            scope_to_handle.add_scope_connectors(new_conn_name)
+            data_source = _DataSource(scope_to_handle, f"OUT_{new_conn_name}")
 
         elif producer_spec.data_name in already_mapped_data:
             data_source = scope_sources[already_mapped_data[producer_spec.data_name]][
@@ -440,7 +406,7 @@ def _map_data_into_nested_scopes_impl(
                     for oedge in state.out_edges(producer_node)
                     if (
                         (not oedge.data.is_empty())
-                        and oedge.dst is scope_to_handle.scope_node
+                        and oedge.dst is scope_to_handle
                         and oedge.dst_conn.startswith("IN_")
                         and oedge.data.get_src_subset(oedge, state).covers(producer_spec.full_shape)
                     )
@@ -450,26 +416,28 @@ def _map_data_into_nested_scopes_impl(
             if edge_that_goes_into_scope is not None:
                 scope_connector = "OUT_" + edge_that_goes_into_scope.dst_conn[3:]
             else:
-                new_conn_name = scope_to_handle.scope_node.next_connector(producer_spec.data_name)  # type: ignore[union-attr]
+                new_conn_name = scope_to_handle.next_connector(producer_spec.data_name)  # type: ignore[union-attr]
                 state.add_edge(
                     producer_node,
                     None,
-                    scope_to_handle.scope_node,
+                    scope_to_handle,
                     "IN_" + new_conn_name,
                     dace.Memlet(
                         data=producer_spec.data_name, subset=copy.deepcopy(producer_spec.full_shape)
                     ),
                 )
-                scope_to_handle.scope_node.add_scope_connectors(new_conn_name)  # type: ignore[union-attr]
+                scope_to_handle.add_scope_connectors(new_conn_name)  # type: ignore[union-attr]
                 scope_connector = "OUT_" + new_conn_name
             already_mapped_data[producer_spec.data_name] = i
-            data_source = _DataSource(node=scope_to_handle.scope_node, conn=scope_connector)
+            data_source = _DataSource(node=scope_to_handle, conn=scope_connector)
         scope_source[scope_to_handle] = data_source
 
     return
 
 
 def _replace_single_read(
+    state: dace.SDFGState,
+    sdfg: dace.SDFG,
     consumer_spec: _FinalConsumerSpec,
     producer_specs: Sequence[_ProducerSpec],
     tag: str,
@@ -486,6 +454,7 @@ def _replace_single_read(
     will then be connected to the final consumer. However, the edge will be removed.
 
     Args:
+        state: The state on which we operate.
         consumer_spec: Describes a consumer.
         producer_specs: Descriptions of how the `concat_where` converges.
         tag: Used to give newly created elements a unique name.
@@ -499,7 +468,7 @@ def _replace_single_read(
 
     select_conds: list[str] = []
     prod_accesses: list[str] = []
-    consume_subset = consumer_spec.edge.data.get_src_subset(consumer_spec.edge, consumer_spec.state)
+    consume_subset = consumer_spec.edge.data.get_src_subset(consumer_spec.edge, state)
     for prod_spec in producer_specs:
         prod_subset = prod_spec.subset
         prod_offsets = prod_spec.offset
@@ -534,12 +503,12 @@ def _replace_single_read(
         tlet_code = "\n".join(tlet_code_lines)
 
     names_of_existing_tasklets = {
-        node.label for node in consumer_spec.state.nodes() if isinstance(node, dace_nodes.Tasklet)
+        node.label for node in state.nodes() if isinstance(node, dace_nodes.Tasklet)
     }
     tasklet_name = dace.utils.find_new_name(
         f"concat_where_taskelt_{tag}", names_of_existing_tasklets
     )
-    concat_where_tasklet = consumer_spec.state.add_tasklet(
+    concat_where_tasklet = state.add_tasklet(
         tasklet_name,
         inputs=set(tlet_inputs),
         outputs={tlet_output},
@@ -547,7 +516,7 @@ def _replace_single_read(
     )
 
     for tlet_input, producer_spec in zip(tlet_inputs, producer_specs):
-        consumer_spec.state.add_edge(
+        state.add_edge(
             producer_spec.data_source[consumer_spec].node,
             producer_spec.data_source[consumer_spec].conn,
             concat_where_tasklet,
@@ -560,15 +529,15 @@ def _replace_single_read(
 
     # Instead of replacing `final_consumer` we create an intermediate output node.
     #  This removes the need to reconfigure the dataflow.
-    intermediate_data, _ = consumer_spec.sdfg.add_scalar(
+    intermediate_data, _ = sdfg.add_scalar(
         name=f"__gt4py_concat_where_mapper_temp_{tag}",
-        dtype=consumer_spec.sdfg.arrays[consumer_spec.edge.data.data].dtype,
+        dtype=producer_specs[0].dtype,
         transient=True,
         find_new_name=True,
     )
-    intermediate_node = consumer_spec.state.add_access(intermediate_data)
+    intermediate_node = state.add_access(intermediate_data)
 
-    consumer_spec.state.add_edge(
+    state.add_edge(
         concat_where_tasklet,
         tlet_output,
         intermediate_node,
@@ -587,7 +556,7 @@ def _replace_single_read(
 
     # Create the edge between the new intermediate and the old consumer. We ignore
     #  some properties of the Memlet here, such as dynamic (`wcr` was handled above).
-    consumer_spec.state.add_edge(
+    state.add_edge(
         intermediate_node,
         None,
         consumer_spec.consumer,
@@ -600,7 +569,7 @@ def _replace_single_read(
     )
 
     # Now remove the old Memlet path.
-    dace_sdutils.remove_edge_and_dangling_path(consumer_spec.state, consumer_spec.edge)
+    dace_sdutils.remove_edge_and_dangling_path(state, consumer_spec.edge)
 
 
 def _find_consumer_specs(
@@ -618,10 +587,7 @@ def _find_consumer_specs(
     consumer_specs: list[_FinalConsumerSpec] = []
     for inner_edge in state.out_edges_by_connector(map_entry, "OUT_" + outer_edge.dst_conn[3:]):
         consumer_specs.extend(
-            (
-                _FinalConsumerSpec(edge=edge, state=state)
-                for edge in state.memlet_tree(inner_edge).leaves()
-            )
+            (_FinalConsumerSpec(edge=edge) for edge in state.memlet_tree(inner_edge).leaves())
         )
 
     # Sort the edges according to the destination.
