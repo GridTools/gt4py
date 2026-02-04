@@ -91,15 +91,20 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
 
-        if self.compilation_options.static_params is None:
-            object.__setattr__(self.compilation_options, "static_params", ())
-
-        argument_descriptor_mapping = {
-            arguments.StaticArg: self.compilation_options.static_params,
-        }
-
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
+
+        argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
+
+        if self.compilation_options.static_params:
+            argument_descriptor_mapping[arguments.StaticArg] = self.compilation_options.static_params
+
+        if self.compilation_options.static_domains:
+            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = (
+                _field_domain_descriptor_mapping_from_func_type(
+                    program_type.definition
+                )
+            )
 
         return compiled_program.CompiledProgramsPool(
             backend=self.backend,
@@ -154,6 +159,17 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
 
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self
+
+
+def _field_domain_descriptor_mapping_from_func_type(func_type: ts.FunctionType) -> list[str]:
+    static_domain_args = []
+    param_types = func_type.pos_or_kw_args | func_type.kw_only_args
+    for name, type_ in param_types.items():
+        for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
+            if isinstance(el_type_, ts.FieldType):
+                path_as_expr = "".join(map(lambda idx: f"[{idx}]", path))
+                static_domain_args.append(f"{name}{path_as_expr}")
+    return static_domain_args
 
 
 program_call_metrics_collector = metrics.make_collector(
