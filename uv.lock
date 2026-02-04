@@ -1170,7 +1170,7 @@ dependencies = [
 
 [[package]]
 name = "dace"
-version = "43!2026.1.21"
+version = "43!2026.2.3"
 source = { registry = "https://gridtools.github.io/pypi/" }
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -1195,9 +1195,10 @@ dependencies = [
     { name = "pyreadline", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm5-0' and extra == 'extra-5-gt4py-rocm6-0')" },
     { name = "pyyaml" },
     { name = "sympy" },
+    { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://gridtools.github.io/pypi/dace/dace-43!2026.1.21-py3-none-any.whl", hash = "sha256:c72988e173bc07d59410fb32e7add2dbca498833e9e369fdff94e1971c5a6df5" },
+    { url = "https://gridtools.github.io/pypi/dace/dace-43!2026.2.3-py3-none-any.whl", hash = "sha256:0fc94ef1dfb8078ffdc0943b5a06dbb5ae63a335235ba5e9ce6571f935e96f66" },
 ]
 
 [[package]]
@@ -1719,7 +1720,7 @@ dace-cartesian = [
     { name = "dace", version = "1.0.2", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip#4a9f46027147a52e2b0ac9eedeb101c3ab27d0bf" } },
 ]
 dace-next = [
-    { name = "dace", version = "43!2026.1.21", source = { registry = "https://gridtools.github.io/pypi/" } },
+    { name = "dace", version = "43!2026.2.3", source = { registry = "https://gridtools.github.io/pypi/" } },
 ]
 dev = [
     { name = "atlas4py" },
@@ -1865,7 +1866,7 @@ build = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dace-cartesian = [{ name = "dace", git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip" }]
-dace-next = [{ name = "dace", specifier = "==43!2026.1.21", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
+dace-next = [{ name = "dace", specifier = "==43!2026.2.3", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
 dev = [
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
