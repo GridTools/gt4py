@@ -22,7 +22,7 @@ from gt4py.next.otf.compilation import cache
 def make_program_source(name: str) -> stages.ProgramSource:
     entry_point = interface.Function(
         name,
-        parameters=[
+        parameters=(
             interface.Parameter(
                 name="buf",
                 type_=ts.FieldType(
@@ -46,7 +46,7 @@ def make_program_source(name: str) -> stages.ProgramSource:
                 ),
             ),
             interface.Parameter(name="sc", type_=ts.ScalarType(ts.ScalarKind.FLOAT32)),
-        ],
+        ),
         returns=True,
     )
     func = cpp_interface.render_function_declaration(
@@ -72,9 +72,8 @@ def make_program_source(name: str) -> stages.ProgramSource:
     return stages.ProgramSource(
         entry_point=entry_point,
         source_code=src,
-        library_deps=[interface.LibraryDependency("gridtools_cpu", "master")],
-        language=languages.CPP,
-        language_settings=cpp_interface.CPP_DEFAULT,
+        library_deps=(interface.LibraryDependency("gridtools_cpu", "master"),),
+        language_settings=languages.CPPLanguageSettings(),
     )
 
 

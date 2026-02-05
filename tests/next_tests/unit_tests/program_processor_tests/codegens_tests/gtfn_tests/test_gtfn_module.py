@@ -82,7 +82,7 @@ def test_codegen(program_example):
     )
     assert module.entry_point.name == fencil.id
     assert any(d.name == "gridtools_cpu" for d in module.library_deps)
-    assert module.language is languages.CPP
+    assert isinstance(module.language_settings, languages.CPPLanguageSettings)
 
 
 def test_hash_and_diskcache(program_example, tmp_path):

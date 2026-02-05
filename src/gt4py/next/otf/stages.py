@@ -63,8 +63,12 @@ def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef
     return program_hash
 
 
+LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLanguageSettings)
+ToLangSettingsT = TypeVar("ToLangSettingsT", bound=languages.SourceLanguageSettings)
+
+
 @dataclasses.dataclass(frozen=True)
-class ProgramSource(Generic[SrcL, SettingT]):
+class ProgramSource(Generic[LangSettingsT]):
     """
     Standalone source code translated from an IR along with information relevant for OTF compilation.
 
@@ -77,18 +81,11 @@ class ProgramSource(Generic[SrcL, SettingT]):
     entry_point: interface.Function
     source_code: str
     library_deps: tuple[interface.LibraryDependency, ...]
-    language: type[SrcL]
-    language_settings: SettingT
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.language_settings, self.language.settings_class):
-            raise TypeError(
-                f"Wrong language settings type for '{self.language}', must be subclass of '{self.language.settings_class}'."
-            )
+    language_settings: LangSettingsT
 
 
 @dataclasses.dataclass(frozen=True)
-class BindingSource(Generic[SrcL, TgtL]):
+class BindingSource(Generic[LangSettingsT, ToLangSettingsT]):
     """
     Companion source code for translated program source code.
 
@@ -104,7 +101,7 @@ class BindingSource(Generic[SrcL, TgtL]):
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableProject(Generic[SrcL, SettingT, TgtL]):
+class CompilableProject(Generic[LangSettingsT, ToLangSettingsT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
@@ -113,8 +110,8 @@ class CompilableProject(Generic[SrcL, SettingT, TgtL]):
     If bindings are required, it is recommended to create them in a separate step to ensure reusability.
     """
 
-    program_source: ProgramSource[SrcL, SettingT]
-    binding_source: Optional[BindingSource[SrcL, TgtL]]
+    program_source: ProgramSource[LangSettingsT]
+    binding_source: Optional[BindingSource[LangSettingsT, ToLangSettingsT]]
 
     @property
     def library_deps(self) -> tuple[interface.LibraryDependency, ...]:
@@ -123,7 +120,15 @@ class CompilableProject(Generic[SrcL, SettingT, TgtL]):
         return _unique_libs(*self.program_source.library_deps, *self.binding_source.library_deps)
 
 
-class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
+LangSettingsT_co = TypeVar(
+    "LangSettingsT_co", bound=languages.SourceLanguageSettings, covariant=True
+)
+ToLangSettingsT_co = TypeVar(
+    "ToLangSettingsT_co", bound=languages.SourceLanguageSettings, covariant=True
+)
+
+
+class BuildSystemProject(Protocol[LangSettingsT_co, ToLangSettingsT_co]):
     """
     Use source code extracted from a ``CompilableSource`` to configure and build a GT4Py program.
 

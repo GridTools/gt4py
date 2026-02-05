@@ -24,14 +24,12 @@ from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake
 
 
-SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL)
+CPPLikeLangSettingsT = TypeVar("CPPLikeLangSettingsT", bound=languages.CLikeLanguageSettings)
 
 
 @dataclasses.dataclass
 class CompiledbFactory(
-    compiler.BuildSystemProjectGenerator[
-        SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
-    ]
+    compiler.BuildSystemProjectGenerator[CPPLikeLangSettingsT, languages.PythonLanguageSettings]
 ):
     """
     Create a CompiledbProject from a ``CompilableSource`` stage object with given CMake settings.
@@ -47,9 +45,7 @@ class CompiledbFactory(
 
     def __call__(
         self,
-        source: stages.CompilableProject[
-            SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
-        ],
+        source: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> CompiledbProject:
         if not source.binding_source:
@@ -64,7 +60,6 @@ class CompiledbFactory(
             deps=source.library_deps,
             build_type=self.cmake_build_type,
             cmake_flags=self.cmake_extra_flags or [],
-            language=source.program_source.language,
             language_settings=source.program_source.language_settings,
         )
 
@@ -106,7 +101,7 @@ def _relative_path_to_parent(current: pathlib.Path, parent: pathlib.Path) -> str
 
 @dataclasses.dataclass()
 class CompiledbProject(
-    stages.BuildSystemProject[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]
+    stages.BuildSystemProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings]
 ):
     """
     Compiledb build system for gt4py programs.
@@ -253,15 +248,13 @@ def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
     build_type: config.CMakeBuildType,
     cmake_flags: list[str],
-    language: type[SrcL],
-    language_settings: languages.LanguageWithHeaderFilesSettings,
+    language_settings: languages.CLikeLanguageSettings,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
         entry_point=interface.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
-        language=language,
         language_settings=language_settings,
     )
 

@@ -40,38 +40,28 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+        stages.ProgramSource[languages.SourceAndHeaderLanguageSettings],
     ],
     workflow.ChainableWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+        stages.ProgramSource[languages.SourceAndHeaderLanguageSettings],
     ],
 ):
-    language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
+    language_settings: Optional[languages.SourceAndHeaderLanguageSettings] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
 
-    def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
+    def _default_language_settings(self) -> languages.SourceAndHeaderLanguageSettings:
         match self.device_type:
             case core_defs.DeviceType.CUDA:
-                return languages.LanguageWithHeaderFilesSettings(
-                    formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
-                    formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
-                    file_extension="cu",
-                    header_extension="cuh",
-                )
+                return languages.CUDALanguageSettings()
             case core_defs.DeviceType.ROCM:
-                return languages.LanguageWithHeaderFilesSettings(
-                    formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
-                    formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
-                    file_extension="hip",
-                    header_extension="h",
-                )
+                return languages.HIPLanguageSettings()
             case core_defs.DeviceType.CPU:
-                return cpp_interface.CPP_DEFAULT
+                return languages.CPPLanguageSettings()
             case _:
                 raise self._not_implemented_for_device_type()
 
@@ -207,7 +197,7 @@ class GTFNTranslationStep(
 
     def __call__(
         self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
+    ) -> stages.ProgramSource[languages.SourceAndHeaderLanguageSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
 
@@ -250,14 +240,13 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
-        module: stages.ProgramSource[
-            languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings
-        ] = stages.ProgramSource(
-            entry_point=function,
-            library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
-            source_code=source_code,
-            language=self._language(),
-            language_settings=self._language_settings(),
+        module: stages.ProgramSource[languages.SourceAndHeaderLanguageSettings] = (
+            stages.ProgramSource(
+                entry_point=function,
+                library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
+                source_code=source_code,
+                language_settings=self._language_settings(),
+            )
         )
         return module
 
@@ -279,18 +268,7 @@ class GTFNTranslationStep(
             case _:
                 raise self._not_implemented_for_device_type()
 
-    def _language(self) -> type[languages.NanobindSrcL]:
-        match self.device_type:
-            case core_defs.DeviceType.CUDA:
-                return languages.CUDA
-            case core_defs.DeviceType.ROCM:
-                return languages.HIP
-            case core_defs.DeviceType.CPU:
-                return languages.CPP
-            case _:
-                raise self._not_implemented_for_device_type()
-
-    def _language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
+    def _language_settings(self) -> languages.SourceAndHeaderLanguageSettings:
         return (
             self.language_settings
             if self.language_settings is not None

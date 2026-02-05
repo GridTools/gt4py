@@ -18,11 +18,8 @@ from gt4py._core import locking
 from gt4py.next import config
 from gt4py.next.otf import definitions, languages, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
-from gt4py.next.otf.definitions import LS, SrcL, TgtL
 
 
-SourceLanguageType = TypeVar("SourceLanguageType", bound=languages.NanobindSrcL)
-LanguageSettingsType = TypeVar("LanguageSettingsType", bound=languages.LanguageSettings)
 T = TypeVar("T")
 
 
@@ -34,37 +31,41 @@ def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
     return (src_dir / data.module).exists()
 
 
-class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
+LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLanguageSettings)
+TargetLangSettingsT = TypeVar("TargetLangSettingsT", bound=languages.SourceLanguageSettings)
+CPPLikeLangSettingsT = TypeVar("CPPLikeLangSettingsT", bound=languages.CLikeLanguageSettings)
+
+
+class BuildSystemProjectGenerator(Protocol[LangSettingsT, TargetLangSettingsT]):
     def __call__(
         self,
-        source: stages.CompilableProject[SrcL, LS, TgtL],
+        source: stages.CompilableProject[LangSettingsT, TargetLangSettingsT],
         cache_lifetime: config.BuildCacheLifetime,
-    ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
+    ) -> stages.BuildSystemProject[LangSettingsT, TargetLangSettingsT]: ...
 
 
 @dataclasses.dataclass(frozen=True)
 class Compiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
+        stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
         stages.CompiledProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
+        stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
         stages.CompiledProgram,
     ],
-    definitions.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python],
+    step_types.CompilationStep[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[
-        SourceLanguageType, LanguageSettingsType, languages.Python
     ]
     force_recompile: bool = False
 
     def __call__(
         self,
-        inp: stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
+        inp: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
     ) -> stages.CompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 

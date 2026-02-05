@@ -225,7 +225,7 @@ _dace_compile_call = dace_workflow.compilation.DaCeCompiler.__call__
 
 def mocked_compile_call(
     self,
-    inp: stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
+    inp: stages.CompilableProject[languages.SDFGLanguageSettings, languages.PythonLanguageSettings],
     binding_source_ref: str,
 ):
     assert len(inp.library_deps) == 0
@@ -242,7 +242,7 @@ def mocked_compile_call(
 
 def mocked_compile_call_cartesian(
     self,
-    inp: stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
+    inp: stages.CompilableProject[languages.SDFGLanguageSettings, languages.PythonLanguageSettings],
     use_metrics: bool,
     use_zero_origin: bool,
 ):
@@ -254,7 +254,7 @@ def mocked_compile_call_cartesian(
 
 def mocked_compile_call_unstructured(
     self,
-    inp: stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
+    inp: stages.CompilableProject[languages.SDFGLanguageSettings, languages.PythonLanguageSettings],
     use_metrics: bool,
     use_zero_origin: bool,
 ):

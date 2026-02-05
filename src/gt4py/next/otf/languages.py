@@ -9,23 +9,13 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import ClassVar, Optional
+import functools
+from collections.abc import Mapping
+from typing import Any
 
 
-class LanguageTag:
-    """
-    Represent a programming language.
-
-    ``.settings_class`` should be set to the ``LanguageSettings`` subclass
-    with the minimum amount of settings required for the language.
-    """
-
-    settings_class: ClassVar[type[LanguageSettings]]
-    ...
-
-
-@dataclasses.dataclass(frozen=True)
-class LanguageSettings:
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SourceLanguageSettings:
     """
     Basic settings for any language.
 
@@ -34,39 +24,75 @@ class LanguageSettings:
     and then check which styles are available for that (if any).
     """
 
-    formatter_key: str
-    formatter_style: Optional[str]
+    name: str
     file_extension: str
+    formatter_key: str | None = None
+    formatter_options: Mapping[str, Any] | None = None
 
 
-@dataclasses.dataclass(frozen=True)
-class LanguageWithHeaderFilesSettings(LanguageSettings):
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SourceAndHeaderLanguageSettings(SourceLanguageSettings):
     """Add a header file extension setting on top of the basic set."""
 
     header_extension: str
 
 
-class Python(LanguageTag):
-    settings_class = LanguageSettings
-    ...
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class PythonLanguageSettings(SourceLanguageSettings):
+    """Settings for Python language."""
+
+    name: str = "python"
+    file_extension: str = "py"
+    formatter_key: str = "python"
 
 
-class SDFG(LanguageTag):
-    settings_class = LanguageSettings
-    ...
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SDFGLanguageSettings(SourceLanguageSettings):
+    """Settings for SDFGs."""
+
+    name: str = "SDFG"
+    file_extension: str = "sdfg"
 
 
-class NanobindSrcL(LanguageTag): ...
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CLikeLanguageSettings(SourceAndHeaderLanguageSettings):
+    """Settings for C++-like language."""
 
 
-class CPP(NanobindSrcL):
-    settings_class = LanguageWithHeaderFilesSettings
-    ...
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CPPLanguageSettings(CLikeLanguageSettings):
+    """Settings for C++ language."""
+
+    name: str = "CXX"
+    file_extension: str = "cpp"
+    header_extension: str = "hpp"
+    formatter_key: str = "cpp"
+    formatter_options: Mapping[str, Any] = dataclasses.field(
+        default_factory=functools.partial(dict, formatter_style="LLVM")
+    )
 
 
-class CUDA(NanobindSrcL):
-    settings_class = LanguageWithHeaderFilesSettings
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CUDALanguageSettings(CLikeLanguageSettings):
+    """Settings for CUDA language."""
+
+    name: str = "CUDA"
+    file_extension: str = "cu"
+    header_extension: str = "cuh"
+    formatter_key: str = "cpp"
+    formatter_options: Mapping[str, Any] = dataclasses.field(
+        default_factory=functools.partial(dict, formatter_style="LLVM")
+    )
 
 
-class HIP(NanobindSrcL):
-    settings_class = LanguageWithHeaderFilesSettings
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class HIPLanguageSettings(CLikeLanguageSettings):
+    """Settings for HIP language."""
+
+    name: str = "HIP"
+    file_extension: str = "hip"
+    header_extension: str = "h"
+    formatter_key: str = "cpp"
+    formatter_options: Mapping[str, Any] = dataclasses.field(
+        default_factory=functools.partial(dict, formatter_style="LLVM")
+    )

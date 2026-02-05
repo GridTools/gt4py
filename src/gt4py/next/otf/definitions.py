@@ -15,12 +15,8 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, languages, stages, toolchain, workflow
 
 
-SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
-TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
-LS = TypeVar("LS", bound=languages.LanguageSettings)
-SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
-TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
-LS_co = TypeVar("LS_co", bound=languages.LanguageSettings, covariant=True)
+LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLanguageSettings)
+ToLangSettingsT = TypeVar("ToLangSettingsT", bound=languages.SourceLanguageSettings)
 
 
 IRDefinitionT = TypeVar(
@@ -38,15 +34,16 @@ CompilableProgramDef: TypeAlias = ConcreteProgramDef[itir.Program, arguments.Com
 
 
 class TranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[CompilableProgramDef, stages.ProgramSource[SrcL, LS]],
-    Protocol[SrcL, LS],
+    workflow.ReplaceEnabledWorkflowMixin[
+        CompilableProgramDef, stages.ProgramSource[LangSettingsT]
+    ],
+    Protocol[LangSettingsT],
 ):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
 
     ...
 
 
-class BindingStep(Protocol[SrcL, LS, TgtL]):
     """
     Generate Bindings for program source and package both together (ProgramSource -> CompilableSource).
 
@@ -55,16 +52,18 @@ class BindingStep(Protocol[SrcL, LS, TgtL]):
     """
 
     def __call__(
-        self, program_source: stages.ProgramSource[SrcL, LS]
-    ) -> stages.CompilableProject[SrcL, LS, TgtL]: ...
+        self, program_source: stages.ProgramSource[LangSettingsT]
+    ) -> stages.CompilableProject[LangSettingsT, ToLangSettingsT]: ...
 
 
 class CompilationStep(
-    workflow.Workflow[stages.CompilableProject[SrcL, LS, TgtL], stages.CompiledProgram],
-    Protocol[SrcL, LS, TgtL],
+    workflow.Workflow[
+        stages.CompilableProject[LangSettingsT, ToLangSettingsT], stages.CompiledProgram
+    ],
+    Protocol[LangSettingsT, ToLangSettingsT],
 ):
     """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
 
     def __call__(
-        self, source: stages.CompilableProject[SrcL, LS, TgtL]
+        self, source: stages.CompilableProject[LangSettingsT, ToLangSettingsT]
     ) -> stages.CompiledProgram: ...
