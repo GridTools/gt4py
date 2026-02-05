@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar, Union
+from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
 from gt4py.eve import (
@@ -235,3 +235,7 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     type: Union[ts_ffront.ScanOperatorType, ts.DeferredType] = ts.DeferredType(
         constraint=ts_ffront.ScanOperatorType
     )
+
+
+OperatorNode: TypeAlias = FieldOperator | ScanOperator
+OperatorNodeT = TypeVar("OperatorNodeT", FieldOperator, ScanOperator)

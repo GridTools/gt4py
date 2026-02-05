@@ -222,7 +222,7 @@ class CompiledProgramsPool:
     """
 
     backend: gtx_backend.Backend
-    definition_stage: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition
+    definition_stage: ffront_stages.DSLProgramDef | ffront_stages.DSLFieldOperatorDef
     # Note: This type can be incomplete, i.e. contain DeferredType, whenever the operator is a
     #  scan operator. In the future it could also be the type of a generic program.
     program_type: ts_ffront.ProgramType

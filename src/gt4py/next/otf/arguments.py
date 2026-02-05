@@ -175,8 +175,8 @@ def jit_to_aot_args(
 
 
 def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
-    toolchain.CompilableProgram[DATA_T, JITArgs],
-    toolchain.CompilableProgram[DATA_T, CompileTimeArgs],
+    toolchain.CompilableArtifact[DATA_T, JITArgs],
+    toolchain.CompilableArtifact[DATA_T, CompileTimeArgs],
 ]:
     """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
     return toolchain.ArgsOnlyAdapter(jit_to_aot_args)

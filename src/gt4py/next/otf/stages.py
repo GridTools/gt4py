@@ -28,7 +28,7 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-CompilableProgram: TypeAlias = toolchain.CompilableProgram[itir.Program, arguments.CompileTimeArgs]
+CompilableProgram: TypeAlias = toolchain.CompilableArtifact[itir.Program, arguments.CompileTimeArgs]
 
 
 def compilation_hash(otf_closure: CompilableProgram) -> int:

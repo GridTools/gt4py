@@ -53,12 +53,12 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 ProgramLikeDefinitionT = TypeVar(
-    "ProgramLikeDefinitionT", ffront_stages.ProgramDefinition, ffront_stages.FieldOperatorDefinition
+    "ProgramLikeDefinitionT", ffront_stages.DSLProgramDef, ffront_stages.DSLFieldOperatorDef
 )
 
 
 @dataclasses.dataclass(frozen=True)
-class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
+class EntryPointCallable(Generic[ProgramLikeDefinitionT]):
     """
     Mixing used by program and program-like objects.
 
@@ -164,7 +164,7 @@ program_call_metrics_collector = metrics.make_collector(
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
-class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
+class Program(EntryPointCallable[ffront_stages.DSLProgramDef]):
     """
     Construct a program object from a PAST node.
 
@@ -192,7 +192,7 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
         grid_type: common.GridType | None = None,
         **compilation_options: Unpack[options.CompilationOptionsArgs],
     ) -> Program:
-        program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
+        program_def = ffront_stages.DSLProgramDef(definition=definition, grid_type=grid_type)
         return cls(
             definition_stage=program_def,
             backend=backend,
@@ -205,7 +205,7 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        no_args_past = toolchain.CompilableProgram(
+        no_args_past = toolchain.CompilableArtifact(
             self.past_stage, arguments.CompileTimeArgs.empty()
         )
         _ = self._frontend_transforms.past_lint(no_args_past).data
@@ -228,9 +228,9 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
         return self.definition_stage.definition
 
     @functools.cached_property
-    def past_stage(self) -> ffront_stages.PAST_PRG:
+    def past_stage(self) -> ffront_stages.PASTProgramDef:
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.CompilableProgram(
+        no_args_def = toolchain.CompilableArtifact(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
         return self._frontend_transforms.func_to_past(no_args_def).data
@@ -250,8 +250,8 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = toolchain.CompilableProgram(
-            data=ffront_stages.PastProgramDefinition(
+        no_args_past = toolchain.CompilableArtifact(
+            data=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
                 grid_type=self.definition_stage.grid_type,
@@ -499,7 +499,7 @@ OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 
 @dataclasses.dataclass(frozen=True)
 class FieldOperator(
-    _ProgramLikeMixin[ffront_stages.FieldOperatorDefinition], GTCallable, Generic[OperatorNodeT]
+    EntryPointCallable[ffront_stages.DSLFieldOperatorDef], GTCallable, Generic[OperatorNodeT]
 ):
     """
     Construct a field operator object from a FOAST node.
@@ -533,7 +533,7 @@ class FieldOperator(
         **compilation_options: Unpack[options.CompilationOptionsArgs],
     ) -> FieldOperator[OperatorNodeT]:
         return cls(
-            definition_stage=ffront_stages.FieldOperatorDefinition(
+            definition_stage=ffront_stages.DSLFieldOperatorDef(
                 definition=definition,
                 grid_type=grid_type,
                 node_class=operator_node_cls,
@@ -549,9 +549,9 @@ class FieldOperator(
         _ = self.foast_stage
 
     @functools.cached_property
-    def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
+    def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
         return self._frontend_transforms.func_to_foast(
-            toolchain.CompilableProgram(
+            toolchain.CompilableArtifact(
                 data=self.definition_stage, args=arguments.CompileTimeArgs.empty()
             )
         ).data
@@ -657,7 +657,7 @@ class FieldOperatorFromFoast(FieldOperator):
     This class provides the appropriate toolchain entry points.
     """
 
-    foast_stage: ffront_stages.FoastOperatorDefinition
+    foast_stage: ffront_stages.FOASTOperatorDef
 
     @override
     def __call__(self, *args: Any, **kwargs: Any) -> Any:

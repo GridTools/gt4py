@@ -35,12 +35,17 @@ from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVar
 from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from gt4py.next.ffront.stages import AOT_DSL_FOP, AOT_FOP, DSL_FOP, FOP
+from gt4py.next.ffront.stages import (
+    CompilableDSLFieldOperator,
+    CompilableFOASTOperator,
+    DSLFieldOperatorDef,
+    FOASTOperatorDef,
+)
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-def func_to_foast(inp: DSL_FOP) -> FOP:
+def func_to_foast(inp: DSLFieldOperatorDef) -> FOASTOperatorDef:
     """
     Turn a DSL field operator definition into a FOAST operator definition, adding metadata.
 
@@ -79,7 +84,7 @@ def func_to_foast(inp: DSL_FOP) -> FOP:
         **operator_attribute_nodes,
     )
     foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
-    return ffront_stages.FoastOperatorDefinition(
+    return ffront_stages.FOASTOperatorDef(
         foast_node=foast_node,
         closure_vars=closure_vars,
         grid_type=inp.grid_type,
@@ -88,7 +93,9 @@ def func_to_foast(inp: DSL_FOP) -> FOP:
     )
 
 
-def func_to_foast_factory(cached: bool = True) -> workflow.Workflow[DSL_FOP, FOP]:
+def func_to_foast_factory(
+    cached: bool = True,
+) -> workflow.Workflow[DSLFieldOperatorDef, FOASTOperatorDef]:
     """Wrap `func_to_foast` in a chainable and optionally cached workflow step."""
     wf = workflow.make_step(func_to_foast)
     if cached:
@@ -96,7 +103,9 @@ def func_to_foast_factory(cached: bool = True) -> workflow.Workflow[DSL_FOP, FOP
     return wf
 
 
-def adapted_func_to_foast_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_FOP, AOT_FOP]:
+def adapted_func_to_foast_factory(
+    **kwargs: Any,
+) -> workflow.Workflow[CompilableDSLFieldOperator, CompilableFOASTOperator]:
     """Wrap the `func_to_foast step in an adapter to fit into transform toolchains.`"""
     return toolchain.DataOnlyAdapter(func_to_foast_factory(**kwargs))
 

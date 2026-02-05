@@ -24,7 +24,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes import utils as foast_utils
-from gt4py.next.ffront.stages import AOT_FOP, FOP
+from gt4py.next.ffront.stages import CompilableFOASTOperator, FOASTOperatorDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
@@ -32,7 +32,7 @@ from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 
-def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.FunctionDefinition:
+def foast_to_gtir(inp: ffront_stages.FOASTOperatorDef) -> itir.FunctionDefinition:
     """
     Lower a FOAST field operator node to GTIR.
 
@@ -41,7 +41,9 @@ def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.FunctionDe
     return FieldOperatorLowering.apply(inp.foast_node)
 
 
-def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.FunctionDefinition]:
+def foast_to_gtir_factory(
+    cached: bool = True,
+) -> workflow.Workflow[FOASTOperatorDef, itir.FunctionDefinition]:
     """Wrap `foast_to_gtir` into a chainable and, optionally, cached workflow step."""
     wf = foast_to_gtir
     if cached:
@@ -51,7 +53,7 @@ def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Fu
 
 def adapted_foast_to_gtir_factory(
     **kwargs: Any,
-) -> workflow.Workflow[AOT_FOP, itir.FunctionDefinition]:
+) -> workflow.Workflow[CompilableFOASTOperator, itir.FunctionDefinition]:
     """Wrap the `foast_to_gtir` workflow step into an adapter to fit into backend transform workflows."""
     return toolchain.StripArgsAdapter(foast_to_gtir_factory(**kwargs))
 

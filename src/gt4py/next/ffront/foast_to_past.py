@@ -18,7 +18,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
-from gt4py.next.ffront.stages import AOT_FOP, AOT_PRG
+from gt4py.next.ffront.stages import CompilableFOASTOperator, CompilablePASTProgram
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -33,8 +33,8 @@ class ItirShim:
     lowering has access to the relevant information.
     """
 
-    definition: AOT_FOP
-    foast_to_itir: workflow.Workflow[AOT_FOP, itir.FunctionDefinition]
+    definition: CompilableFOASTOperator
+    foast_to_itir: workflow.Workflow[CompilableFOASTOperator, itir.FunctionDefinition]
 
     def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
         return self.definition.data.closure_vars
@@ -52,7 +52,7 @@ class ItirShim:
 
 
 @dataclasses.dataclass(frozen=True)
-class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
+class OperatorToProgram(workflow.Workflow[CompilableFOASTOperator, CompilablePASTProgram]):
     """
     Generate a PAST program definition from a FOAST operator definition.
 
@@ -91,9 +91,9 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         >>> assert copy_program.data.closure_vars["copy"].definition.data is copy.foast_stage
     """
 
-    foast_to_itir: workflow.Workflow[AOT_FOP, itir.FunctionDefinition]
+    foast_to_itir: workflow.Workflow[CompilableFOASTOperator, itir.FunctionDefinition]
 
-    def __call__(self, inp: AOT_FOP) -> AOT_PRG:
+    def __call__(self, inp: CompilableFOASTOperator) -> CompilablePASTProgram:
         # TODO(tehrengruber): implement mechanism to deduce default values
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
@@ -165,8 +165,8 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         )
         past_node = type_deduction.ProgramTypeDeduction.apply(untyped_past_node)
 
-        return toolchain.CompilableProgram(
-            data=ffront_stages.PastProgramDefinition(
+        return toolchain.CompilableArtifact(
+            data=ffront_stages.PASTProgramDef(
                 past_node=past_node,
                 closure_vars=fieldop_itir_closure_vars,
                 grid_type=inp.data.grid_type,
@@ -176,11 +176,13 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
 
 
 def operator_to_program_factory(
-    foast_to_itir_step: Optional[workflow.Workflow[AOT_FOP, itir.FunctionDefinition]] = None,
+    foast_to_itir_step: Optional[
+        workflow.Workflow[CompilableFOASTOperator, itir.FunctionDefinition]
+    ] = None,
     cached: bool = True,
-) -> workflow.Workflow[AOT_FOP, AOT_PRG]:
+) -> workflow.Workflow[CompilableFOASTOperator, CompilablePASTProgram]:
     """Optionally wrap `OperatorToProgram` in a `CachedStep`."""
-    wf: workflow.Workflow[AOT_FOP, AOT_PRG] = OperatorToProgram(
+    wf: workflow.Workflow[CompilableFOASTOperator, CompilablePASTProgram] = OperatorToProgram(
         foast_to_itir_step or foast_to_gtir.adapted_foast_to_gtir_factory()
     )
     if cached:
