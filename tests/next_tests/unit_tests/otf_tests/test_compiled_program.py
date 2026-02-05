@@ -124,3 +124,14 @@ def test_inlining_of_scalar_works_integration():
     )
 
     _verify_program_has_expected_true_value(hijacked_program.data)
+
+
+def test_different_static_args_work_after_backend_change():
+    prg1 = prog.with_backend(gtfn.run_gtfn)
+    prg2 = prog.with_backend(gtfn.run_gtfn)
+
+    # compile with static args
+    prg1.compile(cond=[True], offset_provider={})
+
+    # compile without static args
+    prg2.compile(offset_provider={})

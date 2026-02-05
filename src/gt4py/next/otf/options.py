@@ -27,9 +27,7 @@ class CompilationOptions:
     enable_jit: bool = dataclasses.field(default_factory=lambda: config.ENABLE_JIT_DEFAULT)
 
     #: if the user requests static params, they will be used later to initialize CompiledPrograms
-    static_params: Sequence[str] | None = (
-        None  # TODO: describe that this value will eventually be a sequence of strings
-    )
+    static_params: Sequence[str] = ()
 
     # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     #: A dictionary holding static/compile-time information about the offset providers.
