@@ -117,6 +117,7 @@ def gt_auto_optimize(
     gpu_block_size_1d: Optional[Sequence[int | str] | str] = (64, 1, 1),
     gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
     gpu_block_size_3d: Optional[Sequence[int | str] | str] = None,
+    gpu_maxnreg: Optional[int] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
@@ -375,6 +376,7 @@ def gt_auto_optimize(
             gpu_block_size=gpu_block_size,
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
+            gpu_maxnreg=gpu_maxnreg,
             optimization_hooks=optimization_hooks,
             gpu_block_size_spec=gpu_block_size_spec if gpu_block_size_spec else None,
             validate_all=validate_all,
@@ -724,6 +726,25 @@ def _gt_auto_process_dataflow_inside_maps(
         validate_all=validate_all,
     )
 
+    find_single_use_data = dace_analysis.FindSingleUseData()
+    single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.RemoveScalarCopies(
+            single_use_data=single_use_data,
+        ),
+        validate=False,
+        validate_all=validate_all,
+    )
+
+    # Make sure that this runs before MoveDataflowIntoIfBody because atm it doesn't handle
+    # NestedSDFGs inside the ConditionalBlocks it fuses.
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.FuseHorizontalConditionBlocks(),
+        validate=True,
+        validate_all=True,
+    )
+
     # Move dataflow into the branches of the `if` such that they are only evaluated
     #  if they are needed. Important to call it repeatedly.
     # TODO(phimuell): It is unclear if `MoveDataflowIntoIfBody` should be called
@@ -781,6 +802,7 @@ def _gt_auto_configure_maps_and_strides(
     gpu_block_size: Optional[Sequence[int | str] | str],
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
+    gpu_maxnreg: Optional[int],
     optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
     gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]],
     validate_all: bool,
@@ -857,6 +879,7 @@ def _gt_auto_configure_maps_and_strides(
             gpu_launch_bounds=gpu_launch_bounds,
             gpu_launch_factor=gpu_launch_factor,
             gpu_block_size_spec=gpu_block_size_spec,
+            gpu_maxnreg=gpu_maxnreg,
             validate=False,
             validate_all=validate_all,
             try_removing_trivial_maps=True,

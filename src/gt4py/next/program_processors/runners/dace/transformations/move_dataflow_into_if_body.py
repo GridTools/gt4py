@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 import dace
 from dace import (
+    data as dace_data,
     dtypes as dace_dtypes,
     properties as dace_properties,
     subsets as dace_sbs,
@@ -152,6 +153,16 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # If no branch has something to inline then we are done.
         if all(len(rel_df) == 0 for rel_df in relocatable_dataflow.values()):
+            return False
+
+        # Check if relatability is possible.
+        if not self._check_for_data_and_symbol_conflicts(
+            sdfg=sdfg,
+            state=graph,
+            relocatable_dataflow=relocatable_dataflow,
+            enclosing_map=enclosing_map,
+            if_block=if_block,
+        ):
             return False
 
         # Because the transformation can only handle `if` expressions that
@@ -479,6 +490,74 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     dace_type_inference.infer_expr_type(new_sym, parent_symbols)
                     or dace_dtypes.typeclass(int),
                 )
+
+    def _check_for_data_and_symbol_conflicts(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        relocatable_dataflow: dict[str, set[dace_nodes.Node]],
+        if_block: dace_nodes.NestedSDFG,
+        enclosing_map: dace_nodes.MapEntry,
+    ) -> bool:
+        """Check if the relocation would cause any conflict, such as a symbol clash."""
+
+        # TODO(phimuell): There is an obscure case where the nested SDFG, on its own,
+        #   defines a symbol that is also mapped, for example a dynamic Map range.
+        #   It is probably not a problem, because of the scopes DaCe adds when
+        #   generating the C++ code.
+
+        # Create a subgraph to compute the free symbols, i.e. the symbols that
+        #  need to be supplied from the outside. However, this are not all.
+        #  Note, just adding some "well chosen" nodes to the set will not work.
+        all_relocated_dataflow: set[dace_nodes.Node] = functools.reduce(
+            lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), set()
+        )
+        requiered_symbols: set[str] = dace.sdfg.state.StateSubgraphView(
+            state, all_relocated_dataflow
+        ).free_symbols
+
+        inner_data_names = if_block.sdfg.arrays.keys()
+        for node_to_check in all_relocated_dataflow:
+            if (
+                isinstance(node_to_check, dace_nodes.AccessNode)
+                and node_to_check.data in inner_data_names
+            ):
+                # There is already a data descriptor that is used on the inside as on
+                #  the outside. Thus we would have to perform some renaming, which we
+                #  currently do not.
+                # TODO(phimell): Handle this case.
+                return False
+
+            for iedge in state.in_edges(node_to_check):
+                src_node = iedge.src
+                if src_node not in all_relocated_dataflow:
+                    # This means that `src_node` is not relocated but mapped into the
+                    #  `if` block. This means that `edge` is replicated as well.
+                    # NOTE: This code is based on the one found in `DataflowGraphView`.
+                    # TODO(phimuell): Do we have to inspect the full Memlet path here?
+                    assert isinstance(src_node, dace_nodes.AccessNode) or src_node is enclosing_map
+                    requiered_symbols |= iedge.data.used_symbols(True, edge=iedge)
+
+        # The (beyond the enclosing Map) data is also mapped into the `if` block, so we
+        #  have to consider that as well.
+        for iedge in state.in_edges(if_block):
+            if iedge.src is enclosing_map and (not iedge.data.is_empty()):
+                outside_desc = sdfg.arrays[iedge.data.data]
+                if isinstance(outside_desc, dace_data.View):
+                    return False  # Handle this case.
+                requiered_symbols |= outside_desc.used_symbols(True)
+
+        # A conflicting symbol is a free symbol of the relocatable dataflow, that is not a
+        #  direct mapping. For example if there is a symbol `n` on the inside and outside
+        #  then everything is okay if the symbol mapping is `{n: n}` i.e. the symbol has the
+        #  same meaning inside and outside. Everything else is not okay.
+        symbol_mapping = if_block.symbol_mapping
+        conflicting_symbols = requiered_symbols.intersection((str(k) for k in symbol_mapping))
+        for conflicting_symbol in conflicting_symbols:
+            if conflicting_symbol != str(symbol_mapping[conflicting_symbol]):
+                return False
+
+        return True
 
     def _find_branch_for(
         self,

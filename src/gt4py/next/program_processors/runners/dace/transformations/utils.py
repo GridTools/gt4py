@@ -8,6 +8,7 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
+import uuid
 from typing import Optional, Sequence, TypeVar, Union
 
 import dace
@@ -18,6 +19,15 @@ from dace.transformation.passes import analysis as dace_analysis
 
 
 _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
+
+
+def unique_name(name: str) -> str:
+    """Adds a unique string to `name`."""
+    maximal_length = 200
+    unique_sufix = str(uuid.uuid1()).replace("-", "_")
+    if len(name) > (maximal_length - len(unique_sufix)):
+        name = name[: (maximal_length - len(unique_sufix) - 1)]
+    return f"{name}_{unique_sufix}"
 
 
 def gt_make_transients_persistent(

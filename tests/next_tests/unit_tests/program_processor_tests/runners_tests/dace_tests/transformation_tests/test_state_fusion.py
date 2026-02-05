@@ -25,7 +25,7 @@ import dace
 
 
 def _make_simple_two_state_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("simple_linear_states"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple_linear_states"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -71,7 +71,7 @@ def _make_simple_two_state_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGS
 
 def _make_global_in_both_read_and_write() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
     """The first state contains a read to a global and the second contains a write to the global."""
-    sdfg = dace.SDFG(util.unique_name("global_in_both_states_read_and_write"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("global_in_both_states_read_and_write"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -106,7 +106,7 @@ def _make_global_in_both_read_and_write() -> tuple[dace.SDFG, dace.SDFGState, da
 
 def _make_global_both_state_read() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
     """In both states the same global is read."""
-    sdfg = dace.SDFG(util.unique_name("global_read_in_the_same_state"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("global_read_in_the_same_state"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -140,7 +140,7 @@ def _make_global_both_state_read() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFG
 
 def _make_global_both_state_write() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
     """In both states the same global is written."""
-    sdfg = dace.SDFG(util.unique_name("global_write_in_the_same_state"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("global_write_in_the_same_state"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -176,7 +176,9 @@ def _make_empty_state(
     first_state_empty: bool,
 ) -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
     sdfg = dace.SDFG(
-        util.unique_name("global_" + ("first" if first_state_empty else "second") + "_state_empty")
+        gtx_transformations.utils.unique_name(
+            "global_" + ("first" if first_state_empty else "second") + "_state_empty"
+        )
     )
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
@@ -204,7 +206,7 @@ def _make_empty_state(
 
 def _make_global_merge_1() -> dace.SDFG:
     """The first state writes to a global while the second state reads and writes to it."""
-    sdfg = dace.SDFG(util.unique_name("global_merge_1"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("global_merge_1"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -237,7 +239,7 @@ def _make_global_merge_1() -> dace.SDFG:
 
 def _make_global_merge_2() -> dace.SDFG:
     """In both states the global data is read and written to."""
-    sdfg = dace.SDFG(util.unique_name("global_merge_2"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("global_merge_2"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -269,7 +271,7 @@ def _make_global_merge_2() -> dace.SDFG:
 
 def _make_swapping_sdfg() -> dace.SDFG:
     """Makes an SDFG that implements `x, y = y, x` with Memlets."""
-    sdfg = dace.SDFG(util.unique_name("swapping_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("swapping_sdfg"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -299,7 +301,7 @@ def _make_swapping_sdfg() -> dace.SDFG:
 
 
 def _make_non_concurrent_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("non_concurrent_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("non_concurrent_sdfg"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -345,7 +347,7 @@ def _make_non_concurrent_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGSta
 
 
 def _make_double_producer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("double_producer_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("double_producer_sdfg"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -394,7 +396,7 @@ def _make_double_producer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGSt
 
 
 def _make_double_consumer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("double_consumer_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("double_consumer_sdfg"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -468,7 +470,7 @@ def _make_double_consumer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGSt
 
 
 def _make_hidden_double_producer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("hidden_double_producer_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("hidden_double_producer_sdfg"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
 
@@ -624,7 +626,7 @@ def test_empty_second_state():
 
 
 def test_both_states_are_empty():
-    sdfg = dace.SDFG(util.unique_name("full_empty_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("full_empty_sdfg"))
     state1 = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state1)
     assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 0
