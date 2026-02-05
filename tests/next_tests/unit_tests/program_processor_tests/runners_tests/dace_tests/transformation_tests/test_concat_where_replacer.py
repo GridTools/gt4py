@@ -450,7 +450,7 @@ def test_concat_where_non_canonical_memlet_sdfg():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-def _make_concat_where_multiple_consumers(
+def _make_concat_where_multiple_nested_consumers(
     uniform_access: bool,
 ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry]:
     sdfg = dace.SDFG(util.unique_name("concat_where_replacer_multiple_consumer"))
@@ -500,8 +500,8 @@ def _make_concat_where_multiple_consumers(
 
 
 @pytest.mark.parametrize("uniform_access", [True, False])
-def test_concat_where_multiple_consumers_uniform_access(uniform_access: bool):
-    sdfg, state, concat_node, me = _make_concat_where_multiple_consumers(
+def test_concat_where_multiple_nested_consumers(uniform_access: bool):
+    sdfg, state, concat_node, me = _make_concat_where_multiple_nested_consumers(
         uniform_access=uniform_access
     )
 
@@ -862,3 +862,73 @@ def test_concat_where_global_read(use_tasklet: bool, scalar_access: int):
 
     assert state.in_degree(concat_where_tlet) == 2
     assert state.out_degree(concat_where_tlet) == 1
+
+
+def _make_concat_where_multiple_top_level_maps(
+    access_in_both_scopes: bool,
+) -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+]:
+    sdfg, state, concat_node, *_ = _make_concat_where_multiple_nested_scopes(
+        access_in_both_scopes=access_in_both_scopes
+    )
+
+    anames = ["o1", "o2", "o3"]
+    for aname in anames:
+        sdfg.add_array(
+            name=aname,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+
+    state.add_mapped_tasklet(
+        "addi_comp1",
+        map_ranges={"__k": "0:10"},
+        inputs={"__in": dace.Memlet(f"{concat_node}[3, __k]")},
+        outputs={"__out": dace.Memlet("o1[__k]")},
+        code="__out = __in + 2.0",
+        input_nodes={concat_node},
+        external_edges=True,
+    )
+    state.add_mapped_tasklet(
+        "addi_comp2",
+        map_ranges={"__k": "0:10"},
+        inputs={"__in": dace.Memlet(f"{concat_node.data}[__k, 8]")},
+        outputs={"__out": dace.Memlet("o2[__k]")},
+        code="__out = __in * 5.0",
+        input_nodes={concat_node},
+        external_edges=True,
+    )
+    state.add_nedge(concat_node, state.add_access("o3"), dace.Memlet(f"{concat_node}[4, 7] -> [6]"))
+
+    sdfg.validate()
+
+    return sdfg, state, concat_node
+
+
+@pytest.mark.parametrize("access_in_both_scopes", [True, False])
+def test_concat_where_multiple_top_level_maps(access_in_both_scopes: bool):
+    """
+    Essentially the same as `test_concat_where_multiple_nested_scopes()` but it
+    has more consumer on the top level.
+    """
+    sdfg, state, concat_node = _make_concat_where_multiple_top_level_maps(
+        access_in_both_scopes=access_in_both_scopes
+    )
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
