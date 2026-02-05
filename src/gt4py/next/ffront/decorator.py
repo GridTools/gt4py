@@ -75,19 +75,21 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
     def with_backend(self, backend: next_backend.Backend) -> Self:
         return dataclasses.replace(self, backend=backend)
 
-    def with_connectivities(
-        self,
-        connectivities: common.OffsetProvider,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
-    ) -> Self:
+    def with_compilation_option(
+        self, **compilation_options: Unpack[options.CompilationOptionsArgs]
+    ) -> Program:
         return dataclasses.replace(
             self,
             compilation_options=dataclasses.replace(
-                self.compilation_options, connectivities=connectivities
+                self.compilation_options, **compilation_options
             ),
         )
 
     @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
+        # note(tehrengruber): If the program is compiled using `compile` this method
+        #  is skipped and a pool with (potentially different) options as given to
+        #  `compile` is used.
         return self._make_compiled_programs_pool(
             static_params=self.compilation_options.static_params,
         )
@@ -106,14 +108,12 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
 
-        pool = compiled_program.CompiledProgramsPool(
+        return compiled_program.CompiledProgramsPool(
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
             argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
         )
-
-        return pool
 
     def compile(
         self,
