@@ -548,7 +548,7 @@ def _replace_single_read(
     # Find out what `other_subset` of the new Memlet should be.
     if (
         isinstance(consumer_spec.consumer, dace_nodes.AccessNode)
-        and consumer_spec.edge.dst.data == consumer_spec.edge.data.data
+        and consumer_spec.consumer.data == consumer_spec.edge.data.data
     ):
         other_subset = consumer_spec.edge.data.subset
     else:
