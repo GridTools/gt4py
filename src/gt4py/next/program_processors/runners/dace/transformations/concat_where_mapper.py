@@ -8,7 +8,7 @@
 
 import copy
 import dataclasses
-from typing import Any, Sequence, TypeAlias, Union
+from typing import Any, Optional, Sequence, TypeAlias, Union
 
 import dace
 from dace import (
@@ -123,8 +123,11 @@ def gt_replace_concat_where_node(
     converging_edges = sorted(converging_edges, key=lambda iedge: iedge.src.data)
 
     # These are all the consumers that we need to modify.
-    consumer_specs = _find_consumer_specs(state, concat_node, map_entry)
+    find_consumer_result = _find_consumer_specs_single_level(state, concat_node)
+    assert find_consumer_result is not None
+    consumer_specs, next_levels = find_consumer_result
     assert len(consumer_specs) > 0
+    assert len(next_levels) == 0
 
     scope_dict = state.scope_dict()
     producer_specs, scope_sources = _setup_initial_producer_description(
@@ -195,6 +198,9 @@ class _FinalConsumerSpec:
 
     edge: dace_graph.MultiConnectorEdge[dace.Memlet]
 
+    def consumed_subset(self, state: dace.SDFGState) -> dace_sbs.Range:
+        return self.edge.data.get_src_subset(self.edge, state)
+
     @property
     def consumer(self) -> dace_nodes.Node:
         return self.edge.dst
@@ -207,6 +213,11 @@ class _FinalConsumerSpec:
             return self.edge == other
         elif isinstance(other, _FinalConsumerSpec):
             return self.edge == other.edge
+        return NotImplemented
+
+    def __lt__(self, other: object) -> bool:
+        if isinstance(other, _FinalConsumerSpec):
+            return (str(self.consumer), str(self.edge)) < (str(self.consumer), str(other.edge))
         return NotImplemented
 
 
@@ -468,7 +479,7 @@ def _replace_single_read(
 
     select_conds: list[str] = []
     prod_accesses: list[str] = []
-    consume_subset = consumer_spec.edge.data.get_src_subset(consumer_spec.edge, state)
+    consume_subset = consumer_spec.consumed_subset(state)
     for prod_spec in producer_specs:
         prod_subset = prod_spec.subset
         prod_offsets = prod_spec.offset
@@ -572,23 +583,80 @@ def _replace_single_read(
     dace_sdutils.remove_edge_and_dangling_path(state, consumer_spec.edge)
 
 
-def _find_consumer_specs(
+def _find_consumer_specs_single_level(
     state: dace.SDFGState,
     concat_node: dace_nodes.AccessNode,
-    map_entry: dace_nodes.MapEntry,
-) -> list[_FinalConsumerSpec]:
-    """Find all edges that reads from `concat_node` inside the Map defined by `map_entry`."""
-    assert state.out_degree(concat_node) == 1
-    outer_edge: dace_graph.MultiConnectorEdge[dace.Memlet] = state.edges_between(
-        concat_node, map_entry
-    )[0]
-    assert outer_edge.dst_conn.startswith("IN_")
+) -> Optional[tuple[list[_FinalConsumerSpec], list[_FinalConsumerSpec]]]:
+    """Find all consumers of `concat_node` in this state and on this level.
 
+    The consumers are partitioned into two groups. The first group are the "genuine
+    consumers", this are the consumers that only read one element from `concat_node`.
+    These are the consumers that are handled by `_replace_single_read()`.
+    The second group are "descending points", these are essentially nested SDFGs,
+    that consume the entire concat where node (a nested SDFG that just consumes
+    a single element is still classified as a "genuine consumer"). These are the
+    nodes that needs further processing.
+    `None` is returned in cases consumers are found that can not be handled.
+
+    Args:
+        state: The state in which we operate.
+        concat_node: The node representing the `concat_where` result.
+
+    Note:
+        - This function only process a single SDFG level, i.e. does not decent into
+            nested SDFGs.
+        - It only operates in state `state` starting from `concat_node`, i.e. if
+            there are other nodes that refers to the same data as `concat_node`
+            then they are ignored, even in the same state.
+        - The "genuine consumers" are in a sorted order, but the "descending
+            points" are in an unspecific order.
+    """
+
+    if state.out_degree(concat_node) == 0:
+        return [], []
+
+    # First collect all consumer, we will wet and partition them afterwards.
+    all_consumers: list[_FinalConsumerSpec] = []
+    for oedge in state.out_edges(concat_node):
+        consumer = oedge.dst
+        if oedge.data.is_empty():
+            # Possible, but hard to handle.
+            return None
+        if isinstance(consumer, dace_nodes.MapEntry):
+            if not oedge.dst_conn.startswith("IN_"):
+                return None  # We do not handle dynamic map ranges.
+            for edge_inside_map in state.out_edges_by_connector(
+                consumer, "OUT_" + oedge.dst_conn[3:]
+            ):
+                all_consumers.extend(
+                    (
+                        _FinalConsumerSpec(edge=edge)
+                        for edge in state.memlet_tree(edge_inside_map).leaves()
+                    )
+                )
+        elif isinstance(consumer, (dace_nodes.AccessNode, dace_nodes.Tasklet)):
+            all_consumers.append(_FinalConsumerSpec(edge=oedge))
+        else:
+            return None  # These kind of consumers can not be handled.
+
+    # Now wet and partition the consumer. Most importantly test if they only read
+    #  a single element, in which case they are genuine consumers this applies to
+    #  _all_ nodes, even nested SDFGs. Otherwise it might open up a "new level".
+    #  For this the consumer must be a nested SDFG that reads the _whole_ concat
+    #  where node.
+    concat_where_shape = dace_sbs.Range.from_array(concat_node.desc(state.sdfg))
+    stairs_to_deeper_levels: list[_FinalConsumerSpec] = []  # Better name appreciated.
     consumer_specs: list[_FinalConsumerSpec] = []
-    for inner_edge in state.out_edges_by_connector(map_entry, "OUT_" + outer_edge.dst_conn[3:]):
-        consumer_specs.extend(
-            (_FinalConsumerSpec(edge=edge) for edge in state.memlet_tree(inner_edge).leaves())
-        )
+    for consumer_spec in all_consumers:
+        consumed_subset = consumer_spec.consumed_subset(state)
 
-    # Sort the edges according to the destination.
-    return sorted(consumer_specs, key=lambda cspec: str(cspec.consumer))
+        if consumed_subset.num_elements() == 1:  # Real consumer
+            consumer_specs.append(consumer_spec)
+        elif isinstance(consumer_spec.consumer, dace_nodes.NestedSDFG) and consumed_subset.covers(
+            concat_where_shape
+        ):
+            stairs_to_deeper_levels.append(consumer_spec)  # Nested SDFG that opens a "new level".
+        else:
+            return None  # We can not handle this consumer.
+
+    return sorted(consumer_specs), stairs_to_deeper_levels
