@@ -76,7 +76,6 @@ def test_concat_where_different_inputs():
         state=state,
         sdfg=sdfg,
         concat_node=concat_node,
-        map_entry=me,
     )
     sdfg.validate()
 
@@ -152,7 +151,6 @@ def test_concat_where_same_inputs():
         state=state,
         sdfg=sdfg,
         concat_node=concat_node,
-        map_entry=me,
     )
     sdfg.validate()
 
@@ -243,7 +241,6 @@ def test_concat_where_mixed_inputs():
         state=state,
         sdfg=sdfg,
         concat_node=concat_node,
-        map_entry=me,
     )
     sdfg.validate()
 
@@ -332,7 +329,6 @@ def test_concat_where_additional_mapping_needed():
         state=state,
         sdfg=sdfg,
         concat_node=concat_node,
-        map_entry=me,
     )
     sdfg.validate()
 
@@ -434,7 +430,6 @@ def test_concat_where_non_canonical_memlet_sdfg():
         state=state,
         sdfg=sdfg,
         concat_node=concat_node,
-        map_entry=me,
     )
     sdfg.validate()
 
@@ -531,7 +526,6 @@ def test_concat_where_multiple_consumers_uniform_access(uniform_access: bool):
         state=state,
         sdfg=sdfg,
         concat_node=concat_node,
-        map_entry=me,
     )
     sdfg.validate()
 
@@ -624,7 +618,6 @@ def test_concat_where_nested_scopes():
         state=state,
         sdfg=sdfg,
         concat_node=concat_node,
-        map_entry=me,
     )
     sdfg.validate()
 
@@ -743,7 +736,6 @@ def test_concat_where_multiple_nested_scopes(access_in_both_scopes: bool):
         state=state,
         sdfg=sdfg,
         concat_node=concat_node,
-        map_entry=me,
     )
     sdfg.validate()
 
@@ -780,3 +772,93 @@ def test_concat_where_multiple_nested_scopes(access_in_both_scopes: bool):
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_global_read(
+    use_tasklet: bool, scalar_access: int
+) -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+]:
+    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_global_consumer"))
+    state = sdfg.add_state()
+    for aname in "abcd":
+        sdfg.add_array(
+            name=aname,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(aname == "c"),
+        )
+    a, b, c, d = (state.add_access(aname) for aname in "abcd")
+
+    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
+
+    if use_tasklet:
+        tlet = state.add_tasklet(
+            "consumer",
+            inputs={"__in0"},
+            outputs={"__out"},
+            code="__out = __in0 + 1.234",
+        )
+        state.add_edge(c, None, tlet, "__in0", dace.Memlet(f"c[{scalar_access}]"))
+        state.add_edge(tlet, "__out", d, None, dace.Memlet("d[5]"))
+    else:
+        state.add_edge(c, None, d, None, dace.Memlet(f"c[{scalar_access}]"))
+
+    sdfg.validate()
+
+    return sdfg, state, c
+
+
+@pytest.mark.parametrize("use_tasklet", [False, True])
+@pytest.mark.parametrize("scalar_access", [2, 8])
+def test_concat_where_global_read(use_tasklet: bool, scalar_access: int):
+    sdfg, state, concat_node = _make_concat_where_global_read(use_tasklet, scalar_access)
+
+    access_nodes_before = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(access_nodes_before) == 4
+    assert concat_node in access_nodes_before
+
+    if use_tasklet:
+        tasklets_before = util.count_nodes(state, dace_nodes.Tasklet, True)
+        assert len(tasklets_before) == 1
+        org_tlet = tasklets_before[0]
+        assert all(oedge.dst is org_tlet for oedge in state.out_edges(concat_node))
+    else:
+        assert util.count_nodes(state, dace_nodes.Tasklet) == 0
+        assert all(
+            isinstance(oedge.dst, dace_nodes.AccessNode) and oedge.dst.data == "d"
+            for oedge in state.out_edges(concat_node)
+        )
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    tasklets_after = util.count_nodes(state, dace_nodes.Tasklet, True)
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
+
+    if use_tasklet:
+        assert len(tasklets_after) == 2
+        assert org_tlet in tasklets_after
+        assert len(access_nodes_after) == 4
+        concat_where_tlet = next(tlet for tlet in tasklets_after if tlet is not org_tlet)
+    else:
+        # In this case we can remove the intermediate because we could directly
+        #  write into the destination output. However, currently we do not do it.
+        assert len(access_nodes_after) == 4
+        assert len(tasklets_after) == 1
+        concat_where_tlet = tasklets_after[0]
+
+    assert state.in_degree(concat_where_tlet) == 2
+    assert state.out_degree(concat_where_tlet) == 1

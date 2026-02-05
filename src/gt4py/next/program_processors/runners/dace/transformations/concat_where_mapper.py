@@ -100,9 +100,11 @@ def gt_replace_concat_where_node(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     concat_node: dace_nodes.AccessNode,
-    map_entry: dace_nodes.MapEntry,
+    tag: Optional[str] = None,
 ) -> None:
     """Performs the replacement
+
+    User must make sure that `concat_where` is single use data.
 
     Todo:
         - Symbol mapping.
@@ -112,9 +114,6 @@ def gt_replace_concat_where_node(
         - Nested SDFG (1 level).
         - Nested SDFG multiple levels.
     """
-
-    assert state.out_degree(concat_node) == 1
-    assert all(oedge.dst is map_entry for oedge in state.out_edges(concat_node))
 
     # Collect all edges that generate data that converges at the concat where node.
     converging_edges = list(state.in_edges(concat_node))
@@ -152,7 +151,7 @@ def gt_replace_concat_where_node(
             sdfg=sdfg,
             consumer_spec=consumer_spec,
             producer_specs=producer_specs,
-            tag=f"{concat_node.data}_{map_entry.label}",
+            tag=f"{concat_node.data}_{'' if tag is None else tag}",
         )
 
     assert state.out_degree(concat_node) == 0
@@ -333,10 +332,9 @@ def _map_data_into_nested_scopes(
     """
     # These are the scopes in which (legal) accesses to the `concat_where`. We now have
     #  to make the individual data, i.e. the producer available there.
-    accessed_scopes: set[dace_nodes.Node] = {
+    accessed_scopes: set[_ScopeLocation] = {
         scope_dict[consumer_spec.consumer] for consumer_spec in consumer_specs
     }
-    assert not any(scope is None for scope in accessed_scopes)
 
     # Process the nested scopes.
     for needed_scope in accessed_scopes:
