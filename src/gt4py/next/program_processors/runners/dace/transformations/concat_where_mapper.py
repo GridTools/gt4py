@@ -115,33 +115,28 @@ def gt_replace_concat_where_node(
         - Nested SDFG multiple levels.
     """
 
-    # Collect all edges that generate data that converges at the concat where node.
-    converging_edges = list(state.in_edges(concat_node))
-    # TODO(phimuell): Lift this restriction by creating intermediate AccessNodes
-    assert all(isinstance(iedge.src, dace_nodes.AccessNode) for iedge in converging_edges)
-    converging_edges = sorted(converging_edges, key=lambda iedge: iedge.src.data)
-
     # These are all the consumers that we need to modify.
     find_consumer_result = _find_consumer_specs_single_level(state, concat_node)
     assert find_consumer_result is not None
-    consumer_specs, next_levels = find_consumer_result
+    consumer_specs, descening_points = find_consumer_result
     assert len(consumer_specs) > 0
-    assert len(next_levels) == 0
+    assert len(descening_points) == 0
 
     scope_dict = state.scope_dict()
-    producer_specs, scope_sources = _setup_initial_producer_description(
+    initial_producer_specs, base_scope_sources = _setup_initial_producer_description_for(
         sdfg=sdfg,
         state=state,
+        concat_node=concat_node,
         scope_dict=scope_dict,
-        converging_edges=converging_edges,
     )
 
-    _map_data_into_nested_scopes(
+    # We have to ensures that the "descending points" have access to the data.
+    producer_specs = _map_data_into_nested_scopes(
         state=state,
         scope_dict=scope_dict,
-        producer_specs=producer_specs,  # Will be modified
-        scope_sources=scope_sources,  # Will be modified
-        consumer_specs=consumer_specs,
+        initial_producer_specs=initial_producer_specs,
+        base_scope_sources=base_scope_sources,
+        consumer_specs=consumer_specs + descening_points,
     )
 
     # Now process them.
@@ -258,41 +253,56 @@ class _ProducerSpec:
             data_source=self.data_source.copy(),
         )
 
+    def __lt__(self, other: object) -> bool:
+        if isinstance(other, _ProducerSpec):
+            return (self.data_name, str(self.subset)) < (other.data_name, str(other.subset))
+        return NotImplemented
 
-def _setup_initial_producer_description(
+    def __hash__(self) -> int:
+        return id(self)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, _ProducerSpec):
+            return id(self) == id(other)
+        return NotImplemented
+
+
+def _setup_initial_producer_description_for(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
+    concat_node: dace_nodes.AccessNode,
     scope_dict: Any,
-    converging_edges: Sequence[dace_graph.MultiConnectorEdge[dace.Memlet]],
-) -> tuple[list[_ProducerSpec], list[dict[_ScopeLocation, _DataSource]]]:
+) -> tuple[list[_ProducerSpec], list[_DataSource]]:
     """Sets up the producer specs.
 
-    The function essentially populates all attribute of `_ProducerSpec` with the
-    exception of `.data_source` which is only partially populated.
-    Note that the function expects that `converting_edges` are AccessNode to AccessNode
-    connections and have the same target, the concat where node.
-    Furthermore, the order in which producer specifications are generated is the same
-    as in `converging_edges`, the sources do not need to be different.
-    In addition it is also important to realize that multiple producer specs might
-    refer to the same data.
+    The function expects that `concat_node` is the result of a `concat_where`
+    expression. Furthermore, it is assumed that it is single use data, i.e. not
+    used anywhere else. This function will then create an intial specification
+    for the replacement.
 
-    It also sets up the scope source, like the returned producer specs it is also a
-    list with the same ordering. Each element is a `dict` that maps a scope to
-    where the full data of that scope can be found.
-    In the end it is a compressed version of `_ProducerSpec.data_source`, that however
-    needs that `scope_dict` is valid at every point. It will later be expanded.
+    It also creates an initial description of the scope source, which is a helper
+    construct to compute `_ProducerSpec.data_source`. However it is only valid
+    for the state (and SDFG level) `concat_node` resides in. To process different
+    states (which means inside nested SDFGs) it is not suited and
+    `_setup_base_scope_sources_in_state()` has to be used first.
 
-    Note:
-        This function can only be called on a valid SDFG. Furthermore, it only works
-        for a single state.
+    To fully populate the production specification it has to be passed to
+    `_map_data_into_nested_scopes()`.
     """
+
+    # First collect the edges that define the concat where expression. We currently
+    #  assume that all of them came from AccessNodes, but this is a restriction that
+    #  could be lifted.
+    converging_edges = list(state.in_edges(concat_node))
+    assert all(isinstance(iedge.src, dace_nodes.AccessNode) for iedge in converging_edges)
+
     assert len(converging_edges) >= 2
     assert isinstance(converging_edges[0].dst, dace_nodes.AccessNode)
     assert scope_dict[converging_edges[0].dst] is None
     concat_node = converging_edges[0].dst
     concat_dtype = concat_node.desc(sdfg).dtype
 
-    scope_sources: list[dict[_ScopeLocation, _DataSource]] = []
+    base_scope_sources_unordered: dict[_ProducerSpec, _DataSource] = {}
     producer_specs: list[_ProducerSpec] = []
     for converging_edge in converging_edges:
         assert isinstance(converging_edge.src, dace_nodes.AccessNode)
@@ -308,33 +318,42 @@ def _setup_initial_producer_description(
                 data_source={},
             )
         )
-        scope_sources.append({None: _DataSource(producer_node, None)})
+        base_scope_sources_unordered[producer_specs[-1]] = _DataSource(producer_node, None)
 
-    return producer_specs, scope_sources
+    # Now sort the producer specification and then apply the same order to the scope sources.
+    producer_specs = sorted(producer_specs)
+    base_scope_sources = [base_scope_sources_unordered[prod_spec] for prod_spec in producer_specs]
+
+    return producer_specs, base_scope_sources
 
 
 def _map_data_into_nested_scopes(
     state: dace.SDFGState,
     scope_dict: Any,
-    scope_sources: list[dict[_ScopeLocation, _DataSource]],
-    producer_specs: list[_ProducerSpec],
-    consumer_specs: list[_FinalConsumerSpec],
-) -> None:
-    """Ensures that the producer data is available in every nested scope.
+    base_scope_sources: Sequence[_DataSource],
+    initial_producer_specs: Sequence[_ProducerSpec],
+    consumer_specs: Sequence[_FinalConsumerSpec],
+) -> list[_ProducerSpec]:
+    """Complete the production specifications and ensures that the data is available in nested scopes.
 
-    It is important that this function only processes the scope defined by the
-    consumer, `consumer_specs`. Which are further required to only reside inside
-    `state` (which includes nested SDFGs).
-
-    This function essentially finalizes, `producer_specs` which was obtained from
-    a previous call from `_setup_initial_producer_description()` as was `scope_sources`
-    which is modified, in the sense of a scratch pad.
+    The function will use the information passed by `base_scope_sources` and
+    `initial_producer_specs` (which were obtained by a previous call to
+    `_setup_initial_producer_description_for()` or `_setup_base_scope_sources_in_state()`)
+    to compute a full producer description, which is also returned. In addition it will
+    make sure that the data is available in the nested scopes, such that the
+    replacement, performed by `_replace_single_read()` can be performed.
     """
     # These are the scopes in which (legal) accesses to the `concat_where`. We now have
     #  to make the individual data, i.e. the producer available there.
     accessed_scopes: set[_ScopeLocation] = {
         scope_dict[consumer_spec.consumer] for consumer_spec in consumer_specs
     }
+
+    producer_specs = [copy.copy(producer_spec) for producer_spec in initial_producer_specs]
+    scope_sources = [
+        {scope_dict[base_scope_source.node]: base_scope_source}
+        for base_scope_source in base_scope_sources
+    ]
 
     # Process the nested scopes.
     for needed_scope in accessed_scopes:
@@ -352,7 +371,7 @@ def _map_data_into_nested_scopes(
         for scope_source, producer_spec in zip(scope_sources, producer_specs):
             producer_spec.data_source[consumer_spec] = scope_source[consumer_scope]
 
-    return None
+    return producer_specs
 
 
 def _map_data_into_nested_scopes_impl(
@@ -442,6 +461,58 @@ def _map_data_into_nested_scopes_impl(
         scope_source[scope_to_handle] = data_source
 
     return
+
+
+def _setup_producer_description_for_nested_state(
+    nested_state: dace.SDFGState,
+    nested_sdfg: dace.SDFG,
+    top_level_initial_producer_specs: list[_ProducerSpec],
+    rename_spec: dict[str, str],
+    resuse_exiting_access_nodes: bool,
+) -> tuple[list[_ProducerSpec], list[_DataSource]]:
+    """Analogue operation to `_setup_initial_producer_description_for()` but on nested levels."""
+    nested_initial_producer_specs: list[_ProducerSpec] = []
+    nested_base_source_scopes: list[_DataSource] = []
+    created_access_nodes: dict[str, dace_nodes.AccessNode] = (
+        {}
+        if not resuse_exiting_access_nodes
+        else {
+            s.data: s for s in nested_state.source_nodes() if isinstance(s, dace_nodes.AccessNode)
+        }
+    )
+
+    for tl_prod_spec in top_level_initial_producer_specs:
+        nested_data_name = rename_spec.get(tl_prod_spec.data_name, tl_prod_spec.data_name)
+
+        # Ensure that the data is registered in the sdfg.
+        if nested_data_name not in nested_sdfg.arrays:
+            nested_data_name, _ = nested_sdfg.add_array(
+                name=nested_data_name,
+                shape=tuple(s for s, _, _ in tl_prod_spec.full_shape),
+                dtype=tl_prod_spec.dtype,
+                transient=False,
+                find_new_name=True,
+            )
+        assert not nested_sdfg.arrays[nested_data_name].transient
+
+        # Created the access node.
+        if nested_data_name not in created_access_nodes:
+            created_access_nodes[nested_data_name] = nested_state.add_access(nested_data_name)
+        access_node = created_access_nodes[nested_data_name]
+
+        nested_initial_producer_specs.append(
+            _ProducerSpec(
+                data_name=nested_data_name,
+                full_shape=copy.copy(tl_prod_spec.full_shape),
+                dtype=tl_prod_spec.dtype,
+                offset=copy.copy(tl_prod_spec.offset),
+                subset=copy.copy(tl_prod_spec.subset),
+                data_source={},
+            )
+        )
+        nested_base_source_scopes.append(_DataSource(access_node, None))
+
+    return nested_initial_producer_specs, nested_base_source_scopes
 
 
 def _replace_single_read(
