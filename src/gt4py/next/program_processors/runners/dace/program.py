@@ -44,7 +44,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # TODO(ricoh): connectivity tables required here for now.
         gtir_stage = typing.cast(gtx_backend.Transforms, self.backend.transforms).past_to_itir(
-            toolchain.CompilableArtifact(
+            toolchain.CompilableProgram(
                 data=self.past_stage,
                 args=arguments.CompileTimeArgs(
                     args=tuple(p.type for p in self.past_stage.past_node.params),

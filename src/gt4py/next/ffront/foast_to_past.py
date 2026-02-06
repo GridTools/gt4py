@@ -165,7 +165,7 @@ class OperatorToProgram(workflow.Workflow[CompilableFOASTOperator, CompilablePAS
         )
         past_node = type_deduction.ProgramTypeDeduction.apply(untyped_past_node)
 
-        return toolchain.CompilableArtifact(
+        return toolchain.CompilableProgram(
             data=ffront_stages.PASTProgramDef(
                 past_node=past_node,
                 closure_vars=fieldop_itir_closure_vars,

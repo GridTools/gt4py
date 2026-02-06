@@ -27,13 +27,13 @@ from gt4py.next.otf import arguments, toolchain
 @dataclasses.dataclass(frozen=True)
 class DSLFieldOperatorDef(Generic[foast.OperatorNodeT]):
     definition: types.FunctionType
-    node_class: type[foast.OperatorNodeT]
+    node_class: type[foast.OperatorNodeT] = foast.FieldOperator  # type: ignore[assignment]
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
     grid_type: Optional[common.GridType] = None
     debug: bool = False
 
 
-CompilableDSLFieldOperator: typing.TypeAlias = toolchain.CompilableArtifact[
+CompilableDSLFieldOperator: typing.TypeAlias = toolchain.CompilableProgram[
     DSLFieldOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -47,7 +47,7 @@ class FOASTOperatorDef(Generic[foast.OperatorNodeT]):
     debug: bool = False
 
 
-CompilableFOASTOperator: typing.TypeAlias = toolchain.CompilableArtifact[
+CompilableFOASTOperator: typing.TypeAlias = toolchain.CompilableProgram[
     FOASTOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -59,7 +59,7 @@ class DSLProgramDef:
     debug: bool = False
 
 
-CompilableDSLProgram: typing.TypeAlias = toolchain.CompilableArtifact[
+CompilableDSLProgram: typing.TypeAlias = toolchain.CompilableProgram[
     DSLProgramDef, arguments.CompileTimeArgs
 ]
 
@@ -72,7 +72,7 @@ class PASTProgramDef:
     debug: bool = False
 
 
-CompilablePASTProgram: typing.TypeAlias = toolchain.CompilableArtifact[
+CompilablePASTProgram: typing.TypeAlias = toolchain.CompilableProgram[
     PASTProgramDef, arguments.CompileTimeArgs
 ]
 
@@ -103,7 +103,7 @@ for t in (str, int):
 @add_content_to_fingerprint.register(FOASTOperatorDef)
 @add_content_to_fingerprint.register(DSLProgramDef)
 @add_content_to_fingerprint.register(PASTProgramDef)
-@add_content_to_fingerprint.register(toolchain.CompilableArtifact)
+@add_content_to_fingerprint.register(toolchain.CompilableProgram)
 @add_content_to_fingerprint.register(arguments.CompileTimeArgs)
 def add_stage_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
     add_content_to_fingerprint(obj.__class__, hasher)

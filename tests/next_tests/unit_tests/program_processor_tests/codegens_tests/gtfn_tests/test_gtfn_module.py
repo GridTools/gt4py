@@ -75,7 +75,7 @@ def program_example():
 def test_codegen(program_example):
     fencil, parameters = program_example
     module = gtfn_module.translate_program_cpu(
-        stages.CompilableProgram(
+        stages.CompilableITIRProgram(
             data=fencil,
             args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
         )
@@ -87,7 +87,7 @@ def test_codegen(program_example):
 
 def test_hash_and_diskcache(program_example, tmp_path):
     fencil, parameters = program_example
-    compilable_program = stages.CompilableProgram(
+    compilable_program = stages.CompilableITIRProgram(
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
@@ -129,7 +129,7 @@ def test_hash_and_diskcache(program_example, tmp_path):
 
 def test_gtfn_file_cache(program_example):
     fencil, parameters = program_example
-    compilable_program = stages.CompilableProgram(
+    compilable_program = stages.CompilableITIRProgram(
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )

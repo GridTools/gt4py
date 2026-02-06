@@ -22,7 +22,9 @@ LS_co = TypeVar("LS_co", bound=languages.LanguageSettings, covariant=True)
 
 
 class TranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[stages.CompilableProgram, stages.ProgramSource[SrcL, LS]],
+    workflow.ReplaceEnabledWorkflowMixin[
+        stages.CompilableITIRProgram, stages.ProgramSource[SrcL, LS]
+    ],
     Protocol[SrcL, LS],
 ):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""

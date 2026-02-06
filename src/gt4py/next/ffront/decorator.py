@@ -58,7 +58,7 @@ ProgramLikeDefinitionT = TypeVar(
 
 
 @dataclasses.dataclass(frozen=True)
-class EntryPointCallable(Generic[ProgramLikeDefinitionT]):
+class DSLEntryPoint(Generic[ProgramLikeDefinitionT]):
     """
     Mixing used by program and program-like objects.
 
@@ -164,7 +164,7 @@ program_call_metrics_collector = metrics.make_collector(
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
-class Program(EntryPointCallable[ffront_stages.DSLProgramDef]):
+class Program(DSLEntryPoint[ffront_stages.DSLProgramDef]):
     """
     Construct a program object from a PAST node.
 
@@ -205,7 +205,7 @@ class Program(EntryPointCallable[ffront_stages.DSLProgramDef]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        no_args_past = toolchain.CompilableArtifact(
+        no_args_past = toolchain.CompilableProgram(
             self.past_stage, arguments.CompileTimeArgs.empty()
         )
         _ = self._frontend_transforms.past_lint(no_args_past).data
@@ -230,7 +230,7 @@ class Program(EntryPointCallable[ffront_stages.DSLProgramDef]):
     @functools.cached_property
     def past_stage(self) -> ffront_stages.PASTProgramDef:
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.CompilableArtifact(
+        no_args_def = toolchain.CompilableProgram(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
         return self._frontend_transforms.func_to_past(no_args_def).data
@@ -250,7 +250,7 @@ class Program(EntryPointCallable[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = toolchain.CompilableArtifact(
+        no_args_past = toolchain.CompilableProgram(
             data=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
@@ -494,12 +494,9 @@ def program(
     return program_inner if definition is None else program_inner(definition)
 
 
-OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
-
-
 @dataclasses.dataclass(frozen=True)
 class FieldOperator(
-    EntryPointCallable[ffront_stages.DSLFieldOperatorDef], GTCallable, Generic[OperatorNodeT]
+    DSLEntryPoint[ffront_stages.DSLFieldOperatorDef], GTCallable, Generic[foast.OperatorNodeT]
 ):
     """
     Construct a field operator object from a FOAST node.
@@ -528,10 +525,10 @@ class FieldOperator(
         backend: Optional[next_backend.Backend],
         grid_type: Optional[common.GridType] = None,
         *,
-        operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,  # type: ignore[assignment] # TODO(ricoh): understand why mypy complains
+        operator_node_cls: type[foast.OperatorNodeT] = foast.FieldOperator,  # type: ignore[assignment]
         operator_attributes: Optional[dict[str, Any]] = None,
         **compilation_options: Unpack[options.CompilationOptionsArgs],
-    ) -> FieldOperator[OperatorNodeT]:
+    ) -> FieldOperator[foast.OperatorNodeT]:
         return cls(
             definition_stage=ffront_stages.DSLFieldOperatorDef(
                 definition=definition,
@@ -551,7 +548,7 @@ class FieldOperator(
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
         return self._frontend_transforms.func_to_foast(
-            toolchain.CompilableArtifact(
+            toolchain.CompilableProgram(
                 data=self.definition_stage, args=arguments.CompileTimeArgs.empty()
             )
         ).data

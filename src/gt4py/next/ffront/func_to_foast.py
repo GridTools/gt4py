@@ -58,7 +58,7 @@ def func_to_foast(inp: DSLFieldOperatorDef) -> FOASTOperatorDef:
         >>> def dsl_operator(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
         ...     return a * const
 
-        >>> dsl_operator_def = gtx.ffront.stages.FieldOperatorDefinition(definition=dsl_operator)
+        >>> dsl_operator_def = gtx.ffront.stages.DSLFieldOperatorDef(definition=dsl_operator)
         >>> foast_definition = func_to_foast(dsl_operator_def)
 
         >>> print(foast_definition.foast_node.id)

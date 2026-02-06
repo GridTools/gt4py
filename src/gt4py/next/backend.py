@@ -40,13 +40,13 @@ from gt4py.next.otf import arguments, stages, toolchain, workflow
 IRDefinitionForm: typing.TypeAlias = (
     DSLFieldOperatorDef | FOASTOperatorDef | DSLProgramDef | PASTProgramDef | itir.Program
 )
-CompilableDefinition: typing.TypeAlias = toolchain.CompilableArtifact[
+CompilableDefinition: typing.TypeAlias = toolchain.CompilableProgram[
     IRDefinitionForm, arguments.JITArgs | arguments.CompileTimeArgs
 ]
 
 
 @dataclasses.dataclass(frozen=True)
-class Transforms(workflow.MultiWorkflow[CompilableDefinition, stages.CompilableProgram]):
+class Transforms(workflow.MultiWorkflow[CompilableDefinition, stages.CompilableITIRProgram]):
     """
     Modular workflow for transformations with access to intermediates.
 
@@ -62,8 +62,8 @@ class Transforms(workflow.MultiWorkflow[CompilableDefinition, stages.CompilableP
     """
 
     aotify_args: workflow.Workflow[
-        toolchain.CompilableArtifact[IRDefinitionForm, arguments.JITArgs],
-        toolchain.CompilableArtifact[IRDefinitionForm, arguments.CompileTimeArgs],
+        toolchain.CompilableProgram[IRDefinitionForm, arguments.JITArgs],
+        toolchain.CompilableProgram[IRDefinitionForm, arguments.CompileTimeArgs],
     ] = dataclasses.field(default_factory=arguments.adapted_jit_to_aot_args_factory)
 
     func_to_foast: workflow.Workflow[CompilableDSLFieldOperator, CompilableFOASTOperator] = (
@@ -90,7 +90,7 @@ class Transforms(workflow.MultiWorkflow[CompilableDefinition, stages.CompilableP
         CompilablePASTProgram, CompilablePASTProgram
     ] = dataclasses.field(default_factory=past_process_args.transform_program_args_factory)
 
-    past_to_itir: workflow.Workflow[CompilablePASTProgram, stages.CompilableProgram] = (
+    past_to_itir: workflow.Workflow[CompilablePASTProgram, stages.CompilableITIRProgram] = (
         dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
     )
 
@@ -141,15 +141,15 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
-    executor: workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]
+    executor: workflow.Workflow[stages.CompilableITIRProgram, stages.CompiledProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms: workflow.Workflow[CompilableDefinition, stages.CompilableProgram]
+    transforms: workflow.Workflow[CompilableDefinition, stages.CompilableITIRProgram]
 
     def compile(
         self, program: IRDefinitionForm, compile_time_args: arguments.CompileTimeArgs
     ) -> stages.CompiledProgram:
         return self.executor(
-            self.transforms(toolchain.CompilableArtifact(data=program, args=compile_time_args))
+            self.transforms(toolchain.CompilableProgram(data=program, args=compile_time_args))
         )
 
     @property
