@@ -77,7 +77,7 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
 
     def with_compilation_option(
         self, **compilation_options: Unpack[options.CompilationOptionsArgs]
-    ) -> Program:
+    ) -> Self:
         return dataclasses.replace(
             self,
             compilation_options=dataclasses.replace(
@@ -91,7 +91,7 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
         #  is skipped and a pool with (potentially different) options as given to
         #  `compile` is used.
         return self._make_compiled_programs_pool(
-            static_params=self.compilation_options.static_params,
+            static_params=self.compilation_options.static_params or (),
         )
 
     def _make_compiled_programs_pool(
@@ -133,7 +133,7 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
         # TODO(havogt): we should reconsider if we want to return a new program on `compile` (and
         #  rename to `with_static_args` or similar) once we have a better understanding of the
         #  use-cases.
-        # check if pool has already been initialized, since this is also a cached property go via
+        # check if pool has already been initialized. since this is also a cached property go via
         #  the dict directly. Note that we don't need to check any args, since the pool checks
         #  this on compile anyway.
         if "_compiled_programs" not in self.__dict__:

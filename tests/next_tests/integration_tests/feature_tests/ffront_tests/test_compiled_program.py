@@ -202,6 +202,11 @@ def compile_testee_unstructured(unstructured_case):
     return testee
 
 
+@pytest.fixture
+def compile_testee_unstructured_no_jit(compile_testee_unstructured):
+    return compile_testee_unstructured.with_compilation_option(enable_jit=False)
+
+
 def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
@@ -262,73 +267,72 @@ def test_compile_unstructured_jit(
 
 
 def test_compile_unstructured_wrong_offset_provider(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=skip_value_mesh_descriptor.offset_provider,
-        enable_jit=False,
     )
 
     # but executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
 
     with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
-        compile_testee_unstructured(
+        compile_testee_unstructured_no_jit(
             *args, offset_provider=unstructured_case.offset_provider, **kwargs
         )
 
 
 def test_compile_unstructured_modified_offset_provider(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=skip_value_mesh_descriptor.offset_provider,
-        enable_jit=False,
     )
 
     # but executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
 
     with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
-        compile_testee_unstructured(
+        compile_testee_unstructured_no_jit(
             *args, offset_provider=unstructured_case.offset_provider, **kwargs
         )
 
 
 def test_compile_unstructured_for_two_offset_providers(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh and simple_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=[
             skip_value_mesh_descriptor.offset_provider,
             unstructured_case.offset_provider,
         ],
-        enable_jit=False,
     )
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
 
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
-    compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
+    compile_testee_unstructured_no_jit(
+        *args, offset_provider=unstructured_case.offset_provider, **kwargs
+    )
 
     v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
     assert np.allclose(
@@ -400,7 +404,9 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
-    assert compile_variants_testee.compilation_options.static_params == (
+    assert compile_variants_testee._compiled_programs.argument_descriptor_mapping[
+        arguments.StaticArg
+    ] == (
         "scalar_int",
         "scalar_float",
         "scalar_bool",
