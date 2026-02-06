@@ -39,11 +39,11 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProgram,
+        stages.CompilableProgramDef,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProgram,
+        stages.CompilableProgramDef,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
 ):
@@ -206,7 +206,7 @@ class GTFNTranslationStep(
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
-        self, inp: stages.CompilableProgram
+        self, inp: stages.CompilableProgramDef
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data

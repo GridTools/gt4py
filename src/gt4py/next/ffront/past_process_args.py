@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Iterator, Sequence, TypeAlias
+from typing import Any, Iterator, Sequence
 
 from gt4py.next import common, errors
 from gt4py.next.ffront import (
@@ -18,12 +18,9 @@ from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-AOT_PRG: TypeAlias = toolchain.ConcreteArtifact[
-    ffront_stages.PASTProgramDef, arguments.CompileTimeArgs
-]
-
-
-def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
+def transform_program_args(
+    inp: ffront_stages.ConcretePASTProgramDef,
+) -> ffront_stages.ConcretePASTProgramDef:
     rewritten_args, rewritten_kwargs = _process_args(
         past_node=inp.data.past_node, args=inp.args.args, kwargs=inp.args.kwargs
     )
@@ -39,7 +36,9 @@ def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
     )
 
 
-def transform_program_args_factory(cached: bool = True) -> workflow.Workflow[AOT_PRG, AOT_PRG]:
+def transform_program_args_factory(
+    cached: bool = True,
+) -> workflow.Workflow[ffront_stages.ConcretePASTProgramDef, ffront_stages.ConcretePASTProgramDef]:
     wf = transform_program_args
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)

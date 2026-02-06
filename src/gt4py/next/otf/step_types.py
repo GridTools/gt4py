@@ -22,7 +22,9 @@ LS_co = TypeVar("LS_co", bound=languages.LanguageSettings, covariant=True)
 
 
 class TranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[stages.CompilableProgram, stages.ProgramSource[SrcL, LS]],
+    workflow.ReplaceEnabledWorkflowMixin[
+        stages.CompilableProgramDef, stages.ProgramSource[SrcL, LS]
+    ],
     Protocol[SrcL, LS],
 ):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
@@ -40,15 +42,15 @@ class BindingStep(Protocol[SrcL, LS, TgtL]):
 
     def __call__(
         self, program_source: stages.ProgramSource[SrcL, LS]
-    ) -> stages.CompilableSource[SrcL, LS, TgtL]: ...
+    ) -> stages.CompilableProject[SrcL, LS, TgtL]: ...
 
 
 class CompilationStep(
-    workflow.Workflow[stages.CompilableSource[SrcL, LS, TgtL], stages.CompiledProgram],
+    workflow.Workflow[stages.CompilableProject[SrcL, LS, TgtL], stages.CompiledProgram],
     Protocol[SrcL, LS, TgtL],
 ):
     """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
 
     def __call__(
-        self, source: stages.CompilableSource[SrcL, LS, TgtL]
+        self, source: stages.CompilableProject[SrcL, LS, TgtL]
     ) -> stages.CompiledProgram: ...

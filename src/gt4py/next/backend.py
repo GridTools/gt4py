@@ -9,8 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-import typing
-from typing import Generic, TypeVar
+from typing import Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
@@ -28,18 +27,6 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, stages, toolchain, workflow
 
 
-IRDefinitionT = TypeVar(
-    "IRDefinitionT",
-    ffront_stages.DSLFieldOperatorDef,
-    ffront_stages.DSLProgramDef,
-    ffront_stages.FOASTOperatorDef,
-    ffront_stages.PASTProgramDef,
-    itir.Program,
-)
-ArgsDefinitionT = TypeVar("ArgsDefinitionT", arguments.JITArgs, arguments.CompileTimeArgs)
-ConcreteProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[IRDefinitionT, ArgsDefinitionT]
-
-
 def jit_to_aot_args(
     inp: arguments.JITArgs,
 ) -> arguments.CompileTimeArgs:
@@ -47,8 +34,8 @@ def jit_to_aot_args(
 
 
 def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
-    ConcreteProgramDef[IRDefinitionT, arguments.JITArgs],
-    ConcreteProgramDef[IRDefinitionT, arguments.CompileTimeArgs],
+    stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.JITArgs],
+    stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.CompileTimeArgs],
 ]:
     """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
     return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
@@ -57,7 +44,8 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 @dataclasses.dataclass(frozen=True)
 class Transforms(
     workflow.MultiWorkflow[
-        ConcreteProgramDef[IRDefinitionT, ArgsDefinitionT], stages.CompilableProgram
+        stages.ConcreteProgramDef[stages.IRDefinitionT, stages.ArgsDefinitionT],
+        stages.CompilableProgramDef,
     ]
 ):
     """
@@ -75,8 +63,8 @@ class Transforms(
     """
 
     aotify_args: workflow.Workflow[
-        ConcreteProgramDef[IRDefinitionT, arguments.JITArgs],
-        ConcreteProgramDef[IRDefinitionT, arguments.CompileTimeArgs],
+        stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.JITArgs],
+        stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.CompileTimeArgs],
     ] = dataclasses.field(default_factory=adapted_jit_to_aot_args_factory)
 
     func_to_foast: workflow.Workflow[
@@ -104,10 +92,10 @@ class Transforms(
     ] = dataclasses.field(default_factory=past_process_args.transform_program_args_factory)
 
     past_to_itir: workflow.Workflow[
-        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgram
+        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgramDef
     ] = dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
 
-    def step_order(self, inp: ConcreteProgramDef) -> list[str]:
+    def step_order(self, inp: stages.ConcreteProgramDef) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, arguments.JITArgs):
             steps.append("aotify_args")
@@ -159,15 +147,15 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
-    executor: workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]
+    executor: workflow.Workflow[stages.CompilableProgramDef, stages.CompiledProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms: workflow.Workflow[ConcreteProgramDef, stages.CompilableProgram]
+    transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef]
 
     def compile(
-        self, program: IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
+        self, program: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
     ) -> stages.CompiledProgram:
         return self.executor(
-            self.transforms(ConcreteProgramDef(data=program, args=compile_time_args))
+            self.transforms(stages.ConcreteProgramDef(data=program, args=compile_time_args))
         )
 
     @property

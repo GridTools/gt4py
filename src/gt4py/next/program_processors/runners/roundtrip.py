@@ -208,13 +208,13 @@ def fencil_generator(
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]):
+class Roundtrip(workflow.Workflow[stages.CompilableProgramDef, stages.CompiledProgram]):
     debug: Optional[bool] = None
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
     transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
 
-    def __call__(self, inp: stages.CompilableProgram) -> stages.CompiledProgram:
+    def __call__(self, inp: stages.CompilableProgramDef) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
 
         fencil = fencil_generator(

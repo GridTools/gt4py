@@ -37,7 +37,7 @@ def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
 class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self,
-        source: stages.CompilableSource[SrcL, LS, TgtL],
+        source: stages.CompilableProject[SrcL, LS, TgtL],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
 
@@ -45,11 +45,11 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
 @dataclasses.dataclass(frozen=True)
 class Compiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
+        stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
         stages.CompiledProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
+        stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
         stages.CompiledProgram,
     ],
     step_types.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python],
@@ -64,7 +64,7 @@ class Compiler(
 
     def __call__(
         self,
-        inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
+        inp: stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
     ) -> stages.CompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 

@@ -117,11 +117,11 @@ class CompiledDaceProgram(stages.CompiledProgram):
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+        stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
         CompiledDaceProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+        stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
         CompiledDaceProgram,
     ],
     step_types.CompilationStep[languages.SDFG, languages.LanguageSettings, languages.Python],
@@ -135,7 +135,7 @@ class DaCeCompiler(
 
     def __call__(
         self,
-        inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+        inp: stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
