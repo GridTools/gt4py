@@ -90,7 +90,7 @@ def program_source_example():
 
 @pytest.fixture
 def compilable_source_example(program_source_example):
-    return stages.CompilableSource(
+    return stages.CompilableProject(
         program_source=program_source_example,
         binding_source=nanobind.create_bindings(program_source_example),
     )

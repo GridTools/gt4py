@@ -108,7 +108,7 @@ def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backen
 
     return decorator.FieldOperatorFromFoast(
         definition_stage=None,
-        foast_stage=ffront_stages.FoastOperatorDefinition(
+        foast_stage=ffront_stages.FOASTOperatorDef(
             foast_node=typed_foast_node,
             closure_vars=closure_vars,
             grid_type=None,

@@ -136,7 +136,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
 
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
         nanobind.bind_source
     )
     compilation = factory.SubFactory(

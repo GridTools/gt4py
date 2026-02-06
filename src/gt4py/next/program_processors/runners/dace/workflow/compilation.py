@@ -19,7 +19,7 @@ import factory
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import common, config
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import definitions, languages, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
@@ -117,14 +117,14 @@ class CompiledDaceProgram(stages.CompiledProgram):
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+        stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
         CompiledDaceProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+        stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
         CompiledDaceProgram,
     ],
-    step_types.CompilationStep[languages.SDFG, languages.LanguageSettings, languages.Python],
+    definitions.CompilationStep[languages.SDFG, languages.LanguageSettings, languages.Python],
 ):
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
@@ -135,7 +135,7 @@ class DaCeCompiler(
 
     def __call__(
         self,
-        inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+        inp: stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
     ) -> CompiledDaceProgram:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,

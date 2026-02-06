@@ -23,7 +23,7 @@ from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
 from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import stages, workflow
+from gt4py.next.otf import definitions, stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -208,13 +208,13 @@ def fencil_generator(
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]):
+class Roundtrip(workflow.Workflow[definitions.CompilableProgramDef, stages.CompiledProgram]):
     debug: Optional[bool] = None
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
     transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
 
-    def __call__(self, inp: stages.CompilableProgram) -> stages.CompiledProgram:
+    def __call__(self, inp: definitions.CompilableProgramDef) -> stages.CompiledProgram:
         debug = config.DEBUG if self.debug is None else self.debug
 
         fencil = fencil_generator(

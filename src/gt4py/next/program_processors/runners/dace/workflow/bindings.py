@@ -288,13 +288,13 @@ def _create_sdfg_bindings(
 def bind_sdfg(
     inp: stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     bind_func_name: str,
-) -> stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python]:
+) -> stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python]:
     """
     Method to be used as workflow stage for generation of SDFG bindings.
 
     Refer to `_create_sdfg_bindings` documentation.
     """
-    return stages.CompilableSource(
+    return stages.CompilableProject(
         program_source=inp,
         binding_source=_create_sdfg_bindings(inp, bind_func_name),
     )
