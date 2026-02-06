@@ -63,7 +63,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgramDef:
         ... )
 
         >>> itir_copy = past_to_gtir(
-        ...     toolchain.CompilableProgram(copy_program.past_stage, compile_time_args)
+        ...     toolchain.ConcreteArtifact(copy_program.past_stage, compile_time_args)
         ... )
 
         >>> print(itir_copy.data.id)

@@ -83,7 +83,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         ... )
 
         >>> copy_program = op_to_prog(
-        ...     toolchain.CompilableProgram(copy.foast_stage, compile_time_args)
+        ...     toolchain.ConcreteArtifact(copy.foast_stage, compile_time_args)
         ... )
 
         >>> print(copy_program.data.past_node.id)
