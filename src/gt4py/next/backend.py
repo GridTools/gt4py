@@ -21,6 +21,7 @@ from gt4py.next.ffront import (
     func_to_past,
     past_process_args,
     past_to_itir,
+    stages as ffront_stages,
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.ffront.stages import (
@@ -37,7 +38,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, stages, toolchain, workflow
 
 
-IRDefinitionForm: typing.TypeAlias = DSL_FOP | FOP | DSL_PRG | PAST_PRG | itir.Program
+IRDefinitionForm: typing.TypeAlias = ffront_stages.FFrontDefinitionForm | itir.Program
 CompilableDefinition: typing.TypeAlias = toolchain.CompilableProgram[
     IRDefinitionForm, arguments.JITArgs | arguments.CompileTimeArgs
 ]
