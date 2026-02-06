@@ -57,6 +57,7 @@ def parse_definition(
     dtypes: Dict[Type, Type] = None,
     literal_int_precision: int | None = None,
     literal_float_precision: int | None = None,
+    force_annotated_temporaries: bool | None = None,
     rebuild=False,
     **kwargs,
 ) -> nodes.StencilDefinition:
@@ -73,6 +74,8 @@ def parse_definition(
         build_args["literal_int_precision"] = literal_int_precision
     if literal_float_precision is not None:
         build_args["literal_float_precision"] = literal_float_precision
+    if force_annotated_temporaries is not None:
+        build_args["force_annotated_temporaries"] = force_annotated_temporaries
 
     build_options = gt_definitions.BuildOptions(**build_args)
 
@@ -2221,4 +2224,36 @@ class TestIteratorAccess:
                 stencil,
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
+            )
+
+
+class TestForceAnnotatedTemporaries:
+    def test_missing_annotation(self):
+        def good_case(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                tmp: float = 2 * in_field
+                out_field = tmp
+
+        parsed = parse_definition(
+            good_case, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+        declaration = parsed.computations[0].body.stmts[0]
+        assert isinstance(declaration, nodes.FieldDecl)
+        assert declaration.data_type == nodes.DataType.FLOAT64
+
+        def bad_case(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                tmp = 2 * in_field
+                out_field = tmp
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Missing type hint for 'tmp' in stencil 'bad_case'.",
+        ):
+            parse_definition(
+                bad_case,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+                force_annotated_temporaries=True,
             )
