@@ -14,7 +14,7 @@ import functools
 import hashlib
 import types
 import typing
-from typing import Any, Generic, Optional
+from typing import Any, Optional, TypeVar
 
 import xxhash
 
@@ -25,31 +25,29 @@ from gt4py.next.otf import arguments, toolchain
 
 
 @dataclasses.dataclass(frozen=True)
-class DSLFieldOperatorDef(Generic[foast.OperatorNodeT]):
+class DSLFieldOperatorDef:
     definition: types.FunctionType
-    node_class: type[foast.OperatorNodeT] = foast.FieldOperator  # type: ignore[assignment]
+    node_class: type[foast.OperatorNode] = foast.FieldOperator
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
     grid_type: Optional[common.GridType] = None
     debug: bool = False
 
 
-AnyDSLFieldOperatorDef = DSLFieldOperatorDef[foast.OperatorNodeT]  #FieldOperator | ScanOperator
-
-CompilableDSLFieldOperatorDef: typing.TypeAlias = toolchain.CompilableProgram[
-    DSLFieldOperatorDef[foast.OperatorNodeT], arguments.CompileTimeArgs
+ConcreteDSLFieldOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+    DSLFieldOperatorDef, arguments.CompileTimeArgs
 ]
 
 
 @dataclasses.dataclass(frozen=True)
-class FOASTOperatorDef(Generic[foast.OperatorNodeT]):
-    foast_node: foast.OperatorNodeT
+class FOASTOperatorDef:
+    foast_node: foast.OperatorNode
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
     debug: bool = False
 
 
-CompilableFOASTOperatorDef: typing.TypeAlias = toolchain.CompilableProgram[
+ConcreteFOASTOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
     FOASTOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -61,7 +59,7 @@ class DSLProgramDef:
     debug: bool = False
 
 
-CompilableDSLProgramDef: typing.TypeAlias = toolchain.CompilableProgram[
+ConcreteDSLProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
     DSLProgramDef, arguments.CompileTimeArgs
 ]
 
@@ -74,9 +72,11 @@ class PASTProgramDef:
     debug: bool = False
 
 
-CompilablePASTProgramDef: typing.TypeAlias = toolchain.CompilableProgram[
+ConcretePASTProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
     PASTProgramDef, arguments.CompileTimeArgs
 ]
+
+DSLDefinitionT = TypeVar("DSLDefinitionT", DSLFieldOperatorDef, DSLProgramDef)
 
 
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
@@ -105,7 +105,7 @@ for t in (str, int):
 @add_content_to_fingerprint.register(FOASTOperatorDef)
 @add_content_to_fingerprint.register(DSLProgramDef)
 @add_content_to_fingerprint.register(PASTProgramDef)
-@add_content_to_fingerprint.register(toolchain.CompilableProgram)
+@add_content_to_fingerprint.register(toolchain.ConcreteArtifact)
 @add_content_to_fingerprint.register(arguments.CompileTimeArgs)
 def add_stage_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
     add_content_to_fingerprint(obj.__class__, hasher)

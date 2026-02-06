@@ -356,7 +356,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableITIRProgram,
+        stages.CompilableProgram,
         stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
@@ -441,7 +441,7 @@ class DaCeTranslator(
         return sdfg
 
     def __call__(
-        self, inp: stages.CompilableITIRProgram
+        self, inp: stages.CompilableProgram
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data

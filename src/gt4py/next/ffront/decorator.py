@@ -19,7 +19,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Any, Generic, Optional, TypeAlias, TypeVar
+from typing import Any, Generic, Optional, TypeAlias
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -53,16 +53,15 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
-
 @dataclasses.dataclass(frozen=True)
-class _CompilableGTEntryPointMixin(Generic[DSLEntryPointDefT]):
+class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     """
     Mixing used by program and program-like objects.
 
     Contains functionality and configuration options common to all kinds of program-likes.
     """
 
-    definition_stage: DSLEntryPointDefT
+    definition_stage: ffront_stages.DSLDefinitionT
     backend: Optional[next_backend.Backend]
     compilation_options: options.CompilationOptions
 
@@ -202,7 +201,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        no_args_past = toolchain.CompilableProgram(
+        no_args_past = toolchain.ConcreteArtifact(
             self.past_stage, arguments.CompileTimeArgs.empty()
         )
         _ = self._frontend_transforms.past_lint(no_args_past).data
@@ -227,7 +226,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     @functools.cached_property
     def past_stage(self) -> ffront_stages.PASTProgramDef:
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.CompilableProgram(
+        no_args_def = toolchain.ConcreteArtifact(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
         return self._frontend_transforms.func_to_past(no_args_def).data
@@ -247,7 +246,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = toolchain.CompilableProgram(
+        no_args_past = toolchain.ConcreteArtifact(
             data=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
@@ -492,11 +491,7 @@ def program(
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldOperator(
-    _CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorDef[foast.OperatorNodeT]],
-    GTCallable,
-    Generic[foast.OperatorNodeT],
-):
+class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorDef], GTCallable):
     """
     Construct a field operator object from a FOAST node.
 
@@ -524,10 +519,10 @@ class FieldOperator(
         backend: Optional[next_backend.Backend],
         grid_type: Optional[common.GridType] = None,
         *,
-        operator_node_cls: type[foast.OperatorNodeT] = foast.FieldOperator,  # type: ignore[assignment]
+        operator_node_cls: type[foast.OperatorNode] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
         **compilation_options: Unpack[options.CompilationOptionsArgs],
-    ) -> FieldOperator[foast.OperatorNodeT]:
+    ) -> FieldOperator:
         return cls(
             definition_stage=ffront_stages.DSLFieldOperatorDef(
                 definition=definition,
@@ -547,7 +542,7 @@ class FieldOperator(
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
         return self._frontend_transforms.func_to_foast(
-            toolchain.CompilableProgram(
+            toolchain.ConcreteArtifact(
                 data=self.definition_stage, args=arguments.CompileTimeArgs.empty()
             )
         ).data
@@ -673,13 +668,13 @@ def field_operator(
     *,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-) -> FieldOperator[foast.FieldOperator]: ...
+) -> FieldOperator: ...
 
 
 @typing.overload
 def field_operator(
     *, backend: next_backend.Backend | eve.NothingType | None, grid_type: common.GridType | None
-) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]: ...
+) -> Callable[[types.FunctionType], FieldOperator]: ...
 
 
 def field_operator(
@@ -688,10 +683,7 @@ def field_operator(
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
-) -> (
-    FieldOperator[foast.FieldOperator]
-    | Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]
-):
+) -> FieldOperator | Callable[[types.FunctionType], FieldOperator]:
     """
     Generate an implementation of the field operator from a Python function object.
 
@@ -708,7 +700,7 @@ def field_operator(
         ...     ...
     """
 
-    def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
+    def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
         return FieldOperator.from_function(
             definition,
             typing.cast(
@@ -730,7 +722,7 @@ def scan_operator(
     init: core_defs.Scalar,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-) -> FieldOperator[foast.ScanOperator]: ...
+) -> FieldOperator: ...
 
 
 @typing.overload
@@ -741,7 +733,7 @@ def scan_operator(
     init: core_defs.Scalar,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]: ...
+) -> Callable[[types.FunctionType], FieldOperator]: ...
 
 
 def scan_operator(
@@ -752,10 +744,7 @@ def scan_operator(
     init: core_defs.Scalar = 0.0,
     backend: next_backend.Backend | None | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
-) -> (
-    FieldOperator[foast.ScanOperator]
-    | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]
-):
+) -> FieldOperator | Callable[[types.FunctionType], FieldOperator]:
     """
     Generate an implementation of the scan operator from a Python function object.
 

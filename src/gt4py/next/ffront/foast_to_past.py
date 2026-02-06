@@ -18,7 +18,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
-from gt4py.next.ffront.stages import CompilableFOASTOperatorDef, CompilablePASTProgramDef
+from gt4py.next.ffront.stages import ConcreteFOASTOperatorDef, ConcretePASTProgramDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -33,13 +33,14 @@ class ItirShim:
     lowering has access to the relevant information.
     """
 
-    definition: CompilableFOASTOperatorDef
-    foast_to_itir: workflow.Workflow[CompilableFOASTOperatorDef, itir.FunctionDefinition]
+    definition: ConcreteFOASTOperatorDef
+    foast_to_itir: workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]
 
     def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
         return self.definition.data.closure_vars
 
     def __gt_type__(self) -> ts.CallableType:
+        assert isinstance(self.definition.data.foast_node.type, ts.CallableType)
         return self.definition.data.foast_node.type
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
@@ -52,7 +53,7 @@ class ItirShim:
 
 
 @dataclasses.dataclass(frozen=True)
-class OperatorToProgram(workflow.Workflow[CompilableFOASTOperatorDef, CompilablePASTProgramDef]):
+class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePASTProgramDef]):
     """
     Generate a PAST program definition from a FOAST operator definition.
 
@@ -91,9 +92,9 @@ class OperatorToProgram(workflow.Workflow[CompilableFOASTOperatorDef, Compilable
         >>> assert copy_program.data.closure_vars["copy"].definition.data is copy.foast_stage
     """
 
-    foast_to_itir: workflow.Workflow[CompilableFOASTOperatorDef, itir.FunctionDefinition]
+    foast_to_itir: workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]
 
-    def __call__(self, inp: CompilableFOASTOperatorDef) -> CompilablePASTProgramDef:
+    def __call__(self, inp: ConcreteFOASTOperatorDef) -> ConcretePASTProgramDef:
         # TODO(tehrengruber): implement mechanism to deduce default values
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
@@ -103,6 +104,7 @@ class OperatorToProgram(workflow.Workflow[CompilableFOASTOperatorDef, Compilable
 
         type_ = inp.data.foast_node.type
         loc = inp.data.foast_node.location
+        assert isinstance(inp.data.foast_node.type, ts.CallableType)
         partial_program_type = ffront_type_info.type_in_program_context(inp.data.foast_node.type)
         assert isinstance(partial_program_type, ts_ffront.ProgramType)
         args_names = [
@@ -110,6 +112,7 @@ class OperatorToProgram(workflow.Workflow[CompilableFOASTOperatorDef, Compilable
             *partial_program_type.definition.pos_or_kw_args.keys(),
             *partial_program_type.definition.kw_only_args.keys(),
         ]
+        assert isinstance(type_, ts.CallableType)
         assert arg_types[-1] == type_info.return_type(
             type_, with_args=list(arg_types), with_kwargs=kwarg_types
         )
@@ -161,14 +164,15 @@ class OperatorToProgram(workflow.Workflow[CompilableFOASTOperatorDef, Compilable
             location=loc,
         )
         untyped_past_node = closure_var_type_deduction.ClosureVarTypeDeduction.apply(
-            untyped_past_node, fieldop_itir_closure_vars
+            untyped_past_node,
+            fieldop_itir_closure_vars,  # type: ignore[arg-type]
         )
         past_node = type_deduction.ProgramTypeDeduction.apply(untyped_past_node)
 
-        return toolchain.CompilableProgram(
+        return toolchain.ConcreteArtifact(
             data=ffront_stages.PASTProgramDef(
                 past_node=past_node,
-                closure_vars=fieldop_itir_closure_vars,
+                closure_vars=fieldop_itir_closure_vars,  # type: ignore[arg-type]
                 grid_type=inp.data.grid_type,
             ),
             args=inp.args,
@@ -177,12 +181,12 @@ class OperatorToProgram(workflow.Workflow[CompilableFOASTOperatorDef, Compilable
 
 def operator_to_program_factory(
     foast_to_itir_step: Optional[
-        workflow.Workflow[CompilableFOASTOperatorDef, itir.FunctionDefinition]
+        workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]
     ] = None,
     cached: bool = True,
-) -> workflow.Workflow[CompilableFOASTOperatorDef, CompilablePASTProgramDef]:
+) -> workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePASTProgramDef]:
     """Optionally wrap `OperatorToProgram` in a `CachedStep`."""
-    wf: workflow.Workflow[CompilableFOASTOperatorDef, CompilablePASTProgramDef] = OperatorToProgram(
+    wf: workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePASTProgramDef] = OperatorToProgram(
         foast_to_itir_step or foast_to_gtir.adapted_foast_to_gtir_factory()
     )
     if cached:

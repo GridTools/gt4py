@@ -238,4 +238,3 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
 
 
 OperatorNode: TypeAlias = FieldOperator | ScanOperator
-OperatorNodeT = TypeVar("OperatorNodeT", FieldOperator, ScanOperator)

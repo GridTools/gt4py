@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import typing
-from typing import Generic
+from typing import Generic, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
@@ -21,32 +21,45 @@ from gt4py.next.ffront import (
     func_to_past,
     past_process_args,
     past_to_itir,
+    stages as ffront_stages,
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
-from gt4py.next.ffront.stages import (
-    CompilableDSLFieldOperatorDef,
-    CompilableDSLProgramDef,
-    CompilableFOASTOperatorDef,
-    CompilablePASTProgramDef,
-    DSLFieldOperatorDef,
-    DSLProgramDef,
-    FOASTOperatorDef,
-    PASTProgramDef,
-)
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, stages, toolchain, workflow
 
 
-IRDefinitionForm: typing.TypeAlias = (
-    DSLFieldOperatorDef | FOASTOperatorDef | DSLProgramDef | PASTProgramDef | itir.Program
+IRDefinitionT = TypeVar(
+    "IRDefinitionT",
+    ffront_stages.DSLFieldOperatorDef,
+    ffront_stages.DSLProgramDef,
+    ffront_stages.FOASTOperatorDef,
+    ffront_stages.PASTProgramDef,
+    itir.Program,
 )
-CompilableDefinition: typing.TypeAlias = toolchain.CompilableProgram[
-    IRDefinitionForm, arguments.JITArgs | arguments.CompileTimeArgs
-]
+ArgsDefinitionT = TypeVar("ArgsDefinitionT", arguments.JITArgs, arguments.CompileTimeArgs)
+ConcreteProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[IRDefinitionT, ArgsDefinitionT]
+
+
+def jit_to_aot_args(
+    inp: arguments.JITArgs,
+) -> arguments.CompileTimeArgs:
+    return arguments.CompileTimeArgs.from_concrete(*inp.args, **inp.kwargs)
+
+
+def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
+    ConcreteProgramDef[IRDefinitionT, arguments.JITArgs],
+    ConcreteProgramDef[IRDefinitionT, arguments.CompileTimeArgs],
+]:
+    """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
+    return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
 
 
 @dataclasses.dataclass(frozen=True)
-class Transforms(workflow.MultiWorkflow[CompilableDefinition, stages.CompilableITIRProgram]):
+class Transforms(
+    workflow.MultiWorkflow[
+        ConcreteProgramDef[IRDefinitionT, ArgsDefinitionT], stages.CompilableProgram
+    ]
+):
     """
     Modular workflow for transformations with access to intermediates.
 
@@ -62,44 +75,44 @@ class Transforms(workflow.MultiWorkflow[CompilableDefinition, stages.CompilableI
     """
 
     aotify_args: workflow.Workflow[
-        toolchain.CompilableProgram[IRDefinitionForm, arguments.JITArgs],
-        toolchain.CompilableProgram[IRDefinitionForm, arguments.CompileTimeArgs],
-    ] = dataclasses.field(default_factory=arguments.adapted_jit_to_aot_args_factory)
+        ConcreteProgramDef[IRDefinitionT, arguments.JITArgs],
+        ConcreteProgramDef[IRDefinitionT, arguments.CompileTimeArgs],
+    ] = dataclasses.field(default_factory=adapted_jit_to_aot_args_factory)
 
-    func_to_foast: workflow.Workflow[CompilableDSLFieldOperatorDef, CompilableFOASTOperatorDef] = (
-        dataclasses.field(default_factory=func_to_foast.adapted_func_to_foast_factory)
-    )
+    func_to_foast: workflow.Workflow[
+        ffront_stages.ConcreteDSLFieldOperatorDef, ffront_stages.ConcreteFOASTOperatorDef
+    ] = dataclasses.field(default_factory=func_to_foast.adapted_func_to_foast_factory)
 
-    func_to_past: workflow.Workflow[CompilableDSLProgramDef, CompilablePASTProgramDef] = (
-        dataclasses.field(default_factory=func_to_past.adapted_func_to_past_factory)
-    )
+    func_to_past: workflow.Workflow[
+        ffront_stages.ConcreteDSLProgramDef, ffront_stages.ConcretePASTProgramDef
+    ] = dataclasses.field(default_factory=func_to_past.adapted_func_to_past_factory)
 
-    foast_to_itir: workflow.Workflow[CompilableFOASTOperatorDef, itir.FunctionDefinition] = (
-        dataclasses.field(default_factory=foast_to_gtir.adapted_foast_to_gtir_factory)
-    )
+    foast_to_itir: workflow.Workflow[
+        ffront_stages.ConcreteFOASTOperatorDef, itir.FunctionDefinition
+    ] = dataclasses.field(default_factory=foast_to_gtir.adapted_foast_to_gtir_factory)
 
-    field_view_op_to_prog: workflow.Workflow[CompilableFOASTOperatorDef, CompilablePASTProgramDef] = (
-        dataclasses.field(default_factory=foast_to_past.operator_to_program_factory)
-    )
+    field_view_op_to_prog: workflow.Workflow[
+        ffront_stages.ConcreteFOASTOperatorDef, ffront_stages.ConcretePASTProgramDef
+    ] = dataclasses.field(default_factory=foast_to_past.operator_to_program_factory)
 
-    past_lint: workflow.Workflow[CompilablePASTProgramDef, CompilablePASTProgramDef] = dataclasses.field(
-        default_factory=past_linters.adapted_linter_factory
-    )
+    past_lint: workflow.Workflow[
+        ffront_stages.ConcretePASTProgramDef, ffront_stages.ConcretePASTProgramDef
+    ] = dataclasses.field(default_factory=past_linters.adapted_linter_factory)
 
     field_view_prog_args_transform: workflow.Workflow[
-        CompilablePASTProgramDef, CompilablePASTProgramDef
+        ffront_stages.ConcretePASTProgramDef, ffront_stages.ConcretePASTProgramDef
     ] = dataclasses.field(default_factory=past_process_args.transform_program_args_factory)
 
-    past_to_itir: workflow.Workflow[CompilablePASTProgramDef, stages.CompilableITIRProgram] = (
-        dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
-    )
+    past_to_itir: workflow.Workflow[
+        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgram
+    ] = dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
 
-    def step_order(self, inp: CompilableDefinition) -> list[str]:
+    def step_order(self, inp: ConcreteProgramDef) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, arguments.JITArgs):
             steps.append("aotify_args")
         match inp.data:
-            case DSLFieldOperatorDef():
+            case ffront_stages.DSLFieldOperatorDef():
                 steps.extend(
                     [
                         "func_to_foast",
@@ -109,7 +122,7 @@ class Transforms(workflow.MultiWorkflow[CompilableDefinition, stages.CompilableI
                         "past_to_itir",
                     ]
                 )
-            case FOASTOperatorDef():
+            case ffront_stages.FOASTOperatorDef():
                 steps.extend(
                     [
                         "field_view_op_to_prog",
@@ -118,11 +131,16 @@ class Transforms(workflow.MultiWorkflow[CompilableDefinition, stages.CompilableI
                         "past_to_itir",
                     ]
                 )
-            case DSLProgramDef():
+            case ffront_stages.DSLProgramDef():
                 steps.extend(
-                    ["func_to_past", "past_lint", "field_view_prog_args_transform", "past_to_itir"]
+                    [
+                        "func_to_past",
+                        "past_lint",
+                        "field_view_prog_args_transform",
+                        "past_to_itir",
+                    ]
                 )
-            case PASTProgramDef():
+            case ffront_stages.PASTProgramDef():
                 steps.extend(["past_lint", "field_view_prog_args_transform", "past_to_itir"])
             case itir.Program():
                 pass
@@ -141,15 +159,15 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
-    executor: workflow.Workflow[stages.CompilableITIRProgram, stages.CompiledProgram]
+    executor: workflow.Workflow[stages.CompilableProgram, stages.CompiledProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms: workflow.Workflow[CompilableDefinition, stages.CompilableITIRProgram]
+    transforms: workflow.Workflow[ConcreteProgramDef, stages.CompilableProgram]
 
     def compile(
-        self, program: IRDefinitionForm, compile_time_args: arguments.CompileTimeArgs
+        self, program: IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
     ) -> stages.CompiledProgram:
         return self.executor(
-            self.transforms(toolchain.CompilableProgram(data=program, args=compile_time_args))
+            self.transforms(ConcreteProgramDef(data=program, args=compile_time_args))
         )
 
     @property

@@ -28,12 +28,10 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-CompilableITIRProgram: TypeAlias = toolchain.CompilableProgram[
-    itir.Program, arguments.CompileTimeArgs
-]
+CompilableProgram: TypeAlias = toolchain.ConcreteArtifact[itir.Program, arguments.CompileTimeArgs]
 
 
-def compilation_hash(otf_closure: CompilableITIRProgram) -> int:
+def compilation_hash(otf_closure: CompilableProgram) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = otf_closure.args.offset_provider
     return hash(
@@ -48,7 +46,7 @@ def compilation_hash(otf_closure: CompilableITIRProgram) -> int:
     )
 
 
-def fingerprint_compilable_program(inp: CompilableITIRProgram) -> str:
+def fingerprint_compilable_program(inp: CompilableProgram) -> str:
     """
     Generates a unique hash string for a stencil source program representing
     the program, sorted offset_provider, and column_axis.
