@@ -59,7 +59,7 @@ class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWor
     translation: workflow.Workflow[
         gtx.otf.definitions.CompilableProgramDef, gtx.otf.stages.ProgramSource
     ] = MyCodeGen()
-    bindings: workflow.Workflow[gtx.otf.stages.ProgramSource, gtx.otf.stages.CompilableSource] = (
+    bindings: workflow.Workflow[gtx.otf.stages.ProgramSource, gtx.otf.stages.CompilableProject] = (
         Cpp2BindingsGen()
     )
 

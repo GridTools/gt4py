@@ -15,7 +15,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import arguments, languages, stages
+from gt4py.next.otf import arguments, languages, stages, definitions
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_translation
@@ -75,7 +75,7 @@ def program_example():
 def test_codegen(program_example):
     fencil, parameters = program_example
     module = gtfn_module.translate_program_cpu(
-        stages.CompilableProgramDef(
+        definitions.CompilableProgramDef(
             data=fencil,
             args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
         )
@@ -87,7 +87,7 @@ def test_codegen(program_example):
 
 def test_hash_and_diskcache(program_example, tmp_path):
     fencil, parameters = program_example
-    compilable_program = stages.CompilableProgramDef(
+    compilable_program = definitions.CompilableProgramDef(
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
@@ -129,7 +129,7 @@ def test_hash_and_diskcache(program_example, tmp_path):
 
 def test_gtfn_file_cache(program_example):
     fencil, parameters = program_example
-    compilable_program = stages.CompilableProgramDef(
+    compilable_program = definitions.CompilableProgramDef(
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
