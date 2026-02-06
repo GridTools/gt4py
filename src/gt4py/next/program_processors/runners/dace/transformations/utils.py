@@ -767,3 +767,49 @@ def associate_dimmensions(
     assert len(dim_mapping) + len(drop2) == sbs2.dims()
 
     return dim_mapping, drop1, drop2
+
+
+def gt_data_descriptor_mapping(
+    state: dace.SDFGState,
+    nsdfg: dace_nodes.NestedSDFG,
+    only_inputs: bool = False,
+    only_outputs: bool = False,
+) -> dict[str, str]:
+    """Determine the mapping of the data descriptors for the NestedSDFG.
+
+    The returned `dict` maps the name of each global to the name it has on the
+    outside, in that sense it is similar to `NestedSDFG.symbol_map`. If a data
+    descriptor is used an input and output the output takes precedence.
+
+    Args:
+        state: The state in which we operate.
+        nsdfg: The nested SDFG node we want to process.
+        only_inputs: Only consider the data that are used as inputs.
+        only_inputs: Only consider the data that are used as outputs.
+    """
+    assert not (only_inputs and only_outputs)
+    name_mapping: dict[str, str] = {}
+
+    # We we have to return both, we have to start with the input mapping, to ensure
+    #  that the output is dominant.
+    if not only_outputs:
+        iedges = sorted(
+            (iedge for iedge in state.in_edges(nsdfg) if not iedge.data.is_empty()),
+            key=lambda iedge: iedge.dst_conn,
+        )
+        for iedge in iedges:
+            assert not nsdfg.sdfg.arrays[iedge.dst_conn].transient
+            name_mapping[iedge.dst_conn] = iedge.data.data
+
+    if only_inputs:
+        return name_mapping
+
+    oedges = sorted(
+        (oedge for oedge in state.out_edges(nsdfg) if not oedge.data.is_empty()),
+        key=lambda oedge: iedge.src_conn,
+    )
+    for oedge in oedges:
+        assert not nsdfg.sdfg.arrays[oedge.src_conn].transient
+        name_mapping[oedge.src_conn] = oedge.data.data
+
+    return name_mapping
