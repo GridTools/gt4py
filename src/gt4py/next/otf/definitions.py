@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 
-from typing import Protocol, TypeVar
+from typing import Protocol, TypeAlias, TypeVar
 
-from gt4py.next.otf import languages, stages, workflow
+from gt4py.next.ffront import stages as ffront_stages
+from gt4py.next.iterator import ir as itir
+from gt4py.next.otf import arguments, languages, stages, toolchain, workflow
 
 
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
@@ -21,10 +23,22 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 LS_co = TypeVar("LS_co", bound=languages.LanguageSettings, covariant=True)
 
 
+IRDefinitionT = TypeVar(
+    "IRDefinitionT",
+    ffront_stages.DSLFieldOperatorDef,
+    ffront_stages.DSLProgramDef,
+    ffront_stages.FOASTOperatorDef,
+    ffront_stages.PASTProgramDef,
+    itir.Program,
+)
+ArgsDefinitionT = TypeVar("ArgsDefinitionT", arguments.JITArgs, arguments.CompileTimeArgs)
+
+ConcreteProgramDef: TypeAlias = toolchain.ConcreteArtifact[IRDefinitionT, ArgsDefinitionT]
+CompilableProgramDef: TypeAlias = ConcreteProgramDef[itir.Program, arguments.CompileTimeArgs]
+
+
 class TranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProgramDef, stages.ProgramSource[SrcL, LS]
-    ],
+    workflow.ReplaceEnabledWorkflowMixin[CompilableProgramDef, stages.ProgramSource[SrcL, LS]],
     Protocol[SrcL, LS],
 ):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""

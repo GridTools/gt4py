@@ -18,7 +18,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import definitions, languages, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
@@ -356,10 +356,10 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProgramDef,
+        definitions.CompilableProgramDef,
         stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     ],
-    step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
+    definitions.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
@@ -441,7 +441,7 @@ class DaCeTranslator(
         return sdfg
 
     def __call__(
-        self, inp: stages.CompilableProgramDef
+        self, inp: definitions.CompilableProgramDef
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data

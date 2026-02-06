@@ -16,9 +16,9 @@ import factory
 
 from gt4py._core import locking
 from gt4py.next import config
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import definitions, languages, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
-from gt4py.next.otf.step_types import LS, SrcL, TgtL
+from gt4py.next.otf.definitions import LS, SrcL, TgtL
 
 
 SourceLanguageType = TypeVar("SourceLanguageType", bound=languages.NanobindSrcL)
@@ -52,7 +52,7 @@ class Compiler(
         stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
         stages.CompiledProgram,
     ],
-    step_types.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python],
+    definitions.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python],
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 

@@ -9,13 +9,12 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar
+from typing import Any, Generic, Optional, Protocol, TypeVar
 
 from gt4py.eve import utils
 from gt4py.next import common
-from gt4py.next.ffront import stages as ffront_stages
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, languages, toolchain
+from gt4py.next.otf import definitions, languages
 from gt4py.next.otf.binding import interface
 
 
@@ -29,21 +28,7 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-IRDefinitionT = TypeVar(
-    "IRDefinitionT",
-    ffront_stages.DSLFieldOperatorDef,
-    ffront_stages.DSLProgramDef,
-    ffront_stages.FOASTOperatorDef,
-    ffront_stages.PASTProgramDef,
-    itir.Program,
-)
-ArgsDefinitionT = TypeVar("ArgsDefinitionT", arguments.JITArgs, arguments.CompileTimeArgs)
-
-ConcreteProgramDef: TypeAlias = toolchain.ConcreteArtifact[IRDefinitionT, ArgsDefinitionT]
-CompilableProgramDef: TypeAlias = ConcreteProgramDef[itir.Program, arguments.CompileTimeArgs]
-
-
-def compilation_hash(program_def: CompilableProgramDef) -> int:
+def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = program_def.args.offset_provider
     return hash(
@@ -58,7 +43,7 @@ def compilation_hash(program_def: CompilableProgramDef) -> int:
     )
 
 
-def fingerprint_compilable_program(program_def: CompilableProgramDef) -> str:
+def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef) -> str:
     """
     Generates a unique hash string for a stencil source program representing
     the program, sorted offset_provider, and column_axis.
