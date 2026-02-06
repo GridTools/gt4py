@@ -19,7 +19,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Any, Generic, Optional, TypeAlias
+from typing import Any, Generic, Optional, Sequence, TypeAlias
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -71,27 +71,35 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     def with_backend(self, backend: next_backend.Backend) -> Self:
         return dataclasses.replace(self, backend=backend)
 
-    def with_connectivities(
-        self,
-        connectivities: common.OffsetProvider,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+    def with_compilation_options(
+        self, **compilation_options: Unpack[options.CompilationOptionsArgs]
     ) -> Self:
         return dataclasses.replace(
             self,
             compilation_options=dataclasses.replace(
-                self.compilation_options, connectivities=connectivities
+                self.compilation_options, **compilation_options
             ),
         )
 
     @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
+        # This cached property initializer is only called when JITting the first
+        # program variant of the pool. If the program is compiled by directly
+        # calling `compile()`, the pool is initialized with the options passed
+        # to `compile()` instead of re-using the existing compilations options.
+        return self._make_compiled_programs_pool(
+            static_params=self.compilation_options.static_params or (),
+        )
+
+    def _make_compiled_programs_pool(
+        self,
+        static_params: Sequence[str],
+    ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
 
-        if self.compilation_options.static_params is None:
-            object.__setattr__(self.compilation_options, "static_params", ())
-
         argument_descriptor_mapping = {
-            arguments.StaticArg: self.compilation_options.static_params,
+            arguments.StaticArg: static_params,
         }
 
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
@@ -110,7 +118,6 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
-        enable_jit: bool | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         """
@@ -121,13 +128,16 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         but adds the compiled variants to the current program instance.
         """
         # TODO(havogt): we should reconsider if we want to return a new program on `compile` (and
-        # rename to `with_static_args` or similar) once we have a better understanding of the
-        # use-cases.
+        #  rename to `with_static_args` or similar) once we have a better understanding of the
+        #  use-cases.
+        # check if pool has already been initialized. since this is also a cached property go via
+        #  the dict directly. Note that we don't need to check any args, since the pool checks
+        #  this on compile anyway.
+        if "_compiled_programs" not in self.__dict__:
+            self.__dict__["_compiled_programs"] = self._make_compiled_programs_pool(
+                static_params=tuple(static_args.keys()),
+            )
 
-        if enable_jit is not None:
-            object.__setattr__(self.compilation_options, "enable_jit", enable_jit)
-        if self.compilation_options.static_params is None:
-            object.__setattr__(self.compilation_options, "static_params", tuple(static_args.keys()))
         if self.compilation_options.connectivities is None and offset_provider is None:
             raise ValueError(
                 "Cannot compile a program without connectivities / OffsetProviderType."
@@ -263,10 +273,10 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     def with_static_params(self, *static_params: str | None) -> Program:
         if not static_params or (static_params == (None,)):
-            _static_params = None
+            _static_params: tuple[str, ...] = ()
         else:
             assert all(p is not None for p in static_params)
-            _static_params = typing.cast(tuple[str], static_params)
+            _static_params = typing.cast(tuple[str, ...], static_params)
         return dataclasses.replace(
             self,
             compilation_options=dataclasses.replace(
@@ -431,7 +441,6 @@ class ProgramWithBoundArgs(Program):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
-        enable_jit: bool | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
