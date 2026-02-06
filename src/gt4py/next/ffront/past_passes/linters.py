@@ -9,7 +9,7 @@
 from typing import Any
 
 from gt4py.next.ffront import gtcallable, stages as ffront_stages, transform_utils
-from gt4py.next.ffront.stages import CompilablePASTProgram, PASTProgramDef
+from gt4py.next.ffront.stages import CompilablePASTProgramDef, PASTProgramDef
 from gt4py.next.otf import toolchain, workflow
 
 
@@ -57,5 +57,5 @@ def linter_factory(
 
 def adapted_linter_factory(
     **kwargs: Any,
-) -> workflow.Workflow[CompilablePASTProgram, CompilablePASTProgram]:
+) -> workflow.Workflow[CompilablePASTProgramDef, CompilablePASTProgramDef]:
     return toolchain.DataOnlyAdapter(linter_factory(**kwargs))

@@ -26,8 +26,8 @@ from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.stages import (
-    CompilableDSLProgram,
-    CompilablePASTProgram,
+    CompilableDSLProgramDef,
+    CompilablePASTProgramDef,
     DSLProgramDef,
     PASTProgramDef,
 )
@@ -86,7 +86,7 @@ def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSLProgramDef
 
 def adapted_func_to_past_factory(
     **kwargs: Any,
-) -> workflow.Workflow[CompilableDSLProgram, CompilablePASTProgram]:
+) -> workflow.Workflow[CompilableDSLProgramDef, CompilablePASTProgramDef]:
     """
     Wrap an adapter around the DSL definition -> PAST definition step to fit into transform toolchains.
     """

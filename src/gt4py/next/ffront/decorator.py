@@ -19,7 +19,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeAlias, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -52,20 +52,17 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
-ProgramLikeDefinitionT = TypeVar(
-    "ProgramLikeDefinitionT", ffront_stages.DSLProgramDef, ffront_stages.DSLFieldOperatorDef
-)
 
 
 @dataclasses.dataclass(frozen=True)
-class DSLEntryPoint(Generic[ProgramLikeDefinitionT]):
+class _CompilableGTEntryPointMixin(Generic[DSLEntryPointDefT]):
     """
     Mixing used by program and program-like objects.
 
     Contains functionality and configuration options common to all kinds of program-likes.
     """
 
-    definition_stage: ProgramLikeDefinitionT
+    definition_stage: DSLEntryPointDefT
     backend: Optional[next_backend.Backend]
     compilation_options: options.CompilationOptions
 
@@ -164,7 +161,7 @@ program_call_metrics_collector = metrics.make_collector(
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
-class Program(DSLEntryPoint[ffront_stages.DSLProgramDef]):
+class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     """
     Construct a program object from a PAST node.
 
@@ -496,7 +493,9 @@ def program(
 
 @dataclasses.dataclass(frozen=True)
 class FieldOperator(
-    DSLEntryPoint[ffront_stages.DSLFieldOperatorDef], GTCallable, Generic[foast.OperatorNodeT]
+    _CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorDef[foast.OperatorNodeT]],
+    GTCallable,
+    Generic[foast.OperatorNodeT],
 ):
     """
     Construct a field operator object from a FOAST node.
@@ -639,6 +638,9 @@ class FieldOperator(
             else:
                 op = embedded_operators.EmbeddedOperator(self.definition_stage.definition)
             return embedded_operators.field_operator_call(op, args, kwargs)
+
+
+GTEntryPoint: TypeAlias = Program | FieldOperator
 
 
 # TODO(tehrengruber): This class does not follow the Liskov-Substitution principle as it doesn't

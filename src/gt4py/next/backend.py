@@ -24,10 +24,10 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.ffront.stages import (
-    CompilableDSLFieldOperator,
-    CompilableDSLProgram,
-    CompilableFOASTOperator,
-    CompilablePASTProgram,
+    CompilableDSLFieldOperatorDef,
+    CompilableDSLProgramDef,
+    CompilableFOASTOperatorDef,
+    CompilablePASTProgramDef,
     DSLFieldOperatorDef,
     DSLProgramDef,
     FOASTOperatorDef,
@@ -66,31 +66,31 @@ class Transforms(workflow.MultiWorkflow[CompilableDefinition, stages.CompilableI
         toolchain.CompilableProgram[IRDefinitionForm, arguments.CompileTimeArgs],
     ] = dataclasses.field(default_factory=arguments.adapted_jit_to_aot_args_factory)
 
-    func_to_foast: workflow.Workflow[CompilableDSLFieldOperator, CompilableFOASTOperator] = (
+    func_to_foast: workflow.Workflow[CompilableDSLFieldOperatorDef, CompilableFOASTOperatorDef] = (
         dataclasses.field(default_factory=func_to_foast.adapted_func_to_foast_factory)
     )
 
-    func_to_past: workflow.Workflow[CompilableDSLProgram, CompilablePASTProgram] = (
+    func_to_past: workflow.Workflow[CompilableDSLProgramDef, CompilablePASTProgramDef] = (
         dataclasses.field(default_factory=func_to_past.adapted_func_to_past_factory)
     )
 
-    foast_to_itir: workflow.Workflow[CompilableFOASTOperator, itir.FunctionDefinition] = (
+    foast_to_itir: workflow.Workflow[CompilableFOASTOperatorDef, itir.FunctionDefinition] = (
         dataclasses.field(default_factory=foast_to_gtir.adapted_foast_to_gtir_factory)
     )
 
-    field_view_op_to_prog: workflow.Workflow[CompilableFOASTOperator, CompilablePASTProgram] = (
+    field_view_op_to_prog: workflow.Workflow[CompilableFOASTOperatorDef, CompilablePASTProgramDef] = (
         dataclasses.field(default_factory=foast_to_past.operator_to_program_factory)
     )
 
-    past_lint: workflow.Workflow[CompilablePASTProgram, CompilablePASTProgram] = dataclasses.field(
+    past_lint: workflow.Workflow[CompilablePASTProgramDef, CompilablePASTProgramDef] = dataclasses.field(
         default_factory=past_linters.adapted_linter_factory
     )
 
     field_view_prog_args_transform: workflow.Workflow[
-        CompilablePASTProgram, CompilablePASTProgram
+        CompilablePASTProgramDef, CompilablePASTProgramDef
     ] = dataclasses.field(default_factory=past_process_args.transform_program_args_factory)
 
-    past_to_itir: workflow.Workflow[CompilablePASTProgram, stages.CompilableITIRProgram] = (
+    past_to_itir: workflow.Workflow[CompilablePASTProgramDef, stages.CompilableITIRProgram] = (
         dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
     )
 

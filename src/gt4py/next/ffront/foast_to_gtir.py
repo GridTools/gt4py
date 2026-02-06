@@ -24,7 +24,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes import utils as foast_utils
-from gt4py.next.ffront.stages import CompilableFOASTOperator, FOASTOperatorDef
+from gt4py.next.ffront.stages import CompilableFOASTOperatorDef, FOASTOperatorDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
@@ -53,7 +53,7 @@ def foast_to_gtir_factory(
 
 def adapted_foast_to_gtir_factory(
     **kwargs: Any,
-) -> workflow.Workflow[CompilableFOASTOperator, itir.FunctionDefinition]:
+) -> workflow.Workflow[CompilableFOASTOperatorDef, itir.FunctionDefinition]:
     """Wrap the `foast_to_gtir` workflow step into an adapter to fit into backend transform workflows."""
     return toolchain.StripArgsAdapter(foast_to_gtir_factory(**kwargs))
 

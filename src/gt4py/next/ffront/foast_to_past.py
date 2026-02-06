@@ -18,7 +18,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
-from gt4py.next.ffront.stages import CompilableFOASTOperator, CompilablePASTProgram
+from gt4py.next.ffront.stages import CompilableFOASTOperatorDef, CompilablePASTProgramDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -33,8 +33,8 @@ class ItirShim:
     lowering has access to the relevant information.
     """
 
-    definition: CompilableFOASTOperator
-    foast_to_itir: workflow.Workflow[CompilableFOASTOperator, itir.FunctionDefinition]
+    definition: CompilableFOASTOperatorDef
+    foast_to_itir: workflow.Workflow[CompilableFOASTOperatorDef, itir.FunctionDefinition]
 
     def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
         return self.definition.data.closure_vars
@@ -52,7 +52,7 @@ class ItirShim:
 
 
 @dataclasses.dataclass(frozen=True)
-class OperatorToProgram(workflow.Workflow[CompilableFOASTOperator, CompilablePASTProgram]):
+class OperatorToProgram(workflow.Workflow[CompilableFOASTOperatorDef, CompilablePASTProgramDef]):
     """
     Generate a PAST program definition from a FOAST operator definition.
 
@@ -91,9 +91,9 @@ class OperatorToProgram(workflow.Workflow[CompilableFOASTOperator, CompilablePAS
         >>> assert copy_program.data.closure_vars["copy"].definition.data is copy.foast_stage
     """
 
-    foast_to_itir: workflow.Workflow[CompilableFOASTOperator, itir.FunctionDefinition]
+    foast_to_itir: workflow.Workflow[CompilableFOASTOperatorDef, itir.FunctionDefinition]
 
-    def __call__(self, inp: CompilableFOASTOperator) -> CompilablePASTProgram:
+    def __call__(self, inp: CompilableFOASTOperatorDef) -> CompilablePASTProgramDef:
         # TODO(tehrengruber): implement mechanism to deduce default values
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
@@ -177,12 +177,12 @@ class OperatorToProgram(workflow.Workflow[CompilableFOASTOperator, CompilablePAS
 
 def operator_to_program_factory(
     foast_to_itir_step: Optional[
-        workflow.Workflow[CompilableFOASTOperator, itir.FunctionDefinition]
+        workflow.Workflow[CompilableFOASTOperatorDef, itir.FunctionDefinition]
     ] = None,
     cached: bool = True,
-) -> workflow.Workflow[CompilableFOASTOperator, CompilablePASTProgram]:
+) -> workflow.Workflow[CompilableFOASTOperatorDef, CompilablePASTProgramDef]:
     """Optionally wrap `OperatorToProgram` in a `CachedStep`."""
-    wf: workflow.Workflow[CompilableFOASTOperator, CompilablePASTProgram] = OperatorToProgram(
+    wf: workflow.Workflow[CompilableFOASTOperatorDef, CompilablePASTProgramDef] = OperatorToProgram(
         foast_to_itir_step or foast_to_gtir.adapted_foast_to_gtir_factory()
     )
     if cached:

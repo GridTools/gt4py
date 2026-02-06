@@ -25,7 +25,7 @@ from gt4py.next.ffront import (
     type_info as ffront_ti,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.stages import CompilablePASTProgram
+from gt4py.next.ffront.stages import CompilablePASTProgramDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import remap_symbols
@@ -35,7 +35,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 # FIXME[#1582](tehrengruber): This should only depend on the program not the arguments. Remove
 #  dependency as soon as column axis can be deduced from ITIR in consumers of the CompilableProgram.
-def past_to_gtir(inp: CompilablePASTProgram) -> stages.CompilableITIRProgram:
+def past_to_gtir(inp: CompilablePASTProgramDef) -> stages.CompilableITIRProgram:
     """
     Lower a PAST program definition to Iterator IR.
 
@@ -137,7 +137,7 @@ def past_to_gtir(inp: CompilablePASTProgram) -> stages.CompilableITIRProgram:
 
 def past_to_gtir_factory(
     cached: bool = True,
-) -> workflow.Workflow[CompilablePASTProgram, stages.CompilableITIRProgram]:
+) -> workflow.Workflow[CompilablePASTProgramDef, stages.CompilableITIRProgram]:
     wf = workflow.make_step(past_to_gtir)
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)

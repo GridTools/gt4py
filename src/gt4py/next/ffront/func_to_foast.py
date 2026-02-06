@@ -36,8 +36,8 @@ from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClos
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.stages import (
-    CompilableDSLFieldOperator,
-    CompilableFOASTOperator,
+    CompilableDSLFieldOperatorDef,
+    CompilableFOASTOperatorDef,
     DSLFieldOperatorDef,
     FOASTOperatorDef,
 )
@@ -105,7 +105,7 @@ def func_to_foast_factory(
 
 def adapted_func_to_foast_factory(
     **kwargs: Any,
-) -> workflow.Workflow[CompilableDSLFieldOperator, CompilableFOASTOperator]:
+) -> workflow.Workflow[CompilableDSLFieldOperatorDef, CompilableFOASTOperatorDef]:
     """Wrap the `func_to_foast step in an adapter to fit into transform toolchains.`"""
     return toolchain.DataOnlyAdapter(func_to_foast_factory(**kwargs))
 

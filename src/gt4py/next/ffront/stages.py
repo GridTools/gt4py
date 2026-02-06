@@ -33,8 +33,10 @@ class DSLFieldOperatorDef(Generic[foast.OperatorNodeT]):
     debug: bool = False
 
 
-CompilableDSLFieldOperator: typing.TypeAlias = toolchain.CompilableProgram[
-    DSLFieldOperatorDef, arguments.CompileTimeArgs
+AnyDSLFieldOperatorDef = DSLFieldOperatorDef[foast.OperatorNodeT]  #FieldOperator | ScanOperator
+
+CompilableDSLFieldOperatorDef: typing.TypeAlias = toolchain.CompilableProgram[
+    DSLFieldOperatorDef[foast.OperatorNodeT], arguments.CompileTimeArgs
 ]
 
 
@@ -47,7 +49,7 @@ class FOASTOperatorDef(Generic[foast.OperatorNodeT]):
     debug: bool = False
 
 
-CompilableFOASTOperator: typing.TypeAlias = toolchain.CompilableProgram[
+CompilableFOASTOperatorDef: typing.TypeAlias = toolchain.CompilableProgram[
     FOASTOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -59,7 +61,7 @@ class DSLProgramDef:
     debug: bool = False
 
 
-CompilableDSLProgram: typing.TypeAlias = toolchain.CompilableProgram[
+CompilableDSLProgramDef: typing.TypeAlias = toolchain.CompilableProgram[
     DSLProgramDef, arguments.CompileTimeArgs
 ]
 
@@ -72,7 +74,7 @@ class PASTProgramDef:
     debug: bool = False
 
 
-CompilablePASTProgram: typing.TypeAlias = toolchain.CompilableProgram[
+CompilablePASTProgramDef: typing.TypeAlias = toolchain.CompilableProgram[
     PASTProgramDef, arguments.CompileTimeArgs
 ]
 
