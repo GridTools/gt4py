@@ -28,7 +28,7 @@ class CompilationOptions:
 
     #: If the user requests static params, they will be used later to initialize CompiledPrograms.
     #: By default the set of static params is set when compiling for the first time, e.g. on call
-    #: when jitting is enabled, or on a call to `compiled`.
+    #: when jitting is enabled, or on a call to `compile`.
     static_params: Sequence[str] | None = None
 
     # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information

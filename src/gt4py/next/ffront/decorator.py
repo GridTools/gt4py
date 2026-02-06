@@ -75,7 +75,7 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
     def with_backend(self, backend: next_backend.Backend) -> Self:
         return dataclasses.replace(self, backend=backend)
 
-    def with_compilation_option(
+    def with_compilation_options(
         self, **compilation_options: Unpack[options.CompilationOptionsArgs]
     ) -> Self:
         return dataclasses.replace(
@@ -87,9 +87,10 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
 
     @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
-        # note(tehrengruber): If the program is compiled using `compile` this method
-        #  is skipped and a pool with (potentially different) options as given to
-        #  `compile` is used.
+        # This cached property initializer is only called when JITting the first
+        # program variant of the pool. If the program is compiled by directly
+        # calling `compile()`, the pool is initialized with the options passed
+        # to `compile()` instead of re-using the existing compilations options.
         return self._make_compiled_programs_pool(
             static_params=self.compilation_options.static_params or (),
         )
@@ -137,10 +138,9 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
         #  the dict directly. Note that we don't need to check any args, since the pool checks
         #  this on compile anyway.
         if "_compiled_programs" not in self.__dict__:
-            pool = self._make_compiled_programs_pool(
+            self.__dict__["_compiled_programs"] = self._make_compiled_programs_pool(
                 static_params=tuple(static_args.keys()),
             )
-            object.__setattr__(self, "_compiled_programs", pool)
 
         if self.compilation_options.connectivities is None and offset_provider is None:
             raise ValueError(

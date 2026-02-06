@@ -141,7 +141,7 @@ def test_different_static_args_work_after_backend_change(testee_prog):
 
 
 def test_different_static_args_work_after_static_params_change(testee_prog):
-    testee_prog2 = testee_prog.with_compilation_option(static_params=["cond"])
+    testee_prog2 = testee_prog.with_compilation_options(static_params=["cond"])
 
     # compile without static args
     testee_prog.compile(offset_provider={})
@@ -151,7 +151,7 @@ def test_different_static_args_work_after_static_params_change(testee_prog):
 
 
 def test_different_static_args_break_same_prg_after_static_params_change(testee_prog):
-    prg = testee_prog.with_compilation_option(static_params=[])
+    prg = testee_prog.with_compilation_options(static_params=[])
 
     # compile without static args
     prg.compile(offset_provider={})

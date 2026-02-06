@@ -204,7 +204,7 @@ def compile_testee_unstructured(unstructured_case):
 
 @pytest.fixture
 def compile_testee_unstructured_no_jit(compile_testee_unstructured):
-    return compile_testee_unstructured.with_compilation_option(enable_jit=False)
+    return compile_testee_unstructured.with_compilation_options(enable_jit=False)
 
 
 def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
@@ -241,23 +241,24 @@ def skip_value_mesh_descriptor(exec_alloc_descriptor):
 
 
 def test_compile_unstructured_jit(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh and simple_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=[
             skip_value_mesh_descriptor.offset_provider,
             unstructured_case.offset_provider,
         ],
-        enable_jit=False,
     )
 
     # and executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
-    compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
+    compile_testee_unstructured_no_jit(
+        *args, offset_provider=unstructured_case.offset_provider, **kwargs
+    )
 
     v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
     assert np.allclose(
@@ -643,7 +644,14 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
 
     # the compile_variants_testee has static_params set and is compiled (in a previous test)
-    assert len(compile_variants_testee.compilation_options.static_params) > 0
+    assert (
+        len(
+            compile_variants_testee._compiled_programs.argument_descriptor_mapping[
+                arguments.StaticArg
+            ]
+        )
+        > 0
+    )
     assert compile_variants_testee._compiled_programs is not None
 
     # but now we reset the compiled programs and fix to other static params

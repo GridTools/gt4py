@@ -50,12 +50,12 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             backend
-        ).with_compilation_option(
+        ).with_compilation_options(
             connectivities=gtx_common.offset_provider_to_type(cartesian_case.offset_provider)
         )(in_field, tmp_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             backend
-        ).with_compilation_option(
+        ).with_compilation_options(
             connectivities=gtx_common.offset_provider_to_type(cartesian_case.offset_provider)
         )(tmp_field, out_field)
 
@@ -109,7 +109,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         allocator=allocator,
     )
 
-    testee2 = testee.with_backend(backend).with_compilation_option(connectivities={"E2V": e2v})
+    testee2 = testee.with_backend(backend).with_compilation_options(connectivities={"E2V": e2v})
 
     @dace.program
     def sdfg(
@@ -118,7 +118,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         offset_provider: OffsetProvider_t,
         connectivities: dace.compiletime,
     ):
-        testee2.with_compilation_option(connectivities=connectivities)(
+        testee2.with_compilation_options(connectivities=connectivities)(
             a, out, offset_provider=offset_provider
         )
         return out
