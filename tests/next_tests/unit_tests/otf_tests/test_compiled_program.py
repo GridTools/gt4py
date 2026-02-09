@@ -82,7 +82,7 @@ def _verify_program_has_expected_true_value(program: itir.Program):
 
 
 def test_inlining_of_scalars_works(testee_prog):
-    input_pair = toolchain.CompilableProgram(
+    input_pair = toolchain.ConcreteArtifact(
         data=testee_prog.definition_stage,
         args=arguments.CompileTimeArgs(
             args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
@@ -108,7 +108,7 @@ def test_inlining_of_scalar_works_integration(testee_prog):
 
     hijacked_program = None
 
-    def pirate(program: toolchain.CompilableProgram):
+    def pirate(program: toolchain.ConcreteArtifact):
         # Replaces the gtfn otf_workflow: and steals the compilable program,
         # then returns a dummy "CompiledProgram" that does nothing.
         nonlocal hijacked_program

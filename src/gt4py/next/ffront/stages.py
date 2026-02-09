@@ -6,15 +6,29 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+"""
+Definitions of the stages of the GT4Py frontend.
+
+Classes in this module contain different forms of field operator and program
+definitions, which are used as input or output of the different stages of
+the frontend.
+
+All classes containing a definition of a GT4Py computation in any form use the
+`Def` suffix. Definitions containing actual Python functions whose source code
+should be interpreted as GT4Py embedded domain-specific language have `DSL` in
+their name. Definitions containing definitions as an AST of one the internal GT4Py
+dialects contain `AST`.
+"""
+
 from __future__ import annotations
 
-import collections
+import collections.abc
 import dataclasses
 import functools
 import hashlib
 import types
 import typing
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Optional, TypeVar
 
 import xxhash
 
@@ -24,56 +38,59 @@ from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, 
 from gt4py.next.otf import arguments, toolchain
 
 
-OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
-
-
 @dataclasses.dataclass(frozen=True)
-class FieldOperatorDefinition(Generic[OperatorNodeT]):
+class DSLFieldOperatorDef:
     definition: types.FunctionType
-    grid_type: Optional[common.GridType] = None
-    node_class: type[OperatorNodeT] = dataclasses.field(default=foast.FieldOperator)  # type: ignore[assignment] # TODO(ricoh): understand why mypy complains
+    node_class: type[foast.OperatorNode] = foast.FieldOperator
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
+    grid_type: Optional[common.GridType] = None
     debug: bool = False
 
 
-DSL_FOP: typing.TypeAlias = FieldOperatorDefinition
-AOT_DSL_FOP: typing.TypeAlias = toolchain.CompilableProgram[DSL_FOP, arguments.CompileTimeArgs]
+ConcreteDSLFieldOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+    DSLFieldOperatorDef, arguments.CompileTimeArgs
+]
 
 
 @dataclasses.dataclass(frozen=True)
-class FoastOperatorDefinition(Generic[OperatorNodeT]):
-    foast_node: OperatorNodeT
+class FOASTOperatorDef:
+    foast_node: foast.OperatorNode
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
     debug: bool = False
 
 
-FOP: typing.TypeAlias = FoastOperatorDefinition
-AOT_FOP: typing.TypeAlias = toolchain.CompilableProgram[FOP, arguments.CompileTimeArgs]
+ConcreteFOASTOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+    FOASTOperatorDef, arguments.CompileTimeArgs
+]
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramDefinition:
+class DSLProgramDef:
     definition: types.FunctionType
     grid_type: Optional[common.GridType] = None
     debug: bool = False
 
 
-DSL_PRG: typing.TypeAlias = ProgramDefinition
-AOT_DSL_PRG: typing.TypeAlias = toolchain.CompilableProgram[DSL_PRG, arguments.CompileTimeArgs]
+ConcreteDSLProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+    DSLProgramDef, arguments.CompileTimeArgs
+]
 
 
 @dataclasses.dataclass(frozen=True)
-class PastProgramDefinition:
+class PASTProgramDef:
     past_node: past.Program
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
     debug: bool = False
 
 
-PAST_PRG: typing.TypeAlias = PastProgramDefinition
-AOT_PRG: typing.TypeAlias = toolchain.CompilableProgram[PAST_PRG, arguments.CompileTimeArgs]
+ConcretePASTProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+    PASTProgramDef, arguments.CompileTimeArgs
+]
+
+DSLDefinitionT = TypeVar("DSLDefinitionT", DSLFieldOperatorDef, DSLProgramDef)
 
 
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
@@ -98,11 +115,11 @@ for t in (str, int):
     add_content_to_fingerprint.register(t, add_content_to_fingerprint.registry[object])
 
 
-@add_content_to_fingerprint.register(FieldOperatorDefinition)
-@add_content_to_fingerprint.register(FoastOperatorDefinition)
-@add_content_to_fingerprint.register(ProgramDefinition)
-@add_content_to_fingerprint.register(PastProgramDefinition)
-@add_content_to_fingerprint.register(toolchain.CompilableProgram)
+@add_content_to_fingerprint.register(DSLFieldOperatorDef)
+@add_content_to_fingerprint.register(FOASTOperatorDef)
+@add_content_to_fingerprint.register(DSLProgramDef)
+@add_content_to_fingerprint.register(PASTProgramDef)
+@add_content_to_fingerprint.register(toolchain.ConcreteArtifact)
 @add_content_to_fingerprint.register(arguments.CompileTimeArgs)
 def add_stage_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
     add_content_to_fingerprint(obj.__class__, hasher)
