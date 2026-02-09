@@ -6,6 +6,20 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+"""
+Definitions of the stages of the GT4Py frontend.
+
+Classes in this module contain different forms of field operator and program
+definitions, which are used as input or output of the different stages of
+the frontend.
+
+All classes containing a definition of a GT4Py computation in any form use the
+`Def` suffix. Definitions containing actual Python functions whose source code
+should be interpreted as GT4Py embedded domain-specific language have `DSL` in
+their name. Definitions containing definitions as an AST of one the internal GT4Py
+dialects contain `AST`.
+"""
+
 from __future__ import annotations
 
 import collections.abc
