@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import contextlib
 import dataclasses
 import functools
 import itertools
@@ -59,20 +60,6 @@ def _metrics_prefix_from_pool_root(root: tuple[str, str]) -> str:
     return f"{root[0]}<{root[1]}>"
 
 
-@hook_machinery.EventHook
-def compiled_program_call_hook(
-    compiled_program: stages.CompiledProgram,
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    offset_provider: common.OffsetProvider,
-    root: tuple[str, str],
-    key: CompiledProgramsKey,
-) -> None:
-    """Callback hook invoked before compiling a program variant."""
-    if metrics.is_level_enabled(metrics.MINIMAL):
-        metrics.set_current_source_key(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
-
-
 @hook_machinery.event_hook
 def compile_variant_hook(
     program_definition: ffront_stages.DSLDefinitionForm,
@@ -97,6 +84,31 @@ def compile_variant_hook(
                 for key, value in argument_descriptors.items()
             },
         )
+
+
+class CompiledProgramSourceMetricSetter(hook_machinery.ContextHookCallback):
+    root: tuple[str, str]
+    key: CompiledProgramsKey
+
+    def __enter__(self) -> Any:
+        # Set metrics source key
+        if metrics.is_level_enabled(metrics.MINIMAL):
+            metrics.set_current_source_key(
+                f"{_metrics_prefix_from_pool_root(self.root)}[{hash(self.key)}]"
+            )
+
+
+@hook_machinery.context_hook
+def compiled_program_call_context(
+    compiled_program: stages.CompiledProgram,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    offset_provider: common.OffsetProvider,
+    root: tuple[str, str],
+    key: CompiledProgramsKey,
+) -> contextlib.AbstractContextManager:
+    """Hook called at the beginning and end of a compiled program call."""
+    return CompiledProgramSourceMetricSetter(root, key)
 
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
@@ -335,12 +347,10 @@ class CompiledProgramsPool:
                 "Consider calling a specialized version instead.",
                 stacklevel=2,
             )
-            arg_specialization_key = eve_utils.content_hash(
-                (
-                    tuple(type_translation.from_value(arg) for arg in canonical_args),
-                    {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
-                )
-            )
+            arg_specialization_key = eve_utils.content_hash((
+                tuple(type_translation.from_value(arg) for arg in canonical_args),
+                {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
+            ))
         else:
             arg_specialization_key = None
 
@@ -352,10 +362,6 @@ class CompiledProgramsPool:
 
         try:
             compiled_program = self.compiled_programs[key]
-            compiled_program_call_hook(
-                compiled_program, args, kwargs, offset_provider, self.root, key
-            )
-            compiled_program(*args, **kwargs, offset_provider=offset_provider)
 
         except KeyError as e:
             if compiled_program_future := self._compilation_jobs.pop(key, None):
@@ -385,6 +391,11 @@ class CompiledProgramsPool:
                 enable_jit=False,
                 **canonical_kwargs,
             )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
+
+        with compiled_program_call_context(
+            compiled_program, args, kwargs, offset_provider, self.root, key
+        ):
+            compiled_program(*args, **kwargs, offset_provider=offset_provider)
 
     @functools.cached_property
     def _primitive_values_extractor(self) -> Callable | None:

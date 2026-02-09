@@ -14,5 +14,5 @@ from gt4py.next.ffront.decorator import (
 )
 from gt4py.next.otf.compiled_program import (
     compile_variant_hook as compile_variant_hook,
-    compiled_program_call_hook as compiled_program_call_hook,
+    compiled_program_call_context as compiled_program_call_context,
 )

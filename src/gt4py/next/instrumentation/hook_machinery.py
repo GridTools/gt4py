@@ -162,14 +162,7 @@ class EventHook(_BaseHook[None, P]):
 
 
 def event_hook(definition: Callable[P, None]) -> EventHook[P]:
-    """
-    Decorator to create an EventHook from a function definition.
-
-    Args:
-        definition: The function defining the hook signature.
-    Returns:
-        An EventHook instance.
-    """
+    """Decorator to create an EventHook from a function definition."""
     return EventHook(definition)
 
 
@@ -207,28 +200,21 @@ class ContextHook(
 
 
 def context_hook(definition: Callable[P, contextlib.AbstractContextManager]) -> ContextHook[P]:
-    """
-    Decorator to create a ContextHook from a function definition.
-
-    Args:
-        definition: The function defining the hook signature.
-    Returns:
-        A ContextHook instance.
-    """
+    """Decorator to create a ContextHook from a function definition."""
     return ContextHook(definition)
 
 
 @dataclass_transform()
 class ContextHookCallback(contextlib.AbstractContextManager):
     """
-    Context callback hook specification.
+    Context hook callback helper base class.
 
-    This hook type is used to define context managers that can be stacked together.
-    It is functionally identical to `ContextHook` but serves to distinguish
-    different use cases.
+    A simple utility to define context hook callbacks which do not require
+    any special machinery. It converts the subclass into a dataclass and
+    provides default no-op implementations for the context manager methods.
     """
 
-    def __init_subclass__(cls, slots: bool = False) -> None:
+    def __init_subclass__(cls, *, slots: bool = False) -> None:
         super().__init_subclass__()
         cls = dataclasses.dataclass(cls, slots=slots)
 
