@@ -55,19 +55,22 @@ def test_sanitize_static_args_wrong_type():
 TDim = gtx.Dimension("TDim")
 
 
-@gtx.field_operator
-def fop(cond: bool, a: gtx.Field[gtx.Dims[TDim], float], b: gtx.Field[gtx.Dims[TDim], float]):
-    return a if cond else b
+@pytest.fixture
+def testee_prog():
+    @gtx.field_operator
+    def fop(cond: bool, a: gtx.Field[gtx.Dims[TDim], float], b: gtx.Field[gtx.Dims[TDim], float]):
+        return a if cond else b
 
+    @gtx.program(backend=gtfn.run_gtfn)
+    def prog(
+        cond: bool,
+        a: gtx.Field[gtx.Dims[TDim], gtx.float64],
+        b: gtx.Field[gtx.Dims[TDim], gtx.float64],
+        out: gtx.Field[gtx.Dims[TDim], gtx.float64],
+    ):
+        fop(cond, a, b, out=out)
 
-@gtx.program
-def prog(
-    cond: bool,
-    a: gtx.Field[gtx.Dims[TDim], gtx.float64],
-    b: gtx.Field[gtx.Dims[TDim], gtx.float64],
-    out: gtx.Field[gtx.Dims[TDim], gtx.float64],
-):
-    fop(cond, a, b, out=out)
+    return prog
 
 
 def _verify_program_has_expected_true_value(program: itir.Program):
@@ -78,11 +81,11 @@ def _verify_program_has_expected_true_value(program: itir.Program):
     assert program.body[0].expr.args[0].value  # is True
 
 
-def test_inlining_of_scalars_works():
+def test_inlining_of_scalars_works(testee_prog):
     input_pair = toolchain.CompilableProgram(
-        data=prog.definition_stage,
+        data=testee_prog.definition_stage,
         args=arguments.CompileTimeArgs(
-            args=list(prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
             kwargs={},
             offset_provider={},
             column_axis=None,
@@ -96,7 +99,7 @@ def test_inlining_of_scalars_works():
     _verify_program_has_expected_true_value(transformed)
 
 
-def test_inlining_of_scalar_works_integration():
+def test_inlining_of_scalar_works_integration(testee_prog):
     """
     Test that `.compile` replaces the scalar arg in the program.
     Unlike the previous test, this test uses a full backend and makes sure the replacement step is there.
@@ -114,7 +117,7 @@ def test_inlining_of_scalar_works_integration():
 
     hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", otf_workflow=pirate)
 
-    testee = prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
+    testee = testee_prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
     testee(
         cond=True,
         a=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
@@ -124,3 +127,38 @@ def test_inlining_of_scalar_works_integration():
     )
 
     _verify_program_has_expected_true_value(hijacked_program.data)
+
+
+def test_different_static_args_work_after_backend_change(testee_prog):
+    prg1 = testee_prog.with_backend(gtfn.run_gtfn)
+    prg2 = testee_prog.with_backend(gtfn.run_gtfn)
+
+    # compile with static args
+    prg1.compile(cond=[True], offset_provider={})
+
+    # compile without static args
+    prg2.compile(offset_provider={})
+
+
+def test_different_static_args_work_after_static_params_change(testee_prog):
+    testee_prog2 = testee_prog.with_compilation_options(static_params=["cond"])
+
+    # compile without static args
+    testee_prog.compile(offset_provider={})
+
+    # compile with static args
+    testee_prog2.compile(cond=[True], offset_provider={})
+
+
+def test_different_static_args_break_same_prg_after_static_params_change(testee_prog):
+    prg = testee_prog.with_compilation_options(static_params=[])
+
+    # compile without static args
+    prg.compile(offset_provider={})
+
+    # compile with different static args
+    with pytest.raises(
+        ValueError,
+        match="Argument descriptor StaticArg must be the same for all compiled programs",
+    ):
+        prg.compile(cond=[True], offset_provider={})
