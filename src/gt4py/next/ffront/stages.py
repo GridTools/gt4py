@@ -93,10 +93,6 @@ ConcretePASTProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 DSLDefinitionT = TypeVar("DSLDefinitionT", DSLFieldOperatorDef, DSLProgramDef)
 
 
-DSLDefinitionForm: typing.TypeAlias = DSL_FOP | DSL_PRG
-FFrontDefinitionForm: typing.TypeAlias = DSLDefinitionForm | FOP | PAST_PRG
-
-
 def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
     hasher: xtyping.HashlibAlgorithm
     if not algorithm:

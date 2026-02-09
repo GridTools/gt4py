@@ -20,8 +20,6 @@ import warnings
 from collections.abc import Callable
 from typing import Generic, ParamSpec, TypeVar
 
-from typing_extensions import dataclass_transform
-
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -202,29 +200,3 @@ class ContextHook(
 def context_hook(definition: Callable[P, contextlib.AbstractContextManager]) -> ContextHook[P]:
     """Decorator to create a ContextHook from a function definition."""
     return ContextHook(definition)
-
-
-@dataclass_transform()
-class ContextHookCallback(contextlib.AbstractContextManager):
-    """
-    Context hook callback helper base class.
-
-    A simple utility to define context hook callbacks which do not require
-    any special machinery. It converts the subclass into a dataclass and
-    provides default no-op implementations for the context manager methods.
-    """
-
-    def __init_subclass__(cls, *, slots: bool = False) -> None:
-        super().__init_subclass__()
-        cls = dataclasses.dataclass(cls, slots=slots)
-
-    def __enter__(self) -> None:
-        pass
-
-    def __exit__(
-        self,
-        type_: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: types.TracebackType | None,
-    ) -> None:
-        pass

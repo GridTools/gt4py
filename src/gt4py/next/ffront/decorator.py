@@ -54,6 +54,34 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
+ProgramCallMetricsCollector = metrics.make_collector(
+    level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
+)
+
+
+@hook_machinery.context_hook
+def program_call_context(
+    program: Program,
+    args: tuple[Any, ...],
+    offset_provider: common.OffsetProvider,
+    enable_jit: bool,
+    kwargs: dict[str, Any],
+) -> contextlib.AbstractContextManager:
+    """Hook called at the beginning and end of a program call."""
+    return ProgramCallMetricsCollector()
+
+
+@hook_machinery.context_hook
+def embedded_program_call_context(
+    program: Program,
+    args: tuple[Any, ...],
+    offset_provider: common.OffsetProvider,
+    kwargs: dict[str, Any],
+) -> contextlib.AbstractContextManager:
+    """Hook called at the beginning and end of an embedded program call."""
+    return metrics.SourceKeyContextManager(f"{program.__name__}<'<embedded>')>")
+
+
 @dataclasses.dataclass(frozen=True)
 class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     """
@@ -161,44 +189,6 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
 
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self
-
-
-ProgramCallMetricsCollector = metrics.make_collector(
-    level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
-)
-
-
-@hook_machinery.context_hook
-def program_call_context(
-    program: Program,
-    args: tuple[Any, ...],
-    offset_provider: common.OffsetProvider,
-    enable_jit: bool,
-    kwargs: dict[str, Any],
-) -> contextlib.AbstractContextManager:
-    """Hook called at the beginning and end of a program call."""
-    return ProgramCallMetricsCollector()
-
-
-class EmbeddedProgramSourceMetricSetter(hook_machinery.ContextHookCallback):
-    program: Program
-
-    def __enter__(self) -> Any:
-        # Metrics source key needs to be set here. Embedded programs
-        # don't have variants so there's no other place to do it.
-        if metrics.is_level_enabled(metrics.MINIMAL):
-            metrics.set_current_source_key(f"{self.program.__name__}<'<embedded>')>")
-
-
-@hook_machinery.context_hook
-def embedded_program_call_context(
-    program: Program,
-    args: tuple[Any, ...],
-    offset_provider: common.OffsetProvider,
-    kwargs: dict[str, Any],
-) -> contextlib.AbstractContextManager:
-    """Hook called at the beginning and end of an embedded program call."""
-    return EmbeddedProgramSourceMetricSetter(program)
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a

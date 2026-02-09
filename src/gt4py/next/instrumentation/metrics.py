@@ -12,6 +12,7 @@ import collections
 import contextlib
 import contextvars
 import dataclasses
+import functools
 import itertools
 import json
 import numbers
@@ -150,28 +151,21 @@ def is_current_source_key_set() -> bool:
     return _source_key_cvar.get(_NO_KEY_SET_MARKER_) is not _NO_KEY_SET_MARKER_
 
 
-def get_current_source_key() -> str:
-    """Retrieve the current source key for metrics collection (it must be set)."""
-    return _source_key_cvar.get()
-
-
-def set_current_source_key(key: str) -> Source:
+def set_current_source_key(key: str) -> None:
     """
     Set the current source key for metrics collection.
 
     It must be called only when no source key is set (or the same key is already set).
-
-    Args:
-        key: The source key to set.
-
-    Returns:
-        The `Source` object associated with the given key.
     """
     assert _source_key_cvar.get(_NO_KEY_SET_MARKER_) in {key, _NO_KEY_SET_MARKER_}, (
         "A different source key has been already set."
     )
     _source_key_cvar.set(key)
-    return sources[key]
+
+
+def get_current_source_key() -> str:
+    """Retrieve the current source key for metrics collection (it must be set)."""
+    return _source_key_cvar.get()
 
 
 def get_current_source() -> Source:
@@ -292,6 +286,7 @@ class BaseMetricsCollector(contextlib.AbstractContextManager):  # type: ignore[m
             _source_key_cvar.reset(self.previous_cvar_token)
 
 
+@functools.cache
 def make_collector(
     level: int,
     metric_name: str,

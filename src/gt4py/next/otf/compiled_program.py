@@ -49,7 +49,7 @@ ArgumentDescriptorContexts: TypeAlias = dict[
 
 
 def _make_pool_root(
-    program_definition: ffront_stages.DSLDefinitionForm, backend: gtx_backend.Backend
+    program_definition: ffront_stages.DSLDefinitionT, backend: gtx_backend.Backend
 ) -> tuple[str, str]:
     return (program_definition.definition.__name__, backend.name)
 
@@ -62,7 +62,7 @@ def _metrics_prefix_from_pool_root(root: tuple[str, str]) -> str:
 
 @hook_machinery.event_hook
 def compile_variant_hook(
-    program_definition: ffront_stages.DSLDefinitionForm,
+    program_definition: ffront_stages.DSLDefinitionT,
     backend: gtx_backend.Backend,
     offset_provider: common.OffsetProviderType | common.OffsetProvider,
     argument_descriptors: ArgumentDescriptors,
@@ -71,11 +71,14 @@ def compile_variant_hook(
     """Callback hook invoked before compiling a program variant."""
 
     if metrics.is_level_enabled(metrics.MINIMAL):
-        # Create a new metrics entity for this compiled program
-        metrics_source = metrics.set_current_source_key(
-            f"{_metrics_prefix_from_pool_root(_make_pool_root(program_definition, backend))}[{hash(key)}]"
+        # Create a new metrics entity for this compiled program variant and
+        # attach relevant metadata to it.
+        source_key = f"{_metrics_prefix_from_pool_root(_make_pool_root(program_definition, backend))}[{hash(key)}]"
+        assert source_key not in metrics.sources, (
+            "The key for the program variant being compiled is already set!!"
         )
-        metrics_source.metadata |= dict(
+
+        metrics.sources[source_key].metadata |= dict(
             name=program_definition.definition.__name__,
             backend=backend.name,
             compiled_program_pool_key=hash(key),
@@ -84,18 +87,6 @@ def compile_variant_hook(
                 for key, value in argument_descriptors.items()
             },
         )
-
-
-class CompiledProgramSourceMetricSetter(hook_machinery.ContextHookCallback):
-    root: tuple[str, str]
-    key: CompiledProgramsKey
-
-    def __enter__(self) -> Any:
-        # Set metrics source key
-        if metrics.is_level_enabled(metrics.MINIMAL):
-            metrics.set_current_source_key(
-                f"{_metrics_prefix_from_pool_root(self.root)}[{hash(self.key)}]"
-            )
 
 
 @hook_machinery.context_hook
@@ -108,7 +99,7 @@ def compiled_program_call_context(
     key: CompiledProgramsKey,
 ) -> contextlib.AbstractContextManager:
     """Hook called at the beginning and end of a compiled program call."""
-    return CompiledProgramSourceMetricSetter(root, key)
+    return metrics.SourceKeyContextManager(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
 
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
@@ -347,10 +338,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                 "Consider calling a specialized version instead.",
                 stacklevel=2,
             )
-            arg_specialization_key = eve_utils.content_hash((
-                tuple(type_translation.from_value(arg) for arg in canonical_args),
-                {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
-            ))
+            arg_specialization_key = eve_utils.content_hash(
+                (
+                    tuple(type_translation.from_value(arg) for arg in canonical_args),
+                    {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
+                )
+            )
         else:
             arg_specialization_key = None
 
