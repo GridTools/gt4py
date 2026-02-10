@@ -26,7 +26,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.ffront.stages import ConcreteFOASTOperatorDef, FOASTOperatorDef
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
 from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
@@ -433,8 +433,21 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.let(cond_symref_name, cond_)(result)
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        domain, true_branch, false_branch = self.visit(node.args, **kwargs)
-        return im.concat_where(domain, true_branch, false_branch)
+        visited_args = [self.visit(arg, **kwargs) for arg in node.args]
+        if len(visited_args) == 3 and not isinstance(visited_args[0].type, ts.TupleType):
+            cond, true_branch, false_branch = visited_args
+            return im.concat_where(cond, true_branch, false_branch)
+        else:
+            *pair_args, default = visited_args
+
+            result = default
+            for pair in reversed(pair_args):
+                assert cpm.is_call_to(pair, "make_tuple")
+                cond, value = pair.args
+
+                result = im.concat_where(cond, value, result)
+
+            return result
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return im.call("broadcast")(*self.visit(node.args, **kwargs))
