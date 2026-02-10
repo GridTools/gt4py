@@ -225,7 +225,7 @@ _dace_compile_call = dace_workflow.compilation.DaCeCompiler.__call__
 
 def mocked_compile_call(
     self,
-    inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+    inp: stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
     binding_source_ref: str,
 ):
     assert len(inp.library_deps) == 0
@@ -242,7 +242,7 @@ def mocked_compile_call(
 
 def mocked_compile_call_cartesian(
     self,
-    inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+    inp: stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
     use_metrics: bool,
     use_zero_origin: bool,
 ):
@@ -254,7 +254,7 @@ def mocked_compile_call_cartesian(
 
 def mocked_compile_call_unstructured(
     self,
-    inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+    inp: stages.CompilableProject[languages.SDFG, languages.LanguageSettings, languages.Python],
     use_metrics: bool,
     use_zero_origin: bool,
 ):
@@ -281,7 +281,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
             a[0] + 2 * a[1][0] + 3 * a[1][1] + 4 * b[0][0] + 5 * b[1]
         )  # skip 'a[1][2]' on purpose to cover unused scalar args
 
-    @gtx.program
+    @gtx.program(enable_jit=False)
     def testee(
         a: tuple[int32, tuple[int32, cases.IJKField, int32]],
         b: tuple[tuple[cases.IJKField], int32],  # use 'b_0' to test tuple with single element
@@ -327,7 +327,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     program = (
         testee.with_grid_type(gtx_common.GridType.CARTESIAN)
         .with_backend(backend)
-        .compile(enable_jit=False, offset_provider={}, **static_args)
+        .compile(offset_provider={}, **static_args)
     )
     program(a, b, out=c, M=M, N=N, K=K)
     assert np.all(c.asnumpy() == ref)
@@ -344,7 +344,7 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         tmp_2 = neighbor_sum(tmp(V2E), axis=V2EDim)
         return tmp_2
 
-    @gtx.program
+    @gtx.program(enable_jit=False)
     def testee(a: cases.VField, b: cases.VField):
         testee_op(a, out=b)
 
@@ -384,7 +384,7 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     program = (
         testee.with_grid_type(gtx_common.GridType.UNSTRUCTURED)
         .with_backend(backend)
-        .compile(enable_jit=False, offset_provider=offset_provider, **static_args)
+        .compile(offset_provider=offset_provider, **static_args)
     )
     program(a, b, offset_provider=offset_provider)
     assert np.all(b.asnumpy() == ref)
