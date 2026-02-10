@@ -17,7 +17,12 @@ from dace import (
     subsets as dace_sbs,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sutils
+from dace.sdfg import (
+    nodes as dace_nodes,
+    propagation as dace_propagation,
+    type_inference as dace_type_inference,
+    utils as dace_sutils,
+)
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -142,6 +147,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if_block=if_block,
             raw_relocatable_dataflow=raw_relocatable_dataflow,
             non_relocatable_dataflow=non_relocatable_dataflow,
+            enclosing_map=enclosing_map,
         )
 
         # If no branch has something to inline then we are done.
@@ -199,6 +205,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if_block=if_block,
             raw_relocatable_dataflow=raw_relocatable_dataflow,
             non_relocatable_dataflow=non_relocatable_dataflow,
+            enclosing_map=enclosing_map,
         )
 
         # Finally relocate the dataflow
@@ -469,7 +476,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 #   in the `SDFGState.add_nested_sdfg()` function.
                 if_block.sdfg.add_symbol(
                     new_sym,
-                    dace.codegen.tools.type_inference.infer_expr_type(new_sym, parent_symbols)
+                    dace_type_inference.infer_expr_type(new_sym, parent_symbols)
                     or dace_dtypes.typeclass(int),
                 )
 
@@ -546,6 +553,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if_block=upstream_if_block,
             raw_relocatable_dataflow=raw_relocatable_dataflow,
             non_relocatable_dataflow=non_relocatable_dataflow,
+            enclosing_map=enclosing_map,
         )
         if all(len(rel_df) == 0 for rel_df in filtered_relocatable_dataflow.values()):
             return False
@@ -559,6 +567,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if_block: dace_nodes.NestedSDFG,
         raw_relocatable_dataflow: dict[str, set[dace_nodes.Node]],
         non_relocatable_dataflow: dict[str, set[dace_nodes.Node]],
+        enclosing_map: dace_nodes.MapEntry,
     ) -> dict[str, set[dace_nodes.Node]]:
         """Partition the dependencies.
 
@@ -576,6 +585,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 that can be relocated, not yet filtered.
             non_relocatable_dataflow: The connectors and their associated dataflow
                 that can not be relocated.
+            enclosing_map: The limiting node, i.e. the MapEntry of the Map where
+                `if_block` is located in.
         """
 
         # Remove the parts of the dataflow that is unrelocatable.
@@ -587,8 +598,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             for conn_name, rel_df in raw_relocatable_dataflow.items()
         }
 
-        # Now we determine the nodes that are in more than one sets.
-        #  These sets must be removed, from the individual sets.
+        # Relocating nodes that are in more than one set is difficult. In the most
+        #  common case of just two branches, this anyway means they have to be
+        #  executed in any case. Thus we remove them now.
         known_nodes: set[dace_nodes.Node] = set()
         multiple_df_nodes: set[dace_nodes.Node] = set()
         for rel_df in relocatable_dataflow.values():
@@ -601,35 +613,73 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             for conn_name, rel_df in relocatable_dataflow.items()
         }
 
-        # However, not all dataflow can be moved inside the branch. For example if
-        #  something is used outside the dataflow, that is moved inside the `if`,
-        #  then we can not relocate it.
         # TODO(phimuell): If we operate outside of a Map we also have to make sure that
         #   the data is single use data, is not an AccessNode that refers to global
         #   memory nor is a source AccessNode.
         def filter_nodes(
-            branch_nodes: set[dace_nodes.Node],
-            sdfg: dace.SDFG,
-            state: dace.SDFGState,
+            nodes_proposed_for_reloc: set[dace_nodes.Node],
         ) -> set[dace_nodes.Node]:
-            # For this to work the `if_block` must be considered part, we remove it later.
-            branch_nodes.add(if_block)
             has_been_updated = True
             while has_been_updated:
                 has_been_updated = False
-                for node in list(branch_nodes):
-                    if node is if_block:
+
+                for reloc_node in list(nodes_proposed_for_reloc):
+                    # The node was already handled in a previous iteration.
+                    if reloc_node not in nodes_proposed_for_reloc:
                         continue
-                    if any(oedge.dst not in branch_nodes for oedge in state.out_edges(node)):
-                        branch_nodes.remove(node)
+
+                    assert (
+                        state.in_degree(reloc_node) > 0
+                    )  # Because we are currently always inside a Map
+
+                    # If the node is needed by anything that is not also moved
+                    #  into the `if` body, then it has to remain outside. For that we
+                    #  have to pretend that `if_block` is also relocated.
+                    if any(
+                        oedge.dst not in nodes_proposed_for_reloc
+                        for oedge in state.out_edges(reloc_node)
+                        if oedge.dst is not if_block
+                    ):
+                        nodes_proposed_for_reloc.remove(reloc_node)
                         has_been_updated = True
-            assert if_block in branch_nodes
-            branch_nodes.remove(if_block)
-            return branch_nodes
+                        continue
+
+                    # We do not look at all incoming nodes, but have to ignore some of them.
+                    #  We ignore `enclosed_map` because it acts as boundary, and the node
+                    #  on the other side of it is mapped into the `if` body anyway. We
+                    #  ignore the AccessNodes because they will either be relocated into
+                    #  the `if` body or be mapped (remain outside but made accessible
+                    #  inside), thus their relocation state is of no concern for
+                    #  `reloc_node`.
+                    non_mappable_incoming_nodes: set[dace_nodes.Node] = {
+                        iedge.src
+                        for iedge in state.in_edges(reloc_node)
+                        if not (
+                            (iedge.src is enclosing_map)
+                            or isinstance(iedge.src, dace_nodes.AccessNode)
+                        )
+                    }
+                    if non_mappable_incoming_nodes.issubset(nodes_proposed_for_reloc):
+                        # All nodes that can not be mapped into the `if` body are
+                        #  currently scheduled to be relocated, thus there is not
+                        #  problem.
+                        pass
+
+                    else:
+                        # Only some of the non mappable nodes are selected to be
+                        #  moved inside the `if` body. This means that `reloc_node`
+                        #  can also not be moved because of its input dependencies.
+                        #  Since we can not relocate `reloc_node` this also implies
+                        #  that none of its input can. Thus we remove them from
+                        #  `nodes_proposed_for_reloc`.
+                        nodes_proposed_for_reloc.difference_update(non_mappable_incoming_nodes)
+                        nodes_proposed_for_reloc.remove(reloc_node)
+                        has_been_updated = True
+
+            return nodes_proposed_for_reloc
 
         return {
-            conn_name: filter_nodes(rel_df, sdfg, state)
-            for conn_name, rel_df in relocatable_dataflow.items()
+            conn_name: filter_nodes(rel_df) for conn_name, rel_df in relocatable_dataflow.items()
         }
 
     def _partition_if_block(

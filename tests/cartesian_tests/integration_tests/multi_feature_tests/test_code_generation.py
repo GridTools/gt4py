@@ -1326,7 +1326,7 @@ def test_absolute_K_index(backend):
 
 @pytest.mark.parametrize(
     "backend",
-    ["debug", pytest.param("dace:cpu", marks=[pytest.mark.requires_dace])],
+    ["debug", "numpy", pytest.param("dace:cpu", marks=[pytest.mark.requires_dace])],
 )
 def test_iterator_access(backend: str) -> None:
     domain = (3, 4, 5)
@@ -1360,7 +1360,7 @@ def test_iterator_access(backend: str) -> None:
                 raises=NotImplementedError, reason="Iterator access (K) is not implemented for"
             ),
         )
-        for backend in ["gt:cpu_kfirst", "numpy"]
+        for backend in ["gt:cpu_kfirst"]
     ],
 )
 def test_iterator_access_raises_in_unsupported_backends(backend: str) -> None:
@@ -1377,6 +1377,132 @@ def test_iterator_access_raises_in_unsupported_backends(backend: str) -> None:
             field_B = K
 
     test_all_valid_usage(field_A, field_B)
+
+
+def test_runtime_interval_bounds():
+    backend = "debug"
+    domain = (5, 5, 10)
+    in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    @gtscript.stencil(backend=backend)
+    def test_scalar_arg(
+        in_field: Field[np.float64],  # type: ignore
+        out_field: Field[np.float64],  # type: ignore
+        scalar: int,
+    ) -> None:
+        with computation(PARALLEL), interval(0, scalar):
+            out_field[0, 0, 0] = in_field
+
+    in_arr[:, :, :] = 1
+    out_arr[:, :, :] = 0
+    test_scalar_arg(in_arr, out_arr, 3)
+    assert (out_arr[:, :, 0:3] == 1).all()
+    assert (out_arr[:, :, 3:] == 0).all()
+
+    @gtscript.stencil(backend=backend)
+    def test_field_arg(
+        in_field: Field[np.float64],  # type: ignore
+        out_field: Field[np.float64],  # type: ignore
+        index_field: Field[IJ, np.int64],  # type: ignore
+    ) -> None:
+        with computation(PARALLEL), interval(0, index_field):
+            out_field[0, 0, 0] = in_field
+
+    index_field = gt_storage.ones(backend=backend, shape=(domain[0], domain[1]), dtype=np.int64)
+    index_field[:, :] = 4
+    in_arr[:, :, :] = 1
+    out_arr[:, :, :] = 0
+    test_field_arg(in_arr, out_arr, index_field)
+    assert (out_arr[:, :, 0:4] == 1).all()
+    assert (out_arr[:, :, 4:] == 0).all()
+
+    @gtscript.stencil(backend=backend)
+    def test_temporary(
+        in_field: Field[np.float64],  # type: ignore
+        out_field: Field[np.float64],  # type: ignore
+    ) -> None:
+        with computation(FORWARD), interval(0, 1):
+            temporary: Field[IJ, np.float64] = 5  # type: ignore
+        with computation(PARALLEL), interval(0, temporary):
+            out_field[0, 0, 0] = in_field
+
+    in_arr[:, :, :] = 1
+    out_arr[:, :, :] = 0
+    test_temporary(in_arr, out_arr)
+    assert (out_arr[:, :, 0:5] == 1).all()
+    assert (out_arr[:, :, 5:] == 0).all()
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param(
+            "numpy",
+            marks=pytest.mark.xfail(
+                raises=NotImplementedError, reason="Runtime interval bounds not implemented yet."
+            ),
+        ),
+        pytest.param(
+            "gt:cpu_ifirst",
+            marks=pytest.mark.xfail(
+                raises=NotImplementedError, reason="Runtime interval bounds not implemented yet."
+            ),
+        ),
+        pytest.param(
+            "gt:cpu_kfirst",
+            marks=pytest.mark.xfail(
+                raises=NotImplementedError, reason="Runtime interval bounds not implemented yet."
+            ),
+        ),
+        pytest.param(
+            "gt:gpu",
+            marks=pytest.mark.xfail(
+                raises=NotImplementedError, reason="Runtime interval bounds not implemented yet."
+            ),
+        ),
+        pytest.param(
+            "dace:cpu",
+            marks=[
+                pytest.mark.xfail(
+                    raises=NotImplementedError,
+                    reason="Runtime interval bounds not implemented yet.",
+                ),
+                pytest.mark.requires_dace,
+            ],
+        ),
+        pytest.param(
+            "dace:gpu",
+            marks=[
+                pytest.mark.xfail(
+                    raises=NotImplementedError,
+                    reason="Runtime interval bounds not implemented yet.",
+                ),
+                pytest.mark.requires_dace,
+                pytest.mark.requires_gpu,
+            ],
+        ),
+    ],
+)
+def test_runtime_interval_raises(backend):
+    @gtscript.stencil(backend=backend)
+    def test_stencil(
+        out_field: Field[np.float64],  # type: ignore
+        input_data: Field[np.float64],  # type: ignore
+        index_data: Field[gtscript.IJ, np.int64],  # type: ignore
+        scalar_arg: int,
+    ):
+        with computation(FORWARD), interval(0, 1):
+            temporary: Field[IJ, np.float64] = 7  # type: ignore
+
+        with computation(PARALLEL), interval(0, scalar_arg):
+            out_field = input_data
+
+        with computation(PARALLEL), interval(0, index_data):
+            out_field = input_data[0, 0, 0]
+
+        with computation(PARALLEL), interval(0, temporary):
+            out_field[0, 0, 0] = input_data[0, 0, 0]
 
 
 @pytest.mark.parametrize(

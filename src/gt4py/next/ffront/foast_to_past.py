@@ -9,12 +9,12 @@
 import dataclasses
 from typing import Any, Optional
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
     foast_to_gtir,
     program_ast as past,
     stages as ffront_stages,
+    type_info as ffront_type_info,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
@@ -71,9 +71,12 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         >>> op_to_prog = OperatorToProgram(foast_to_gtir.adapted_foast_to_gtir_factory())
 
         >>> compile_time_args = arguments.CompileTimeArgs(
-        ...     args=tuple(param.type for param in copy.foast_stage.foast_node.definition.params),
+        ...     args=(
+        ...         *(param.type for param in copy.foast_stage.foast_node.definition.params),
+        ...         copy.foast_stage.foast_node.definition.type.returns,
+        ...     ),
         ...     kwargs={},
-        ...     offset_provider={"I", IDim},
+        ...     offset_provider={"I": IDim},
         ...     column_axis=None,
         ...     argument_descriptor_contexts={},
         ... )
@@ -95,30 +98,37 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
-
         arg_types, kwarg_types = inp.args.args, inp.args.kwargs
-
-        loc = inp.data.foast_node.location
-        # use a new UID generator to allow caching
-        param_sym_uids = eve_utils.UIDGenerator()
+        assert not kwarg_types
 
         type_ = inp.data.foast_node.type
+        loc = inp.data.foast_node.location
+        partial_program_type = ffront_type_info.type_in_program_context(inp.data.foast_node.type)
+        assert isinstance(partial_program_type, ts_ffront.ProgramType)
+        args_names = [
+            *partial_program_type.definition.pos_only_args,
+            *partial_program_type.definition.pos_or_kw_args.keys(),
+            *partial_program_type.definition.kw_only_args.keys(),
+        ]
+        assert arg_types[-1] == type_info.return_type(
+            type_, with_args=list(arg_types), with_kwargs=kwarg_types
+        )
+        assert args_names[-1] == "out"
+
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
-                id=param_sym_uids.sequential_id(prefix="__sym"),
+                id=name,
                 type=arg_type,
                 namespace=dialect_ast_enums.Namespace.LOCAL,
                 location=loc,
             )
-            for arg_type in arg_types
+            for name, arg_type in zip(
+                args_names,
+                arg_types,
+                strict=True,
+            )
         ]
-        params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
-        out_sym: past.Symbol = past.DataSymbol(
-            id="out",
-            type=type_info.return_type(type_, with_args=list(arg_types), with_kwargs=kwarg_types),
-            namespace=dialect_ast_enums.Namespace.LOCAL,
-            location=loc,
-        )
+        params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl[:-1]]
         out_ref = past.Name(id="out", location=loc)
 
         if inp.data.foast_node.id in inp.data.closure_vars:
@@ -138,7 +148,7 @@ class OperatorToProgram(workflow.Workflow[AOT_FOP, AOT_PRG]):
         untyped_past_node = past.Program(
             id=f"__field_operator_{inp.data.foast_node.id}",
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
-            params=[*params_decl, out_sym],
+            params=params_decl,
             body=[
                 past.Call(
                     func=past.Name(id=inp.data.foast_node.id, location=loc),

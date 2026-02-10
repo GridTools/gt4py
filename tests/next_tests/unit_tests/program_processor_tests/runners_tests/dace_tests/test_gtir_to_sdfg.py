@@ -38,7 +38,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 dace = pytest.importorskip("dace")
-dace_backend = pytest.importorskip("gt4py.next.program_processors.runners.dace")
+from gt4py.next.program_processors.runners.dace import lowering as dace_lowering
 
 
 @pytest.fixture
@@ -121,16 +121,16 @@ def build_dace_sdfg(
     offset_provider: gtx_common.OffsetProvider,
     skip_domain_inference: bool = False,
 ) -> Callable[..., Any]:
-    """Wrapper of `dace_backend.build_sdfg_from_gtir()` to run domain inference.
+    """Wrapper of `dace_lowering.build_sdfg_from_gtir()` to run domain inference.
 
-    Before calling `dace_backend.build_sdfg_from_gtir()`, it will infer the domain
+    Before calling `dace_lowering.build_sdfg_from_gtir()`, it will infer the domain
     of the given `ir`, unless called with `skip_domain_inference=True`.
     """
     if not skip_domain_inference:
         # run domain inference in order to add the domain annex information to the IR nodes
         ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     offset_provider_type = gtx_common.offset_provider_to_type(offset_provider)
-    return dace_backend.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
+    return dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
 
 
 def apply_margin_on_field_domain(
@@ -1647,6 +1647,38 @@ def test_gtir_let_lambda():
     assert np.allclose(b, ref)
 
 
+def test_gtir_let_lambda_unused_arg():
+    testee = gtir.Program(
+        id="let_lambda_unused_arg",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="z", type=IFTYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                # Arg 'xᐞ1' is used inside the let-lambda, 'yᐞ1' is not.
+                expr=im.let(("xᐞ1", im.op_as_fieldop("multiplies")("x", 3.0)), ("yᐞ1", "y"))(
+                    im.op_as_fieldop("multiplies")("xᐞ1", 2.0)
+                ),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim]),
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    c = np.random.rand(N)
+
+    sdfg = build_dace_sdfg(testee, {})
+
+    sdfg(a, b, c, **FSYMBOLS)
+    assert np.allclose(c, a * 6.0)
+
+
 def test_gtir_let_lambda_scalar_expression():
     domain_inner = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, "size_inner")})
     domain_outer = im.get_field_domain(
@@ -2270,13 +2302,16 @@ def test_gtir_scan(id, use_symbolic_column_size):
                     im.scan(
                         im.lambda_("state", "inp")(
                             im.if_(
+                                # we use a let expression inside this if-branch to cover a lowering case
                                 im.tuple_get(1, "state"),
                                 im.make_tuple(
-                                    im.plus(VAL, im.deref("inp")),
+                                    im.let("val", VAL)(im.plus("val", im.deref("inp"))),
                                     False,
                                 ),
                                 im.make_tuple(
-                                    im.plus(im.tuple_get(0, "state"), im.deref("inp")),
+                                    im.let("val", im.tuple_get(0, "state"))(
+                                        im.plus("val", im.deref("inp"))
+                                    ),
                                     False,
                                 ),
                             )
