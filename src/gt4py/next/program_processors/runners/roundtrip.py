@@ -137,7 +137,7 @@ def fencil_generator(
     if cache_key in _FENCIL_CACHE:
         if debug:
             print(f"Using cached fencil for key {cache_key}")
-        return typing.cast(stages.CompiledProgram, _FENCIL_CACHE[cache_key])
+        return _FENCIL_CACHE[cache_key]  # A CompiledProgram is just a Callable
 
     ir = transforms(ir, offset_provider=offset_provider)
 

@@ -24,7 +24,7 @@ from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
-class CompiledDaceProgram(stages.CompiledProgram):
+class CompiledDaceProgram:
     sdfg_program: dace.CompiledSDFG
 
     # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;

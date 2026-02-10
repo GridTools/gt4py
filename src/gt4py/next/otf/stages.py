@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic, Optional, Protocol, TypeVar
+from collections.abc import Callable
+from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
 
 from gt4py.eve import utils
 from gt4py.next import common
@@ -134,10 +135,7 @@ class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
     def build(self) -> None: ...
 
 
-class CompiledProgram(Protocol):
-    """Executable python representation of a program."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> None: ...
+CompiledProgram: TypeAlias = Callable
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

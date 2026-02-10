@@ -35,21 +35,17 @@ from gt4py.next.utils import tree_map
 T = TypeVar("T")
 
 ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
+
+#: Content of the key: (*hashable_arg_descriptors, id(offset_provider), concrete_instantation_if_generic)
 CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int, None | str]
-ArgumentDescriptors: TypeAlias = dict[
+
+ArgStaticDescriptorsByType: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
-]
-ArgumentDescriptorContext: TypeAlias = dict[
-    str, xtyping.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
-]
-ArgumentDescriptorContexts: TypeAlias = dict[
-    type[arguments.ArgStaticDescriptor],
-    ArgumentDescriptorContext,
 ]
 
 
 def _make_pool_root(
-    program_definition: ffront_stages.DSLDefinitionT, backend: gtx_backend.Backend
+    program_definition: ffront_stages.DSLDefinition, backend: gtx_backend.Backend
 ) -> tuple[str, str]:
     return (program_definition.definition.__name__, backend.name)
 
@@ -62,15 +58,15 @@ def _metrics_prefix_from_pool_root(root: tuple[str, str]) -> str:
 
 @hook_machinery.event_hook
 def compile_variant_hook(
-    program_definition: ffront_stages.DSLDefinitionT,
+    program_definition: ffront_stages.DSLDefinition,
     backend: gtx_backend.Backend,
     offset_provider: common.OffsetProviderType | common.OffsetProvider,
-    argument_descriptors: ArgumentDescriptors,
+    argument_descriptors: ArgStaticDescriptorsByType,
     key: CompiledProgramsKey,
 ) -> None:
     """Callback hook invoked before compiling a program variant."""
 
-    if metrics.is_level_enabled(metrics.MINIMAL):
+    if metrics.is_any_level_enabled():
         # Create a new metrics entity for this compiled program variant and
         # attach relevant metadata to it.
         source_key = f"{_metrics_prefix_from_pool_root(_make_pool_root(program_definition, backend))}[{hash(key)}]"
@@ -98,7 +94,19 @@ def compiled_program_call_context(
     root: tuple[str, str],
     key: CompiledProgramsKey,
 ) -> contextlib.AbstractContextManager:
-    """Hook called at the beginning and end of a compiled program call."""
+    """
+    Hook called at the beginning and end of a compiled program call.
+
+    Args:
+        compiled_program: The compiled program being called.
+        args: The arguments with which the program is called.
+        kwargs: The keyword arguments with which the program is called.
+        offset_provider: The offset provider passed to the program.
+        root: The root of the compiled programs pool this program belongs to, i.e. a tuple of
+            (program name, backend name).
+        key: The key of the compiled program in the compiled programs pool.
+
+    """
     return metrics.SourceKeyContextManager(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
 
 
@@ -178,11 +186,11 @@ def _make_argument_descriptors(
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]],
     args: tuple[Any],
     kwargs: dict[str, Any],
-) -> ArgumentDescriptors:
+) -> ArgStaticDescriptorsByType:
     """Given a set of runtime arguments construct all argument descriptors from them."""
     func_type = program_type.definition
     params = list(func_type.pos_or_kw_args.keys()) + list(func_type.kw_only_args.keys())
-    descriptors: ArgumentDescriptors = {}
+    descriptors: ArgStaticDescriptorsByType = {}
     for descriptor_cls, exprs in argument_descriptor_mapping.items():
         descriptors[descriptor_cls] = {}
         for expr in exprs:
@@ -193,8 +201,8 @@ def _make_argument_descriptors(
 
 
 def _convert_to_argument_descriptor_context(
-    func_type: ts.FunctionType, argument_descriptors: ArgumentDescriptors
-) -> ArgumentDescriptorContexts:
+    func_type: ts.FunctionType, argument_descriptors: ArgStaticDescriptorsByType
+) -> arguments.ArgStaticDescriptorsContextsByType:
     """
     Given argument descriptors, i.e., a mapping from an expr to a descriptor, transform them into a
     context of argument descriptors in which we can evaluate expressions.
@@ -214,9 +222,9 @@ def _convert_to_argument_descriptor_context(
     >>> contexts[arguments.StaticArg]
     {'inp1': (None, StaticArg(value=1)), 'inp2': None}
     """
-    descriptor_contexts: ArgumentDescriptorContexts = {}
+    descriptor_contexts: arguments.ArgStaticDescriptorsContextsByType = {}
     for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
-        context: ArgumentDescriptorContext = _make_param_context_from_func_type(
+        context: arguments.ArgStaticDescriptorsContext = _make_param_context_from_func_type(
             func_type, lambda x: None
         )
         # convert tuples to list such that we can alter the context easily
@@ -246,14 +254,13 @@ def _convert_to_argument_descriptor_context(
             )(v)
             for k, v in context.items()
         }
-        descriptor_contexts[descriptor_cls] = context
+        descriptor_contexts[descriptor_cls] = context  # type: ignore[index]  # Hard to understand, it looks like a mypy bug
 
     return descriptor_contexts
 
 
 def _validate_argument_descriptors(
-    program_type: ts_ffront.ProgramType,
-    all_descriptors: ArgumentDescriptors,
+    program_type: ts_ffront.ProgramType, all_descriptors: ArgStaticDescriptorsByType
 ) -> None:
     for descriptors in all_descriptors.values():
         for expr, descriptor in descriptors.items():
@@ -443,7 +450,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
     def _argument_descriptor_cache_key_from_descriptors(
         self,
-        argument_descriptor_contexts: ArgumentDescriptorContexts,
+        argument_descriptor_contexts: arguments.ArgStaticDescriptorsContextsByType,
     ) -> tuple:
         """
         Given a set of argument descriptors deduce the cache key used to retrieve the instance
@@ -467,7 +474,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         return tuple(elements)
 
     def _initialize_argument_descriptor_mapping(
-        self, argument_descriptors: ArgumentDescriptors
+        self, argument_descriptors: ArgStaticDescriptorsByType
     ) -> None:
         if self.argument_descriptor_mapping is None:
             self.argument_descriptor_mapping = {
@@ -506,7 +513,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
     def _compile_variant(
         self,
-        argument_descriptors: ArgumentDescriptors,
+        argument_descriptors: ArgStaticDescriptorsByType,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
         #: tuple consisting of the types of the positional and keyword arguments.
         arg_specialization_info: tuple[tuple[ts.TypeSpec, ...], dict[str, ts.TypeSpec]]
