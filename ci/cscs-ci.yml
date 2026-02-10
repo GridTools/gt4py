@@ -86,7 +86,6 @@ build_cscs_amd_rocm:
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
     TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6_0) to test 
-    CSCS_CUDA_MPS: 1
     USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
@@ -137,6 +136,7 @@ test_cscs_gh200:
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
+    CSCS_CUDA_MPS: 1
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
