@@ -92,12 +92,11 @@ class RemoveScalarCopies(dace_transformation.SingleStateTransformation):
         edges = list(graph.edges_between(first_node, second_node))
         if len(edges) != 1:
             return False
+        edge = edges[0]
 
         # Check that the second access node has only one incoming edge, which is the one from the first access node.
         if graph.in_degree(second_node) != 1:
             return False
-
-        edge = edges[0]
 
         # Check if the edge transfers only one element
         if edge.data.num_elements() != 1:
