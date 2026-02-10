@@ -106,13 +106,13 @@ def test_inlining_of_scalar_works_integration():
     hijacked_program = None
 
     def pirate(program: toolchain.CompilableProgram):
-        # Replaces the gtfn otf_workflow: and steals the compilable program,
+        # Replaces the gtfn backend transformation: and steals the compilable program,
         # then returns a dummy "CompiledProgram" that does nothing.
         nonlocal hijacked_program
         hijacked_program = program
         return lambda *args, **kwargs: None
 
-    hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", otf_workflow=pirate)
+    hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", executor=pirate)
 
     testee = prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
     testee(
