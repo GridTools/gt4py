@@ -216,8 +216,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         out_connectors_to_move_rename_map: dict[str, str] = {}
         for original_in_connector_name in in_connectors_to_move:
             new_connector_name = original_in_connector_name
-            if new_connector_name in first_cb.in_connectors:
-                new_connector_name = second_arrays_rename_map[original_in_connector_name]
+            new_connector_name = second_arrays_rename_map[original_in_connector_name]
             in_connectors_to_move_rename_map[original_in_connector_name] = new_connector_name
             first_cb.add_in_connector(new_connector_name)
             for edge in graph.in_edges(second_cb):
@@ -227,8 +226,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                     )
         for original_out_connector_name in out_connectors_to_move:
             new_connector_name = original_out_connector_name
-            if new_connector_name in first_cb.out_connectors:
-                new_connector_name = second_arrays_rename_map[original_out_connector_name]
+            new_connector_name = second_arrays_rename_map[original_out_connector_name]
             out_connectors_to_move_rename_map[original_out_connector_name] = new_connector_name
             first_cb.add_out_connector(new_connector_name)
             for edge in graph.out_edges(second_cb):
@@ -262,9 +260,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             for node in nodes_to_move:
                 new_node = node
                 if isinstance(node, dace_nodes.AccessNode):
-                    if node.data in first_cb.in_connectors or node.data in first_cb.out_connectors:
-                        new_data_name = second_arrays_rename_map[node.data]
-                        new_node = dace_nodes.AccessNode(new_data_name)
+                    new_data_name = second_arrays_rename_map[node.data]
+                    new_node = dace_nodes.AccessNode(new_data_name)
                 nodes_renamed_map[node] = new_node
                 second_state_edges_to_add[corresponding_state_in_second].extend(
                     corresponding_state_in_second.in_edges(node)
