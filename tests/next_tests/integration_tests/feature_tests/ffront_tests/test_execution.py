@@ -60,9 +60,6 @@ def test_copy(cartesian_case):
         field_0 = field_tuple[0]
         field_1 = field_tuple[1]
         return field_0
-        # TODO: this breaks with dace: investigate
-        # field_tmp = 2*field_0
-        # return field_tmp
 
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
