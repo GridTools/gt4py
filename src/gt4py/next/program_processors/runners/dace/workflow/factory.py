@@ -9,12 +9,12 @@
 from __future__ import annotations
 
 import functools
-from typing import Final
+from typing import Callable, Final
 
 import factory
 
 from gt4py._core import definitions as core_defs, filecache
-from gt4py.next import config
+from gt4py.next import config, factory_utils
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow import (
     bindings as bindings_step,
@@ -36,35 +36,35 @@ class DaCeWorkflowFactory(factory.Factory):
         model = recipes.OTFCompileWorkflow
 
     class Params:
+        cache_translation: bool = True
         auto_optimize: bool = False
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
 
-        cached_translation = factory.Trait(
-            translation=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(
-                    o.bare_translation,
-                    hash_function=stages.fingerprint_compilable_program,
-                    cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "translation_cache")),
-                )
-            ),
-        )
-
-        bare_translation = factory.SubFactory(
+    @factory_utils.dynamic_transformer(
+        default=factory.SubFactory(
             DaCeTranslationStepFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
         )
-
-    translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings = factory.LazyAttribute(
-        lambda o: functools.partial(
-            bindings_step.bind_sdfg,
-            bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
-        )
     )
+    def translation(self: factory.builder.Resolver, value: Callable) -> Callable:
+        if self.cache_translation:
+            return workflow.CachedStep(
+                value,
+                hash_function=stages.fingerprint_compilable_program,
+                cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "translation_cache")),
+            )
+        return value
+
+    @factory.lazy_attribute
+    def bindings(self: factory.builder.Resolver) -> Callable:
+        return functools.partial(
+            bindings_step.bind_sdfg, bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME
+        )
+
     compilation = factory.SubFactory(
         DaCeCompilationStepFactory,
         bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
@@ -72,9 +72,9 @@ class DaCeWorkflowFactory(factory.Factory):
         device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )
-    decoration = factory.LazyAttribute(
-        lambda o: functools.partial(
-            decoration_step.convert_args,
-            device=o.device_type,
-        )
-    )
+
+    @factory.lazy_attribute
+    def decoration(
+        self: factory.builder.Resolver,
+    ) -> Callable[[stages.CompiledProgram], stages.CompiledProgram]:
+        return functools.partial(decoration_step.convert_args, device=self.device_type)
