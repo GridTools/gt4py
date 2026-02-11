@@ -48,11 +48,11 @@ class BuildSystemProjectGenerator(Protocol[LangSettingsT, TargetLangSettingsT]):
 class Compiler(
     workflow.ChainableWorkflowMixin[
         stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
-        stages.CompiledProgram,
+        stages.ExecutableProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
-        stages.CompiledProgram,
+        stages.ExecutableProgram,
     ],
     definitions.CompilationStep[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
 ):
@@ -67,7 +67,7 @@ class Compiler(
     def __call__(
         self,
         inp: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
-    ) -> stages.CompiledProgram:
+    ) -> stages.ExecutableProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
@@ -85,11 +85,12 @@ class Compiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
-        compiled_prog = getattr(
-            importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
+        m = importer.import_from_path(
+            src_dir / new_data.module, sys_modules_prefix="gt4py.__compiled_programs__."
         )
+        func = getattr(m, new_data.entry_point_name)
 
-        return compiled_prog
+        return func
 
 
 class CompilerFactory(factory.Factory):

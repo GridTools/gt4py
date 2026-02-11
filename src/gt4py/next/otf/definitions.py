@@ -57,7 +57,7 @@ class BindingStep(Protocol[LangSettingsT, ToLangSettingsT]):
 
 class CompilationStep(
     workflow.Workflow[
-        stages.CompilableProject[LangSettingsT, ToLangSettingsT], stages.CompiledProgram
+        stages.CompilableProject[LangSettingsT, ToLangSettingsT], stages.ExecutableProgram
     ],
     Protocol[LangSettingsT, ToLangSettingsT],
 ):
@@ -65,4 +65,4 @@ class CompilationStep(
 
     def __call__(
         self, source: stages.CompilableProject[LangSettingsT, ToLangSettingsT]
-    ) -> stages.CompiledProgram: ...
+    ) -> stages.ExecutableProgram: ...
