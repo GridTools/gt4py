@@ -133,6 +133,12 @@ class JITArgs:
         return cls(args=args, kwargs=kwargs)
 
 
+ArgStaticDescriptorsContext: TypeAlias = dict[str, MaybeNestedInTuple[ArgStaticDescriptor | None]]
+ArgStaticDescriptorsContextsByType: TypeAlias = Mapping[
+    type[ArgStaticDescriptor], ArgStaticDescriptorsContext
+]
+
+
 @dataclasses.dataclass(frozen=True)
 class CompileTimeArgs:
     """Compile-time standins for arguments to a GTX program to be used in ahead-of-time compilation."""
@@ -145,10 +151,7 @@ class CompileTimeArgs:
     #: If an argument or element of an argument has no descriptor, the respective value is `None`.
     #: E.g., for a tuple argument `a` with type `ts.TupleTupe(types=[field_t, int32_t])` a possible
     #  context would be `{"a": (FieldDomainDescriptor(...), None)}`.
-    argument_descriptor_contexts: Mapping[
-        type[ArgStaticDescriptor],
-        dict[str, MaybeNestedInTuple[ArgStaticDescriptor | None]],
-    ]
+    argument_descriptor_contexts: ArgStaticDescriptorsContextsByType
 
     @property
     def offset_provider_type(self) -> common.OffsetProviderType:

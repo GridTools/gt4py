@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import contextlib
 import dataclasses
 import functools
 import itertools
@@ -25,7 +26,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
     type_translation,
 )
-from gt4py.next.instrumentation import metrics
+from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.otf import arguments, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -34,17 +35,85 @@ from gt4py.next.utils import tree_map
 T = TypeVar("T")
 
 ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
+
+#: Content of the key: (*hashable_arg_descriptors, id(offset_provider), concrete_instantation_if_generic)
 CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int, None | str]
-ArgumentDescriptors: TypeAlias = dict[
+
+ArgStaticDescriptorsByType: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
-ArgumentDescriptorContext: TypeAlias = dict[
-    str, xtyping.MaybeNestedInTuple[arguments.ArgStaticDescriptor | None]
-]
-ArgumentDescriptorContexts: TypeAlias = dict[
-    type[arguments.ArgStaticDescriptor],
-    ArgumentDescriptorContext,
-]
+
+
+def _make_pool_root(
+    program_definition: ffront_stages.DSLDefinition, backend: gtx_backend.Backend
+) -> tuple[str, str]:
+    return (program_definition.definition.__name__, backend.name)
+
+
+@functools.cache
+def _metrics_prefix_from_pool_root(root: tuple[str, str]) -> str:
+    """Generate a metrics prefix from a compiled programs pool root."""
+    return f"{root[0]}<{root[1]}>"
+
+
+@hook_machinery.event_hook
+def compile_variant_hook(
+    program_definition: ffront_stages.DSLDefinition,
+    backend: gtx_backend.Backend,
+    offset_provider: common.OffsetProviderType | common.OffsetProvider,
+    argument_descriptors: ArgStaticDescriptorsByType,
+    key: CompiledProgramsKey,
+) -> None:
+    """Callback hook invoked before compiling a program variant."""
+
+    if metrics.is_any_level_enabled():
+        # Create a new metrics entity for this compiled program variant and
+        # attach relevant metadata to it.
+        source_key = f"{_metrics_prefix_from_pool_root(_make_pool_root(program_definition, backend))}[{hash(key)}]"
+        assert source_key not in metrics.sources, (
+            "The key for the program variant being compiled is already set!!"
+        )
+
+        metrics.sources[source_key].metadata |= dict(
+            name=program_definition.definition.__name__,
+            backend=backend.name,
+            compiled_program_pool_key=hash(key),
+            **{
+                f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
+                for key, value in argument_descriptors.items()
+            },
+        )
+
+
+@hook_machinery.context_hook
+def compiled_program_call_context(
+    compiled_program: stages.ExecutableProgram,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    offset_provider: common.OffsetProvider,
+    root: tuple[str, str],
+    key: CompiledProgramsKey,
+) -> contextlib.AbstractContextManager:
+    """
+    Hook called at the beginning and end of a compiled program call.
+
+    Args:
+        compiled_program: The compiled program being called.
+        args: The arguments with which the program is called.
+        kwargs: The keyword arguments with which the program is called.
+        offset_provider: The offset provider passed to the program.
+        root: The root of the compiled programs pool this program belongs to, i.e. a tuple of
+            (program name, backend name).
+        key: The key of the compiled program in the compiled programs pool.
+
+    """
+    # We set the metrics key for the compiled program call at enter and leave it
+    # set at exit, since it is needed in the exit of the outer `program_call` context,
+    # which will take care of unsetting it. This is because the compiled program call
+    # is part of a program call, but we want the metrics to be associated with a
+    # specific compiled program variant, not just the generic outer program.
+    return metrics.metrics_setter_at_enter(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
+
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
 _async_compilation_pool: concurrent.futures.Executor | None = None
@@ -122,11 +191,11 @@ def _make_argument_descriptors(
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]],
     args: tuple[Any],
     kwargs: dict[str, Any],
-) -> ArgumentDescriptors:
+) -> ArgStaticDescriptorsByType:
     """Given a set of runtime arguments construct all argument descriptors from them."""
     func_type = program_type.definition
     params = list(func_type.pos_or_kw_args.keys()) + list(func_type.kw_only_args.keys())
-    descriptors: ArgumentDescriptors = {}
+    descriptors: ArgStaticDescriptorsByType = {}
     for descriptor_cls, exprs in argument_descriptor_mapping.items():
         descriptors[descriptor_cls] = {}
         for expr in exprs:
@@ -137,8 +206,8 @@ def _make_argument_descriptors(
 
 
 def _convert_to_argument_descriptor_context(
-    func_type: ts.FunctionType, argument_descriptors: ArgumentDescriptors
-) -> ArgumentDescriptorContexts:
+    func_type: ts.FunctionType, argument_descriptors: ArgStaticDescriptorsByType
+) -> arguments.ArgStaticDescriptorsContextsByType:
     """
     Given argument descriptors, i.e., a mapping from an expr to a descriptor, transform them into a
     context of argument descriptors in which we can evaluate expressions.
@@ -158,9 +227,9 @@ def _convert_to_argument_descriptor_context(
     >>> contexts[arguments.StaticArg]
     {'inp1': (None, StaticArg(value=1)), 'inp2': None}
     """
-    descriptor_contexts: ArgumentDescriptorContexts = {}
+    descriptor_contexts: arguments.ArgStaticDescriptorsContextsByType = {}
     for descriptor_cls, descriptor_expr_mapping in argument_descriptors.items():
-        context: ArgumentDescriptorContext = _make_param_context_from_func_type(
+        context: arguments.ArgStaticDescriptorsContext = _make_param_context_from_func_type(
             func_type, lambda x: None
         )
         # convert tuples to list such that we can alter the context easily
@@ -190,14 +259,13 @@ def _convert_to_argument_descriptor_context(
             )(v)
             for k, v in context.items()
         }
-        descriptor_contexts[descriptor_cls] = context
+        descriptor_contexts[descriptor_cls] = context  # type: ignore[index]  # Hard to understand, it looks like a mypy bug
 
     return descriptor_contexts
 
 
 def _validate_argument_descriptors(
-    program_type: ts_ffront.ProgramType,
-    all_descriptors: ArgumentDescriptors,
+    program_type: ts_ffront.ProgramType, all_descriptors: ArgStaticDescriptorsByType
 ) -> None:
     for descriptors in all_descriptors.values():
         for expr, descriptor in descriptors.items():
@@ -231,15 +299,19 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
 
-    # cache the compiled programs
-    compiled_programs: dict[
-        CompiledProgramsKey,
-        stages.CompiledProgram | concurrent.futures.Future[stages.CompiledProgram],
+    # store for the compiled programs
+    compiled_programs: dict[CompiledProgramsKey, stages.ExecutableProgram] = dataclasses.field(
+        default_factory=dict, init=False
+    )
+
+    # store for the async compilation jobs
+    _compilation_jobs: dict[
+        CompiledProgramsKey, concurrent.futures.Future[stages.ExecutableProgram]
     ] = dataclasses.field(default_factory=dict, init=False)
 
     @functools.cached_property
-    def _primitive_values_extractor(self) -> Callable | None:
-        return arguments.make_primitive_value_args_extractor(self.program_type.definition)
+    def root(self) -> tuple[str, str]:
+        return _make_pool_root(self.definition_stage, self.backend)
 
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
@@ -294,23 +366,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         )
 
         try:
-            program = self.compiled_programs[key]
-            if metrics.is_level_enabled(metrics.MINIMAL):
-                metrics.set_current_source_key(self._metrics_key_from_pool_key(key))
-
-            program(*args, **kwargs, offset_provider=offset_provider)  # type: ignore[operator]  # the Future case is handled below
-
-        except TypeError as e:
-            if "program" in locals() and isinstance(program, concurrent.futures.Future):
-                # 'Future' objects are not callable so they will generate a TypeError.
-                # Here we resolve the future and call it again.
-                program = self._resolve_future(key)
-                program(*args, **kwargs, offset_provider=offset_provider)
-            else:
-                raise e
+            compiled_program = self.compiled_programs[key]
 
         except KeyError as e:
-            if enable_jit:
+            if self._finish_compilation_job(key):
+                compiled_program = self.compiled_programs[key]
+            elif enable_jit:
                 assert self.argument_descriptor_mapping is not None
                 self._compile_variant(
                     argument_descriptors=_make_argument_descriptors(
@@ -331,7 +392,18 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                     enable_jit=False,
                     **canonical_kwargs,
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
-            raise RuntimeError("No program compiled for this set of static arguments.") from e
+
+            else:
+                raise RuntimeError("No program compiled for this set of static arguments.") from e
+
+        with compiled_program_call_context(
+            compiled_program, args, kwargs, offset_provider, self.root, key
+        ):
+            compiled_program(*args, **kwargs, offset_provider=offset_provider)
+
+    @functools.cached_property
+    def _primitive_values_extractor(self) -> Callable | None:
+        return arguments.make_primitive_value_args_extractor(self.program_type.definition)
 
     @functools.cached_property
     def _is_generic(self) -> bool:
@@ -360,12 +432,6 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         )
 
     @functools.cached_property
-    def _metrics_key_from_pool_key(self) -> Callable[[CompiledProgramsKey], str]:
-        prefix = f"{self.definition_stage.definition.__name__}<{self.backend.name}>"
-
-        return lambda key: f"{prefix}[{hash(key)}]"
-
-    @functools.cached_property
     def _argument_descriptor_cache_key_from_args(
         self,
     ) -> Callable[..., tuple[Hashable, ...]]:
@@ -388,7 +454,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
     def _argument_descriptor_cache_key_from_descriptors(
         self,
-        argument_descriptor_contexts: ArgumentDescriptorContexts,
+        argument_descriptor_contexts: arguments.ArgStaticDescriptorsContextsByType,
     ) -> tuple:
         """
         Given a set of argument descriptors deduce the cache key used to retrieve the instance
@@ -412,7 +478,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         return tuple(elements)
 
     def _initialize_argument_descriptor_mapping(
-        self, argument_descriptors: ArgumentDescriptors
+        self, argument_descriptors: ArgStaticDescriptorsByType
     ) -> None:
         if self.argument_descriptor_mapping is None:
             self.argument_descriptor_mapping = {
@@ -449,9 +515,22 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                         location=None,
                     )
 
+    def _is_existing_key(self, key: CompiledProgramsKey) -> bool:
+        return key in self.compiled_programs or key in self._compilation_jobs
+
+    def _finish_compilation_job(self, key: CompiledProgramsKey) -> bool:
+        if key not in self._compilation_jobs:
+            return False
+
+        compiled_program_future = self._compilation_jobs.pop(key)
+        assert isinstance(compiled_program_future, concurrent.futures.Future)
+        assert key not in self.compiled_programs
+        self.compiled_programs[key] = compiled_program_future.result()
+        return True
+
     def _compile_variant(
         self,
-        argument_descriptors: ArgumentDescriptors,
+        argument_descriptors: ArgStaticDescriptorsByType,
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
         #: tuple consisting of the types of the positional and keyword arguments.
         arg_specialization_info: tuple[tuple[ts.TypeSpec, ...], dict[str, ts.TypeSpec]]
@@ -481,21 +560,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         )
         assert call_key is None or call_key == key
 
-        if key in self.compiled_programs:
+        if self._is_existing_key(key):
             raise ValueError(f"Program with key {key} already exists.")
-
-        # If we are collecting metrics, create a new metrics entity for this compiled program
-        if metrics.is_level_enabled(metrics.MINIMAL):
-            metrics_source = metrics.set_current_source_key(self._metrics_key_from_pool_key(key))
-            metrics_source.metadata |= dict(
-                name=self.definition_stage.definition.__name__,
-                backend=self.backend.name,
-                compiled_program_pool_key=hash(key),
-                **{
-                    f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
-                    for key, value in argument_descriptors.items()
-                },
-            )
 
         if arg_specialization_info:
             arg_types, kwarg_types = arg_specialization_info
@@ -520,11 +586,18 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         compile_call = functools.partial(
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
         )
+        compile_variant_hook(
+            self.definition_stage,
+            self.backend,
+            offset_provider=offset_provider,
+            argument_descriptors=argument_descriptors,
+            key=key,
+        )
+
         if _async_compilation_pool is None:
-            # synchronous compilation
             self.compiled_programs[key] = compile_call()
         else:
-            self.compiled_programs[key] = _async_compilation_pool.submit(compile_call)
+            self._compilation_jobs[key] = _async_compilation_pool.submit(compile_call)
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
     #  domains and of scans.
@@ -559,10 +632,3 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                     },
                     offset_provider=offset_provider,
                 )
-
-    def _resolve_future(self, key: CompiledProgramsKey) -> stages.CompiledProgram:
-        program = self.compiled_programs[key]
-        assert isinstance(program, concurrent.futures.Future)
-        result = program.result()
-        self.compiled_programs[key] = result
-        return result
