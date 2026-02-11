@@ -87,7 +87,7 @@ def compile_variant_hook(
 
 @hook_machinery.context_hook
 def compiled_program_call_context(
-    compiled_program: stages.CompiledProgram,
+    compiled_program: stages.ExecutableProgram,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     offset_provider: common.OffsetProvider,
@@ -300,13 +300,13 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
 
     # store for the compiled programs
-    compiled_programs: dict[CompiledProgramsKey, stages.CompiledProgram] = dataclasses.field(
+    compiled_programs: dict[CompiledProgramsKey, stages.ExecutableProgram] = dataclasses.field(
         default_factory=dict, init=False
     )
 
     # store for the async compilation jobs
     _compilation_jobs: dict[
-        CompiledProgramsKey, concurrent.futures.Future[stages.CompiledProgram]
+        CompiledProgramsKey, concurrent.futures.Future[stages.ExecutableProgram]
     ] = dataclasses.field(default_factory=dict, init=False)
 
     @functools.cached_property

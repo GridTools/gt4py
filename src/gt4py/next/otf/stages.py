@@ -135,7 +135,7 @@ class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
     def build(self) -> None: ...
 
 
-CompiledProgram: TypeAlias = Callable
+ExecutableProgram: TypeAlias = Callable
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:
