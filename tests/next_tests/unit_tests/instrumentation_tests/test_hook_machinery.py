@@ -12,8 +12,6 @@ import contextlib
 import dataclasses
 
 import pytest
-from gt4py.next.instrumentation.hook_machinery import ContextHookCallback
-from gt4py.next.instrumentation.hook_machinery import ContextHookCallback
 
 from gt4py.next.instrumentation.hook_machinery import (
     EventHook,
@@ -272,7 +270,11 @@ class TestContextHook:
 def test_context_hook_callback_partial():
     exit_called = []
 
-    class MyContextCallback(ContextHookCallback):
+    @dataclasses.dataclass(slots=True)
+    class MyContextCallback:
+        def __enter__(self):
+            pass
+
         def __exit__(self, type_, exc_value, traceback):
             exit_called.append(True)
 
@@ -290,7 +292,8 @@ def test_context_hook_callback_full():
     enter_called = []
     exit_called = []
 
-    class MyContextCallback(ContextHookCallback, slots=True):
+    @dataclasses.dataclass(slots=True)
+    class MyContextCallback:
         enter_value: int
         exit_value: int
 

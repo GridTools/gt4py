@@ -26,11 +26,9 @@ class TestSetCurrentSourceKey:
         metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
 
         key = "test_source"
-        source = metrics.set_current_source_key(key)
+        metrics.set_current_source_key(key)
 
         assert metrics.get_current_source_key() == key
-        assert metrics.sources[key] == source
-        assert isinstance(source, metrics.Source)
 
     def test_set_current_source_key_same_key_twice(self):
         """Test setting the same source key twice."""
