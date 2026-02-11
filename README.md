@@ -1,7 +1,7 @@
 [![logo](https://raw.githubusercontent.com/GridTools/gt4py/gh-pages/v1.0/_static/logo.svg)](https://GridTools.github.io/gt4py)
 
 ![license](https://img.shields.io/github/license/GridTools/gt4py)
-[![slack](https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a)](https://join.slack.com/t/gridtools/shared_invite/zt-1mceuj747-59swuowC3MKAuCFyNAnc1g)
+[![slack](https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a)](https://join.slack.com/t/gridtools/shared_invite/zt-3pg63o8a8-huyrLZgLgC4RS42S9FGDZA)
 
 [![Daily CI](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml/badge.svg)](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml)
 ![test-components](https://github.com/GridTools/gt4py/actions/workflows/test-components.yml/badge.svg?branch=main)
