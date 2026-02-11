@@ -43,16 +43,16 @@ def get_device_arch() -> str | None:
 
 def get_cmake_device_arch_option() -> str:
     cmake_flag = ""
-    device_archs = ""
+    device_archs: str | None = ""
 
     match core_defs.CUPY_DEVICE_TYPE:
         case core_defs.DeviceType.CUDA:
-            device_archs = os.environ.get("CUDAARCHS", "").strip() or get_device_arch()
             cmake_flag_template = "-DCMAKE_CUDA_ARCHITECTURES={device_archs}"
+            device_archs = os.environ.get("CUDAARCHS", "").strip() or get_device_arch()
         case core_defs.DeviceType.ROCM:
+            cmake_flag_template = "-DCMAKE_HIP_ARCHITECTURES={device_archs}"
             # `HIPARCHS` is not officially supported by CMake yet, but it might be in the future
             device_archs = os.environ.get("HIPARCHS", "").strip() or get_device_arch()
-            cmake_flag_template = "-DCMAKE_HIP_ARCHITECTURES={device_archs}"
 
     cmake_flag = cmake_flag_template.format(device_archs=device_archs) if device_archs else ""
 
@@ -115,7 +115,7 @@ class CMakeFactory(
 
 @dataclasses.dataclass
 class CMakeProject(
-    stages.BuildSystemProject[languages.CPPLanguageSettings, languages.PythonLanguageSettings]
+    stages.BuildSystemProject[languages.CLikeLanguageSettings, languages.PythonLanguageSettings]
 ):
     """
     CMake build system for gt4py programs.

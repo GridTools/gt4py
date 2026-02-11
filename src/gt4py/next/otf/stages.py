@@ -18,16 +18,6 @@ from gt4py.next.otf import definitions, languages
 from gt4py.next.otf.binding import interface
 
 
-PrgT = TypeVar("PrgT")
-ArgT = TypeVar("ArgT")
-SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
-TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
-SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
-SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
-TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
-SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
-
-
 def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = program_def.args.offset_provider

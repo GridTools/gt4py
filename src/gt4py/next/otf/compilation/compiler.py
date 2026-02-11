@@ -54,12 +54,13 @@ class Compiler(
         stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
         stages.CompiledProgram,
     ],
-    step_types.CompilationStep[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
+    definitions.CompilationStep[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[
+        CPPLikeLangSettingsT, languages.PythonLanguageSettings
     ]
     force_recompile: bool = False
 

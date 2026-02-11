@@ -34,9 +34,7 @@ CompilableProgramDef: TypeAlias = ConcreteProgramDef[itir.Program, arguments.Com
 
 
 class TranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[
-        CompilableProgramDef, stages.ProgramSource[LangSettingsT]
-    ],
+    workflow.ReplaceEnabledWorkflowMixin[CompilableProgramDef, stages.ProgramSource[LangSettingsT]],
     Protocol[LangSettingsT],
 ):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""

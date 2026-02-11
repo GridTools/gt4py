@@ -307,6 +307,6 @@ def create_bindings(
 
 @workflow.make_step
 def bind_source(
-    inp: stages.ProgramProject[LangSettingsT],
+    inp: stages.ProgramSource[LangSettingsT],
 ) -> stages.CompilableProject[LangSettingsT, languages.PythonLanguageSettings]:
     return stages.CompilableProject(program_source=inp, binding_source=create_bindings(inp))
