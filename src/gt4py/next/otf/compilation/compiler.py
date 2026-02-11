@@ -83,11 +83,12 @@ class Compiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
-        compiled_prog = getattr(
-            importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
+        m = importer.import_from_path(
+            src_dir / new_data.module, sys_modules_prefix="gt4py.__compiled_programs__."
         )
+        func = getattr(m, new_data.entry_point_name)
 
-        return compiled_prog
+        return func
 
 
 class CompilerFactory(factory.Factory):
