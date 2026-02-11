@@ -136,7 +136,6 @@ test_cscs_gh200:
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
-    CSCS_CUDA_MPS: 1
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
