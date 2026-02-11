@@ -1207,7 +1207,7 @@ def test_if_mover_symbol_aliasing():
     however, with different meanings. Thus the relocation will lead to invalid
     behaviour and should be rejected.
     """
-    sdfg = dace.SDFG(util.unique_name("if_mover_symbol_alias"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_symbol_alias"))
     state = sdfg.add_state(is_start_block=True)
 
     scalar_names = ["cond", "a1", "b2"]
