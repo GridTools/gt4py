@@ -96,13 +96,7 @@ class AssertionChecker(ast.NodeTransformer):
         return node
 
 
-class AxisIntervalParser(gt_meta.ASTPass):
-    """Parse Python AST interval syntax in the form of a Slice.
-
-    Corner cases: `ast.Ellipsis` refers to the entire interval, and
-    if an `ast.Subscript` is passed, this parses its slice attribute.
-    """
-
+class IntervalParser(gt_meta.ASTPass):
     @classmethod
     def apply(
         cls,
@@ -282,6 +276,33 @@ class AxisIntervalParser(gt_meta.ASTPass):
             return op(value)
 
         raise self.interval_error
+
+
+class HorizontalIntervalParser(IntervalParser):
+    """Parse Python AST interval syntax in the form of a Slice.
+
+    Corner cases: `ast.Ellipsis` refers to the entire interval, and
+    if an `ast.Subscript` is passed, this parses its slice attribute.
+    """
+
+    def visit_Subscript(self, node: ast.Subscript) -> nodes.AxisBound:
+        if node.value.id != self.axis_name:
+            raise self.interval_error
+
+        if isinstance(node.slice, ast.Index):
+            index = self.visit(node.slice.value)
+        else:
+            index = self.visit(node.slice)
+
+        return gtscript.AxisIndex(axis=self.axis_name, index=index)
+
+
+class VerticalIntervalParser(IntervalParser):
+    """Parse Python AST interval syntax in the form of a Slice.
+
+    Corner cases: `ast.Ellipsis` refers to the entire interval, and
+    if an `ast.Subscript` is passed, this parses its slice attribute.
+    """
 
     def visit_Subscript(self, node: ast.Subscript) -> nodes.AxisBound:
         if node.value.id != self.axis_name:
@@ -938,7 +959,7 @@ class IRMaker(ast.NodeVisitor):
         list_of_exprs = [axis_node for axis_node in node.elts]
         axes_names = [axis.name for axis in self.domain.parallel_axes]
         return {
-            name: AxisIntervalParser.apply(axis_node, name, self.fields)
+            name: HorizontalIntervalParser.apply(axis_node, name, self.fields)
             for axis_node, name in zip(list_of_exprs, axes_names)
         }
 
@@ -1014,7 +1035,7 @@ class IRMaker(ast.NodeVisitor):
             interval_node = args[0]
 
         seq_name = nodes.Domain.LatLonGrid().sequential_axis.name
-        interval = AxisIntervalParser.apply(interval_node, seq_name, self.fields, loc=loc)
+        interval = VerticalIntervalParser.apply(interval_node, seq_name, self.fields, loc=loc)
 
         if (
             interval.start.level == nodes.LevelMarker.END
