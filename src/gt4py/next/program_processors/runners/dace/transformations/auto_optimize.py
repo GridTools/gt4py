@@ -21,7 +21,7 @@ from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
-    sdfg_library_nodes,
+    library_nodes as gtir_library_nodes,
     transformations as gtx_transformations,
 )
 
@@ -253,7 +253,7 @@ def gt_auto_optimize(
         # We need new transformations in order to deal with GTIR library nodes.
         # For now, we simply expand these nodes before starting optimizing.
         for node, state in sdfg.all_nodes_recursive():
-            if isinstance(node, sdfg_library_nodes.GTIR_LIBRARY_NODES):
+            if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
                 node.expand(state)
 
         # Initial Cleanup

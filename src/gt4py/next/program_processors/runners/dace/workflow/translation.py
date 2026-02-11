@@ -22,9 +22,9 @@ from gt4py.next.otf import definitions, languages, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtir_library_nodes,
     lowering as gtx_dace_lowering,
     sdfg_args as gtx_dace_args,
-    sdfg_library_nodes,
     transformations as gtx_transformations,
 )
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
@@ -418,7 +418,7 @@ class DaCeTranslator(
             )
             # Expand all GT4Py library nodes
             for node, state in sdfg.all_nodes_recursive():
-                if isinstance(node, sdfg_library_nodes.GTIR_LIBRARY_NODES):
+                if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
                     node.expand(state)
             if on_gpu:
                 gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)

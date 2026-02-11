@@ -34,7 +34,10 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
-from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtir_library_nodes,
+    sdfg_args as gtx_dace_args,
+)
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_python_codegen,
     gtir_to_sdfg,
@@ -1320,139 +1323,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             gt_dtype=ts.ListType(node.type.element_type, offset_type),
         )
 
-    def _make_reduce_with_skip_values(
-        self,
-        input_expr: ValueExpr | MemletExpr,
-        offset_provider_type: gtx_common.NeighborConnectivityType,
-        reduce_init: SymbolExpr,
-        reduce_identity: SymbolExpr,
-        reduce_wcr: str,
-        result_node: dace_nodes.AccessNode,
-    ) -> None:
-        """
-        Helper method to lower reduction on a local field containing skip values.
-
-        The reduction is implemented as a nested SDFG containing 2 states. In first
-        state, the result (a scalar data node passed as argumet) is initialized.
-        In second state, a mapped tasklet uses a write-conflict resolution (wcr)
-        memlet to update the result.
-        We use the offset provider as a mask to identify skip values: the value
-        that is written to the result node is either the input value, when the
-        corresponding neighbor index in the connectivity table is valid, or the
-        identity value if the neighbor index is missing.
-        """
-        origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
-
-        assert (
-            isinstance(input_expr.gt_dtype, ts.ListType)
-            and input_expr.gt_dtype.offset_type is not None
-        )
-        offset_type = input_expr.gt_dtype.offset_type
-        connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
-        connectivity_node = self.state.add_access(connectivity)
-        connectivity_desc = connectivity_node.desc(self.sdfg)
-        connectivity_desc.transient = False
-
-        desc = input_expr.dc_node.desc(self.sdfg)
-        if isinstance(input_expr, MemletExpr):
-            local_dim_indices = [i for i, size in enumerate(input_expr.subset.size()) if size != 1]
-        else:
-            local_dim_indices = list(range(len(desc.shape)))
-
-        if len(local_dim_indices) != 1:
-            raise NotImplementedError(
-                f"Found {len(local_dim_indices)} local dimensions in reduce expression, expected one."
-            )
-        local_dim_index = local_dim_indices[0]
-        assert desc.shape[local_dim_index] == offset_provider_type.max_neighbors
-
-        # we lower the reduction map with WCR out memlet in a nested SDFG
-        nsdfg = dace.SDFG(self.subgraph_builder.unique_nsdfg_name("reduce_with_skip_values"))
-        nsdfg.add_array(
-            "values",
-            (desc.shape[local_dim_index],),
-            desc.dtype,
-            strides=(desc.strides[local_dim_index],),
-        )
-        nsdfg.add_array(
-            "neighbor_indices",
-            (connectivity_desc.shape[1],),
-            connectivity_desc.dtype,
-            strides=(connectivity_desc.strides[1],),
-        )
-        nsdfg.add_scalar("acc", desc.dtype)
-        st_init = nsdfg.add_state(f"{nsdfg.label}_init")
-        init_tasklet, connector_mapping = self.subgraph_builder.add_tasklet(
-            name="init_acc",
-            sdfg=self.sdfg,
-            state=st_init,
-            inputs={},
-            outputs={"val"},
-            code=f"val = {reduce_init.dc_dtype}({reduce_init.value})",
-        )
-        st_init.add_edge(
-            init_tasklet,
-            connector_mapping["val"],
-            st_init.add_access("acc"),
-            None,
-            dace.Memlet(data="acc", subset="0"),
-        )
-        st_reduce = nsdfg.add_state_after(st_init, f"{nsdfg.label}_reduce")
-        # Fill skip values in local dimension with the reduce identity value
-        skip_value = f"{reduce_identity.dc_dtype}({reduce_identity.value})"
-        # Since this map operates on a pure local dimension, we explicitly set sequential
-        # schedule and we set the flag 'wcr_nonatomic=True' on the write memlet.
-        # TODO(phimuell): decide if auto-optimizer should reset `wcr_nonatomic` properties, as DaCe does.
-        self.subgraph_builder.add_mapped_tasklet(
-            name="reduce_with_skip_values",
-            sdfg=self.sdfg,
-            state=st_reduce,
-            map_ranges={"i": f"0:{offset_provider_type.max_neighbors}"},
-            inputs={
-                "val": dace.Memlet(data="values", subset="i"),
-                "neighbor_idx": dace.Memlet(data="neighbor_indices", subset="i"),
-            },
-            code=f"out = val if neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
-            outputs={
-                "out": dace.Memlet(data="acc", subset="0", wcr=reduce_wcr, wcr_nonatomic=True),
-            },
-            external_edges=True,
-            schedule=dace.dtypes.ScheduleType.Sequential,
-        )
-
-        nsdfg_node = self.state.add_nested_sdfg(
-            nsdfg, inputs={"values", "neighbor_indices"}, outputs={"acc"}
-        )
-
-        if isinstance(input_expr, MemletExpr):
-            self._add_input_data_edge(input_expr.dc_node, input_expr.subset, nsdfg_node, "values")
-        else:
-            self.state.add_edge(
-                input_expr.dc_node,
-                None,
-                nsdfg_node,
-                "values",
-                self.sdfg.make_array_memlet(input_expr.dc_node.data),
-            )
-        # The layout of connectivity tables is known.
-        assert len(offset_provider_type.domain) == 2
-        assert offset_provider_type.domain[1].kind == gtx_common.DimensionKind.LOCAL
-        self._add_input_data_edge(
-            connectivity_node,
-            dace_subsets.Range.from_string(
-                f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
-            ),
-            nsdfg_node,
-            "neighbor_indices",
-        )
-        self.state.add_edge(
-            nsdfg_node,
-            "acc",
-            result_node,
-            None,
-            dace.Memlet(data=result_node.data, subset="0"),
-        )
-
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
@@ -1472,26 +1342,61 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
 
         if offset_provider_type.has_skip_values:
-            self._make_reduce_with_skip_values(
-                input_expr,
-                offset_provider_type,
-                reduce_init,
-                reduce_identity,
+            name = self.subgraph_builder.unique_nsdfg_name("reduce_with_skip_values")
+            reduce_node = gtir_library_nodes.ReduceWithSkipValues(
+                name,
                 reduce_wcr,
-                result_node,
+                identity=reduce_identity.value,
+                init=reduce_init.value,
+                debuginfo=gtir_to_sdfg_utils.debug_info(node),
+            )
+            self.state.add_node(reduce_node)
+        else:
+            reduce_node = self.state.add_reduce(
+                reduce_wcr,
+                axes=None,
+                identity=reduce_init.value,
+                debuginfo=gtir_to_sdfg_utils.debug_info(node),
             )
 
+        if isinstance(input_expr, MemletExpr):
+            self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node, "_in")
         else:
-            reduce_node = self.state.add_reduce(reduce_wcr, axes=None, identity=reduce_init.value)
-            if isinstance(input_expr, MemletExpr):
-                self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node)
-            else:
-                self.state.add_nedge(
-                    input_expr.dc_node,
-                    reduce_node,
-                    self.sdfg.make_array_memlet(input_expr.dc_node.data),
-                )
-            self.state.add_nedge(reduce_node, result_node, dace.Memlet(data=result, subset="0"))
+            self.state.add_edge(
+                input_expr.dc_node,
+                None,
+                reduce_node,
+                "_in",
+                self.sdfg.make_array_memlet(input_expr.dc_node.data),
+            )
+        self.state.add_edge(
+            reduce_node, "_out", result_node, None, dace.Memlet(data=result, subset="0")
+        )
+
+        if offset_provider_type.has_skip_values:
+            assert (
+                isinstance(input_expr.gt_dtype, ts.ListType)
+                and input_expr.gt_dtype.offset_type is not None
+            )
+
+            offset_type = input_expr.gt_dtype.offset_type
+            connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
+            connectivity_node = self.state.add_access(connectivity)
+            connectivity_desc = connectivity_node.desc(self.sdfg)
+            connectivity_desc.transient = False
+
+            # The layout of connectivity tables is known.
+            assert len(offset_provider_type.domain) == 2
+            assert offset_provider_type.domain[1].kind == gtx_common.DimensionKind.LOCAL
+            origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
+            self._add_input_data_edge(
+                connectivity_node,
+                dace_subsets.Range.from_string(
+                    f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
+                ),
+                reduce_node,
+                "_mask",
+            )
 
         return ValueExpr(result_node, node.type)
 

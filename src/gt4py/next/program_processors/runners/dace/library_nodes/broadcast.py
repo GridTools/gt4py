@@ -29,7 +29,7 @@ class Broadcast(dace_nodes.LibraryNode):
     axes = dace_properties.ListProperty(element_type=int)
     src_origin = dace_properties.ListProperty(element_type=str)
     dst_origin = dace_properties.ListProperty(element_type=str)
-    value = dace_properties.SymbolicProperty(allow_none=True)
+    value = dace_properties.Property(allow_none=True)
 
     def __init__(
         self,
@@ -38,6 +38,7 @@ class Broadcast(dace_nodes.LibraryNode):
         src_origin: Sequence[dace.symbolic.SymbolicType] | None = None,
         dst_origin: Sequence[dace.symbolic.SymbolicType] | None = None,
         value: dace.symbolic.SymbolicType | None = None,
+        debuginfo: dace.dtypes.DebugInfo | None = None,
     ):
         inputs = {_INPUT_NAME} if value is None else None
         super().__init__(name, inputs=inputs, outputs={_OUTPUT_NAME})
@@ -46,6 +47,7 @@ class Broadcast(dace_nodes.LibraryNode):
         self.src_origin = [] if src_origin is None else [str(o) for o in src_origin]
         self.dst_origin = [] if dst_origin is None else [str(o) for o in dst_origin]
         self.value = value
+        self.debuginfo = debuginfo
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         if any(i < 0 for i in self.axes):
@@ -86,7 +88,7 @@ class Broadcast(dace_nodes.LibraryNode):
 
 @dace_library.register_expansion(Broadcast, "pure")
 class BroadcastExpandInlined(dace_transform.ExpandTransformation):
-    """Implements pure expansion of the Fill library node."""
+    """Implements pure expansion of the Broadcast library node."""
 
     environments: Final[list[Any]] = []
 
@@ -94,8 +96,8 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
     def expansion(
         node: Broadcast, parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.SDFG:
-        sdfg = dace.SDFG(f"{node.label}_sdfg")
-        state = sdfg.add_state(f"{node.label}_state")
+        sdfg = dace.SDFG(node.label)
+        state = sdfg.add_state(f"{node.label}_impl")
 
         assert len(list(parent_state.out_edges_by_connector(node, _OUTPUT_NAME))) == 1
         outedge = next(parent_state.out_edges_by_connector(node, _OUTPUT_NAME))
@@ -134,18 +136,13 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
                 external_edges=True,
             )
         else:
-            inp_value = (out_desc.dtype)(node.value)
             state.add_mapped_tasklet(
                 name="broadcast",
                 map_ranges=dict(zip(map_params, dst_subset)),
                 inputs={},
-                code=f"outp = {inp_value}",
+                code=f"outp = {node.value}",
                 outputs={"outp": out_mem},
                 external_edges=True,
             )
 
         return sdfg
-
-
-GTIR_LIBRARY_NODES: Final[tuple[dace_nodes.LibraryNode]] = (Broadcast,)
-"""List of available GTIR library nodes."""

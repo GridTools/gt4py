@@ -19,8 +19,8 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtir_library_nodes,
     sdfg_args as gtx_dace_args,
-    sdfg_library_nodes,
 )
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_dataflow,
@@ -327,11 +327,12 @@ def translate_broadcast(
 
     # Retrieve the scalar argument, which could be either a literal value or the
     # result of a scalar expression.
+    name = sdfg_builder.unique_tasklet_name("broadcast")
     if isinstance(bcast_arg, gtir.Literal):
         # Use a 'Broadcast' library node to fill the result field with the given value.
-        name = sdfg_builder.unique_tasklet_name("fill")
-        value = (gtx_dace_args.as_dace_type(bcast_arg.type))(bcast_arg.value)
-        bcast_node = sdfg_library_nodes.Broadcast(name, value=value)
+        bcast_node = gtir_library_nodes.Broadcast(
+            name, value=bcast_arg.value, debuginfo=gtir_to_sdfg_utils.debug_info(node)
+        )
         ctx.state.add_node(bcast_node)
     else:
         if isinstance(
@@ -347,8 +348,9 @@ def translate_broadcast(
             inp_origin = [o for _, o in arg.field_domain]
 
         # Use a 'Broadcast' library node to write the scalar value to the result field.
-        name = sdfg_builder.unique_tasklet_name("broadcast")
-        bcast_node = sdfg_library_nodes.Broadcast(name, inp_axes, inp_origin, field_origin)
+        bcast_node = gtir_library_nodes.Broadcast(
+            name, inp_axes, inp_origin, field_origin, debuginfo=gtir_to_sdfg_utils.debug_info(node)
+        )
         ctx.state.add_node(bcast_node)
         ctx.state.add_edge(
             inp_node,
