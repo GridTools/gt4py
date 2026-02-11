@@ -134,11 +134,12 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
                 external_edges=True,
             )
         else:
+            inp_value = (out_desc.dtype)(node.value)
             state.add_mapped_tasklet(
                 name="broadcast",
                 map_ranges=dict(zip(map_params, dst_subset)),
                 inputs={},
-                code=f"outp = {node.value}",
+                code=f"outp = {inp_value}",
                 outputs={"outp": out_mem},
                 external_edges=True,
             )
