@@ -53,14 +53,14 @@ class CompiledbFactory(
                 "Compiledb build system project requires separate bindings code file."
             )
         name = source.program_source.entry_point.name
-        header_name = f"{name}.{source.program_source.language_settings.header_extension}"
-        bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
+        header_name = f"{name}.{source.program_source.lang_settings.header_extension}"
+        bindings_name = f"{name}_bindings.{source.program_source.lang_settings.file_extension}"
 
         cc_prototype_program_source = _cc_prototype_program_source(
             deps=source.library_deps,
             build_type=self.cmake_build_type,
             cmake_flags=self.cmake_extra_flags or [],
-            language_settings=source.program_source.language_settings,
+            lang_settings=source.program_source.lang_settings,
         )
 
         compiledb_template = _cc_get_compiledb(
@@ -248,14 +248,14 @@ def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
     build_type: config.CMakeBuildType,
     cmake_flags: list[str],
-    language_settings: languages.CPPLikeLangSettings,
+    lang_settings: languages.CPPLikeLangSettings,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
         entry_point=interface.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
-        language_settings=language_settings,
+        lang_settings=lang_settings,
     )
 
 
@@ -315,7 +315,7 @@ def _cc_create_compiledb(
     binding_src_name = next(
         name
         for name in prototype_project.source_files.keys()
-        if name.endswith(f"_bindings.{prototype_program_source.language_settings.file_extension}")
+        if name.endswith(f"_bindings.{prototype_program_source.lang_settings.file_extension}")
     )
 
     prototype_project.build()

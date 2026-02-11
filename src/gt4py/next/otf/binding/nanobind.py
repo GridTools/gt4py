@@ -238,15 +238,15 @@ def create_bindings(
     program_source
         The program source for which the bindings are created
     """
-    if not isinstance(program_source.language_settings, languages.CPPLikeLangSettings):
+    if not isinstance(program_source.lang_settings, languages.CPPLikeLangSettings):
         raise ValueError(
-            f"Can only create bindings for C++ program sources, received '{program_source.language_settings.name}'."
+            f"Can only create bindings for C++ program sources, received '{program_source.lang_settings.name}'."
         )
     wrapper_name = program_source.entry_point.name + "_wrapper"
 
     Stmt = ReturnStmt if program_source.entry_point.returns else ExprStmt
     file_binding = BindingFile(
-        callee_header_file=f"{program_source.entry_point.name}.{program_source.language_settings.header_extension}",
+        callee_header_file=f"{program_source.entry_point.name}.{program_source.lang_settings.header_extension}",
         header_files=[
             "chrono",
             "optional",
@@ -280,7 +280,7 @@ def create_bindings(
                 )
             ),
             on_device=isinstance(
-                program_source.language_settings,
+                program_source.lang_settings,
                 (languages.CUDALangSettings, languages.HIPLangSettings),
             ),
         ),
@@ -299,7 +299,7 @@ def create_bindings(
     )
 
     src = interface.format_source(
-        program_source.language_settings, BindingCodeGenerator.apply(file_binding)
+        program_source.lang_settings, BindingCodeGenerator.apply(file_binding)
     )
 
     return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "2.0.0"),))

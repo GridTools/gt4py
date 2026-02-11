@@ -72,7 +72,7 @@ class ProgramSource(Generic[LangSettingsT]):
     entry_point: interface.Function
     source_code: str
     library_deps: tuple[interface.LibraryDependency, ...]
-    language_settings: LangSettingsT
+    lang_settings: LangSettingsT
 
 
 @dataclasses.dataclass(frozen=True)

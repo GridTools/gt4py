@@ -82,10 +82,10 @@ class CMakeFactory(
                 "CMake build system project requires separate bindings code file."
             )
         name = source.program_source.entry_point.name
-        header_name = f"{name}.{source.program_source.language_settings.header_extension}"
-        bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
+        header_name = f"{name}.{source.program_source.lang_settings.header_extension}"
+        bindings_name = f"{name}_bindings.{source.program_source.lang_settings.file_extension}"
         cmake_languages = [cmake_lists.Language(name="CXX")]
-        if (src_lang_name := source.program_source.language_settings.name) in {
+        if (src_lang_name := source.program_source.lang_settings.name) in {
             languages.CPPLangSettings.name,
             languages.HIPLangSettings.name,
         }:

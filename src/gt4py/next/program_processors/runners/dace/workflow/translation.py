@@ -466,7 +466,7 @@ class DaCeTranslator(
             #   which makes the JSON serialization stable.
             source_code=sdfg.to_json(hash=True),
             library_deps=tuple(),
-            language_settings=languages.SDFGLangSettings(),
+            lang_settings=languages.SDFGLangSettings(),
         )
         return module
 

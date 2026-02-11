@@ -47,14 +47,14 @@ class GTFNTranslationStep(
         stages.ProgramSource[languages.SourceAndHeaderLangSettings],
     ],
 ):
-    language_settings: Optional[languages.SourceAndHeaderLangSettings] = None
+    lang_settings: Optional[languages.SourceAndHeaderLangSettings] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
 
-    def _default_language_settings(self) -> languages.SourceAndHeaderLangSettings:
+    def _default_lang_settings(self) -> languages.SourceAndHeaderLangSettings:
         match self.device_type:
             case core_defs.DeviceType.CUDA:
                 return languages.CUDALangSettings()
@@ -231,7 +231,7 @@ class GTFNTranslationStep(
             inp.args.column_axis,
         )
         source_code = interface.format_source(
-            self._language_settings(),
+            self._lang_settings(),
             f"""
                     #include <{self._backend_header()}>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
@@ -244,7 +244,7 @@ class GTFNTranslationStep(
             entry_point=function,
             library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
             source_code=source_code,
-            language_settings=self._language_settings(),
+            lang_settings=self._lang_settings(),
         )
         return module
 
@@ -266,11 +266,9 @@ class GTFNTranslationStep(
             case _:
                 raise self._not_implemented_for_device_type()
 
-    def _language_settings(self) -> languages.SourceAndHeaderLangSettings:
+    def _lang_settings(self) -> languages.SourceAndHeaderLangSettings:
         return (
-            self.language_settings
-            if self.language_settings is not None
-            else self._default_language_settings()
+            self.lang_settings if self.lang_settings is not None else self._default_lang_settings()
         )
 
     def _library_name(self) -> str:

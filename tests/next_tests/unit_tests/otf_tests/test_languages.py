@@ -17,5 +17,5 @@ def test_header_files_settings_with_cpp_accepted():
         entry_point=interface.Function(name="basic_settings_with_cpp", parameters=[]),
         source_code="",
         library_deps=(),
-        language_settings=languages.CPPLangSettings(),
+        lang_settings=languages.CPPLangSettings(),
     )
