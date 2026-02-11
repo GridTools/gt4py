@@ -47,11 +47,13 @@ def _make_if_block_with_tasklet(
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
     tstate = then_body.add_state("true_branch_0_1_2_3_4", is_start_block=True)
+    inner_sdfg.add_symbol("multiplier", dace.float64)
+
     tasklet = tstate.add_tasklet(
         "true_tasklet",
         inputs={"__tasklet_in"},
         outputs={"__tasklet_out"},
-        code="__tasklet_out = __tasklet_in * 2.0",
+        code="__tasklet_out = __tasklet_in * multiplier",
     )
     tstate.add_edge(
         tstate.add_access(b1_name),
@@ -79,11 +81,13 @@ def _make_if_block_with_tasklet(
     if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
     if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}"), else_body)
 
-    return state.add_nested_sdfg(
+    nested_sdfg = state.add_nested_sdfg(
         sdfg=inner_sdfg,
         inputs={b1_name, b2_name, cond_name},
         outputs={output_name},
     )
+    nested_sdfg.symbol_mapping["multiplier"] = 2.0
+    return nested_sdfg
 
 
 def _make_map_with_conditional_blocks() -> dace.SDFG:
@@ -188,6 +192,10 @@ def test_fuse_horizontal_condition_blocks():
         n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, dace.sdfg.state.ConditionalBlock)
     ]
     assert len(new_conditional_blocks) == 1
+    conditional_block = new_conditional_blocks[0]
+    assert (
+        len(conditional_block.sdfg.symbols) == 1 and "multiplier" in conditional_block.sdfg.symbols
+    )
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)

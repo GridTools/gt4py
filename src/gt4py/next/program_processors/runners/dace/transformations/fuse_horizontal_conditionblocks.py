@@ -272,7 +272,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         }
         for missing_symb, symb_def in missing_symbols.items():
             first_cb.symbol_mapping[missing_symb] = symb_def
-            first_cb.add_symbol(
+            first_cb.sdfg.add_symbol(
                 missing_symb, second_cb.sdfg.symbols[missing_symb], find_new_name=False
             )
 
