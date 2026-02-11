@@ -93,9 +93,8 @@ def _perform_test(
         return sdfg
 
     # General case, run the SDFG first and then compare the result.
-    ref, res = util.make_sdfg_args(sdfg)
-
     if explected_applies != 0:
+        ref, res = util.make_sdfg_args(sdfg)
         util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_apply = sdfg.apply_transformations_repeated(
@@ -1199,3 +1198,102 @@ def test_if_mover_access_node_between():
         "__cond",
     }
     assert set(top_if_block.sdfg.arrays.keys()) == expected_top_if_block_data
+
+
+def test_if_mover_symbol_aliasing():
+    """Tests if symbol clashes are detected.
+
+    Essentially there is a symbol `n` both in the parent SDFG and the `if_block`,
+    however, with different meanings. Thus the relocation will lead to invalid
+    behaviour and should be rejected.
+    """
+    sdfg = dace.SDFG(util.unique_name("if_mover_symbol_alias"))
+    state = sdfg.add_state(is_start_block=True)
+
+    scalar_names = ["cond", "a1", "b2"]
+    array_names = list("abcd")
+    sdfg.add_symbol("n", stype=dace.int32)
+    for aname in array_names:
+        sdfg.add_array(
+            aname,
+            shape=((10, "n") if aname in "ab" else (10,)),
+            dtype=dace.float64,
+            transient=False,
+        )
+    for sname in scalar_names:
+        sdfg.add_scalar(
+            sname,
+            dtype=(dace.bool_ if sname == "cond" else dace.float64),
+            transient=True,
+        )
+    a, b, c, d, cond_ac, true_ac, false_ac = (
+        state.add_access(name) for name in array_names + scalar_names
+    )
+
+    me, mx = state.add_map("outer_map", ndrange={"__i": "0:10"})
+
+    for ac in [a, b, c]:
+        state.add_edge(
+            ac,
+            None,
+            me,
+            f"IN_{ac.data}",
+            dace.Memlet(f"{ac.data}[0:10" + ("]" if ac is c else ", 0:n]")),
+        )
+        me.add_scope_connectors(ac.data)
+
+    # Make the condition.
+    cond_tlet = state.add_tasklet(
+        "cond_tlet",
+        inputs={"__in0"},
+        outputs={"__out"},
+        code="__out = __in0 < 0.0",
+    )
+    state.add_edge(me, "OUT_c", cond_tlet, "__in0", dace.Memlet("c[__i]"))
+    state.add_edge(cond_tlet, "__out", cond_ac, None, dace.Memlet(f"{cond_ac.data}[0]"))
+
+    # The true branch.
+    true_tlet = state.add_tasklet(
+        "true_tlet",
+        inputs={"__in0"},
+        outputs={"__out"},
+        code="__out = __in0 + 1.0",
+    )
+    state.add_edge(me, "OUT_a", true_tlet, "__in0", dace.Memlet("a[__i, n - 1]"))
+    state.add_edge(true_tlet, "__out", true_ac, None, dace.Memlet(f"{true_ac.data}[0]"))
+
+    # False branch
+    false_tlet = state.add_tasklet(
+        "false_tlet",
+        inputs={"__in0"},
+        outputs={"__out"},
+        code="__out = __in0 + 1.0",
+    )
+    state.add_edge(me, "OUT_b", false_tlet, "__in0", dace.Memlet("b[__i, n - 3]"))
+    state.add_edge(false_tlet, "__out", false_ac, None, dace.Memlet(f"{false_ac.data}[0]"))
+
+    # Create the top `if_block`
+    if_block = _make_if_block(state, sdfg)
+
+    # By Adding this symbol mapping, we emulate the case where something is used
+    #  inside and special case must be taken.
+    assert len(if_block.symbol_mapping) == 0
+    if_block.symbol_mapping["n"] = "n - 1"
+
+    # Connect the inputs to the if block.
+    state.add_edge(true_ac, None, if_block, "__arg1", dace.Memlet(f"{true_ac}[0]"))
+    state.add_edge(false_ac, None, if_block, "__arg2", dace.Memlet(f"{false_ac}[0]"))
+    state.add_edge(cond_ac, None, if_block, "__cond", dace.Memlet(f"{cond_ac}[0]"))
+
+    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
+    mx.add_scope_connectors("d")
+
+    sdfg.validate()
+
+    # Because `n` is already taken, see above, we need an additional symbol mapping
+    #  to account for the access on the Memlets of the `{true, false}_tlet`.
+    _perform_test(
+        sdfg=sdfg,
+        explected_applies=0,
+    )
