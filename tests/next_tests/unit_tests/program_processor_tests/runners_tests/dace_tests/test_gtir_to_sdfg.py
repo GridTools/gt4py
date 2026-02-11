@@ -38,7 +38,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 dace = pytest.importorskip("dace")
-from gt4py.next.program_processors.runners.dace import lowering as dace_lowering, library_nodes as gtir_library_nodes
+from gt4py.next.program_processors.runners.dace import lowering as dace_lowering
 
 
 @pytest.fixture
@@ -130,12 +130,7 @@ def build_dace_sdfg(
         # run domain inference in order to add the domain annex information to the IR nodes
         ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
     offset_provider_type = gtx_common.offset_provider_to_type(offset_provider)
-    sdfg = dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
-    # Expand all GT4Py library nodes
-    for node, state in sdfg.all_nodes_recursive():
-        if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
-            node.expand(state)
-    return sdfg
+    return dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
 
 
 def apply_margin_on_field_domain(

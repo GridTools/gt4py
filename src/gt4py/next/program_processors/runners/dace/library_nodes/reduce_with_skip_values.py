@@ -24,6 +24,7 @@ _OUTPUT_NAME: Final[str] = "_out"
 _MASK_NAME: Final[str] = "_mask"
 
 
+@dace.library.node
 class ReduceWithSkipValues(dace_stdlib.Reduce):
     """Implements reduction with skip values."""
 
