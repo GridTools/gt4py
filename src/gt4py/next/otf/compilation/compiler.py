@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Protocol, TypeVar, cast
+from typing import Protocol, TypeVar
 
 import factory
 
@@ -83,29 +83,12 @@ class Compiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
-        m = importer.import_from_path(src_dir / new_data.module)
+        m = importer.import_from_path(
+            src_dir / new_data.module, sys_modules_prefix="gt4py.__compiled_programs__."
+        )
         func = getattr(m, new_data.entry_point_name)
 
-        # Since nanobind 2.10, calling functions with ndarray args crashes (SEGFAULT)
-        # when there are not live references to their extension module (see: https://github.com/wjakob/nanobind/issues/1283)
-        # Here we dynamically create a new callable class holding a reference to the
-        # module and the function, whose `__call__` is exactly the `__call__` method
-        # of the returned (nanobind) nbfunction object. As long as this object is alive,
-        # the module reference is kept alive too, preventing the SEGFAULT.
-        managed_entry_point = type(
-            f"{m.__name__}_managed_wrapper",
-            (),
-            dict(
-                __call__=func.__call__,
-                __doc__=getattr(func, "__doc__", None),
-                __hash__=func.__hash__,
-                __eq__=func.__eq__,
-                module_ref=m,
-                func_ref=func,
-            ),
-        )()
-
-        return cast(stages.CompiledProgram, managed_entry_point)
+        return func
 
 
 class CompilerFactory(factory.Factory):
