@@ -107,7 +107,7 @@ def compiled_program_call_context(
         key: The key of the compiled program in the compiled programs pool.
 
     """
-    return metrics.SourceKeyContextManager(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
+    return metrics.metrics_setter_at_enter(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
 
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
@@ -364,9 +364,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             compiled_program = self.compiled_programs[key]
 
         except KeyError as e:
-            if compiled_program_future := self._compilation_jobs.pop(key, None):
-                assert isinstance(compiled_program_future, concurrent.futures.Future)
-                self.compiled_programs[key] = compiled_program_future.result()
+            if self._finish_compilation_job(key):
+                compiled_program = self.compiled_programs[key]
             elif enable_jit:
                 assert self.argument_descriptor_mapping is not None
                 self._compile_variant(
@@ -382,15 +381,15 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                     offset_provider=offset_provider,
                     call_key=key,
                 )
+                return self(
+                    *canonical_args,
+                    offset_provider=offset_provider,
+                    enable_jit=False,
+                    **canonical_kwargs,
+                )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
+
             else:
                 raise RuntimeError("No program compiled for this set of static arguments.") from e
-
-            return self(
-                *canonical_args,
-                offset_provider=offset_provider,
-                enable_jit=False,
-                **canonical_kwargs,
-            )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
 
         with compiled_program_call_context(
             compiled_program, args, kwargs, offset_provider, self.root, key
@@ -511,6 +510,19 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                         location=None,
                     )
 
+    def _is_existing_key(self, key: CompiledProgramsKey) -> bool:
+        return key in self.compiled_programs or key in self._compilation_jobs
+
+    def _finish_compilation_job(self, key: CompiledProgramsKey) -> bool:
+        if key not in self._compilation_jobs:
+            return False
+
+        compiled_program_future = self._compilation_jobs.pop(key)
+        assert isinstance(compiled_program_future, concurrent.futures.Future)
+        assert key not in self.compiled_programs
+        self.compiled_programs[key] = compiled_program_future.result()
+        return True
+
     def _compile_variant(
         self,
         argument_descriptors: ArgStaticDescriptorsByType,
@@ -543,7 +555,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         )
         assert call_key is None or call_key == key
 
-        if key in self.compiled_programs:
+        if self._is_existing_key(key):
             raise ValueError(f"Program with key {key} already exists.")
 
         if arg_specialization_info:

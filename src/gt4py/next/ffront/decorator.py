@@ -79,7 +79,7 @@ def embedded_program_call_context(
     kwargs: dict[str, Any],
 ) -> contextlib.AbstractContextManager:
     """Hook called at the beginning and end of an embedded program call."""
-    return metrics.SourceKeyContextManager(f"{program.__name__}<'<embedded>')>")
+    return metrics.metrics_context(f"{program.__name__}<'<embedded>')>")
 
 
 @dataclasses.dataclass(frozen=True)

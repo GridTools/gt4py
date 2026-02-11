@@ -211,7 +211,18 @@ class SourceKeyContextManager(contextlib.AbstractContextManager):  # type: ignor
             _source_key_cvar.reset(self.previous_cvar_token)
 
 
+class SourceKeySetterAtEnter(SourceKeyContextManager):
+    def __exit__(
+        self,
+        exc_type_: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        pass
+
+
 metrics_context = SourceKeyContextManager
+metrics_setter_at_enter = SourceKeySetterAtEnter
 
 
 @dataclasses.dataclass(slots=True)
