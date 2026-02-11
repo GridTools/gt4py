@@ -73,7 +73,7 @@ def make_program_source(name: str) -> stages.ProgramSource:
         entry_point=entry_point,
         source_code=src,
         library_deps=(interface.LibraryDependency("gridtools_cpu", "master"),),
-        language_settings=languages.CPPLanguageSettings(),
+        language_settings=languages.CPPLangSettings(),
     )
 
 

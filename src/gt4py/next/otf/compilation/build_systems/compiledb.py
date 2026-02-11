@@ -24,12 +24,12 @@ from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake
 
 
-CPPLikeLangSettingsT = TypeVar("CPPLikeLangSettingsT", bound=languages.CLikeLanguageSettings)
+CPPLikeLangSettingsT = TypeVar("CPPLikeLangSettingsT", bound=languages.CPPLikeLangSettings)
 
 
 @dataclasses.dataclass
 class CompiledbFactory(
-    compiler.BuildSystemProjectGenerator[CPPLikeLangSettingsT, languages.PythonLanguageSettings]
+    compiler.BuildSystemProjectGenerator[CPPLikeLangSettingsT, languages.PythonLangSettings]
 ):
     """
     Create a CompiledbProject from a ``CompilableSource`` stage object with given CMake settings.
@@ -45,7 +45,7 @@ class CompiledbFactory(
 
     def __call__(
         self,
-        source: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
+        source: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLangSettings],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> CompiledbProject:
         if not source.binding_source:
@@ -101,7 +101,7 @@ def _relative_path_to_parent(current: pathlib.Path, parent: pathlib.Path) -> str
 
 @dataclasses.dataclass()
 class CompiledbProject(
-    stages.BuildSystemProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings]
+    stages.BuildSystemProject[CPPLikeLangSettingsT, languages.PythonLangSettings]
 ):
     """
     Compiledb build system for gt4py programs.
@@ -248,7 +248,7 @@ def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
     build_type: config.CMakeBuildType,
     cmake_flags: list[str],
-    language_settings: languages.CLikeLanguageSettings,
+    language_settings: languages.CPPLikeLangSettings,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(

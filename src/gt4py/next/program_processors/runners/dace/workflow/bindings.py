@@ -223,9 +223,9 @@ def _parse_gt_connectivities(
 
 
 def _create_sdfg_bindings(
-    program_source: stages.ProgramSource[languages.SDFGLanguageSettings],
+    program_source: stages.ProgramSource[languages.SDFGLangSettings],
     bind_func_name: str,
-) -> stages.BindingSource[languages.SDFGLanguageSettings, languages.PythonLanguageSettings]:
+) -> stages.BindingSource[languages.SDFGLangSettings, languages.PythonLangSettings]:
     """
     Creates a Python translation function to convert the GT4Py arguments list
     to the SDFG calling convention.
@@ -286,9 +286,9 @@ def _create_sdfg_bindings(
 
 
 def bind_sdfg(
-    inp: stages.ProgramSource[languages.SDFGLanguageSettings],
+    inp: stages.ProgramSource[languages.SDFGLangSettings],
     bind_func_name: str,
-) -> stages.CompilableProject[languages.SDFGLanguageSettings, languages.PythonLanguageSettings]:
+) -> stages.CompilableProject[languages.SDFGLangSettings, languages.PythonLangSettings]:
     """
     Method to be used as workflow stage for generation of SDFG bindings.
 

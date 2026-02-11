@@ -54,8 +54,8 @@ def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef
     return program_hash
 
 
-LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLanguageSettings)
-ToLangSettingsT = TypeVar("ToLangSettingsT", bound=languages.SourceLanguageSettings)
+LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLangSettings)
+ToLangSettingsT = TypeVar("ToLangSettingsT", bound=languages.SourceLangSettings)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -111,11 +111,9 @@ class CompilableProject(Generic[LangSettingsT, ToLangSettingsT]):
         return _unique_libs(*self.program_source.library_deps, *self.binding_source.library_deps)
 
 
-LangSettingsT_co = TypeVar(
-    "LangSettingsT_co", bound=languages.SourceLanguageSettings, covariant=True
-)
+LangSettingsT_co = TypeVar("LangSettingsT_co", bound=languages.SourceLangSettings, covariant=True)
 ToLangSettingsT_co = TypeVar(
-    "ToLangSettingsT_co", bound=languages.SourceLanguageSettings, covariant=True
+    "ToLangSettingsT_co", bound=languages.SourceLangSettings, covariant=True
 )
 
 

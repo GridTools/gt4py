@@ -56,7 +56,7 @@ class CompiledDaceProgram:
         program: dace.CompiledSDFG,
         bind_func_name: str,
         binding_source: stages.BindingSource[
-            languages.SDFGLanguageSettings, languages.PythonLanguageSettings
+            languages.SDFGLangSettings, languages.PythonLangSettings
         ],
     ):
         self.sdfg_program = program
@@ -119,14 +119,14 @@ class CompiledDaceProgram:
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[languages.SDFGLanguageSettings, languages.PythonLanguageSettings],
+        stages.CompilableProject[languages.SDFGLangSettings, languages.PythonLangSettings],
         CompiledDaceProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[languages.SDFGLanguageSettings, languages.PythonLanguageSettings],
+        stages.CompilableProject[languages.SDFGLangSettings, languages.PythonLangSettings],
         CompiledDaceProgram,
     ],
-    definitions.CompilationStep[languages.SDFGLanguageSettings, languages.PythonLanguageSettings],
+    definitions.CompilationStep[languages.SDFGLangSettings, languages.PythonLangSettings],
 ):
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
@@ -137,9 +137,7 @@ class DaCeCompiler(
 
     def __call__(
         self,
-        inp: stages.CompilableProject[
-            languages.SDFGLanguageSettings, languages.PythonLanguageSettings
-        ],
+        inp: stages.CompilableProject[languages.SDFGLangSettings, languages.PythonLangSettings],
     ) -> CompiledDaceProgram:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,

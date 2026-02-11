@@ -21,7 +21,7 @@ from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.type_system import type_specifications as ts
 
 
-LangSettingsT = TypeVar("LangSettingsT", bound=languages.CLikeLanguageSettings, covariant=True)
+LangSettingsT = TypeVar("LangSettingsT", bound=languages.CPPLikeLangSettings, covariant=True)
 
 
 class Expr(eve.Node):
@@ -229,7 +229,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
 
 def create_bindings(
     program_source: stages.ProgramSource[LangSettingsT],
-) -> stages.BindingSource[LangSettingsT, languages.PythonLanguageSettings]:
+) -> stages.BindingSource[LangSettingsT, languages.PythonLangSettings]:
     """
     Generate Python bindings through which a C++ function can be called.
 
@@ -238,7 +238,7 @@ def create_bindings(
     program_source
         The program source for which the bindings are created
     """
-    if not isinstance(program_source.language_settings, languages.CLikeLanguageSettings):
+    if not isinstance(program_source.language_settings, languages.CPPLikeLangSettings):
         raise ValueError(
             f"Can only create bindings for C++ program sources, received '{program_source.language_settings.name}'."
         )
@@ -281,7 +281,7 @@ def create_bindings(
             ),
             on_device=isinstance(
                 program_source.language_settings,
-                (languages.CUDALanguageSettings, languages.HIPLanguageSettings),
+                (languages.CUDALangSettings, languages.HIPLangSettings),
             ),
         ),
         binding_module=BindingModule(
@@ -308,5 +308,5 @@ def create_bindings(
 @workflow.make_step
 def bind_source(
     inp: stages.ProgramSource[LangSettingsT],
-) -> stages.CompilableProject[LangSettingsT, languages.PythonLanguageSettings]:
+) -> stages.CompilableProject[LangSettingsT, languages.PythonLangSettings]:
     return stages.CompilableProject(program_source=inp, binding_source=create_bindings(inp))

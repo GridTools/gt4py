@@ -31,9 +31,9 @@ def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
     return (src_dir / data.module).exists()
 
 
-LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLanguageSettings)
-TargetLangSettingsT = TypeVar("TargetLangSettingsT", bound=languages.SourceLanguageSettings)
-CPPLikeLangSettingsT = TypeVar("CPPLikeLangSettingsT", bound=languages.CLikeLanguageSettings)
+LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLangSettings)
+TargetLangSettingsT = TypeVar("TargetLangSettingsT", bound=languages.SourceLangSettings)
+CPPLikeLangSettingsT = TypeVar("CPPLikeLangSettingsT", bound=languages.CPPLikeLangSettings)
 
 
 class BuildSystemProjectGenerator(Protocol[LangSettingsT, TargetLangSettingsT]):
@@ -47,26 +47,24 @@ class BuildSystemProjectGenerator(Protocol[LangSettingsT, TargetLangSettingsT]):
 @dataclasses.dataclass(frozen=True)
 class Compiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
+        stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLangSettings],
         stages.ExecutableProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
+        stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLangSettings],
         stages.ExecutableProgram,
     ],
-    definitions.CompilationStep[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
+    definitions.CompilationStep[CPPLikeLangSettingsT, languages.PythonLangSettings],
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
     cache_lifetime: config.BuildCacheLifetime
-    builder_factory: BuildSystemProjectGenerator[
-        CPPLikeLangSettingsT, languages.PythonLanguageSettings
-    ]
+    builder_factory: BuildSystemProjectGenerator[CPPLikeLangSettingsT, languages.PythonLangSettings]
     force_recompile: bool = False
 
     def __call__(
         self,
-        inp: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
+        inp: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLangSettings],
     ) -> stages.ExecutableProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 

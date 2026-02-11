@@ -15,13 +15,13 @@ from typing import Any
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SourceLanguageSettings:
+class SourceLangSettings:
     """
-    Basic settings for any language.
+    Basic settings for any source programming language.
 
     Formatting will happen through ``eve.codegen.format_source``.
-    For available formatting styles check, which formatter is used (depends on ``.formatter_key``)
-    and then check which styles are available for that (if any).
+    For available formatting options, check the options of the
+    specific formatter used depending on ``.formatter_key``.
     """
 
     name: str
@@ -31,14 +31,14 @@ class SourceLanguageSettings:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SourceAndHeaderLanguageSettings(SourceLanguageSettings):
+class SourceAndHeaderLangSettings(SourceLangSettings):
     """Add a header file extension setting on top of the basic set."""
 
     header_extension: str
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class PythonLanguageSettings(SourceLanguageSettings):
+class PythonLangSettings(SourceLangSettings):
     """Settings for Python language."""
 
     name: str = "python"
@@ -47,7 +47,7 @@ class PythonLanguageSettings(SourceLanguageSettings):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SDFGLanguageSettings(SourceLanguageSettings):
+class SDFGLangSettings(SourceLangSettings):
     """Settings for SDFGs."""
 
     name: str = "SDFG"
@@ -55,12 +55,12 @@ class SDFGLanguageSettings(SourceLanguageSettings):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CLikeLanguageSettings(SourceAndHeaderLanguageSettings):
+class CPPLikeLangSettings(SourceAndHeaderLangSettings):
     """Settings for C++-like language."""
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CPPLanguageSettings(CLikeLanguageSettings):
+class CPPLangSettings(CPPLikeLangSettings):
     """Settings for C++ language."""
 
     name: str = "CXX"
@@ -73,7 +73,7 @@ class CPPLanguageSettings(CLikeLanguageSettings):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CUDALanguageSettings(CLikeLanguageSettings):
+class CUDALangSettings(CPPLikeLangSettings):
     """Settings for CUDA language."""
 
     name: str = "CUDA"
@@ -86,7 +86,7 @@ class CUDALanguageSettings(CLikeLanguageSettings):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class HIPLanguageSettings(CLikeLanguageSettings):
+class HIPLangSettings(CPPLikeLangSettings):
     """Settings for HIP language."""
 
     name: str = "HIP"

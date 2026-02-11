@@ -15,8 +15,8 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, languages, stages, toolchain, workflow
 
 
-LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLanguageSettings)
-ToLangSettingsT = TypeVar("ToLangSettingsT", bound=languages.SourceLanguageSettings)
+LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLangSettings)
+ToLangSettingsT = TypeVar("ToLangSettingsT", bound=languages.SourceLangSettings)
 
 
 IRDefinitionT = TypeVar(

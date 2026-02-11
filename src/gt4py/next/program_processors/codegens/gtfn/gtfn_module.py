@@ -40,28 +40,28 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.SourceAndHeaderLanguageSettings],
+        stages.ProgramSource[languages.SourceAndHeaderLangSettings],
     ],
     workflow.ChainableWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.SourceAndHeaderLanguageSettings],
+        stages.ProgramSource[languages.SourceAndHeaderLangSettings],
     ],
 ):
-    language_settings: Optional[languages.SourceAndHeaderLanguageSettings] = None
+    language_settings: Optional[languages.SourceAndHeaderLangSettings] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
 
-    def _default_language_settings(self) -> languages.SourceAndHeaderLanguageSettings:
+    def _default_language_settings(self) -> languages.SourceAndHeaderLangSettings:
         match self.device_type:
             case core_defs.DeviceType.CUDA:
-                return languages.CUDALanguageSettings()
+                return languages.CUDALangSettings()
             case core_defs.DeviceType.ROCM:
-                return languages.HIPLanguageSettings()
+                return languages.HIPLangSettings()
             case core_defs.DeviceType.CPU:
-                return languages.CPPLanguageSettings()
+                return languages.CPPLangSettings()
             case _:
                 raise self._not_implemented_for_device_type()
 
@@ -197,7 +197,7 @@ class GTFNTranslationStep(
 
     def __call__(
         self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[languages.SourceAndHeaderLanguageSettings]:
+    ) -> stages.ProgramSource[languages.SourceAndHeaderLangSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
 
@@ -240,13 +240,11 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
-        module: stages.ProgramSource[languages.SourceAndHeaderLanguageSettings] = (
-            stages.ProgramSource(
-                entry_point=function,
-                library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
-                source_code=source_code,
-                language_settings=self._language_settings(),
-            )
+        module: stages.ProgramSource[languages.SourceAndHeaderLangSettings] = stages.ProgramSource(
+            entry_point=function,
+            library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
+            source_code=source_code,
+            language_settings=self._language_settings(),
         )
         return module
 
@@ -268,7 +266,7 @@ class GTFNTranslationStep(
             case _:
                 raise self._not_implemented_for_device_type()
 
-    def _language_settings(self) -> languages.SourceAndHeaderLanguageSettings:
+    def _language_settings(self) -> languages.SourceAndHeaderLangSettings:
         return (
             self.language_settings
             if self.language_settings is not None

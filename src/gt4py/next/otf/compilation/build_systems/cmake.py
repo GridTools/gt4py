@@ -59,12 +59,12 @@ def get_cmake_device_arch_option() -> str:
     return cmake_flag
 
 
-CPPLikeLangSettingsT = TypeVar("CPPLikeLangSettingsT", bound=languages.CLikeLanguageSettings)
+CPPLikeLangSettingsT = TypeVar("CPPLikeLangSettingsT", bound=languages.CPPLikeLangSettings)
 
 
 @dataclasses.dataclass
 class CMakeFactory(
-    compiler.BuildSystemProjectGenerator[CPPLikeLangSettingsT, languages.PythonLanguageSettings]
+    compiler.BuildSystemProjectGenerator[CPPLikeLangSettingsT, languages.PythonLangSettings]
 ):
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
 
@@ -74,7 +74,7 @@ class CMakeFactory(
 
     def __call__(
         self,
-        source: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLanguageSettings],
+        source: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLangSettings],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> CMakeProject:
         if not source.binding_source:
@@ -86,8 +86,8 @@ class CMakeFactory(
         bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
         cmake_languages = [cmake_lists.Language(name="CXX")]
         if (src_lang_name := source.program_source.language_settings.name) in {
-            languages.CPPLanguageSettings.name,
-            languages.HIPLanguageSettings.name,
+            languages.CPPLangSettings.name,
+            languages.HIPLangSettings.name,
         }:
             cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang_name)]
             if device_arch_flag := get_cmake_device_arch_option():
@@ -114,9 +114,7 @@ class CMakeFactory(
 
 
 @dataclasses.dataclass
-class CMakeProject(
-    stages.BuildSystemProject[languages.CLikeLanguageSettings, languages.PythonLanguageSettings]
-):
+class CMakeProject(stages.BuildSystemProject[CPPLikeLangSettingsT, languages.PythonLangSettings]):
     """
     CMake build system for gt4py programs.
 
