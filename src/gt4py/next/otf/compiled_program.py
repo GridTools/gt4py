@@ -107,6 +107,11 @@ def compiled_program_call_context(
         key: The key of the compiled program in the compiled programs pool.
 
     """
+    # We set the metrics key for the compiled program call at enter and leave it
+    # set at exit, since it is needed in the exit of the outer `program_call` context,
+    # which will take care of unsetting it. This is because the compiled program call
+    # is part of a program call, but we want the metrics to be associated with a
+    # specific compiled program variant, not just the generic outer program.
     return metrics.metrics_setter_at_enter(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
 
 
