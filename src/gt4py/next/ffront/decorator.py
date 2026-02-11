@@ -89,11 +89,11 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         # to `compile()` instead of re-using the existing compilations options.
         return self._make_compiled_programs_pool(
             static_params=self.compilation_options.static_params or (),
+            static_domains=self.compilation_options.static_domains,
         )
 
     def _make_compiled_programs_pool(
-        self,
-        static_params: Sequence[str],
+        self, static_params: Sequence[str], static_domains: bool
     ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
@@ -103,12 +103,10 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
 
         argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
 
-        if self.compilation_options.static_params:
-            argument_descriptor_mapping[arguments.StaticArg] = (
-                self.compilation_options.static_params
-            )
+        if static_params:
+            argument_descriptor_mapping[arguments.StaticArg] = static_params
 
-        if self.compilation_options.static_domains:
+        if static_domains:
             argument_descriptor_mapping[arguments.FieldDomainDescriptor] = (
                 _field_domain_descriptor_mapping_from_func_type(program_type.definition)
             )
@@ -144,6 +142,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         if "_compiled_programs" not in self.__dict__:
             self.__dict__["_compiled_programs"] = self._make_compiled_programs_pool(
                 static_params=tuple(static_args.keys()),
+                static_domains=self.compilation_options.static_domains,
             )
 
         if self.compilation_options.connectivities is None and offset_provider is None:
