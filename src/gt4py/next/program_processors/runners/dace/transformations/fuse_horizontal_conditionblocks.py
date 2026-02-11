@@ -96,7 +96,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         if first_cb.sdfg.number_of_nodes() != 1 or second_cb.sdfg.number_of_nodes() != 1:
             return False
 
-        # Check that the symbol mappings are compatible
+        # Check that the symbol mappings are compatible. If there's a symbol that is in both mappings but mapped to different definitions then we skip fusing the conditional blocks.
+        # TODO(iomaganaris): One could also rename the symbols instead of skipping the fusion but for now we keep it simple
         sym_map1 = first_cb.symbol_mapping
         sym_map2 = second_cb.symbol_mapping
         if any(str(sym_map1[sym]) != str(sym_map2[sym]) for sym in sym_map2 if sym in sym_map1):
@@ -105,6 +106,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         # Get the actual conditional blocks
         first_conditional_block = next(iter(first_cb.sdfg.nodes()))
         second_conditional_block = next(iter(second_cb.sdfg.nodes()))
+        # TODO(iomaganaris): For now the branches of the conditional blocks should have only one state. If there's a change in the future and they have more than one state the below checks need to be modified
         if not (
             isinstance(first_conditional_block, dace.sdfg.state.ConditionalBlock)
             and len(first_conditional_block.sub_regions()) == 2
@@ -181,6 +183,21 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         first_conditional_block = next(iter(first_cb.sdfg.nodes()))
         second_conditional_block = next(iter(second_cb.sdfg.nodes()))
 
+        # Copy missing symbols from second conditional block to the first one.
+        #  For the symbols that are already in `first_cb.symbol_mapping` we know
+        #  that the definition matches. Thus there is no need to perform symbol
+        #  renaming.
+        missing_symbols = {
+            sym2: val2
+            for sym2, val2 in second_cb.symbol_mapping.items()
+            if sym2 not in first_cb.symbol_mapping
+        }
+        for missing_symb, symb_def in missing_symbols.items():
+            first_cb.symbol_mapping[missing_symb] = symb_def
+            first_cb.sdfg.add_symbol(
+                missing_symb, second_cb.sdfg.symbols[missing_symb], find_new_name=False
+            )
+
         # Store number of original arrays to check later that all the necessary arrays have been moved
         total_original_arrays = len(first_conditional_block.sdfg.arrays) + len(
             second_conditional_block.sdfg.arrays
@@ -194,13 +211,15 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             if data_name == "__cond":
                 continue
             new_data_name = gtx_transformations.utils.unique_name(data_name) + "_from_cb_fusion"
-            second_arrays_rename_map[data_name] = new_data_name
             data_desc_renamed = copy.deepcopy(data_desc)
-            first_cb.sdfg.add_datadesc(new_data_name, data_desc_renamed)
+            second_arrays_rename_map[data_name] = first_cb.sdfg.add_datadesc(
+                new_data_name, data_desc_renamed, find_new_name=True
+            )
 
         second_conditional_states = list(second_conditional_block.all_states())
 
         # Move the connectors from the second conditional block to the first
+        # TODO(iomaganaris): Here we copy empty memlets used for scheduling as well. This means that the first conditional blocks inherits the scheduling of the second one as well. Maybe that's not good in some cases to hide latency but for now we keep it as it is
         for edge in graph.in_edges(second_cb):
             if edge.dst_conn == "__cond":
                 continue
@@ -255,26 +274,12 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                     edge_to_copy.dst_conn,
                     edge_to_copy.data,
                 )
-                if (
-                    not new_edge.data.is_empty()
-                ) and new_edge.data.data in second_arrays_rename_map:
+                if not new_edge.data.is_empty():
                     new_edge.data.data = second_arrays_rename_map[new_edge.data.data]
 
         for edge in list(graph.out_edges(conditional_access_node)):
             if edge.dst == second_cb:
                 graph.remove_edge(edge)
-
-        # Copy missing symbols from second conditional block to the first one
-        missing_symbols = {
-            sym2: val2
-            for sym2, val2 in second_cb.symbol_mapping.items()
-            if sym2 not in first_cb.symbol_mapping
-        }
-        for missing_symb, symb_def in missing_symbols.items():
-            first_cb.symbol_mapping[missing_symb] = symb_def
-            first_cb.sdfg.add_symbol(
-                missing_symb, second_cb.sdfg.symbols[missing_symb], find_new_name=False
-            )
 
         # TODO(iomaganaris): Atm need to remove both references to remove NestedSDFG from graph
         #  second_conditional_block is inside the SDFG of NestedSDFG second_cb and removing only
