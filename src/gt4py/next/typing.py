@@ -17,12 +17,14 @@ from gt4py.next.ffront import decorator
 _ONLY_FOR_TYPING: Final[str] = "only for typing"
 
 # TODO(havogt): alternatively we could introduce Protocols
+GTEntryPoint: TypeAlias = Annotated[decorator.GTEntryPoint, _ONLY_FOR_TYPING]
 Program: TypeAlias = Annotated[decorator.Program, _ONLY_FOR_TYPING]
 FieldOperator: TypeAlias = Annotated[decorator.FieldOperator, _ONLY_FOR_TYPING]
 Backend: TypeAlias = Annotated[backend.Backend, _ONLY_FOR_TYPING]
 FieldBufferAllocationUtil: TypeAlias = Annotated[
     allocators.FieldBufferAllocationUtil, _ONLY_FOR_TYPING
 ]
+
 
 __all__ = [
     "Backend",
