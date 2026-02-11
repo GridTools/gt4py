@@ -19,7 +19,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, Sequence, TypeAlias
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -52,20 +52,16 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
-ProgramLikeDefinitionT = TypeVar(
-    "ProgramLikeDefinitionT", ffront_stages.ProgramDefinition, ffront_stages.FieldOperatorDefinition
-)
-
 
 @dataclasses.dataclass(frozen=True)
-class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
+class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     """
     Mixing used by program and program-like objects.
 
     Contains functionality and configuration options common to all kinds of program-likes.
     """
 
-    definition_stage: ProgramLikeDefinitionT
+    definition_stage: ffront_stages.DSLDefinitionT
     backend: Optional[next_backend.Backend]
     compilation_options: options.CompilationOptions
 
@@ -75,19 +71,30 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
     def with_backend(self, backend: next_backend.Backend) -> Self:
         return dataclasses.replace(self, backend=backend)
 
-    def with_connectivities(
-        self,
-        connectivities: common.OffsetProvider,  # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+    def with_compilation_options(
+        self, **compilation_options: Unpack[options.CompilationOptionsArgs]
     ) -> Self:
         return dataclasses.replace(
             self,
             compilation_options=dataclasses.replace(
-                self.compilation_options, connectivities=connectivities
+                self.compilation_options, **compilation_options
             ),
         )
 
     @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
+        # This cached property initializer is only called when JITting the first
+        # program variant of the pool. If the program is compiled by directly
+        # calling `compile()`, the pool is initialized with the options passed
+        # to `compile()` instead of re-using the existing compilations options.
+        return self._make_compiled_programs_pool(
+            static_params=self.compilation_options.static_params or (),
+        )
+
+    def _make_compiled_programs_pool(
+        self,
+        static_params: Sequence[str],
+    ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
 
@@ -97,20 +104,20 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
         argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
 
         if self.compilation_options.static_params:
-            argument_descriptor_mapping[arguments.StaticArg] = self.compilation_options.static_params
+            argument_descriptor_mapping[arguments.StaticArg] = (
+                self.compilation_options.static_params
+            )
 
         if self.compilation_options.static_domains:
             argument_descriptor_mapping[arguments.FieldDomainDescriptor] = (
-                _field_domain_descriptor_mapping_from_func_type(
-                    program_type.definition
-                )
+                _field_domain_descriptor_mapping_from_func_type(program_type.definition)
             )
 
         return compiled_program.CompiledProgramsPool(
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
+            argument_descriptor_mapping=argument_descriptor_mapping,
         )
 
     def compile(
@@ -119,7 +126,6 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
-        enable_jit: bool | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         """
@@ -130,13 +136,16 @@ class _ProgramLikeMixin(Generic[ProgramLikeDefinitionT]):
         but adds the compiled variants to the current program instance.
         """
         # TODO(havogt): we should reconsider if we want to return a new program on `compile` (and
-        # rename to `with_static_args` or similar) once we have a better understanding of the
-        # use-cases.
+        #  rename to `with_static_args` or similar) once we have a better understanding of the
+        #  use-cases.
+        # check if pool has already been initialized. since this is also a cached property go via
+        #  the dict directly. Note that we don't need to check any args, since the pool checks
+        #  this on compile anyway.
+        if "_compiled_programs" not in self.__dict__:
+            self.__dict__["_compiled_programs"] = self._make_compiled_programs_pool(
+                static_params=tuple(static_args.keys()),
+            )
 
-        if enable_jit is not None:
-            object.__setattr__(self.compilation_options, "enable_jit", enable_jit)
-        if self.compilation_options.static_params is None:
-            object.__setattr__(self.compilation_options, "static_params", tuple(static_args.keys()))
         if self.compilation_options.connectivities is None and offset_provider is None:
             raise ValueError(
                 "Cannot compile a program without connectivities / OffsetProviderType."
@@ -180,7 +189,7 @@ program_call_metrics_collector = metrics.make_collector(
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
-class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
+class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     """
     Construct a program object from a PAST node.
 
@@ -208,7 +217,7 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
         grid_type: common.GridType | None = None,
         **compilation_options: Unpack[options.CompilationOptionsArgs],
     ) -> Program:
-        program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
+        program_def = ffront_stages.DSLProgramDef(definition=definition, grid_type=grid_type)
         return cls(
             definition_stage=program_def,
             backend=backend,
@@ -221,7 +230,7 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        no_args_past = toolchain.CompilableProgram(
+        no_args_past = toolchain.ConcreteArtifact(
             self.past_stage, arguments.CompileTimeArgs.empty()
         )
         _ = self._frontend_transforms.past_lint(no_args_past).data
@@ -244,9 +253,9 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
         return self.definition_stage.definition
 
     @functools.cached_property
-    def past_stage(self) -> ffront_stages.PAST_PRG:
+    def past_stage(self) -> ffront_stages.PASTProgramDef:
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.CompilableProgram(
+        no_args_def = toolchain.ConcreteArtifact(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
         return self._frontend_transforms.func_to_past(no_args_def).data
@@ -266,8 +275,8 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = toolchain.CompilableProgram(
-            data=ffront_stages.PastProgramDefinition(
+        no_args_past = toolchain.ConcreteArtifact(
+            data=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
                 grid_type=self.definition_stage.grid_type,
@@ -283,10 +292,10 @@ class Program(_ProgramLikeMixin[ffront_stages.ProgramDefinition]):
 
     def with_static_params(self, *static_params: str | None) -> Program:
         if not static_params or (static_params == (None,)):
-            _static_params = None
+            _static_params: tuple[str, ...] = ()
         else:
             assert all(p is not None for p in static_params)
-            _static_params = typing.cast(tuple[str], static_params)
+            _static_params = typing.cast(tuple[str, ...], static_params)
         return dataclasses.replace(
             self,
             compilation_options=dataclasses.replace(
@@ -451,7 +460,6 @@ class ProgramWithBoundArgs(Program):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
-        enable_jit: bool | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
@@ -510,13 +518,8 @@ def program(
     return program_inner if definition is None else program_inner(definition)
 
 
-OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
-
-
 @dataclasses.dataclass(frozen=True)
-class FieldOperator(
-    _ProgramLikeMixin[ffront_stages.FieldOperatorDefinition], GTCallable, Generic[OperatorNodeT]
-):
+class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorDef], GTCallable):
     """
     Construct a field operator object from a FOAST node.
 
@@ -544,12 +547,12 @@ class FieldOperator(
         backend: Optional[next_backend.Backend],
         grid_type: Optional[common.GridType] = None,
         *,
-        operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,  # type: ignore[assignment] # TODO(ricoh): understand why mypy complains
+        operator_node_cls: type[foast.OperatorNode] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
         **compilation_options: Unpack[options.CompilationOptionsArgs],
-    ) -> FieldOperator[OperatorNodeT]:
+    ) -> FieldOperator:
         return cls(
-            definition_stage=ffront_stages.FieldOperatorDefinition(
+            definition_stage=ffront_stages.DSLFieldOperatorDef(
                 definition=definition,
                 grid_type=grid_type,
                 node_class=operator_node_cls,
@@ -565,9 +568,9 @@ class FieldOperator(
         _ = self.foast_stage
 
     @functools.cached_property
-    def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
+    def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
         return self._frontend_transforms.func_to_foast(
-            toolchain.CompilableProgram(
+            toolchain.ConcreteArtifact(
                 data=self.definition_stage, args=arguments.CompileTimeArgs.empty()
             )
         ).data
@@ -660,6 +663,9 @@ class FieldOperator(
             return embedded_operators.field_operator_call(op, args, kwargs)
 
 
+GTEntryPoint: TypeAlias = Program | FieldOperator
+
+
 # TODO(tehrengruber): This class does not follow the Liskov-Substitution principle as it doesn't
 #  have a field operator definition. Currently implementation is merely a hack to keep the only
 #  test relying on this working. Revisit.
@@ -673,7 +679,7 @@ class FieldOperatorFromFoast(FieldOperator):
     This class provides the appropriate toolchain entry points.
     """
 
-    foast_stage: ffront_stages.FoastOperatorDefinition
+    foast_stage: ffront_stages.FOASTOperatorDef
 
     @override
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
@@ -690,13 +696,13 @@ def field_operator(
     *,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-) -> FieldOperator[foast.FieldOperator]: ...
+) -> FieldOperator: ...
 
 
 @typing.overload
 def field_operator(
     *, backend: next_backend.Backend | eve.NothingType | None, grid_type: common.GridType | None
-) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]: ...
+) -> Callable[[types.FunctionType], FieldOperator]: ...
 
 
 def field_operator(
@@ -705,10 +711,7 @@ def field_operator(
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
-) -> (
-    FieldOperator[foast.FieldOperator]
-    | Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]
-):
+) -> FieldOperator | Callable[[types.FunctionType], FieldOperator]:
     """
     Generate an implementation of the field operator from a Python function object.
 
@@ -725,7 +728,7 @@ def field_operator(
         ...     ...
     """
 
-    def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
+    def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
         return FieldOperator.from_function(
             definition,
             typing.cast(
@@ -747,7 +750,7 @@ def scan_operator(
     init: core_defs.Scalar,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-) -> FieldOperator[foast.ScanOperator]: ...
+) -> FieldOperator: ...
 
 
 @typing.overload
@@ -758,7 +761,7 @@ def scan_operator(
     init: core_defs.Scalar,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]: ...
+) -> Callable[[types.FunctionType], FieldOperator]: ...
 
 
 def scan_operator(
@@ -769,10 +772,7 @@ def scan_operator(
     init: core_defs.Scalar = 0.0,
     backend: next_backend.Backend | None | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
-) -> (
-    FieldOperator[foast.ScanOperator]
-    | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]
-):
+) -> FieldOperator | Callable[[types.FunctionType], FieldOperator]:
     """
     Generate an implementation of the scan operator from a Python function object.
 

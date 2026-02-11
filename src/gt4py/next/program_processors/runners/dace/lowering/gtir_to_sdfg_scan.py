@@ -141,8 +141,7 @@ def _create_scan_field_operator_impl(
 
     # the memory layout of the output field follows the field operator compute domain
     field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
-    field_indices = gtir_domain.get_domain_indices(field_dims, field_origin)
-    field_subset = dace_subsets.Range.from_indices(field_indices)
+    field_subset = gtir_domain.get_element_subset(field_dims, field_origin)
 
     # the vertical dimension used as scan column is computed by the `LoopRegion`
     # inside the map scope, therefore it is excluded from the map range

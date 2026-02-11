@@ -34,6 +34,7 @@ def gt_gpu_transformation(
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
     gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]] = None,
+    gpu_maxnreg: Optional[int] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -123,6 +124,7 @@ def gt_gpu_transformation(
             launch_bounds=gpu_launch_bounds,
             launch_factor=gpu_launch_factor,
             **gpu_block_size_spec,
+            gpu_maxnreg=gpu_maxnreg,
             validate=False,
             validate_all=validate_all,
         )
@@ -241,6 +243,7 @@ def gt_gpu_transform_non_standard_memlet(
     if len(maps_to_modify) == 0:
         return sdfg
 
+    # NOTE: This inherently assumes a particular memory order, see `gt_change_strides()`.
     for me_to_modify in maps_to_modify:
         map_to_modify: dace_nodes.Map = me_to_modify.map
         map_to_modify.params = list(reversed(map_to_modify.params))
@@ -362,6 +365,7 @@ def gt_set_gpu_blocksize(
     block_size: Optional[Sequence[int | str] | str],
     launch_bounds: Optional[int | str] = None,
     launch_factor: Optional[int] = None,
+    gpu_maxnreg: Optional[int] = None,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -393,6 +397,7 @@ def gt_set_gpu_blocksize(
         }.items():
             if f"{arg}_{dim}d" not in kwargs:
                 kwargs[f"{arg}_{dim}d"] = val
+    kwargs["maxnreg"] = gpu_maxnreg
 
     setter = GPUSetBlockSize(**kwargs)
 
@@ -590,6 +595,12 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         default=None,
         desc="Set the launch bound property for 3 dimensional map.",
     )
+    maxnreg = dace_properties.Property(
+        dtype=int,
+        allow_none=True,
+        default=None,
+        desc="Set the maxnreg property for the GPU maps. Takes precedence over any launch_bounds.",
+    )
 
     # Pattern matching
     map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
@@ -605,6 +616,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         launch_factor_1d: int | None = None,
         launch_factor_2d: int | None = None,
         launch_factor_3d: int | None = None,
+        maxnreg: int | None = None,
     ) -> None:
         super().__init__()
         if block_size_1d is not None:
@@ -632,6 +644,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         self.launch_bounds_3d = _gpu_launch_bound_parser(
             self.block_size_3d, launch_bounds_3d, launch_factor_3d
         )
+        if maxnreg is not None:
+            self.maxnreg = maxnreg
 
     @classmethod
     def expressions(cls) -> Any:
@@ -748,7 +762,9 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                 block_size[i] = map_size[map_dim_idx_to_inspect]
 
         gpu_map.gpu_block_size = tuple(block_size)
-        if launch_bounds is not None:  # Note: empty string has a meaning in DaCe
+        if self.maxnreg is not None:
+            gpu_map.gpu_maxnreg = self.maxnreg
+        elif launch_bounds is not None:  # Note: empty string has a meaning in DaCe
             gpu_map.gpu_launch_bounds = launch_bounds
 
 

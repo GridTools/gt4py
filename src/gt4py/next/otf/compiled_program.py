@@ -14,7 +14,7 @@ import functools
 import itertools
 import warnings
 from collections.abc import Callable, Hashable, Sequence
-from typing import Any, TypeAlias, TypeVar
+from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
@@ -206,7 +206,7 @@ def _validate_argument_descriptors(
 
 
 @dataclasses.dataclass
-class CompiledProgramsPool:
+class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     """
     A pool of compiled programs for a given program and backend.
 
@@ -222,7 +222,7 @@ class CompiledProgramsPool:
     """
 
     backend: gtx_backend.Backend
-    definition_stage: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition
+    definition_stage: ffront_stages.DSLDefinitionT
     # Note: This type can be incomplete, i.e. contain DeferredType, whenever the operator is a
     #  scan operator. In the future it could also be the type of a generic program.
     program_type: ts_ffront.ProgramType

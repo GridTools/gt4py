@@ -16,9 +16,9 @@ import factory
 
 from gt4py._core import locking
 from gt4py.next import config
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import definitions, languages, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
-from gt4py.next.otf.step_types import LS, SrcL, TgtL
+from gt4py.next.otf.definitions import LS, SrcL, TgtL
 
 
 SourceLanguageType = TypeVar("SourceLanguageType", bound=languages.NanobindSrcL)
@@ -37,7 +37,7 @@ def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
 class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self,
-        source: stages.CompilableSource[SrcL, LS, TgtL],
+        source: stages.CompilableProject[SrcL, LS, TgtL],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
 
@@ -45,14 +45,14 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
 @dataclasses.dataclass(frozen=True)
 class Compiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
+        stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
         stages.CompiledProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
+        stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
         stages.CompiledProgram,
     ],
-    step_types.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python],
+    definitions.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python],
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
@@ -64,7 +64,7 @@ class Compiler(
 
     def __call__(
         self,
-        inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
+        inp: stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
     ) -> stages.CompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
@@ -83,11 +83,12 @@ class Compiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
-        compiled_prog = getattr(
-            importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
+        m = importer.import_from_path(
+            src_dir / new_data.module, sys_modules_prefix="gt4py.__compiled_programs__."
         )
+        func = getattr(m, new_data.entry_point_name)
 
-        return compiled_prog
+        return func
 
 
 class CompilerFactory(factory.Factory):
