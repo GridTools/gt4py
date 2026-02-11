@@ -25,17 +25,17 @@ from gt4py.next.ffront import (
     type_info as ffront_ti,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.stages import AOT_PRG
+from gt4py.next.ffront.stages import ConcretePASTProgramDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import remap_symbols
-from gt4py.next.otf import arguments, stages, workflow
+from gt4py.next.otf import arguments, definitions, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 # FIXME[#1582](tehrengruber): This should only depend on the program not the arguments. Remove
 #  dependency as soon as column axis can be deduced from ITIR in consumers of the CompilableProgram.
-def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
+def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDef:
     """
     Lower a PAST program definition to Iterator IR.
 
@@ -63,7 +63,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ... )
 
         >>> itir_copy = past_to_gtir(
-        ...     toolchain.CompilableProgram(copy_program.past_stage, compile_time_args)
+        ...     toolchain.ConcreteArtifact(copy_program.past_stage, compile_time_args)
         ... )
 
         >>> print(itir_copy.data.id)
@@ -132,12 +132,12 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
     if config.DEBUG or inp.data.debug:
         devtools.debug(itir_program)
 
-    return stages.CompilableProgram(data=itir_program, args=compile_time_args)
+    return definitions.CompilableProgramDef(data=itir_program, args=compile_time_args)
 
 
 def past_to_gtir_factory(
     cached: bool = True,
-) -> workflow.Workflow[AOT_PRG, stages.CompilableProgram]:
+) -> workflow.Workflow[ConcretePASTProgramDef, definitions.CompilableProgramDef]:
     wf = workflow.make_step(past_to_gtir)
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
