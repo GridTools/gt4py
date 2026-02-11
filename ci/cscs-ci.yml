@@ -65,7 +65,6 @@ stages:
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
     EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
     EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx942 ROCM_HOME=/opt/rocm"
-    UBUNTU_VERSION: '22.04'
 
 build_cscs_gh200:
   extends:
@@ -87,7 +86,7 @@ build_cscs_amd_rocm:
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
     TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6_0) to test 
-    CSCS_CUDA_MPS: 1
+    USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
   parallel:

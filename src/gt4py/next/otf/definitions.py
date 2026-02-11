@@ -44,6 +44,7 @@ class TranslationStep(
     ...
 
 
+class BindingStep(Protocol[LangSettingsT, ToLangSettingsT]):
     """
     Generate Bindings for program source and package both together (ProgramSource -> CompilableSource).
 

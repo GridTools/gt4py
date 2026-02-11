@@ -309,4 +309,4 @@ def create_bindings(
 def bind_source(
     inp: stages.ProgramProject[LangSettingsT],
 ) -> stages.CompilableProject[LangSettingsT, languages.PythonLanguageSettings]:
-    return stages.CompilableSource(program_source=inp, binding_source=create_bindings(inp))
+    return stages.CompilableProject(program_source=inp, binding_source=create_bindings(inp))
