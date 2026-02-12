@@ -30,9 +30,6 @@ __all__ = [
     "IDim",
     "JDim",
     "KDim",
-    "Ioff",
-    "Joff",
-    "Koff",
     "Vertex",
     "Edge",
     "Cell",
@@ -133,12 +130,11 @@ DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
 IDim = gtx.Dimension("IDim")
+IHalfDim = common.flip_staggered(IDim)
 JDim = gtx.Dimension("JDim")
+JHalfDim = common.flip_staggered(JDim)
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
-KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
-Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
-Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
-Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
+KHalfDim = common.flip_staggered(KDim)
 
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")
@@ -172,18 +168,13 @@ class CartesianGridDescriptor(Protocol):
 
 
 def simple_cartesian_grid(
-    sizes: int | tuple[int, int, int, int] = (5, 7, 9, 11),
+    sizes: int | tuple[int, int, int, int] = (5, 7, 9),
 ) -> CartesianGridDescriptor:
     if isinstance(sizes, int):
-        sizes = (sizes,) * 4
-    assert len(sizes) == 4, "sizes must be a tuple of four integers"
+        sizes = (sizes,) * 3
+    assert len(sizes) == 3, "sizes must be a tuple of three integers"
 
-    offset_provider = {
-        "Ioff": IDim,
-        "Joff": JDim,
-        "Koff": KDim,
-        "KHalfoff": KHalfDim,
-    }
+    offset_provider = {}
 
     return types.SimpleNamespace(
         name="simple_cartesian_grid",
