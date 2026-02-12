@@ -932,3 +932,77 @@ def test_concat_where_multiple_top_level_maps(access_in_both_scopes: bool):
     access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert concat_node not in access_nodes_after
     assert concat_node.data not in sdfg.arrays
+
+
+def _make_concat_where_single_nested_sdfg_consumer() -> tuple[
+    dace.SDFG,
+    dace.SDFGState,
+    dace_nodes.AccessNode,
+    dace_nodes.NestedSDFG,
+]:
+    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_single_nested_sdfg_consumer"))
+    state = sdfg.add_state()
+    for aname in "abcd":
+        sdfg.add_array(
+            name=aname,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(aname == "c"),
+        )
+    a, b, c, d = (state.add_access(aname) for aname in "abcd")
+    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
+
+    nested_sdfg = dace.SDFG("nested_sdfg")
+    nested_state = nested_sdfg.add_state()
+    nested_input = "c"
+    nested_output = "d"
+    for aname in [nested_input, nested_output]:
+        nested_sdfg.add_array(
+            name=aname,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=True,
+        )
+    nested_state.add_mapped_tasklet(
+        "nested_map",
+        map_ranges={"__j": "0:10"},
+        inputs={"__in": dace.Memlet(f"{nested_input}[__j]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet(f"{nested_output}[__j]")},
+        external_edges=True,
+    )
+
+    nsdfg = state.add_nested_sdfg(
+        nested_sdfg,
+        inputs={nested_input},
+        outputs={nested_output},
+    )
+    state.add_edge(c, None, nsdfg, nested_input, dace.Memlet("c[0:10]"))
+    state.add_edge(nsdfg, nested_output, d, None, dace.Memlet("d[0:10]"))
+
+    return sdfg, state, c, nsdfg
+
+
+def test_concat_where_single_nested_sdfg_consumer():
+    sdfg, state, concat_node, nsdfg = _make_concat_where_single_nested_sdfg_consumer()
+
+    access_nodes_before = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(access_nodes_before) == 4
+    assert concat_node in access_nodes_before
+    assert {nsdfg} == set(util.count_nodes(sdfg, dace_nodes.NestedSDFG, True))
+    assert all(oedge.dst is nsdfg for oedge in state.out_edges(concat_node))
+    assert state.in_degree(nsdfg) == 1
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(access_nodes_after) == 3
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
+    assert state.in_degree(nsdfg) == 2
