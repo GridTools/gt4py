@@ -31,40 +31,40 @@ def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
     return (src_dir / data.module).exists()
 
 
-LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLangSettings)
-TargetLangSettingsT = TypeVar("TargetLangSettingsT", bound=languages.SourceLangSettings)
-CPPLikeLangSettingsT = TypeVar("CPPLikeLangSettingsT", bound=languages.CPPLikeLangSettings)
+CodeConfigT = TypeVar("CodeConfigT", bound=languages.SourceCodeConfig)
+TargetCodeConfigT = TypeVar("TargetCodeConfigT", bound=languages.SourceCodeConfig)
+CPPLikeCodeConfigT = TypeVar("CPPLikeCodeConfigT", bound=languages.CPPLikeCodeConfig)
 
 
-class BuildSystemProjectGenerator(Protocol[LangSettingsT, TargetLangSettingsT]):
+class BuildSystemProjectGenerator(Protocol[CodeConfigT, TargetCodeConfigT]):
     def __call__(
         self,
-        source: stages.CompilableProject[LangSettingsT, TargetLangSettingsT],
+        source: stages.CompilableProject[CodeConfigT, TargetCodeConfigT],
         cache_lifetime: config.BuildCacheLifetime,
-    ) -> stages.BuildSystemProject[LangSettingsT, TargetLangSettingsT]: ...
+    ) -> stages.BuildSystemProject[CodeConfigT, TargetCodeConfigT]: ...
 
 
 @dataclasses.dataclass(frozen=True)
 class Compiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLangSettings],
+        stages.CompilableProject[CPPLikeCodeConfigT, languages.PythonCodeConfig],
         stages.ExecutableProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLangSettings],
+        stages.CompilableProject[CPPLikeCodeConfigT, languages.PythonCodeConfig],
         stages.ExecutableProgram,
     ],
-    definitions.CompilationStep[CPPLikeLangSettingsT, languages.PythonLangSettings],
+    definitions.CompilationStep[CPPLikeCodeConfigT, languages.PythonCodeConfig],
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
     cache_lifetime: config.BuildCacheLifetime
-    builder_factory: BuildSystemProjectGenerator[CPPLikeLangSettingsT, languages.PythonLangSettings]
+    builder_factory: BuildSystemProjectGenerator[CPPLikeCodeConfigT, languages.PythonCodeConfig]
     force_recompile: bool = False
 
     def __call__(
         self,
-        inp: stages.CompilableProject[CPPLikeLangSettingsT, languages.PythonLangSettings],
+        inp: stages.CompilableProject[CPPLikeCodeConfigT, languages.PythonCodeConfig],
     ) -> stages.ExecutableProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 

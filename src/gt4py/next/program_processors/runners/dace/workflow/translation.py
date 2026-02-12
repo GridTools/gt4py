@@ -356,9 +356,9 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.SDFGLangSettings],
+        stages.ProgramSource[languages.SDFGCodeConfig],
     ],
-    definitions.TranslationStep[languages.SDFGLangSettings],
+    definitions.TranslationStep[languages.SDFGCodeConfig],
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
@@ -441,7 +441,7 @@ class DaCeTranslator(
 
     def __call__(
         self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[languages.SDFGLangSettings]:
+    ) -> stages.ProgramSource[languages.SDFGCodeConfig]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
@@ -459,14 +459,14 @@ class DaCeTranslator(
             for param, arg_type in zip(program.params, arg_types)
         )
 
-        module: stages.ProgramSource[languages.SDFGLangSettings] = stages.ProgramSource(
+        module: stages.ProgramSource[languages.SDFGCodeConfig] = stages.ProgramSource(
             entry_point=interface.Function(program.id, program_parameters),
             # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
             #   We compute the hash in order to refresh `cfg_list` on the SDFG,
             #   which makes the JSON serialization stable.
             source_code=sdfg.to_json(hash=True),
             library_deps=tuple(),
-            lang_settings=languages.SDFGLangSettings(),
+            code_config=languages.SDFGCodeConfig(),
         )
         return module
 

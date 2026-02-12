@@ -15,7 +15,7 @@ from typing import Any
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SourceLangSettings:
+class SourceCodeConfig:
     """
     Basic settings for any source programming language.
 
@@ -31,14 +31,14 @@ class SourceLangSettings:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SourceAndHeaderLangSettings(SourceLangSettings):
+class SourceCodeAndHeaderConfig(SourceCodeConfig):
     """Add a header file extension setting on top of the basic set."""
 
     header_extension: str
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class PythonLangSettings(SourceLangSettings):
+class PythonCodeConfig(SourceCodeConfig):
     """Settings for Python language."""
 
     name: str = "python"
@@ -47,7 +47,7 @@ class PythonLangSettings(SourceLangSettings):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SDFGLangSettings(SourceLangSettings):
+class SDFGCodeConfig(SourceCodeConfig):
     """Settings for SDFGs."""
 
     name: str = "SDFG"
@@ -55,12 +55,12 @@ class SDFGLangSettings(SourceLangSettings):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CPPLikeLangSettings(SourceAndHeaderLangSettings):
+class CPPLikeCodeConfig(SourceCodeAndHeaderConfig):
     """Settings for C++-like language."""
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CPPLangSettings(CPPLikeLangSettings):
+class CPPCodeConfig(CPPLikeCodeConfig):
     """Settings for C++ language."""
 
     name: str = "CXX"
@@ -73,7 +73,7 @@ class CPPLangSettings(CPPLikeLangSettings):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CUDALangSettings(CPPLikeLangSettings):
+class CUDACodeConfig(CPPLikeCodeConfig):
     """Settings for CUDA language."""
 
     name: str = "CUDA"
@@ -86,7 +86,7 @@ class CUDALangSettings(CPPLikeLangSettings):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class HIPLangSettings(CPPLikeLangSettings):
+class HIPCodeConfig(CPPLikeCodeConfig):
     """Settings for HIP language."""
 
     name: str = "HIP"

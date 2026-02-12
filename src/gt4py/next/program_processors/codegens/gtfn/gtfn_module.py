@@ -40,28 +40,28 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.SourceAndHeaderLangSettings],
+        stages.ProgramSource[languages.SourceCodeAndHeaderConfig],
     ],
     workflow.ChainableWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.SourceAndHeaderLangSettings],
+        stages.ProgramSource[languages.SourceCodeAndHeaderConfig],
     ],
 ):
-    lang_settings: Optional[languages.SourceAndHeaderLangSettings] = None
+    code_config: Optional[languages.SourceCodeAndHeaderConfig] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
 
-    def _default_lang_settings(self) -> languages.SourceAndHeaderLangSettings:
+    def _default_code_config(self) -> languages.SourceCodeAndHeaderConfig:
         match self.device_type:
             case core_defs.DeviceType.CUDA:
-                return languages.CUDALangSettings()
+                return languages.CUDACodeConfig()
             case core_defs.DeviceType.ROCM:
-                return languages.HIPLangSettings()
+                return languages.HIPCodeConfig()
             case core_defs.DeviceType.CPU:
-                return languages.CPPLangSettings()
+                return languages.CPPCodeConfig()
             case _:
                 raise self._not_implemented_for_device_type()
 
@@ -197,7 +197,7 @@ class GTFNTranslationStep(
 
     def __call__(
         self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[languages.SourceAndHeaderLangSettings]:
+    ) -> stages.ProgramSource[languages.SourceCodeAndHeaderConfig]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
 
@@ -231,7 +231,7 @@ class GTFNTranslationStep(
             inp.args.column_axis,
         )
         source_code = interface.format_source(
-            self._lang_settings(),
+            self._code_config(),
             f"""
                     #include <{self._backend_header()}>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
@@ -240,11 +240,11 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
-        module: stages.ProgramSource[languages.SourceAndHeaderLangSettings] = stages.ProgramSource(
+        module: stages.ProgramSource[languages.SourceCodeAndHeaderConfig] = stages.ProgramSource(
             entry_point=function,
             library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
             source_code=source_code,
-            lang_settings=self._lang_settings(),
+            code_config=self._code_config(),
         )
         return module
 
@@ -266,10 +266,8 @@ class GTFNTranslationStep(
             case _:
                 raise self._not_implemented_for_device_type()
 
-    def _lang_settings(self) -> languages.SourceAndHeaderLangSettings:
-        return (
-            self.lang_settings if self.lang_settings is not None else self._default_lang_settings()
-        )
+    def _code_config(self) -> languages.SourceCodeAndHeaderConfig:
+        return self.code_config if self.code_config is not None else self._default_code_config()
 
     def _library_name(self) -> str:
         match self.device_type:

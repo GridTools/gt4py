@@ -21,7 +21,7 @@ from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.type_system import type_specifications as ts
 
 
-LangSettingsT = TypeVar("LangSettingsT", bound=languages.CPPLikeLangSettings, covariant=True)
+CodeConfigT = TypeVar("CodeConfigT", bound=languages.CPPLikeCodeConfig, covariant=True)
 
 
 class Expr(eve.Node):
@@ -228,8 +228,8 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
 
 
 def create_bindings(
-    program_source: stages.ProgramSource[LangSettingsT],
-) -> stages.BindingSource[LangSettingsT, languages.PythonLangSettings]:
+    program_source: stages.ProgramSource[CodeConfigT],
+) -> stages.BindingSource[CodeConfigT, languages.PythonCodeConfig]:
     """
     Generate Python bindings through which a C++ function can be called.
 
@@ -238,15 +238,15 @@ def create_bindings(
     program_source
         The program source for which the bindings are created
     """
-    if not isinstance(program_source.lang_settings, languages.CPPLikeLangSettings):
+    if not isinstance(program_source.code_config, languages.CPPLikeCodeConfig):
         raise ValueError(
-            f"Can only create bindings for C++ program sources, received '{program_source.lang_settings.name}'."
+            f"Can only create bindings for C++ program sources, received '{program_source.code_config.name}'."
         )
     wrapper_name = program_source.entry_point.name + "_wrapper"
 
     Stmt = ReturnStmt if program_source.entry_point.returns else ExprStmt
     file_binding = BindingFile(
-        callee_header_file=f"{program_source.entry_point.name}.{program_source.lang_settings.header_extension}",
+        callee_header_file=f"{program_source.entry_point.name}.{program_source.code_config.header_extension}",
         header_files=[
             "chrono",
             "optional",
@@ -280,8 +280,8 @@ def create_bindings(
                 )
             ),
             on_device=isinstance(
-                program_source.lang_settings,
-                (languages.CUDALangSettings, languages.HIPLangSettings),
+                program_source.code_config,
+                (languages.CUDACodeConfig, languages.HIPCodeConfig),
             ),
         ),
         binding_module=BindingModule(
@@ -299,7 +299,7 @@ def create_bindings(
     )
 
     src = interface.format_source(
-        program_source.lang_settings, BindingCodeGenerator.apply(file_binding)
+        program_source.code_config, BindingCodeGenerator.apply(file_binding)
     )
 
     return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "2.0.0"),))
@@ -307,6 +307,6 @@ def create_bindings(
 
 @workflow.make_step
 def bind_source(
-    inp: stages.ProgramSource[LangSettingsT],
-) -> stages.CompilableProject[LangSettingsT, languages.PythonLangSettings]:
+    inp: stages.ProgramSource[CodeConfigT],
+) -> stages.CompilableProject[CodeConfigT, languages.PythonCodeConfig]:
     return stages.CompilableProject(program_source=inp, binding_source=create_bindings(inp))

@@ -15,8 +15,8 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, languages, stages, toolchain, workflow
 
 
-LangSettingsT = TypeVar("LangSettingsT", bound=languages.SourceLangSettings)
-ToLangSettingsT = TypeVar("ToLangSettingsT", bound=languages.SourceLangSettings)
+CodeConfigT = TypeVar("CodeConfigT", bound=languages.SourceCodeConfig)
+ToCodeConfigT = TypeVar("ToCodeConfigT", bound=languages.SourceCodeConfig)
 
 
 IRDefinitionT = TypeVar(
@@ -34,15 +34,15 @@ CompilableProgramDef: TypeAlias = ConcreteProgramDef[itir.Program, arguments.Com
 
 
 class TranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[CompilableProgramDef, stages.ProgramSource[LangSettingsT]],
-    Protocol[LangSettingsT],
+    workflow.ReplaceEnabledWorkflowMixin[CompilableProgramDef, stages.ProgramSource[CodeConfigT]],
+    Protocol[CodeConfigT],
 ):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
 
     ...
 
 
-class BindingStep(Protocol[LangSettingsT, ToLangSettingsT]):
+class BindingStep(Protocol[CodeConfigT, ToCodeConfigT]):
     """
     Generate Bindings for program source and package both together (ProgramSource -> CompilableSource).
 
@@ -51,18 +51,18 @@ class BindingStep(Protocol[LangSettingsT, ToLangSettingsT]):
     """
 
     def __call__(
-        self, program_source: stages.ProgramSource[LangSettingsT]
-    ) -> stages.CompilableProject[LangSettingsT, ToLangSettingsT]: ...
+        self, program_source: stages.ProgramSource[CodeConfigT]
+    ) -> stages.CompilableProject[CodeConfigT, ToCodeConfigT]: ...
 
 
 class CompilationStep(
     workflow.Workflow[
-        stages.CompilableProject[LangSettingsT, ToLangSettingsT], stages.ExecutableProgram
+        stages.CompilableProject[CodeConfigT, ToCodeConfigT], stages.ExecutableProgram
     ],
-    Protocol[LangSettingsT, ToLangSettingsT],
+    Protocol[CodeConfigT, ToCodeConfigT],
 ):
     """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
 
     def __call__(
-        self, source: stages.CompilableProject[LangSettingsT, ToLangSettingsT]
+        self, source: stages.CompilableProject[CodeConfigT, ToCodeConfigT]
     ) -> stages.ExecutableProgram: ...
