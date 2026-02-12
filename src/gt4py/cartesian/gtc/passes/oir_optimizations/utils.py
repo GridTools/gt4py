@@ -116,6 +116,10 @@ class AccessCollector(eve.NodeVisitor):
     def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs: Any) -> None:
         self.visit(node.body, horizontal_mask=node.mask, **kwargs)
 
+    def visit_Interval(self, node: oir.Interval, **kwargs: Any) -> None:
+        self.visit(node.start, is_write=False, **kwargs)
+        self.visit(node.end, is_write=False, **kwargs)
+
     @dataclass
     class GenericAccessCollection(Generic[AccessT, OffsetT]):
         _ordered_accesses: List[AccessT]

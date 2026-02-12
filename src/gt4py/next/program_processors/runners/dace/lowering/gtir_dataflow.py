@@ -26,7 +26,7 @@ from typing import (
 )
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py import eve
 from gt4py.eve.extended_typing import MaybeNestedInTuple, NestedTuple
@@ -34,12 +34,12 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
-from gt4py.next.program_processors.runners.dace import (
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_python_codegen,
     gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
-    utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import (
     type_info as ti,
@@ -68,7 +68,7 @@ class ValueExpr:
         gt_dtype: GT4Py data type, which includes the `offset_type` local dimension for lists.
     """
 
-    dc_node: dace.nodes.AccessNode
+    dc_node: dace_nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
 
     def __post_init__(self) -> None:
@@ -89,7 +89,7 @@ class MemletExpr:
         subset: The memlet subset to retrieve the local data.
     """
 
-    dc_node: dace.nodes.AccessNode
+    dc_node: dace_nodes.AccessNode
     gt_field: ts.FieldType
     subset: dace_subsets.Range
 
@@ -131,7 +131,7 @@ class IteratorExpr:
             or the result of a tasklet computation like neighbors connectivity or dynamic offset.
     """
 
-    field: dace.nodes.AccessNode
+    field: dace_nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
     field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType]]
     indices: dict[gtx_common.Dimension, DataExpr]
@@ -195,7 +195,7 @@ class DataflowInputEdge(Protocol):
     """
 
     @abc.abstractmethod
-    def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None: ...
+    def connect(self, map_entry: Optional[dace_nodes.MapEntry]) -> None: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -208,12 +208,12 @@ class MemletInputEdge(DataflowInputEdge):
     """
 
     state: dace.SDFGState
-    source: dace.nodes.AccessNode
+    source: dace_nodes.AccessNode
     subset: dace_subsets.Range
-    dest: dace.nodes.AccessNode | dace.nodes.Tasklet
+    dest: dace_nodes.AccessNode | dace_nodes.Tasklet
     dest_conn: Optional[str]
 
-    def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
+    def connect(self, map_entry: Optional[dace_nodes.MapEntry]) -> None:
         memlet = dace.Memlet(data=self.source.data, subset=self.subset)
         if map_entry is None:
             self.state.add_edge(self.source, None, self.dest, self.dest_conn, memlet)
@@ -237,9 +237,9 @@ class EmptyInputEdge(DataflowInputEdge):
     """
 
     state: dace.SDFGState
-    node: dace.nodes.Tasklet
+    node: dace_nodes.Tasklet
 
-    def connect(self, map_entry: Optional[dace.nodes.MapEntry]) -> None:
+    def connect(self, map_entry: Optional[dace_nodes.MapEntry]) -> None:
         if map_entry is None:
             # outside of a map scope it is possible to instantiate a tasklet node
             # without input connectors
@@ -266,8 +266,8 @@ class DataflowOutputEdge:
 
     def connect(
         self,
-        map_exit: Optional[dace.nodes.MapExit],
-        dest: dace.nodes.AccessNode,
+        map_exit: Optional[dace_nodes.MapExit],
+        dest: dace_nodes.AccessNode,
         dest_subset: dace_subsets.Range,
     ) -> bool:
         """Create a connection to the `dest` node, writing the given `dest_subset`.
@@ -281,11 +281,11 @@ class DataflowOutputEdge:
         write_edge = self.state.in_edges(self.result.dc_node)[0]
 
         # Check the kind of node which writes the result
-        if isinstance(write_edge.src, dace.nodes.Tasklet):
+        if isinstance(write_edge.src, dace_nodes.Tasklet):
             # The temporary data written by a tasklet can be safely deleted.
             assert map_exit is not None
             remove_last_node = True
-        elif isinstance(write_edge.src, dace.nodes.NestedSDFG):
+        elif isinstance(write_edge.src, dace_nodes.NestedSDFG):
             if isinstance(dest_desc, dace.data.Scalar):
                 # We keep scalar temporary storage, as a general rule, since it
                 # does not affect performance of the generated code. This scalar
@@ -346,7 +346,7 @@ DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
 
 def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
     assert isinstance(node.type, ts.ScalarType)
-    dc_dtype = gtx_dace_utils.as_dace_type(node.type)
+    dc_dtype = gtx_dace_args.as_dace_type(node.type)
 
     assert isinstance(node.fun, gtir.FunCall)
     assert len(node.fun.args) == 2
@@ -412,9 +412,9 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     def _add_input_data_edge(
         self,
-        src: dace.nodes.AccessNode,
+        src: dace_nodes.AccessNode,
         src_subset: dace_subsets.Range,
-        dst_node: dace.nodes.Node,
+        dst_node: dace_nodes.Node,
         dst_conn: Optional[str] = None,
     ) -> None:
         edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
@@ -439,7 +439,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             List[Tuple[str, Union[str, dace.subsets.Subset]]],
         ],
         **kwargs: Any,
-    ) -> Tuple[dace.nodes.MapEntry, dace.nodes.MapExit]:
+    ) -> Tuple[dace_nodes.MapEntry, dace_nodes.MapExit]:
         """
         Helper method to add a map in current state.
 
@@ -455,7 +455,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         outputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
         code: str,
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dict[str, str]]:
+    ) -> tuple[dace_nodes.Tasklet, dict[str, str]]:
         """
         Helper method to add a tasklet in current state.
 
@@ -482,7 +482,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         code: str,
         outputs: Mapping[str, dace.Memlet],
         **kwargs: Any,
-    ) -> tuple[dace.nodes.Tasklet, dace.nodes.MapEntry, dace.nodes.MapExit, dict[str, str]]:
+    ) -> tuple[dace_nodes.Tasklet, dace_nodes.MapEntry, dace_nodes.MapExit, dict[str, str]]:
         """
         Helper method to add a mapped tasklet in current state.
 
@@ -492,10 +492,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         return self.subgraph_builder.add_mapped_tasklet(
             name, self.sdfg, self.state, map_ranges, inputs, code, outputs, **kwargs
         )
-
-    def unique_nsdfg_name(self, prefix: str) -> str:
-        """Utility function to generate a unique name for a nested SDFG, starting with the given prefix."""
-        return self.subgraph_builder.unique_nsdfg_name(self.sdfg, prefix)
 
     def _construct_local_view(self, field: MemletExpr | ValueExpr) -> ValueExpr:
         if isinstance(field, MemletExpr):
@@ -526,11 +522,11 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _construct_tasklet_result(
         self,
         dc_dtype: dace.typeclass,
-        src_node: dace.nodes.Tasklet,
+        src_node: dace_nodes.Tasklet,
         src_connector: str,
         use_array: bool = False,
     ) -> ValueExpr:
-        data_type = gtx_dace_utils.as_itir_type(dc_dtype)
+        data_type = gtx_dace_args.as_itir_type(dc_dtype)
         if use_array:
             # In some cases, such as result data with list-type annotation, we want
             # that output data is represented as an array (single-element 1D array)
@@ -778,7 +774,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     deref_on_input_memlet=deref_on_input_memlet: self._visit_if_branch_arg(
                         if_sdfg,
                         if_branch_state,
-                        tsym.id,
+                        str(tsym.id),
                         targ,
                         deref_on_input_memlet,
                         if_sdfg_input_memlets,
@@ -803,13 +799,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         input_edges, output_tree = translate_lambda_to_dataflow(
             if_sdfg, if_branch_state, self.subgraph_builder, lambda_node, lambda_args
         )
-
-        for data_node in if_branch_state.data_nodes():
-            # In case of tuple arguments, isolated access nodes might be left in the state,
-            # because not all tuple fields are necessarily used inside the lambda scope
-            if if_branch_state.degree(data_node) == 0:
-                assert not data_node.desc(if_sdfg).transient
-                if_branch_state.remove_node(data_node)
 
         return input_edges, output_tree
 
@@ -876,7 +865,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             else (condition_value.dc_dtype == dace.dtypes.bool_)
         )
 
-        nsdfg = dace.SDFG(self.unique_nsdfg_name(prefix="if_stmt"))
+        nsdfg = dace.SDFG(self.subgraph_builder.unique_nsdfg_name("if_stmt"))
         nsdfg.debuginfo = gtir_to_sdfg_utils.debug_info(node, default=self.sdfg.debuginfo)
 
         # create states inside the nested SDFG for the if-branches
@@ -891,7 +880,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=nsdfg)
         fstate = else_body.add_state("false_branch", is_start_block=True)
-        if_region.add_branch(dace.sdfg.state.CodeBlock("not (__cond)"), else_body)
+        # Use `None` for unconditional execution of else-branch, if the condition is not met.
+        if_region.add_branch(None, else_body)
 
         input_memlets: dict[str, MemletExpr | ValueExpr] = {}
         nsdfg_symbols_mapping: Optional[dict[str, dace.symbol]] = None
@@ -1008,7 +998,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # initially, the storage for the connectivty tables is created as transient;
         # when the tables are used, the storage is changed to non-transient,
         # as the corresponding arrays are supposed to be allocated by the SDFG caller
-        conn_data = gtx_dace_utils.connectivity_identifier(offset)
+        conn_data = gtx_dace_args.connectivity_identifier(offset)
         conn_desc = self.sdfg.arrays[conn_data]
         conn_desc.transient = False
 
@@ -1124,7 +1114,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             raise ValueError(f"Unexpected argument type {type(src_arg)} in 'list_get' expression.")
 
         assert isinstance(src_arg.gt_dtype.element_type, ts.ScalarType)
-        assert src_desc.dtype == gtx_dace_utils.as_dace_type(src_arg.gt_dtype.element_type)
+        assert src_desc.dtype == gtx_dace_args.as_dace_type(src_arg.gt_dtype.element_type)
         dst, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, src_desc.dtype)
         dst_node = self.state.add_access(dst)
 
@@ -1200,7 +1190,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(node.fun.args) == 1  # the operation to be mapped on the arguments
 
         assert isinstance(node.type.element_type, ts.ScalarType)
-        dc_dtype = gtx_dace_utils.as_dace_type(node.type.element_type)
+        dc_dtype = gtx_dace_args.as_dace_type(node.type.element_type)
 
         input_connectors = [f"__arg{i}" for i in range(len(node.args))]
         output_connector = "__out"
@@ -1273,7 +1263,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if conn_type.has_skip_values:
             # In case the `map_` input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
-            conn_data = gtx_dace_utils.connectivity_identifier(offset_type.value)
+            conn_data = gtx_dace_args.connectivity_identifier(offset_type.value)
             conn_desc = self.sdfg.arrays[conn_data]
             conn_desc.transient = False
 
@@ -1337,7 +1327,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         reduce_init: SymbolExpr,
         reduce_identity: SymbolExpr,
         reduce_wcr: str,
-        result_node: dace.nodes.AccessNode,
+        result_node: dace_nodes.AccessNode,
     ) -> None:
         """
         Helper method to lower reduction on a local field containing skip values.
@@ -1358,7 +1348,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             and input_expr.gt_dtype.offset_type is not None
         )
         offset_type = input_expr.gt_dtype.offset_type
-        connectivity = gtx_dace_utils.connectivity_identifier(offset_type.value)
+        connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
         connectivity_node = self.state.add_access(connectivity)
         connectivity_desc = connectivity_node.desc(self.sdfg)
         connectivity_desc.transient = False
@@ -1377,7 +1367,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert desc.shape[local_dim_index] == offset_provider_type.max_neighbors
 
         # we lower the reduction map with WCR out memlet in a nested SDFG
-        nsdfg = dace.SDFG(name=self.unique_nsdfg_name("reduce_with_skip_values"))
+        nsdfg = dace.SDFG(self.subgraph_builder.unique_nsdfg_name("reduce_with_skip_values"))
         nsdfg.add_array(
             "values",
             (desc.shape[local_dim_index],),
@@ -1610,7 +1600,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _make_dynamic_neighbor_offset(
         self,
         offset_expr: MemletExpr | ValueExpr,
-        offset_table_node: dace.nodes.AccessNode,
+        offset_table_node: dace_nodes.AccessNode,
         origin_index: SymbolExpr,
     ) -> ValueExpr:
         """
@@ -1657,7 +1647,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         self,
         it: IteratorExpr,
         conn_type: gtx_common.NeighborConnectivityType,
-        conn_node: dace.nodes.AccessNode,
+        conn_node: dace_nodes.AccessNode,
         offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
@@ -1715,7 +1705,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             # initially, the storage for the connectivity tables is created as transient;
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
-            offset_table = gtx_dace_utils.connectivity_identifier(offset)
+            offset_table = gtx_dace_args.connectivity_identifier(offset)
             self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
 
@@ -1783,13 +1773,13 @@ class LambdaToDataflow(eve.NodeVisitor):
             # Therefore we handle `ListType` as a single-element array with shape (1,)
             # that will be accessed in a map expression on a local domain.
             assert isinstance(node.type.element_type, ts.ScalarType)
-            dc_dtype = gtx_dace_utils.as_dace_type(node.type.element_type)
+            dc_dtype = gtx_dace_args.as_dace_type(node.type.element_type)
             # In order to ease the lowring of the parent expression on local dimension,
             # we represent the scalar value as a single-element 1D array.
             use_array = True
         else:
             assert isinstance(node.type, ts.ScalarType)
-            dc_dtype = gtx_dace_utils.as_dace_type(node.type)
+            dc_dtype = gtx_dace_args.as_dace_type(node.type)
             use_array = False
 
         return self._construct_tasklet_result(
@@ -1842,9 +1832,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         elif cpm.is_applied_shift(node):
             return self._visit_shift(node)
 
-        elif isinstance(node.fun, gtir.Lambda):
-            # Lambda node should be visited with 'visit_let()' method.
-            raise ValueError(f"Unexpected lambda in 'FunCall' node: {node}.")
+        elif cpm.is_let(node):
+            let_node = node.fun
+            let_args = [self.visit(arg) for arg in node.args]
+            for p, arg in zip(node.fun.params, let_args, strict=True):
+                self.symbol_map[str(p.id)] = arg
+            return self.visit(let_node.expr)
 
         elif isinstance(node.fun, gtir.SymRef):
             return self._visit_generic_builtin(node)
@@ -1894,7 +1887,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
     def visit_Literal(self, node: gtir.Literal) -> SymbolExpr:
-        dc_dtype = gtx_dace_utils.as_dace_type(node.type)
+        dc_dtype = gtx_dace_args.as_dace_type(node.type)
         return SymbolExpr(node.value, dc_dtype)
 
     def visit_SymRef(self, node: gtir.SymRef) -> MaybeNestedInTuple[IteratorExpr | DataExpr]:
@@ -1904,39 +1897,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         # if not in the lambda symbol map, this must be a symref to a builtin function
         assert param in gtir_python_codegen.MATH_BUILTINS_MAPPING
         return SymbolExpr(param, dace.string)
-
-    def visit_let(
-        self,
-        node: gtir.Lambda,
-        args: Sequence[MaybeNestedInTuple[IteratorExpr | MemletExpr | ValueExpr]],
-    ) -> MaybeNestedInTuple[DataflowOutputEdge]:
-        """
-        Maps lambda arguments to internal parameters.
-
-        This method is responsible to recognize the usage of the `Lambda` node,
-        which can be either a let-statement or the stencil expression in local view.
-        The usage of a `Lambda` as let-statement corresponds to computing some results
-        and making them available inside the lambda scope, represented as a nested SDFG.
-        All let-statements, if any, are supposed to be encountered before the stencil
-        expression. In other words, the `Lambda` node representing the stencil expression
-        is always the innermost node.
-        Therefore, the lowering of let-statements results in recursive calls to
-        `visit_let()` until the stencil expression is found. At that point, it falls
-        back to the `visit()` function.
-        """
-
-        # lambda arguments are mapped to symbols defined in lambda scope.
-        for p, arg in zip(node.params, args, strict=True):
-            self.symbol_map[str(p.id)] = arg
-
-        if cpm.is_let(node.expr):
-            let_node = node.expr
-            let_args = [self.visit(arg) for arg in let_node.args]
-            assert isinstance(let_node.fun, gtir.Lambda)
-            return self.visit_let(let_node.fun, args=let_args)
-        else:
-            # this lambda node is not a let-statement, but a stencil expression
-            return self.visit(node)
 
 
 def translate_lambda_to_dataflow(
@@ -1967,6 +1927,16 @@ def translate_lambda_to_dataflow(
         - Tree representation of output data connections.
     """
     taskgen = LambdaToDataflow(sdfg, state, sdfg_builder)
-    lambda_output = taskgen.visit_let(node, args)
+    for p, arg in zip(node.params, args, strict=True):
+        taskgen.symbol_map[str(p.id)] = arg
+
+    lambda_output = taskgen.visit(node)
+
+    # remove access nodes to lambda symbols which were not used
+    flat_arg_nodes = (
+        x.field if isinstance(x, IteratorExpr) else x.dc_node  # type: ignore[attr-defined]
+        for x in gtx_utils.flatten_nested_tuple(tuple(args))
+    )
+    state.remove_nodes_from([node for node in flat_arg_nodes if state.degree(node) == 0])
 
     return taskgen.input_edges, lambda_output

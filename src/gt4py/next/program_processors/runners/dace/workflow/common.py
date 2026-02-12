@@ -76,7 +76,7 @@ def set_dace_config(
     else:
         dace.Config.set(
             "compiler.cpu.args",
-            value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
+            value="-fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
         )
     if gt_cudaargs := os.environ.get("CUDAFLAGS", None):
         dace.Config.set("compiler.cuda.args", value=gt_cudaargs)
@@ -87,7 +87,7 @@ def set_dace_config(
         )
     dace.Config.set(
         "compiler.cuda.hip_args",
-        value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
+        value="-fPIC -O3 -march=native -Wno-unused-parameter",
     )
 
     # By design, we do not allow converting Memlets to Maps during code generation.
@@ -114,7 +114,7 @@ def set_dace_config(
         dace.Config.set("compiler.cuda.backend", value="cuda")
 
     # Instrumentation of SDFG timers
-    dace.Config.set("instrumentation", "report_each_invocation", value=True)
+    dace.Config.set("instrumentation", "report_each_invocation", value=False)
 
     # we are not interested in storing the history of SDFG transformations.
     dace.Config.set("store_history", value=False)

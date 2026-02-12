@@ -11,7 +11,6 @@ from __future__ import annotations
 import functools
 from typing import Callable, Literal, Optional, cast
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next import common, utils as next_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
@@ -121,7 +120,9 @@ def _is_as_fieldop_of_scan(expr: itir.Expr) -> bool:
 
 
 def _transform_if(
-    stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
+    stmt: itir.Stmt,
+    declarations: list[itir.Temporary],
+    uids: next_utils.IDGeneratorPool,
 ) -> Optional[list[itir.Stmt]]:
     if isinstance(stmt, itir.SetAt) and cpm.is_call_to(stmt.expr, "if_"):
         cond, true_val, false_val = stmt.expr.args
@@ -147,7 +148,7 @@ def _transform_by_pattern(
     stmt: itir.Stmt,
     predicate: Callable[[itir.Expr, int], bool],
     declarations: list[itir.Temporary],
-    uids: eve_utils.UIDGenerator,
+    uids: next_utils.IDGeneratorPool,
 ) -> Optional[list[itir.Stmt]]:
     if not isinstance(stmt, itir.SetAt):
         return None
@@ -158,7 +159,7 @@ def _transform_by_pattern(
     new_expr, extracted_fields, _ = cse.extract_subexpression(
         expr,
         predicate=predicate,
-        uid_generator=eve_utils.UIDGenerator(prefix="__tmp_subexpr"),
+        prefixed_uids=uids["__tmp_subexpr"],
         # TODO(tehrengruber): extracting the deepest expression first would allow us to fuse
         #  the extracted expressions resulting in fewer kernel calls & better data-locality.
         #  Extracting multiple expressions deepest-first is however not supported right now.
@@ -175,7 +176,7 @@ def _transform_by_pattern(
         for tmp_sym, tmp_expr in extracted_fields.items():
             assert isinstance(tmp_expr.type, ts.TypeSpec)
             tmp_names: str | tuple[str | tuple, ...] = type_info.apply_to_primitive_constituents(
-                lambda x: uids.sequential_id(),
+                lambda x: next(uids["__tmp"]),
                 tmp_expr.type,
                 tuple_constructor=lambda *elements: tuple(elements),
             )
@@ -269,7 +270,9 @@ def _transform_by_pattern(
 
 
 def _transform_stmt(
-    stmt: itir.Stmt, declarations: list[itir.Temporary], uids: eve_utils.UIDGenerator
+    stmt: itir.Stmt,
+    declarations: list[itir.Temporary],
+    uids: next_utils.IDGeneratorPool,
 ) -> list[itir.Stmt]:
     unprocessed_stmts: list[itir.Stmt] = [stmt]
     stmts: list[itir.Stmt] = []
@@ -314,7 +317,7 @@ def create_global_tmps(
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
     *,
-    uids: Optional[eve_utils.UIDGenerator] = None,
+    uids: next_utils.IDGeneratorPool,
 ) -> itir.Program:
     """
     Given an `itir.Program` create temporaries for intermediate values.
@@ -337,8 +340,6 @@ def create_global_tmps(
         program, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )
 
-    if not uids:
-        uids = eve_utils.UIDGenerator(prefix="__tmp")
     declarations = program.declarations.copy()
     new_body = []
 

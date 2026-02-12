@@ -19,7 +19,7 @@ from typing import Any, List, Optional, Tuple, Type, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.common import AxisBound as AxisBound, LocNode as LocNode
+from gt4py.cartesian.gtc.common import AxisBound, BaseAxisBound, LocNode, RuntimeAxisBound
 from gt4py.eve import datamodels
 
 
@@ -160,7 +160,9 @@ def _check_interval(instance: Union[Interval, UnboundedInterval]) -> None:
         start is not None
         and end is not None
         and start.level == end.level
-        and not start.offset < end.offset
+        and not isinstance(start, RuntimeAxisBound)
+        and not isinstance(end, RuntimeAxisBound)
+        and not start.offset < end.offset  # type: ignore
     ):
         raise ValueError(
             "Start offset must be smaller than end offset if start and end levels are equal"
@@ -168,8 +170,8 @@ def _check_interval(instance: Union[Interval, UnboundedInterval]) -> None:
 
 
 class Interval(LocNode):
-    start: AxisBound
-    end: AxisBound
+    start: BaseAxisBound
+    end: BaseAxisBound
 
     @datamodels.root_validator
     @classmethod
@@ -177,19 +179,43 @@ class Interval(LocNode):
         _check_interval(instance)
 
     def covers(self, other: Interval) -> bool:
+        if not (
+            isinstance(self.start, AxisBound)
+            and isinstance(self.end, AxisBound)
+            and isinstance(other.start, AxisBound)
+            and isinstance(other.end, AxisBound)
+        ):
+            raise NotImplementedError("Can't determine coverage of runtime intervals")
         outer_starts_lower = self.start < other.start or self.start == other.start
         outer_ends_higher = self.end > other.end or self.end == other.end
         return outer_starts_lower and outer_ends_higher
 
     def intersects(self, other: Interval) -> bool:
+        if not (
+            isinstance(self.start, AxisBound)
+            and isinstance(self.end, AxisBound)
+            and isinstance(other.start, AxisBound)
+            and isinstance(other.end, AxisBound)
+        ):
+            raise NotImplementedError("Can't determine intersection of runtime intervals")
         return not (other.start >= self.end or self.start >= other.end)
 
     def shifted(self, offset: Optional[int]) -> Union[Interval, UnboundedInterval]:
+        if not (isinstance(self.start, AxisBound) and isinstance(self.end, AxisBound)):
+            raise NotImplementedError("Can't shift runtime-intervals")
         if offset is None:
             return UnboundedInterval()
         start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
         end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
         return Interval(start=start, end=end)
+
+    def has_runtime_access(self) -> bool:
+        """Check if the interval contains runtime-accesses.
+
+        Returns:
+            bool: True if there are runtime bounds to the interval.
+        """
+        return isinstance(self.start, RuntimeAxisBound) or isinstance(self.end, RuntimeAxisBound)
 
     @classmethod
     def full(cls):
@@ -206,6 +232,14 @@ class UnboundedInterval:
         _check_interval(instance)
 
     def covers(self, other: Union[Interval, UnboundedInterval]) -> bool:
+        if not (
+            isinstance(self.start, AxisBound)
+            and isinstance(self.end, AxisBound)
+            and isinstance(other.start, AxisBound)
+            and isinstance(other.end, AxisBound)
+        ):
+            raise NotImplementedError("Can't assess if runtime intervals cover each other")
+
         if self.start is None and self.end is None:
             return True
         if (
@@ -231,6 +265,14 @@ class UnboundedInterval:
         return Interval(start=self.start, end=self.end).covers(other)
 
     def intersects(self, other: Union[Interval, UnboundedInterval]) -> bool:
+        if not (
+            isinstance(self.start, AxisBound)
+            and isinstance(self.end, AxisBound)
+            and isinstance(other.start, AxisBound)
+            and isinstance(other.end, AxisBound)
+        ):
+            raise NotImplementedError("Can't assess if runtime intervals intersect")
+
         no_overlap_high = (
             self.end is not None and other.start is not None and other.start >= self.end
         )

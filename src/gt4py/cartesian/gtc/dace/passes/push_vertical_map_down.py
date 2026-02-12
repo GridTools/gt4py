@@ -13,29 +13,30 @@ from gt4py.cartesian.gtc.dace.passes import utils
 
 class PushVerticalMapDown(tn.ScheduleNodeVisitor):
     """
-    Given a schedule tree with K-IJ loops, push the K-loop down into the IJ-loops to
-    achieve a loop structure suitable for a "K-first" memory layout.
+    Given a schedule tree with K-JI loops, push the K-loop down into the JI-loops to
+    achieve a loop structure suitable for a "K-first" memory layout, or a layout
+    where K is the highest value in the layout_map.
 
     Expected input is something like
 
     // vertical loop outside
     for k ...
         // horizontal loop(s) inside
-        for i,j ...
+        for j,i ...
             // computation here (1)
 
-        for i,j ...
+        for j,i ...
             // computation here (2)
 
     Given such a loop structure, this pass will push down the vertical loop into the
     horizontal loops. In the above example, the expected output is
 
     // horizontal loop(s) outside
-    for i,j ...
+    for j,i ...
         for k ...
             // computation here (1)
 
-    for i, j ...
+    for j,i ...
         for k ...
             // computation here (2)
     """

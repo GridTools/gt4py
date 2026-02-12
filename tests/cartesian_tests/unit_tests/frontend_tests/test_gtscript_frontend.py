@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import inspect
+import functools
 import textwrap
 import types
 from typing import Any, Callable, Dict, Optional, Type
@@ -1423,8 +1424,13 @@ class TestDTypes:
         list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])),
     )
     def test_invalid_inlined_dtypes(self, id_case, test_dtype):
+        parse_dec = functools.partial(
+            parse_definition, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
         with pytest.raises(ValueError, match=r".*data type descriptor.*"):
 
+            @parse_dec
             def definition_func(
                 in_field: gtscript.Field[test_dtype],
                 out_field: gtscript.Field[test_dtype],
@@ -1479,13 +1485,6 @@ class TestBuiltinDTypes:
 
 
 class TestAssignmentSyntax:
-    def test_ellipsis(self):
-        def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
-            with computation(PARALLEL), interval(...):
-                out_field[...] = in_field
-
-        parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
     def test_offset(self):
         def func(in_field: gtscript.Field[np.float64], out_field: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):

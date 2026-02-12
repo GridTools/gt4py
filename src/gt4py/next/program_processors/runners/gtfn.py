@@ -15,8 +15,9 @@ import numpy as np
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py._core import filecache
-from gt4py.next import backend, common, config, field_utils, metrics
+from gt4py.next import backend, common, config, field_utils
 from gt4py.next.embedded import nd_array_field
+from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -43,8 +44,8 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
-) -> stages.CompiledProgram:
+    inp: stages.ExecutableProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+) -> stages.ExecutableProgram:
     def decorated_program(
         *args: Any,
         offset_provider: dict[str, common.Connectivity | common.Dimension],
@@ -57,7 +58,7 @@ def convert_args(
         conn_args = extract_connectivity_args(offset_provider, device)
 
         opt_kwargs: dict[str, Any] = {}
-        if collect_metrics := (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE):
+        if collect_metrics := metrics.is_level_enabled(metrics.PERFORMANCE):
             # If we are collecting metrics, we need to add the `exec_info` argument
             # to the `inp` call, which will be used to collect performance metrics.
             exec_info: dict[str, float] = {}
@@ -71,8 +72,8 @@ def convert_args(
         )
 
         if collect_metrics:
-            metrics.get_current_source().metrics[metrics.COMPUTE_METRIC].add_sample(
-                exec_info["run_cpp_duration"]
+            metrics.add_sample_to_current_source(
+                metrics.COMPUTE_METRIC, exec_info["run_cpp_duration"]
             )
 
     return decorated_program
@@ -135,7 +136,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
 
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
         nanobind.bind_source
     )
     compilation = factory.SubFactory(

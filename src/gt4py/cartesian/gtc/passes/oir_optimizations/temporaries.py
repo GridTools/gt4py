@@ -16,6 +16,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
     collect_symbol_names,
     symbol_name_creator,
 )
+from gt4py.eve.utils import XIterable
 
 
 class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
@@ -24,9 +25,11 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
         offsets = node.offset.to_dict()
         if node.name in tmps_name_map:
-            assert offsets["i"] == offsets["j"] == offsets["k"] == 0, (
-                "Non-zero offset in temporary that is replaced?!"
-            )
+            if offsets["i"] != 0 or offsets["j"] != 0 or offsets["k"] != 0:
+                raise ValueError(
+                    "No offset write capabilities of temporaries. Must "
+                    f"define '{node.name}' as FloatField, FloatFieldIJ, etc."
+                )
             return oir.ScalarAccess(name=tmps_name_map[node.name], dtype=node.dtype)
         return self.generic_visit(node, tmps_name_map=tmps_name_map, **kwargs)
 
@@ -52,7 +55,9 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
             declarations=node.declarations
             + [
                 oir.LocalScalar(
-                    name=tmps_name_map[tmp], dtype=symtable[tmp].dtype, loc=symtable[tmp].loc
+                    name=tmps_name_map[tmp],
+                    dtype=symtable[tmp].dtype,
+                    loc=symtable[tmp].loc,
                 )
                 for tmp in local_tmps_to_replace
             ],
@@ -69,6 +74,10 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
             loc=node.loc,
         )
 
+    def visit_Interval(self, interval: oir.Interval, **_: Any) -> oir.Interval:
+        # We don't want to scalarize temporaries inside runtime intervals, so just return here.
+        return interval
+
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         tmps_to_replace = kwargs["tmps_to_replace"]
         all_names = collect_symbol_names(node)
@@ -76,7 +85,9 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
             name=node.name,
             params=node.params,
             vertical_loops=self.visit(
-                node.vertical_loops, new_symbol_name=symbol_name_creator(all_names), **kwargs
+                node.vertical_loops,
+                new_symbol_name=symbol_name_creator(all_names),
+                **kwargs,
             ),
             declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
             loc=node.loc,
@@ -100,6 +111,12 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
         temps_without_data_dims = set(
             [decl.name for decl in node.declarations if not decl.data_dims]
         )
+        intervals = node.walk_values().if_isinstance(oir.Interval)
+        interval_temporaries = set()
+        for interval in intervals:
+            interval_temporaries.update(
+                interval.walk_values().if_isinstance(oir.FieldAccess).getattr("name").to_set()
+            )
         counts: collections.Counter = sum(
             (
                 collections.Counter(
@@ -107,6 +124,7 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
                     .if_isinstance(oir.FieldAccess)
                     .getattr("name")
                     .if_in(temps_without_data_dims)
+                    .if_not_in(interval_temporaries)
                     .to_set()
                 )
                 for horizontal_execution in horizontal_executions
@@ -126,11 +144,20 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        # Can't scalarize temporaries that are used in interval-bounds
+        intervals: XIterable[oir.Interval] = node.walk_values().if_isinstance(oir.Interval)
+        interval_temporaries = set()
+        for interval in intervals:
+            interval_temporaries.update(
+                interval.walk_values().if_isinstance(oir.FieldAccess).getattr("name").to_set()
+            )
         # Does not (yet) support scalarizing temporaries with data_dims
         write_before_read_tmps = {
             symbol
             for symbol, value in kwargs["symtable"].items()
-            if isinstance(value, oir.Temporary) and not value.data_dims
+            if isinstance(value, oir.Temporary)
+            and not value.data_dims
+            and symbol not in interval_temporaries
         }
         horizontal_executions = node.walk_values().if_isinstance(oir.HorizontalExecution)
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Sequence
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
@@ -26,12 +26,12 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.program_processors.runners.dace import (
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
     gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
-    utils as gtx_dace_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -46,7 +46,7 @@ def _translate_concat_where_branch(
     output_domain: domain_utils.SymbolicDomain,
     output_type: ts.FieldType,
     output_desc: dace.data.Array,
-    output_node: dace.nodes.AccessNode,
+    output_node: dace_nodes.AccessNode,
     output_origin: Sequence[dace.symbolic.SymbolicType],
 ) -> None:
     """
@@ -243,7 +243,7 @@ def translate_concat_where(
     assert output_dims == node.type.dims
 
     if isinstance(node.type.dtype, ts.ScalarType):
-        dtype = gtx_dace_utils.as_dace_type(node.type.dtype)
+        dtype = gtx_dace_args.as_dace_type(node.type.dtype)
     else:
         # TODO(edopao): Refactor allocation of fields with local dimension and enable this.
         raise NotImplementedError("'concat_where' with list output is not supported")

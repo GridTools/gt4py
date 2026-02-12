@@ -9,13 +9,13 @@
 import pytest
 import textwrap
 
-from gt4py.eve.utils import UIDGenerator
-from gt4py.next import common
+from gt4py.eve.utils import SequentialIDGenerator
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.transforms.cse import (
-    CommonSubexpressionElimination as CSE,
+    CommonSubexpressionElimination,
     extract_subexpression,
 )
 
@@ -41,43 +41,43 @@ def opaque_fun(request):
     )
 
 
-def test_trivial():
+def test_trivial(uids: utils.IDGeneratorPool):
     common = im.plus("x", "y")
     testee = im.plus(common, common)
-    expected = im.let("_cs_1", common)(im.plus("_cs_1", "_cs_1"))
-    actual = CSE.apply(testee, within_stencil=True)
+    expected = im.let("_cs_0", common)(im.plus("_cs_0", "_cs_0"))
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_capture():
+def test_lambda_capture(uids: utils.IDGeneratorPool):
     common = ir.FunCall(fun=ir.SymRef(id="plus"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")])
     testee = ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id="x")], expr=common), args=[common])
     expected = testee
-    actual = CSE.apply(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_no_capture():
+def test_lambda_no_capture(uids: utils.IDGeneratorPool):
     common = im.plus("x", "y")
     testee = im.call(im.lambda_("z")(im.plus("x", "y")))(im.plus("x", "y"))
-    expected = im.let("_cs_1", common)("_cs_1")
-    actual = CSE.apply(testee, within_stencil=True)
+    expected = im.let("_cs_0", common)("_cs_0")
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_nested_capture():
+def test_lambda_nested_capture(uids: utils.IDGeneratorPool):
     def common_expr():
         return im.plus("x", "y")
 
     # (λ(x, y) → x + y)(x + y, x + y)
     testee = im.call(im.lambda_("x", "y")(common_expr()))(common_expr(), common_expr())
     # (λ(_cs_1) → _cs_1 + _cs_1)(x + y)
-    expected = im.let("_cs_1", common_expr())(im.plus("_cs_1", "_cs_1"))
-    actual = CSE.apply(testee, within_stencil=True)
+    expected = im.let("_cs_0", common_expr())(im.plus("_cs_0", "_cs_0"))
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_nested_capture_scoped():
+def test_lambda_nested_capture_scoped(uids: utils.IDGeneratorPool):
     def common_expr():
         return im.plus("x", "x")
 
@@ -85,13 +85,13 @@ def test_lambda_nested_capture_scoped():
     testee = im.lambda_("x")(im.let("y", "z")(im.plus("y", im.plus(common_expr(), common_expr()))))
     # λ(x) → (λ(_cs_1) → z + (_cs_1 + _cs_1))(x + x)
     expected = im.lambda_("x")(
-        im.let("_cs_1", common_expr())(im.plus("z", im.plus("_cs_1", "_cs_1")))
+        im.let("_cs_0", common_expr())(im.plus("z", im.plus("_cs_0", "_cs_0")))
     )
-    actual = CSE.apply(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_redef():
+def test_lambda_redef(uids: utils.IDGeneratorPool):
     def common_expr():
         return im.lambda_("a")(im.plus("a", 1))
 
@@ -100,12 +100,12 @@ def test_lambda_redef():
         im.let("f2", common_expr())(im.plus(im.call("f1")(2), im.call("f2")(3)))
     )
     # (λ(_cs_1) → _cs_1(2) + _cs_1(3))(λ(a) → a + 1)
-    expected = im.let("_cs_1", common_expr())(im.plus(im.call("_cs_1")(2), im.call("_cs_1")(3)))
-    actual = CSE.apply(testee, within_stencil=True)
+    expected = im.let("_cs_0", common_expr())(im.plus(im.call("_cs_0")(2), im.call("_cs_0")(3)))
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_redef_same_arg():
+def test_lambda_redef_same_arg(uids: utils.IDGeneratorPool):
     def common_expr():
         return im.lambda_("a")(im.plus("a", 1))
 
@@ -114,14 +114,14 @@ def test_lambda_redef_same_arg():
         im.let("f2", common_expr())(im.plus(im.call("f1")(2), im.call("f2")(2)))
     )
     # (λ(_cs_1) → (λ(_cs_2) → _cs_2 + _cs_2)(_cs_1(2)))(λ(a) → a + 1)
-    expected = im.let("_cs_1", common_expr())(
-        im.let("_cs_2", im.call("_cs_1")(2))(im.plus("_cs_2", "_cs_2"))
+    expected = im.let("_cs_0", common_expr())(
+        im.let("_cs_1", im.call("_cs_0")(2))(im.plus("_cs_1", "_cs_1"))
     )
-    actual = CSE.apply(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_lambda_redef_same_arg_scope():
+def test_lambda_redef_same_arg_scope(uids: utils.IDGeneratorPool):
     pytest.xfail(
         reason="Not implemented. The CSE pass may not extract from a lambda function"
         "unless it knows the function is unconditionally evaluated. For this"
@@ -140,18 +140,18 @@ def test_lambda_redef_same_arg_scope():
     )
     # (λ(_cs_3) → (λ(_cs_1) → (λ(_cs_4) → _cs_4 + _cs_4 + (_cs_3 + _cs_3))(_cs_1(2)))(
     #   λ(a) → a + _cs_3))(1 + 1)
-    expected = im.let("_cs_3", im.plus(1, 1))(
-        im.let("_cs_1", im.lambda_("a")(im.plus("a", "_cs_3")))(
-            im.let("_cs_4", im.call("_cs_1")(2))(
-                im.plus(im.plus("_cs_4", "_cs_4"), im.plus("_cs_3", "_cs_3"))
+    expected = im.let("_cs_2", im.plus(1, 1))(
+        im.let("_cs_0", im.lambda_("a")(im.plus("a", "_cs_2")))(
+            im.let("_cs_3", im.call("_cs_0")(2))(
+                im.plus(im.plus("_cs_3", "_cs_3"), im.plus("_cs_2", "_cs_2"))
             )
         )
     )
-    actual = CSE.apply(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_if_can_deref_no_extraction(offset_provider_type):
+def test_if_can_deref_no_extraction(offset_provider_type, uids: utils.IDGeneratorPool):
     # Test that a subexpression only occurring in one branch of an `if_` is not moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -163,19 +163,21 @@ def test_if_can_deref_no_extraction(offset_provider_type):
         im.literal("1", "int32"),
     )
     # (λ(_cs_1) → if can_deref(_cs_1) then (λ(_cs_2) → _cs_2 + _cs_2)(·_cs_1) else 1)(⟪Iₒ, 1ₒ⟫(it))
-    expected = im.let("_cs_1", im.shift("I", 1)("it"))(
+    expected = im.let("_cs_0", im.shift("I", 1)("it"))(
         im.if_(
-            im.can_deref("_cs_1"),
-            im.let("_cs_2", im.deref("_cs_1"))(im.plus("_cs_2", "_cs_2")),
+            im.can_deref("_cs_0"),
+            im.let("_cs_1", im.deref("_cs_0"))(im.plus("_cs_1", "_cs_1")),
             im.literal("1", "int32"),
         )
     )
 
-    actual = CSE.apply(testee, offset_provider_type=offset_provider_type, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(
+        testee, offset_provider_type=offset_provider_type, within_stencil=True, uids=uids
+    )
     assert actual == expected
 
 
-def test_if_can_deref_eligible_extraction(offset_provider_type):
+def test_if_can_deref_eligible_extraction(offset_provider_type, uids: utils.IDGeneratorPool):
     # Test that a subexpression only occurring in both branches of an `if_` is moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -186,26 +188,30 @@ def test_if_can_deref_eligible_extraction(offset_provider_type):
         im.plus(im.deref(im.shift("I", 1)("it")), im.deref(im.shift("I", 1)("it"))),
     )
     # (λ(_cs_3) → (λ(_cs_1) → if can_deref(_cs_3) then _cs_1 else _cs_1 + _cs_1)(·_cs_3))(⟪Iₒ, 1ₒ⟫(it))
-    expected = im.let("_cs_3", im.shift("I", 1)("it"))(
-        im.let("_cs_1", im.deref("_cs_3"))(
-            im.if_(im.can_deref("_cs_3"), "_cs_1", im.plus("_cs_1", "_cs_1"))
+    expected = im.let("_cs_2", im.shift("I", 1)("it"))(
+        im.let("_cs_0", im.deref("_cs_2"))(
+            im.if_(im.can_deref("_cs_2"), "_cs_0", im.plus("_cs_0", "_cs_0"))
         )
     )
 
-    actual = CSE.apply(testee, offset_provider_type=offset_provider_type, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(
+        testee, offset_provider_type=offset_provider_type, within_stencil=True, uids=uids
+    )
     assert actual == expected
 
 
-def test_if_eligible_extraction(offset_provider_type):
+def test_if_eligible_extraction(offset_provider_type, uids: utils.IDGeneratorPool):
     # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
     # if statement.
 
     # if ((a ∧ b) ∧ (a ∧ b)) then c else d
     testee = im.if_(im.and_(im.and_("a", "b"), im.and_("a", "b")), "c", "d")
     # (λ(_cs_1) → if _cs_1 ∧ _cs_1 then c else d)(a ∧ b)
-    expected = im.let("_cs_1", im.and_("a", "b"))(im.if_(im.and_("_cs_1", "_cs_1"), "c", "d"))
+    expected = im.let("_cs_0", im.and_("a", "b"))(im.if_(im.and_("_cs_0", "_cs_0"), "c", "d"))
 
-    actual = CSE.apply(testee, offset_provider_type=offset_provider_type, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(
+        testee, offset_provider_type=offset_provider_type, within_stencil=True, uids=uids
+    )
     assert actual == expected
 
 
@@ -228,12 +234,12 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
         b = 2
         c = a + b
         d = 3
-        _let_result_1 = c + d
-        return _let_result_1 + 4
+        _let_result_0 = c + d
+        return _let_result_0 + 4
     """
     ).strip()
 
-    uid_gen = UIDGenerator(prefix="_let_result")
+    uid_gen = SequentialIDGenerator(prefix="_let_result")
 
     def convert_to_assignment_stmt_form(node: ir.Expr) -> tuple[list[tuple[str, ir.Expr]], ir.Expr]:
         assignment_stmts: list[tuple[str, ir.Expr]] = []
@@ -268,7 +274,7 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
     assert actual == expected
 
 
-def test_no_extraction_outside_asfieldop():
+def test_no_extraction_outside_asfieldop(uids: utils.IDGeneratorPool):
     plus_fieldop = im.as_fieldop(
         im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))), im.call("cartesian_domain")()
     )
@@ -282,11 +288,11 @@ def test_no_extraction_outside_asfieldop():
         identity_fieldop(im.ref("a", field_type)), identity_fieldop(im.ref("b", field_type))
     )
 
-    actual = CSE.apply(testee, within_stencil=False)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=False, uids=uids)
     assert actual == testee
 
 
-def test_field_extraction_outside_asfieldop():
+def test_field_extraction_outside_asfieldop(uids: utils.IDGeneratorPool):
     plus_fieldop = im.as_fieldop(
         im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref("y"))), im.call("cartesian_domain")()
     )
@@ -301,50 +307,52 @@ def test_field_extraction_outside_asfieldop():
     # (λ(_cs_1) → as_fieldop(λ(x, y) → ·x + ·y, cartesian_domain())(_cs_1, _cs_1))(
     #   as_fieldop(λ(x) → ·x, cartesian_domain())(a)
     # )
-    expected = im.let("_cs_1", identity_fieldop(field))(plus_fieldop("_cs_1", "_cs_1"))
+    expected = im.let("_cs_0", identity_fieldop(field))(plus_fieldop("_cs_0", "_cs_0"))
 
-    actual = CSE.apply(testee, within_stencil=False)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=False, uids=uids)
     assert actual == expected
 
 
-def test_scalar_extraction_inside_as_fieldop():
+def test_scalar_extraction_inside_as_fieldop(uids: utils.IDGeneratorPool):
     common_expr = im.plus(1, 2)
 
     testee = im.as_fieldop(
         im.lambda_()(im.plus(common_expr, common_expr)), im.domain(common.GridType.CARTESIAN, {})
     )()
     expected = im.as_fieldop(
-        im.lambda_()(im.let("_cs_1", common_expr)(im.plus("_cs_1", "_cs_1"))),
+        im.lambda_()(im.let("_cs_0", common_expr)(im.plus("_cs_0", "_cs_0"))),
         im.domain(common.GridType.CARTESIAN, {}),
     )()
 
-    actual = CSE.apply(testee, within_stencil=False)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=False, uids=uids)
     assert actual == expected
 
 
-def test_no_extraction_from_unapplied_lambda():
+def test_no_extraction_from_unapplied_lambda(uids: utils.IDGeneratorPool):
     testee = im.if_(
         "cond",
         im.let("f", im.lambda_()(im.deref("guarded_it")))(im.if_("cond2", im.call("f")(), 0)),
         im.deref("guarded_it"),
     )
 
-    actual = CSE.apply(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == testee  # no extraction should happen
 
 
-def test_extraction_from_let_form():
+def test_extraction_from_let_form(uids: utils.IDGeneratorPool):
     common = im.plus(1, 2)
     testee = im.plus(im.let("a", 1)(im.plus("a", common)), im.let("b", 2)(im.plus("b", common)))
-    expected = im.let("_cs_1", common)(
-        im.plus(im.let("a", 1)(im.plus("a", "_cs_1")), im.let("b", 2)(im.plus("b", "_cs_1")))
+    expected = im.let("_cs_0", common)(
+        im.plus(im.let("a", 1)(im.plus("a", "_cs_0")), im.let("b", 2)(im.plus("b", "_cs_0")))
     )
+    # note: inner occurrences of "_cs_0" are intentionally left as the extracted name;
+    # the outer let name was shifted to _cs_0 above and the extraction logic produces consistent names.
 
-    actual = CSE.apply(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected
 
 
-def test_sym_ref_collection_from_lambda(opaque_fun):
+def test_sym_ref_collection_from_lambda(opaque_fun, uids: utils.IDGeneratorPool):
     # This is more a regression than a unit test. When `f` & `g` are collected, we don't want to
     # collect subexpression from their body (as the pass does not recognize them to be evaluated),
     # but still need to respect that `val` is used inside. Hence, when extracting `f` and `g,` the
@@ -355,8 +363,8 @@ def test_sym_ref_collection_from_lambda(opaque_fun):
         )
     )
     expected = im.let("val", 1)(
-        im.let("_cs_1", im.lambda_()("val"))(im.call(opaque_fun)("_cs_1", "_cs_1"))
+        im.let("_cs_0", im.lambda_()("val"))(im.call(opaque_fun)("_cs_0", "_cs_0"))
     )
 
-    actual = CSE.apply(testee, within_stencil=True)
+    actual = CommonSubexpressionElimination.apply(testee, within_stencil=True, uids=uids)
     assert actual == expected  # no extraction should happen

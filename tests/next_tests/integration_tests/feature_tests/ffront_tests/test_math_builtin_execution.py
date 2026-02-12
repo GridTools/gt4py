@@ -21,6 +21,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next import backend as next_backend
+from gt4py.next.otf import options
 from gt4py.next.type_system import type_translation
 
 from next_tests.integration_tests import cases
@@ -107,11 +108,12 @@ def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backen
 
     return decorator.FieldOperatorFromFoast(
         definition_stage=None,
-        foast_stage=ffront_stages.FoastOperatorDefinition(
+        foast_stage=ffront_stages.FOASTOperatorDef(
             foast_node=typed_foast_node,
             closure_vars=closure_vars,
             grid_type=None,
         ),
+        compilation_options=options.CompilationOptions(),
         backend=backend,
     )
 
@@ -133,6 +135,6 @@ def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inp
 
     builtin_field_op = make_builtin_field_operator(builtin_name, cartesian_case.backend)
 
-    builtin_field_op(*inps, out=out, offset_provider={})
+    builtin_field_op(*inps, out, offset_provider={})
 
     assert np.allclose(out.asnumpy(), expected)

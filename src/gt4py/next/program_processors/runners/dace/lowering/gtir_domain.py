@@ -19,7 +19,7 @@ from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
-from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils
+from gt4py.next.program_processors.runners.dace.lowering import gtir_to_sdfg_utils
 
 
 @dataclasses.dataclass(frozen=True)
@@ -84,30 +84,32 @@ def extract_target_domain(node: gtir.Expr) -> TargetDomain:
     return TargetDomainParser().visit(node)
 
 
-def get_domain_indices(
+def get_element_subset(
     dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]]
-) -> dace_subsets.Indices:
+) -> dace_subsets.Range:
     """
-    Helper function to construct the list of indices for a field domain, applying
-    an optional origin in each dimension as start index.
+    Helper function to construct the Memlet subset to access an element in the field
+    domain, applying an optional origin in each dimension as start index.
 
     Args:
         dims: The field dimensions.
         origin: The domain start index in each dimension. If set to `None`, assume all zeros.
 
     Returns:
-        A list of indices for field access in dace arrays. As this list is returned
-        as `dace.subsets.Indices`, it should be converted to `dace.subsets.Range` before
-        being used in memlet subset because ranges are better supported throughout DaCe.
+        Range containing the indices for field access in dace arrays. Although it is a
+        `dace.subsets.Range` object, it only encodes a single value, thus only the
+        lower bound has any significance.
     """
+    # TODO(phimuell, edopao): Think about if this function should return `list[SymExpr]`.
     assert len(dims) != 0
     index_variables = [
         dace.symbolic.pystr_to_symbolic(gtir_to_sdfg_utils.get_map_variable(dim)) for dim in dims
     ]
     origin = [0] * len(index_variables) if origin is None else origin
-    return dace_subsets.Indices(
-        [index - start_index for index, start_index in zip(index_variables, origin, strict=True)]
-    )
+    start_values = [
+        index - start_index for index, start_index in zip(index_variables, origin, strict=True)
+    ]
+    return dace_subsets.Range([(s, s, 1) for s in start_values])
 
 
 def get_field_layout(

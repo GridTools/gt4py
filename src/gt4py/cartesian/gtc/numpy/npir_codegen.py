@@ -109,6 +109,9 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     VarKOffset = as_fmt("lk + {k}")
 
+    def visit_KMaskFieldAccess(self, node: npir.KMaskFieldAccess, **kwargs: Any) -> str:
+        return "k_mask[i:I, j:J, k:K]"
+
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
         k_offset = (
             self.visit(node.k_offset, **kwargs)
@@ -340,6 +343,8 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 # --- begin domain boundary shortcuts ---
                 _di_, _dj_, _dk_ = 0, 0, 0
                 _dI_, _dJ_, _dK_ = _domain_
+                k_mask = np.empty(_domain_, dtype=int)
+                k_mask[:, :] = np.arange(_dK_, dtype=int)
                 # --- end domain padding ---
 
                 {% for decl in api_field_decls %}{{ decl | indent(4) }}

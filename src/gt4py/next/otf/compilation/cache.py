@@ -50,7 +50,7 @@ def _cache_folder_name(source: stages.ProgramSource) -> str:
 
 
 def get_cache_folder(
-    compilable_source: stages.CompilableSource, lifetime: config.BuildCacheLifetime
+    compilable_source: stages.CompilableProject, lifetime: config.BuildCacheLifetime
 ) -> pathlib.Path:
     """
     Construct the path to where the build system project artifact of a compilable source should be cached.

@@ -25,7 +25,7 @@ def _make_double_write_single_consumer(
 ) -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode, dace_nodes.MapExit
 ]:
-    sdfg = dace.SDFG(util.unique_name("double_write_elimination_1"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("double_write_elimination_1"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -148,7 +148,7 @@ def _make_double_write_multi_consumer(
     dace_nodes.AccessNode,
     dace_nodes.MapExit,
 ]:
-    sdfg = dace.SDFG(util.unique_name("double_write_elimination_2"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("double_write_elimination_2"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -255,7 +255,9 @@ def _make_double_write_multi_producer_map(
 ) -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode, dace_nodes.MapExit
 ]:
-    sdfg = dace.SDFG(util.unique_name("double_write_elimination_multi_producer_map"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("double_write_elimination_multi_producer_map")
+    )
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(

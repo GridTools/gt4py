@@ -11,11 +11,11 @@ from collections.abc import Iterable, Iterator
 from typing import TypeGuard
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.eve.utils import UIDGenerator
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+from gt4py.next.type_system import type_specifications as ts
 
 
 def _is_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
@@ -40,26 +40,14 @@ def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCa
     return filter(_is_neighbors_or_lifted_and_neighbors, flat_reduce_args)
 
 
-def _is_list_of_funcalls(lst: list) -> TypeGuard[list[itir.FunCall]]:
-    return all(isinstance(f, itir.FunCall) for f in lst)
-
-
-def _get_partial_offset_tag(arg: itir.FunCall) -> str:
-    if _is_neighbors(arg):
-        offset = arg.args[0]
-        assert isinstance(offset, itir.OffsetLiteral)
-        assert isinstance(offset.value, str)
-        return offset.value
-    else:
-        assert is_applied_lift(arg)
-        assert _is_list_of_funcalls(arg.args)
-        partial_offsets = [_get_partial_offset_tag(arg) for arg in arg.args]
-        assert all(o == partial_offsets[0] for o in partial_offsets)
-        return partial_offsets[0]
-
-
 def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
-    return [_get_partial_offset_tag(arg) for arg in _get_neighbors_args(reduce_args)]
+    assert all(isinstance(arg.type, ts.ListType) for arg in reduce_args)
+
+    return [
+        arg.type.offset_type.value  # type: ignore[union-attr] # checked in previous lines
+        for arg in reduce_args
+        if arg.type.offset_type is not None  # type: ignore[union-attr] # checked in previous lines
+    ]
 
 
 def _get_connectivity(
@@ -77,7 +65,9 @@ def _get_connectivity(
         connectivities.append(conn)
 
     if not connectivities:
-        raise RuntimeError("Couldn't detect partial shift in any arguments of 'reduce'.")
+        raise RuntimeError(
+            "Couldn't deduce 'offset_type' in any arguments of 'reduce'. Did you reduce over `make_const_list`s only?"
+        )
 
     if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
         # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
@@ -89,11 +79,16 @@ def _get_connectivity(
 class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     @classmethod
-    def apply(cls, node: itir.Node, offset_provider_type: common.OffsetProviderType) -> itir.Node:
-        return cls().visit(node, offset_provider_type=offset_provider_type)
+    def apply(
+        cls,
+        node: itir.Node,
+        offset_provider_type: common.OffsetProviderType,
+        uids: utils.IDGeneratorPool,
+    ) -> itir.Node:
+        return cls(uids=uids).visit(node, offset_provider_type=offset_provider_type)
 
     def _visit_reduce(
         self, node: itir.FunCall, offset_provider_type: common.OffsetProviderType
@@ -102,9 +97,9 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
         max_neighbors = connectivity_type.max_neighbors
         has_skip_values = connectivity_type.has_skip_values
 
-        acc: str = self.uids.sequential_id(prefix="_acc")
-        offset: str = self.uids.sequential_id(prefix="_i")
-        step: str = self.uids.sequential_id(prefix="_step")
+        acc: str = next(self.uids["_acc"])
+        offset: str = next(self.uids["_i"])
+        step: str = next(self.uids["_step"])
 
         assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args

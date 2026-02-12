@@ -243,6 +243,7 @@ def gt_gpu_transform_non_standard_memlet(
     if len(maps_to_modify) == 0:
         return sdfg
 
+    # NOTE: This inherently assumes a particular memory order, see `gt_change_strides()`.
     for me_to_modify in maps_to_modify:
         map_to_modify: dace_nodes.Map = me_to_modify.map
         map_to_modify.params = list(reversed(map_to_modify.params))
@@ -598,7 +599,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         dtype=int,
         allow_none=True,
         default=None,
-        desc="Set the maxnreg property for the GPU maps.",
+        desc="Set the maxnreg property for the GPU maps. Takes precedence over any launch_bounds.",
     )
 
     # Pattern matching
@@ -824,10 +825,7 @@ def gt_remove_trivial_gpu_maps(
                 return False
             if _map.range[0][0] != _map.range[0][1]:
                 return False
-            if _map.schedule not in [
-                dace.dtypes.ScheduleType.GPU_Device,
-                dace.dtypes.ScheduleType.GPU_Default,
-            ]:
+            if _map.schedule != dace.dtypes.ScheduleType.GPU_Device:
                 return False
         return True
 
@@ -958,10 +956,7 @@ class TrivialGPUMapElimination(dace_transformation.SingleStateTransformation):
         # Check if only GPU maps are involved (this is more a testing debug feature).
         if self.only_gpu_maps:
             for map_to_check in [trivial_map, second_map]:
-                if map_to_check.schedule not in [
-                    dace.dtypes.ScheduleType.GPU_Device,
-                    dace.dtypes.ScheduleType.GPU_Default,
-                ]:
+                if map_to_check.schedule != dace.dtypes.ScheduleType.GPU_Device:
                     return False
 
         # Now we check if the two maps can be fused together. For that we have to

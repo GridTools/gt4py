@@ -11,9 +11,8 @@ import dataclasses
 from typing import Any, Callable, Optional
 
 from gt4py import eve
-from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Never, cast
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental as experimental_builtins,
@@ -25,7 +24,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes import utils as foast_utils
-from gt4py.next.ffront.stages import AOT_FOP, FOP
+from gt4py.next.ffront.stages import ConcreteFOASTOperatorDef, FOASTOperatorDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
@@ -33,7 +32,7 @@ from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 
-def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.FunctionDefinition:
+def foast_to_gtir(inp: ffront_stages.FOASTOperatorDef) -> itir.FunctionDefinition:
     """
     Lower a FOAST field operator node to GTIR.
 
@@ -42,7 +41,9 @@ def foast_to_gtir(inp: ffront_stages.FoastOperatorDefinition) -> itir.FunctionDe
     return FieldOperatorLowering.apply(inp.foast_node)
 
 
-def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.FunctionDefinition]:
+def foast_to_gtir_factory(
+    cached: bool = True,
+) -> workflow.Workflow[FOASTOperatorDef, itir.FunctionDefinition]:
     """Wrap `foast_to_gtir` into a chainable and, optionally, cached workflow step."""
     wf = foast_to_gtir
     if cached:
@@ -52,7 +53,7 @@ def foast_to_gtir_factory(cached: bool = True) -> workflow.Workflow[FOP, itir.Fu
 
 def adapted_foast_to_gtir_factory(
     **kwargs: Any,
-) -> workflow.Workflow[AOT_FOP, itir.FunctionDefinition]:
+) -> workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]:
     """Wrap the `foast_to_gtir` workflow step into an adapter to fit into backend transform workflows."""
     return toolchain.StripArgsAdapter(foast_to_gtir_factory(**kwargs))
 
@@ -92,9 +93,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     [Sym(id=SymbolName('inp'))]
     """
 
-    uid_generator: eve_utils.UIDGenerator = dataclasses.field(
-        default_factory=eve_utils.UIDGenerator
-    )
+    uid_generator: utils.IDGeneratorPool = dataclasses.field(default_factory=utils.IDGeneratorPool)
 
     @classmethod
     def apply(cls, node: foast.LocatedNode) -> itir.FunctionDefinition:
@@ -200,7 +199,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
             # wrap the inner expression in a lambda function. note that this increases the
             # operation count if both branches are evaluated.
-            inner_expr_name = self.uid_generator.sequential_id(prefix="__inner_expr")
+            inner_expr_name = next(self.uid_generator["__inner_expr"])
             inner_expr_evaluator = im.lambda_(*common_syms)(inner_expr)
             inner_expr = im.call(inner_expr_name)(*common_symrefs)
 
@@ -413,7 +412,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return self._lower_and_map("if_", *node.args)
 
         cond_ = self.visit(node.args[0])
-        cond_symref_name = f"__cond_{eve_utils.content_hash(cond_)}"
+        cond_symref_name = f"__cond_{cond_.fingerprint()}"
 
         def create_if(
             true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]

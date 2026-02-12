@@ -118,6 +118,10 @@ class VarKOffset(common.VariableKOffset[Expr]):
     pass
 
 
+class KMaskFieldAccess(Expr):
+    dtype = common.DataType.INT64
+
+
 class FieldSlice(VectorLValue):
     name: eve.Coerced[eve.SymbolRef]
     i_offset: int

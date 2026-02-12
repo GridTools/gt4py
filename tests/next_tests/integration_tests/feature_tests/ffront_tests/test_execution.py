@@ -470,6 +470,32 @@ def test_scalar_scan_vertical_offset(cartesian_case):
     cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
 
 
+@pytest.mark.uses_scan
+def test_scan_unused_parameter(cartesian_case):
+    @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
+    def testee_scan(state: float, inp: float, unused: float) -> float:
+        return state + inp
+
+    @gtx.field_operator
+    def testee(
+        inp: gtx.Field[[KDim], float], unused: gtx.Field[[KDim], float]
+    ) -> gtx.Field[[KDim], float]:
+        return testee_scan(inp, unused)
+
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    unused = cases.allocate(cartesian_case, testee, "unused")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN).zeros()()
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        inp,
+        unused,
+        out=out,
+        ref=np.cumsum(inp.asnumpy(), axis=0),
+    )
+
+
 def test_single_value_field(cartesian_case):
     @gtx.field_operator
     def testee_fo(a: cases.IKField) -> cases.IKField:

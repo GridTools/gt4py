@@ -15,6 +15,7 @@ from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sdutils
+from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
@@ -122,6 +123,8 @@ def gt_auto_optimize(
     blocking_only_if_independent_nodes: bool = True,
     promote_independent_memlets_for_blocking: bool = False,
     blocking_independent_node_threshold: Optional[int] = None,
+    scan_loop_unrolling: bool = False,
+    scan_loop_unrolling_factor: int = 0,
     disable_splitting: bool = False,
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
@@ -131,6 +134,7 @@ def gt_auto_optimize(
     assume_pointwise: bool = True,
     optimization_hooks: Optional[dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun]] = None,
     demote_fields: Optional[list[str]] = None,
+    fuse_tasklets: bool = False,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -182,6 +186,8 @@ def gt_auto_optimize(
         blocking_only_if_independent_nodes: If `True`, the default, only apply loop
             blocking if there are independent nodes in the Map, see the
             `require_independent_nodes` option of the `LoopBlocking` transformation.
+        scan_loop_unrolling: Whether to unroll scan loops.
+        scan_loop_unrolling_factor: The unroll factor to use when unrolling scan loops.
         disable_splitting: Disable the splitting transformations.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
@@ -196,6 +202,7 @@ def gt_auto_optimize(
             see `GT4PyAutoOptHook` for more information.
         demote_fields: Consider these fields as transients for the purpose of optimization.
             Use at your own risk. See Notes for all implications.
+        fuse_tasklets: Reduces the number of Tasklets by fusing them.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -323,6 +330,9 @@ def gt_auto_optimize(
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
             promote_independent_memlets_for_blocking=promote_independent_memlets_for_blocking,
             blocking_independent_node_threshold=blocking_independent_node_threshold,
+            scan_loop_unrolling=scan_loop_unrolling,
+            scan_loop_unrolling_factor=scan_loop_unrolling_factor,
+            fuse_tasklets=fuse_tasklets,
             validate_all=validate_all,
         )
 
@@ -487,6 +497,12 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
+        # NOTE: There is a Memlet caching issue at work here, see DaCe issue 1703 and
+        #   1708. Without clearing the cache, which is done through a side effect of
+        #   `to_json()`, running `propagate_memlets_sdfg()` would lead to an invalid
+        #   SDFG.
+        sdfg.to_json(hash=False)
+
         # Promote Maps. This will remove transients between 1D and 2D Maps, at the
         #  cost of more data loads from memory. Empirical observations have shown
         #  that this is beneficial; especially for Nabla4-type kernel in conjunction
@@ -559,18 +575,21 @@ def _gt_auto_process_top_level_maps(
             dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
 
-            sdfg.apply_transformations_repeated(
-                [
-                    # TODO(phimuell): The transformation is also active inside Maps.
-                    #   Which is against the description of this function, but it should
-                    #   not matter that much.
-                    gtx_transformations.SplitAccessNode(
-                        single_use_data=single_use_data,
-                    ),
-                    gtx_transformations.GT4PyMapBufferElimination(
-                        assume_pointwise=assume_pointwise,
-                    ),
-                ],
+            # Split the top level AccessNodes.
+            # NOTE: This function will also update `single_use_data`.
+            gtx_transformations.gt_split_access_nodes(
+                sdfg=sdfg,
+                validate=False,
+                validate_all=validate_all,
+                single_use_data=single_use_data,
+            )
+
+            # Perform buffer elimination.
+            # TODO(phimuell): Implement a faster matching.
+            sdfg.apply_transformations_once_everywhere(
+                gtx_transformations.GT4PyMapBufferElimination(
+                    assume_pointwise=assume_pointwise,
+                ),
                 validate=False,
                 validate_all=validate_all,
             )
@@ -651,6 +670,9 @@ def _gt_auto_process_dataflow_inside_maps(
     blocking_only_if_independent_nodes: Optional[bool],
     promote_independent_memlets_for_blocking: Optional[bool],
     blocking_independent_node_threshold: Optional[int],
+    scan_loop_unrolling: bool,
+    scan_loop_unrolling_factor: int,
+    fuse_tasklets: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
@@ -665,22 +687,9 @@ def _gt_auto_process_dataflow_inside_maps(
     time, so the compiler will fully unroll them anyway.
     """
 
-    # Constants (tasklets are needed to write them into a variable) should not be
-    #  arguments to a kernel but be present inside the body.
-    sdfg.apply_transformations_once_everywhere(
-        gtx_transformations.GT4PyMoveTaskletIntoMap,
-        validate=False,
-        validate_all=validate_all,
-    )
-    gtx_transformations.gt_simplify(
-        sdfg,
-        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
-        validate=False,
-        validate_all=validate_all,
-    )
-
-    # Blocking is performed first, because this ensures that as much as possible
-    #  is moved into the k independent part.
+    # Separate Tasklets into dependent and independent parts to promote data
+    #  reusability. It is important that this step has to be performed before
+    #  `TaskletFusion` is used.
     if blocking_dim is not None:
         sdfg.apply_transformations_once_everywhere(
             gtx_transformations.LoopBlocking(
@@ -694,12 +703,71 @@ def _gt_auto_process_dataflow_inside_maps(
             validate_all=validate_all,
         )
 
+    # Merge Tasklets into bigger ones.
+    # NOTE: Empirical observation for Graupel have shown that this leads to an increase
+    #   in performance, however, it has to be run before `GT4PyMoveTaskletIntoMap`
+    #   (not fully clear why though, probably a compiler artefact) and as well as
+    #   `MoveDataflowIntoIfBody` (not fully clear either, it `TaskletFusion` makes
+    #   things simpler or prevent it from doing certain, negative, things).
+    # TODO(phimuell): Investigate more.
+    # TODO(phimuell): Restrict it to Tasklets only inside Maps.
+    if fuse_tasklets:
+        sdfg.apply_transformations_repeated(
+            dace_dataflow.TaskletFusion,
+            validate=False,
+            validate_all=validate_all,
+        )
+
+    # Constants (tasklets are needed to write them into a variable) should not be
+    #  arguments to a kernel but be present inside the body.
+    sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.GT4PyMoveTaskletIntoMap,
+        validate=False,
+        validate_all=validate_all,
+    )
+
+    # TODO(phimuell): figuring out if this is needed?
+    gtx_transformations.gt_simplify(
+        sdfg,
+        skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
+        validate=False,
+        validate_all=validate_all,
+    )
+
+    find_single_use_data = dace_analysis.FindSingleUseData()
+    single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.RemoveScalarCopies(
+            single_use_data=single_use_data,
+        ),
+        validate=False,
+        validate_all=validate_all,
+    )
+
+    # Make sure that this runs before MoveDataflowIntoIfBody because atm it doesn't handle
+    # NestedSDFGs inside the ConditionalBlocks it fuses.
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.FuseHorizontalConditionBlocks(),
+        validate=True,
+        validate_all=True,
+    )
+
     # Move dataflow into the branches of the `if` such that they are only evaluated
     #  if they are needed. Important to call it repeatedly.
     # TODO(phimuell): It is unclear if `MoveDataflowIntoIfBody` should be called
     #   before or after `LoopBlocking`. In cases where the condition is `False`
     #   most of the times calling it before is better, but if the condition is
     #   `True` then this order is better. Solve that issue.
+    # NOTE: The transformation is currently only able to handle dataflow that is
+    #   _directly_ enclosed by a Map. Thus the order in which they (multiple blocks
+    #   in the same Map) are processed matter. Think of a chain of `if` blocks that
+    #   can be perfectly nested. If the last one is handled first, then all other
+    #   can not be processed anymore. This means it is important to set
+    #   `ignore_upstream_blocks` to `False`, thus the transformation will not apply
+    #   if the dataflow that should be relocated into an `if` block contains again
+    #   `if` blocks that can be relocated. It would be more efficient to process
+    #   them in the right order from the beginning.
     sdfg.apply_transformations_repeated(
         gtx_transformations.MoveDataflowIntoIfBody(
             ignore_upstream_blocks=False,
@@ -707,6 +775,8 @@ def _gt_auto_process_dataflow_inside_maps(
         validate=False,
         validate_all=validate_all,
     )
+
+    # TODO(phimuell): figuring out if this is needed?
     gtx_transformations.gt_simplify(
         sdfg,
         skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
@@ -722,6 +792,13 @@ def _gt_auto_process_dataflow_inside_maps(
         validate=False,
         validate_all=validate_all,
     )
+
+    if scan_loop_unrolling:
+        sdfg.apply_transformations_once_everywhere(
+            gtx_transformations.ScanLoopUnrolling(unroll_factor=scan_loop_unrolling_factor),
+            validate=False,
+            validate_all=validate_all,
+        )
 
     return sdfg
 
@@ -749,33 +826,57 @@ def _gt_auto_configure_maps_and_strides(
     For a description of the arguments see the `gt_auto_optimize()` function.
     """
 
-    # We now set the iteration order of the Maps. For that we use `unit_strides_kind`
-    #  argument and if not supplied we guess depending if we are on the GPU or not.
-    if unit_strides_kind is None:
-        unit_strides_kind = (
-            gtx_common.DimensionKind.HORIZONTAL if gpu else gtx_common.DimensionKind.VERTICAL
+    # If `unit_strides_kind` is unknown we will not modify the Map order nor the
+    #  strides, except if we are on GPU. The reason for this is that the maximal
+    #  number of blocks is different for each dimension. If the largest dimension
+    #  is for example associated with the `z` dimension, we would get launch errors
+    #  at some point. Thus in that case we pretend that it is horizontal. Which is
+    #  a valid assumption for any ICON-like code or if the GT4Py allocator is used.
+    # TODO(phimuell): Make this selection more intelligent.
+    if unit_strides_kind is None and gpu:
+        prefered_direction_kind: Optional[gtx_common.DimensionKind] = (
+            gtx_common.DimensionKind.HORIZONTAL
         )
-    # It is not possible to use the `unit_strides_dim` argument of the
-    #  function, because `LoopBlocking`, if run, changed the name of the
-    #  parameter but the dimension can still be identified by its "kind".
-    gtx_transformations.gt_set_iteration_order(
-        sdfg=sdfg,
-        unit_strides_kind=unit_strides_kind,
-        validate=False,
-        validate_all=validate_all,
-    )
+    else:
+        prefered_direction_kind = unit_strides_kind
+
+    # We should actually use a `gtx.Dimension` here and not a `gtx.DimensionKind`,
+    #  since they are unique. However at this stage, especially after the expansion
+    #  of non standard Memlets (which happens in the GPU transformation) associating
+    #  Map parameters with GT4Py dimension is very hard to impossible. At this stage
+    #  the kind is the most reliable indicator we have.
+    # NOTE: This is not the only location where we manipulate the Map order, we also
+    #   do it in the GPU transformation, where we have to set the order of the
+    #   expanded Memlets.
+    if prefered_direction_kind is not None:
+        gtx_transformations.gt_set_iteration_order(
+            sdfg=sdfg,
+            unit_strides_kind=prefered_direction_kind,
+            validate=False,
+            validate_all=validate_all,
+        )
 
     # NOTE: We have to set the strides of transients before the non-standard Memlets
-    #   get expanded, i.e. turned into Maps because no `cudaMemcpy*()` call exists,
-    #   which requires that the final strides are there. Furthermore, Memlet expansion
-    #   has to happen before the GPU block size is set. There are several possible
-    #   solutions for that, of which none is really good. The one that is the least
-    #   bad thing is to set the strides of the transients here. The main downside
-    #   is that this and the `_gt_auto_post_processing()` function has these weird
-    #   names.
-    gtx_transformations.gt_change_strides(sdfg, gpu=gpu)
+    #   get expanded, i.e. turned into Maps because no matching `cudaMemcpy*()` call
+    #   exists, which requires that the final strides are there. Furthermore, Memlet
+    #   expansion has to happen before the GPU block size is set. There are several
+    #   possible solutions for that, of which none is really good. The least bad one
+    #   is to set the strides of the transients here. The main downside is that we
+    #   slightly modify the SDFG in the GPU transformation after we have set the
+    #   strides.
+    if prefered_direction_kind is not None:
+        gtx_transformations.gt_change_strides(sdfg, prefered_direction_kind=prefered_direction_kind)
 
     if gpu:
+        if unit_strides_kind != gtx_common.DimensionKind.HORIZONTAL:
+            warnings.warn(
+                "The GT4Py DaCe GPU backend assumes that the leading dimension, i.e."
+                " where stride is 1, is of kind 'HORIZONTAL', however it was"
+                f" '{unit_strides_kind}'. Furthermore, it should be the last dimension."
+                " Other configurations might lead to suboptimal performance.",
+                stacklevel=2,
+            )
+
         # TODO(phimuell): The GPU function might modify the map iteration order.
         #   This is because how it is implemented (promotion and fusion). However,
         #   because of its current state, this should not happen, but we have to look

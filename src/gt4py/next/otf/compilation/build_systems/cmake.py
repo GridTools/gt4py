@@ -73,7 +73,7 @@ class CMakeFactory(
 
     def __call__(
         self,
-        source: stages.CompilableSource[
+        source: stages.CompilableProject[
             languages.CPP | languages.CUDA | languages.HIP,
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,

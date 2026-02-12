@@ -101,4 +101,4 @@ jobs:
       - name: Run '${{ matrix.nox-session.name }}-${{ matrix.python-version }}(${{ matrix.nox-session.args }})' nox session
         shell: bash
         run: |
-          uv run --script noxfile.py -s '${{ matrix.nox-session.name }}-${{ matrix.python-version }}${{ matrix.nox-session.args }}'
+          ./noxfile.py -s '${{ matrix.nox-session.name }}-${{ matrix.python-version }}${{ matrix.nox-session.args }}'

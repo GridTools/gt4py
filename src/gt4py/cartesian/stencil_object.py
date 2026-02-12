@@ -381,7 +381,7 @@ class StencilObject(abc.ABC):
             )
         ):
             raise ValueError(
-                f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
+                f"Compute domain too large (provided: {domain}, maximum: {max_domain}. Check stencil domain provided or adjust K interval as needed.)"
             )
 
         if domain[2] < self.domain_info.min_sequential_axis_size:
@@ -434,7 +434,10 @@ class StencilObject(abc.ABC):
 
                 if (
                     arg_info.dimensions is not None
-                    and (*field_info.axes, *(str(d) for d in range(len(field_info.data_dims))))
+                    and (
+                        *field_info.axes,
+                        *(str(d) for d in range(len(field_info.data_dims))),
+                    )
                     != arg_info.dimensions
                 ):
                     raise ValueError(
@@ -589,7 +592,10 @@ class StencilObject(abc.ABC):
             exec_info["call_run_end_time"] = time.perf_counter()
 
     def freeze(
-        self: StencilObject, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]
+        self: StencilObject,
+        *,
+        origin: dict[str, tuple[int, ...]],
+        domain: tuple[int, ...],
     ) -> FrozenStencil:
         """Return a StencilObject wrapper with a fixed domain and origin for each argument.
 

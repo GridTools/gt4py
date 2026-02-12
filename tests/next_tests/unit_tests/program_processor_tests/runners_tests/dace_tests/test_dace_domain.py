@@ -13,10 +13,10 @@ import pytest
 dace = pytest.importorskip("dace")
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import (
+from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain as gtx_dace_domain,
-    utils as gtx_dace_utils,
 )
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -33,12 +33,12 @@ def test_symbolic_domain():
     assert gtx_dace_domain.get_field_domain(domain) == [
         gtx_dace_domain.FieldopDomainRange(
             Vertex,
-            dace.symbolic.SymExpr(gtx_dace_utils.range_start_symbol("arg", Vertex)),
-            dace.symbolic.SymExpr(gtx_dace_utils.range_stop_symbol("arg", Vertex)),
+            dace.symbolic.SymExpr(gtx_dace_args.range_start_symbol("arg", Vertex)),
+            dace.symbolic.SymExpr(gtx_dace_args.range_stop_symbol("arg", Vertex)),
         ),
         gtx_dace_domain.FieldopDomainRange(
             KDim,
-            dace.symbolic.SymExpr(gtx_dace_utils.range_start_symbol("arg", KDim)),
-            dace.symbolic.SymExpr(gtx_dace_utils.range_stop_symbol("arg", KDim)),
+            dace.symbolic.SymExpr(gtx_dace_args.range_start_symbol("arg", KDim)),
+            dace.symbolic.SymExpr(gtx_dace_args.range_stop_symbol("arg", KDim)),
         ),
     ]
