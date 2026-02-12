@@ -22,7 +22,6 @@ from gt4py.next.otf import definitions, languages, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtir_library_nodes,
     lowering as gtx_dace_lowering,
     sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
@@ -405,7 +404,7 @@ class DaCeTranslator(
                 constant_symbols=constant_symbols,
                 **auto_optimize_args,
             )
-        else:
+        elif on_gpu:
             # Note that `gt_substitute_compiletime_symbols()` will run `gt_simplify()`
             # at entry, in order to avoid some issue in constant propagatation.
             # Besides, `gt_simplify()` will bring the SDFG into a canonical form
@@ -416,12 +415,20 @@ class DaCeTranslator(
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg, constant_symbols, validate=True
             )
-            # Expand all GT4Py library nodes
-            for node, state in sdfg.all_nodes_recursive():
-                if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
-                    node.expand(state)
-            if on_gpu:
-                gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+            gtx_transformations.gt_gpu_transformation(sdfg, try_removing_trivial_maps=True)
+
+        elif len(constant_symbols) != 0:
+            # Target CPU without SDFG transformations, but still replace constant symbols.
+            # Replacing the SDFG symbols for field origin in global arrays is strictly
+            # required by dace orchestration, which runs the translation stage
+            # with `disable_field_origin_on_program_arguments=True`. The program
+            # decorator used by dace orchestartion cannot handle field origin.
+            # It also requires skipping auto-optimize on the `SDFGConvertible` objects,
+            # because it targets the full-application SDFG, so we have to explicitly
+            # apply `gt_substitute_compiletime_symbols()` here.
+            gtx_transformations.gt_substitute_compiletime_symbols(
+                sdfg, constant_symbols, validate=True
+            )
 
         if self.async_sdfg_call:
             make_sdfg_call_async(sdfg, on_gpu)

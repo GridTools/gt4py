@@ -54,7 +54,31 @@ class ReduceWithSkipValues(dace_stdlib.Reduce):
         self.init = init
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
-        return
+        assert len(list(state.in_edges_by_connector(self, _INPUT_NAME))) == 1
+        inedge: dace_graph.MultiConnectorEdge = next(state.in_edges_by_connector(self, _INPUT_NAME))
+        assert len(list(state.out_edges_by_connector(self, _OUTPUT_NAME))) == 1
+        outedge: dace_graph.MultiConnectorEdge = next(
+            state.out_edges_by_connector(self, _OUTPUT_NAME)
+        )
+        assert len(list(state.in_edges_by_connector(self, _MASK_NAME))) == 1
+        maskedge: dace_graph.MultiConnectorEdge = next(
+            state.in_edges_by_connector(self, _MASK_NAME)
+        )
+
+        mask_desc = sdfg.arrays[maskedge.data.data]
+        if len(mask_desc.shape) != 2:
+            raise ValueError(f"Invalid shape {mask_desc.shape} of mask array, expected 2d array.")
+        max_neighbors = mask_desc.shape[1]
+        if not (isinstance(max_neighbors, int) or str(max_neighbors).isdigit()):
+            raise ValueError(
+                f"Invalid shape {mask_desc.shape} of mask array, expected constant neighbors size."
+            )
+        if inedge.data.num_elements() != max_neighbors:
+            raise ValueError(f"Invalid memlet on input connector {_INPUT_NAME}.")
+        if maskedge.data.num_elements() != max_neighbors:
+            raise ValueError(f"Invalid memlet on input connector {_MASK_NAME}.")
+        if outedge.data.num_elements() != 1:
+            raise ValueError(f"Invalid memlet on output connector {_OUTPUT_NAME}.")
 
 
 @dace_library.register_expansion(ReduceWithSkipValues, "pure")
@@ -79,42 +103,38 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         output_desc = sdfg.arrays[outedge.data.data]
         mask_desc = sdfg.arrays[maskedge.data.data]
         assert len(mask_desc.shape) == 2
-
         max_neighbors = mask_desc.shape[1]
         assert isinstance(max_neighbors, int) or str(max_neighbors).isdigit()
-        assert inedge.data.num_elements() == max_neighbors
-        assert maskedge.data.num_elements() == max_neighbors
-        assert outedge.data.num_elements() == 1
 
         local_dim_index = inedge.data.src_subset.size().index(max_neighbors)
 
         nsdfg = dace.SDFG(node.label)
-        nsdfg.add_array(
+        inp, _ = nsdfg.add_array(
             _INPUT_NAME,
             (max_neighbors,),
             input_desc.dtype,
             strides=(input_desc.strides[local_dim_index],),
         )
-        nsdfg.add_array(
+        mask, _ = nsdfg.add_array(
             _MASK_NAME,
             (max_neighbors,),
             mask_desc.dtype,
             strides=(mask_desc.strides[1],),
         )
-        nsdfg.add_scalar(_OUTPUT_NAME, output_desc.dtype)
+        outp, _ = nsdfg.add_scalar(_OUTPUT_NAME, output_desc.dtype)
         st_init = nsdfg.add_state("init")
         init_tasklet = st_init.add_tasklet(
             name="write",
             inputs={},
-            outputs={"val"},
-            code=f"val = {input_desc.dtype}({node.init})",
+            outputs={"__tlet_out"},
+            code=f"__tlet_out = {input_desc.dtype}({node.init})",
         )
         st_init.add_edge(
             init_tasklet,
-            "val",
-            st_init.add_access(_OUTPUT_NAME),
+            "__tlet_out",
+            st_init.add_access(outp),
             None,
-            dace.Memlet(data=_OUTPUT_NAME, subset="0"),
+            dace.Memlet(data=outp, subset="0"),
         )
         st_reduce = nsdfg.add_state_after(st_init, "compute")
         # Fill skip values in local dimension with the reduce identity value
@@ -126,12 +146,12 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
             name="reduce_with_skip_values",
             map_ranges={"i": f"0:{max_neighbors}"},
             inputs={
-                "val": dace.Memlet(data=_INPUT_NAME, subset="i"),
-                "neighbor_idx": dace.Memlet(data=_MASK_NAME, subset="i"),
+                "__tlet_inp": dace.Memlet(data=inp, subset="i"),
+                "__tlet_mask": dace.Memlet(data=mask, subset="i"),
             },
-            code=f"out = val if neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
+            code=f"__tlet_out = __tlet_inp if __tlet_mask != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
             outputs={
-                "out": dace.Memlet(data=_OUTPUT_NAME, subset="0", wcr=node.wcr, wcr_nonatomic=True),
+                "__tlet_out": dace.Memlet(data=outp, subset="0", wcr=node.wcr, wcr_nonatomic=True),
             },
             external_edges=True,
             schedule=dace.dtypes.ScheduleType.Sequential,

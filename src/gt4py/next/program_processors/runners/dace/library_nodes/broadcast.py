@@ -56,13 +56,15 @@ class Broadcast(dace_nodes.LibraryNode):
         if len(self.axes) != len(set(self.axes)):
             raise ValueError("Axes must be unique.")
 
-        assert len(list(state.out_edges_by_connector(self, _OUTPUT_NAME))) == 1
+        if len(list(state.out_edges_by_connector(self, _OUTPUT_NAME))) != 1:
+            raise ValueError(f"Expected one output edge on connector {_OUTPUT_NAME}.")
         outedge = next(state.out_edges_by_connector(self, _OUTPUT_NAME))
         if not isinstance(outedge.dst, dace_nodes.AccessNode):
             raise ValueError("Output node must be an access node.")
 
         if self.value is None:  # expect an input connection
-            assert len(list(state.in_edges_by_connector(self, _INPUT_NAME))) == 1
+            if len(list(state.in_edges_by_connector(self, _INPUT_NAME))) != 1:
+                raise ValueError(f"Expected one input edge on connector {_INPUT_NAME}.")
             inedge = next(state.in_edges_by_connector(self, _INPUT_NAME))
             if not isinstance(inedge.src, dace_nodes.AccessNode):
                 raise ValueError("Input node must be an access node.")
@@ -93,30 +95,28 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
     environments: Final[list[Any]] = []
 
     @staticmethod
-    def expansion(
-        node: Broadcast, parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
-    ) -> dace.SDFG:
-        sdfg = dace.SDFG(node.label)
-        state = sdfg.add_state(f"{node.label}_impl")
+    def expansion(node: Broadcast, state: dace.SDFGState, sdfg: dace.SDFG) -> dace.SDFG:
+        nsdfg = dace.SDFG(node.label)
+        bcast_st = nsdfg.add_state(f"{node.label}_impl")
 
-        assert len(list(parent_state.out_edges_by_connector(node, _OUTPUT_NAME))) == 1
-        outedge = next(parent_state.out_edges_by_connector(node, _OUTPUT_NAME))
-        out_desc = parent_sdfg.arrays[outedge.data.data]
+        assert len(list(state.out_edges_by_connector(node, _OUTPUT_NAME))) == 1
+        outedge = next(state.out_edges_by_connector(node, _OUTPUT_NAME))
+        out_desc = sdfg.arrays[outedge.data.data]
         inner_out_desc = out_desc.clone()
         inner_out_desc.transient = False
-        outp = sdfg.add_datadesc(_OUTPUT_NAME, inner_out_desc)
+        outp = nsdfg.add_datadesc(_OUTPUT_NAME, inner_out_desc)
 
-        dst_subset = outedge.data.get_dst_subset(outedge, parent_state)
+        dst_subset = outedge.data.get_dst_subset(outedge, state)
         map_params = [f"_i{i}" for i in range(len(dst_subset))]
         out_mem = dace.Memlet(data=outp, subset=",".join(map_params))
 
         if node.value is None:
-            assert len(list(parent_state.in_edges_by_connector(node, _INPUT_NAME))) == 1
-            inedge = next(parent_state.in_edges_by_connector(node, _INPUT_NAME))
-            inp_desc = parent_sdfg.arrays[inedge.data.data]
+            assert len(list(state.in_edges_by_connector(node, _INPUT_NAME))) == 1
+            inedge = next(state.in_edges_by_connector(node, _INPUT_NAME))
+            inp_desc = sdfg.arrays[inedge.data.data]
             inner_inp_desc = inp_desc.clone()
             inner_inp_desc.transient = False
-            inp = sdfg.add_datadesc(_INPUT_NAME, inner_inp_desc)
+            inp = nsdfg.add_datadesc(_INPUT_NAME, inner_inp_desc)
 
             if node.axes:
                 index_map = dict(enumerate(map_params))
@@ -127,16 +127,16 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
             else:
                 inp_subset = "0"
 
-            state.add_mapped_tasklet(
+            bcast_st.add_mapped_tasklet(
                 name=node.label,
                 map_ranges=dict(zip(map_params, dst_subset, strict=True)),
-                inputs={"inp": dace.Memlet(data=inp, subset=inp_subset)},
-                code="outp = inp",
-                outputs={"outp": out_mem},
+                inputs={"__tlet_inp": dace.Memlet(data=inp, subset=inp_subset)},
+                code="__tlet_out = __tlet_inp",
+                outputs={"__tlet_out": out_mem},
                 external_edges=True,
             )
         else:
-            state.add_mapped_tasklet(
+            bcast_st.add_mapped_tasklet(
                 name="broadcast",
                 map_ranges=dict(zip(map_params, dst_subset)),
                 inputs={},
@@ -145,4 +145,4 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
                 external_edges=True,
             )
 
-        return sdfg
+        return nsdfg
