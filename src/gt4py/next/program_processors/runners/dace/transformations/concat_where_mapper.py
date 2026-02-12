@@ -623,7 +623,9 @@ def _configure_descending_point(
             ),
         )
         assert nested_data_name not in descending_point.consumer.in_connectors
-        descending_point.consumer.add_in_connector(nested_data_name, dtype=nested_desc.dtype)
+        descending_point.consumer.add_in_connector(
+            nested_data_name, dtype=dace.pointer(nested_desc.dtype)
+        )
 
         transformed_initial_producer_specs.append(
             _ProducerSpec(
