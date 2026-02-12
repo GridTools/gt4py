@@ -12,7 +12,6 @@ from typing import Any, Final
 
 import dace
 from dace import library as dace_library, properties as dace_properties
-from dace.libraries import standard as dace_stdlib
 from dace.sdfg import graph as dace_graph
 from dace.transformation import transformation as dace_transform
 
@@ -25,13 +24,16 @@ _MASK_NAME: Final[str] = "_mask"
 
 
 @dace.library.node
-class ReduceWithSkipValues(dace_stdlib.Reduce):
+class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
     """Implements reduction with skip values."""
 
     implementations: Final[dict[str, dace_transform.ExpandTransformation]] = {}
     default_implementation: Final[str | None] = "pure"
 
-    init = dace_properties.SymbolicProperty(default=0)
+    # Properties
+    wcr = dace_properties.LambdaProperty(default="lambda a, b: a")
+    identity = dace_properties.SymbolicProperty(default=0, to_json=lambda x: str(x))
+    init = dace_properties.SymbolicProperty(default=0, to_json=lambda x: str(x))
 
     def __init__(
         self,
@@ -41,17 +43,11 @@ class ReduceWithSkipValues(dace_stdlib.Reduce):
         init: dace.symbolic.SymbolicType,
         debuginfo: dace.dtypes.DebugInfo | None = None,
     ) -> None:
-        super().__init__(
-            name,
-            wcr,
-            None,
-            identity,
-            dace.dtypes.ScheduleType.Default,
-            debuginfo,
-            inputs={_INPUT_NAME, _MASK_NAME},
-            outputs={_OUTPUT_NAME},
-        )
+        super().__init__(name, inputs={_INPUT_NAME, _MASK_NAME}, outputs={_OUTPUT_NAME})
+        self.wcr = wcr
+        self.identity = identity
         self.init = init
+        self.debuginfo = debuginfo
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         assert len(list(state.in_edges_by_connector(self, _INPUT_NAME))) == 1
