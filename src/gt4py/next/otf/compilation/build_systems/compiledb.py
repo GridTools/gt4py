@@ -47,7 +47,7 @@ class CompiledbFactory(
 
     def __call__(
         self,
-        source: stages.CompilableSource[
+        source: stages.CompilableProject[
             SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
         ],
         cache_lifetime: config.BuildCacheLifetime,
@@ -274,7 +274,7 @@ def _cc_get_compiledb(
     cache_lifetime: config.BuildCacheLifetime,
 ) -> pathlib.Path:
     cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_lifetime
+        stages.CompilableProject(prototype_program_source, None), cache_lifetime
     )
 
     # In a multi-threaded environment, multiple threads may try to create the compiledb at the same time
@@ -311,7 +311,7 @@ def _cc_create_compiledb(
         cmake_build_type=build_type,
         cmake_extra_flags=cmake_flags,
     )(
-        stages.CompilableSource(
+        stages.CompilableProject(
             prototype_program_source, stages.BindingSource(source_code="", library_deps=())
         ),
         cache_lifetime,

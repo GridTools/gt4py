@@ -29,11 +29,7 @@ from gt4py.eve.extended_typing import (
     final,
 )
 from gt4py.next import common, errors, named_collections, utils
-from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
-
-
-DATA_T = TypeVar("DATA_T")
 
 
 def _make_dict_expr(exprs: dict[str, str]) -> str:
@@ -168,20 +164,6 @@ class CompileTimeArgs:
         return cls(tuple(), {}, {}, None, {})
 
 
-def jit_to_aot_args(
-    inp: JITArgs,
-) -> CompileTimeArgs:
-    return CompileTimeArgs.from_concrete(*inp.args, **inp.kwargs)
-
-
-def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
-    toolchain.CompilableProgram[DATA_T, JITArgs],
-    toolchain.CompilableProgram[DATA_T, CompileTimeArgs],
-]:
-    """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
-    return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
-
-
 # This is not really accurate, just an approximation
 NeedsValueExtraction: TypeAlias = MaybeNestedInTuple[named_collections.CustomNamedCollection]
 
@@ -237,7 +219,11 @@ def make_primitive_value_args_extractor(
     The returned function has the signature `(*args, **kwargs) -> (args, kwargs)`,
     where `args` is a tuple of positional arguments and `kwargs` is a dictionary of
     keyword arguments containing the extracted primitive values where needed.
+
+    This function only uses structural information of the type, primitive values may be
+    passed as :ref:`ts.DeferredType`.
     """
+
     args_param = "args"
     kwargs_param = "kwargs"
     num_args_to_extract = 0

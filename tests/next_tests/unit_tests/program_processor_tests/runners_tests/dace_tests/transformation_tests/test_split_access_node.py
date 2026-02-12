@@ -13,7 +13,6 @@ import copy
 import numpy as np
 
 dace = pytest.importorskip("dace")
-import dace
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
@@ -860,3 +859,48 @@ def test_ac_producer_ac_consumer_complex():
     assert any(
         edge.src.label == "b" and edge.dst.label == "e" and edge.data.volume == 5 for edge in edges
     )
+
+
+def test_unused_partial_read_from_inout_node():
+    """SDFG configuration witch unused read subset 'c[0:5]' from global inout node.
+    c[0:5]  -> t[0:5]
+    b[5:10] -> t[5:10]
+    a[0:5]  -> c[0:5]
+    t[5:10] -> c[5:10]
+    """
+    sdfg = dace.SDFG(util.unique_name("full_write_from_global_to_split_node"))
+    for data in "abc":
+        sdfg.add_array(data, [10], dace.float64)
+    t, _ = sdfg.add_temp_transient([10], dace.float64)
+
+    st = sdfg.add_state()
+    an_a = st.add_access("a")
+    an_b = st.add_access("b")
+    an_c_rd = st.add_access("c")
+    an_c_wr = st.add_access("c")
+    an_t = st.add_access(t)
+    st.add_mapped_tasklet(
+        "plus_1",
+        code="out = inp + 1",
+        map_ranges={"i": "0:5"},
+        inputs={"inp": dace.Memlet("a[i]")},
+        outputs={"out": dace.Memlet("c[i]")},
+        input_nodes={an_a},
+        output_nodes={an_c_wr},
+        external_edges=True,
+    )
+    st.add_mapped_tasklet(
+        "plus_2",
+        code="out = inp + 2",
+        map_ranges={"i": "5:10"},
+        inputs={"inp": dace.Memlet("b[i]")},
+        outputs={"out": dace.Memlet(f"{t}[i]")},
+        input_nodes={an_b},
+        output_nodes={an_t},
+        external_edges=True,
+    )
+    st.add_nedge(an_c_rd, an_t, dace.Memlet(data="c", subset="0:5", other_subset="0:5"))
+    st.add_nedge(an_t, an_c_wr, dace.Memlet(data=t, subset="5:10", other_subset="5:10"))
+    sdfg.validate()
+
+    _perform_test(sdfg, explected_applies=1, removed_transients={t})
