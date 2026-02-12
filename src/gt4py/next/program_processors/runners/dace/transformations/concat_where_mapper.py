@@ -1056,10 +1056,7 @@ def _find_consumer_specs_single_source_single_level(
                     consumer, "OUT_" + oedge.dst_conn[3:]
                 ):
                     edges_to_scan_next.extend(
-                        (
-                            _FinalConsumerSpec(edge=edge)
-                            for edge in state.memlet_tree(edge_inside_map).leaves()
-                        )
+                        edge for edge in state.memlet_tree(edge_inside_map).leaves()
                     )
             elif isinstance(
                 consumer, (dace_nodes.AccessNode, dace_nodes.Tasklet, dace_nodes.NestedSDFG)
