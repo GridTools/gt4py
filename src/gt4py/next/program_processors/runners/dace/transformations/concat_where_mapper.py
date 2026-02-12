@@ -332,10 +332,14 @@ def _setup_initial_producer_description_on_top_level(
         converging_edge.data.try_initialize(sdfg, state, converging_edge)
         producer_node = converging_edge.src
         producer_desc = producer_node.desc(sdfg)
-        free_symb_types = {str(fs): sdfg_symbols[str(fs)] for fs in producer_desc.free_symbols}
         offset = copy.deepcopy(converging_edge.data.src_subset)
         subset = copy.deepcopy(converging_edge.data.dst_subset)
         assert offset is not None and subset is not None
+        free_symb_types = (
+            {str(fs): sdfg_symbols[str(fs)] for fs in producer_desc.free_symbols}
+            | {str(fs): sdfg_symbols[str(fs)] for fs in offset.free_symbols}
+            | {str(fs): sdfg_symbols[str(fs)] for fs in subset.free_symbols}
+        )
 
         initial_producer_specs.append(
             _ProducerSpec(
@@ -544,35 +548,32 @@ def _configure_descending_point(
     symbol_mapping: dict[str, dace_sym.SymExpr] = nsdfg_node.symbol_mapping
 
     # Now we need to map the data into the nested SDFG. The mapping function only
-    #  gives us `inter -> top` so we have to invert it.
-    nested_to_top_desc_mapping = gtx_transformations.utils.gt_data_descriptor_mapping(
+    #  gives us `inter -> top` so we have to invert it. Inversion here should be
+    #  stable because the data is internally ordered.
+    nested_to_parent_name_mapping = gtx_transformations.utils.gt_data_descriptor_mapping(
         state=state,
         nsdfg=nsdfg_node,
+        only_fully_mapped=True,
         only_inputs=True,
     )
-    top_to_nested_desc_mapping = {top: nested for nested, top in nested_to_top_desc_mapping.items()}
-
-    # Name of the concat where data in the parent and the descending point.
-    top_concat_data = descending_point.edge.data.data
+    parent_to_nested_name_mapping = {
+        parent: nested for nested, parent in nested_to_parent_name_mapping.items()
+    }
 
     transformed_initial_producer_specs: list[_ProducerSpec] = []
     handled_data: dict[str, int] = {}
     for i, parent_prod_spec in enumerate(parent_initial_producer_specs):
         parent_data_name = parent_prod_spec.data_name
 
-        # This data is already handled so we can simply copy it.
         if parent_data_name in handled_data:
+            # The data is already handled so just reuse it.
             transformed_initial_producer_specs.append(
-                copy.copy(transformed_initial_producer_specs[handled_data[parent_data_name]])
+                copy.deepcopy(transformed_initial_producer_specs[handled_data[parent_data_name]])
             )
             continue
 
-        nested_offset = copy.deepcopy(parent_prod_spec.offset)
-        nested_subset = copy.deepcopy(parent_prod_spec.subset)
-        nested_desc = parent_prod_spec.desc.clone()
-        nested_desc.transient = False  # Inputs of nested SDFGs are always global.
-
-        # Handle the symbols
+        # Compute the symbol mapping for the symbols that we need, which are
+        #  listed in the `free_symb_types` attribute we got from the parent.
         nested_free_symb_types: dict[str, dace.dtypes.typeclass] = {}
         repl_dict: dict[str, str] = {}
         for psym, ptype in parent_prod_spec.free_symb_types.items():
@@ -582,7 +583,7 @@ def _configure_descending_point(
                 and psym in nsdfg.symbols
                 and nsdfg.symbols[psym] == ptype
             ):
-                # The symbol is already mapped 1:1 into the nested sdfg, so we do not have to do anything.
+                # The symbol is already mapped 1:1 into the nested sdfg -> nothing to do.
                 nested_symbol = psym
             else:
                 # The symbol is either not known or it is not mapped 1:1 or has the wrong type,
@@ -591,42 +592,51 @@ def _configure_descending_point(
                 assert nested_symbol not in symbol_mapping
                 symbol_mapping[nested_symbol] = psym
                 repl_dict[psym] = nested_symbol
+            assert nested_symbol not in repl_dict
             nested_free_symb_types[nested_symbol] = ptype
 
-        # If needed apply the renaming of symbols in the
-        if len(repl_dict) != 0:
-            nested_offset.replace(repl_dict)
-            nested_subset(repl_dict)
-            dace.sdfg.replace_properties_dict(nested_desc, repl=repl_dict)
+        if parent_data_name in parent_to_nested_name_mapping:
+            # We have not handled the data but, it is already mapped into the nested
+            #  SDFG. Thus we will reuse this data descriptor. Note that we do not have
+            #  to perform symbol remapping in this case.
+            nested_data_name = parent_to_nested_name_mapping[parent_data_name]
+            nested_desc = nsdfg.arrays[nested_data_name]
+            parent_prod_spec.desc.clone()
+            assert not nested_desc.transient
+            assert set(repl_dict.keys()).isdisjoint(str(fs) for fs in nested_desc.free_symbols)
 
-        # Now make sure that `parent_data_name` is available in the nested SDFG.
-        if parent_data_name in top_to_nested_desc_mapping:
-            # The data is already available inside the nested SDFG.
-            nested_data_name = top_to_nested_desc_mapping[parent_data_name]
         else:
-            # The data is not available inside the nested SDFG or the name as a different meaning.
-            nested_data_name = nsdfg.add_datadesc(
-                name=parent_data_name,
-                datadesc=nested_desc.clone(),
-                find_new_name=True,
+            # The data is not yet mapped into the nested SDFG, so we have to create
+            #  a new one. And we have to apply symbol renaming on it.
+            nested_desc = parent_prod_spec.desc.clone()
+            if repl_dict:
+                dace.sdfg.replace_properties_dict(nested_desc, repl=repl_dict)
+            nested_data_name = nsdfg.add_datadesc(parent_data_name, nested_desc, find_new_name=True)
+
+            # We also need to map it into the nested SDFG.
+            state.add_edge(
+                full_parent_producer_specs[i].data_source[descending_point].node,
+                full_parent_producer_specs[i].data_source[descending_point].conn,
+                descending_point.consumer,
+                nested_data_name,
+                dace.Memlet(
+                    data=full_parent_producer_specs[i].data_name,
+                    subset=dace_sbs.Range.from_array(full_parent_producer_specs[i].desc),
+                ),
+            )
+            assert nested_data_name not in descending_point.consumer.in_connectors
+            descending_point.consumer.add_in_connector(
+                nested_data_name, dtype=dace.pointer(nested_desc.dtype)
             )
 
-        # Now create a connection to fully map the data into the nested SDFG.
-        state.add_edge(
-            full_parent_producer_specs[i].data_source[descending_point].node,
-            full_parent_producer_specs[i].data_source[descending_point].conn,
-            descending_point.consumer,
-            nested_data_name,
-            dace.Memlet(
-                data=full_parent_producer_specs[i].data_name,
-                subset=dace_sbs.Range.from_array(full_parent_producer_specs[i].desc),
-            ),
-        )
-        assert nested_data_name not in descending_point.consumer.in_connectors
-        descending_point.consumer.add_in_connector(
-            nested_data_name, dtype=dace.pointer(nested_desc.dtype)
-        )
+        # Apply symbol renaming on offset and subset; descriptor was handled above.
+        nested_offset = copy.deepcopy(parent_prod_spec.offset)
+        nested_subset = copy.deepcopy(parent_prod_spec.subset)
+        if len(repl_dict) != 0:
+            nested_offset.replace(repl_dict)
+            nested_subset.replace(repl_dict)
 
+        handled_data[parent_data_name] = len(transformed_initial_producer_specs)
         transformed_initial_producer_specs.append(
             _ProducerSpec(
                 data_name=nested_data_name,
@@ -637,17 +647,14 @@ def _configure_descending_point(
                 data_source={},
             )
         )
-        handled_data[parent_data_name] = len(transformed_initial_producer_specs)
 
     # Restore the proper format of the symbol mapping.
     nsdfg_node.symbol_mapping = symbol_mapping
 
-    # Remove the consumer
+    # Remove the Memlet path that was used to map in the concat data.
     dace_sdutils.remove_edge_and_dangling_path(state, descending_point.edge)
-    nested_concat_data = top_to_nested_desc_mapping[top_concat_data]
-    assert nested_concat_data not in descending_point.consumer.out_connectors
 
-    return nested_concat_data, transformed_initial_producer_specs
+    return descending_point.edge.dst_conn, transformed_initial_producer_specs
 
 
 def _map_data_into_nested_scopes(

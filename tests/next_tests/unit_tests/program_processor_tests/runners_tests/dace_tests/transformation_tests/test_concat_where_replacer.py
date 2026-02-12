@@ -950,7 +950,7 @@ def _make_concat_where_single_nested_sdfg_consumer(
     dace_nodes.AccessNode,
     dace_nodes.NestedSDFG,
 ]:
-    assert binary_ops and (not rename_bin_data), "This configuration does not make sense."
+    assert binary_ops or (not rename_bin_data), "This configuration does not make sense."
 
     sdfg = dace.SDFG(util.unique_name("concat_where_replacer_single_nested_sdfg_consumer"))
     state = sdfg.add_state()
@@ -967,7 +967,7 @@ def _make_concat_where_single_nested_sdfg_consumer(
 
     nested_sdfg = dace.SDFG("nested_sdfg")
     nested_state = nested_sdfg.add_state()
-    if rename_mapped_data:
+    if rename_concat_data:
         nested_input = "e"
         nested_output = "f"
     else:
@@ -978,7 +978,7 @@ def _make_concat_where_single_nested_sdfg_consumer(
     nsdfg_inputs = {nested_input}
 
     if binary_ops:
-        sec_op = "h" if rename_mapped_data else "b"
+        sec_op = "h" if rename_bin_data else "b"
         nested_arrays += [sec_op]
         map_code = "__out = __in1 + __in2"
         map_inputs = {
@@ -1029,7 +1029,7 @@ def test_concat_where_single_nested_sdfg_consumer(
     sdfg, state, concat_node, nsdfg = _make_concat_where_single_nested_sdfg_consumer(
         rename_concat_data=rename_concat_data,
         binary_ops=False,
-        rename_bin_data=True,
+        rename_bin_data=False,
     )
 
     access_nodes_before = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
@@ -1072,7 +1072,7 @@ def test_concat_where_single_nested_sdfg_consumer(
 @pytest.mark.parametrize("rename_concat_data", [True, False])
 @pytest.mark.parametrize("rename_bin_data", [True, False])
 def test_concat_where_single_nested_sdfg_consumer_multiple_inputs(
-    rename_mapped_data: bool,
+    rename_concat_data: bool,
     rename_bin_data: bool,
 ) -> None:
     sdfg, state, concat_node, nsdfg = _make_concat_where_single_nested_sdfg_consumer(
@@ -1081,9 +1081,29 @@ def test_concat_where_single_nested_sdfg_consumer_multiple_inputs(
         rename_bin_data=rename_bin_data,
     )
 
+    access_nodes_before = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    a = next(iter(ac for ac in access_nodes_before if ac.data == "a"))
+    b = next(iter(ac for ac in access_nodes_before if ac.data == "b"))
+    assert len(access_nodes_before) == 4
+    assert concat_node in access_nodes_before
+    assert state.in_degree(nsdfg) == 2
+    assert {concat_node, b} == {iedge.src for iedge in state.in_edges(nsdfg)}
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
     gtx_transformations.gt_replace_concat_where_node(
         state=state,
         sdfg=sdfg,
         concat_node=concat_node,
     )
     sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert len(access_nodes_after) == 3
+    assert all(oedge.dst is nsdfg for oedge in state.out_edges(a))
+    assert all(oedge.dst is nsdfg for oedge in state.out_edges(b))
+    assert state.in_degree(nsdfg) == 2
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
