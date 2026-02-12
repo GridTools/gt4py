@@ -1101,9 +1101,157 @@ def test_concat_where_single_nested_sdfg_consumer_multiple_inputs(
 
     access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert len(access_nodes_after) == 3
+    assert concat_node not in access_nodes_after
     assert all(oedge.dst is nsdfg for oedge in state.out_edges(a))
     assert all(oedge.dst is nsdfg for oedge in state.out_edges(b))
     assert state.in_degree(nsdfg) == 2
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_multi_level_sdfg():
+    def make_third_level() -> dace.SDFG:
+        sdfg = dace.SDFG("third_level")
+        state = sdfg.add_state()
+        for aname in "ab":
+            sdfg.add_array(
+                aname,
+                shape=(15,),
+                dtype=dace.float64,
+                transient=False,
+            )
+        state.add_mapped_tasklet(
+            "third_level_map",
+            map_ranges={"__i": "0:15"},
+            inputs={"__in": dace.Memlet("a[__i]")},
+            outputs={"__out": dace.Memlet("b[__i]")},
+            code="__out = __in + 1.9",
+            external_edges=True,
+        )
+        sdfg.validate()
+
+        return sdfg
+
+    def make_second_level() -> dace.SDFG:
+        sdfg = dace.SDFG("second_level")
+        state = sdfg.add_state()
+
+        for aname in "abcdefgh":
+            sdfg.add_array(
+                aname,
+                shape=(15,),
+                dtype=dace.float64,
+                transient=False,
+            )
+
+        a = state.add_access("a")
+
+        state.add_mapped_tasklet(
+            "second_level_map1",
+            map_ranges={"__i": "0:15"},
+            inputs={
+                "__in1": dace.Memlet("a[__i]"),
+                "__in2": dace.Memlet("b[__i]"),
+                "__in3": dace.Memlet("c[__i]"),
+            },
+            outputs={"__out": dace.Memlet("e[__i]")},
+            code="__out = __in1 + __in2 * __in3",
+            external_edges=True,
+            input_nodes={a},
+        )
+
+        state.add_mapped_tasklet(
+            "second_level_map2",
+            map_ranges={"__i": "0:15"},
+            inputs={
+                "__in1": dace.Memlet("a[__i]"),
+                "__in2": dace.Memlet("h[14 - __i]"),
+            },
+            outputs={"__out": dace.Memlet("d[__i]")},
+            code="__out = __in1 + __in2",
+            external_edges=True,
+            input_nodes={a},
+        )
+
+        nsdfg = state.add_nested_sdfg(
+            make_third_level(),
+            inputs={"a"},
+            outputs={"b"},
+        )
+        state.add_edge(a, None, nsdfg, "a", dace.Memlet("a[0:15]"))
+        state.add_edge(nsdfg, "b", state.add_access("f"), None, dace.Memlet("f[0:15]"))
+        sdfg.validate()
+
+        return sdfg
+
+    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_single_multi_level"))
+    state = sdfg.add_state()
+
+    for aname in "abcdefghj":
+        sdfg.add_array(
+            aname,
+            shape=((1 if aname == "f" else 15),),
+            dtype=dace.float64,
+            transient=(aname != "d"),
+        )
+    a, b, c, d = (state.add_access(aname) for aname in "abcd")
+
+    state.add_nedge(a, d, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, d, dace.Memlet("b[3:8] -> [5:10]"))
+    state.add_nedge(c, d, dace.Memlet("c[9:14] -> [10:15]"))
+
+    state.add_mapped_tasklet(
+        "top_level_map",
+        map_ranges={"__i": "0:15"},
+        inputs={
+            "__in1": dace.Memlet("d[14 - __i]"),
+            "__in2": dace.Memlet("b[__i]"),
+        },
+        outputs={"__out": dace.Memlet("e[__i]")},
+        code="__out = __in + 1.23",
+        input_nodes={d, b},
+        external_edges=True,
+    )
+
+    # Turn this into a NSDFG inside a Map that does the access _inside_.
+    tlet = state.add_tasklet(
+        "single_access",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in * 3.0",
+    )
+    state.add_edge(d, None, tlet, "__in", dace.Memlet("d[3]"))
+    state.add_edge(tlet, "__out", state.add_access("f"), None, dace.Memlet("f[0]"))
+
+    nsdfg = state.add_nested_sdfg(make_second_level(), inputs=set("cbah"), outputs=set("efg"))
+    state.add_edge(a, None, nsdfg, "c", dace.Memlet("a[0:15]"))
+    state.add_edge(c, None, nsdfg, "b", dace.Memlet("c[0:15]"))
+    state.add_edge(d, None, nsdfg, "a", dace.Memlet("d[0:15]"))
+    state.add_edge(d, None, nsdfg, "h", dace.Memlet("d[0:15]"))
+    state.add_edge(nsdfg, "e", state.add_access("g"), None, dace.Memlet("g[0:15]"))
+    state.add_edge(nsdfg, "f", state.add_access("h"), None, dace.Memlet("h[0:15]"))
+    state.add_edge(nsdfg, "d", state.add_access("j"), None, dace.Memlet("j[0:15]"))
+    sdfg.validate()
+
+    return sdfg, state, d
+
+
+def test_concat_where_multi_level_nesting():
+    sdfg, state, concat_node = _make_concat_where_multi_level_sdfg()
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert concat_node not in access_nodes_after
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
