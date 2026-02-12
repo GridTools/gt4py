@@ -934,7 +934,9 @@ def test_concat_where_multiple_top_level_maps(access_in_both_scopes: bool):
     assert concat_node.data not in sdfg.arrays
 
 
-def _make_concat_where_single_nested_sdfg_consumer() -> tuple[
+def _make_concat_where_single_nested_sdfg_consumer(
+    rename_concat_data: bool,
+) -> tuple[
     dace.SDFG,
     dace.SDFGState,
     dace_nodes.AccessNode,
@@ -955,8 +957,13 @@ def _make_concat_where_single_nested_sdfg_consumer() -> tuple[
 
     nested_sdfg = dace.SDFG("nested_sdfg")
     nested_state = nested_sdfg.add_state()
-    nested_input = "c"
-    nested_output = "d"
+    if rename_concat_data:
+        nested_input = "e"
+        nested_output = "f"
+    else:
+        nested_input = "c"
+        nested_output = "d"
+
     for aname in [nested_input, nested_output]:
         nested_sdfg.add_array(
             name=aname,
@@ -986,8 +993,13 @@ def _make_concat_where_single_nested_sdfg_consumer() -> tuple[
     return sdfg, state, c, nsdfg
 
 
-def test_concat_where_single_nested_sdfg_consumer():
-    sdfg, state, concat_node, nsdfg = _make_concat_where_single_nested_sdfg_consumer()
+@pytest.mark.parametrize("rename_concat_data", [True, False])
+def test_concat_where_single_nested_sdfg_consumer(
+    rename_concat_data: bool,
+) -> None:
+    sdfg, state, concat_node, nsdfg = _make_concat_where_single_nested_sdfg_consumer(
+        rename_concat_data=rename_concat_data
+    )
 
     access_nodes_before = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
     assert len(access_nodes_before) == 4
@@ -995,10 +1007,11 @@ def test_concat_where_single_nested_sdfg_consumer():
     assert {nsdfg} == set(util.count_nodes(sdfg, dace_nodes.NestedSDFG, True))
     assert all(oedge.dst is nsdfg for oedge in state.out_edges(concat_node))
     assert state.in_degree(nsdfg) == 1
+    nested_concat_data_name = next(iter(oedge.dst_conn for oedge in state.out_edges(concat_node)))
     assert concat_node.data in sdfg.arrays
     assert sdfg.arrays[concat_node.data].transient
-    assert concat_node.data in nsdfg.sdfg.arrays
-    assert not nsdfg.sdfg.arrays[concat_node.data].transient
+    assert nested_concat_data_name in nsdfg.sdfg.arrays
+    assert not nsdfg.sdfg.arrays[nested_concat_data_name].transient
 
     gtx_transformations.gt_replace_concat_where_node(
         state=state,
@@ -1014,6 +1027,6 @@ def test_concat_where_single_nested_sdfg_consumer():
     assert all(isinstance(source_node, dace_nodes.AccessNode) for source_node in source_nodes)
     assert concat_node not in access_nodes_after
     assert concat_node.data not in sdfg.arrays
-    assert concat_node.data not in nsdfg.sdfg.arrays
+    assert nested_concat_data_name not in nsdfg.sdfg.arrays
     assert state.in_degree(nsdfg) == 2
     assert all(iedge.src in source_nodes for iedge in state.in_edges(nsdfg))
