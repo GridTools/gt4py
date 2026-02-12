@@ -365,22 +365,26 @@ def _process_descending_points_of_state(
     producer_specs: Sequence[_ProducerSpec],
 ) -> None:
     """Do some preprocessing."""
-    configured_descending_points: dict[dace_nodes.NestedSDFG, list[_ProducerSpec]] = {}
+    configured_descending_points: dict[dace_nodes.NestedSDFG, tuple[str, list[_ProducerSpec]]] = {}
     for descending_point in descending_points:
-        if descending_point.consumer not in configured_descending_points:
-            configured_descending_points[descending_point.consumer] = _configure_descending_point(
+        nsdfg = descending_point.consumer
+        if nsdfg not in configured_descending_points:
+            configured_descending_points[nsdfg] = _configure_descending_point(
                 state=state,
                 descending_point=descending_point,
                 parent_initial_producer_specs=initial_producer_specs,
                 full_parent_producer_specs=producer_specs,
             )
-
         _process_descending_point_impl(
             this_descending_point=descending_point,
-            transformed_initial_producer_specs=configured_descending_points[
-                descending_point.consumer
-            ],
+            transformed_initial_producer_specs=configured_descending_points[nsdfg][1],
         )
+
+    # Now remove the concat where data descriptors form the nested SDFG. We must
+    #   it do here because we have to make sure that all edges, that are descending
+    #   points have been processed.
+    for nsdfg, (nested_concat_data, _) in configured_descending_points.items():
+        nsdfg.sdfg.remove_data(nested_concat_data, validate=__debug__)
 
 
 def _process_descending_point_impl(
@@ -389,8 +393,8 @@ def _process_descending_point_impl(
 ) -> None:
     """Perform preprocessing and then call the actual implementation."""
     consumers = _find_consumer_specs_in_descending_point(this_descending_point)
-    for state, (concat_node, (genuine_consumer_specs, descending_points)) in consumers.items():
-        scope_dict = state.scope_dict()
+
+    for state, (_concat_node, (genuine_consumer_specs, descending_points)) in consumers.items():
         initial_producer_specs, base_scope_sources = (
             _setup_initial_producer_description_in_nested_state(
                 descending_point=this_descending_point,
@@ -398,6 +402,9 @@ def _process_descending_point_impl(
                 transformed_initial_producer_specs=transformed_initial_producer_specs,
             )
         )
+        scope_dict = (
+            state.scope_dict()
+        )  # Must be called after `_setup_initial_producer_description_in_nested_state()`.
         producer_specs = _map_data_into_nested_scopes(
             state=state,
             scope_dict=scope_dict,
@@ -417,15 +424,20 @@ def _process_descending_point_impl(
             )
 
         # Now recursively descend.
-        _process_descending_points_of_state(
-            state=state,
-            descending_points=descending_points,
-            initial_producer_specs=initial_producer_specs,
-            producer_specs=producer_specs,
-        )
+        if len(descending_points) > 0:
+            _process_descending_points_of_state(
+                state=state,
+                descending_points=descending_points,
+                initial_producer_specs=initial_producer_specs,
+                producer_specs=producer_specs,
+            )
 
-        assert state.degree(concat_node) == 0
-        state.remove_node(concat_node)
+        # NOTE: `_concat_node` has been removed already by `_configure_descending_point()`.
+
+    # NOTE: We can not remove the concat where data here, because a descending point
+    #   does not equals a nested SDFG. Thus there could be other descending points
+    #   that refers to the same nested SDFG. The data is removed in
+    #   `_process_descending_points_of_state()`.
 
 
 def _setup_initial_producer_description_in_nested_state(
@@ -499,7 +511,7 @@ def _configure_descending_point(
     descending_point: _FinalConsumerSpec,
     parent_initial_producer_specs: Sequence[_ProducerSpec],
     full_parent_producer_specs: Sequence[_ProducerSpec],
-) -> list[_ProducerSpec]:
+) -> tuple[str, list[_ProducerSpec]]:
     """Handles a descending point.
 
     The function computes the initial producer specification for the nested SDFG.
@@ -507,13 +519,16 @@ def _configure_descending_point(
     - That the nested SDFG has the necessary data descriptors and symbols:
     - That the nested SDFG has an updated symbol mapping.
     - That the nested SDFG was connected to the data source.
-    - Remove the edge that maps in the top level concat where data.
+    - Remove the edge that maps in the top level concat where data into the nested SDFG.
+        However, it does not remove the data descriptor from the nested SDFG.
     - Applies the symbol remapping to the returned producer specifications.
 
-    The function returns a transformed version of the initial producer specification
-    of the parent that is can be used inside the descending point. It can then later
-    be passed to `_setup_initial_producer_description_in_nested_state()` to obtain
-    producer specification and scope information inside a state.
+    The function returns a pair. The first element is the name of the concat where
+    data inside the nested SDFG. The second element is a transformed version of the
+    initial producer specification of the parent that is can be used inside the
+    descending point. It can then later be passed to
+    `_setup_initial_producer_description_in_nested_state()` to obtain producer
+    specification and scope information inside a state.
 
     It is important that this function can only be called once per descending point.
 
@@ -630,7 +645,7 @@ def _configure_descending_point(
     nested_concat_data = top_to_nested_desc_mapping[top_concat_data]
     assert nested_concat_data not in descending_point.consumer.out_connectors
 
-    return transformed_initial_producer_specs
+    return nested_concat_data, transformed_initial_producer_specs
 
 
 def _map_data_into_nested_scopes(
@@ -934,14 +949,14 @@ def _find_consumer_specs_in_descending_point(
                 continue
             assert state.in_degree(dnode) == 0
 
-            if concat_node is not None:
+            if concat_node is None:
+                concat_node = dnode
+            else:
                 # We found a second node referring to the concat where data,
                 #  we have to merge them.
                 for oedge in state.out_edges(dnode):
                     dace_transformation.helpers.redirect_edge(
-                        state=state,
-                        edge=oedge,
-                        new_src=concat_node,
+                        state=state, edge=oedge, new_src=concat_node
                     )
                 assert state.degree(dnode) == 0
                 state.remove_node(dnode)
