@@ -15,7 +15,7 @@ from typing import Any
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SourceCodeConfig:
+class SourceCodeSpec:
     """
     Basic settings for any source programming language.
 
@@ -24,46 +24,46 @@ class SourceCodeConfig:
     specific formatter used depending on ``.formatter_key``.
     """
 
-    name: str
+    source_language: str
     file_extension: str
     formatter_key: str | None = None
     formatter_options: Mapping[str, Any] | None = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SourceCodeAndHeaderConfig(SourceCodeConfig):
+class HeaderAndSourceCodeSpec(SourceCodeSpec):
     """Add a header file extension setting on top of the basic set."""
 
     header_extension: str
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class PythonCodeConfig(SourceCodeConfig):
+class PythonCodeSpec(SourceCodeSpec):
     """Settings for Python language."""
 
-    name: str = "python"
+    source_language: str = "python"
     file_extension: str = "py"
     formatter_key: str = "python"
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SDFGCodeConfig(SourceCodeConfig):
+class SDFGCodeSpec(SourceCodeSpec):
     """Settings for SDFGs."""
 
-    name: str = "SDFG"
+    source_language: str = "SDFG"
     file_extension: str = "sdfg"
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CPPLikeCodeConfig(SourceCodeAndHeaderConfig):
+class CPPLikeCodeSpec(HeaderAndSourceCodeSpec):
     """Settings for C++-like language."""
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CPPCodeConfig(CPPLikeCodeConfig):
+class CPPCodeSpec(CPPLikeCodeSpec):
     """Settings for C++ language."""
 
-    name: str = "CXX"
+    source_language: str = "CXX"
     file_extension: str = "cpp"
     header_extension: str = "hpp"
     formatter_key: str = "cpp"
@@ -73,10 +73,10 @@ class CPPCodeConfig(CPPLikeCodeConfig):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CUDACodeConfig(CPPLikeCodeConfig):
+class CUDACodeSpec(CPPLikeCodeSpec):
     """Settings for CUDA language."""
 
-    name: str = "CUDA"
+    source_language: str = "CUDA"
     file_extension: str = "cu"
     header_extension: str = "cuh"
     formatter_key: str = "cpp"
@@ -86,10 +86,10 @@ class CUDACodeConfig(CPPLikeCodeConfig):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class HIPCodeConfig(CPPLikeCodeConfig):
+class HIPCodeSpec(CPPLikeCodeSpec):
     """Settings for HIP language."""
 
-    name: str = "HIP"
+    source_language: str = "HIP"
     file_extension: str = "hip"
     header_extension: str = "h"
     formatter_key: str = "cpp"

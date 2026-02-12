@@ -16,7 +16,7 @@ dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py.next import common as gtx_common, int32
-from gt4py.next.otf import languages, stages
+from gt4py.next.otf import code_specs, stages
 from gt4py.next.program_processors.runners import dace as dace_runner
 from gt4py.next.program_processors.runners.dace import workflow as dace_workflow
 from gt4py.next import neighbor_sum
@@ -225,7 +225,7 @@ _dace_compile_call = dace_workflow.compilation.DaCeCompiler.__call__
 
 def mocked_compile_call(
     self,
-    inp: stages.CompilableProject[languages.SDFGCodeConfig, languages.PythonCodeConfig],
+    inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     binding_source_ref: str,
 ):
     assert len(inp.library_deps) == 0
@@ -242,7 +242,7 @@ def mocked_compile_call(
 
 def mocked_compile_call_cartesian(
     self,
-    inp: stages.CompilableProject[languages.SDFGCodeConfig, languages.PythonCodeConfig],
+    inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     use_metrics: bool,
     use_zero_origin: bool,
 ):
@@ -254,7 +254,7 @@ def mocked_compile_call_cartesian(
 
 def mocked_compile_call_unstructured(
     self,
-    inp: stages.CompilableProject[languages.SDFGCodeConfig, languages.PythonCodeConfig],
+    inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     use_metrics: bool,
     use_zero_origin: bool,
 ):

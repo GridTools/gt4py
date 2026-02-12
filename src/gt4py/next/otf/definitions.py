@@ -12,11 +12,11 @@ from typing import Protocol, TypeAlias, TypeVar
 
 from gt4py.next.ffront import stages as ffront_stages
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, languages, stages, toolchain, workflow
+from gt4py.next.otf import arguments, code_specs, stages, toolchain, workflow
 
 
-CodeConfigT = TypeVar("CodeConfigT", bound=languages.SourceCodeConfig)
-ToCodeConfigT = TypeVar("ToCodeConfigT", bound=languages.SourceCodeConfig)
+CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
+ToCodeSpecT = TypeVar("ToCodeSpecT", bound=code_specs.SourceCodeSpec)
 
 
 IRDefinitionT = TypeVar(
@@ -34,15 +34,15 @@ CompilableProgramDef: TypeAlias = ConcreteProgramDef[itir.Program, arguments.Com
 
 
 class TranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[CompilableProgramDef, stages.ProgramSource[CodeConfigT]],
-    Protocol[CodeConfigT],
+    workflow.ReplaceEnabledWorkflowMixin[CompilableProgramDef, stages.ProgramSource[CodeSpecT]],
+    Protocol[CodeSpecT],
 ):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
 
     ...
 
 
-class BindingStep(Protocol[CodeConfigT, ToCodeConfigT]):
+class BindingStep(Protocol[CodeSpecT, ToCodeSpecT]):
     """
     Generate Bindings for program source and package both together (ProgramSource -> CompilableSource).
 
@@ -51,18 +51,16 @@ class BindingStep(Protocol[CodeConfigT, ToCodeConfigT]):
     """
 
     def __call__(
-        self, program_source: stages.ProgramSource[CodeConfigT]
-    ) -> stages.CompilableProject[CodeConfigT, ToCodeConfigT]: ...
+        self, program_source: stages.ProgramSource[CodeSpecT]
+    ) -> stages.CompilableProject[CodeSpecT, ToCodeSpecT]: ...
 
 
 class CompilationStep(
-    workflow.Workflow[
-        stages.CompilableProject[CodeConfigT, ToCodeConfigT], stages.ExecutableProgram
-    ],
-    Protocol[CodeConfigT, ToCodeConfigT],
+    workflow.Workflow[stages.CompilableProject[CodeSpecT, ToCodeSpecT], stages.ExecutableProgram],
+    Protocol[CodeSpecT, ToCodeSpecT],
 ):
     """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
 
     def __call__(
-        self, source: stages.CompilableProject[CodeConfigT, ToCodeConfigT]
+        self, source: stages.CompilableProject[CodeSpecT, ToCodeSpecT]
     ) -> stages.ExecutableProgram: ...

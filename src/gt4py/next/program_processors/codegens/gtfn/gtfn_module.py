@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.otf import definitions, languages, stages, workflow
+from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
@@ -40,28 +40,28 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.SourceCodeAndHeaderConfig],
+        stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec],
     ],
     workflow.ChainableWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.SourceCodeAndHeaderConfig],
+        stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec],
     ],
 ):
-    code_config: Optional[languages.SourceCodeAndHeaderConfig] = None
+    code_spec: Optional[code_specs.HeaderAndSourceCodeSpec] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
 
-    def _default_code_config(self) -> languages.SourceCodeAndHeaderConfig:
+    def _default_code_spec(self) -> code_specs.HeaderAndSourceCodeSpec:
         match self.device_type:
             case core_defs.DeviceType.CUDA:
-                return languages.CUDACodeConfig()
+                return code_specs.CUDACodeSpec()
             case core_defs.DeviceType.ROCM:
-                return languages.HIPCodeConfig()
+                return code_specs.HIPCodeSpec()
             case core_defs.DeviceType.CPU:
-                return languages.CPPCodeConfig()
+                return code_specs.CPPCodeSpec()
             case _:
                 raise self._not_implemented_for_device_type()
 
@@ -197,7 +197,7 @@ class GTFNTranslationStep(
 
     def __call__(
         self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[languages.SourceCodeAndHeaderConfig]:
+    ) -> stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
 
@@ -231,7 +231,7 @@ class GTFNTranslationStep(
             inp.args.column_axis,
         )
         source_code = interface.format_source(
-            self._code_config(),
+            self._code_spec(),
             f"""
                     #include <{self._backend_header()}>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
@@ -240,11 +240,11 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
-        module: stages.ProgramSource[languages.SourceCodeAndHeaderConfig] = stages.ProgramSource(
+        module: stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec] = stages.ProgramSource(
             entry_point=function,
             library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
             source_code=source_code,
-            code_config=self._code_config(),
+            code_spec=self._code_spec(),
         )
         return module
 
@@ -266,8 +266,8 @@ class GTFNTranslationStep(
             case _:
                 raise self._not_implemented_for_device_type()
 
-    def _code_config(self) -> languages.SourceCodeAndHeaderConfig:
-        return self.code_config if self.code_config is not None else self._default_code_config()
+    def _code_spec(self) -> code_specs.HeaderAndSourceCodeSpec:
+        return self.code_spec if self.code_spec is not None else self._default_code_spec()
 
     def _library_name(self) -> str:
         match self.device_type:

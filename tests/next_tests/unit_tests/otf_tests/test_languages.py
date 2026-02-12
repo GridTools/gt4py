@@ -8,7 +8,7 @@
 
 import pytest
 
-from gt4py.next.otf import languages, stages
+from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
 
 
@@ -17,5 +17,5 @@ def test_header_files_settings_with_cpp_accepted():
         entry_point=interface.Function(name="basic_settings_with_cpp", parameters=[]),
         source_code="",
         library_deps=(),
-        code_config=languages.CPPCodeConfig(),
+        code_spec=code_specs.CPPCodeSpec(),
     )

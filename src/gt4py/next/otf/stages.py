@@ -15,7 +15,7 @@ from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
 from gt4py.eve import utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import definitions, languages
+from gt4py.next.otf import code_specs, definitions
 from gt4py.next.otf.binding import interface
 
 
@@ -54,12 +54,12 @@ def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef
     return program_hash
 
 
-CodeConfigT = TypeVar("CodeConfigT", bound=languages.SourceCodeConfig)
-ToCodeConfigT = TypeVar("ToCodeConfigT", bound=languages.SourceCodeConfig)
+CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
+ToCodeSpecT = TypeVar("ToCodeSpecT", bound=code_specs.SourceCodeSpec)
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramSource(Generic[CodeConfigT]):
+class ProgramSource(Generic[CodeSpecT]):
     """
     Standalone source code translated from an IR along with information relevant for OTF compilation.
 
@@ -72,11 +72,11 @@ class ProgramSource(Generic[CodeConfigT]):
     entry_point: interface.Function
     source_code: str
     library_deps: tuple[interface.LibraryDependency, ...]
-    code_config: CodeConfigT
+    code_spec: CodeSpecT
 
 
 @dataclasses.dataclass(frozen=True)
-class BindingSource(Generic[CodeConfigT, ToCodeConfigT]):
+class BindingSource(Generic[CodeSpecT, ToCodeSpecT]):
     """
     Companion source code for translated program source code.
 
@@ -92,7 +92,7 @@ class BindingSource(Generic[CodeConfigT, ToCodeConfigT]):
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableProject(Generic[CodeConfigT, ToCodeConfigT]):
+class CompilableProject(Generic[CodeSpecT, ToCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
@@ -101,8 +101,8 @@ class CompilableProject(Generic[CodeConfigT, ToCodeConfigT]):
     If bindings are required, it is recommended to create them in a separate step to ensure reusability.
     """
 
-    program_source: ProgramSource[CodeConfigT]
-    binding_source: Optional[BindingSource[CodeConfigT, ToCodeConfigT]]
+    program_source: ProgramSource[CodeSpecT]
+    binding_source: Optional[BindingSource[CodeSpecT, ToCodeSpecT]]
 
     @property
     def library_deps(self) -> tuple[interface.LibraryDependency, ...]:
@@ -111,11 +111,11 @@ class CompilableProject(Generic[CodeConfigT, ToCodeConfigT]):
         return _unique_libs(*self.program_source.library_deps, *self.binding_source.library_deps)
 
 
-CodeConfigT_co = TypeVar("CodeConfigT_co", bound=languages.SourceCodeConfig, covariant=True)
-ToCodeConfigT_co = TypeVar("ToCodeConfigT_co", bound=languages.SourceCodeConfig, covariant=True)
+CodeSpecT_co = TypeVar("CodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
+ToCodeSpecT_co = TypeVar("ToCodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
 
 
-class BuildSystemProject(Protocol[CodeConfigT_co, ToCodeConfigT_co]):
+class BuildSystemProject(Protocol[CodeSpecT_co, ToCodeSpecT_co]):
     """
     Use source code extracted from a ``CompilableSource`` to configure and build a GT4Py program.
 

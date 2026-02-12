@@ -18,7 +18,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import definitions, languages, stages, workflow
+from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
@@ -356,9 +356,9 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.SDFGCodeConfig],
+        stages.ProgramSource[code_specs.SDFGCodeSpec],
     ],
-    definitions.TranslationStep[languages.SDFGCodeConfig],
+    definitions.TranslationStep[code_specs.SDFGCodeSpec],
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
@@ -441,7 +441,7 @@ class DaCeTranslator(
 
     def __call__(
         self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[languages.SDFGCodeConfig]:
+    ) -> stages.ProgramSource[code_specs.SDFGCodeSpec]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
@@ -459,14 +459,14 @@ class DaCeTranslator(
             for param, arg_type in zip(program.params, arg_types)
         )
 
-        module: stages.ProgramSource[languages.SDFGCodeConfig] = stages.ProgramSource(
+        module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
             entry_point=interface.Function(program.id, program_parameters),
             # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
             #   We compute the hash in order to refresh `cfg_list` on the SDFG,
             #   which makes the JSON serialization stable.
             source_code=sdfg.to_json(hash=True),
             library_deps=tuple(),
-            code_config=languages.SDFGCodeConfig(),
+            code_spec=code_specs.SDFGCodeSpec(),
         )
         return module
 

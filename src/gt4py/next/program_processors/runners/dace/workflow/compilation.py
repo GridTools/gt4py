@@ -19,7 +19,7 @@ import factory
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import common, config
-from gt4py.next.otf import definitions, languages, stages, workflow
+from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
@@ -55,7 +55,7 @@ class CompiledDaceProgram:
         self,
         program: dace.CompiledSDFG,
         bind_func_name: str,
-        binding_source: stages.BindingSource[languages.SDFGCodeConfig, languages.PythonCodeConfig],
+        binding_source: stages.BindingSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     ):
         self.sdfg_program = program
 
@@ -117,14 +117,14 @@ class CompiledDaceProgram:
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[languages.SDFGCodeConfig, languages.PythonCodeConfig],
+        stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
         CompiledDaceProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[languages.SDFGCodeConfig, languages.PythonCodeConfig],
+        stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
         CompiledDaceProgram,
     ],
-    definitions.CompilationStep[languages.SDFGCodeConfig, languages.PythonCodeConfig],
+    definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
@@ -135,7 +135,7 @@ class DaCeCompiler(
 
     def __call__(
         self,
-        inp: stages.CompilableProject[languages.SDFGCodeConfig, languages.PythonCodeConfig],
+        inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     ) -> CompiledDaceProgram:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,

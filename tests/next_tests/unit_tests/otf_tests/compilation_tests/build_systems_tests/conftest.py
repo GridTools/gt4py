@@ -14,7 +14,7 @@ import pytest
 import gt4py.next as gtx
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.next import config
-from gt4py.next.otf import languages, stages
+from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import cpp_interface, interface, nanobind
 from gt4py.next.otf.compilation import cache
 
@@ -73,7 +73,7 @@ def make_program_source(name: str) -> stages.ProgramSource:
         entry_point=entry_point,
         source_code=src,
         library_deps=(interface.LibraryDependency("gridtools_cpu", "master"),),
-        code_config=languages.CPPCodeConfig(),
+        code_spec=code_specs.CPPCodeSpec(),
     )
 
 

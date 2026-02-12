@@ -17,7 +17,7 @@ from typing import TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, errors
-from gt4py.next.otf import languages, stages
+from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.compilation import build_data, cache, common, compiler
 from gt4py.next.otf.compilation.build_systems import cmake_lists
 
@@ -59,12 +59,12 @@ def get_cmake_device_arch_option() -> str:
     return cmake_flag
 
 
-CPPLikeCodeConfigT = TypeVar("CPPLikeCodeConfigT", bound=languages.CPPLikeCodeConfig)
+CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
 
 
 @dataclasses.dataclass
 class CMakeFactory(
-    compiler.BuildSystemProjectGenerator[CPPLikeCodeConfigT, languages.PythonCodeConfig]
+    compiler.BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
 ):
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
 
@@ -74,7 +74,7 @@ class CMakeFactory(
 
     def __call__(
         self,
-        source: stages.CompilableProject[CPPLikeCodeConfigT, languages.PythonCodeConfig],
+        source: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> CMakeProject:
         if not source.binding_source:
@@ -82,12 +82,12 @@ class CMakeFactory(
                 "CMake build system project requires separate bindings code file."
             )
         name = source.program_source.entry_point.name
-        header_name = f"{name}.{source.program_source.code_config.header_extension}"
-        bindings_name = f"{name}_bindings.{source.program_source.code_config.file_extension}"
+        header_name = f"{name}.{source.program_source.code_spec.header_extension}"
+        bindings_name = f"{name}_bindings.{source.program_source.code_spec.file_extension}"
         cmake_languages = [cmake_lists.Language(name="CXX")]
-        if (src_lang_name := source.program_source.code_config.name) in {
-            languages.CPPCodeConfig.name,
-            languages.HIPCodeConfig.name,
+        if (src_lang_name := source.program_source.code_spec.source_language) in {
+            code_specs.CPPCodeSpec.source_language,
+            code_specs.HIPCodeSpec.source_language,
         }:
             cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang_name)]
             if device_arch_flag := get_cmake_device_arch_option():
@@ -114,7 +114,7 @@ class CMakeFactory(
 
 
 @dataclasses.dataclass
-class CMakeProject(stages.BuildSystemProject[CPPLikeCodeConfigT, languages.PythonCodeConfig]):
+class CMakeProject(stages.BuildSystemProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]):
     """
     CMake build system for gt4py programs.
 
