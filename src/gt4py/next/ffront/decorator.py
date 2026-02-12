@@ -197,6 +197,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self
 
+
 def _field_domain_descriptor_mapping_from_func_type(func_type: ts.FunctionType) -> list[str]:
     static_domain_args = []
     param_types = func_type.pos_or_kw_args | func_type.kw_only_args
