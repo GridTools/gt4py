@@ -11,18 +11,27 @@ from typing import Annotated, Final, TypeAlias
 from gt4py._core.definitions import Scalar
 from gt4py.next import allocators, backend
 from gt4py.next.common import OffsetProvider
-from gt4py.next.ffront import decorator
+from gt4py.next.ffront import decorator, stages as ffront_stages
+from gt4py.next.otf import compiled_program
 
 
 _ONLY_FOR_TYPING: Final[str] = "only for typing"
 
 # TODO(havogt): alternatively we could introduce Protocols
+DSLDefinition: TypeAlias = Annotated[ffront_stages.DSLDefinition, _ONLY_FOR_TYPING]
+
 Program: TypeAlias = Annotated[decorator.Program, _ONLY_FOR_TYPING]
 FieldOperator: TypeAlias = Annotated[decorator.FieldOperator, _ONLY_FOR_TYPING]
+GTEntryPoint: TypeAlias = Annotated[decorator.GTEntryPoint, _ONLY_FOR_TYPING]
+
+CompiledProgramsKey: TypeAlias = Annotated[compiled_program.CompiledProgramsKey, _ONLY_FOR_TYPING]
+
 Backend: TypeAlias = Annotated[backend.Backend, _ONLY_FOR_TYPING]
+
 FieldBufferAllocationUtil: TypeAlias = Annotated[
     allocators.FieldBufferAllocationUtil, _ONLY_FOR_TYPING
 ]
+
 
 __all__ = [
     "Backend",
