@@ -18,7 +18,6 @@ from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, 
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
-from dace.transformation.passes import SimplifyPass
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config, definitions
@@ -412,11 +411,7 @@ class SDFGManager:
             flipper.visit(stree)
 
         # Create SDFG
-        sdfg = stree.as_sdfg(
-            validate=validate,
-            simplify=simplify,
-            skip={"ScalarToSymbolPromotion"},
-        )
+        sdfg = stree.as_sdfg(validate=validate, simplify=simplify, skip={"ScalarToSymbolPromotion"})
 
         if do_cache:
             self._save_sdfg(sdfg, path)
@@ -478,7 +473,7 @@ class DaCeExtGenerator(BackendCodegen):
             sdfg,
             self.backend.storage_info,
         )
-        SimplifyPass(validate=True, skip={"ScalarToSymbolPromotion"}).apply_pass(sdfg, {})
+        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion"})
 
         # NOTE
         # The glue code in DaCeComputationCodegen.apply() (just below) will define all the
