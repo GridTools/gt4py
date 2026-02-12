@@ -16,7 +16,7 @@ from gt4py.next.otf import arguments, code_specs, stages, toolchain, workflow
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
-ToCodeSpecT = TypeVar("ToCodeSpecT", bound=code_specs.SourceCodeSpec)
+TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
 
 
 IRDefinitionT = TypeVar(
@@ -42,7 +42,7 @@ class TranslationStep(
     ...
 
 
-class BindingStep(Protocol[CodeSpecT, ToCodeSpecT]):
+class BindingStep(Protocol[CodeSpecT, TargetCodeSpecT]):
     """
     Generate Bindings for program source and package both together (ProgramSource -> CompilableSource).
 
@@ -52,15 +52,17 @@ class BindingStep(Protocol[CodeSpecT, ToCodeSpecT]):
 
     def __call__(
         self, program_source: stages.ProgramSource[CodeSpecT]
-    ) -> stages.CompilableProject[CodeSpecT, ToCodeSpecT]: ...
+    ) -> stages.CompilableProject[CodeSpecT, TargetCodeSpecT]: ...
 
 
 class CompilationStep(
-    workflow.Workflow[stages.CompilableProject[CodeSpecT, ToCodeSpecT], stages.ExecutableProgram],
-    Protocol[CodeSpecT, ToCodeSpecT],
+    workflow.Workflow[
+        stages.CompilableProject[CodeSpecT, TargetCodeSpecT], stages.ExecutableProgram
+    ],
+    Protocol[CodeSpecT, TargetCodeSpecT],
 ):
     """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
 
     def __call__(
-        self, source: stages.CompilableProject[CodeSpecT, ToCodeSpecT]
+        self, source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT]
     ) -> stages.ExecutableProgram: ...

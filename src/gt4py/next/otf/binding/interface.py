@@ -15,10 +15,12 @@ from gt4py.eve import codegen
 from gt4py.next.otf import code_specs
 
 
-def format_source(settings: code_specs.SourceCodeSpec, source: str) -> str:
-    assert settings.formatter_key is not None, "No formatter key specified in language settings."
+def format_source(source_code_spec: code_specs.SourceCodeSpec, source: str) -> str:
+    assert source_code_spec.formatter_key is not None, (
+        "No formatter key specified in language settings."
+    )
     return codegen.format_source(
-        settings.formatter_key, source, **(settings.formatter_options or {})
+        source_code_spec.formatter_key, source, **(source_code_spec.formatter_options or {})
     )
 
 

@@ -55,7 +55,7 @@ def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
-ToCodeSpecT = TypeVar("ToCodeSpecT", bound=code_specs.SourceCodeSpec)
+TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -76,7 +76,7 @@ class ProgramSource(Generic[CodeSpecT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class BindingSource(Generic[CodeSpecT, ToCodeSpecT]):
+class BindingSource(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Companion source code for translated program source code.
 
@@ -92,7 +92,7 @@ class BindingSource(Generic[CodeSpecT, ToCodeSpecT]):
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableProject(Generic[CodeSpecT, ToCodeSpecT]):
+class CompilableProject(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
@@ -102,7 +102,7 @@ class CompilableProject(Generic[CodeSpecT, ToCodeSpecT]):
     """
 
     program_source: ProgramSource[CodeSpecT]
-    binding_source: Optional[BindingSource[CodeSpecT, ToCodeSpecT]]
+    binding_source: Optional[BindingSource[CodeSpecT, TargetCodeSpecT]]
 
     @property
     def library_deps(self) -> tuple[interface.LibraryDependency, ...]:
@@ -112,10 +112,10 @@ class CompilableProject(Generic[CodeSpecT, ToCodeSpecT]):
 
 
 CodeSpecT_co = TypeVar("CodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
-ToCodeSpecT_co = TypeVar("ToCodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
+TargetCodeSpecT_co = TypeVar("TargetCodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
 
 
-class BuildSystemProject(Protocol[CodeSpecT_co, ToCodeSpecT_co]):
+class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
     """
     Use source code extracted from a ``CompilableSource`` to configure and build a GT4Py program.
 
