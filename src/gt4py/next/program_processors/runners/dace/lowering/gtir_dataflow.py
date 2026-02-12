@@ -27,6 +27,7 @@ from typing import (
 
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
+from dace.libraries import standard as dace_stdlib
 
 from gt4py import eve
 from gt4py.eve.extended_typing import MaybeNestedInTuple, NestedTuple
@@ -1341,6 +1342,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset_type.value)
         assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
 
+        inp_conn = "_in"
+        outp_conn = "_out"
+        mask_conn = "_mask"
+
         if offset_provider_type.has_skip_values:
             name = self.subgraph_builder.unique_nsdfg_name("reduce_with_skip_values")
             reduce_node = gtir_library_nodes.ReduceWithSkipValues(
@@ -1350,27 +1355,34 @@ class LambdaToDataflow(eve.NodeVisitor):
                 init=reduce_init.value,
                 debuginfo=gtir_to_sdfg_utils.debug_info(node),
             )
-            self.state.add_node(reduce_node)
+            reduce_node.input_conn = inp_conn
+            reduce_node.output_conn = outp_conn
+            reduce_node.mask_conn = mask_conn
         else:
-            reduce_node = self.state.add_reduce(
+            reduce_node = dace_stdlib.Reduce(
+                "reduce",
                 reduce_wcr,
                 axes=None,
                 identity=reduce_init.value,
+                schedule=dace.dtypes.ScheduleType.Default,
                 debuginfo=gtir_to_sdfg_utils.debug_info(node),
+                inputs={inp_conn},
+                outputs={outp_conn},
             )
+        self.state.add_node(reduce_node)
 
         if isinstance(input_expr, MemletExpr):
-            self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node, "_in")
+            self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node, inp_conn)
         else:
             self.state.add_edge(
                 input_expr.dc_node,
                 None,
                 reduce_node,
-                "_in",
+                inp_conn,
                 self.sdfg.make_array_memlet(input_expr.dc_node.data),
             )
         self.state.add_edge(
-            reduce_node, "_out", result_node, None, dace.Memlet(data=result, subset="0")
+            reduce_node, outp_conn, result_node, None, dace.Memlet(data=result, subset="0")
         )
 
         if offset_provider_type.has_skip_values:
@@ -1395,7 +1407,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
                 ),
                 reduce_node,
-                "_mask",
+                mask_conn,
             )
 
         return ValueExpr(result_node, node.type)

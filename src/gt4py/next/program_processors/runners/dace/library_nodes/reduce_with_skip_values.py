@@ -18,11 +18,6 @@ from dace.transformation import transformation as dace_transform
 from gt4py.next import common as gtx_common
 
 
-_INPUT_NAME: Final[str] = "_in"
-_OUTPUT_NAME: Final[str] = "_out"
-_MASK_NAME: Final[str] = "_mask"
-
-
 @dace.library.node
 class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
     """Implements reduction with skip values."""
@@ -34,6 +29,9 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
     wcr = dace_properties.LambdaProperty(default="lambda a, b: a")
     identity = dace_properties.SymbolicProperty(default=0, to_json=lambda x: str(x))
     init = dace_properties.SymbolicProperty(default=0, to_json=lambda x: str(x))
+    input_conn = dace_properties.Property(default="_in")
+    output_conn = dace_properties.Property(default="_out")
+    mask_conn = dace_properties.Property(default="_mask")
 
     def __init__(
         self,
@@ -42,23 +40,43 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
         identity: dace.symbolic.SymbolicType,
         init: dace.symbolic.SymbolicType,
         debuginfo: dace.dtypes.DebugInfo | None = None,
+        input_conn: str | None = None,
+        output_conn: str | None = None,
+        mask_conn: str | None = None,
     ) -> None:
-        super().__init__(name, inputs={_INPUT_NAME, _MASK_NAME}, outputs={_OUTPUT_NAME})
+        if input_conn is None:
+            input_conn = self.input_conn
+        else:
+            self.input_conn = input_conn
+
+        if output_conn is None:
+            output_conn = self.output_conn
+        else:
+            self.output_conn = output_conn
+
+        if mask_conn is None:
+            mask_conn = self.mask_conn
+        else:
+            self.mask_conn = mask_conn
+
+        super().__init__(name, inputs={input_conn, mask_conn}, outputs={output_conn})
         self.wcr = wcr
         self.identity = identity
         self.init = init
         self.debuginfo = debuginfo
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
-        assert len(list(state.in_edges_by_connector(self, _INPUT_NAME))) == 1
-        inedge: dace_graph.MultiConnectorEdge = next(state.in_edges_by_connector(self, _INPUT_NAME))
-        assert len(list(state.out_edges_by_connector(self, _OUTPUT_NAME))) == 1
-        outedge: dace_graph.MultiConnectorEdge = next(
-            state.out_edges_by_connector(self, _OUTPUT_NAME)
+        assert len(list(state.in_edges_by_connector(self, self.input_conn))) == 1
+        inedge: dace_graph.MultiConnectorEdge = next(
+            state.in_edges_by_connector(self, self.input_conn)
         )
-        assert len(list(state.in_edges_by_connector(self, _MASK_NAME))) == 1
+        assert len(list(state.out_edges_by_connector(self, self.output_conn))) == 1
+        outedge: dace_graph.MultiConnectorEdge = next(
+            state.out_edges_by_connector(self, self.output_conn)
+        )
+        assert len(list(state.in_edges_by_connector(self, self.mask_conn))) == 1
         maskedge: dace_graph.MultiConnectorEdge = next(
-            state.in_edges_by_connector(self, _MASK_NAME)
+            state.in_edges_by_connector(self, self.mask_conn)
         )
 
         mask_desc = sdfg.arrays[maskedge.data.data]
@@ -70,11 +88,11 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
                 f"Invalid shape {mask_desc.shape} of mask array, expected constant neighbors size."
             )
         if inedge.data.num_elements() != max_neighbors:
-            raise ValueError(f"Invalid memlet on input connector {_INPUT_NAME}.")
+            raise ValueError(f"Invalid memlet on input connector {self.input_conn}.")
         if maskedge.data.num_elements() != max_neighbors:
-            raise ValueError(f"Invalid memlet on input connector {_MASK_NAME}.")
+            raise ValueError(f"Invalid memlet on input connector {self.mask_conn}.")
         if outedge.data.num_elements() != 1:
-            raise ValueError(f"Invalid memlet on output connector {_OUTPUT_NAME}.")
+            raise ValueError(f"Invalid memlet on output connector {self.output_conn}.")
 
 
 @dace_library.register_expansion(ReduceWithSkipValues, "pure")
@@ -85,15 +103,17 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
 
     @staticmethod
     def expansion(node: ReduceWithSkipValues, state: dace.SDFGState, sdfg: dace.SDFG) -> dace.SDFG:
-        assert len(list(state.in_edges_by_connector(node, _INPUT_NAME))) == 1
-        inedge: dace_graph.MultiConnectorEdge = next(state.in_edges_by_connector(node, _INPUT_NAME))
-        assert len(list(state.out_edges_by_connector(node, _OUTPUT_NAME))) == 1
-        outedge: dace_graph.MultiConnectorEdge = next(
-            state.out_edges_by_connector(node, _OUTPUT_NAME)
+        assert len(list(state.in_edges_by_connector(node, node.input_conn))) == 1
+        inedge: dace_graph.MultiConnectorEdge = next(
+            state.in_edges_by_connector(node, node.input_conn)
         )
-        assert len(list(state.in_edges_by_connector(node, _MASK_NAME))) == 1
+        assert len(list(state.out_edges_by_connector(node, node.output_conn))) == 1
+        outedge: dace_graph.MultiConnectorEdge = next(
+            state.out_edges_by_connector(node, node.output_conn)
+        )
+        assert len(list(state.in_edges_by_connector(node, node.mask_conn))) == 1
         maskedge: dace_graph.MultiConnectorEdge = next(
-            state.in_edges_by_connector(node, _MASK_NAME)
+            state.in_edges_by_connector(node, node.mask_conn)
         )
         input_desc = sdfg.arrays[inedge.data.data]
         output_desc = sdfg.arrays[outedge.data.data]
@@ -106,18 +126,18 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
 
         nsdfg = dace.SDFG(node.label)
         inp, _ = nsdfg.add_array(
-            _INPUT_NAME,
+            node.input_conn,
             (max_neighbors,),
             input_desc.dtype,
             strides=(input_desc.strides[local_dim_index],),
         )
         mask, _ = nsdfg.add_array(
-            _MASK_NAME,
+            node.mask_conn,
             (max_neighbors,),
             mask_desc.dtype,
             strides=(mask_desc.strides[1],),
         )
-        outp, _ = nsdfg.add_scalar(_OUTPUT_NAME, output_desc.dtype)
+        outp, _ = nsdfg.add_scalar(node.output_conn, output_desc.dtype)
         st_init = nsdfg.add_state("init")
         init_tasklet = st_init.add_tasklet(
             name="write",
