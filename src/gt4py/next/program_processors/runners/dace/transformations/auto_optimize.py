@@ -726,6 +726,25 @@ def _gt_auto_process_dataflow_inside_maps(
         validate_all=validate_all,
     )
 
+    find_single_use_data = dace_analysis.FindSingleUseData()
+    single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.RemoveScalarCopies(
+            single_use_data=single_use_data,
+        ),
+        validate=False,
+        validate_all=validate_all,
+    )
+
+    # Make sure that this runs before MoveDataflowIntoIfBody because atm it doesn't handle
+    # NestedSDFGs inside the ConditionalBlocks it fuses.
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.FuseHorizontalConditionBlocks(),
+        validate=True,
+        validate_all=True,
+    )
+
     # Move dataflow into the branches of the `if` such that they are only evaluated
     #  if they are needed. Important to call it repeatedly.
     # TODO(phimuell): It is unclear if `MoveDataflowIntoIfBody` should be called
