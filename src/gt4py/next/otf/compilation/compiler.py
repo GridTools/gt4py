@@ -46,11 +46,11 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
 class Compiler(
     workflow.ChainableWorkflowMixin[
         stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
-        stages.CompiledProgram,
+        stages.ExecutableProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
-        stages.CompiledProgram,
+        stages.ExecutableProgram,
     ],
     definitions.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python],
 ):
@@ -65,7 +65,7 @@ class Compiler(
     def __call__(
         self,
         inp: stages.CompilableProject[SourceLanguageType, LanguageSettingsType, languages.Python],
-    ) -> stages.CompiledProgram:
+    ) -> stages.ExecutableProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),

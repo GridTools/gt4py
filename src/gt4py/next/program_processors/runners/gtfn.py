@@ -44,8 +44,8 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
-) -> stages.CompiledProgram:
+    inp: stages.ExecutableProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+) -> stages.ExecutableProgram:
     def decorated_program(
         *args: Any,
         offset_provider: dict[str, common.Connectivity | common.Dimension],
