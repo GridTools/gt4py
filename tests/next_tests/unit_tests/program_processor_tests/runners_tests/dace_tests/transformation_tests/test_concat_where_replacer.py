@@ -995,6 +995,10 @@ def test_concat_where_single_nested_sdfg_consumer():
     assert {nsdfg} == set(util.count_nodes(sdfg, dace_nodes.NestedSDFG, True))
     assert all(oedge.dst is nsdfg for oedge in state.out_edges(concat_node))
     assert state.in_degree(nsdfg) == 1
+    assert concat_node.data in sdfg.arrays
+    assert sdfg.arrays[concat_node.data].transient
+    assert concat_node.data in nsdfg.sdfg.arrays
+    assert not nsdfg.sdfg.arrays[concat_node.data].transient
 
     gtx_transformations.gt_replace_concat_where_node(
         state=state,
@@ -1004,7 +1008,12 @@ def test_concat_where_single_nested_sdfg_consumer():
     sdfg.validate()
 
     access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    source_nodes = list(state.source_nodes())
     assert len(access_nodes_after) == 3
+    assert len(source_nodes) == 2
+    assert all(isinstance(source_node, dace_nodes.AccessNode) for source_node in source_nodes)
     assert concat_node not in access_nodes_after
     assert concat_node.data not in sdfg.arrays
+    assert concat_node.data not in nsdfg.sdfg.arrays
     assert state.in_degree(nsdfg) == 2
+    assert all(iedge.src in source_nodes for iedge in state.in_edges(nsdfg))

@@ -381,7 +381,6 @@ def _process_descending_points_of_state(
                 descending_point.consumer
             ],
         )
-        dace_sdutils.remove_edge_and_dangling_path(state, descending_point.edge)
 
 
 def _process_descending_point_impl(
@@ -529,17 +528,17 @@ def _configure_descending_point(
     nsdfg: dace.SDFG = nsdfg_node.sdfg
     symbol_mapping: dict[str, dace_sym.SymExpr] = nsdfg_node.symbol_mapping
 
-    # Name of the data at the top that is used for the concat where.
-    top_concat_data = descending_point.edge.data.data
-
-    # Now we need to map the data into the nested SDFG. For that we will look at
-    #  what is already there.
+    # Now we need to map the data into the nested SDFG. The mapping function only
+    #  gives us `inter -> top` so we have to invert it.
     nested_to_top_desc_mapping = gtx_transformations.utils.gt_data_descriptor_mapping(
         state=state,
         nsdfg=nsdfg_node,
         only_inputs=True,
     )
     top_to_nested_desc_mapping = {top: nested for nested, top in nested_to_top_desc_mapping.items()}
+
+    # Name of the concat where data in the parent and the descending point.
+    top_concat_data = descending_point.edge.data.data
 
     transformed_initial_producer_specs: list[_ProducerSpec] = []
     handled_data: dict[str, int] = {}
@@ -591,8 +590,8 @@ def _configure_descending_point(
             nested_data_name = top_to_nested_desc_mapping[parent_data_name]
         else:
             # The data is not available inside the nested SDFG or the name as a different meaning.
-            nested_data_name, _ = nsdfg.add_datadesc(
-                name=nested_data_name,
+            nested_data_name = nsdfg.add_datadesc(
+                name=parent_data_name,
                 datadesc=nested_desc.clone(),
                 find_new_name=True,
             )
@@ -625,10 +624,10 @@ def _configure_descending_point(
 
     # Restore the proper format of the symbol mapping.
     nsdfg_node.symbol_mapping = symbol_mapping
-    nested_concat_data = top_to_nested_desc_mapping[top_concat_data]
 
     # Remove the consumer
     dace_sdutils.remove_edge_and_dangling_path(state, descending_point.edge)
+    nested_concat_data = top_to_nested_desc_mapping[top_concat_data]
     assert nested_concat_data not in descending_point.consumer.out_connectors
 
     return transformed_initial_producer_specs
@@ -933,7 +932,7 @@ def _find_consumer_specs_in_descending_point(
         for dnode in state.data_nodes():
             if dnode.data != concat_data:
                 continue
-            assert state.in_edges(dnode) == 0
+            assert state.in_degree(dnode) == 0
 
             if concat_node is not None:
                 # We found a second node referring to the concat where data,
@@ -969,7 +968,7 @@ def _check_descending_point(
         for dnode in state.data_nodes():
             if dnode.data != concat_data:
                 continue
-            if state.in_edges(dnode) != 0:
+            if state.in_degree(dnode) != 0:
                 return False
             scan_for_nested_descending_points = _find_consumer_specs_single_source_single_level(
                 state,
