@@ -962,7 +962,7 @@ def _make_concat_where_single_nested_sdfg_consumer() -> tuple[
             name=aname,
             shape=(10,),
             dtype=dace.float64,
-            transient=True,
+            transient=False,
         )
     nested_state.add_mapped_tasklet(
         "nested_map",
@@ -980,6 +980,8 @@ def _make_concat_where_single_nested_sdfg_consumer() -> tuple[
     )
     state.add_edge(c, None, nsdfg, nested_input, dace.Memlet("c[0:10]"))
     state.add_edge(nsdfg, nested_output, d, None, dace.Memlet("d[0:10]"))
+
+    sdfg.validate()
 
     return sdfg, state, c, nsdfg
 

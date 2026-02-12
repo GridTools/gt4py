@@ -120,11 +120,9 @@ def gt_replace_concat_where_node(
     """
 
     # These are all the consumers that we need to modify.
-    find_consumer_result = _find_consumer_specs_single_source_single_level(
+    genuine_consumer_specs, descending_points = _find_consumer_specs_single_source_single_level(
         state, concat_node, for_check=False
     )
-    genuine_consumer_specs, descending_points = find_consumer_result
-    assert len(genuine_consumer_specs) > 0
     assert all(_check_descending_point(descening_point) for descening_point in descending_points)
 
     scope_dict = state.scope_dict()
