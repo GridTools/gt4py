@@ -1255,3 +1255,116 @@ def test_concat_where_multi_level_nesting():
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_nested_single_element_consumer() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.NestedSDFG, dace_nodes.NestedSDFG
+]:
+    def make_single_element_consumer(name) -> dace.SDFG:
+        sdfg = dace.SDFG(name)
+        state = sdfg.add_state()
+        for aname in "ab":
+            sdfg.add_scalar(
+                aname,
+                dtype=dace.float64,
+                transient=False,
+            )
+
+        tlet = state.add_tasklet(
+            f"single_element_consumer_{name}",
+            inputs={"__in"},
+            outputs={"__out"},
+            code="__out = __in + 1.9",
+        )
+        state.add_edge(state.add_access("a"), None, tlet, "__in", dace.Memlet("a[0]"))
+        state.add_edge(tlet, "__out", state.add_access("b"), None, dace.Memlet("b[0]"))
+        sdfg.validate()
+        return sdfg
+
+    sdfg = dace.SDFG(util.unique_name("nested_single_element_consumer"))
+    state = sdfg.add_state()
+    for aname in "abcd":
+        sdfg.add_array(
+            name=aname,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(aname == "c"),
+        )
+    a, b, c, d = (state.add_access(aname) for aname in "abcd")
+    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
+
+    top_level_nsdfg = state.add_nested_sdfg(
+        make_single_element_consumer("top_level"),
+        inputs={"a"},
+        outputs={"b"},
+        symbol_mapping={},
+    )
+    state.add_edge(c, None, top_level_nsdfg, "a", dace.Memlet("c[0]"))
+    state.add_edge(top_level_nsdfg, "b", d, None, dace.Memlet("d[9]"))
+
+    nested_nsdfg = state.add_nested_sdfg(
+        make_single_element_consumer("nested"),
+        inputs={"a"},
+        outputs={"b"},
+        symbol_mapping={},
+    )
+    me, mx = state.add_map("map", ndrange={"__i": "0:9"})
+
+    state.add_edge(c, None, me, "IN_c", dace.Memlet("c[1:10]"))
+    me.add_scope_connectors("c")
+    state.add_edge(me, "OUT_c", nested_nsdfg, "a", dace.Memlet("c[__i + 1]"))
+    state.add_edge(nested_nsdfg, "b", mx, "IN_d", dace.Memlet("d[__i]"))
+    mx.add_scope_connectors("d")
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:9]"))
+
+    sdfg.validate()
+
+    return sdfg, state, c, top_level_nsdfg, nested_nsdfg
+
+
+def test_concat_where_nested_single_element_consumer():
+    sdfg, state, concat_node, top_level_nsdfg, nested_nsdfg = (
+        _make_concat_where_nested_single_element_consumer()
+    )
+
+    access_nodes_before = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert concat_node.data in sdfg.arrays
+    assert state.in_degree(nested_nsdfg) == 1
+    assert all(isinstance(iedge.src, dace_nodes.MapEntry) for iedge in state.in_edges(nested_nsdfg))
+    assert nested_nsdfg.sdfg.arrays.keys() == {"a", "b"}
+    assert state.in_degree(top_level_nsdfg)
+    assert all(iedge.src is concat_node for iedge in state.in_edges(top_level_nsdfg))
+    assert top_level_nsdfg.sdfg.arrays.keys() == {"a", "b"}
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
+
+    # Since the nested SDFG only consumed a single element they are not manipulated in
+    #  any way, essentially they are a big Tasklet. But their surrounding has changed.
+    assert state.in_degree(nested_nsdfg) == 1
+    assert nested_nsdfg.sdfg.arrays.keys() == {"a", "b"}
+    assert all(
+        isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src not in access_nodes_before
+        for iedge in state.in_edges(nested_nsdfg)
+    )
+    assert state.in_degree(top_level_nsdfg)
+    assert top_level_nsdfg.sdfg.arrays.keys() == {"a", "b"}
+    assert all(
+        isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src not in access_nodes_before
+        for iedge in state.in_edges(top_level_nsdfg)
+    )
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
