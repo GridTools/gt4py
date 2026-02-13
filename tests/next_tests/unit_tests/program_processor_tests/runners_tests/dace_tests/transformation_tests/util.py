@@ -13,7 +13,7 @@ import numpy as np
 import dace
 import copy
 from dace.sdfg import nodes as dace_nodes
-from dace import data as dace_data
+from dace import data as dace_data, symbolic as dace_sym
 
 
 @overload
@@ -93,29 +93,79 @@ def compile_and_run_sdfg(
 
 def make_sdfg_args(
     sdfg: dace.SDFG,
+    symbols: dict[str, Any] = {},
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Generates the arguments to call the SDFG.
 
     The function returns data for the reference and the result call.
     You can compare the two using `compar_sdfg_res()`.
     """
+    sdfg_args = sdfg.signature_arglist(False)
+
+    # We first have to generate the symbols, because they might appear in the shape.
+    used_symbols: dict[str, Any] = {}
+    for arg_name in sdfg_args:
+        if arg_name not in sdfg.symbols:
+            continue
+        arg_type = sdfg.symbols[arg_name]
+        if arg_name in symbols:
+            used_symbols[arg_name] = arg_type(symbols[arg_name])
+        else:
+            used_symbols[arg_name] = np.array(
+                np.random.rand(1), copy=True, dtype=sdfg.symbols[arg_name].as_numpy_dtype()
+            )[0]
+
+    # Now generate the non array arguments.
     ref: dict[str, Any] = {}
-    for arg_name in sdfg.signature_arglist(False):
+    res: dict[str, Any] = {}
+    for arg_name in sdfg_args:
         if arg_name in sdfg.arrays:
             desc = sdfg.arrays[arg_name]
             assert not desc.transient
-            ref[arg_name] = (
-                np.array(np.random.rand(*desc.shape), copy=True, dtype=desc.dtype.as_numpy_dtype())
-                if isinstance(desc, dace_data.Array)
-                else np.array(np.random.rand(1), copy=True, dtype=desc.dtype.as_numpy_dtype())[0]
+
+            if isinstance(desc, dace.data.Scalar):
+                ref[arg_name] = np.array(
+                    np.random.rand(1), copy=True, dtype=desc.dtype.as_numpy_dtype()
+                )[0]
+                res[arg_name] = copy.deepcopy(ref[arg_name])
+                continue
+
+            if storage is dtypes.StorageType.GPU_Global:
+                try:
+                    import cupy
+
+                    rand = cupy.random.rand
+
+                    def ndarray(*args, buffer=None, **kwargs):
+                        return cupy.ndarray(*args, memptr=buffer, **kwargs)
+
+                except (ImportError, ModuleNotFoundError):
+                    raise NotImplementedError("Requested GPU memory but no GPU found.")
+            else:
+                ndarray = np.ndarray
+                rand = np.random.rand
+
+            buffer_ref = rand(
+                int(dace_sym.evaluate(desc.total_size, used_symbols)), desc.dtype.as_numpy_dtype()
             )
-        elif arg_name in sdfg.symbols:
-            ref[arg_name] = np.array(
-                np.random.rand(1), copy=True, dtype=sdfg.symbols[arg_name].as_numpy_dtype()
-            )[0]
+            buffer_res = buffer_ref.copy(order="K")
+            shape = tuple(dace_sym.evaluate(s, used_symbols) for s in desc.shape)
+            dtype = desc.dtype.as_numpy_dtype()
+            strides = tuple(
+                dace_sym.evaluate(s, used_symbols) * desc.dtype.bytes for s in desc.strides
+            )
+
+            # We have to do it this way to ensure that the strides are copied correctly.
+            ref[arg_name] = ndarray(shape=shape, dtype=dtype, buffer=buffer_ref, strides=strides)
+            res[arg_name] = ndarray(shape=shape, dtype=dtype, buffer=buffer_res, strides=strides)
+
+        elif arg_name in used_symbols:
+            ref[arg_name] = used_symbols[arg_name]
+            res[arg_name] = copy.deepcopy(ref[arg_name])
+
         else:
             raise ValueError(f"Could not find argument: {arg_name}")
-    res = copy.deepcopy(ref)
+
     return ref, res
 
 
