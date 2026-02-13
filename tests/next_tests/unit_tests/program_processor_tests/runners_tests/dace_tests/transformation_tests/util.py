@@ -101,6 +101,37 @@ def make_sdfg_args(
     You can compare the two using `compar_sdfg_res()`.
     """
     sdfg_args = sdfg.signature_arglist(False)
+    rng = np.random.default_rng()
+
+    try:
+        import cupy
+
+        def cp_ndarray(buffer, **kwargs):
+            assert "dtype" not in kwargs
+            assert buffer.ndim == 1
+            return cupy.ndarray(memptr=cupy.array(buffer, copy=True), **kwargs)
+
+    except (ImportError, ModuleNotFoundError):
+
+        def cp_ndarray(buffer, **kwargs):
+            raise ModuleNotFoundError("Requested GPU memory, but no GPU found.")
+
+    def np_ndarray(buffer, **kwargs):
+        assert "dtype" not in kwargs
+        assert buffer.ndim == 1
+        return np.ndarray(buffer=np.array(buffer, copy=True), **kwargs)
+
+    def host_rand(size, dtype):
+        np_dtype = dtype.as_numpy_dtype()
+        if dtype in dace.dtypes.INTEGER_TYPES:
+            np_limits = np.iinfo(np_dtype)
+            return rng.integers(
+                low=np_limits.min,
+                high=np_limits.max,
+                size=int(size),
+                dtype=np_dtype,
+            )
+        return rng.random(size=int(size), dtype=np_dtype)
 
     # We first have to generate the symbols, because they might appear in the shape.
     used_symbols: dict[str, Any] = {}
@@ -111,9 +142,7 @@ def make_sdfg_args(
         if arg_name in symbols:
             used_symbols[arg_name] = arg_type(symbols[arg_name])
         else:
-            used_symbols[arg_name] = np.array(
-                np.random.rand(1), copy=True, dtype=sdfg.symbols[arg_name].as_numpy_dtype()
-            )[0]
+            used_symbols[arg_name] = host_rand(1, dtype=sdfg.symbols[arg_name])[0]
 
     # Now generate the non array arguments.
     ref: dict[str, Any] = {}
@@ -124,31 +153,14 @@ def make_sdfg_args(
             assert not desc.transient
 
             if isinstance(desc, dace.data.Scalar):
-                ref[arg_name] = np.array(
-                    np.random.rand(1), copy=True, dtype=desc.dtype.as_numpy_dtype()
-                )[0]
+                ref[arg_name] = host_rand(1, desc.dtype)[0]
                 res[arg_name] = copy.deepcopy(ref[arg_name])
                 continue
 
-            if storage is dtypes.StorageType.GPU_Global:
-                try:
-                    import cupy
-
-                    rand = cupy.random.rand
-
-                    def ndarray(*args, buffer=None, **kwargs):
-                        return cupy.ndarray(*args, memptr=buffer, **kwargs)
-
-                except (ImportError, ModuleNotFoundError):
-                    raise NotImplementedError("Requested GPU memory but no GPU found.")
-            else:
-                ndarray = np.ndarray
-                rand = np.random.rand
-
-            buffer_ref = rand(
-                int(dace_sym.evaluate(desc.total_size, used_symbols)), desc.dtype.as_numpy_dtype()
+            ndarray = (
+                cp_ndarray if desc.storage is dace.dtypes.StorageType.GPU_Global else np_ndarray
             )
-            buffer_res = buffer_ref.copy(order="K")
+            host_buffer = host_rand(dace_sym.evaluate(desc.total_size, used_symbols), desc.dtype)
             shape = tuple(dace_sym.evaluate(s, used_symbols) for s in desc.shape)
             dtype = desc.dtype.as_numpy_dtype()
             strides = tuple(
@@ -156,8 +168,8 @@ def make_sdfg_args(
             )
 
             # We have to do it this way to ensure that the strides are copied correctly.
-            ref[arg_name] = ndarray(shape=shape, dtype=dtype, buffer=buffer_ref, strides=strides)
-            res[arg_name] = ndarray(shape=shape, dtype=dtype, buffer=buffer_res, strides=strides)
+            ref[arg_name] = ndarray(shape=shape, buffer=host_buffer, strides=strides)
+            res[arg_name] = ndarray(shape=shape, buffer=host_buffer, strides=strides)
 
         elif arg_name in used_symbols:
             ref[arg_name] = used_symbols[arg_name]
