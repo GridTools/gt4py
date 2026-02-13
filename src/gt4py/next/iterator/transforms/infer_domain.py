@@ -55,7 +55,7 @@ AccessedDomains: TypeAlias = dict[str, DomainAccess]
 
 class InferenceOptions(typing.TypedDict):
     offset_provider: common.OffsetProvider | common.OffsetProviderType
-    symbolic_domain_sizes: Optional[dict[str, itir.Expr]]
+    symbolic_domain_sizes: dict[str, itir.Expr] | None
     allow_uninferred: bool
     keep_existing_domains: bool
 

@@ -28,7 +28,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.otf import arguments, stages
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.utils import tree_map
 
 
@@ -170,9 +170,12 @@ def _make_param_context_from_func_type(
     """
     params = func_type.pos_or_kw_args | func_type.kw_only_args
     return {
-        param: type_info.apply_to_primitive_constituents(
-            type_map, type_, tuple_constructor=lambda *els: tuple(els)
-        )
+        param: ffront_type_info.tree_map_type(
+            # note(tehrengruber): Mapping all collections to tuples is and must be the same as in
+            #  :ref:`arguments.extract`.
+            type_map,
+            result_collection_constructor=lambda _, els: tuple(els),
+        )(type_)
         for param, type_ in params.items()
     }
 
@@ -502,8 +505,6 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         for descr_cls, exprs in self.argument_descriptor_mapping.items():
             for expr in exprs:
                 try:
-                    # TODO(tehrengruber): Re-evaluate the way we validate here when we add support
-                    #  for containers.
                     if any(
                         v is not None for v in gtx_utils.flatten_nested_tuple(eval(expr, context))
                     ):

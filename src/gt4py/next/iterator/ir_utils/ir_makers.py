@@ -462,6 +462,9 @@ def domain(
     'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
     'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
+    >>> ij_domain = common.domain({IDim: (0, 10), JDim: (0, 20)})
+    >>> str(domain(common.GridType.UNSTRUCTURED, ij_domain))
+    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
     if isinstance(ranges_or_domain, common.Domain):
         domain = ranges_or_domain

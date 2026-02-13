@@ -5,7 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-from typing import Optional
+from typing import Optional, NamedTuple
 from unittest import mock
 
 import numpy as np
@@ -39,6 +39,11 @@ from gt4py.next.otf import arguments
 
 _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
+
+
+class NamedTupleNamedCollection(NamedTuple):
+    u: cases.IField
+    v: cases.IField
 
 
 @pytest.fixture(
@@ -939,7 +944,7 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
 
 
-def test_compile_variants_decorator_static_domains(compile_variants_field_operator, cartesian_case):
+def test_compile_variants_decorator_static_domains(cartesian_case):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
@@ -957,14 +962,12 @@ def test_compile_variants_decorator_static_domains(compile_variants_field_operat
 
     @gtx.field_operator
     def identity_like(inp: tuple[cases.IField, cases.IField, float]):
-        return inp[0], inp[1]
+        return NamedTupleNamedCollection(u=inp[0], v=inp[1])
 
     # the float argument here is merely to test that static domains work for tuple arguments
     # of inhomogeneous types
     @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
-    def testee(
-        inp: tuple[cases.IField, cases.IField, float], out: tuple[cases.IField, cases.IField]
-    ):
+    def testee(inp: tuple[cases.IField, cases.IField, float], out: NamedTupleNamedCollection):
         identity_like(inp, out=out)
 
     inp = cases.allocate(cartesian_case, testee, "inp")()

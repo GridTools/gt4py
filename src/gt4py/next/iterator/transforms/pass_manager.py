@@ -54,14 +54,14 @@ def _max_domain_range_sizes(offset_provider: common.OffsetProvider) -> dict[str,
     sizes: dict[str, int] = {}
     for provider in offset_provider.values():
         if common.is_neighbor_connectivity(provider):
-            conn_type = provider.__gt_type__()
-            sizes[conn_type.source_dim.value] = max(
-                sizes.get(conn_type.source_dim.value, 0), provider.ndarray.shape[0]
-            )
-            sizes[conn_type.codomain.value] = max(
-                sizes.get(conn_type.codomain.value, 0),
+            src_dim = provider.__gt_type__().source_dim.value
+            codomain_dim = provider.__gt_type__().codomain.value
+            sizes[src_dim] = max(sizes.get(src_dim, 0), provider.ndarray.shape[0])
+            sizes[codomain_dim] = max(
+                sizes.get(codomain_dim, 0),
                 int(provider.ndarray.max()) + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
+
     sizes_exprs = {k: im.literal_from_value(v) for k, v in sizes.items()}
     return sizes_exprs
 

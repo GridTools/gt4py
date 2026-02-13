@@ -204,7 +204,7 @@ def _field_domain_descriptor_mapping_from_func_type(func_type: ts.FunctionType) 
     for name, type_ in param_types.items():
         for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
             if isinstance(el_type_, ts.FieldType):
-                path_as_expr = "".join(map(lambda idx: f"[{idx}]", path))
+                path_as_expr = "".join(f"[{idx}]" for idx in path)
                 static_domain_args.append(f"{name}{path_as_expr}")
     return static_domain_args
 

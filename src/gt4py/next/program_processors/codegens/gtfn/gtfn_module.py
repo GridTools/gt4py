@@ -52,8 +52,8 @@ class GTFNTranslationStep(
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-    symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None
-    use_max_domain_range_on_unstructured_shift: Optional[bool] = None
+    symbolic_domain_sizes: dict[str, itir.Expr] | None = None
+    use_max_domain_range_on_unstructured_shift: bool | None = None
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
         match self.device_type:
