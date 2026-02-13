@@ -8,6 +8,7 @@
 
 import copy
 import dataclasses
+import functools
 from typing import Any, Literal, Optional, Sequence, TypeAlias, Union, overload
 
 import dace
@@ -614,7 +615,12 @@ def _configure_descending_point(
             nested_desc = parent_prod_spec.desc.clone()
             nested_desc.transient = False
             if repl_dict:
-                dace.sdfg.replace_properties_dict(nested_desc, repl=repl_dict)
+                dace_sym.safe_replace(
+                    mapping=repl_dict,
+                    replace_callback=functools.partial(
+                        dace.sdfg.replace_properties_dict, node=nested_desc
+                    ),
+                )
             nested_data_name = nsdfg.add_datadesc(parent_data_name, nested_desc, find_new_name=True)
 
             # We also need to map it into the nested SDFG.
@@ -636,9 +642,14 @@ def _configure_descending_point(
         # Apply symbol renaming on offset and subset; descriptor was handled above.
         nested_offset = copy.deepcopy(parent_prod_spec.offset)
         nested_subset = copy.deepcopy(parent_prod_spec.subset)
-        if len(repl_dict) != 0:
-            nested_offset.replace(repl_dict)
-            nested_subset.replace(repl_dict)
+        if repl_dict:
+            nested_offset, nested_subset = (
+                dace_sym.safe_replace(
+                    mapping=repl_dict,
+                    replace_callback=nested_set.replace,
+                )
+                for nested_set in [nested_offset, nested_subset]
+            )
 
         handled_data[parent_data_name] = len(transformed_initial_producer_specs)
         transformed_initial_producer_specs.append(
