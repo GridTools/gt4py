@@ -1373,13 +1373,14 @@ def test_concat_where_nested_single_element_consumer():
 def _make_concat_where_nested_symbolic_bound(
     has_blocking_symbol: bool,
 ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.NestedSDFG, str, str]:
-    demarcation_symb = "demarcation_symb"
+    inc_symb = "inc_symb"
+    split_sym = "split_sym"
 
     def make_nested_sdfg() -> tuple[dace.SDFG, str]:
         sdfg = dace.SDFG("nested")
         state = sdfg.add_state()
 
-        inc_symb = demarcation_symb if has_blocking_symbol else "inc_symb"
+        nested_inc_symb = split_sym if has_blocking_symbol else inc_symb
         sdfg.add_symbol(inc_symb, dace.int32)
 
         for aname in "ab":
@@ -1394,17 +1395,12 @@ def _make_concat_where_nested_symbolic_bound(
             map_ranges={"__i": "0:10"},
             inputs={"__in": dace.Memlet("a[__i]")},
             outputs={"__out": dace.Memlet("b[__i]")},
-            code=f"__out = __in + {inc_symb}",
+            code=f"__out = __in + {nested_inc_symb}",
             external_edges=True,
         )
         sdfg.validate()
 
         return sdfg, inc_symb
-
-    inc_symb = "inc_symb"
-    split_sym = "split_sym"
-    for symb in [inc_symb, split_sym]:
-        sdfg.add_symbol(symb, dace.int32)
 
     sdfg = dace.SDFG(util.unique_name("concat_where_nested_with_symbolic_bound"))
     state = sdfg.add_state()
@@ -1415,6 +1411,9 @@ def _make_concat_where_nested_symbolic_bound(
             dtype=dace.float64,
             transient=(aname == "c"),
         )
+    for symb in [inc_symb, split_sym]:
+        sdfg.add_symbol(symb, dace.int32)
+
     a, b, c, d = (state.add_access(aname) for aname in "abcd")
     state.add_nedge(a, c, dace.Memlet(f"a[1:({split_sym} + 1)] -> [0:({split_sym})]"))
     state.add_nedge(b, c, dace.Memlet(f"b[3:({split_sym} + 3)] -> [(10 - {split_sym}):10]"))
@@ -1432,15 +1431,15 @@ def _make_concat_where_nested_symbolic_bound(
 
     sdfg.validate()
 
-    return sdfg, state, c, nested_sdfg, inc_symb, demarcation_symb
+    return sdfg, state, c, nested_sdfg, inc_symb, split_sym
 
 
 def test_concat_where_nested_symbolic_bound():
-    sdfg, state, concat_node, nested_sdfg, inc_symb, demarcation_symb = (
+    sdfg, state, concat_node, nested_sdfg, inc_symb, split_sym = (
         _make_concat_where_nested_symbolic_bound(has_blocking_symbol=False)
     )
 
-    ref, res = util.make_sdfg_args(sdfg, symbols={demarcation_symb: 6})
+    ref, res = util.make_sdfg_args(sdfg, symbols={split_sym: 6})
     util.compile_and_run_sdfg(sdfg, **ref)
 
     gtx_transformations.gt_replace_concat_where_node(
