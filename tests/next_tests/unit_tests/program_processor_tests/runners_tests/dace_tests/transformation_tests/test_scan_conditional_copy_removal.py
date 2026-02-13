@@ -49,35 +49,39 @@ def compute_expected(qc_initial: np.ndarray, scalar: float, threshold: float) ->
 class IntegrationState(NamedTuple):
     q_tmp: float
 
+class Q(NamedTuple):
+    q: cases.IKFloatField
+
+class Q_scalar(NamedTuple):
+    q: np.float64
+
 def test_scalar_scan(cartesian_case):
     @gtx.field_operator
     def simple_addition(
-        a: cases.IKFloatField,
-    ) -> cases.IKFloatField:
-        return a + 1.0
+        a: Q,
+    ) -> Q:
+        return Q(q=a.q + 1.0)
     @gtx.scan_operator(axis=KDim, forward=True, init=IntegrationState(q_tmp=0.0))
-    def testee_scan(state: IntegrationState, q_in: float, scalar: float) -> IntegrationState:
-        q_tmp = q_in + state.q_tmp + scalar if q_in > 5.0 else state.q_tmp
+    def testee_scan(state: IntegrationState, q_in: Q_scalar, scalar: float) -> IntegrationState:
+        q_tmp = q_in.q + state.q_tmp + scalar if q_in.q > 5.0 else state.q_tmp
         return IntegrationState(q_tmp=q_tmp)
 
     @gtx.field_operator
     def combined_fop(
-        q_in: cases.IKFloatField, scalar: float
+        q_in: Q, scalar: float
     ):
         q_in = simple_addition(q_in)
         q_out = testee_scan(q_in, scalar)
         return q_out.q_tmp
 
     @gtx.program
-    def testee(q_in: cases.IKFloatField, q_out: cases.IKFloatField, scalar: float):
-        # simple_addition(q_in, out=q_in)
-        # testee_scan(q_in, scalar, out=q_out)
+    def testee(q_in: Q, q_out: cases.IKFloatField, scalar: float):
         combined_fop(q_in, scalar, out=q_out)
 
     q_in = cases.allocate(cartesian_case, testee, "q_in").unique()()
     q_out = cases.allocate(cartesian_case, testee, "q_out").zeros()()
     scalar = 5.0
-    qc_np = q_in.asnumpy() if hasattr(q_in, 'asnumpy') else np.asarray(q_in)
+    qc_np = q_in.q.asnumpy() if hasattr(q_in.q, 'asnumpy') else np.asarray(q_in.q)
     expected = compute_expected(qc_np, scalar, threshold=5.0)
 
     cases.verify(cartesian_case, testee, q_in, q_out, scalar, inout=q_out, ref=expected)
