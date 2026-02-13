@@ -18,7 +18,7 @@ from dace import (
     symbolic as dace_sym,
     transformation as dace_transformation,
 )
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes, utils as dace_sdutils
+from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -390,7 +390,7 @@ def _process_descending_points_of_state(
 
         # Now remove the Memlet path that mapped the concat where data into the
         #  nested SDFG and also delete its alias inside it.
-        dace_sdutils.remove_edge_and_dangling_path(state, descending_point.edge)
+        _cleanup_memlet_path(state, descending_point)
         nsdfg.sdfg.remove_data(descending_point.edge.dst_conn, validate=__debug__)
 
 
@@ -930,7 +930,7 @@ def _replace_single_read(
     )
 
     # Now remove the old Memlet path.
-    dace_sdutils.remove_edge_and_dangling_path(state, consumer_spec.edge)
+    _cleanup_memlet_path(state, consumer_spec)
 
 
 def _find_consumer_specs_in_descending_point(
@@ -1115,3 +1115,43 @@ def _find_consumer_specs_single_source_single_level(
     if for_check:
         return stairs_to_deeper_levels
     return sorted(consumer_specs), sorted(stairs_to_deeper_levels)
+
+
+def _cleanup_memlet_path(state: dace.SDFGState, consumer_spec: _FinalConsumerSpec) -> None:
+    """Similar to `remove_edge_and_dangling_path()` but special to our case.
+
+    Removes the full path that leads to `consumer_spec` and removing the ultimate
+    source if it has become empty. In normal operation it will not remove the
+    connector of the consumer, except if the consumer is a nested SDFG. Which is
+    consistent with the semantic that we need.
+    """
+
+    if isinstance(consumer_spec.consumer, dace_nodes.NestedSDFG):
+        consumer_spec.consumer.remove_in_connector(consumer_spec.edge.dst_conn)
+
+    edge: dace_graph.MultiConnectorEdge[dace.Memlet] = consumer_spec.edge
+    while True:
+        state.remove_edge(edge)
+
+        # We go up as long as `edge.src` is a scoping node.
+        if not isinstance(edge.src, dace_nodes.EntryNode):
+            break
+
+        # If `edge.src_conn` is in use we are done, otherwise we remove it.
+        if len(list(state.out_edges_by_connector(edge.src, edge.src_conn))) != 0:
+            break
+
+        # We now find the next edge, which must be done before we remove the connectors.
+        other_conn = "IN_" + edge.src_conn[4:]
+        next_edges = list(state.in_edges_by_connector(edge.src, other_conn))
+        assert len(next_edges) == 1
+
+        # Now remove the connectors.
+        edge.src.remove_out_connector(edge.src_conn)
+        edge.src.remove_in_connector(other_conn)
+
+        edge = next_edges[0]
+
+    # Test for isolated node and remove it in that case
+    if (state.in_degree(edge.src) == 0) and (state.out_degree(edge.src) == 0):
+        state.remove_node(edge.src)
