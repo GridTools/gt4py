@@ -238,11 +238,9 @@ def create_bindings(
     program_source
         The program source for which the bindings are created
     """
-    if (
-        src_lang := program_source.code_spec.source_language
-    ) != code_specs.CPPLikeCodeSpec.source_language:
+    if not isinstance(program_source.code_spec, code_specs.CPPLikeCodeSpec):
         raise ValueError(
-            f"Can only create bindings for C++ program sources, received '{src_lang}'."
+            f"Can only create bindings for C++ program sources, received '{program_source.code_spec.source_language}'."
         )
     wrapper_name = program_source.entry_point.name + "_wrapper"
 
