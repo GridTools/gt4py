@@ -68,7 +68,7 @@ class CPPCodeSpec(CPPLikeCodeSpec):
     header_extension: str = "hpp"
     formatter_key: str = "cpp"
     formatter_options: Mapping[str, Any] = dataclasses.field(
-        default_factory=functools.partial(dict, formatter_style="LLVM")
+        default_factory=functools.partial(dict, style="LLVM")
     )
 
 
@@ -81,7 +81,7 @@ class CUDACodeSpec(CPPLikeCodeSpec):
     header_extension: str = "cuh"
     formatter_key: str = "cpp"
     formatter_options: Mapping[str, Any] = dataclasses.field(
-        default_factory=functools.partial(dict, formatter_style="LLVM")
+        default_factory=functools.partial(dict, style="LLVM")
     )
 
 
@@ -94,5 +94,5 @@ class HIPCodeSpec(CPPLikeCodeSpec):
     header_extension: str = "h"
     formatter_key: str = "cpp"
     formatter_options: Mapping[str, Any] = dataclasses.field(
-        default_factory=functools.partial(dict, formatter_style="LLVM")
+        default_factory=functools.partial(dict, style="LLVM")
     )

@@ -86,7 +86,7 @@ class CMakeFactory(
         bindings_name = f"{name}_bindings.{source.program_source.code_spec.file_extension}"
         cmake_languages = [cmake_lists.Language(name="CXX")]
         if (src_lang_name := source.program_source.code_spec.source_language) in {
-            code_specs.CPPCodeSpec.source_language,
+            code_specs.CUDACodeSpec.source_language,
             code_specs.HIPCodeSpec.source_language,
         }:
             cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang_name)]

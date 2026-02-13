@@ -17,7 +17,7 @@ from gt4py.next.otf import code_specs
 
 def format_source(source_code_spec: code_specs.SourceCodeSpec, source: str) -> str:
     assert source_code_spec.formatter_key is not None, (
-        "No formatter key specified in language settings."
+        "No formatter key specified in source code specification."
     )
     return codegen.format_source(
         source_code_spec.formatter_key, source, **(source_code_spec.formatter_options or {})
