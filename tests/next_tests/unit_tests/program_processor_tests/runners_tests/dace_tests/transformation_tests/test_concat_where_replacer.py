@@ -1243,7 +1243,6 @@ def test_concat_where_multi_level_nesting():
     ref, res = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
 
-    sdfg.view()
     gtx_transformations.gt_replace_concat_where_node(
         state=state,
         sdfg=sdfg,
