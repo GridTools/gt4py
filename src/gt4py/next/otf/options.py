@@ -16,6 +16,7 @@ class CompilationOptionsArgs(TypedDict, total=False):
     enable_jit: bool
     static_params: Sequence[str]
     connectivities: common.OffsetProvider
+    static_domains: bool
 
 
 @dataclasses.dataclass(frozen=True)
@@ -36,6 +37,8 @@ class CompilationOptions:
     #: For now, it is used for ahead of time compilation in DaCe orchestrated programs,
     #: i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
     connectivities: common.OffsetProvider | None = None
+
+    static_domains: bool = False
 
 
 assert CompilationOptionsArgs.__annotations__.keys() == CompilationOptions.__annotations__.keys()

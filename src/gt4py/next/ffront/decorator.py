@@ -118,27 +118,33 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         # to `compile()` instead of re-using the existing compilations options.
         return self._make_compiled_programs_pool(
             static_params=self.compilation_options.static_params or (),
+            static_domains=self.compilation_options.static_domains,
         )
 
     def _make_compiled_programs_pool(
-        self,
-        static_params: Sequence[str],
+        self, static_params: Sequence[str], static_domains: bool
     ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
 
-        argument_descriptor_mapping = {
-            arguments.StaticArg: static_params,
-        }
-
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
+
+        argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
+
+        if static_params:
+            argument_descriptor_mapping[arguments.StaticArg] = static_params
+
+        if static_domains:
+            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = (
+                _field_domain_descriptor_mapping_from_func_type(program_type.definition)
+            )
 
         return compiled_program.CompiledProgramsPool(
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
+            argument_descriptor_mapping=argument_descriptor_mapping,
         )
 
     def compile(
@@ -165,6 +171,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         if "_compiled_programs" not in self.__dict__:
             self.__dict__["_compiled_programs"] = self._make_compiled_programs_pool(
                 static_params=tuple(static_args.keys()),
+                static_domains=self.compilation_options.static_domains,
             )
 
         if self.compilation_options.connectivities is None and offset_provider is None:
@@ -189,6 +196,17 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
 
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self
+
+
+def _field_domain_descriptor_mapping_from_func_type(func_type: ts.FunctionType) -> list[str]:
+    static_domain_args = []
+    param_types = func_type.pos_or_kw_args | func_type.kw_only_args
+    for name, type_ in param_types.items():
+        for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
+            if isinstance(el_type_, ts.FieldType):
+                path_as_expr = "".join(f"[{idx}]" for idx in path)
+                static_domain_args.append(f"{name}{path_as_expr}")
+    return static_domain_args
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
