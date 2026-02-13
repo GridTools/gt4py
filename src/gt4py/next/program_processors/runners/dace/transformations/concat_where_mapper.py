@@ -389,8 +389,10 @@ def _process_descending_points_of_state(
         )
 
         # Now remove the Memlet path that mapped the concat where data into the
-        #  nested SDFG and also delete its alias inside it.
+        #  nested SDFG and also delete its alias inside it. We also have to remove
+        #  the connector manually.
         _cleanup_memlet_path(state, descending_point)
+        descending_point.consumer.remove_in_connector(descending_point.edge.dst_conn)
         nsdfg.sdfg.remove_data(descending_point.edge.dst_conn, validate=__debug__)
 
 
@@ -1121,13 +1123,9 @@ def _cleanup_memlet_path(state: dace.SDFGState, consumer_spec: _FinalConsumerSpe
     """Similar to `remove_edge_and_dangling_path()` but special to our case.
 
     Removes the full path that leads to `consumer_spec` and removing the ultimate
-    source if it has become empty. In normal operation it will not remove the
-    connector of the consumer, except if the consumer is a nested SDFG. Which is
-    consistent with the semantic that we need.
+    source if it has become empty. The connector name of the original consumer
+    will never be removed.
     """
-
-    if isinstance(consumer_spec.consumer, dace_nodes.NestedSDFG):
-        consumer_spec.consumer.remove_in_connector(consumer_spec.edge.dst_conn)
 
     edge: dace_graph.MultiConnectorEdge[dace.Memlet] = consumer_spec.edge
     while True:
