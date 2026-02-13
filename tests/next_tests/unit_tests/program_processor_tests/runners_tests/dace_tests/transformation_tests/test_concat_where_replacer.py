@@ -1137,7 +1137,7 @@ def _make_concat_where_multi_level_sdfg():
         sdfg = dace.SDFG("second_level")
         state = sdfg.add_state()
 
-        for aname in "abcdefgh":
+        for aname in "abcdefh":
             sdfg.add_array(
                 aname,
                 shape=(15,),
@@ -1193,7 +1193,7 @@ def _make_concat_where_multi_level_sdfg():
             aname,
             shape=((1 if aname == "f" else 15),),
             dtype=dace.float64,
-            transient=(aname != "d"),
+            transient=(aname == "d"),
         )
     a, b, c, d = (state.add_access(aname) for aname in "abcd")
 
@@ -1209,7 +1209,7 @@ def _make_concat_where_multi_level_sdfg():
             "__in2": dace.Memlet("b[__i]"),
         },
         outputs={"__out": dace.Memlet("e[__i]")},
-        code="__out = __in + 1.23",
+        code="__out = __in1 + __in2",
         input_nodes={d, b},
         external_edges=True,
     )
@@ -1224,7 +1224,7 @@ def _make_concat_where_multi_level_sdfg():
     state.add_edge(d, None, tlet, "__in", dace.Memlet("d[3]"))
     state.add_edge(tlet, "__out", state.add_access("f"), None, dace.Memlet("f[0]"))
 
-    nsdfg = state.add_nested_sdfg(make_second_level(), inputs=set("cbah"), outputs=set("efg"))
+    nsdfg = state.add_nested_sdfg(make_second_level(), inputs=set("cbah"), outputs=set("def"))
     state.add_edge(a, None, nsdfg, "c", dace.Memlet("a[0:15]"))
     state.add_edge(c, None, nsdfg, "b", dace.Memlet("c[0:15]"))
     state.add_edge(d, None, nsdfg, "a", dace.Memlet("d[0:15]"))
@@ -1243,6 +1243,7 @@ def test_concat_where_multi_level_nesting():
     ref, res = util.make_sdfg_args(sdfg)
     util.compile_and_run_sdfg(sdfg, **ref)
 
+    sdfg.view()
     gtx_transformations.gt_replace_concat_where_node(
         state=state,
         sdfg=sdfg,
