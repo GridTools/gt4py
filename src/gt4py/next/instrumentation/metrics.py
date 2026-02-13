@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import atexit
 import collections
 import contextlib
 import contextvars
@@ -438,3 +439,26 @@ def dump_json(
     filename: str | pathlib.Path, metric_sources: Mapping[str, Source] | None = None
 ) -> None:
     pathlib.Path(filename).write_text(dumps_json(metric_sources))
+
+
+# Handler registration to automatically dump metrics at program exit if
+# the corresponding configuration flag is set.
+def _dump_metrics_at_exit() -> None:
+    """Dump collected metrics to a file at program exit if required."""
+
+    # It is assumed that 'gtx.config' is still alive at this point
+    if sources and config.DUMP_METRICS_AT_EXIT:
+        try:
+            pathlib.Path(config.DUMP_METRICS_AT_EXIT).write_text(dumps_json())
+            print(
+                f"--- atexit: GT4Py performance metrics saved at {config.DUMP_METRICS_AT_EXIT} ---",
+                file=sys.stderr,
+            )
+        except (IOError, PermissionError) as e:
+            print(
+                f"--- atexit: ERROR: Failed to automatically save GT4Py performance metrics: ---\n{e}",
+                file=sys.stderr,
+            )
+
+
+atexit.register(_dump_metrics_at_exit)
