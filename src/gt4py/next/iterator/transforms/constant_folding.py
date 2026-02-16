@@ -77,7 +77,7 @@ class ConstantFolding(
         # `maximum(maximum(a, 1), 1)` -> `maximum(a, 1)`
         FOLD_MIN_MAX = enum.auto()
 
-        # `maximum(a + 1), a)` -> `a + 1`
+        # `maximum(a + 1, a)` -> `a + 1`
         # `maximum(a + 1, a + (-1))` -> `a + maximum(1, -1)`
         FOLD_MIN_MAX_PLUS = enum.auto()
 
