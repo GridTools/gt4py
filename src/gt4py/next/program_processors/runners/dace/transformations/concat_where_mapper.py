@@ -787,13 +787,14 @@ def _map_data_into_nested_scopes(
         In most cases you should pass both the genuine consumer and the descending
         points to this function.
     """
+    assert all(None in prod_spec.data_source for prod_spec in initial_producer_specs)
+    producer_specs = [copy.copy(producer_spec) for producer_spec in initial_producer_specs]
+
     # These are the scopes in which (legal) accesses to the `concat_where`. We now have
     #  to make the individual data, i.e. the producer available there.
     accessed_scopes: set[_ScopeLocation] = {
         scope_dict[consumer_spec.consumer] for consumer_spec in consumer_specs
     }
-
-    producer_specs = [copy.copy(producer_spec) for producer_spec in initial_producer_specs]
 
     # Process the nested scopes.
     for needed_scope in accessed_scopes:
@@ -834,31 +835,49 @@ def _map_data_into_nested_scopes_impl(
     )
 
     if parent_scope is not None:
-        # This is a nested scope, i.e. the scope node is not located at the global level.
-        #  We also do not have to perform dedublication here, because this was done at
-        #  the top level.
+        # Nested scope case.
         for producer_spec in producer_specs:
             parent_source = producer_spec.data_source[parent_scope]
-            assert parent_source.node is not None and scope_to_handle is not None
-            new_conn_name = scope_to_handle.next_connector(producer_spec.data_name)
-            state.add_edge(
-                parent_source.node,
-                parent_source.conn,
-                scope_to_handle,
-                "IN_" + new_conn_name,
-                dace.Memlet(
-                    data=producer_spec.data_name,
-                    subset=dace_sbs.Range.from_array(producer_spec.desc),
+            assert (
+                parent_source.node is not None
+                and scope_to_handle is not None
+                and parent_source.conn is not None
+            )
+
+            # Check if there is already a connection between `parent_scope` and
+            #  `scope_to_handle` and if so use it. Otherwise create a new connection.
+            parent_to_current_scope_edge = next(
+                (
+                    oedge
+                    for oedge in state.out_edges_by_connector(parent_scope, parent_source.conn)
+                    if oedge.dst is scope_to_handle and oedge.dst_conn.startswith("IN_")
                 ),
+                None,
             )
-            scope_to_handle.add_scope_connectors(new_conn_name)
-            producer_spec.data_source[scope_to_handle] = _DataSource(
-                scope_to_handle, f"OUT_{new_conn_name}"
-            )
+            if parent_to_current_scope_edge is not None:
+                data_source = _DataSource(
+                    scope_to_handle, f"OUT_{parent_to_current_scope_edge.dst_conn[3:]}"
+                )
+            else:
+                new_conn_name = scope_to_handle.next_connector(producer_spec.data_name)
+                state.add_edge(
+                    parent_source.node,
+                    parent_source.conn,
+                    scope_to_handle,
+                    "IN_" + new_conn_name,
+                    dace.Memlet(
+                        data=producer_spec.data_name,
+                        subset=dace_sbs.Range.from_array(producer_spec.desc),
+                    ),
+                )
+                scope_to_handle.add_scope_connectors(new_conn_name)
+                data_source = _DataSource(scope_to_handle, f"OUT_{new_conn_name}")
+            producer_spec.data_source[scope_to_handle] = data_source
         return
 
-    # `scope_to_handle` is located at the global scope. Thus we have to connect the
-    #  producer AccessNodes to the scope. We also have to perform dedublication here.
+    # `scope_to_handle` (the node itself) is located at the global scope. Thus we have
+    #  to connect the producer AccessNodes to the scope. We also have to perform
+    #  dedublication here.
     already_mapped_data: dict[str, _DataSource] = {}
     for producer_spec in producer_specs:
         if producer_spec.data_name in already_mapped_data:
