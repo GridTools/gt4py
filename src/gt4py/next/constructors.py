@@ -186,7 +186,7 @@ class FieldAllocationNamespace(abc.ABC):
     ) -> core_defs.NDArrayObject: ...
 
 
-_ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayAPICreationNamespace)
+_ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayCreationNamespace)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -327,7 +327,7 @@ class FieldBufferAllocatorWrapper(FieldAllocationNamespace):
 
 # Type to be used by the end-user
 FieldAllocator: TypeAlias = (
-    core_ndarray_utils.ArrayAPICreationNamespace | next_allocators.FieldBufferAllocationUtil
+    core_ndarray_utils.ArrayCreationNamespace | next_allocators.FieldBufferAllocationUtil
 )
 
 
@@ -340,13 +340,13 @@ def _numpy_device_translator(device: core_defs.Device | None) -> Any:
 
 
 # TODO move to the correct place and register other libraries
-_registry: dict[core_ndarray_utils.ArrayAPICreationNamespace, Callable[[core_defs.Device], Any]] = {
-    cast(core_ndarray_utils.ArrayAPICreationNamespace, np): _numpy_device_translator
+_registry: dict[core_ndarray_utils.ArrayCreationNamespace, Callable[[core_defs.Device], Any]] = {
+    cast(core_ndarray_utils.ArrayCreationNamespace, np): _numpy_device_translator
 }
 
 
 def get_device_translator(
-    array_ns: core_ndarray_utils.ArrayAPICreationNamespace,
+    array_ns: core_ndarray_utils.ArrayCreationNamespace,
 ) -> Callable[[core_defs.Device], Any]:
     if array_ns not in _registry:
         raise ValueError(f"No device translator registered for array namespace {array_ns}.")

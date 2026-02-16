@@ -19,9 +19,11 @@ except ImportError:
     cupy = None
 
 
-class ArrayAPICreationNamespace(Protocol):
+class ArrayCreationNamespace(Protocol):
     """
-    Subset of the Array API standard namespace with functions relevant for construction.
+    Subset of the Array API standard namespace with functions relevant for array creation.
+
+    See also 'ArrayNamespace'.
     """
 
     def empty(
@@ -89,24 +91,35 @@ class ArrayAPICreationNamespace(Protocol):
     def float64(self) -> Any: ...
 
 
-def is_array_api_creation_namespace(obj: object) -> TypeGuard[ArrayAPICreationNamespace]:
-    """Check whether `obj` is an array namespace.
+def is_array_api_creation_namespace(obj: Any) -> TypeGuard[ArrayCreationNamespace]:
+    """Check whether `obj` (structurally) supports the subset of the array API relevant for array creation."""
 
-    An array namespace is any module that follows the Array API standard
-    (https://data-apis.org/array-api/latest/).
-    """
-
-    # TODO extend
     return (
         hasattr(obj, "empty")
         and hasattr(obj, "zeros")
         and hasattr(obj, "ones")
         and hasattr(obj, "full")
         and hasattr(obj, "asarray")
+        and hasattr(obj, "bool")
+        and hasattr(obj, "int8")
+        and hasattr(obj, "int16")
+        and hasattr(obj, "int32")
+        and hasattr(obj, "int64")
+        and hasattr(obj, "uint8")
+        and hasattr(obj, "uint16")
+        and hasattr(obj, "uint32")
+        and hasattr(obj, "uint64")
+        and hasattr(obj, "float32")
+        and hasattr(obj, "float64")
     )
 
 
-class ArrayNamespace(ArrayAPICreationNamespace, Protocol):
+class ArrayNamespace(ArrayCreationNamespace, Protocol):
+    """
+    An array namespace is any module that follows the Array API standard
+    (https://data-apis.org/array-api/latest/).
+    """
+
     # TODO(havogt): replace by https://github.com/data-apis/array-api-typing once fully supported
     ...
 
