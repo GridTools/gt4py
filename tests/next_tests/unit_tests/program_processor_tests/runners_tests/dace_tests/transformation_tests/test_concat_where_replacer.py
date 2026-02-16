@@ -26,7 +26,9 @@ from . import util
 def _make_concat_where_different_inputs() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry
 ]:
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_different_inputs"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("concat_where_replacer_different_inputs")
+    )
     state = sdfg.add_state()
     for name in "abcde":
         sdfg.add_array(
@@ -98,7 +100,7 @@ def test_concat_where_different_inputs():
 def _make_concat_where_same_inputs() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry, dace_nodes.AccessNode
 ]:
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_same_inputs"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("concat_where_replacer_same_inputs"))
     state = sdfg.add_state()
     for name in "abcd":
         sdfg.add_array(
@@ -181,7 +183,7 @@ def test_concat_where_same_inputs():
 def _make_concat_where_mixed_inputs() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry, dace_nodes.AccessNode
 ]:
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_mixed_inputs"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("concat_where_replacer_mixed_inputs"))
     state = sdfg.add_state()
     for name in "abcd":
         sdfg.add_array(
@@ -277,7 +279,9 @@ def test_concat_where_mixed_inputs():
 def _make_concat_where_no_mapping_reuse() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry, dace_nodes.AccessNode
 ]:
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_no_mapping_reuse"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("concat_where_replacer_no_mapping_reuse")
+    )
     state = sdfg.add_state()
     for name in "abcd":
         sdfg.add_array(
@@ -354,7 +358,9 @@ def test_concat_where_additional_mapping_needed():
 def _make_concat_where_non_canonical_memlet_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry, dace_nodes.AccessNode
 ]:
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_non_canonical_memlet"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("concat_where_replacer_non_canonical_memlet")
+    )
     state = sdfg.add_state()
     for name in "abcd":
         sdfg.add_array(
@@ -453,7 +459,9 @@ def test_concat_where_non_canonical_memlet_sdfg():
 def _make_concat_where_multiple_nested_consumers(
     uniform_access: bool,
 ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry]:
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_multiple_consumer"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("concat_where_replacer_multiple_consumer")
+    )
     state = sdfg.add_state()
     for name in "abcde":
         sdfg.add_array(
@@ -554,7 +562,7 @@ def _make_concat_where_nested_scopes() -> tuple[
     dace_nodes.MapEntry,
     dace_nodes.Tasklet,
 ]:
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_nested_consumer"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("concat_where_replacer_nested_consumer"))
     state = sdfg.add_state()
     for name in "abcd":
         sdfg.add_array(
@@ -647,7 +655,7 @@ def _make_concat_where_multiple_nested_scopes(
     dace_nodes.MapEntry,
     dace_nodes.Tasklet,
 ]:
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_nested_consumer"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("concat_where_replacer_nested_consumer"))
     state = sdfg.add_state()
     for name in "abcd":
         sdfg.add_array(
@@ -781,7 +789,7 @@ def _make_concat_where_global_read(
     dace.SDFGState,
     dace_nodes.AccessNode,
 ]:
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_global_consumer"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("concat_where_replacer_global_consumer"))
     state = sdfg.add_state()
     for aname in "abcd":
         sdfg.add_array(
@@ -952,7 +960,9 @@ def _make_concat_where_single_nested_sdfg_consumer(
 ]:
     assert binary_ops or (not rename_bin_data), "This configuration does not make sense."
 
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_single_nested_sdfg_consumer"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("concat_where_replacer_single_nested_sdfg_consumer")
+    )
     state = sdfg.add_state()
     for aname in "abcd":
         sdfg.add_array(
@@ -1185,7 +1195,9 @@ def _make_concat_where_multi_level_sdfg():
 
         return sdfg
 
-    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_single_multi_level"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("concat_where_replacer_single_multi_level")
+    )
     state = sdfg.add_state()
 
     for aname in "abcdefghj":
@@ -1281,7 +1293,7 @@ def _make_concat_where_nested_single_element_consumer() -> tuple[
         sdfg.validate()
         return sdfg
 
-    sdfg = dace.SDFG(util.unique_name("nested_single_element_consumer"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("nested_single_element_consumer"))
     state = sdfg.add_state()
     for aname in "abcd":
         sdfg.add_array(
@@ -1401,7 +1413,9 @@ def _make_concat_where_nested_symbolic_bound(
 
         return sdfg
 
-    sdfg = dace.SDFG(util.unique_name("concat_where_nested_with_symbolic_bound"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("concat_where_nested_with_symbolic_bound")
+    )
     state = sdfg.add_state()
     for aname in "abcd":
         sdfg.add_array(
@@ -1516,7 +1530,9 @@ def _make_concat_where_with_symbolic_top_level_size() -> tuple[
 
         return sdfg
 
-    sdfg = dace.SDFG(util.unique_name("concat_where_nested_with_symbolic_top_level_size"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("concat_where_nested_with_symbolic_top_level_size")
+    )
     state = sdfg.add_state()
     for sym in [symbolic_size, inc_symb]:
         sdfg.add_symbol(sym, dace.int32)

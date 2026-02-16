@@ -60,6 +60,15 @@ def count_nodes(
     return len(found_nodes)
 
 
+def unique_name(name: str) -> str:
+    """Adds a unique string to `name`."""
+    maximal_length = 200
+    unique_sufix = str(uuid.uuid1()).replace("-", "_")
+    if len(name) > (maximal_length - len(unique_sufix)):
+        name = name[: (maximal_length - len(unique_sufix) - 1)]
+    return f"{name}_{unique_sufix}"
+
+
 def compile_and_run_sdfg(
     sdfg: dace.SDFG,
     *args: Any,

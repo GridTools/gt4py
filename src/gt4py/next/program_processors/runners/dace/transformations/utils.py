@@ -22,7 +22,13 @@ _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
 
 
 def unique_name(name: str) -> str:
-    """Adds a unique string to `name`."""
+    """Adds a unique string to `name`.
+
+    Note:
+        The names generates by this function are rather unstable and it should
+        not be used if a particular order should be enforced. This function is
+        marked for deprecation.
+    """
     maximal_length = 200
     unique_sufix = str(uuid.uuid1()).replace("-", "_")
     if len(name) > (maximal_length - len(unique_sufix)):
