@@ -7,7 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
+from typing import Any
 import pytest
+from types import ModuleType
+import dataclasses
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
@@ -20,35 +23,81 @@ K = gtx.Dimension("K")
 
 sizes = {I: 10, J: 10, K: 10}
 
+cp = core_defs.cp
 
-# TODO: parametrize with gpu backend and compare with cupy array
-@pytest.mark.parametrize(
-    "allocator, device",
-    [
-        [next_allocators.StandardCPUFieldBufferAllocator(), None],
-        [None, core_defs.Device(core_defs.DeviceType.CPU, 0)],
-    ],
+
+@dataclasses.dataclass
+class ConstructureTestSetup:
+    allocator: Any  #: gtx.FieldAllocator
+    device: core_defs.Device
+    expected_xp: ModuleType
+
+
+def _constructor_test_cases():
+    return [
+        ConstructureTestSetup(
+            allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+            device=None,
+            expected_xp=np,
+        ),
+        ConstructureTestSetup(
+            allocator=None,
+            device=core_defs.Device(core_defs.DeviceType.CPU, 0),
+            expected_xp=np,
+        ),
+        ConstructureTestSetup(
+            allocator=np,
+            device=None,
+            expected_xp=np,
+        ),
+        pytest.param(
+            ConstructureTestSetup(
+                allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+                device=None,
+                expected_xp=cp,
+            ),
+            marks=pytest.mark.requires_gpu,
+        ),
+        pytest.param(
+            ConstructureTestSetup(
+                allocator=None,
+                device=core_defs.Device(core_defs.CUPY_DEVICE_TYPE, 0),
+                expected_xp=cp,
+            ),
+            marks=pytest.mark.requires_gpu,
+        ),
+    ]
+
+
+@pytest.fixture(
+    params=_constructor_test_cases(),
+    ids=lambda x: f"{type(x.allocator).__name__}-device_type={x.device.device_type.name if x.device else None}-{x.expected_xp.__name__}",
 )
-def test_empty(allocator, device):
-    ref = np.empty([sizes[I], sizes[J]]).astype(gtx.float32)
+def constructor_test_cases(request):
+    yield request.param
+
+
+def test_empty(constructor_test_cases):
+    allocator = constructor_test_cases.allocator
+    device = constructor_test_cases.device
+    expected_xp = constructor_test_cases.expected_xp
+
+    ref = expected_xp.empty([sizes[I], sizes[J]]).astype(gtx.float32)
     a = gtx.empty(
         domain={I: range(sizes[I]), J: range(sizes[J])},
         dtype=core_defs.dtype(np.float32),
         allocator=allocator,
         device=device,
     )
+    assert isinstance(a.ndarray, expected_xp.ndarray)
     assert a.shape == ref.shape
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
-@pytest.mark.parametrize(
-    "allocator, device",
-    [
-        [next_allocators.StandardCPUFieldBufferAllocator(), None],
-        [None, core_defs.Device(core_defs.DeviceType.CPU, 0)],
-    ],
-)
-def test_zeros(allocator, device):
+def test_zeros(constructor_test_cases):
+    allocator = constructor_test_cases.allocator
+    device = constructor_test_cases.device
+    expected_xp = constructor_test_cases.expected_xp
+
     a = gtx.zeros(
         common.Domain(
             dims=(I, J), ranges=(common.UnitRange(0, sizes[I]), common.UnitRange(0, sizes[J]))
@@ -57,40 +106,34 @@ def test_zeros(allocator, device):
         allocator=allocator,
         device=device,
     )
-    ref = np.zeros((sizes[I], sizes[J])).astype(gtx.float32)
+    ref = expected_xp.zeros((sizes[I], sizes[J])).astype(gtx.float32)
 
-    assert np.array_equal(a.ndarray, ref)
+    assert isinstance(a.ndarray, expected_xp.ndarray)
+    assert expected_xp.array_equal(a.ndarray, ref)
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
-@pytest.mark.parametrize(
-    "allocator, device",
-    [
-        [next_allocators.StandardCPUFieldBufferAllocator(), None],
-        [None, core_defs.Device(core_defs.DeviceType.CPU, 0)],
-    ],
-)
-def test_ones(allocator, device):
+def test_ones(constructor_test_cases):
+    allocator = constructor_test_cases.allocator
+    device = constructor_test_cases.device
+    expected_xp = constructor_test_cases.expected_xp
+
     a = gtx.ones(
         common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
         dtype=core_defs.dtype(np.float32),
         allocator=allocator,
         device=device,
     )
-    ref = np.ones((sizes[I], sizes[J])).astype(gtx.float32)
+    ref = expected_xp.ones((sizes[I], sizes[J])).astype(gtx.float32)
 
-    assert np.array_equal(a.ndarray, ref)
+    assert isinstance(a.ndarray, expected_xp.ndarray)
+    assert expected_xp.array_equal(a.ndarray, ref)
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
-@pytest.mark.parametrize(
-    "allocator, device",
-    [
-        [next_allocators.StandardCPUFieldBufferAllocator(), None],
-        [None, core_defs.Device(core_defs.DeviceType.CPU, 0)],
-    ],
-)
-def test_full(allocator, device):
+def test_full(constructor_test_cases):
+    allocator = constructor_test_cases.allocator
+    device = constructor_test_cases.device
+    expected_xp = constructor_test_cases.expected_xp
+
     a = gtx.full(
         domain={I: range(sizes[I] - 2), J: (sizes[J] - 2)},
         fill_value=42.0,
@@ -98,9 +141,10 @@ def test_full(allocator, device):
         allocator=allocator,
         device=device,
     )
-    ref = np.full((sizes[I] - 2, sizes[J] - 2), 42.0).astype(gtx.float32)
+    ref = expected_xp.full((sizes[I] - 2, sizes[J] - 2), 42.0).astype(gtx.float32)
 
-    assert np.array_equal(a.ndarray, ref)
+    assert isinstance(a.ndarray, expected_xp.ndarray)
+    assert expected_xp.array_equal(a.ndarray, ref)
 
 
 def test_as_field():
