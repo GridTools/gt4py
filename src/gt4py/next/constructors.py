@@ -12,7 +12,7 @@ import abc
 import dataclasses
 import functools
 from collections.abc import Mapping, Sequence
-from typing import Any, Callable, Generic, Optional, Protocol, TypeAlias, TypeGuard, TypeVar, cast
+from typing import Any, Callable, Generic, Optional, TypeAlias, TypeVar, cast
 
 import numpy as np
 
@@ -21,7 +21,7 @@ import gt4py.next.allocators as next_allocators
 import gt4py.next.common as common
 import gt4py.next.embedded.nd_array_field as nd_array_field
 import gt4py.storage.cartesian.utils as storage_utils
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.eve import extended_typing as xtyping
 
 
@@ -32,6 +32,8 @@ from gt4py.eve import extended_typing as xtyping
 # - backing array api OR FieldBufferAllocator
 
 
+# TODO Introduce a protocol and keep the concrete implementation for NDArray-based allocation (both array api and fieldbufferallocator) in a separate class?
+# TODO maybe FieldAllocationNamespace can evolve to FieldNamespace (convering also all Field operations?)
 class FieldAllocationNamespace(abc.ABC):
     # TODO: expand to a full description
     """
@@ -119,7 +121,7 @@ class FieldAllocationNamespace(abc.ABC):
     def as_field(
         self,
         domain: common.DomainLike | Sequence[common.Dimension],
-        data: core_defs.NDArrayObject,  # TODO rename to `obj`?
+        data: core_defs.NDArrayObject,  # TODO rename to `obj`? # TODO what do we support as input?
         *,
         dtype: core_defs.DTypeLike | None = None,
         origin: Mapping[common.Dimension, int] | None = None,
@@ -156,8 +158,6 @@ class FieldAllocationNamespace(abc.ABC):
                 raise ValueError(f"Cannot specify origin for a concrete domain {domain}")
             actual_domain = common.domain(cast(common.DomainLike, domain))
 
-        # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
-        #   already the correct layout and device.
         shape = storage_utils.asarray(
             data
         ).shape  # TODO this is a quite expensive throw-away operation...
@@ -186,95 +186,7 @@ class FieldAllocationNamespace(abc.ABC):
     ) -> core_defs.NDArrayObject: ...
 
 
-# TODO: move to core_defs?
-class ArrayAPICreationNamespace(Protocol):
-    """
-    Subset of the Array API standard namespace with functions relevant for construction.
-    """
-
-    def empty(
-        self, shape: tuple[int, ...], *, dtype: Any | None = None, device: Any | None = None
-    ) -> core_defs.NDArrayObject: ...
-
-    def zeros(
-        self, shape: tuple[int, ...], *, dtype: Any | None = None, device: Any | None = None
-    ) -> core_defs.NDArrayObject: ...
-
-    def ones(
-        self, shape: tuple[int, ...], *, dtype: Any | None = None, device: Any | None = None
-    ) -> core_defs.NDArrayObject: ...
-
-    def full(
-        self,
-        shape: tuple[int, ...],
-        fill_value: Any,
-        *,
-        dtype: Any | None = None,
-        device: Any | None = None,
-    ) -> core_defs.NDArrayObject: ...
-
-    def asarray(
-        self,
-        obj: Any,
-        /,
-        *,
-        dtype: Any | None = None,
-        device: Any | None = None,
-        copy: bool | None = None,
-    ) -> core_defs.NDArrayObject: ...
-
-    @property
-    def bool(self) -> Any: ...
-
-    @property
-    def int8(self) -> Any: ...
-
-    @property
-    def int16(self) -> Any: ...
-
-    @property
-    def int32(self) -> Any: ...
-
-    @property
-    def int64(self) -> Any: ...
-
-    @property
-    def uint8(self) -> Any: ...
-
-    @property
-    def uint16(self) -> Any: ...
-
-    @property
-    def uint32(self) -> Any: ...
-
-    @property
-    def uint64(self) -> Any: ...
-
-    @property
-    def float32(self) -> Any: ...
-
-    @property
-    def float64(self) -> Any: ...
-
-
-def is_array_api_creation_namespace(obj: object) -> TypeGuard[ArrayAPICreationNamespace]:
-    """Check whether `obj` is an array namespace.
-
-    An array namespace is any module that follows the Array API standard
-    (https://data-apis.org/array-api/latest/).
-    """
-
-    # TODO extend
-    return (
-        hasattr(obj, "empty")
-        and hasattr(obj, "zeros")
-        and hasattr(obj, "ones")
-        and hasattr(obj, "full")
-        and hasattr(obj, "asarray")
-    )
-
-
-_ANS = TypeVar("_ANS", bound=ArrayAPICreationNamespace)
+_ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayAPICreationNamespace)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -355,16 +267,6 @@ class ArrayNamespaceWrapper(FieldAllocationNamespace, Generic[_ANS]):
         return arr
 
 
-def _get_array_namespace(arr: core_defs.NDArrayObject) -> ArrayAPICreationNamespace:
-    # TODO use array api compatibility layer?
-    if isinstance(arr, np.ndarray):
-        return cast(ArrayAPICreationNamespace, np)
-    elif core_defs.cp is not None and isinstance(arr, core_defs.cp.ndarray):
-        return cast(ArrayAPICreationNamespace, core_defs.cp)
-    else:
-        raise ValueError(f"Could not determine array namespace for array of type {type(arr)}.")
-
-
 @dataclasses.dataclass(frozen=True)
 class FieldBufferAllocatorWrapper(FieldAllocationNamespace):
     allocator: next_allocators.FieldBufferAllocatorProtocol
@@ -412,17 +314,21 @@ class FieldBufferAllocatorWrapper(FieldAllocationNamespace):
         dtype: core_defs.DType,
         copy: bool | None = None,
     ) -> core_defs.NDArrayObject:
-        assert copy is None  # TODO double-check that user-facing functions are properly protected
+        if copy is not None:
+            # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
+            #   already the correct layout and device.
+            raise NotImplementedError("The 'copy' argument is not yet supported.")
         assert dtype is not None
         arr = self._empty(domain, dtype=dtype)
 
-        # TODO is this the right place?
-        arr[...] = _get_array_namespace(arr).asarray(data)  # type: ignore[index] # # `NDArrayObject` typing is not complete
+        arr[...] = core_ndarray_utils.array_namespace(arr).asarray(data)  # type: ignore[index] # # `NDArrayObject` typing is not complete
         return arr
 
 
 # Type to be used by the end-user
-FieldAllocator: TypeAlias = ArrayAPICreationNamespace | next_allocators.FieldBufferAllocationUtil
+FieldAllocator: TypeAlias = (
+    core_ndarray_utils.ArrayAPICreationNamespace | next_allocators.FieldBufferAllocationUtil
+)
 
 
 def _numpy_device_translator(device: core_defs.Device | None) -> Any:
@@ -434,12 +340,14 @@ def _numpy_device_translator(device: core_defs.Device | None) -> Any:
 
 
 # TODO move to the correct place and register other libraries
-_registry: dict[ArrayAPICreationNamespace, Callable[[core_defs.Device], Any]] = {
-    cast(ArrayAPICreationNamespace, np): _numpy_device_translator
+_registry: dict[core_ndarray_utils.ArrayAPICreationNamespace, Callable[[core_defs.Device], Any]] = {
+    cast(core_ndarray_utils.ArrayAPICreationNamespace, np): _numpy_device_translator
 }
 
 
-def get_device_translator(array_ns: ArrayAPICreationNamespace) -> Callable[[core_defs.Device], Any]:
+def get_device_translator(
+    array_ns: core_ndarray_utils.ArrayAPICreationNamespace,
+) -> Callable[[core_defs.Device], Any]:
     if array_ns not in _registry:
         raise ValueError(f"No device translator registered for array namespace {array_ns}.")
     return _registry[array_ns]
@@ -467,7 +375,7 @@ def _as_field_allocation_namespace(
         else:
             allocator = next_allocators.device_allocators[device.device_type]
 
-    if is_array_api_creation_namespace(allocator):
+    if core_ndarray_utils.is_array_api_creation_namespace(allocator):
         return ArrayNamespaceWrapper(array_ns=allocator, _device=device)
     elif next_allocators.is_field_allocation_tool(allocator):
         allocator = next_allocators.get_allocator(
