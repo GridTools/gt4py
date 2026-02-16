@@ -1372,7 +1372,7 @@ def test_concat_where_nested_single_element_consumer():
 
 def _make_concat_where_nested_symbolic_bound(
     has_blocking_symbol: bool,
-) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.NestedSDFG, str, str]:
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.NestedSDFG, str, str, str]:
     inc_symb = "inc_symb"
     split_sym = "split_sym"
 
@@ -1381,7 +1381,7 @@ def _make_concat_where_nested_symbolic_bound(
         state = sdfg.add_state()
 
         nested_inc_symb = split_sym if has_blocking_symbol else inc_symb
-        sdfg.add_symbol(inc_symb, dace.int32)
+        sdfg.add_symbol(nested_inc_symb, dace.int32)
 
         for aname in "ab":
             sdfg.add_array(
@@ -1400,7 +1400,7 @@ def _make_concat_where_nested_symbolic_bound(
         )
         sdfg.validate()
 
-        return sdfg, inc_symb
+        return sdfg, nested_inc_symb
 
     sdfg = dace.SDFG(util.unique_name("concat_where_nested_with_symbolic_bound"))
     state = sdfg.add_state()
@@ -1431,13 +1431,26 @@ def _make_concat_where_nested_symbolic_bound(
 
     sdfg.validate()
 
-    return sdfg, state, c, nested_sdfg, inc_symb, split_sym
+    return sdfg, state, c, nested_sdfg, inc_symb, split_sym, nested_inc_symb
 
 
-def test_concat_where_nested_symbolic_bound():
-    sdfg, state, concat_node, nested_sdfg, inc_symb, split_sym = (
-        _make_concat_where_nested_symbolic_bound(has_blocking_symbol=False)
+@pytest.mark.parametrize("has_blocking_symbol", [True, False])
+def test_concat_where_nested_symbolic_bound(
+    has_blocking_symbol: bool,
+) -> None:
+    sdfg, state, concat_node, nested_sdfg, inc_symb, split_sym, nested_inc_symb = (
+        _make_concat_where_nested_symbolic_bound(has_blocking_symbol=has_blocking_symbol)
     )
+
+    access_nodes_before = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(access_nodes_before) == 4
+    assert concat_node in access_nodes_before
+    assert sdfg.symbols.keys() == {inc_symb, split_sym}
+    assert nested_sdfg.sdfg.symbols.keys() == {nested_inc_symb}
+    assert len(nested_sdfg.symbol_mapping) == 1
+    assert nested_inc_symb in nested_sdfg.symbol_mapping
+    assert str(nested_sdfg.symbol_mapping[nested_inc_symb]) == inc_symb
+    assert state.in_degree(nested_sdfg) == 1
 
     ref, res = util.make_sdfg_args(sdfg, symbols={split_sym: 6})
     util.compile_and_run_sdfg(sdfg, **ref)
@@ -1448,6 +1461,26 @@ def test_concat_where_nested_symbolic_bound():
         concat_node=concat_node,
     )
     sdfg.validate()
+
+    access_nodes_after = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(access_nodes_after) == 3
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
+    assert state.in_degree(nested_sdfg) == 2
+    assert str(nested_sdfg.symbol_mapping[nested_inc_symb]) == inc_symb
+
+    if has_blocking_symbol:
+        assert len(nested_sdfg.symbol_mapping) == 2
+
+        nested_split_sym = next(
+            iter(ss for s in nested_sdfg.symbol_mapping if (ss := str(s)) != nested_inc_symb)
+        )
+        assert str(nested_sdfg.symbol_mapping[nested_split_sym]) == split_sym
+
+    else:
+        assert nested_sdfg.symbol_mapping.keys() == {nested_inc_symb, split_sym}
+        assert str(nested_sdfg.symbol_mapping[nested_inc_symb]) == inc_symb
+        assert str(nested_sdfg.symbol_mapping[split_sym]) == split_sym
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
