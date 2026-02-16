@@ -9,7 +9,7 @@
 import copy
 import dataclasses
 import functools
-from typing import Any, Literal, Optional, Sequence, TypeAlias, Union, overload
+from typing import Any, Literal, Mapping, Optional, Sequence, TypeAlias, Union, overload
 
 import dace
 from dace import (
@@ -102,29 +102,41 @@ class ConcatWhereCopyToMap(dace_transformation.SingleStateTransformation):
 
 
 def gt_replace_concat_where_node(
-    state: dace.SDFGState,
     sdfg: dace.SDFG,
+    state: dace.SDFGState,
     concat_node: dace_nodes.AccessNode,
     tag: Optional[str] = None,
 ) -> None:
-    """Performs the replacement
+    """Replaces all accesses to a concat where AccessNode with Tasklets.
 
-    User must make sure that `concat_where` is single use data.
+    Instead of accessing the AccessNode, in which the result of the `concat_where`
+    is written, directly, the function replaces accesses with Tasklets, that based
+    on original access select what data from the producers are accessed.
+    The function is also able to handle nested SDFGs, i.e. the `concat_where` data
+    is accessed inside nested SDFGs.
 
-    Todo:
-        - Symbol mapping.
-        - On global scope read of single element (needed if it happens in the nested level).
-        - Multiple consumer but same element, dedublication.
-        - Nested Maps.
-        - Nested SDFG (1 level).
-        - Nested SDFG multiple levels.
+    The function has currently the following limitations:
+    - `concat_node` must be single use data (might be lifted).
+    - All producers of `concat_node` must be AccessNodes (might be lifted).
+    - It is only possible to replace accesses of a single element that happens on
+        a Memlet, i.e. no neighborhood accesses.
+
+    In order to check if a `concat_where` AccessNode can be replaced use
+    `gt_check_if_concat_where_node_is_replaceable()`.
+
+    Args:
+        sdfg: The SDFG in which we operate.
+        state: The state that contains the `concat_where` node.
+        concat_node: The node that represents the result of the `concat_where` expression.
+        tag: Use this to mangle the name of data descriptors that should be created.
+            If not given defaults to `concat_node.data`.
     """
 
     # These are all the consumers that we need to modify.
     genuine_consumer_specs, descending_points = _find_consumer_specs_single_source_single_level(
         state, concat_node, for_check=False
     )
-    assert all(_check_descending_point(descening_point) for descening_point in descending_points)
+    assert all(_check_descending_point(descending_point) for descending_point in descending_points)
 
     scope_dict = state.scope_dict()
     initial_producer_specs = _setup_initial_producer_description_on_top_level(
@@ -145,8 +157,9 @@ def gt_replace_concat_where_node(
     # Now process the genuine consumers.
     for consumer_spec in genuine_consumer_specs:
         _replace_single_read(
-            state=state,
             sdfg=sdfg,
+            state=state,
+            scope_dict=scope_dict,
             consumer_spec=consumer_spec,
             producer_specs=producer_specs,
             tag=f"{concat_node.data}_{'' if tag is None else tag}",
@@ -156,7 +169,6 @@ def gt_replace_concat_where_node(
         state=state,
         scope_dict=scope_dict,
         descending_points=descending_points,
-        initial_producer_specs=initial_producer_specs,
         producer_specs=producer_specs,
     )
 
@@ -223,7 +235,7 @@ that needs further processing.
 
 @dataclasses.dataclass(frozen=True)
 class _ProducerSpec:
-    """Describes how a `concat_where` converges at a name.
+    """Describes how a `concat_where` converges.
 
     This class only describes a single source of the concat where. To make sense
     one needs a `list` of `_ProducerSpec`, one for each converging edges.
@@ -248,7 +260,7 @@ class _ProducerSpec:
     def get_data_source(
         self,
         consumer_spec: _FinalConsumerSpec,
-        scope_dict: dict[_ScopeLocation, _ScopeLocation],
+        scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
     ) -> _DataSource:
         """Maps a consumer to the data source it should use.
 
@@ -280,14 +292,13 @@ def _setup_initial_producer_description_on_top_level(
     concat_node: dace_nodes.AccessNode,
     scope_dict: Any,
 ) -> list[_ProducerSpec]:
-    """Sets up the producer specs.
+    """Sets up the producer specifications at the top level.
 
-    The function expects that `concat_node` is the result of a `concat_where`
-    expression. Furthermore, it is assumed that it is single use data, i.e. not
-    used anywhere else. This function will then create an intial specification
-    for the replacement.
     To fully populate the production specification it has to be passed to
     `_map_data_into_nested_scopes()`.
+
+    This function should be called on the top level, i.e. not in nested SDFGs.
+    For these cases you should use `_setup_initial_producer_description_in_nested_state()`.
 
     Args:
         sdfg: The top level SDFG, in which `state` is located.
@@ -340,14 +351,27 @@ def _setup_initial_producer_description_on_top_level(
 
 def _process_descending_points_of_state(
     state: dace.SDFGState,
-    scope_dict: dict[_ScopeLocation, _ScopeLocation],
+    scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
     descending_points: Sequence[_FinalConsumerSpec],
-    initial_producer_specs: Sequence[_ProducerSpec],
     producer_specs: Sequence[_ProducerSpec],
 ) -> None:
-    """Do some preprocessing."""
+    """Processes all descending points inside a single state.
+
+    Processes all descending points in the given state. It will configure them if
+    needed. However, the function assumes that the producer data has already been
+    made available inside the scopes of the descending points, which is the case
+    if `_map_data_into_nested_scopes()` has been run on the state.
+
+    Args:
+        state: The state containing the descending points.
+        scope_dict: The scope dict of `state`.
+        descending_points: All descending points inside `state`.
+        producer_specs: The producer specification of the parent.
+    """
+
     configured_descending_points: dict[dace_nodes.NestedSDFG, list[_ProducerSpec]] = {}
     for descending_point in descending_points:
+        # If needed configure the descending point.
         nsdfg: dace_nodes.NestedSDFG = descending_point.consumer
         if nsdfg not in configured_descending_points:
             configured_descending_points[nsdfg] = _configure_descending_point(
@@ -360,33 +384,52 @@ def _process_descending_points_of_state(
         # Process this descending point.
         # NOTE: A nested SDFG might be processed multiple times, but each time
         #   different data is processed.
-        _process_descending_point_impl(
+        _process_descending_points_of_state_impl(
             this_descending_point=descending_point,
             transformed_initial_producer_specs=configured_descending_points[nsdfg],
         )
 
-        # Now remove the Memlet path that mapped the concat where data into the
-        #  nested SDFG and also delete its alias inside it. We also have to remove
-        #  the connector manually.
+        # Now remove the Memlet "path" that mapped the concat where data into the
+        #  nested SDFG and also delete its alias inside it.
         _cleanup_memlet_path(state, descending_point)
         descending_point.consumer.remove_in_connector(descending_point.edge.dst_conn)
         nsdfg.sdfg.remove_data(descending_point.edge.dst_conn, validate=__debug__)
 
 
-def _process_descending_point_impl(
+def _process_descending_points_of_state_impl(
     this_descending_point: _FinalConsumerSpec,
-    transformed_initial_producer_specs: list[_ProducerSpec],  # UPPER LEVEL
+    transformed_initial_producer_specs: list[_ProducerSpec],
 ) -> None:
-    """Perform preprocessing and then call the actual implementation."""
-    consumers = _find_consumer_specs_in_descending_point(this_descending_point)
+    """Process the interior of a descending point.
 
+    Essentially iterate through all states of the descending point and perform
+    the replacement of concat where accesses. The function assumes that
+    `this_descending_point` has been configured.
+    Furthermore, the function will handled descending points that are located within
+    `this_descending_point` by passing them to `_process_descending_points_of_state()`.
+
+    Args:
+        this_descending_point: The descending point that is currently processed.
+        transformed_initial_producer_specs: The producer specification that describes
+            the concat where convergence in the context of this descending point.
+            It is obtained by a call to `_configure_descending_point()`.
+
+    Note:
+        - This function should not be called directly.
+        - It is possible that a nested SDFG is handled multiple times, but each time
+            it is handled through a different descending point, i.e. the concat where
+            data is aliased to multiple data.
+    """
+    assert all(len(pspec.data_source) == 0 for pspec in transformed_initial_producer_specs)
+
+    consumers = _find_consumer_specs_in_descending_point(this_descending_point)
     for state, (_concat_node, (genuine_consumer_specs, descending_points)) in consumers.items():
         initial_producer_specs = _setup_initial_producer_description_in_nested_state(
             descending_point=this_descending_point,
             nested_state=state,
             transformed_initial_producer_specs=transformed_initial_producer_specs,
         )
-        # Must be called after `_setup_initial_producer_description_in_nested_state()`.
+        # `state.scope_dict()` must be called after `_setup_initial_producer_description_in_nested_state()`.
         scope_dict = state.scope_dict()
         producer_specs = _map_data_into_nested_scopes(
             state=state,
@@ -398,8 +441,9 @@ def _process_descending_point_impl(
         # Replace the consumer on this level.
         for consumer_spec in genuine_consumer_specs:
             _replace_single_read(
-                state=state,
                 sdfg=state.sdfg,
+                state=state,
+                scope_dict=scope_dict,
                 consumer_spec=consumer_spec,
                 producer_specs=producer_specs,
                 tag=f"{this_descending_point.edge.dst_conn}",
@@ -411,7 +455,6 @@ def _process_descending_point_impl(
                 state=state,
                 scope_dict=scope_dict,
                 descending_points=descending_points,
-                initial_producer_specs=initial_producer_specs,
                 producer_specs=producer_specs,
             )
 
@@ -426,7 +469,7 @@ def _process_descending_point_impl(
 def _setup_initial_producer_description_in_nested_state(
     descending_point: _FinalConsumerSpec,
     nested_state: dace.SDFGState,
-    transformed_initial_producer_specs: list[_ProducerSpec],
+    transformed_initial_producer_specs: Sequence[_ProducerSpec],
 ) -> list[_ProducerSpec]:
     """Analogue operation to `_setup_initial_producer_description_on_top_level()` but on nested levels.
 
@@ -437,8 +480,7 @@ def _setup_initial_producer_description_in_nested_state(
 
     In principle the function will do the same as `_setup_initial_producer_description_on_top_level()`,
     i.e. setting up the producer and scope source description. However, it will also
-    generate create AccessNodes for the mapped data, if it can not find any data
-    inside.
+    generate AccessNodes for the mapped data in the state if they are not yet there.
 
     Args:
         descending_point: The descending point in which we operate.
@@ -448,6 +490,7 @@ def _setup_initial_producer_description_in_nested_state(
     """
     nested_sdfg: dace.SDFG = descending_point.consumer.sdfg
     assert nested_state in nested_sdfg.states()
+    assert all(len(prod_spec.data_source) == 0 for prod_spec in transformed_initial_producer_specs)
 
     # Look for access nodes that already exist.
     source_access_nodes: dict[str, dace_nodes.AccessNode] = {}
@@ -468,26 +511,22 @@ def _setup_initial_producer_description_in_nested_state(
         assert not nested_sdfg.arrays[missing_data].transient
         source_access_nodes[missing_data] = nested_state.add_access(missing_data)
 
-    # Now setup the data.
-    nested_initial_producer_specs: list[_ProducerSpec] = []
-    for prod_spec in transformed_initial_producer_specs:
-        nested_initial_producer_specs.append(
-            _ProducerSpec(
-                data_name=prod_spec.data_name,
-                offset=copy.deepcopy(prod_spec.offset),
-                subset=copy.deepcopy(prod_spec.subset),
-                desc=prod_spec.desc.clone(),
-                free_symb_types=prod_spec.free_symb_types.copy(),
-                data_source={None: _DataSource(source_access_nodes[prod_spec.data_name], None)},
-            )
+    return [
+        _ProducerSpec(
+            data_name=prod_spec.data_name,
+            offset=copy.deepcopy(prod_spec.offset),
+            subset=copy.deepcopy(prod_spec.subset),
+            desc=prod_spec.desc.clone(),
+            free_symb_types=prod_spec.free_symb_types.copy(),
+            data_source={None: _DataSource(source_access_nodes[prod_spec.data_name], None)},
         )
-
-    return nested_initial_producer_specs
+        for prod_spec in transformed_initial_producer_specs
+    ]
 
 
 def _configure_descending_point(
     state: dace.SDFGState,
-    scope_dict: dict[_ScopeLocation, _ScopeLocation],
+    scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
     descending_point: _FinalConsumerSpec,
     parent_producer_specs: Sequence[_ProducerSpec],
 ) -> list[_ProducerSpec]:
@@ -514,6 +553,9 @@ def _configure_descending_point(
         scope_dict: The scope dict of `state`.
         descending_point: The consumer that represents a descending point, located in `scope`.
         parent_producer_specs: The initial producer specification on the top level.
+
+    Note:
+        You should not use this function directly, instead use `_process_descending_points_of_state()`.
     """
     assert isinstance(descending_point.consumer, dace_nodes.NestedSDFG)
     nsdfg_node: dace_nodes.NestedSDFG = descending_point.consumer
@@ -535,15 +577,16 @@ def _configure_descending_point(
 
     transformed_initial_producer_specs: list[_ProducerSpec] = []
     handled_data: dict[str, _ProducerSpec] = {}
+    full_repl_dict: dict[str, str] = {}  # All known replacements.
     for parent_prod_spec in parent_producer_specs:
         parent_data_name = parent_prod_spec.data_name
 
         # Compute the replacement mapping for symbols.
-        repl_dict: dict[str, str] = {}
+        repl_dict: dict[str, str] = {}  # For this producer.
         for psym, ptype in parent_prod_spec.free_symb_types.items():
-            if psym in repl_dict:
+            if psym in full_repl_dict:
                 # The symbol was already handled in a previous producer, so we reuse it.
-                nested_symbol = repl_dict[psym]
+                nested_symbol = full_repl_dict[psym]
                 assert nested_symbol in nsdfg.symbols and nsdfg.symbols[nested_symbol] == ptype
 
             elif (
@@ -562,8 +605,11 @@ def _configure_descending_point(
                 nested_symbol = nsdfg.add_symbol(psym, ptype, find_new_name=True)
                 assert nested_symbol not in symbol_mapping
                 symbol_mapping[nested_symbol] = psym
+
             if psym != nested_symbol:
                 repl_dict[psym] = nested_symbol
+                if psym not in full_repl_dict:
+                    full_repl_dict[psym] = nested_symbol
 
         # Compute the nested data descriptor.
         if parent_data_name in parent_to_nested_name_mapping:
@@ -583,6 +629,8 @@ def _configure_descending_point(
             # The data is not yet mapped into the nested SDFG, so we have to create
             #  a new one. And we have to apply symbol renaming on it. In addition
             #  we have to make sure that it is a global.
+            # NOTE: This is the only case that would allow us to recompute `nested_free_symb_types`
+            #   as a byproduct of the loop computing `repl_dict`.
             nested_desc = parent_prod_spec.desc.clone()
             nested_desc.transient = False
             if repl_dict:
@@ -654,15 +702,25 @@ def _map_data_into_nested_scopes(
     initial_producer_specs: Sequence[_ProducerSpec],
     consumer_specs: Sequence[_FinalConsumerSpec],
 ) -> list[_ProducerSpec]:
-    """Complete the production specifications and ensures that the data is available in nested scopes.
+    """Complete the scope information and ensure that they are available.
 
-    The function will use the information passed by `base_scope_sources` and
-    `initial_producer_specs` (which were obtained by a previous call to
+    The function returns a finalized version of the production specifications passed
+    through `initial_producer_specs`, which were obtained by a previous call to
     `_setup_initial_producer_description_on_top_level()` or
-    `_setup_base_scope_sources_in_state()`) to compute a full producer description
-    which is also returned. In addition it will make sure that the data is available
-    in the nested scopes, such that the replacement, performed by `_replace_single_read()`
-    can be performed.
+    `_setup_initial_producer_description_in_nested_state()`.
+    The main differences between the return value and `initial_producer_specs` is
+    that `_ProducerSpec::data_source` has been fully populated and the scope nodes
+    are prepared.
+
+    Args:
+        state: The state in which we operate.
+        scope_dict: The scope dict of `state`.
+        initial_producer_specs: The initial produzce
+        consumer_specs: All consumers that should be prepared.
+
+    Note:
+        In most cases you should pass both the genuine consumer and the descending
+        points to this function.
     """
     # These are the scopes in which (legal) accesses to the `concat_where`. We now have
     #  to make the individual data, i.e. the producer available there.
@@ -686,11 +744,11 @@ def _map_data_into_nested_scopes(
 
 def _map_data_into_nested_scopes_impl(
     state: dace.SDFGState,
-    scope_dict: Any,
+    scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
     scope_to_handle: _ScopeLocation,
-    producer_specs: list[_ProducerSpec],
+    producer_specs: Sequence[_ProducerSpec],
 ) -> None:
-    """Helper function of `_map_data_into_nested_scopes_impl()` that populate nested scopes."""
+    """Helper function of `_map_data_into_nested_scopes()`."""
     if scope_to_handle in producer_specs[0].data_source:
         assert all(scope_to_handle in producer_spec.data_source for producer_spec in producer_specs)
         return
@@ -710,12 +768,11 @@ def _map_data_into_nested_scopes_impl(
         for producer_spec in producer_specs
     )
 
-    # On the top level perform dedublication of inputs.
-    already_mapped_data: dict[str, _DataSource] = {}
-    for producer_spec in producer_specs:
-        if parent_scope is not None:
-            # Nested scope: no need to do dedublication.
-            assert scope_to_handle not in producer_spec.data_source
+    if parent_scope is not None:
+        # This is a nested scope, i.e. the scope node is not located at the global level.
+        #  We also do not have to perform dedublication here, because this was done at
+        #  the top level.
+        for producer_spec in producer_specs:
             parent_source = producer_spec.data_source[parent_scope]
             assert parent_source.node is not None and scope_to_handle is not None
             new_conn_name = scope_to_handle.next_connector(producer_spec.data_name)
@@ -730,19 +787,28 @@ def _map_data_into_nested_scopes_impl(
                 ),
             )
             scope_to_handle.add_scope_connectors(new_conn_name)
-            data_source = _DataSource(scope_to_handle, f"OUT_{new_conn_name}")
+            producer_spec.data_source[scope_to_handle] = _DataSource(
+                scope_to_handle, f"OUT_{new_conn_name}"
+            )
+        return
 
-        elif producer_spec.data_name in already_mapped_data:
-            # The scope is located at the top level and the data has already been
-            #  mapped into it previously -> reuse it.
+    # `scope_to_handle` is located at the global scope. Thus we have to connect the
+    #  producer AccessNodes to the scope. We also have to perform dedublication here.
+    already_mapped_data: dict[str, _DataSource] = {}
+    for producer_spec in producer_specs:
+        if producer_spec.data_name in already_mapped_data:
+            # The data has already been processed, i.e. mapped in previously,
+            #  thus we reuse the connector.
             data_source = already_mapped_data[producer_spec.data_name]
 
         else:
-            # Try to find an edge that maps the producer into the Map.
+            # The data has not been seen before. Before we create a new connection
+            #  we check if there is already a connection between the AccessNode and
+            #  `scope_to_handle`.
             parent_source = producer_spec.data_source[parent_scope]
             producer_node = parent_source.node
-            full_shape = dace_sbs.Range.from_array(producer_spec.desc)
             assert isinstance(producer_node, dace_nodes.AccessNode)
+            full_shape = dace_sbs.Range.from_array(producer_spec.desc)
             edge_that_goes_into_scope = next(
                 (
                     oedge
@@ -767,7 +833,7 @@ def _map_data_into_nested_scopes_impl(
                     "IN_" + new_conn_name,
                     dace.Memlet(
                         data=producer_spec.data_name,
-                        subset=full_shape,  # No need to copy.
+                        subset=full_shape,
                     ),
                 )
                 scope_to_handle.add_scope_connectors(new_conn_name)  # type: ignore[union-attr]
@@ -780,8 +846,9 @@ def _map_data_into_nested_scopes_impl(
 
 
 def _replace_single_read(
-    state: dace.SDFGState,
     sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
     consumer_spec: _FinalConsumerSpec,
     producer_specs: Sequence[_ProducerSpec],
     tag: str,
@@ -798,7 +865,9 @@ def _replace_single_read(
     will then be connected to the final consumer. However, the edge will be removed.
 
     Args:
+        sdfg: The sdfg that we process.
         state: The state on which we operate.
+        scope_dict: The scope dict of `state`.
         consumer_spec: Describes a consumer.
         producer_specs: Descriptions of how the `concat_where` converges.
         tag: Used to give newly created elements a unique name.
@@ -860,9 +929,10 @@ def _replace_single_read(
     )
 
     for tlet_input, producer_spec in zip(tlet_inputs, producer_specs):
+        data_source = producer_spec.get_data_source(consumer_spec, scope_dict)
         state.add_edge(
-            producer_spec.data_source[consumer_spec].node,
-            producer_spec.data_source[consumer_spec].conn,
+            data_source.node,
+            data_source.conn,
             concat_where_tasklet,
             tlet_input,
             dace.Memlet(
@@ -917,7 +987,7 @@ def _replace_single_read(
 
 
 def _find_consumer_specs_in_descending_point(
-    descening_point: _FinalConsumerSpec,
+    descending_point: _FinalConsumerSpec,
 ) -> dict[dace.SDFGState, tuple[dace_nodes.AccessNode, _ConsumerPartition]]:
     """Scans the descending point for consumer (non recursive).
 
@@ -929,8 +999,8 @@ def _find_consumer_specs_in_descending_point(
     Furthermore, this function assumes that the partition exists, i.e.
     `_check_descending_point()` has returned `True`.
     """
-    sdfg: dace.SDFG = descening_point.consumer.sdfg
-    concat_data = descening_point.edge.dst_conn
+    sdfg: dace.SDFG = descending_point.consumer.sdfg
+    concat_data = descending_point.edge.dst_conn
 
     consumers: dict[dace.SDFG, tuple[dace_nodes.AccessNode, _ConsumerPartition]] = {}
     for state in sdfg.states():
@@ -938,8 +1008,8 @@ def _find_consumer_specs_in_descending_point(
         for dnode in state.data_nodes():
             if dnode.data != concat_data:
                 continue
-            assert state.in_degree(dnode) == 0
 
+            assert state.in_degree(dnode) == 0
             if concat_node is None:
                 concat_node = dnode
             else:
@@ -963,11 +1033,11 @@ def _find_consumer_specs_in_descending_point(
 
 
 def _check_descending_point(
-    descening_point: _FinalConsumerSpec,
+    descending_point: _FinalConsumerSpec,
 ) -> bool:
     """Check if this descending point has valid consumers, consumer are checked recursively."""
-    sdfg: dace.SDFG = descening_point.consumer.sdfg
-    concat_data = descening_point.edge.dst_conn
+    sdfg: dace.SDFG = descending_point.consumer.sdfg
+    concat_data = descending_point.edge.dst_conn
     assert not sdfg.arrays[concat_data].transient
 
     for state in sdfg.states():
@@ -1012,14 +1082,14 @@ def _find_consumer_specs_single_source_single_level(
 ) -> Union[Optional[list[_FinalConsumerSpec]], _ConsumerPartition]:
     """Find all consumers of `concat_node` in state `state`.
 
-    Of `for_check` is `False` then the function returns the consumer partition for
+    If `for_check` is `False` then the function returns the consumer partition for
     `concat_node`. Note if the consumer partition does not exists then an error
-    is returned in this mode.
-    If `for_check` is `True` then the function only checks if the partition exists
-    to indicate this it will only return the descending points or `None` if the
-    partition does not exist.
+    is generated.
+    If `for_check` is `True` then the function only checks if the partition exists,
+    which is indicated by a list containing all descending points of this state,
+    can be empty. `None` is returned if the partition does not exist.
 
-    Important the function does not:
+    Important this function does not:
     - Considers any other state.
     - Considers any other AccessNode in `state` that also refers to the same
         data as `concat_node` does.
@@ -1031,7 +1101,7 @@ def _find_consumer_specs_single_source_single_level(
         for_check: Only perform checks.
 
     Note:
-        If `for_check` is `False` then both kind of consumers were sorted. For `True`
+        If `for_check` is `False` then both kind of consumers are sorted. For `True`
         the order of the returned descending points is unspecific.
     """
 
