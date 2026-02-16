@@ -447,7 +447,7 @@ def _dump_metrics_at_exit() -> None:
     """Dump collected metrics to a file at program exit if required."""
 
     # It is assumed that 'gtx.config' is still alive at this point
-    if sources and config.DUMP_METRICS_AT_EXIT:
+    if config.DUMP_METRICS_AT_EXIT:
         try:
             pathlib.Path(config.DUMP_METRICS_AT_EXIT).write_text(dumps_json())
             print(
