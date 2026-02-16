@@ -52,7 +52,8 @@ class GTFNTranslationStep(
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-    symbolic_domain_sizes: Optional[dict[str, str]] = None
+    symbolic_domain_sizes: dict[str, itir.Expr] | None = None
+    use_max_domain_range_on_unstructured_shift: bool | None = None
 
     def _default_code_spec(self) -> code_specs.HeaderAndSourceCodeSpec:
         match self.device_type:
@@ -153,6 +154,7 @@ class GTFNTranslationStep(
             extract_temporaries=True,
             offset_provider=offset_provider,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
         )
 
         new_program = apply_common_transforms(
