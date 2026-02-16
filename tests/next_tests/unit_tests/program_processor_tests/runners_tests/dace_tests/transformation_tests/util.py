@@ -102,7 +102,7 @@ def make_sdfg_args(
         def cp_ndarray(buffer, **kwargs):
             assert "dtype" not in kwargs
             assert buffer.ndim == 1
-            return cupy.ndarray(memptr=cupy.array(buffer, copy=True), **kwargs)
+            return cupy.ndarray(memptr=cupy.array(buffer, copy=True), dtype=buffer.dtype, **kwargs)
 
     except (ImportError, ModuleNotFoundError):
 
@@ -112,11 +112,14 @@ def make_sdfg_args(
     def np_ndarray(buffer, **kwargs):
         assert "dtype" not in kwargs
         assert buffer.ndim == 1
-        return np.ndarray(buffer=np.array(buffer, copy=True), **kwargs)
+        return np.ndarray(buffer=np.array(buffer, copy=True), dtype=buffer.dtype, **kwargs)
 
     def host_rand(size, dtype):
         np_dtype = dtype.as_numpy_dtype()
-        if dtype in dace.dtypes.INTEGER_TYPES:
+        if dtype is dace.bool_:
+            return rng.random(size=int(size), dtype=np.float32) > 0.5
+
+        elif dtype in dace.dtypes.INTEGER_TYPES:
             np_limits = np.iinfo(np_dtype)
             return rng.integers(
                 low=np_limits.min,
