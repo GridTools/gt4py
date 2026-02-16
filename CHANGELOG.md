@@ -2,6 +2,25 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.4] - 2026-02-12
+
+### Cartesian
+
+- Fixed issue in program bindings by locking `pybind11` to `2.x`
+
+### Next
+
+See commit history.
+
+## [1.1.3] - 2026-01-19
+
+### Cartesian
+
+- New features:
+  - Support for K iterator access in `numpy` backend
+  - New `dace_KJI` backend that operates on fields with Fortran memory layout
+  - Automatic match for `dace:X` backends between layout and schedule, cache-optimal by default
+
 ## [1.1.2] - 2025-12-08
 
 ### General

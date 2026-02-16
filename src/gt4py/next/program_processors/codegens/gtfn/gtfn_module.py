@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import definitions, languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
@@ -39,11 +39,11 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProgram,
+        definitions.CompilableProgramDef,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProgram,
+        definitions.CompilableProgramDef,
         stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
 ):
@@ -52,7 +52,8 @@ class GTFNTranslationStep(
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-    symbolic_domain_sizes: Optional[dict[str, str]] = None
+    symbolic_domain_sizes: dict[str, itir.Expr] | None = None
+    use_max_domain_range_on_unstructured_shift: bool | None = None
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
         match self.device_type:
@@ -163,6 +164,7 @@ class GTFNTranslationStep(
             extract_temporaries=True,
             offset_provider=offset_provider,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
         )
 
         new_program = apply_common_transforms(
@@ -206,7 +208,7 @@ class GTFNTranslationStep(
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
-        self, inp: stages.CompilableProgram
+        self, inp: definitions.CompilableProgramDef
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
@@ -317,8 +319,8 @@ class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):
         model = GTFNTranslationStep
 
 
-translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
+translate_program_cpu: Final[definitions.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
 
-translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
+translate_program_gpu: Final[definitions.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
     device_type=core_defs.DeviceType.CUDA
 )

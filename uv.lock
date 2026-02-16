@@ -135,16 +135,36 @@ sdist = { url = "https://test-files.pythonhosted.org/packages/a3/f5/a673f60257b5
 wheels = [
     { url = "https://test-files.pythonhosted.org/packages/f7/ee/ba109534bf8100cd25c75f12ff2661ac03ccb8e4e2e47b911ba518cc3ee9/atlas4py-0.41.1.dev1-cp310-cp310-macosx_13_0_x86_64.whl", hash = "sha256:2b2b638ef7e5a5fad74ec92a02cf9f3981814109834c2400577935b38dada1dc", size = 8702761, upload-time = "2025-03-31T16:03:49.815Z" },
     { url = "https://test-files.pythonhosted.org/packages/0d/9e/45cf0e09c0b804e62330d5d3593081ecd40e7959b1fa65617d1bb44d813b/atlas4py-0.41.1.dev1-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:c763d6740bc27a216555b6aed1521a8d6acb913a06b5bec2cd5f97750fa13efe", size = 7559373, upload-time = "2025-03-31T16:03:51.707Z" },
+    { url = "https://test-files.pythonhosted.org/packages/97/87/895833feffacfbfe5444e40b8adc8fb20e5799658a1b4572fe3d06059e22/atlas4py-0.41.1.dev1-cp310-cp310-macosx_15_0_arm64.whl", hash = "sha256:a407004d1bc45efc5411987f0c38770589b1a6a7eaf8299f92caa2e5b16107ef", size = 7315823, upload-time = "2026-02-06T16:06:17.21Z" },
+    { url = "https://test-files.pythonhosted.org/packages/80/68/947e4f0c7e9113fcff1a9474a93867478a4768259ffe03f3ae4e10bb369c/atlas4py-0.41.1.dev1-cp310-cp310-macosx_15_0_x86_64.whl", hash = "sha256:30081c1ef21763a5f28b7e4a1ac5c18be103b0eda2f1c71eb6780e74b27f15e7", size = 8395532, upload-time = "2026-02-06T16:06:19.692Z" },
     { url = "https://test-files.pythonhosted.org/packages/fd/ab/26a5e3f8ff10cef710a1069c5f0d54a8f1892c6e3b7b99218149477e2982/atlas4py-0.41.1.dev1-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5035ad1deab0000af5d73ffb5f61fd1aed9c929e66f6e0d39a11910430ede306", size = 9382550, upload-time = "2025-03-31T16:03:53.168Z" },
     { url = "https://test-files.pythonhosted.org/packages/a3/bf/f021a7c491d73662789f2d05fd45a16e58ad5f493d8829175828d7194b0f/atlas4py-0.41.1.dev1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:78c7e27e075c3dd6ed0e87df42fbcfcc560d2ca34940ef35143b63649d753e07", size = 10082147, upload-time = "2025-03-31T16:03:55.011Z" },
+    { url = "https://test-files.pythonhosted.org/packages/b9/23/54048b642bd6fdd5ce943b2c5ee2310c4f23130769a8d120e5301a4f7240/atlas4py-0.41.1.dev1-cp310-cp310-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:40b796be161ac66a2318c9f6b51a311ec6690ab33e71354287887834868b804a", size = 9500841, upload-time = "2026-02-06T16:06:21.36Z" },
+    { url = "https://test-files.pythonhosted.org/packages/1a/1b/159653bc91054fed3365b32c631750e9bf4547221d4ad0469c37fbd3b13c/atlas4py-0.41.1.dev1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:fc450696a6732c99c4e7820d4f11e594e64e1dccd994882c0a06e2d99f6826a9", size = 10288153, upload-time = "2026-02-06T16:06:23.854Z" },
     { url = "https://test-files.pythonhosted.org/packages/28/cd/e8501aa4f58c1cd283a8e759fa6d3c25c1f1538b622705f484086e111240/atlas4py-0.41.1.dev1-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:556a6433a8b20f11909c5e4cb9ccb8a61856c419d7e1703758b635abecd8cc43", size = 8704283, upload-time = "2025-03-31T16:03:56.819Z" },
     { url = "https://test-files.pythonhosted.org/packages/6c/8e/d29c28fa23a9e97a90b0d0e840884843064183ae761cd740e814574a5adc/atlas4py-0.41.1.dev1-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:4c4bb76833fbaeb65e3eba29068045d7ae64952d70f4d62254b2c5f3e7de5fe4", size = 7560973, upload-time = "2025-03-31T16:03:58.609Z" },
+    { url = "https://test-files.pythonhosted.org/packages/1c/2d/c9cc89e68874095ad28d4e7f64337028ea7f9a1e50106dfeb891365c7c86/atlas4py-0.41.1.dev1-cp311-cp311-macosx_15_0_arm64.whl", hash = "sha256:128caf34b772459eb9698b01369ea4f8f85934dce4d6705b1d11e09b4a7029e7", size = 7316976, upload-time = "2026-02-06T16:07:16.654Z" },
+    { url = "https://test-files.pythonhosted.org/packages/97/e2/ae364a8a64ba3f293c6861b78cf3b31dc97d57fe57d3763221654b904576/atlas4py-0.41.1.dev1-cp311-cp311-macosx_15_0_x86_64.whl", hash = "sha256:a30de229f799389e332c0aee184afaef6115bd8fd0465a91ca7fc547f0ba7732", size = 8397028, upload-time = "2026-02-06T16:07:18.87Z" },
     { url = "https://test-files.pythonhosted.org/packages/89/e4/bb7aa021e8506302d6d2a323e2122707ecc543259f17a9ac03265060550a/atlas4py-0.41.1.dev1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:53d724ed738de2187a33a0695c53b06e3b1fd02207934ac7435dbacffec4e8d8", size = 9384024, upload-time = "2025-03-31T16:04:00.202Z" },
     { url = "https://test-files.pythonhosted.org/packages/34/db/e052229ee958aacc41a9c7235d7cf735aa96bc29b5c2b7012711fbf01559/atlas4py-0.41.1.dev1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ef24351d6bc948f8d293e0f71b0fd87724b7f3f183cdf348400214090a22663b", size = 10083742, upload-time = "2025-03-31T16:04:02.188Z" },
+    { url = "https://test-files.pythonhosted.org/packages/fa/9e/795d55e0f31db9000de59e713958668a3ecf6fd8d3ad33739e6b2a2a64db/atlas4py-0.41.1.dev1-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:2a9bc2d17574b146942f490ca6399c83e384d59189720356d11f880bad6654b0", size = 9502385, upload-time = "2026-02-06T16:07:20.915Z" },
+    { url = "https://test-files.pythonhosted.org/packages/a8/50/cd4a1a985f60c02c9cd6b0354f58f51b66a8a9cde5b175277eaf20ba3d03/atlas4py-0.41.1.dev1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:90f428b91f0afa416673c064f24b742c1de39a0c526724005672cee33ba8e11b", size = 10289422, upload-time = "2026-02-06T16:07:23.809Z" },
     { url = "https://test-files.pythonhosted.org/packages/a0/b3/5c41e5f40a1f9bddf79fc04b68ce8074d690604afe0559a83c0c212e4b9f/atlas4py-0.41.1.dev1-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:18f61c3849802fb55bb77fd60dc9a1489f9476796e840ece3eff898a7bafcace", size = 8706845, upload-time = "2025-03-31T16:04:04.023Z" },
     { url = "https://test-files.pythonhosted.org/packages/0d/57/4055abbf0a4cbb6d0e85d568a3b2fd05fb3b55d5a362fce1bfe230d55139/atlas4py-0.41.1.dev1-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:eed9ceeed3f3cc2dabf4946dc4ede6d4602cc6a8ae989c522dbbd224fc32f1f6", size = 7561584, upload-time = "2025-03-31T16:04:05.852Z" },
+    { url = "https://test-files.pythonhosted.org/packages/0a/7f/f2d9fd9e76fe895f06ed8d866d87f1b7ac71ac7f5a2cee1986712fbd49fb/atlas4py-0.41.1.dev1-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:e228b66bc97c6065543bcd5a35f3f8ce5c5e61724395a998860bbc7cf3dd208f", size = 7317706, upload-time = "2026-02-06T16:07:26.242Z" },
+    { url = "https://test-files.pythonhosted.org/packages/aa/c1/629b1e05b7b3191107caae95a651cde2408644fc139e8ab634b5334589ca/atlas4py-0.41.1.dev1-cp312-cp312-macosx_15_0_x86_64.whl", hash = "sha256:68b1ef464c962199591b33588c05e605b1f96854e6736e9e2c1a8ebfb1ca28bb", size = 8399542, upload-time = "2026-02-06T16:07:28.534Z" },
     { url = "https://test-files.pythonhosted.org/packages/20/a2/107f1fbab50d84b4f97ffb5709bfee820fff6dfd377cb3002a4d7d0a6054/atlas4py-0.41.1.dev1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2dddd0bd8005e70e33dcdcd879153c0aefed46f411ed4ade9ab5f11fc9d68263", size = 9381991, upload-time = "2025-03-31T16:04:08.091Z" },
     { url = "https://test-files.pythonhosted.org/packages/58/37/43a8defa9bd8557050dd5a1eefb80557df168dbb59efed0b3812905915fe/atlas4py-0.41.1.dev1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f7897c591a5367b4abec048cf283ddaa5d0f7e464a3715044eec804e579ad802", size = 10082954, upload-time = "2025-03-31T16:04:09.819Z" },
+    { url = "https://test-files.pythonhosted.org/packages/fc/19/ca42db7a51b92b264d73d30ec59c42d2cd5face6f03257f46ba5ec27f78e/atlas4py-0.41.1.dev1-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:4fe5f03a93f789226690b491eee5cc843cfcb7195e87002ae39a3c576f8c3dc2", size = 9502705, upload-time = "2026-02-06T16:07:30.569Z" },
+    { url = "https://test-files.pythonhosted.org/packages/1b/61/3ea65fd6099dfe650f98bd95d8e2b0df460f919c0b80479113f9a055521d/atlas4py-0.41.1.dev1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8f8154f45a4f821f61ddd4ffd638bd9165e10e5d89d4846fa7f503b16ad90bc9", size = 10290857, upload-time = "2026-02-06T16:07:33.296Z" },
+    { url = "https://test-files.pythonhosted.org/packages/67/69/0bade8fe1851cbe0bba6eb99683133bd78c08d78b4a077bad6bf917007bd/atlas4py-0.41.1.dev1-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:cdd94d39907efad24df9286d33ee13d4665c64c81d946f859f2f0d7770bde2dc", size = 7317749, upload-time = "2026-02-06T16:07:36.118Z" },
+    { url = "https://test-files.pythonhosted.org/packages/7c/ef/56f8e51da73da72a97ee8050202f6db334c47fc39bb5f39cc535000cddb3/atlas4py-0.41.1.dev1-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:12baa963a0d803a687afe3fa4ef82310ea0c464af53e687edc3b4765fd95e7ba", size = 8399583, upload-time = "2026-02-06T16:07:38.218Z" },
+    { url = "https://test-files.pythonhosted.org/packages/69/71/7968b93c1ab20d2e4fe544d4d8eb752d9aec59999f4be822638ecc44405c/atlas4py-0.41.1.dev1-cp313-cp313-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:35f745732c56d0cc3c8440cdbfe7333df9422bd452781d309bfabdd361a620f5", size = 9502408, upload-time = "2026-02-06T16:07:40.084Z" },
+    { url = "https://test-files.pythonhosted.org/packages/d3/c8/993f8a5a79d6c002455938eb8ee1811276d046fd030aa267fb8864a5de63/atlas4py-0.41.1.dev1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c635a4952e7cf10cbe916ec345b4b3c3736bbc3437d0f870dbbb99d66c0730cb", size = 10291057, upload-time = "2026-02-06T16:07:42.802Z" },
+    { url = "https://test-files.pythonhosted.org/packages/ca/d6/a23614f6c1c81b69c4c44fdb7c4295a1958b094a0b847bdfac14469b5c87/atlas4py-0.41.1.dev1-cp314-cp314-macosx_15_0_arm64.whl", hash = "sha256:8a212dffe96f7570196d4b8aa63194687a3a88a65cef2666736e49ee89da2403", size = 7318139, upload-time = "2026-02-06T16:07:45.654Z" },
+    { url = "https://test-files.pythonhosted.org/packages/76/9e/36c4d57c3cae8fdac07b9fb4b9db87a03e19b38e09ab0957ba76fe306343/atlas4py-0.41.1.dev1-cp314-cp314-macosx_15_0_x86_64.whl", hash = "sha256:fb1238240d7f6851abb7969cfa5e5bf07cee6d46058f32018e540dc604bce3c1", size = 8399597, upload-time = "2026-02-06T16:07:47.84Z" },
+    { url = "https://test-files.pythonhosted.org/packages/e0/62/373c499b97bbb95072eeba46692778a072c2ebac25b75a1eeb4a06d4736a/atlas4py-0.41.1.dev1-cp314-cp314-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1c902a57d1e93916774f6e03112deb5781c2394abe45ca1beeab4d6939b8eea0", size = 9503724, upload-time = "2026-02-06T16:07:49.688Z" },
+    { url = "https://test-files.pythonhosted.org/packages/ff/6d/9fd346837a8d53526a3e2b84d32fc581c1be681b9402a289b1191786e99e/atlas4py-0.41.1.dev1-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8da6becc763df808c1352ff4657d412da92b03ba5dc4259eff25477549d9f467", size = 10291262, upload-time = "2026-02-06T16:07:52.13Z" },
 ]
 
 [[package]]
@@ -1170,7 +1190,7 @@ dependencies = [
 
 [[package]]
 name = "dace"
-version = "43!2026.1.13"
+version = "43!2026.2.12"
 source = { registry = "https://gridtools.github.io/pypi/" }
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -1181,7 +1201,6 @@ resolution-markers = [
     "python_full_version < '3.10.2'",
 ]
 dependencies = [
-    { name = "aenum" },
     { name = "astunparse" },
     { name = "dill" },
     { name = "fparser", version = "0.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1195,9 +1214,10 @@ dependencies = [
     { name = "pyreadline", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-jax-cuda12') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-cuda11' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm4-3') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-jax-cuda12' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm5-0') or (extra == 'extra-5-gt4py-rocm4-3' and extra == 'extra-5-gt4py-rocm6-0') or (extra == 'extra-5-gt4py-rocm5-0' and extra == 'extra-5-gt4py-rocm6-0')" },
     { name = "pyyaml" },
     { name = "sympy" },
+    { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://gridtools.github.io/pypi/dace/dace-43!2026.1.13-py3-none-any.whl", hash = "sha256:0a0b6ea03254372043bd8c9532dffddfe336729efb9148195f2523d9aa8ed331" },
+    { url = "https://gridtools.github.io/pypi/dace/dace-43!2026.2.12-py3-none-any.whl", hash = "sha256:67c27b0cc46eaaa407fd3bb70508fa100d3b58ae6f311470db075a4335f71341" },
 ]
 
 [[package]]
@@ -1719,7 +1739,7 @@ dace-cartesian = [
     { name = "dace", version = "1.0.2", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip#4a9f46027147a52e2b0ac9eedeb101c3ab27d0bf" } },
 ]
 dace-next = [
-    { name = "dace", version = "43!2026.1.13", source = { registry = "https://gridtools.github.io/pypi/" } },
+    { name = "dace", version = "43!2026.2.12", source = { registry = "https://gridtools.github.io/pypi/" } },
 ]
 dev = [
     { name = "atlas4py" },
@@ -1844,7 +1864,7 @@ requires-dist = [
     { name = "ninja", specifier = ">=1.11" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "packaging", specifier = ">=20.0" },
-    { name = "pybind11", specifier = ">=2.10.1" },
+    { name = "pybind11", specifier = ">=2.10.1,<3" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
     { name = "scipy", marker = "python_full_version >= '3.11' and extra == 'standard'", specifier = ">=1.16.1" },
     { name = "scipy", marker = "python_full_version < '3.11' and extra == 'standard'", specifier = ">=1.14.1" },
@@ -1865,7 +1885,7 @@ build = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dace-cartesian = [{ name = "dace", git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-roundtrip" }]
-dace-next = [{ name = "dace", specifier = "==43!2026.1.13", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
+dace-next = [{ name = "dace", specifier = "==43!2026.2.12", index = "https://gridtools.github.io/pypi/", conflict = { package = "gt4py", group = "dace-next" } }]
 dev = [
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
@@ -3845,11 +3865,11 @@ wheels = [
 
 [[package]]
 name = "pybind11"
-version = "3.0.1"
+version = "2.13.6"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/2f/7b/a6d8dcb83c457e24a9df1e4d8fd5fb8034d4bbc62f3c324681e8a9ba57c2/pybind11-3.0.1.tar.gz", hash = "sha256:9c0f40056a016da59bab516efb523089139fcc6f2ba7e4930854c61efb932051", size = 546914, upload-time = "2025-08-22T20:09:27.265Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d2/c1/72b9622fcb32ff98b054f724e213c7f70d6898baa714f4516288456ceaba/pybind11-2.13.6.tar.gz", hash = "sha256:ba6af10348c12b24e92fa086b39cfba0eff619b61ac77c406167d813b096d39a", size = 218403, upload-time = "2024-09-14T00:35:22.606Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cd/8a/37362fc2b949d5f733a8b0f2ff51ba423914cabefe69f1d1b6aab710f5fe/pybind11-3.0.1-py3-none-any.whl", hash = "sha256:aa8f0aa6e0a94d3b64adfc38f560f33f15e589be2175e103c0a33c6bce55ee89", size = 293611, upload-time = "2025-08-22T20:09:25.235Z" },
+    { url = "https://files.pythonhosted.org/packages/13/2f/0f24b288e2ce56f51c920137620b4434a38fd80583dbbe24fc2a1656c388/pybind11-2.13.6-py3-none-any.whl", hash = "sha256:237c41e29157b962835d356b370ededd57594a26d5894a795960f0047cb5caf5", size = 243282, upload-time = "2024-09-14T00:35:20.361Z" },
 ]
 
 [[package]]

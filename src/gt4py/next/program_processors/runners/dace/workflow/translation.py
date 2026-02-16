@@ -15,9 +15,10 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config, metrics
+from gt4py.next import common, config
+from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import definitions, languages, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
@@ -267,7 +268,7 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         dace.Memlet(f"{output}[0]"),
     )
 
-    if (config.COLLECT_METRICS_LEVEL == metrics.GPU_TX_MARKERS) and gpu:
+    if gpu and _has_gpu_schedule(sdfg) and config.ADD_GPU_TRACE_MARKERS:
         sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
         for node, _ in sdfg.all_nodes_recursive():
             if isinstance(
@@ -355,9 +356,10 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+        definitions.CompilableProgramDef,
+        stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
     ],
-    step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
+    definitions.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
@@ -367,6 +369,7 @@ class DaCeTranslator(
 
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
+    use_max_domain_range_on_unstructured_shift: bool | None = None
 
     def generate_sdfg(
         self,
@@ -383,7 +386,11 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+            ir = itir_transforms.apply_fieldview_transforms(
+                ir,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                offset_provider=offset_provider,
+            )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
@@ -439,7 +446,7 @@ class DaCeTranslator(
         return sdfg
 
     def __call__(
-        self, inp: stages.CompilableProgram
+        self, inp: definitions.CompilableProgramDef
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data
