@@ -135,7 +135,7 @@ def make_sdfg_args(
 
     # We first have to generate the symbols, because they might appear in the shape.
     used_symbols: dict[str, Any] = {}
-    for arg_name in sdfg_args:
+    for arg_name in sdfg_args + list(symbols.keys()):
         if arg_name not in sdfg.symbols:
             continue
         arg_type = sdfg.symbols[arg_name]

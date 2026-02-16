@@ -1484,3 +1484,109 @@ def test_concat_where_nested_symbolic_bound(
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_with_symbolic_top_level_size() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.NestedSDFG, str, str, str
+]:
+    symbolic_size = "n"
+    nested_inc_symb = "n"  # Intentionally.
+    inc_symb = "inc_sym"
+
+    def make_nested_sdfg() -> dace.SDFG:
+        sdfg = dace.SDFG("nested")
+        state = sdfg.add_state()
+
+        sdfg.add_symbol(nested_inc_symb, dace.int32)
+
+        for aname in "ab":
+            sdfg.add_array(
+                aname,
+                shape=(10,),
+                dtype=dace.float64,
+                transient=False,
+            )
+        state.add_mapped_tasklet(
+            "third_level_map",
+            map_ranges={"__i": "0:10"},
+            inputs={"__in": dace.Memlet("a[__i]")},
+            outputs={"__out": dace.Memlet("b[__i]")},
+            code=f"__out = __in + {nested_inc_symb}",
+            external_edges=True,
+        )
+        sdfg.validate()
+
+        return sdfg
+
+    sdfg = dace.SDFG(util.unique_name("concat_where_nested_with_symbolic_top_level_size"))
+    state = sdfg.add_state()
+    for sym in [symbolic_size, inc_symb]:
+        sdfg.add_symbol(sym, dace.int32)
+    for aname in "abcd":
+        sdfg.add_array(
+            name=aname,
+            shape=((10,) if aname != "a" else (dace.symbolic.pystr_to_symbolic(symbolic_size),)),
+            dtype=dace.float64,
+            transient=(aname == "c"),
+        )
+
+    a, b, c, d = (state.add_access(aname) for aname in "abcd")
+    state.add_nedge(a, c, dace.Memlet(f"a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet(f"b[3:8] -> [5:10]"))
+
+    nested_sdfg = state.add_nested_sdfg(
+        sdfg=make_nested_sdfg(),
+        inputs={"a"},
+        outputs={"b"},
+        symbol_mapping={nested_inc_symb: inc_symb},
+    )
+
+    state.add_edge(c, None, nested_sdfg, "a", dace.Memlet("c[0:10]"))
+    state.add_edge(nested_sdfg, "b", d, None, dace.Memlet("d[0:10]"))
+
+    sdfg.validate()
+
+    return sdfg, state, c, nested_sdfg, inc_symb, nested_inc_symb, symbolic_size
+
+
+def test_concat_where_with_symbolic_top_size():
+    sdfg, state, concat_node, nested_sdfg, inc_symb, nested_inc_symb, symbolic_size = (
+        _make_concat_where_with_symbolic_top_level_size()
+    )
+
+    access_nodes_before = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(access_nodes_before) == 4
+    assert concat_node in access_nodes_before
+    assert sdfg.symbols.keys() == {symbolic_size, inc_symb}
+    assert nested_sdfg.sdfg.symbols.keys() == {nested_inc_symb}
+    assert len(nested_sdfg.symbol_mapping) == 1
+    assert nested_inc_symb in nested_sdfg.symbol_mapping
+    assert str(nested_sdfg.symbol_mapping[nested_inc_symb]) == inc_symb
+    assert state.in_degree(nested_sdfg) == 1
+    assert symbolic_size == nested_inc_symb
+
+    ref, res = util.make_sdfg_args(sdfg, symbols={symbolic_size: 10})
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(access_nodes_after) == 3
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
+    assert state.in_degree(nested_sdfg) == 2
+    assert str(nested_sdfg.symbol_mapping[nested_inc_symb]) == inc_symb
+
+    assert len(nested_sdfg.symbol_mapping) == 2
+    nested_symbolic_size = next(
+        iter(ss for s in nested_sdfg.symbol_mapping if (ss := str(s)) != nested_inc_symb)
+    )
+    assert str(nested_sdfg.symbol_mapping[nested_symbolic_size]) == symbolic_size
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
