@@ -11,8 +11,8 @@ from typing import Literal, Union, overload, Any
 import numpy as np
 import dace
 import copy
+from dace import data as dace_data, symbolic as dace_sym
 from dace.sdfg import nodes as dace_nodes
-from dace import data as dace_data
 from gt4py.next.program_processors.runners.dace.transformations import (
     utils as gtx_transformations_utils,
 )
