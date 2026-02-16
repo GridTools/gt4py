@@ -22,6 +22,7 @@ import gt4py.next.common as common
 import gt4py.next.embedded.nd_array_field as nd_array_field
 import gt4py.storage.cartesian.utils as storage_utils
 from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping
 
 
 # TODO translate into a description somewhere
@@ -166,12 +167,6 @@ class FieldAllocationNamespace(abc.ABC):
         if dtype is None:  # TODO does this make sense?
             dtype = core_defs.dtype(storage_utils.asarray(data).dtype)
 
-        # if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
-        #     device = core_defs.Device(*data.__dlpack_device__())
-
-        # arr = _as_array_api_construction_namespace(
-        #     actual_domain, allocator, device, aligned_index=aligned_index
-        # ).asarray(data, dtype=dtype, device=device, copy=copy)
         arr = self._asarray(actual_domain, data, dtype=dtype, copy=copy)
         res = common._field(
             arr,
@@ -693,6 +688,9 @@ def as_field(
         >>> gtx.as_field({IDim: range(-1, 2)}, xdata).domain.ranges[0]
         UnitRange(-1, 2)
     """
+    if allocator is None and device is None and xtyping.supports_dlpack(data):
+        # allocate for the device of the input data if no explicit allocator or device is given
+        device = core_defs.Device(*data.__dlpack_device__())
     return _as_field_allocation_namespace(
         allocator, aligned_index=aligned_index, device=device
     ).as_field(domain=domain, data=data, dtype=dtype, origin=origin, copy=copy)
