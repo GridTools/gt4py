@@ -12,9 +12,7 @@ import abc
 import dataclasses
 import functools
 from collections.abc import Mapping, Sequence
-from typing import Any, Callable, Generic, Optional, TypeAlias, TypeVar, cast
-
-import numpy as np
+from typing import Any, Generic, Optional, TypeAlias, TypeVar, cast
 
 import gt4py.eve as eve
 import gt4py.next.allocators as next_allocators
@@ -34,6 +32,15 @@ from gt4py.eve import extended_typing as xtyping
 
 # TODO Introduce a protocol and keep the concrete implementation for NDArray-based allocation (both array api and fieldbufferallocator) in a separate class?
 # TODO maybe FieldAllocationNamespace can evolve to FieldNamespace (convering also all Field operations?)
+
+# Type to be used by the end-user
+FieldAllocator: TypeAlias = (
+    core_ndarray_utils.ArrayCreationNamespace | next_allocators.FieldBufferAllocationUtil
+)
+
+# TODO make all other types private? check usage in ICON4Py
+
+
 class FieldAllocationNamespace(abc.ABC):
     # TODO: expand to a full description
     """
@@ -192,19 +199,23 @@ _ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayCreationNamespace)
 @dataclasses.dataclass(frozen=True)
 class ArrayNamespaceWrapper(FieldAllocationNamespace, Generic[_ANS]):
     array_ns: _ANS
-    _device: core_defs.Device | None = None
+    _device: dataclasses.InitVar[core_defs.Device | None] = None
+
+    # device in the format expected by the array namespace
+    device: Any = dataclasses.field(init=False)
+
+    def __post_init__(self, _device: core_defs.Device | None) -> None:
+        device = (
+            core_ndarray_utils.get_device_translator(self.array_ns)(_device)
+            if _device is not None
+            else None
+        )
+        object.__setattr__(self, "device", device)
 
     def _to_array_ns_dtype(self, dtype: core_defs.DType | None) -> Any:
         if dtype is None:
             return None
         return getattr(self.array_ns, core_defs.dtype_to_name[dtype.scalar_type])
-
-    @functools.cached_property
-    def device(self) -> Any:
-        # TODO can be done in init and not store the core_defs.Device!
-        if self._device is None:
-            return None
-        return get_device_translator(self.array_ns)(self._device)
 
     def _empty(
         self,
@@ -325,43 +336,6 @@ class FieldBufferAllocatorWrapper(FieldAllocationNamespace):
         return arr
 
 
-# Type to be used by the end-user
-FieldAllocator: TypeAlias = (
-    core_ndarray_utils.ArrayCreationNamespace | next_allocators.FieldBufferAllocationUtil
-)
-
-
-def _numpy_device_translator(device: core_defs.Device | None) -> Any:
-    if device is None:
-        return None
-    if device.device_type == core_defs.DeviceType.CPU:
-        return None  # or Literal['cpu']
-    raise ValueError(f"NumPy does not support device type {device.device_type}.")
-
-
-# TODO move to the correct place and register other libraries
-_registry: dict[core_ndarray_utils.ArrayCreationNamespace, Callable[[core_defs.Device], Any]] = {
-    cast(core_ndarray_utils.ArrayCreationNamespace, np): _numpy_device_translator
-}
-
-
-def get_device_translator(
-    array_ns: core_ndarray_utils.ArrayCreationNamespace,
-) -> Callable[[core_defs.Device], Any]:
-    if array_ns not in _registry:
-        raise ValueError(f"No device translator registered for array namespace {array_ns}.")
-    return _registry[array_ns]
-
-
-def _aligned_index(
-    domain: common.Domain, aligned_index: Sequence[common.NamedIndex] | None
-) -> Sequence[int] | None:
-    """Translates the absolute aligned index to a relative aligned index in the array buffer."""
-    if aligned_index is not None:
-        raise NotImplementedError("Aligned index is not yet implemented.")
-    return None
-
-
 # TODO test all code paths
 def _as_field_allocation_namespace(
     allocator: FieldAllocator | None,  # TODO should we allow None
@@ -438,6 +412,15 @@ def empty(
         >>> from gt4py import next as gtx
         >>> IDim = gtx.Dimension("I")
         >>> a = gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
+        >>> a.shape
+        (7,)
+
+        Initialize a field in one dimension from an array namespace:
+
+        >>> import numpy as
+        >>> from gt4py import next as gtx
+        >>> IDim = gtx.Dimension("I")
+        >>> a = gtx.empty({IDim: range(3, 10)}, allocator=np)
         >>> a.shape
         (7,)
 

@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Protocol, TypeGuard
+import functools
+from typing import Any, Callable, Protocol, TypeGuard, cast
 
 import numpy as np
 
@@ -139,3 +140,40 @@ def array_namespace(array: core_defs.NDArrayObject) -> ArrayNamespace:
         if cupy is not None and isinstance(array, cupy.ndarray):
             return cupy
         raise TypeError(f"Could not determine array namespace of {array} of type {type(array)}")
+
+
+def _numpy_device_translator(device: core_defs.Device | None) -> Any:
+    if device is None:
+        return None
+    if device.device_type == core_defs.DeviceType.CPU:
+        return None  # or Literal['cpu']
+    raise ValueError(f"NumPy does not support device type {device.device_type}.")
+
+
+# TODO(egparedes): Replace by single dispatch on types (instead of instances)
+_device_translation_registry: dict[ArrayCreationNamespace, Callable[[core_defs.Device], Any]] = {
+    cast(ArrayCreationNamespace, np): _numpy_device_translator
+}
+
+if cupy is not None:
+
+    def _cupy_device_translator(device: core_defs.Device | None) -> Any:
+        if device is None:
+            return None
+        if device.device_type != core_defs.CUPY_DEVICE_TYPE:
+            # TODO test this code path
+            raise ValueError(
+                f"CuPy only supports GPU devices, got device type {device.device_type}."
+            )
+        return cupy.cuda.Device(device.device_id)
+
+    _device_translation_registry[cupy] = _cupy_device_translator
+
+
+@functools.cache
+def get_device_translator(
+    array_ns: ArrayCreationNamespace,
+) -> Callable[[core_defs.Device], Any]:
+    if array_ns not in _device_translation_registry:
+        raise ValueError(f"No device translator registered for array namespace {array_ns}.")
+    return _device_translation_registry[array_ns]
