@@ -565,6 +565,7 @@ def _configure_descending_point(
 
     transformed_initial_producer_specs: list[_ProducerSpec] = []
     handled_data: dict[str, int] = {}
+    known_symbol_replacements: dict[str, str] = {}
     for i, parent_prod_spec in enumerate(parent_initial_producer_specs):
         parent_data_name = parent_prod_spec.data_name
 
@@ -580,7 +581,13 @@ def _configure_descending_point(
         nested_free_symb_types: dict[str, dace.dtypes.typeclass] = {}
         repl_dict: dict[str, str] = {}
         for psym, ptype in parent_prod_spec.free_symb_types.items():
-            if (
+            if psym in known_symbol_replacements:
+                # The symbol was already handled in a previous producer, so we reuse it.
+                nested_symbol = known_symbol_replacements[psym]
+                repl_dict[psym] = nested_symbol
+                assert psym in nsdfg.symbols and nsdfg.symbols[nested_symbol] == ptype
+
+            elif (
                 psym in symbol_mapping
                 and psym == str(symbol_mapping[psym])
                 and psym in nsdfg.symbols
@@ -588,6 +595,8 @@ def _configure_descending_point(
             ):
                 # The symbol is already mapped 1:1 into the nested sdfg -> nothing to do.
                 nested_symbol = psym
+                assert nested_symbol not in repl_dict
+
             else:
                 # The symbol is either not known or it is not mapped 1:1 or has the wrong type,
                 #  in either case we have to create a new symbol inside the nested SDFG.
@@ -595,8 +604,8 @@ def _configure_descending_point(
                 assert nested_symbol not in symbol_mapping
                 symbol_mapping[nested_symbol] = psym
                 repl_dict[psym] = nested_symbol
-            assert nested_symbol not in repl_dict
             nested_free_symb_types[nested_symbol] = ptype
+            known_symbol_replacements[psym] = nested_symbol
 
         if parent_data_name in parent_to_nested_name_mapping:
             # We have not handled the data but, it is already mapped into the nested
@@ -618,7 +627,7 @@ def _configure_descending_point(
                 dace_sym.safe_replace(
                     mapping=repl_dict,
                     replace_callback=functools.partial(
-                        dace.sdfg.replace_properties_dict, node=nested_desc
+                        dace.sdfg.replace_properties_dict, nested_desc
                     ),
                 )
             nested_data_name = nsdfg.add_datadesc(parent_data_name, nested_desc, find_new_name=True)
@@ -643,13 +652,11 @@ def _configure_descending_point(
         nested_offset = copy.deepcopy(parent_prod_spec.offset)
         nested_subset = copy.deepcopy(parent_prod_spec.subset)
         if repl_dict:
-            nested_offset, nested_subset = (
-                dace_sym.safe_replace(
+            for nested_set in [nested_offset, nested_subset]:
+                dace_sym.safe_replace(  # Performs inplace replacement
                     mapping=repl_dict,
                     replace_callback=nested_set.replace,
                 )
-                for nested_set in [nested_offset, nested_subset]
-            )
 
         handled_data[parent_data_name] = len(transformed_initial_producer_specs)
         transformed_initial_producer_specs.append(
