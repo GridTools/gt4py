@@ -439,7 +439,7 @@ class TestDumpMetricsAtExit:
     ):
         """Test _dump_metrics_at_exit writes to a file when enabled."""
         explicit_output_filename = str(tmp_path / "explicit_metrics.json")
-        auto_output_filename = gt_config._init_dump_metrics_file()
+        auto_output_filename = gt_config._init_dump_metrics_filename()
 
         if mode == "explicit":
             output_filename = explicit_output_filename

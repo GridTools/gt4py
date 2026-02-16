@@ -119,7 +119,7 @@ BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1
 COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", default=0)
 
 
-def _init_dump_metrics_file():
+def _init_dump_metrics_filename():
     return f"gt4py_metrics_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
 
@@ -130,7 +130,7 @@ DUMP_METRICS_AT_EXIT: str | None = os.environ.get("GT4PY_DUMP_METRICS_AT_EXIT", 
 if DUMP_METRICS_AT_EXIT:
     with contextlib.suppress(ValueError):
         if env_flag_to_bool("GT4PY_DUMP_METRICS_AT_EXIT", default=False):
-            DUMP_METRICS_AT_EXIT = _init_dump_metrics_file()
+            DUMP_METRICS_AT_EXIT = _init_dump_metrics_filename()
 
 
 #: The default for whether to allow jit-compilation for a compiled program.
