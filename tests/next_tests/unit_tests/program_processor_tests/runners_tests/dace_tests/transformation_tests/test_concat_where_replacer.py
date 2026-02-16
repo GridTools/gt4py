@@ -1375,14 +1375,13 @@ def _make_concat_where_nested_symbolic_bound(
 ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.NestedSDFG, str, str, str]:
     inc_symb = "inc_symb"
     split_sym = "split_sym"
+    nested_inc_symb = split_sym if has_blocking_symbol else inc_symb
 
-    def make_nested_sdfg() -> tuple[dace.SDFG, str]:
+    def make_nested_sdfg() -> dace.SDFG:
         sdfg = dace.SDFG("nested")
         state = sdfg.add_state()
 
-        nested_inc_symb = split_sym if has_blocking_symbol else inc_symb
         sdfg.add_symbol(nested_inc_symb, dace.int32)
-
         for aname in "ab":
             sdfg.add_array(
                 aname,
@@ -1400,7 +1399,7 @@ def _make_concat_where_nested_symbolic_bound(
         )
         sdfg.validate()
 
-        return sdfg, nested_inc_symb
+        return sdfg
 
     sdfg = dace.SDFG(util.unique_name("concat_where_nested_with_symbolic_bound"))
     state = sdfg.add_state()
@@ -1418,9 +1417,8 @@ def _make_concat_where_nested_symbolic_bound(
     state.add_nedge(a, c, dace.Memlet(f"a[1:({split_sym} + 1)] -> [0:({split_sym})]"))
     state.add_nedge(b, c, dace.Memlet(f"b[3:({split_sym} + 3)] -> [(10 - {split_sym}):10]"))
 
-    _nsdfg, nested_inc_symb = make_nested_sdfg()
     nested_sdfg = state.add_nested_sdfg(
-        _nsdfg,
+        sdfg=make_nested_sdfg(),
         inputs={"a"},
         outputs={"b"},
         symbol_mapping={nested_inc_symb: inc_symb},
