@@ -179,6 +179,43 @@ def gt_replace_concat_where_node(
     # TODO(phimuell): Run Memlet propagation.
 
 
+def gt_check_if_concat_where_node_is_replaceable(
+    sdfg: dace.SDFG,
+    state: dace.SDFGState,
+    concat_node: dace_nodes.AccessNode,
+) -> bool:
+    """Check if `concat_node` is a suitable candidate for replacement by `gt_replace_concat_where_node()`.
+
+    The function checks if the producer are valid, i.e. if they are AccessNodes and
+    if the consumer of `concat_where` data can be replaced. It does not check if
+    `concat_node` is single use data.
+
+    Args:
+        sdfg: The SDFG in which we operate.
+        state: The state that contains the `concat_where` node.
+        concat_node: The node that represents the result of the `concat_where` expression.
+    """
+
+    # Check the producers
+    if state.in_degree(concat_node) == 0:
+        return False
+    for iedge in state.in_edges(concat_node):
+        if not isinstance(iedge.src, dace_nodes.AccessNode):
+            return False
+
+    descending_points = _find_consumer_specs_single_source_single_level(
+        state, concat_node, for_check=True
+    )
+    if descending_points is None:
+        return False
+
+    for descending_point in descending_points:
+        if not _check_descending_point(descending_point):
+            return False
+
+    return True
+
+
 _ScopeLocation: TypeAlias = Union[dace_nodes.MapEntry, None]
 """Defines a scope in the DaCe term.
 
@@ -1083,15 +1120,15 @@ def _find_consumer_specs_single_source_single_level(
     """Find all consumers of `concat_node` in state `state`.
 
     If `for_check` is `False` then the function returns the consumer partition for
-    `concat_node`. Note if the consumer partition does not exists then an error
-    is generated.
+    `concat_node`. Note if the consumer partition does not exists an error is generated.
     If `for_check` is `True` then the function only checks if the partition exists,
     which is indicated by a list containing all descending points of this state,
     can be empty. `None` is returned if the partition does not exist.
+    To further check the returned descending points you can use `_check_descending_point()`.
 
     Important this function does not:
-    - Considers any other state.
-    - Considers any other AccessNode in `state` that also refers to the same
+    - Considering any other state.
+    - Considering any other AccessNode in `state` that also refers to the same
         data as `concat_node` does.
     - Does not descend into nested SDFGs.
 
