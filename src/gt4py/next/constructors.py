@@ -50,7 +50,7 @@ class FieldAllocationNamespace(abc.ABC):
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
         assert dtype is not None  # TODO check where to put the default
-        return common._field(self._empty(domain, dtype=dtype), domain)
+        return common._field(self._empty(domain, dtype=dtype), domain=domain)
 
     @abc.abstractmethod
     def _empty(
