@@ -176,7 +176,7 @@ def _verify_program_has_expected_domain(
 
 def test_inlining_of_static_domain_works(testee_prog, uids: utils.IDGeneratorPool):
     domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
-    input_pair = toolchain.CompilableProgram(
+    input_pair = toolchain.ConcreteArtifact(
         data=testee_prog.definition_stage,
         args=arguments.CompileTimeArgs(
             args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
