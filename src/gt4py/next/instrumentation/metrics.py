@@ -446,15 +446,15 @@ def dump_json(
 def _dump_metrics_at_exit() -> None:
     """Dump collected metrics to a file at program exit if required."""
 
-    # It is assumed that 'gtx.config' is still alive at this point
-    if config.DUMP_METRICS_AT_EXIT:
+    # It is assumed that 'gt4py.next.config' is still alive at this point
+    if config.DUMP_METRICS_AT_EXIT and (is_any_level_enabled() or sources):
         try:
             pathlib.Path(config.DUMP_METRICS_AT_EXIT).write_text(dumps_json())
             print(
                 f"--- atexit: GT4Py performance metrics saved at {config.DUMP_METRICS_AT_EXIT} ---",
                 file=sys.stderr,
             )
-        except (IOError, PermissionError) as e:
+        except Exception as e:
             print(
                 f"--- atexit: ERROR: Failed to automatically save GT4Py performance metrics: ---\n{e}",
                 file=sys.stderr,
