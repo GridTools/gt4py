@@ -144,7 +144,7 @@ def test_field_wrong_origin():
     with pytest.raises(ValueError, match=(r"Origin keys {'J'} not in domain")):
         gtx.as_field([I], np.random.rand(sizes[I]).astype(gtx.float32), origin={"J": 0})
 
-    with pytest.raises(ValueError, match=(r"Cannot specify origin for domain I")):
+    with pytest.raises(ValueError, match=(r"Cannot specify origin for .* domain I")):
         gtx.as_field("I", np.random.rand(sizes[J]).astype(gtx.float32), origin={"J": 0})
 
 

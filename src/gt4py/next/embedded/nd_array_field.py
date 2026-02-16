@@ -1116,7 +1116,7 @@ if jnp:
                     )
                 value = value.ndarray
 
-            object.__setattr__(self, "_ndarray", self._ndarray.at[target_slice].set(value))
+            object.__setattr__(self, "_ndarray", self._ndarray.at[target_slice].set(value))  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
 
