@@ -605,7 +605,8 @@ def _configure_descending_point(
                 symbol_mapping[nested_symbol] = psym
                 repl_dict[psym] = nested_symbol
             nested_free_symb_types[nested_symbol] = ptype
-            known_symbol_replacements[psym] = nested_symbol
+            if psym != nested_symbol:
+                known_symbol_replacements[psym] = nested_symbol
 
         if parent_data_name in parent_to_nested_name_mapping:
             # We have not handled the data but, it is already mapped into the nested
