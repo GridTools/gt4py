@@ -8,14 +8,15 @@
 
 from __future__ import annotations
 
+import abc
 import dataclasses
+import functools
 from collections.abc import Mapping, Sequence
 from typing import Any, Callable, Generic, Optional, Protocol, TypeAlias, TypeGuard, TypeVar, cast
 
 import numpy as np
 
 import gt4py.eve as eve
-import gt4py.eve.extended_typing as xtyping
 import gt4py.next.allocators as next_allocators
 import gt4py.next.common as common
 import gt4py.next.embedded.nd_array_field as nd_array_field
@@ -23,18 +24,155 @@ import gt4py.storage.cartesian.utils as storage_utils
 from gt4py._core import definitions as core_defs
 
 
-# TODO for Monday:
-# the current proposal breaks one of our other ideas, we wanted to store the allocator on the field
-# to be able to propagate the allocation strategy in array operations, but that requires the aligned_index
-# to be stored in absolute (NamedIndex) format, because we want to use it to align domain points, not buffer points.
-# But then we can't compute the relative (int) aligned index from just the shape passed to e.g. empty.
-# Of course we can still save the (FieldAllocator, aligned_index) tuple on the field not the resolved one.
-
-
+# TODO translate into a description somewhere
 # Notes (3 concepts): we need
 # - translation of dtype/device to target namespace
 # - absolute (domain) to relative (shape), includes aligned index
 # - backing array api OR FieldBufferAllocator
+
+
+class FieldAllocationNamespace(abc.ABC):
+    # TODO: expand to a full description
+    """
+    - emtpy, as_field, etc are public facing, they do the work that is shared between all subclasses:
+      - conversion of dtype-like and domain-like
+      - array to field
+    - _empty, _as_field are to be implented by the subclasses:
+      - note: we pass domain explicitly because it's needed together with aligned_index to compute the alignment relative to the buffer
+    """
+
+    def empty(
+        self,
+        domain: common.DomainLike,
+        *,
+        dtype: core_defs.DTypeLike | None = None,
+    ) -> nd_array_field.NdArrayField:
+        domain = common.domain(domain)
+        dtype = core_defs.dtype(dtype)
+        assert dtype is not None  # TODO check where to put the default
+        return common._field(self._empty(domain, dtype=dtype), domain)
+
+    @abc.abstractmethod
+    def _empty(
+        self, domain: common.Domain, *, dtype: core_defs.DType
+    ) -> core_defs.NDArrayObject: ...
+
+    def zeros(
+        self,
+        domain: common.DomainLike,
+        dtype: core_defs.DTypeLike | None = None,
+    ) -> nd_array_field.NdArrayField:
+        domain = common.domain(domain)
+        dtype = core_defs.dtype(dtype)
+        assert dtype is not None
+        return common._field(self._zeros(domain, dtype=dtype), domain=domain)
+
+    @abc.abstractmethod
+    def _zeros(
+        self, domain: common.Domain, *, dtype: core_defs.DType
+    ) -> core_defs.NDArrayObject: ...
+
+    def ones(
+        self,
+        domain: common.DomainLike,
+        dtype: core_defs.DTypeLike | None = None,
+    ) -> nd_array_field.NdArrayField:
+        domain = common.domain(domain)
+        dtype = core_defs.dtype(dtype)
+        assert dtype is not None
+        return common._field(self._ones(domain, dtype=dtype), domain=domain)
+
+    @abc.abstractmethod
+    def _ones(
+        self, domain: common.Domain, *, dtype: core_defs.DType
+    ) -> core_defs.NDArrayObject: ...
+
+    def full(
+        self,
+        domain: common.DomainLike,
+        fill_value: core_defs.Scalar,
+        dtype: core_defs.DTypeLike | None = None,
+    ) -> nd_array_field.NdArrayField:
+        domain = common.domain(domain)
+        dtype = core_defs.dtype(dtype) if dtype is not None else core_defs.dtype(type(fill_value))
+        assert dtype is not None
+        return common._field(self._full(domain, fill_value=fill_value, dtype=dtype), domain=domain)
+
+    @abc.abstractmethod
+    def _full(
+        self,
+        domain: common.Domain,
+        fill_value: core_defs.Scalar,
+        dtype: core_defs.DType,
+    ) -> nd_array_field.NdArrayField: ...
+
+    def as_field(
+        self,
+        domain: common.DomainLike | Sequence[common.Dimension],
+        data: core_defs.NDArrayObject,  # TODO rename to `obj`?
+        *,
+        dtype: core_defs.DTypeLike | None = None,
+        origin: Mapping[common.Dimension, int] | None = None,
+        copy: bool | None = None,
+    ) -> nd_array_field.NdArrayField:
+        if copy is not None:
+            raise NotImplementedError("The 'copy' argument is not yet implemented.")
+
+        dtype = core_defs.dtype(dtype) if dtype is not None else None
+        assert dtype is None or dtype.tensor_shape == ()  # TODO in the other cases as well?
+
+        if isinstance(domain, Sequence) and all(
+            isinstance(dim, common.Dimension) for dim in domain
+        ):
+            domain = cast(Sequence[common.Dimension], domain)
+            if len(domain) != data.ndim:
+                raise ValueError(
+                    f"Cannot construct 'Field' from array of shape '{data.shape}' and domain '{domain}'."
+                )
+            if origin:
+                domain_dims = set(domain)
+                if unknown_dims := set(origin.keys()) - domain_dims:
+                    raise ValueError(f"Origin keys {unknown_dims} not in domain {domain}.")
+            else:
+                origin = {}
+            actual_domain = common.domain(
+                [
+                    (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
+                    for d, s in zip(domain, data.shape)
+                ]
+            )
+        else:
+            if origin:
+                raise ValueError(f"Cannot specify origin for a concrete domain {domain}")
+            actual_domain = common.domain(cast(common.DomainLike, domain))
+
+        # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
+        #   already the correct layout and device.
+        shape = storage_utils.asarray(
+            data
+        ).shape  # TODO this is a quite expensive throw-away operation...
+        if shape != actual_domain.shape:
+            raise ValueError(f"Cannot construct 'Field' from array of shape '{shape}'.")
+
+        if dtype is None:  # TODO does this make sense?
+            dtype = core_defs.dtype(storage_utils.asarray(data).dtype)
+
+        # if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
+        #     device = core_defs.Device(*data.__dlpack_device__())
+
+        # arr = _as_array_api_construction_namespace(
+        #     actual_domain, allocator, device, aligned_index=aligned_index
+        # ).asarray(data, dtype=dtype, device=device, copy=copy)
+        arr = self._asarray(actual_domain, data, dtype=dtype, copy=copy)
+        return common._field(
+            arr,
+            domain=actual_domain,
+        )
+
+    @abc.abstractmethod
+    def _asarray(
+        domain: common.Domain, data: core_defs.NDArrayObject, *, dtype, copy
+    ) -> core_defs.NDArrayObject: ...
 
 
 # TODO: move to core_defs?
@@ -129,87 +267,81 @@ _ANS = TypeVar("_ANS", bound=ArrayAPICreationNamespace)
 
 
 @dataclasses.dataclass(frozen=True)
-class ArrayNamespaceWrapper(Generic[_ANS]):
+class ArrayNamespaceWrapper(FieldAllocationNamespace, Generic[_ANS]):
     array_ns: _ANS
+    _device: core_defs.Device | None = None
 
-    def _to_array_ns_dtype(self, dtype: core_defs.DTypeLike | None) -> Any:
+    def _to_array_ns_dtype(self, dtype: core_defs.DType | None) -> Any:
         if dtype is None:
             return None
-        return getattr(self.array_ns, core_defs.dtype_to_name(dtype.scalar_type))
+        return getattr(self.array_ns, core_defs.dtype_to_name[dtype.scalar_type])
 
-    def _to_array_ns_device(self, device: core_defs.Device | None) -> Any:
-        if device is None:
+    @functools.cached_property
+    def device(self) -> Any:
+        # TODO can be done in init and not store the core_defs.Device!
+        if self._device is None:
             return None
-        return get_device_translator(self.array_ns)(device)
+        return get_device_translator(self.array_ns)(self._device)
 
-    def empty(
+    def _empty(
         self,
-        shape: tuple[int, ...],
+        domain: common.Domain,
         *,
         dtype: core_defs.DType | None = None,
-        device: core_defs.Device | None = None,
     ) -> core_defs.NDArrayObject:
         return self.array_ns.empty(
-            shape, dtype=self._to_array_ns_dtype(dtype), device=self._to_array_ns_device(device)
+            domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
         )
 
-    def zeros(
+    def _zeros(
         self,
-        shape: tuple[int, ...],
+        domain: common.Domain,
         *,
         dtype: core_defs.DType | None = None,
-        device: core_defs.Device | None = None,
     ) -> core_defs.NDArrayObject:
         return self.array_ns.zeros(
-            shape, dtype=self._to_array_ns_dtype(dtype), device=self._to_array_ns_device(device)
+            domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
         )
 
-    def ones(
+    def _ones(
         self,
-        shape: tuple[int, ...],
+        domain: common.Domain,
         *,
         dtype: core_defs.DType | None = None,
-        device: core_defs.Device | None = None,
     ) -> core_defs.NDArrayObject:
         return self.array_ns.ones(
-            shape, dtype=self._to_array_ns_dtype(dtype), device=self._to_array_ns_device(device)
+            domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
         )
 
-    def full(
+    def _full(
         self,
-        shape: tuple[int, ...],
+        domain: common.Domain,
         fill_value: core_defs.Scalar,
         *,
         dtype: core_defs.DType | None = None,
-        device: core_defs.Device | None = None,
     ) -> core_defs.NDArrayObject:
         return self.array_ns.full(
-            shape,
-            fill_value,
+            domain.shape,
+            fill_value=fill_value,
             dtype=self._to_array_ns_dtype(dtype),
-            device=self._to_array_ns_device(device),
+            device=self.device,
         )
 
-    def asarray(
+    def _asarray(
         self,
-        obj: Any,
+        domain: common.Domain | Sequence[common.Dimension],
+        data: core_defs.NDArrayObject,  # TODO rename to `obj`?
         *,
         dtype: core_defs.DType | None = None,
-        device: core_defs.Device | None = None,
         copy: bool | None = None,
     ) -> core_defs.NDArrayObject:
-        return self.array_ns.asarray(
-            obj,
-            dtype=self._to_array_ns_dtype(dtype),
-            device=self._to_array_ns_device(device),
-            copy=copy,
+        arr = self.array_ns.asarray(
+            data, dtype=self._to_array_ns_dtype(dtype), device=self.device, copy=copy
         )
-
-    @property
-    def bool(self) -> _ANS.bool:
-        return self.array_ns.bool
-
-    # etc
+        assert domain.shape == arr.shape, (
+            f"pre-condition of `_asarray` not met: {data.shape=} and {domain.shape} need to agree."
+        )
+        return arr
 
 
 def _get_array_namespace(arr) -> ArrayAPICreationNamespace:
@@ -223,81 +355,57 @@ def _get_array_namespace(arr) -> ArrayAPICreationNamespace:
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldBufferAllocatorWrapper:
+class FieldBufferAllocatorWrapper(FieldAllocationNamespace):
     allocator: next_allocators.FieldBufferAllocatorProtocol
-    dims: Sequence[common.Dimension]
-    aligned_index: (
-        Sequence[int] | None
-    )  # TODO the translation from Sequence[NamedIndex] and Domain needs to be done outside!
+    device: core_defs.Device | None = None
+    aligned_index: Sequence[common.NamedIndex] | None = None
 
-    def empty(
-        self,
-        shape: tuple[int, ...],
-        *,
-        dtype: core_defs.DTypeLike | None = None,
-        device: core_defs.Device | None = None,
-    ) -> core_defs.NDArrayObject:
-        assert dtype is not None
+    @functools.cached_property
+    def device_id(self):
+        return self.device.device_id if self.device is not None else 0
+
+    def _empty(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject:
         return self.allocator.__gt_allocate__(
-            dims=self.dims,
-            shape=shape,
-            dtype=core_defs.dtype(dtype),
+            domain=domain,
+            dtype=dtype,
             aligned_index=self.aligned_index,
-            device_id=device.device_id if device is not None else 0,
+            device_id=self.device_id,
         ).ndarray
 
-    def zeros(
-        self,
-        shape: tuple[int, ...],
-        *,
-        dtype: core_defs.DTypeLike | None = None,
-        device: core_defs.Device | None = None,
-    ) -> core_defs.NDArrayObject:
-        assert dtype is not None
-        arr = self.empty(shape, dtype=dtype, device=device)
+    def _zeros(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject:
+        arr = self._empty(domain, dtype=dtype)
         arr[...] = 0
         return arr
 
-    def ones(
-        self,
-        shape: tuple[int, ...],
-        *,
-        dtype: core_defs.DTypeLike | None = None,
-        device: core_defs.Device | None = None,
-    ) -> core_defs.NDArrayObject:
-        assert dtype is not None
-        arr = self.empty(shape, dtype=dtype, device=device)
+    def _ones(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject:
+        arr = self._empty(domain, dtype=dtype)
         arr[...] = 1
         return arr
 
-    def full(
+    def _full(
         self,
-        shape: tuple[int, ...],
+        domain: common.Domain,
         fill_value: core_defs.Scalar,
         *,
-        dtype: core_defs.DTypeLike | None = None,
-        device: core_defs.Device | None = None,
+        dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        dtype if dtype is not None else core_defs.dtype(type(fill_value))
-        arr = self.empty(shape, dtype=dtype, device=device)
+        arr = self._empty(domain, dtype=dtype)
         arr[...] = fill_value
         return arr
 
-    def asarray(
+    def _asarray(
         self,
+        domain: common.Domain,
         data: core_defs.NDArrayObject,
         *,
-        dtype: core_defs.DTypeLike | None = None,
-        device: core_defs.Device | None = None,
+        dtype: core_defs.DType,
         copy: bool | None = None,
     ) -> core_defs.NDArrayObject:
-        assert copy is None
-        if dtype is None:
-            dtype = storage_utils.asarray(data).dtype
+        assert copy is None  # TODO double-check that user-facing functions are properly protected
+        assert dtype is not None
+        arr = self._empty(domain, dtype=dtype)
 
-        arr = self.empty(data.shape, dtype=dtype, device=device)
-        array_ns = _get_array_namespace(arr)  # TODO add compatibility function
-        arr[...] = array_ns.asarray(data)
+        arr[...] = _get_array_namespace(arr).asarray(data)  # TODO is this the right place?
         return arr
 
 
@@ -313,25 +421,12 @@ def _numpy_device_translator(device: core_defs.Device | None) -> Any:
     raise ValueError(f"NumPy does not support device type {device.device_type}.")
 
 
-# TODO move to the correct place
+# TODO move to the correct place and register other libraries
 _registry = {np: _numpy_device_translator}
 
 
 def get_device_translator(array_ns: ArrayAPICreationNamespace) -> Callable[[core_defs.Device], Any]:
     return _registry.get(array_ns)
-
-
-# class OurArrayApiCreationNamespace(ArrayAPICreationNamespace, Protocol): ...
-
-
-# class ArrayAPIWrapper(OurArrayApiCreationNamespace):
-#     # TODO the concrete one
-#     ...
-
-
-# class FieldBufferAllocatorWrapper(OurArrayApiCreationNamespace):
-#     # TODO the concrete one that wraps a FieldBufferAllocationUtil and implements the functions by calling the allocator's allocation functions and then converting the resulting buffer to an array using the array API of choice
-#     ...
 
 
 def _aligned_index(
@@ -343,49 +438,35 @@ def _aligned_index(
     return None
 
 
-def _as_array_api_construction_namespace(
-    domain: common.Domain,
-    allocator: FieldAllocator | None,
-    device: core_defs.Device | None,
+# TODO test all code paths
+def _as_field_allocation_namespace(
+    allocator: FieldAllocator | None,  # TODO should we allow None
+    *,
     aligned_index: Sequence[common.NamedIndex] | None = None,
-) -> ArrayAPICreationNamespace:  # TODO actually our concrete one that takes our dtype and device
-    return _as_array_api_construction_namespace_lower(
-        domain.dims,
-        allocator,
-        device.device_type if device is not None else None,
-        _aligned_index(domain, aligned_index),
-    )
-
-
-# @functools.cache # TODO
-def _as_array_api_construction_namespace_lower(
-    dims: Sequence[common.Dimension],
-    allocator: FieldAllocator | None,
-    device_type: core_defs.DeviceType | None,
-    aligned_index: Sequence[int] | None = None,
-) -> ArrayAPICreationNamespace:  # TODO actually our concrete one that takes our dtype and device
+    device: core_defs.Device | None = None,
+) -> FieldAllocationNamespace:
     if allocator is None:
-        if device_type is None:
-            device_type = core_defs.DeviceType.CPU  # fallback to CPU allocation # TODO discuss, we could also fallback to Numpy allocation
-        allocator = next_allocators.device_allocators[device_type]
+        if device is None:
+            allocator = next_allocators.device_allocators[core_defs.DeviceType.CPU]
+        else:
+            allocator = next_allocators.device_allocators[device.device_type]
 
-    assert allocator is not None
-    if next_allocators.is_field_allocation_tool(allocator):
+    if is_array_api_creation_namespace(allocator):
+        return ArrayNamespaceWrapper(array_ns=allocator, _device=device)
+    elif next_allocators.is_field_allocation_tool(allocator):
         allocator = next_allocators.get_allocator(
             allocator, strict=True
         )  # TODO this function could be inlined here?
-        if device_type is not None and allocator.__gt_device_type__ != device_type:
+        if device is not None and allocator.__gt_device_type__ != device.device_type:
             raise ValueError(
-                f"Allocator {allocator} is for device type {allocator.__gt_device_type__}, but device type {device_type} was specified."
+                f"Allocator {allocator} is for device type {allocator.__gt_device_type__}, but device type {device.device_type} was specified."
             )
         return FieldBufferAllocatorWrapper(
-            allocator=allocator, dims=dims, aligned_index=aligned_index
+            allocator=allocator,
+            device=device,
+            aligned_index=aligned_index,
         )
-    elif is_array_api_creation_namespace(allocator):
-        # TODO can/should we check if the namespace matches device_type if specified?
-        return ArrayNamespaceWrapper(array_ns=allocator)
     else:
-        # static analysis guarantees this already, but we want a user-facing error at runtime
         raise ValueError(f"Invalid field allocator: {allocator}.")
 
 
@@ -445,14 +526,10 @@ def empty(
         >>> b.shape
         (3, 3)
     """
-    domain = common.domain(domain)
-    array_api_constructor_namespace = _as_array_api_construction_namespace(
-        domain=domain, allocator=allocator, device=device, aligned_index=aligned_index
+    field_array_allocation_api = _as_field_allocation_namespace(
+        allocator, aligned_index=aligned_index, device=device
     )
-
-    # TODO double-check where we should resolve dtypelike->dtype
-    arr = array_api_constructor_namespace.empty(domain.shape, dtype=dtype, device=device)
-    return common._field(arr, domain=domain)
+    return field_array_allocation_api.empty(domain, dtype=dtype)
 
 
 @eve.utils.with_fluid_partial
@@ -475,13 +552,10 @@ def zeros(
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
-    domain = common.domain(domain)
-    array_api_constructor_namespace = _as_array_api_construction_namespace(
-        domain=domain, allocator=allocator, device=device, aligned_index=aligned_index
+    field_array_allocation_api = _as_field_allocation_namespace(
+        allocator, aligned_index=aligned_index, device=device
     )
-
-    arr = array_api_constructor_namespace.zeros(domain.shape, dtype=dtype, device=device)
-    return common._field(arr, domain=domain)
+    return field_array_allocation_api.zeros(domain, dtype=dtype)
 
 
 @eve.utils.with_fluid_partial
@@ -504,13 +578,10 @@ def ones(
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
-    domain = common.domain(domain)
-    array_api_constructor_namespace = _as_array_api_construction_namespace(
-        domain=domain, allocator=allocator, device=device, aligned_index=aligned_index
+    field_array_allocation_api = _as_field_allocation_namespace(
+        allocator, aligned_index=aligned_index, device=device
     )
-
-    arr = array_api_constructor_namespace.ones(domain.shape, dtype=dtype, device=device)
-    return common._field(arr, domain=domain)
+    return field_array_allocation_api.ones(domain, dtype=dtype)
 
 
 @eve.utils.with_fluid_partial
@@ -539,15 +610,10 @@ def full(
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
-    domain = common.domain(domain)
-    array_api_constructor_namespace = _as_array_api_construction_namespace(
-        domain=domain, allocator=allocator, device=device, aligned_index=aligned_index
+    field_array_allocation_api = _as_field_allocation_namespace(
+        allocator, aligned_index=aligned_index, device=device
     )
-
-    arr = array_api_constructor_namespace.full(
-        domain.shape, fill_value=fill_value, dtype=dtype, device=device
-    )
-    return common._field(arr, domain=domain)
+    return field_array_allocation_api.full(domain, fill_value=fill_value, dtype=dtype)
 
 
 @eve.utils.with_fluid_partial
@@ -605,50 +671,9 @@ def as_field(
         >>> gtx.as_field({IDim: range(-1, 2)}, xdata).domain.ranges[0]
         UnitRange(-1, 2)
     """
-    if copy is not None:
-        raise NotImplementedError("The 'copy' argument is not yet implemented.")
-
-    dtype = core_defs.dtype(dtype) if dtype is not None else None
-    assert dtype is None or dtype.tensor_shape == ()  # TODO in the other cases as well?
-
-    if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
-        domain = cast(Sequence[common.Dimension], domain)
-        if len(domain) != data.ndim:
-            raise ValueError(
-                f"Cannot construct 'Field' from array of shape '{data.shape}' and domain '{domain}'."
-            )
-        if origin:
-            domain_dims = set(domain)
-            if unknown_dims := set(origin.keys()) - domain_dims:
-                raise ValueError(f"Origin keys {unknown_dims} not in domain {domain}.")
-        else:
-            origin = {}
-        actual_domain = common.domain(
-            [
-                (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
-                for d, s in zip(domain, data.shape)
-            ]
-        )
-    else:
-        if origin:
-            raise ValueError(f"Cannot specify origin for a concrete domain {domain}")
-        actual_domain = common.domain(cast(common.DomainLike, domain))
-
-    # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
-    #   already the correct layout and device.
-    shape = storage_utils.asarray(
-        data
-    ).shape  # TODO this is a quite expensive throw-away operation...
-    if shape != actual_domain.shape:
-        raise ValueError(f"Cannot construct 'Field' from array of shape '{shape}'.")
-
-    if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
-        device = core_defs.Device(*data.__dlpack_device__())
-
-    arr = _as_array_api_construction_namespace(
-        actual_domain, allocator, device, aligned_index=aligned_index
-    ).asarray(data, dtype=dtype, device=device, copy=copy)
-    return common._field(arr, domain=actual_domain)
+    return _as_field_allocation_namespace(
+        allocator, aligned_index=aligned_index, device=device
+    ).as_field(domain=domain, data=data, dtype=dtype, origin=origin, copy=copy)
 
 
 @eve.utils.with_fluid_partial
