@@ -41,9 +41,10 @@ def compute_expected(qc_initial: np.ndarray, scalar: float, threshold: float) ->
             qc_in = qc_tmp[i, k]
             if qc_in > threshold:
                 state = qc_in + state + scalar
-            # else: state remains unchanged
+            else:
+                state = qc_in
             result[i, k] = state
-    
+
     return result
 
 class IntegrationState(NamedTuple):
