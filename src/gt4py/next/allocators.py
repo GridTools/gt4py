@@ -42,10 +42,11 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
     @abc.abstractmethod
     def __gt_allocate__(
         self,
-        domain: common.Domain,
+        dims: Sequence[common.Dimension],
+        shape: Sequence[int],
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
-        aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
+        aligned_index: Sequence[int] | None = None,
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]: ...
 
 
@@ -148,16 +149,14 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
 
     def __gt_allocate__(
         self,
-        domain: common.Domain,
+        dims: Sequence[common.Dimension],
+        shape: Sequence[int],
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
-        aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
+        aligned_index: Sequence[int] | None = None,
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
-        shape = domain.shape
-        layout_map = self.layout_mapper(domain.dims)
-        # TODO(egparedes): add support for non-empty aligned index values
-        assert aligned_index is None
-
+        shape = tuple(shape)
+        layout_map = self.layout_mapper(dims)
         return self.buffer_allocator.allocate(
             shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
         )
@@ -230,10 +229,11 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
 
     def __gt_allocate__(
         self,
-        domain: common.Domain,
+        dims: Sequence[common.Dimension],
+        shape: Sequence[int],
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
-        aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
+        aligned_index: Sequence[int] | None = None,
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
         raise self.exception
 
@@ -317,6 +317,8 @@ def allocate(
             If illegal or inconsistent arguments are specified.
 
     """
+
+    # TODO check the new _actual_array_allocator function for the logic to decide the device/allocator
     if device is None and allocator is None:
         raise ValueError("No 'device' or 'allocator' specified.")
     actual_allocator = get_allocator(allocator)
