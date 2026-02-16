@@ -63,7 +63,7 @@ def test_scalar_scan(cartesian_case):
         return Q(q=a.q + 1.0)
     @gtx.scan_operator(axis=KDim, forward=True, init=IntegrationState(q_tmp=0.0))
     def testee_scan(state: IntegrationState, q_in: Q_scalar, scalar: float) -> IntegrationState:
-        q_tmp = q_in.q + state.q_tmp + scalar if q_in.q > 5.0 else state.q_tmp
+        q_tmp = q_in.q + state.q_tmp + scalar if q_in.q > 5.0 else q_in.q
         return IntegrationState(q_tmp=q_tmp)
 
     @gtx.field_operator
