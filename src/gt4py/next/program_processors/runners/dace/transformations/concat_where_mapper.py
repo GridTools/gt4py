@@ -20,32 +20,44 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 @dace_properties.make_properties
 class ConcatWhereCopyToMap(dace_transformation.SingleStateTransformation):
-    """NA"""
+    """Replaces `concat_where` nodes with Tasklets that access the source data directly.
+
+    This is essentially a wrapper around the `gt_replace_concat_where_node()`, for
+    more information see there.
+
+    Args:
+        single_use_data: Single use data, if not provided a scan will be performed.
+        tag: Used to mangle names of data descriptors, see `gt_replace_concat_where_node()`
+            for more.
+    """
 
     node_a1 = dace_transformation.PatternNode(dace_nodes.AccessNode)  # Needed to speed up matching.
     concat_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
+    tag = dace_properties.Property(dtype=str, default=None, allow_none=True)
+
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
     #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
-    _single_use_data: dict[dace.SDFG, set[str]]
+    _single_use_data: Optional[Mapping[dace.SDFG, set[str]]]
 
     def __init__(
         self,
-        *args: Any,
-        single_use_data: dict[dace.SDFG, set[str]],
+        tag: Optional[str] = None,
+        single_use_data: Optional[Mapping[dace.SDFG, set[str]]] = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(*args, **kwargs)
-        # ALLOW NONE.
+        super().__init__(**kwargs)
         self._single_use_data = single_use_data
+        self.tag = tag
 
     @classmethod
     def expressions(cls) -> Any:
@@ -67,38 +79,55 @@ class ConcatWhereCopyToMap(dace_transformation.SingleStateTransformation):
         map_entry: dace_nodes.MapEntry = self.map_entry
         concat_node: dace_nodes.AccessNode = self.concat_node
 
-        # Must be on the top scope.
-        if graph.scope_dict()[map_entry] is not None:
-            return False
-
-        # Currently we only allow that there is one consumer, might be lifted but for
-        #  sure it must be single use data (check is done at the very end).
-        if graph.out_degree(concat_node) != 1:
-            return False
-        if not concat_node.desc(sdfg).transient:
-            return False
+        # If we have the single use data check, perform it here to safe some scanning.
         if (
             self._single_use_data is not None
             and concat_node.data not in self._single_use_data[sdfg]
         ):
             return False
 
+        # We can not replace global data.
+        if not sdfg.arrays[concat_node.data].transient:
+            return False
+
+        # Must be on the top scope.
+        if graph.scope_dict()[map_entry] is not None:
+            return False
+
         # The concat where node must act as a converging point and no Map can write
         #  into it directly.
-        # TODO(phimuell): Consider to lift the restriction that `concat_node` gets
-        #   data from other nodes, also allow that Maps write into it by creating
-        #   a new intermediate node.
+        # TODO(phimuell): Lift this restriction once we allow for other types of producers.
         if graph.in_degree(concat_node) < 2:
             return False
-        if any(
-            not isinstance(iedge.src, dace_nodes.AccessNode)
-            for iedge in graph.in_edges(concat_node)
+
+        # Check if the accesses are valid.
+        if not gt_check_if_concat_where_node_is_replaceable(
+            state=graph,
+            concat_node=concat_node,
         ):
             return False
 
-        # IMPLEMENT ME
+        # Check if single use data if not yet done.
+        if self._single_use_data is None:
+            find_single_use_data = dace_analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+            if concat_node.data not in single_use_data[sdfg]:
+                return False
 
-        return False
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        concat_node: dace_nodes.AccessNode = self.concat_node
+        gt_replace_concat_where_node(
+            sdfg=sdfg,
+            state=graph,
+            concat_node=concat_node,
+            tag=self.tag,
+        )
 
 
 def gt_replace_concat_where_node(
@@ -131,6 +160,7 @@ def gt_replace_concat_where_node(
         tag: Use this to mangle the name of data descriptors that should be created.
             If not given defaults to `concat_node.data`.
     """
+    assert sdfg.arrays[concat_node.data].transient
 
     # These are all the consumers that we need to modify.
     genuine_consumer_specs, descending_points = _find_consumer_specs_single_source_single_level(
@@ -180,7 +210,6 @@ def gt_replace_concat_where_node(
 
 
 def gt_check_if_concat_where_node_is_replaceable(
-    sdfg: dace.SDFG,
     state: dace.SDFGState,
     concat_node: dace_nodes.AccessNode,
 ) -> bool:
@@ -191,7 +220,6 @@ def gt_check_if_concat_where_node_is_replaceable(
     `concat_node` is single use data.
 
     Args:
-        sdfg: The SDFG in which we operate.
         state: The state that contains the `concat_where` node.
         concat_node: The node that represents the result of the `concat_where` expression.
     """
