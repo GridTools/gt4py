@@ -19,7 +19,11 @@ from .auto_optimize import (
     GT4PyAutoOptHookStage,
     gt_auto_optimize,
 )
-from .concat_where_mapper import gt_replace_concat_where_node
+from .concat_where_mapper import (
+    gt_apply_concat_where_replacement_on_sdfg,
+    gt_check_if_concat_where_node_is_replaceable,
+    gt_replace_concat_where_node,
+)
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
 from .fuse_horizontal_conditionblocks import FuseHorizontalConditionBlocks
 from .gpu_utils import (
@@ -118,8 +122,10 @@ __all__ = [
     "VerticalMapFusionCallback",
     "VerticalMapSplitCallback",
     "constants",
+    "gt_apply_concat_where_replacement_on_sdfg",
     "gt_auto_optimize",
     "gt_change_strides",
+    "gt_check_if_concat_where_node_is_replaceable",
     "gt_create_local_double_buffering",
     "gt_eliminate_dead_dataflow",
     "gt_gpu_transform_non_standard_memlet",
