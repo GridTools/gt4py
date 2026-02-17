@@ -11,10 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import TracebackType
 
-from dace import __version__ as dace_version, dtypes, nodes, sdfg, subsets
-from dace.codegen import control_flow as dcf
+from dace import nodes, subsets
 from dace.properties import CodeBlock
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
+from dace.sdfg.state import LoopRegion
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
@@ -67,10 +67,6 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         ctx.current_scope.children.append(tasklet)
 
     def visit_HorizontalLoop(self, node: tir.HorizontalLoop, ctx: Context) -> None:
-        # Define axis iteration symbols
-        for axis in tir.Axis.dims_horizontal():
-            ctx.tree.symbols[axis.iteration_symbol()] = dtypes.int32
-
         dace_map = nodes.Map(
             label=f"horizontal_loop_{id(node)}",
             params=[tir.Axis.J.iteration_symbol(), tir.Axis.I.iteration_symbol()],
@@ -89,12 +85,9 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             self.visit(node.children, ctx=ctx)
 
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
-        # In any case, define the iteration symbol
-        ctx.tree.symbols[node.iteration_variable] = dtypes.int32
-
         # For serial loops, create a ForScope and add it to the tree
         if node.loop_order != common.LoopOrder.PARALLEL:
-            for_scope = tn.ForScope(header=_for_scope_header(node), children=[])
+            for_scope = tn.ForScope(loop=_loop_region_for(node), children=[])
 
             with ContextPushPop(ctx, for_scope):
                 self.visit(node.children, ctx=ctx)
@@ -118,7 +111,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
     def visit_IfElse(self, node: tir.IfElse, ctx: Context) -> None:
         if_scope = tn.IfScope(
-            condition=tn.CodeBlock(node.if_condition_code),
+            condition=CodeBlock(node.if_condition_code),
             children=[],
         )
 
@@ -126,7 +119,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
             self.visit(node.children, ctx=ctx)
 
     def visit_While(self, node: tir.While, ctx: Context) -> None:
-        while_scope = tn.WhileScope(children=[], header=_while_scope_header(node))
+        while_scope = tn.WhileScope(loop=_loop_region_while(node), children=[])
 
         with ContextPushPop(ctx, while_scope):
             self.visit(node.children, ctx=ctx)
@@ -147,83 +140,31 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         return ctx.tree
 
 
-def _for_scope_header(node: tir.VerticalLoop) -> dcf.ForScope:
-    """Header for the tn.ForScope re-using DaCe codegen ForScope.
-
-    Only setup the required data, default or mock the rest.
-
-    TODO: In DaCe 2.x this will be replaced by an SDFG concept which should
-    be closer and required less mockup.
+def _loop_region_for(node: tir.VerticalLoop) -> LoopRegion:
     """
-    if not dace_version.startswith("1."):
-        raise NotImplementedError("DaCe 2.x detected - please fix below code")
-    if node.loop_order == common.LoopOrder.PARALLEL:
-        raise ValueError("Parallel vertical loops should be translated to maps instead.")
+    Translates a vertical loop into a Dace LoopRegion to be used in `tn.ForScope`.
 
+    :param node: Vertical loop to translate
+    :return: DaCe LoopRegion to use in `tn.ForScope`
+    """
     plus_minus = "+" if node.loop_order == common.LoopOrder.FORWARD else "-"
     comparison = "<" if node.loop_order == common.LoopOrder.FORWARD else ">="
     iteration_var = node.iteration_variable
 
-    for_scope = dcf.ForScope(
-        condition=CodeBlock(
-            code=f"{iteration_var} {comparison} {node.bounds_k.end}",
-            language=dtypes.Language.Python,
-        ),
-        itervar=iteration_var,
-        init=node.bounds_k.start,
-        update=f"{iteration_var} {plus_minus} 1",
-        # Unused
-        parent=None,  # not Tree parent, CF parent
-        dispatch_state=lambda _state: "",
-        last_block=False,
-        guard=sdfg.SDFGState(),
-        body=dcf.GeneralBlock(
-            lambda _state: "",
-            None,
-            True,
-            None,
-            [],
-            [],
-            [],
-            [],
-            [],
-            False,
-        ),
-        init_edges=[],
+    return LoopRegion(
+        label=f"vertical_loop_{id(node)}",
+        loop_var=iteration_var,
+        initialize_expr=CodeBlock(f"{iteration_var} = {node.bounds_k.start}"),
+        condition_expr=CodeBlock(f"{iteration_var} {comparison} {node.bounds_k.end}"),
+        update_expr=CodeBlock(f"{iteration_var} = {iteration_var} {plus_minus} 1"),
     )
-    # Kill the loop_range test for memlet propagation check going in
-    dcf.ForScope.loop_range = lambda self: None
-    return for_scope
 
 
-def _while_scope_header(node: tir.While) -> dcf.WhileScope:
-    """Header for the tn.WhileScope re-using DaCe codegen WhileScope.
-
-    Only setup the required data, default or mock the rest.
-
-    TODO: In DaCe 2.x this will be replaced by an SDFG concept which should
-    be closer and required less mockup.
+def _loop_region_while(node: tir.While) -> LoopRegion:
     """
-    if not dace_version.startswith("1."):
-        raise NotImplementedError("DaCe 2.x detected - please fix below code")
+    Translates a while loop into a Dace LoopRegion to be used in `tn.WhileScope`.
 
-    return dcf.WhileScope(
-        test=CodeBlock(node.condition_code),
-        # Unused
-        guard=sdfg.SDFGState(),
-        dispatch_state=lambda _state: "",
-        parent=None,
-        body=dcf.GeneralBlock(
-            lambda _state: "",
-            None,
-            True,
-            None,
-            [],
-            [],
-            [],
-            [],
-            [],
-            False,
-        ),
-        last_block=False,
-    )
+    :param node: While loop to translate
+    :return: DaCe LoopRegion to use in `tn.WhileScope`
+    """
+    return LoopRegion(label=f"while_loop_{id(node)}", condition_expr=CodeBlock(node.condition_code))

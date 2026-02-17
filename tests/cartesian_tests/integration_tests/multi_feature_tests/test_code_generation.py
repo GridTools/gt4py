@@ -1692,3 +1692,25 @@ def test_self_assignment_in_forward(backend: str) -> None:
         with computation(FORWARD), interval(1, None):
             tmp = field[K - 1]
             field = tmp * 2
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_reset_mask_2d(backend: str) -> None:
+    domain = (5, 5, 5)
+
+    input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    mask_2d = gt_storage.ones(backend=backend, shape=(domain[0], domain[1]), dtype=np.int32)
+
+    @gtscript.stencil(backend=backend)
+    def test_set_2d_mask(
+        dp1: Field[np.float64], pe1: Field[np.float64], lev: Field[IJ, np.int32]
+    ) -> None:
+        with computation(PARALLEL), interval(0, -1):
+            dp1 = pe1[0, 0, 1] - pe1
+        with computation(FORWARD), interval(0, 1):
+            lev = 0
+
+    test_set_2d_mask(output, input, mask_2d)
+
+    assert (mask_2d == 0).all()
