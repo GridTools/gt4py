@@ -153,6 +153,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
+        static_domains: Optional[dict[common.Domain, int] | None] = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         """
@@ -194,7 +195,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             for op in offset_provider
         )
 
-        self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
+        self._compiled_programs.compile(
+            offset_providers=offset_provider, static_domains=static_domains, **static_args
+        )
         return self
 
 

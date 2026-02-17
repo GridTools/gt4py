@@ -15,7 +15,7 @@ import functools
 import itertools
 import warnings
 from collections.abc import Callable, Hashable, Sequence
-from typing import Any, Generic, TypeAlias, TypeVar
+from typing import Any, Generic, Optional, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
@@ -28,7 +28,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.otf import arguments, stages
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
 
@@ -605,6 +605,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     def compile(
         self,
         offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
+        static_domains: Optional[dict[common.Domain, int] | None] = None,
         **static_args: list[ScalarOrTupleOfScalars],
     ) -> None:
         """
@@ -619,17 +620,43 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
+
+        def _build_field_domain_descriptors(program_type, static_domains):
+            def _create_field_descriptor(field_type):
+                domain_ranges = {
+                    dim: static_domains[dim] for dim in field_type.dims
+                }  # TODO: improve error message
+                return arguments.FieldDomainDescriptor(common.domain(domain_ranges))
+
+            field_domain_descriptors = {}
+            for arg_name, arg_type_ in program_type.definition.pos_or_kw_args.items():
+                for el_type_, path in type_info.primitive_constituents(
+                    arg_type_, with_path_arg=True
+                ):
+                    if isinstance(el_type_, ts.FieldType):
+                        path_as_expr = "".join(map(lambda idx: f"[{idx}]", path))
+                        field_domain_descriptors[f"{arg_name}{path_as_expr}"] = (
+                            _create_field_descriptor(el_type_)
+                        )
+
+            return field_domain_descriptors
+
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
+                argument_descriptor_dict = {
+                    arguments.StaticArg: dict(
+                        zip(
+                            static_args.keys(),
+                            [arguments.StaticArg(value=v) for v in static_values],
+                            strict=True,
+                        )
+                    ),
+                }
+                if static_domains:
+                    argument_descriptor_dict[arguments.FieldDomainDescriptor] = (
+                        _build_field_domain_descriptors(self.program_type, static_domains)
+                    )
                 self._compile_variant(
-                    argument_descriptors={
-                        arguments.StaticArg: dict(
-                            zip(
-                                static_args.keys(),
-                                [arguments.StaticArg(value=v) for v in static_values],
-                                strict=True,
-                            )
-                        ),
-                    },
+                    argument_descriptor_dict,
                     offset_provider=offset_provider,
                 )
