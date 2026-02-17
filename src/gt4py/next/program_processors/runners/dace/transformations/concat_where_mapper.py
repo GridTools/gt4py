@@ -287,7 +287,7 @@ def gt_apply_concat_where_replacement_on_sdfg(
             if (
                 isinstance(node, dace_nodes.AccessNode)
                 and scope_dict[node] is None
-                and (not sdfg.arrays[node.data].transient)
+                and (sdfg.arrays[node.data].transient)
             ):
                 if node.data in single_use_data[
                     sdfg
