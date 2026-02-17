@@ -19,7 +19,6 @@ from gt4py.next import errors, constructors, common
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
     IDim,
-    Ioff,
     JDim,
     cartesian_case,
     exec_alloc_descriptor,
@@ -56,7 +55,7 @@ def test_identity_fo_execution(cartesian_case, identity_def):
 def test_shift_by_one_execution(cartesian_case):
     @gtx.field_operator
     def shift_by_one(in_field: cases.IFloatField) -> cases.IFloatField:
-        return in_field(Ioff[1])
+        return in_field(IDim + 1)
 
     # direct call to field operator
     # TODO(tehrengruber): slicing located fields not supported currently

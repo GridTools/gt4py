@@ -32,7 +32,11 @@ from gt4py import eve
 from gt4py.eve.extended_typing import MaybeNestedInTuple, NestedTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    ir_makers as im,
+    misc as itir_misc,
+)
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
@@ -1524,12 +1528,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         return offset_provider_arg, offset_value_arg, it
 
     def _make_cartesian_shift(
-        self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: DataExpr
+        self, it: IteratorExpr, conn: gtx_common.CartesianConnectivityType, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        assert any(dim == offset_dim for dim, _ in it.field_domain)
+        (old_dim,) = conn.domain
+        new_dim = conn.codomain
         new_index: SymbolExpr | ValueExpr
-        index_expr = it.indices[offset_dim]
+        index_expr = it.indices[old_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
             new_index = SymbolExpr(
@@ -1592,9 +1597,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
 
         # a new iterator with a shifted index along one dimension
-        shifted_indices = {
-            dim: (new_index if dim == offset_dim else index) for dim, index in it.indices.items()
-        }
+        shifted_indices = dict(
+            (new_dim, new_index) if dim == old_dim else (dim, index) for dim, index in it.indices.items()
+        )
         return IteratorExpr(it.field, it.gt_dtype, it.field_domain, shifted_indices)
 
     def _make_dynamic_neighbor_offset(
@@ -1687,11 +1692,16 @@ class LambdaToDataflow(eve.NodeVisitor):
             node.args[0], node.fun.args
         )
 
-        # first argument of the shift node is the offset provider
-        assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
-        offset = offset_provider_arg.value
-        assert isinstance(offset, str)
-        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
+        if isinstance(offset_provider_arg, gtir.CartesianOffset):
+            conn = itir_misc.connectivity_from_cartesian_offset(offset_provider_arg)
+            offset_provider_type = conn.__gt_type__()
+        else:
+            assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
+            assert isinstance(offset_provider_arg.value, str)
+            offset_provider_type = self.subgraph_builder.get_offset_provider_type(
+                offset_provider_arg.value
+            )
+
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr = (
             SymbolExpr(offset_value_arg.value, gtir_to_sdfg_types.INDEX_DTYPE)
@@ -1699,13 +1709,14 @@ class LambdaToDataflow(eve.NodeVisitor):
             else self.visit(offset_value_arg)
         )
 
-        if isinstance(offset_provider_type, gtx_common.Dimension):
+        if isinstance(offset_provider_type, gtx_common.CartesianConnectivityType):
             return self._make_cartesian_shift(it, offset_provider_type, offset_expr)
         else:
+            assert isinstance(offset_value_arg, gtir.OffsetLiteral)
             # initially, the storage for the connectivity tables is created as transient;
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
-            offset_table = gtx_dace_args.connectivity_identifier(offset)
+            offset_table = gtx_dace_args.connectivity_identifier(offset_provider_arg.value)
             self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
 
