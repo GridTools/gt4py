@@ -199,18 +199,8 @@ _ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayCreationNamespace)
 @dataclasses.dataclass(frozen=True)
 class ArrayNamespaceWrapper(FieldAllocationNamespace, Generic[_ANS]):
     array_ns: _ANS
-    _device: dataclasses.InitVar[core_defs.Device | None] = None
-
     # device in the format expected by the array namespace
-    device: Any = dataclasses.field(init=False)
-
-    def __post_init__(self, _device: core_defs.Device | None) -> None:
-        device = (
-            core_ndarray_utils.get_device_translator(self.array_ns)(_device)
-            if _device is not None
-            else None
-        )
-        object.__setattr__(self, "device", device)
+    device: Any = None
 
     def _to_array_ns_dtype(self, dtype: core_defs.DType | None) -> Any:
         if dtype is None:
@@ -350,7 +340,12 @@ def _as_field_allocation_namespace(
             allocator = next_allocators.device_allocators[device.device_type]
 
     if core_ndarray_utils.is_array_api_creation_namespace(allocator):
-        return ArrayNamespaceWrapper(array_ns=allocator, _device=device)
+        translated_device = (
+            core_ndarray_utils.get_device_translator(allocator)(device)
+            if device is not None
+            else None
+        )
+        return ArrayNamespaceWrapper(array_ns=allocator, device=translated_device)
     elif next_allocators.is_field_allocation_tool(allocator):
         allocator = next_allocators.get_allocator(
             allocator, strict=True

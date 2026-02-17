@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+from collections.abc import Hashable
 from typing import Any, Callable, Protocol, TypeGuard, cast
 
 import numpy as np
@@ -20,7 +21,7 @@ except ImportError:
     cupy = None
 
 
-class ArrayCreationNamespace(Protocol):
+class ArrayCreationNamespace(Hashable, Protocol):
     """
     Subset of the Array API standard namespace with functions relevant for array creation.
 
