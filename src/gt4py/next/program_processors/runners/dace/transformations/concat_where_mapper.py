@@ -458,17 +458,11 @@ def _setup_initial_producer_description_on_top_level(
     #  could be lifted.
     converging_edges = list(state.in_edges(concat_node))
     assert all(isinstance(iedge.src, dace_nodes.AccessNode) for iedge in converging_edges)
-
     assert len(converging_edges) >= 2
-    assert isinstance(converging_edges[0].dst, dace_nodes.AccessNode)
-    assert scope_dict[converging_edges[0].dst] is None
-    concat_node = converging_edges[0].dst
 
     initial_producer_specs: list[_ProducerSpec] = []
     sdfg_symbols = sdfg.symbols
     for converging_edge in converging_edges:
-        assert isinstance(converging_edge.src, dace_nodes.AccessNode)
-        assert converging_edge.dst is concat_node
         converging_edge.data.try_initialize(sdfg, state, converging_edge)
         producer_node = converging_edge.src
         producer_desc = producer_node.desc(sdfg)
