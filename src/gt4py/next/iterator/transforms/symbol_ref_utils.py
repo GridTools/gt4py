@@ -10,7 +10,7 @@ import dataclasses
 from collections import Counter
 
 import gt4py.eve as eve
-from gt4py.eve.extended_typing import Iterable, Literal, Optional, Sequence, cast, overload
+from gt4py.eve.extended_typing import Iterable, Literal, Optional, cast, overload
 from gt4py.next.iterator import ir as itir
 
 
@@ -22,7 +22,7 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
     @classmethod
     def apply(
         cls,
-        node: itir.Node | Sequence[itir.Node],
+        node: itir.Node | Iterable[itir.Node],
         symbol_names: Optional[Iterable[str]] = None,
         *,
         ignore_builtins: bool = True,
@@ -33,7 +33,7 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
     @classmethod
     def apply(
         cls,
-        node: itir.Node | Sequence[itir.Node],
+        node: itir.Node | Iterable[itir.Node],
         symbol_names: Optional[Iterable[str]] = None,
         *,
         ignore_builtins: bool = True,
@@ -43,7 +43,7 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
     @classmethod
     def apply(
         cls,
-        node: itir.Node | Sequence[itir.Node],
+        node: itir.Node | Iterable[itir.Node],
         symbol_names: Optional[Iterable[str]] = None,
         *,
         ignore_builtins: bool = True,
@@ -101,7 +101,7 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
 
 @overload
 def collect_symbol_refs(
-    node: itir.Node | Sequence[itir.Node],
+    node: itir.Node | Iterable[itir.Node],
     symbol_names: Optional[Iterable[str]] = None,
     *,
     ignore_builtins: bool = True,
@@ -111,7 +111,7 @@ def collect_symbol_refs(
 
 @overload
 def collect_symbol_refs(
-    node: itir.Node | Sequence[itir.Node],
+    node: itir.Node | Iterable[itir.Node],
     symbol_names: Optional[Iterable[str]] = None,
     *,
     ignore_builtins: bool = True,
@@ -120,7 +120,7 @@ def collect_symbol_refs(
 
 
 def collect_symbol_refs(
-    node: itir.Node | Sequence[itir.Node],
+    node: itir.Node | Iterable[itir.Node],
     symbol_names: Optional[Iterable[str]] = None,
     *,
     ignore_builtins: bool = True,

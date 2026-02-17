@@ -22,6 +22,7 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -128,7 +129,11 @@ def build_dace_sdfg(
     """
     if not skip_domain_inference:
         # run domain inference in order to add the domain annex information to the IR nodes
-        ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+        ir = infer_domain.infer_program(
+            ir,
+            offset_provider=offset_provider,
+            symbolic_domain_sizes=pass_manager._max_domain_range_sizes(offset_provider),
+        )
     offset_provider_type = gtx_common.offset_provider_to_type(offset_provider)
     return dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
 
@@ -220,7 +225,7 @@ def test_gtir_copy_self():
         body=[
             gtir.SetAt(
                 expr=gtir.SymRef(id="x"),
-                domain=im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, 2)}),
+                domain=im.domain(gtx_common.GridType.CARTESIAN, {IDim: (1, 2)}),
                 target=gtir.SymRef(id="x"),
             )
         ],
@@ -414,7 +419,7 @@ def test_gtir_tuple_broadcast_scalar():
 
 def test_gtir_zero_dim_fields():
     domain = im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", [IDim])
-    empty_domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={})
+    empty_domain = im.domain(gtx_common.GridType.CARTESIAN, {})
     testee = gtir.Program(
         id="gtir_zero_dim_fields",
         function_definitions=[],
@@ -1680,7 +1685,7 @@ def test_gtir_let_lambda_unused_arg():
 
 
 def test_gtir_let_lambda_scalar_expression():
-    domain_inner = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, "size_inner")})
+    domain_inner = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (1, "size_inner")})
     domain_outer = im.get_field_domain(
         gtx_common.GridType.CARTESIAN,
         "y",
@@ -2182,8 +2187,6 @@ def test_gtir_concat_where():
             ],
         )
 
-        # run domain inference in order to add the domain annex information to the concat_where node.
-        testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
         sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
         c = np.empty_like(a)
 
@@ -2263,8 +2266,6 @@ def test_gtir_concat_where_two_dimensions():
         "__z_JDim_stride": d.strides[1] // d.itemsize,
     }
 
-    # run domain inference in order to add the domain annex information to the concat_where node.
-    testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     sdfg(a, b, c, d, **field_symbols)

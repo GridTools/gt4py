@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import Any, Callable, Iterable, Literal, Mapping, Optional
+import warnings
+from typing import Callable, Iterable, Literal, Optional
+
+import numpy as np
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
@@ -19,25 +22,12 @@ from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
 
-def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> dict[str, int]:
-    """
-    Extract horizontal domain sizes from an `offset_provider`.
+#: Threshold fraction of domain points which may be added to a domain on translation in order
+#: to have a contiguous domain before a warning is raised.
+_NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD: float = 1 / 4
 
-    Considers the shape of the neighbor table to get the size of each `source_dim` and the maximum
-    value inside the neighbor table to get the size of each `codomain`.
-    """
-    sizes = dict[str, int]()
-    for provider in offset_provider.values():
-        if common.is_neighbor_connectivity(provider):
-            conn_type = provider.__gt_type__()
-            sizes[conn_type.source_dim.value] = max(
-                sizes.get(conn_type.source_dim.value, 0), provider.ndarray.shape[0]
-            )
-            sizes[conn_type.codomain.value] = max(
-                sizes.get(conn_type.codomain.value, 0),
-                provider.ndarray.max() + 1,  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
-            )
-    return sizes
+#: Offset tags for which a non-contiguous domain warning has already been printed
+_NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS: set[str] = set()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -66,6 +56,72 @@ _GRID_TYPE_MAPPING = {
     "unstructured_domain": common.GridType.UNSTRUCTURED,
     "cartesian_domain": common.GridType.CARTESIAN,
 }
+
+
+def _unstructured_translate_range_statically(
+    range_: SymbolicRange,
+    tag: str,
+    val: itir.OffsetLiteral
+    | Literal[trace_shifts.Sentinel.VALUE, trace_shifts.Sentinel.ALL_NEIGHBORS],
+    offset_provider: common.OffsetProvider,
+    expr: itir.Expr | None = None,
+) -> SymbolicRange:
+    """
+    Translate `range_` using static connectivity information from `offset_provider`.
+    """
+    assert common.is_offset_provider(offset_provider)
+    connectivity = offset_provider[tag]
+    assert common.is_neighbor_connectivity(connectivity)
+    skip_value = connectivity.skip_value
+
+    # fold & convert expr into actual integers
+    start_expr, stop_expr = range_.start, range_.stop
+    # note: if you find tuple expressions on literals here, you likely forgot to collapse tuple
+    # expressions beforehand
+    assert isinstance(start_expr, itir.Literal) and isinstance(stop_expr, itir.Literal)
+    start, stop = int(start_expr.value), int(stop_expr.value)
+
+    nb_index: slice | int
+    if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
+        nb_index = slice(None)
+    else:
+        nb_index = val.value  # type: ignore[assignment]  # assert above
+
+    accessed = connectivity.ndarray[start:stop, nb_index]
+
+    if isinstance(val, itir.OffsetLiteral) and np.any(accessed == skip_value):
+        # TODO(tehrengruber): Turn this into a configurable error. This is currently
+        #  not possible since some test cases starting from ITIR containing
+        #  `can_deref` might lead here. The frontend never emits such IR and domain
+        #  inference runs after we transform reductions into stmts containing
+        #  `can_deref`.
+        warnings.warn(
+            UserWarning(f"Translating '{expr}' using '{tag}' has an out-of-bounds access."),
+            stacklevel=2,
+        )
+
+    new_start, new_stop = accessed.min(), accessed.max() + 1  # type: ignore[attr-defined]  # TODO(havogt): improve typing for NDArrayObject
+
+    fraction_accessed = np.unique(accessed).size / (new_stop - new_start)  # type: ignore[call-overload]  # TODO(havogt): improve typing for NDArrayObject
+
+    if fraction_accessed < _NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD and (
+        tag not in _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS
+    ):
+        _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS.add(tag)
+        warnings.warn(
+            UserWarning(
+                f"Translating '{expr}' using '{tag}' requires "
+                f"computations on many additional points "
+                f"({round((1 - fraction_accessed) * 100)}%) in order to get a contiguous "
+                f"domain. Please consider reordering your mesh."
+            ),
+            stacklevel=2,
+        )
+
+    return SymbolicRange(
+        im.literal(str(new_start), builtins.INTEGER_INDEX_BUILTIN),
+        im.literal(str(new_stop), builtins.INTEGER_INDEX_BUILTIN),
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -114,7 +170,7 @@ class SymbolicDomain:
         offset_provider: common.OffsetProvider | common.OffsetProviderType,
         #: A dictionary mapping axes names to their length. See
         #: func:`gt4py.next.iterator.transforms.infer_domain.infer_expr` for more details.
-        symbolic_domain_sizes: Optional[dict[str, str]] = None,
+        symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     ) -> SymbolicDomain:
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
@@ -161,28 +217,20 @@ class SymbolicDomain:
                     trace_shifts.Sentinel.ALL_NEIGHBORS,
                     trace_shifts.Sentinel.VALUE,
                 ]
-                horizontal_sizes: dict[str, itir.Expr]
-                if symbolic_domain_sizes is not None:
-                    horizontal_sizes = {
-                        k: im.ensure_expr(v) for k, v in symbolic_domain_sizes.items()
-                    }
-                else:
-                    # note: ugly but cheap re-computation, but should disappear
-                    assert common.is_offset_provider(offset_provider)
-                    horizontal_sizes = {
-                        k: im.literal(str(v), builtins.INTEGER_INDEX_BUILTIN)
-                        for k, v in _max_domain_sizes_by_location_type(offset_provider).items()
-                    }
-
-                old_dim = connectivity.domain.dims[0]
-                new_dim = connectivity.codomain
-
+                old_dim = connectivity_type.source_dim
+                new_dim = connectivity_type.codomain
                 assert new_dim not in new_ranges or old_dim == new_dim
+                if symbolic_domain_sizes is not None and new_dim.value in symbolic_domain_sizes:
+                    new_range = SymbolicRange(
+                        im.literal(str(0), builtins.INTEGER_INDEX_BUILTIN),
+                        im.ensure_expr(symbolic_domain_sizes[new_dim.value]),
+                    )
+                else:
+                    assert common.is_offset_provider(offset_provider)
+                    new_range = _unstructured_translate_range_statically(
+                        new_ranges[old_dim], off.value, val, offset_provider, self.as_expr()
+                    )
 
-                new_range = SymbolicRange(
-                    im.literal("0", builtins.INTEGER_INDEX_BUILTIN),
-                    horizontal_sizes[new_dim.value],
-                )
                 new_ranges = dict(
                     (dim, range_) if dim != old_dim else (new_dim, new_range)
                     for dim, range_ in new_ranges.items()

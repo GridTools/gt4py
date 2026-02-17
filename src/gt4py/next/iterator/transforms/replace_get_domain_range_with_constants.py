@@ -7,10 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Dict
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
@@ -28,7 +28,7 @@ class _DomainDeduction(NodeTranslator):
         return None  # means we could not deduce the domain
 
     def visit_SymRef(
-        self, node: itir.SymRef, *, sizes: Dict[str, common.Domain], **kwargs
+        self, node: itir.SymRef, *, sizes: dict[str, MaybeNestedInTuple[common.Domain]], **kwargs
     ) -> DomainOrTupleThereof | None:
         return sizes.get(node.id, None)
 
@@ -48,9 +48,9 @@ class _DomainDeduction(NodeTranslator):
 
 
 @dataclasses.dataclass(frozen=True)
-class TransformGetDomainRange(PreserveLocationVisitor, NodeTranslator):
+class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator):
     """
-    Transforms `get_domain` calls into a tuple containing start and stop.
+    Replace `get_domain` calls into a tuple containing start and stop.
 
     Example:
         >>> from gt4py import next as gtx
@@ -86,7 +86,7 @@ class TransformGetDomainRange(PreserveLocationVisitor, NodeTranslator):
         ...         ),
         ...     ],
         ... )
-        >>> result = TransformGetDomainRange.apply(ir, sizes=sizes)
+        >>> result = ReplaceGetDomainRangeWithConstants.apply(ir, sizes=sizes)
         >>> print(result)
         test(inp, out) {
           out @ u⟨ Vertexₕ: [{0, 10}[0], {0, 10}[1][, KDimᵥ: [{0, 20}[0], {0, 20}[1][ ⟩ ← (⇑deref)(inp);
@@ -94,7 +94,9 @@ class TransformGetDomainRange(PreserveLocationVisitor, NodeTranslator):
     """
 
     @classmethod
-    def apply(cls, program: itir.Program, sizes: Dict[str, common.Domain]):
+    def apply(
+        cls, program: itir.Program, sizes: dict[str, MaybeNestedInTuple[common.Domain | None]]
+    ):
         return cls().visit(program, sizes=sizes)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.FunCall:
@@ -115,7 +117,4 @@ class TransformGetDomainRange(PreserveLocationVisitor, NodeTranslator):
         index = next((i for i, d in enumerate(domain.dims) if d.value == dim.value), None)
         assert index is not None, f"Dimension {dim.value} not found in {domain.dims}"
 
-        start = domain.ranges[index].start
-        stop = domain.ranges[index].stop
-        node = im.make_tuple(start, stop)
-        return node
+        return im.make_tuple(domain.ranges[index].start, domain.ranges[index].stop)
