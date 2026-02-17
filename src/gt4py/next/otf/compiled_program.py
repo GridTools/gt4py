@@ -19,6 +19,7 @@ from typing import Any, Generic, Optional, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
@@ -605,7 +606,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     def compile(
         self,
         offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
-        static_domains: Optional[dict[common.Domain, int] | None] = None,
+        static_domains: Optional[dict[common.Dimension, tuple[int, int]] | None] = None,
         **static_args: list[ScalarOrTupleOfScalars],
     ) -> None:
         """
@@ -621,8 +622,13 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                 will compile for (0,2), (1,3)
         """
 
-        def _build_field_domain_descriptors(program_type, static_domains):
-            def _create_field_descriptor(field_type):
+        def _build_field_domain_descriptors(
+            program_type: ts_ffront.ProgramType,
+            static_domains: dict[common.Dimension, tuple[int, int]],
+        ) -> dict[str, MaybeNestedInTuple[arguments.FieldDomainDescriptor]]:
+            def _create_field_descriptor(
+                field_type: ts.FieldType,
+            ) -> arguments.FieldDomainDescriptor:
                 domain_ranges = {
                     dim: static_domains[dim] for dim in field_type.dims
                 }  # TODO: improve error message
