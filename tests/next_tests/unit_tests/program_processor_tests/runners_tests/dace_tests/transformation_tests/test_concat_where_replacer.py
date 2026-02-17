@@ -180,6 +180,81 @@ def test_concat_where_same_inputs():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
+def _make_concat_where_different_sized_sources() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry
+]:
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("concat_where_replacer_different_sized_sources")
+    )
+    state = sdfg.add_state()
+    shapes = {"a": (7,), "b": (5,), "c": (10,), "d": (10,), "e": (10,)}
+    for name, shape in shapes.items():
+        sdfg.add_array(
+            name=name,
+            shape=shape,
+            dtype=dace.float64,
+            transient=(name == "c"),
+        )
+    a, b, c, d, e = (state.add_access(name) for name in "abcde")
+
+    state.add_nedge(a, c, dace.Memlet("a[1:7] -> [0:6]"))
+    state.add_nedge(b, c, dace.Memlet("b[0:4] -> [6:10]"))
+
+    _, me, _ = state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in0": dace.Memlet("c[__i]"),
+            "__in1": dace.Memlet("e[__i]"),
+        },
+        code="__out = __in1 + __in0",
+        outputs={"__out": dace.Memlet("d[__i]")},
+        input_nodes={c, e},
+        output_nodes={d},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    return sdfg, state, c, me
+
+
+def test_concat_where_different_sized_sources():
+    sdfg, state, concat_node, me = _make_concat_where_different_sized_sources()
+
+    access_nodes_before = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(access_nodes_before) == 5
+    assert concat_node in access_nodes_before
+    assert [ac for ac in access_nodes_before if ac.desc(sdfg).transient] == [concat_node]
+    assert concat_node.data == "c"
+    assert util.count_nodes(state, dace_nodes.Tasklet) == 1
+    assert state.in_degree(me) == 2
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    sdfg.validate()
+
+    access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    assert len(access_nodes_after) == 5
+    assert concat_node not in access_nodes_after
+    assert concat_node.data not in sdfg.arrays
+    assert all(
+        ac.data.startswith("__gt4py_concat_where_mapper_temp_c_")
+        for ac in access_nodes_after
+        if ac.desc(sdfg).transient
+    )
+    assert util.count_nodes(state, dace_nodes.Tasklet) == 2
+    assert state.in_degree(me) == 3
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
 def _make_concat_where_mixed_inputs() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry, dace_nodes.AccessNode
 ]:
