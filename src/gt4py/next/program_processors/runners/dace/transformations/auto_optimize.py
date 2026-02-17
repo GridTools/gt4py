@@ -627,6 +627,17 @@ def _gt_auto_process_top_level_maps(
                 validate_all=validate_all,
             )
 
+        # Replace `concat_where` nodes
+        # TODO(phimuell): Are there better locations for this transformation? An
+        #   alternative would be to call after the loop.
+        gtx_transformations.gt_apply_concat_where_replacement_on_sdfg(
+            sdfg=sdfg,
+            single_use_data=single_use_data,
+            validate=False,
+            validate_all=validate_all,
+        )
+
+        # TODO(phimuell): Deprecate this transformation.
         sdfg.apply_transformations_repeated(
             gtx_transformations.GT4PyMapBufferElimination(
                 assume_pointwise=assume_pointwise,
@@ -635,7 +646,7 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        # TODO(phimuell): Figuring out if this is is the correct location for doing it.
+        # TODO(phimuell): Figuring out if this is the correct location for doing it.
         if GT4PyAutoOptHook.TopLevelDataFlowStep in optimization_hooks:
             optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowStep](sdfg)  # type: ignore[call-arg]
 
