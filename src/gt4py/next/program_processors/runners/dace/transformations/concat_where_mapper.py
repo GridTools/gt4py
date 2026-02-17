@@ -9,7 +9,7 @@
 import copy
 import dataclasses
 import functools
-from typing import Any, Literal, Mapping, Optional, Sequence, TypeAlias, Union, overload
+from typing import Any, Collection, Literal, Mapping, Optional, Sequence, TypeAlias, Union, overload
 
 import dace
 from dace import (
@@ -31,6 +31,8 @@ class ConcatWhereCopyToMap(dace_transformation.SingleStateTransformation):
 
     This is essentially a wrapper around the `gt_replace_concat_where_node()`, for
     more information see there.
+    There is also `gt_apply_concat_where_replacement_on_sdfg()`, it is recommended
+    to use, as it guarantees stable ordering.
 
     Args:
         single_use_data: Single use data, if not provided a scan will be performed.
@@ -135,7 +137,7 @@ def gt_replace_concat_where_node(
     state: dace.SDFGState,
     concat_node: dace_nodes.AccessNode,
     tag: Optional[str] = None,
-) -> None:
+) -> int:
     """Replaces all accesses to a concat where AccessNode with Tasklets.
 
     Instead of accessing the AccessNode, in which the result of the `concat_where`
@@ -150,8 +152,11 @@ def gt_replace_concat_where_node(
     - It is only possible to replace accesses of a single element that happens on
         a Memlet, i.e. no neighborhood accesses.
 
+    The function returns the number of edges that were replaced.
+
     In order to check if a `concat_where` AccessNode can be replaced use
-    `gt_check_if_concat_where_node_is_replaceable()`.
+    `gt_check_if_concat_where_node_is_replaceable()`. For the application of the
+    transformation to an entire SDFG use `gt_apply_concat_where_replacement_on_sdfg()`.
 
     Args:
         sdfg: The SDFG in which we operate.
@@ -185,6 +190,7 @@ def gt_replace_concat_where_node(
     )
 
     # Now process the genuine consumers.
+    nb_applies = 0
     for consumer_spec in genuine_consumer_specs:
         _replace_single_read(
             sdfg=sdfg,
@@ -194,8 +200,9 @@ def gt_replace_concat_where_node(
             producer_specs=producer_specs,
             tag=f"{concat_node.data}_{'' if tag is None else tag}",
         )
+        nb_applies += 1
 
-    _process_descending_points_of_state(
+    nb_applies += _process_descending_points_of_state(
         state=state,
         scope_dict=scope_dict,
         descending_points=descending_points,
@@ -207,6 +214,8 @@ def gt_replace_concat_where_node(
     sdfg.remove_data(concat_node.data, validate=False)
 
     # TODO(phimuell): Run Memlet propagation.
+
+    return nb_applies
 
 
 def gt_check_if_concat_where_node_is_replaceable(
@@ -225,7 +234,8 @@ def gt_check_if_concat_where_node_is_replaceable(
     """
 
     # Check the producers
-    if state.in_degree(concat_node) == 0:
+    if state.in_degree(concat_node) < 2:
+        # Otherwise it would be a redundant copy.
         return False
     for iedge in state.in_edges(concat_node):
         if not isinstance(iedge.src, dace_nodes.AccessNode):
@@ -242,6 +252,77 @@ def gt_check_if_concat_where_node_is_replaceable(
             return False
 
     return True
+
+
+def gt_apply_concat_where_replacement_on_sdfg(
+    sdfg: dace.SDFG,
+    single_use_data: Optional[Mapping[dace.SDFG, Collection[str]]] = None,
+    validate: bool = False,
+    validate_all: bool = False,
+) -> int:
+    """Applies `gt_apply_concat_where_replacement_on_sdfg()` on the entire SDFG.
+
+    The function scans the SDFG and calls `gt_apply_concat_where_replacement_on_sdfg()`
+    for all suitable nodes, including nested SDFGs. The function guarantees a stable
+    ordering, that is based on the labels.
+    The function returns the number of replacements.
+
+    Args:
+        sdfg: The sdfg to process.
+        single_use_data: The result of the `FindSingleUseData` analysis pass. If `None`,
+            the default, the function will perform the scan automatically.
+        validate: Perform validation at the end.
+        validate_all: Perform validation also at intermediate steps.
+    """
+
+    if single_use_data is None or sdfg not in single_use_data:
+        find_single_use_data = dace_analysis.FindSingleUseData()
+        single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    found_nsdfgs: list[tuple[dace.SDFGState, dace_nodes.NestedSDFG]] = []
+    suitable_concat_nodes: list[tuple[dace.SDFGState, dace_nodes.AccessNode]] = []
+    nb_applies = 0
+    for state in sdfg.states():
+        scope_dict = state.scope_dict()
+        for node in state.nodes():
+            if (
+                isinstance(node, dace_nodes.AccessNode)
+                and scope_dict[node] is None
+                and (not sdfg.arrays[node.data].transient)
+            ):
+                if node.data in single_use_data[
+                    sdfg
+                ] and gt_check_if_concat_where_node_is_replaceable(state, node):
+                    suitable_concat_nodes.append((state, node))
+            elif isinstance(node, dace_nodes.NestedSDFG):
+                found_nsdfgs.append((state, node))
+
+    if len(suitable_concat_nodes) > 0:
+        suitable_concat_nodes = sorted(suitable_concat_nodes, key=lambda x: (repr(x[0]), x[1].data))
+        for state, concat_node in suitable_concat_nodes:
+            nb_applies += gt_replace_concat_where_node(
+                sdfg=sdfg,
+                state=state,
+                concat_node=concat_node,
+            )
+            if validate_all:
+                # TODO(phimuell): Limit validation to the state.
+                sdfg.validate()
+
+    if len(found_nsdfgs) > 0:
+        found_nsdfgs = sorted(found_nsdfgs, key=lambda x: (repr(x[0]), str(x[1])))
+        for _, nsdfg in found_nsdfgs:
+            nb_applies += gt_apply_concat_where_replacement_on_sdfg(
+                sdfg=nsdfg.sdfg,
+                single_use_data=single_use_data,
+                validate=False,
+                validate_all=validate_all,
+            )
+
+    if validate:
+        sdfg.validate()
+
+    return nb_applies
 
 
 _ScopeLocation: TypeAlias = Union[dace_nodes.MapEntry, None]
@@ -419,7 +500,7 @@ def _process_descending_points_of_state(
     scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
     descending_points: Sequence[_FinalConsumerSpec],
     producer_specs: Sequence[_ProducerSpec],
-) -> None:
+) -> int:
     """Processes all descending points inside a single state.
 
     Processes all descending points in the given state. It will configure them if
@@ -435,6 +516,7 @@ def _process_descending_points_of_state(
     """
 
     configured_descending_points: dict[dace_nodes.NestedSDFG, list[_ProducerSpec]] = {}
+    nb_applies = 0
     for descending_point in descending_points:
         # If needed configure the descending point.
         nsdfg: dace_nodes.NestedSDFG = descending_point.consumer
@@ -449,7 +531,7 @@ def _process_descending_points_of_state(
         # Process this descending point.
         # NOTE: A nested SDFG might be processed multiple times, but each time
         #   different data is processed.
-        _process_descending_points_of_state_impl(
+        nb_applies += _process_descending_points_of_state_impl(
             this_descending_point=descending_point,
             transformed_initial_producer_specs=configured_descending_points[nsdfg],
         )
@@ -460,11 +542,13 @@ def _process_descending_points_of_state(
         descending_point.consumer.remove_in_connector(descending_point.edge.dst_conn)
         nsdfg.sdfg.remove_data(descending_point.edge.dst_conn, validate=__debug__)
 
+    return nb_applies
+
 
 def _process_descending_points_of_state_impl(
     this_descending_point: _FinalConsumerSpec,
     transformed_initial_producer_specs: list[_ProducerSpec],
-) -> None:
+) -> int:
     """Process the interior of a descending point.
 
     Essentially iterate through all states of the descending point and perform
@@ -488,6 +572,7 @@ def _process_descending_points_of_state_impl(
     assert all(len(pspec.data_source) == 0 for pspec in transformed_initial_producer_specs)
 
     consumers = _find_consumer_specs_in_descending_point(this_descending_point)
+    nb_applies = 0
     for state, (_concat_node, (genuine_consumer_specs, descending_points)) in consumers.items():
         initial_producer_specs = _setup_initial_producer_description_in_nested_state(
             descending_point=this_descending_point,
@@ -513,10 +598,11 @@ def _process_descending_points_of_state_impl(
                 producer_specs=producer_specs,
                 tag=f"{this_descending_point.edge.dst_conn}",
             )
+            nb_applies += 1
 
         # Now recursively descend.
         if len(descending_points) > 0:
-            _process_descending_points_of_state(
+            nb_applies += _process_descending_points_of_state(
                 state=state,
                 scope_dict=scope_dict,
                 descending_points=descending_points,
@@ -529,6 +615,8 @@ def _process_descending_points_of_state_impl(
     #   does not equals a nested SDFG. Thus there could be other descending points
     #   that refers to the same nested SDFG. The data is removed in
     #   `_process_descending_points_of_state()`.
+
+    return nb_applies
 
 
 def _setup_initial_producer_description_in_nested_state(
