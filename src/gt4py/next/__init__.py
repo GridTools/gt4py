@@ -39,8 +39,58 @@ from .embedded import (  # Just for registering field implementations
 )
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
-from .ffront.fbuiltins import *  # noqa: F403 [undefined-local-with-import-star]  explicitly reexport all from fbuiltins.__all__
-from .ffront.fbuiltins import FieldOffset
+from .ffront.fbuiltins import (
+    FieldOffset,
+    IndexType,
+    abs,  # noqa: A004 # shadowing
+    arccos,
+    arccosh,
+    arcsin,
+    arcsinh,
+    arctan,
+    arctanh,
+    astype,
+    bool,  # noqa: A004 # shadowing
+    broadcast,
+    cbrt,
+    ceil,
+    cos,
+    cosh,
+    exp,
+    float,  # noqa: A004 # shadowing
+    float32,
+    float64,
+    floor,
+    fmod,
+    gamma,
+    int,  # noqa: A004 # shadowing
+    int8,
+    int16,
+    int32,
+    int64,
+    isfinite,
+    isinf,
+    isnan,
+    log,
+    max_over,
+    maximum,
+    minimums,
+    neg,
+    neighbor_sum,
+    power,
+    sin,
+    sinh,
+    sqrt,
+    tan,
+    tanh,
+    trunc,
+    tuple,  # noqa: A004 # shadowing
+    uint8,
+    uint16,
+    uint32,
+    uint64,
+    where,
+)
 from .otf.compiled_program import wait_for_compilation
 from .program_processors.runners.gtfn import (
     run_gtfn_cached as gtfn_cpu,

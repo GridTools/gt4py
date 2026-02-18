@@ -255,6 +255,11 @@ ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
 
 [[tool.mypy.overrides]]
+# mypy can not see through runtime logic in "fbuiltins"
+disable_error_code = ["attr-defined"]
+module = 'gt4py.next'
+
+[[tool.mypy.overrides]]
 ignore_missing_imports = true
 implicit_reexport = true
 # factory-boy is broken, see https://github.com/FactoryBoy/factory_boy/pull/1114
