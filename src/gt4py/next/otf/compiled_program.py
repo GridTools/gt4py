@@ -15,11 +15,10 @@ import functools
 import itertools
 import warnings
 from collections.abc import Callable, Hashable, Sequence
-from typing import Any, Generic, Optional, TypeAlias, TypeVar
+from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
-from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
@@ -606,7 +605,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     def compile(
         self,
         offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
-        static_domains: Optional[dict[common.Dimension, tuple[int, int]] | None] = None,
+        static_domains: dict[common.Dimension, tuple[int, int]] | None = None,
         **static_args: list[ScalarOrTupleOfScalars],
     ) -> None:
         """
@@ -625,7 +624,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         def _build_field_domain_descriptors(
             program_type: ts_ffront.ProgramType,
             static_domains: dict[common.Dimension, tuple[int, int]],
-        ) -> dict[str, MaybeNestedInTuple[arguments.FieldDomainDescriptor]]:
+        ) -> dict[str, arguments.FieldDomainDescriptor]:
             def _create_field_descriptor(
                 field_type: ts.FieldType,
             ) -> arguments.FieldDomainDescriptor:
@@ -634,8 +633,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                 }  # TODO: improve error message
                 return arguments.FieldDomainDescriptor(common.domain(domain_ranges))
 
-            field_domain_descriptors = {}
-            for arg_name, arg_type_ in program_type.definition.pos_or_kw_args.items():
+            field_domain_descriptors: dict[str, arguments.FieldDomainDescriptor] = {}
+            assert program_type.definition.pos_only_args == []
+            param_types = (
+                program_type.definition.pos_or_kw_args | program_type.definition.kw_only_args
+            )
+            for arg_name, arg_type_ in param_types.items():
                 for el_type_, path in type_info.primitive_constituents(
                     arg_type_, with_path_arg=True
                 ):
@@ -649,7 +652,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
-                argument_descriptor_dict = {
+                argument_descriptor_dict: dict[
+                    type[arguments.ArgStaticDescriptor],
+                    dict[str, arguments.ArgStaticDescriptor],
+                ] = {
                     arguments.StaticArg: dict(
                         zip(
                             static_args.keys(),
@@ -660,7 +666,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                 }
                 if static_domains:
                     argument_descriptor_dict[arguments.FieldDomainDescriptor] = (
-                        _build_field_domain_descriptors(self.program_type, static_domains)
+                        _build_field_domain_descriptors(self.program_type, static_domains)  # type: ignore[assignment]
                     )
                 self._compile_variant(
                     argument_descriptor_dict,

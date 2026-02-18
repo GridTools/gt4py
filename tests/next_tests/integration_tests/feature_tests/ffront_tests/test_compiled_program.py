@@ -48,7 +48,7 @@ class NamedTupleNamedCollection(NamedTuple):
 @pytest.fixture(
     params=[
         pytest.param(True, id="program"),
-        # pytest.param(False, id="field-operator"),
+        pytest.param(False, id="field-operator"),
     ]
 )
 def compile_testee(request, cartesian_case):
@@ -61,7 +61,7 @@ def compile_testee(request, cartesian_case):
         testee_op(a, b, out=out)
 
     wrap_in_program = request.param
-    print(f"HUHU{id(testee)}", flush=True)
+
     if wrap_in_program:
         return testee
     else:
@@ -970,27 +970,28 @@ def test_compile_variants_decorator_static_domains(cartesian_case):
     def testee(inp: tuple[cases.IField, cases.IField, float], out: NamedTupleNamedCollection):
         identity_like(inp, out=out)
 
-    inp = cases.allocate(cartesian_case, testee, "inp")()
-    out = cases.allocate(cartesian_case, testee, "out")()
+    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+        inp = cases.allocate(cartesian_case, testee, "inp")()
+        out = cases.allocate(cartesian_case, testee, "out")()
 
-    testee(inp, out, offset_provider={})
-    assert np.allclose(inp[0].ndarray, out[0].ndarray)
-    assert np.allclose(inp[1].ndarray, out[1].ndarray)
+        testee(inp, out, offset_provider={})
+        assert np.allclose(inp[0].ndarray, out[0].ndarray)
+        assert np.allclose(inp[1].ndarray, out[1].ndarray)
 
-    assert testee._compiled_programs.argument_descriptor_mapping[
-        arguments.FieldDomainDescriptor
-    ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
-    assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
-        "inp": (
-            arguments.FieldDomainDescriptor(inp[0].domain),
-            arguments.FieldDomainDescriptor(inp[1].domain),
-            None,
-        ),
-        "out": (
-            arguments.FieldDomainDescriptor(out[0].domain),
-            arguments.FieldDomainDescriptor(out[1].domain),
-        ),
-    }
+        assert testee._compiled_programs.argument_descriptor_mapping[
+            arguments.FieldDomainDescriptor
+        ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
+        assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
+            "inp": (
+                arguments.FieldDomainDescriptor(inp[0].domain),
+                arguments.FieldDomainDescriptor(inp[1].domain),
+                None,
+            ),
+            "out": (
+                arguments.FieldDomainDescriptor(out[0].domain),
+                arguments.FieldDomainDescriptor(out[1].domain),
+            ),
+        }
 
 
 def test_compile_with_static_domains(compile_variants_field_operator, cartesian_case):
@@ -1021,26 +1022,27 @@ def test_compile_with_static_domains(compile_variants_field_operator, cartesian_
     ):
         identity_like(inp, out=out)
 
-    inp = cases.allocate(cartesian_case, testee, "inp")()
-    out = cases.allocate(cartesian_case, testee, "out")()
+    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+        inp = cases.allocate(cartesian_case, testee, "inp")()
+        out = cases.allocate(cartesian_case, testee, "out")()
 
-    testee.compile(
-        offset_provider=cartesian_case.offset_provider,
-        static_domains={dim: (0, size) for dim, size in cartesian_case.default_sizes.items()},
-    )
+        testee.compile(
+            offset_provider=cartesian_case.offset_provider,
+            static_domains={dim: (0, size) for dim, size in cartesian_case.default_sizes.items()},
+        )
 
-    assert testee._compiled_programs.argument_descriptor_mapping[
-        arguments.FieldDomainDescriptor
-    ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
+        assert testee._compiled_programs.argument_descriptor_mapping[
+            arguments.FieldDomainDescriptor
+        ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
 
-    assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
-        "inp": (
-            arguments.FieldDomainDescriptor(inp[0].domain),
-            arguments.FieldDomainDescriptor(inp[1].domain),
-            None,
-        ),
-        "out": (
-            arguments.FieldDomainDescriptor(out[0].domain),
-            arguments.FieldDomainDescriptor(out[1].domain),
-        ),
-    }
+        assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
+            "inp": (
+                arguments.FieldDomainDescriptor(inp[0].domain),
+                arguments.FieldDomainDescriptor(inp[1].domain),
+                None,
+            ),
+            "out": (
+                arguments.FieldDomainDescriptor(out[0].domain),
+                arguments.FieldDomainDescriptor(out[1].domain),
+            ),
+        }
