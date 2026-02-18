@@ -9,6 +9,7 @@
 import copy
 import dataclasses
 import functools
+import warnings
 from typing import Any, Collection, Literal, Mapping, Optional, Sequence, TypeAlias, Union, overload
 
 import dace
@@ -231,7 +232,6 @@ def gt_check_if_concat_where_node_is_replaceable(
         state: The state that contains the `concat_where` node.
         concat_node: The node that represents the result of the `concat_where` expression.
     """
-
     # Check the producers
     if state.in_degree(concat_node) < 2:
         # Otherwise it would be a redundant copy.
@@ -241,7 +241,9 @@ def gt_check_if_concat_where_node_is_replaceable(
             return False
 
     descending_points = _find_consumer_specs_single_source_single_level(
-        state, concat_node, for_check=True
+        state,
+        concat_node,
+        for_check=True,
     )
     if descending_points is None:
         return False
@@ -403,7 +405,7 @@ class _ProducerSpec:
     def get_data_source(
         self,
         consumer_spec: _FinalConsumerSpec,
-        scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
+        scope_dict: Mapping[dace_nodes.Node, _ScopeLocation],
     ) -> _DataSource:
         """Maps a consumer to the data source it should use.
 
@@ -441,7 +443,7 @@ def _setup_initial_producer_description_on_top_level(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     concat_node: dace_nodes.AccessNode,
-    scope_dict: Any,
+    scope_dict: Mapping[dace_nodes.Node, _ScopeLocation],
 ) -> list[_ProducerSpec]:
     """Sets up the producer specifications at the top level.
 
@@ -490,7 +492,7 @@ def _setup_initial_producer_description_on_top_level(
 
 def _process_descending_points_of_state(
     state: dace.SDFGState,
-    scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
+    scope_dict: Mapping[dace_nodes.Node, _ScopeLocation],
     descending_points: Sequence[_FinalConsumerSpec],
     producer_specs: Sequence[_ProducerSpec],
 ) -> int:
@@ -671,7 +673,7 @@ def _setup_initial_producer_description_in_nested_state(
 
 def _configure_descending_point(
     state: dace.SDFGState,
-    scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
+    scope_dict: Mapping[dace_nodes.Node, _ScopeLocation],
     descending_point: _FinalConsumerSpec,
     parent_producer_specs: Sequence[_ProducerSpec],
 ) -> list[_ProducerSpec]:
@@ -728,7 +730,7 @@ def _configure_descending_point(
 
         # Compute the replacement mapping for symbols.
         repl_dict: dict[str, str] = {}  # For this producer.
-        for psym in parent_prod_spec.free_symbols:
+        for psym in sorted(parent_prod_spec.free_symbols):
             ptype = state.sdfg.symbols[psym]
             if psym in full_repl_dict:
                 # The symbol was already handled in a previous producer, so we reuse it.
@@ -833,7 +835,7 @@ def _configure_descending_point(
 
 def _map_data_into_nested_scopes(
     state: dace.SDFGState,
-    scope_dict: Any,
+    scope_dict: Mapping[dace_nodes.Node, _ScopeLocation],
     initial_producer_specs: Sequence[_ProducerSpec],
     consumer_specs: Sequence[_FinalConsumerSpec],
 ) -> list[_ProducerSpec]:
@@ -880,7 +882,7 @@ def _map_data_into_nested_scopes(
 
 def _map_data_into_nested_scopes_impl(
     state: dace.SDFGState,
-    scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
+    scope_dict: Mapping[dace_nodes.Node, _ScopeLocation],
     scope_to_handle: _ScopeLocation,
     producer_specs: Sequence[_ProducerSpec],
 ) -> None:
@@ -972,7 +974,7 @@ def _map_data_into_nested_scopes_impl(
 def _replace_single_read(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    scope_dict: Mapping[_ScopeLocation, _ScopeLocation],
+    scope_dict: Mapping[dace_nodes.Node, _ScopeLocation],
     consumer_spec: _FinalConsumerSpec,
     producer_specs: Sequence[_ProducerSpec],
     tag: str,
@@ -1005,15 +1007,15 @@ def _replace_single_read(
 
     select_conds: list[str] = []
     prod_accesses: list[str] = []
-    consume_subset = consumer_spec.consumed_subset(state)
+    consumed_subset = consumer_spec.consumed_subset(state)
     for prod_spec in producer_specs:
         prod_subset = prod_spec.subset
         prod_offsets = prod_spec.offset
 
         this_select_cond: list[str] = []
         this_prod_access: list[str] = []
-        for dim in range(consume_subset.dims()):
-            consumer_access = consume_subset[dim][0]
+        for dim in range(consumed_subset.dims()):
+            consumer_access = consumed_subset[dim][0]
             prod_supply_start = prod_subset[dim][0]
             prod_supply_end = prod_subset[dim][1]  # Inclusive end.
             prod_offset = prod_offsets[dim][0]
@@ -1171,9 +1173,7 @@ def _check_descending_point(
             if state.in_degree(dnode) != 0:
                 return False
             scan_for_nested_descending_points = _find_consumer_specs_single_source_single_level(
-                state,
-                dnode,
-                for_check=True,
+                state, dnode, for_check=True
             )
             if scan_for_nested_descending_points is None:
                 return False
@@ -1221,6 +1221,7 @@ def _find_consumer_specs_single_source_single_level(
 
     Args:
         state: The state in which we operate.
+        scope_dict: The scope dict of for the state.
         concat_node: The node representing the `concat_where` result.
         for_check: Only perform checks.
 
@@ -1228,7 +1229,6 @@ def _find_consumer_specs_single_source_single_level(
         If `for_check` is `False` then both kind of consumers are sorted. For `True`
         the order of the returned descending points is unspecific.
     """
-
     if state.out_degree(concat_node) == 0:
         return ([], []) if not for_check else []
 
@@ -1280,18 +1280,105 @@ def _find_consumer_specs_single_source_single_level(
         if consumed_subset.num_elements() == 1:  # Real consumer
             if not for_check:
                 consumer_specs.append(consumer_spec)
-        elif isinstance(consumer_spec.consumer, dace_nodes.NestedSDFG) and consumed_subset.covers(
-            concat_where_shape
-        ):
-            stairs_to_deeper_levels.append(consumer_spec)  # Nested SDFG that opens a "new level".
-        else:
-            if for_check:
-                return None
-            raise ValueError(f"Expected that partition for {concat_node} exists but it does not.")
+            continue
+
+        if isinstance(consumer_spec.consumer, dace_nodes.NestedSDFG):
+            if consumed_subset.covers(concat_where_shape):
+                # The whole array is mapped into the nested SDFG, so we have to check it.
+                stairs_to_deeper_levels.append(consumer_spec)
+                continue
+
+            elif _handle_special_case_of_gt4py_scan_point(
+                state=state,
+                descending_point=consumer_spec,
+                concat_node=concat_node,
+                consumed_subset=consumed_subset,
+            ):
+                # Apply special rule.
+                stairs_to_deeper_levels.append(consumer_spec)
+                continue
+
+        if for_check:
+            return None
+        raise ValueError(f"Expected that partition for {concat_node} exists but it does not.")
 
     if for_check:
         return stairs_to_deeper_levels
     return sorted(consumer_specs), sorted(stairs_to_deeper_levels)
+
+
+def _handle_special_case_of_gt4py_scan_point(
+    state: dace.SDFGState,
+    descending_point: _FinalConsumerSpec,
+    concat_node: dace_nodes.AccessNode,
+    consumed_subset: dace_sbs.Range,
+) -> bool:
+    """Performs special checking for nested SDFGs that fail to properly m
+
+    In certain cases, especially for scans, DaCe Memlet propagation (or related) will
+    fail to properly annotate the consumer Memlet that maps the data inside a nested
+    SDFG. This function applies some heuristic checks if the nested SDFG can be
+    processed or not.
+
+    The pathological case is a scan that is inside a Map. In that case it can happen
+    that `consumed_subset` is not the full shape of `concat_node` but #  something
+    like `[0:i_Cell_gtx_horizontal + 1, 0:3]` this function applies #  some empirical
+    checks to see if this is the case and then concludes "it is safe to do".
+    """
+    assert isinstance(descending_point.consumer, dace_nodes.NestedSDFG)
+    nsdfg: dace_nodes.NestedSDFG = descending_point.consumer
+
+    if not nsdfg.label.startswith("scan_"):
+        return False
+
+    # At this point `state` should be in a valid state so that it is safe to
+    #  compute the scope dict.
+    scope_dict = state.scope_dict()
+    if scope_dict[nsdfg] is None:
+        return False
+
+    parent_desc = concat_node.desc(state.sdfg)
+    nested_desc = nsdfg.sdfg.arrays[descending_point.edge.dst_conn]
+
+    if len(parent_desc.shape) != len(nested_desc.shape):
+        return False
+    if type(parent_desc) is not type(nested_desc):
+        return False
+
+    if not all((start == 0) == True for start in consumed_subset.min_element()):  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        return False
+
+    # Find all map parameters.
+    edge = descending_point.edge
+    map_params: set[str] = set()
+    while isinstance(edge.src, dace_nodes.MapEntry):
+        assert edge.src_conn.startswith("OUT")
+        map_params.update(edge.src.map.params)
+        edge = next(
+            iter(e for e in state.in_edges_by_connector(edge.src, "IN_" + edge.src_conn[4:]))
+        )
+
+    assert scope_dict[edge.dst] is None  # really strange case.
+
+    for i, end in enumerate(consumed_subset.max_element()):
+        if str(end).isdigit():
+            if (end + 1) != parent_desc.shape[i]:  # `+1` because of storage format.
+                return False
+        else:
+            # It is a symbol.
+            # TODO(phimuell): For the pathological case one could check
+            #  `str(end) not in map_params`. However, I think we could also write
+            #  `not end.free_symbols.intersection(map_params)`, which allows DaCe a bit
+            #  more slack. However, it allows DaCe more slack. We should check if that
+            #  is okay.
+            if not map_params.intersection((str(fs) for fs in end.free_symbols)):
+                return False
+
+    warnings.warn(
+        f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}`.",
+        stacklevel=1,
+    )
+    return True
 
 
 def _cleanup_memlet_path(state: dace.SDFGState, consumer_spec: _FinalConsumerSpec) -> None:
