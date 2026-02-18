@@ -977,7 +977,9 @@ def test_compile_variants_decorator_static_domains(cartesian_case, precompile):
         if precompile:
             testee.compile(
                 offset_provider=cartesian_case.offset_provider,
-                static_domains={dim: (0, size) for dim, size in cartesian_case.default_sizes.items()},
+                static_domains={
+                    dim: (0, size) for dim, size in cartesian_case.default_sizes.items()
+                },
             )
         else:
             testee(inp, out, offset_provider={})
