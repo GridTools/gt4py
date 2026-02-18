@@ -30,9 +30,6 @@ from gt4py.eve import extended_typing as xtyping
 # - backing array api OR FieldBufferAllocator
 
 
-# TODO Introduce a protocol and keep the concrete implementation for NDArray-based allocation (both array api and fieldbufferallocator) in a separate class?
-# TODO maybe FieldAllocationNamespace can evolve to FieldNamespace (convering also all Field operations?)
-
 # Type to be used by the end-user
 FieldAllocator: TypeAlias = (
     core_ndarray_utils.ArrayCreationNamespace | next_allocators.FieldBufferAllocationUtil
@@ -41,15 +38,55 @@ FieldAllocator: TypeAlias = (
 # TODO make all other types private? check usage in ICON4Py
 
 
-class FieldConstructionNamespace(abc.ABC):
-    # TODO: expand to a full description
+class _ArrayCreationNamespace(abc.ABC):
     """
-    - emtpy, as_field, etc are public facing, they do the work that is shared between all subclasses:
-      - conversion of dtype-like and domain-like
-      - array to field
-    - _empty, _as_field are to be implented by the subclasses:
-      - note: we pass domain explicitly because it's needed together with aligned_index to compute the alignment relative to the buffer
+    Abstract interface for array creation operations on a specific device/backend.
+
+    The translation from DomainLike and DTypeLike is already done in the public interface.
     """
+
+    @abc.abstractmethod
+    def empty(
+        self, domain: common.Domain, *, dtype: core_defs.DType
+    ) -> core_defs.NDArrayObject: ...
+
+    @abc.abstractmethod
+    def zeros(
+        self, domain: common.Domain, *, dtype: core_defs.DType
+    ) -> core_defs.NDArrayObject: ...
+
+    @abc.abstractmethod
+    def ones(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject: ...
+
+    @abc.abstractmethod
+    def full(
+        self,
+        domain: common.Domain,
+        fill_value: core_defs.Scalar,
+        *,
+        dtype: core_defs.DType,
+    ) -> core_defs.NDArrayObject: ...
+
+    @abc.abstractmethod
+    def asarray(
+        self,
+        domain: common.Domain,
+        data: core_defs.NDArrayObject,
+        *,
+        dtype: core_defs.DType,
+        copy: bool | None,
+    ) -> core_defs.NDArrayObject: ...
+
+
+@dataclasses.dataclass(frozen=True)
+class FieldConstructionNamespace:
+    """
+    Public-facing field construction API.
+
+    Delegates array creation to the composed `_array_constructor` and wraps the result in a Field.
+    """
+
+    _array_constructor: _ArrayCreationNamespace
 
     def empty(
         self,
@@ -60,14 +97,9 @@ class FieldConstructionNamespace(abc.ABC):
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
         assert dtype is not None  # TODO check where to put the default
-        res = common._field(self._empty(domain, dtype=dtype), domain=domain)
+        res = common._field(self._array_constructor.empty(domain, dtype=dtype), domain=domain)
         assert isinstance(res, nd_array_field.NdArrayField)  # for typing
         return res
-
-    @abc.abstractmethod
-    def _empty(
-        self, domain: common.Domain, *, dtype: core_defs.DType
-    ) -> core_defs.NDArrayObject: ...
 
     def zeros(
         self,
@@ -77,14 +109,9 @@ class FieldConstructionNamespace(abc.ABC):
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
         assert dtype is not None
-        res = common._field(self._zeros(domain, dtype=dtype), domain=domain)
+        res = common._field(self._array_constructor.zeros(domain, dtype=dtype), domain=domain)
         assert isinstance(res, nd_array_field.NdArrayField)  # for typing
         return res
-
-    @abc.abstractmethod
-    def _zeros(
-        self, domain: common.Domain, *, dtype: core_defs.DType
-    ) -> core_defs.NDArrayObject: ...
 
     def ones(
         self,
@@ -94,14 +121,9 @@ class FieldConstructionNamespace(abc.ABC):
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
         assert dtype is not None
-        res = common._field(self._ones(domain, dtype=dtype), domain=domain)
+        res = common._field(self._array_constructor.ones(domain, dtype=dtype), domain=domain)
         assert isinstance(res, nd_array_field.NdArrayField)  # for typing
         return res
-
-    @abc.abstractmethod
-    def _ones(
-        self, domain: common.Domain, *, dtype: core_defs.DType
-    ) -> core_defs.NDArrayObject: ...
 
     def full(
         self,
@@ -112,18 +134,11 @@ class FieldConstructionNamespace(abc.ABC):
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype) if dtype is not None else core_defs.dtype(type(fill_value))
         assert dtype is not None
-        res = common._field(self._full(domain, fill_value=fill_value, dtype=dtype), domain=domain)
+        res = common._field(
+            self._array_constructor.full(domain, fill_value=fill_value, dtype=dtype), domain=domain
+        )
         assert isinstance(res, nd_array_field.NdArrayField)  # for typing
         return res
-
-    @abc.abstractmethod
-    def _full(
-        self,
-        domain: common.Domain,
-        fill_value: core_defs.Scalar,
-        *,
-        dtype: core_defs.DType,
-    ) -> core_defs.NDArrayObject: ...
 
     def as_field(
         self,
@@ -174,7 +189,7 @@ class FieldConstructionNamespace(abc.ABC):
         if dtype is None:  # TODO does this make sense?
             dtype = core_defs.dtype(storage_utils.asarray(data).dtype)
 
-        arr = self._asarray(actual_domain, data, dtype=dtype, copy=copy)
+        arr = self._array_constructor.asarray(actual_domain, data, dtype=dtype, copy=copy)
         res = common._field(
             arr,
             domain=actual_domain,
@@ -182,22 +197,12 @@ class FieldConstructionNamespace(abc.ABC):
         assert isinstance(res, nd_array_field.NdArrayField)  # for typing
         return res
 
-    @abc.abstractmethod
-    def _asarray(
-        self,
-        domain: common.Domain,
-        data: core_defs.NDArrayObject,
-        *,
-        dtype: core_defs.DType,
-        copy: bool | None,
-    ) -> core_defs.NDArrayObject: ...
-
 
 _ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayCreationNamespace)
 
 
 @dataclasses.dataclass(frozen=True)
-class ArrayNamespaceWrapper(FieldConstructionNamespace, Generic[_ANS]):
+class _ArrayApiCreationNamespace(_ArrayCreationNamespace, Generic[_ANS]):
     array_ns: _ANS
     # device in the format expected by the array namespace
     device: Any = None
@@ -207,7 +212,7 @@ class ArrayNamespaceWrapper(FieldConstructionNamespace, Generic[_ANS]):
             return None
         return getattr(self.array_ns, core_defs.dtype_to_name[dtype.scalar_type])
 
-    def _empty(
+    def empty(
         self,
         domain: common.Domain,
         *,
@@ -217,7 +222,7 @@ class ArrayNamespaceWrapper(FieldConstructionNamespace, Generic[_ANS]):
             domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
         )
 
-    def _zeros(
+    def zeros(
         self,
         domain: common.Domain,
         *,
@@ -227,7 +232,7 @@ class ArrayNamespaceWrapper(FieldConstructionNamespace, Generic[_ANS]):
             domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
         )
 
-    def _ones(
+    def ones(
         self,
         domain: common.Domain,
         *,
@@ -237,7 +242,7 @@ class ArrayNamespaceWrapper(FieldConstructionNamespace, Generic[_ANS]):
             domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
         )
 
-    def _full(
+    def full(
         self,
         domain: common.Domain,
         fill_value: core_defs.Scalar,
@@ -251,7 +256,7 @@ class ArrayNamespaceWrapper(FieldConstructionNamespace, Generic[_ANS]):
             device=self.device,
         )
 
-    def _asarray(
+    def asarray(
         self,
         domain: common.Domain,
         data: core_defs.NDArrayObject,  # TODO rename to `obj`?
@@ -263,13 +268,13 @@ class ArrayNamespaceWrapper(FieldConstructionNamespace, Generic[_ANS]):
             data, dtype=self._to_array_ns_dtype(dtype), device=self.device, copy=copy
         )
         assert domain.shape == arr.shape, (
-            f"pre-condition of `_asarray` not met: {data.shape=} and {domain.shape} need to agree."
+            f"pre-condition of `asarray` not met: {data.shape=} and {domain.shape} need to agree."
         )
         return arr
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldBufferAllocatorWrapper(FieldConstructionNamespace):
+class _FieldBufferCreationNamespace(_ArrayCreationNamespace):
     allocator: next_allocators.FieldBufferAllocatorProtocol
     device: core_defs.Device | None = None
     aligned_index: Sequence[common.NamedIndex] | None = None
@@ -278,7 +283,7 @@ class FieldBufferAllocatorWrapper(FieldConstructionNamespace):
     def device_id(self) -> int:
         return self.device.device_id if self.device is not None else 0
 
-    def _empty(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject:
+    def empty(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject:
         return self.allocator.__gt_allocate__(
             domain=domain,
             dtype=dtype,
@@ -286,28 +291,24 @@ class FieldBufferAllocatorWrapper(FieldConstructionNamespace):
             device_id=self.device_id,
         ).ndarray
 
-    def _zeros(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject:
-        arr = self._empty(domain, dtype=dtype)
-        arr[...] = 0  # type: ignore[index] # # `NDArrayObject` typing is not complete
-        return arr
+    def zeros(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject:
+        return self.full(domain, fill_value=0, dtype=dtype)
 
-    def _ones(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject:
-        arr = self._empty(domain, dtype=dtype)
-        arr[...] = 1  # type: ignore[index] # # `NDArrayObject` typing is not complete
-        return arr
+    def ones(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject:
+        return self.full(domain, fill_value=1, dtype=dtype)
 
-    def _full(
+    def full(
         self,
         domain: common.Domain,
         fill_value: core_defs.Scalar,
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        arr = self._empty(domain, dtype=dtype)
+        arr = self.empty(domain, dtype=dtype)
         arr[...] = fill_value  # type: ignore[index] # # `NDArrayObject` typing is not complete
         return arr
 
-    def _asarray(
+    def asarray(
         self,
         domain: common.Domain,
         data: core_defs.NDArrayObject,
@@ -320,7 +321,7 @@ class FieldBufferAllocatorWrapper(FieldConstructionNamespace):
             #   already the correct layout and device.
             raise NotImplementedError("The 'copy' argument is not yet supported.")
         assert dtype is not None
-        arr = self._empty(domain, dtype=dtype)
+        arr = self.empty(domain, dtype=dtype)
 
         arr[...] = core_ndarray_utils.array_namespace(arr).asarray(data)  # type: ignore[index] # # `NDArrayObject` typing is not complete
         return arr
@@ -345,7 +346,9 @@ def _as_field_allocation_namespace(
             if device is not None
             else None
         )
-        return ArrayNamespaceWrapper(array_ns=allocator, device=translated_device)
+        return FieldConstructionNamespace(
+            _ArrayApiCreationNamespace(array_ns=allocator, device=translated_device)
+        )
     elif next_allocators.is_field_allocation_tool(allocator):
         allocator = next_allocators.get_allocator(
             allocator, strict=True
@@ -355,10 +358,12 @@ def _as_field_allocation_namespace(
             raise ValueError(
                 f"Allocator {allocator} is for device type {allocator.__gt_device_type__}, but device type {device.device_type} was specified."
             )
-        return FieldBufferAllocatorWrapper(
-            allocator=allocator,
-            device=device,
-            aligned_index=aligned_index,
+        return FieldConstructionNamespace(
+            _FieldBufferCreationNamespace(
+                allocator=allocator,
+                device=device,
+                aligned_index=aligned_index,
+            )
         )
     else:
         raise ValueError(f"Invalid field allocator: {allocator}.")
