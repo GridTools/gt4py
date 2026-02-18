@@ -41,7 +41,7 @@ FieldAllocator: TypeAlias = (
 # TODO make all other types private? check usage in ICON4Py
 
 
-class FieldAllocationNamespace(abc.ABC):
+class FieldConstructionNamespace(abc.ABC):
     # TODO: expand to a full description
     """
     - emtpy, as_field, etc are public facing, they do the work that is shared between all subclasses:
@@ -197,7 +197,7 @@ _ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayCreationNamespace)
 
 
 @dataclasses.dataclass(frozen=True)
-class ArrayNamespaceWrapper(FieldAllocationNamespace, Generic[_ANS]):
+class ArrayNamespaceWrapper(FieldConstructionNamespace, Generic[_ANS]):
     array_ns: _ANS
     # device in the format expected by the array namespace
     device: Any = None
@@ -269,7 +269,7 @@ class ArrayNamespaceWrapper(FieldAllocationNamespace, Generic[_ANS]):
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldBufferAllocatorWrapper(FieldAllocationNamespace):
+class FieldBufferAllocatorWrapper(FieldConstructionNamespace):
     allocator: next_allocators.FieldBufferAllocatorProtocol
     device: core_defs.Device | None = None
     aligned_index: Sequence[common.NamedIndex] | None = None
@@ -332,7 +332,7 @@ def _as_field_allocation_namespace(
     *,
     aligned_index: Sequence[common.NamedIndex] | None = None,
     device: core_defs.Device | None = None,
-) -> FieldAllocationNamespace:
+) -> FieldConstructionNamespace:
     if allocator is None:
         if device is None:
             allocator = next_allocators.device_allocators[core_defs.DeviceType.CPU]
