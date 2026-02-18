@@ -944,7 +944,8 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
 
 
-def test_compile_variants_decorator_static_domains(cartesian_case):
+@pytest.mark.parametrize("precompile", [True, False], ids=["precompile", "run"])
+def test_compile_variants_decorator_static_domains(cartesian_case, precompile):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
@@ -973,68 +974,19 @@ def test_compile_variants_decorator_static_domains(cartesian_case):
     with mock.patch.object(compiled_program, "_async_compilation_pool", None):
         inp = cases.allocate(cartesian_case, testee, "inp")()
         out = cases.allocate(cartesian_case, testee, "out")()
-
-        testee(inp, out, offset_provider={})
-        assert np.allclose(inp[0].ndarray, out[0].ndarray)
-        assert np.allclose(inp[1].ndarray, out[1].ndarray)
-
-        assert testee._compiled_programs.argument_descriptor_mapping[
-            arguments.FieldDomainDescriptor
-        ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
-        assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
-            "inp": (
-                arguments.FieldDomainDescriptor(inp[0].domain),
-                arguments.FieldDomainDescriptor(inp[1].domain),
-                None,
-            ),
-            "out": (
-                arguments.FieldDomainDescriptor(out[0].domain),
-                arguments.FieldDomainDescriptor(out[1].domain),
-            ),
-        }
-
-
-def test_compile_with_static_domains(compile_variants_field_operator, cartesian_case):
-    if cartesian_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    captured_cargs: Optional[arguments.CompileTimeArgs] = None
-
-    class CaptureCompileTimeArgsBackend:
-        def __getattr__(self, name):
-            return getattr(cartesian_case.backend, name)
-
-        def compile(self, program, compile_time_args):
-            nonlocal captured_cargs
-            captured_cargs = compile_time_args
-
-            return cartesian_case.backend.compile(program, compile_time_args)
-
-    @gtx.field_operator
-    def identity_like(inp: tuple[cases.IField, cases.IField, float]):
-        return inp[0], inp[1]
-
-    # the float argument here is merely to test that static domains work for tuple arguments
-    # of inhomogeneous types
-    @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
-    def testee(
-        inp: tuple[cases.IField, cases.IField, float], out: tuple[cases.IField, cases.IField]
-    ):
-        identity_like(inp, out=out)
-
-    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
-        inp = cases.allocate(cartesian_case, testee, "inp")()
-        out = cases.allocate(cartesian_case, testee, "out")()
-
-        testee.compile(
-            offset_provider=cartesian_case.offset_provider,
-            static_domains={dim: (0, size) for dim, size in cartesian_case.default_sizes.items()},
-        )
+        if precompile:
+            testee.compile(
+                offset_provider=cartesian_case.offset_provider,
+                static_domains={dim: (0, size) for dim, size in cartesian_case.default_sizes.items()},
+            )
+        else:
+            testee(inp, out, offset_provider={})
+            assert np.allclose(inp[0].ndarray, out[0].ndarray)
+            assert np.allclose(inp[1].ndarray, out[1].ndarray)
 
         assert testee._compiled_programs.argument_descriptor_mapping[
             arguments.FieldDomainDescriptor
         ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
-
         assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
             "inp": (
                 arguments.FieldDomainDescriptor(inp[0].domain),

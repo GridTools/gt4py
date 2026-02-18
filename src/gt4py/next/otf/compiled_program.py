@@ -625,14 +625,6 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             program_type: ts_ffront.ProgramType,
             static_domains: dict[common.Dimension, tuple[int, int]],
         ) -> dict[str, arguments.FieldDomainDescriptor]:
-            def _create_field_descriptor(
-                field_type: ts.FieldType,
-            ) -> arguments.FieldDomainDescriptor:
-                domain_ranges = {
-                    dim: static_domains[dim] for dim in field_type.dims
-                }  # TODO: improve error message
-                return arguments.FieldDomainDescriptor(common.domain(domain_ranges))
-
             field_domain_descriptors: dict[str, arguments.FieldDomainDescriptor] = {}
             assert program_type.definition.pos_only_args == []
             param_types = (
@@ -644,8 +636,16 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                 ):
                     if isinstance(el_type_, ts.FieldType):
                         path_as_expr = "".join(map(lambda idx: f"[{idx}]", path))
+                        if missing_dims := [
+                            dim for dim in el_type_.dims if dim not in static_domains
+                        ]:
+                            raise ValueError(
+                                f"Missing domain specification for dimension(s) {missing_dims} for {arg_name}{path_as_expr}. "
+                                f"Field has dimensions {list(el_type_.dims)}, but static_domains only contains {list(static_domains.keys())}."
+                            )
+                        domain_ranges = {dim: static_domains[dim] for dim in el_type_.dims}
                         field_domain_descriptors[f"{arg_name}{path_as_expr}"] = (
-                            _create_field_descriptor(el_type_)
+                            arguments.FieldDomainDescriptor(common.domain(domain_ranges))
                         )
 
             return field_domain_descriptors
