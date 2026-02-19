@@ -9,12 +9,13 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar
+from collections.abc import Callable
+from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
 
 from gt4py.eve import utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, languages, toolchain
+from gt4py.next.otf import definitions, languages
 from gt4py.next.otf.binding import interface
 
 
@@ -28,32 +29,29 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
-CompilableProgram: TypeAlias = toolchain.CompilableProgram[itir.Program, arguments.CompileTimeArgs]
-
-
-def compilation_hash(otf_closure: CompilableProgram) -> int:
+def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
-    offset_provider = otf_closure.args.offset_provider
+    offset_provider = program_def.args.offset_provider
     return hash(
         (
-            otf_closure.data,
+            program_def.data,
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
-            utils.content_hash(tuple(arg for arg in otf_closure.args.args)),
+            utils.content_hash(tuple(arg for arg in program_def.args.args)),
             common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
-            otf_closure.args.column_axis,
+            program_def.args.column_axis,
         )
     )
 
 
-def fingerprint_compilable_program(inp: CompilableProgram) -> str:
+def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef) -> str:
     """
     Generates a unique hash string for a stencil source program representing
     the program, sorted offset_provider, and column_axis.
     """
-    program: itir.Program = inp.data
-    offset_provider: common.OffsetProvider = inp.args.offset_provider
-    column_axis: Optional[common.Dimension] = inp.args.column_axis
+    program: itir.Program = program_def.data
+    offset_provider: common.OffsetProvider = program_def.args.offset_provider
+    column_axis: Optional[common.Dimension] = program_def.args.column_axis
 
     offset_provider_arrays = {key: value.ndarray if hasattr(value, "ndarray") else value for key, value in offset_provider.items()}
     program_hash = utils.content_hash(
@@ -108,7 +106,7 @@ class BindingSource(Generic[SrcL, TgtL]):
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableSource(Generic[SrcL, SettingT, TgtL]):
+class CompilableProject(Generic[SrcL, SettingT, TgtL]):
     """
     Encapsulate all the source code required for OTF compilation.
 
@@ -138,10 +136,7 @@ class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
     def build(self) -> None: ...
 
 
-class CompiledProgram(Protocol):
-    """Executable python representation of a program."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> None: ...
+ExecutableProgram: TypeAlias = Callable
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

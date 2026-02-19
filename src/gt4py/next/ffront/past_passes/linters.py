@@ -9,14 +9,14 @@
 from typing import Any
 
 from gt4py.next.ffront import gtcallable, stages as ffront_stages, transform_utils
-from gt4py.next.ffront.stages import AOT_PRG, PAST_PRG
+from gt4py.next.ffront.stages import ConcretePASTProgramDef, PASTProgramDef
 from gt4py.next.otf import toolchain, workflow
 
 
 @workflow.make_step
 def lint_misnamed_functions(
-    inp: ffront_stages.PastProgramDefinition,
-) -> ffront_stages.PastProgramDefinition:
+    inp: ffront_stages.PASTProgramDef,
+) -> ffront_stages.PASTProgramDef:
     function_closure_vars = transform_utils._filter_closure_vars_by_type(
         inp.closure_vars, gtcallable.GTCallable
     )
@@ -34,8 +34,8 @@ def lint_misnamed_functions(
 
 @workflow.make_step
 def lint_undefined_symbols(
-    inp: ffront_stages.PastProgramDefinition,
-) -> ffront_stages.PastProgramDefinition:
+    inp: ffront_stages.PASTProgramDef,
+) -> ffront_stages.PASTProgramDef:
     undefined_symbols = [
         symbol.id for symbol in inp.past_node.closure_vars if symbol.id not in inp.closure_vars
     ]
@@ -48,12 +48,14 @@ def lint_undefined_symbols(
 
 def linter_factory(
     cached: bool = True, adapter: bool = True
-) -> workflow.Workflow[PAST_PRG, PAST_PRG]:
+) -> workflow.Workflow[PASTProgramDef, PASTProgramDef]:
     wf = lint_misnamed_functions.chain(lint_undefined_symbols)
     if cached:
         wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
     return wf
 
 
-def adapted_linter_factory(**kwargs: Any) -> workflow.Workflow[AOT_PRG, AOT_PRG]:
+def adapted_linter_factory(
+    **kwargs: Any,
+) -> workflow.Workflow[ConcretePASTProgramDef, ConcretePASTProgramDef]:
     return toolchain.DataOnlyAdapter(linter_factory(**kwargs))
