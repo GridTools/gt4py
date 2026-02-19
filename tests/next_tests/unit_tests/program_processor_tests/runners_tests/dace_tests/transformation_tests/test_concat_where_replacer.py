@@ -1689,3 +1689,77 @@ def test_concat_where_with_symbolic_top_size():
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_multi_producer_sdfg(
+    nb_producers: int,
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode]:
+    N = nb_producers * 5
+
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("multi_output"))
+    state = sdfg.add_state()
+
+    output_data = "output"
+    concat_data = "c"
+    for name in [output_data, concat_data]:
+        sdfg.add_array(
+            name,
+            shape=(N,),
+            dtype=dace.float64,
+            transient=(name == concat_data),
+        )
+
+    concat_node = state.add_access(concat_data)
+
+    for i in range(nb_producers):
+        prod_data = f"prod_{i}"
+        sdfg.add_array(
+            prod_data,
+            shape=(N + 2,),
+            dtype=dace.float64,
+            transient=False,
+        )
+        state.add_nedge(
+            state.add_access(prod_data),
+            concat_node,
+            dace.Memlet(
+                f"{prod_data}[({2 + i * 5}):({2 + (i + 1) * 5})] -> [({i * 5}):({(i + 1) * 5})]"
+            ),
+        )
+
+    state.add_mapped_tasklet(
+        "compute",
+        map_ranges={"__i": f"0:{N}"},
+        inputs={"__in": dace.Memlet(f"{concat_node}[__i]")},
+        outputs={"__out": dace.Memlet(f"{output_data}[__i]")},
+        code="__out = __in + 3.2",
+        external_edges=True,
+        input_nodes={concat_node},
+    )
+
+    sdfg.validate()
+
+    return sdfg, state, concat_node
+
+
+@pytest.mark.parametrize("nb_producers", [3, 4, 5])
+def test_concat_where_multiple_producers(nb_producers: int):
+    sdfg, state, concat_node = _make_multi_producer_sdfg(nb_producers)
+
+    assert concat_node.data in sdfg.arrays
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    nb_repl = gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    assert nb_repl == 1
+    sdfg.validate()
+
+    assert concat_node.data not in sdfg.arrays
+
+    csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
