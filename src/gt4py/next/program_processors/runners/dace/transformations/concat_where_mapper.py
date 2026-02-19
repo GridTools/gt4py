@@ -1060,17 +1060,14 @@ def _replace_single_read(
             tlet_inputs.append(f"__in{i}")
             tinput_map[producer_spec.data_name] = (tlet_inputs[-1], producer_spec)
 
-    if len(producer_specs) == 2:
-        tlet_code = f"{tlet_output} = {tlet_inputs[0]}[{prod_accesses[0]}] if ({select_conds[0]}) else {tlet_inputs[1]}[{prod_accesses[1]}]"
-    else:
-        tlet_code_lines: list[str] = []
-        # TODO(phimuell): Turn this into nested `?:` expressions.
-        for i in range(len(producer_specs) - 1):
-            tlet_code_lines.append(
-                f"{'if' if i == 0 else 'elif'} ({select_conds[i]}):\n\t{tlet_output} = {tlet_inputs[i]}[{prod_accesses[i]}]"
-            )
-        tlet_code_lines.append(f"else:\n\t{tlet_output} = {tlet_inputs[-1]}[{prod_accesses[-1]}]")
-        tlet_code = "\n".join(tlet_code_lines)
+    # This writes the Tasklet code as a series of nested `?:` operators.
+    def write_tasklet_code(tlet_inputs, select_conds, prod_accesses):  # type: ignore[no-untyped-def]
+        if len(tlet_inputs) == 2:
+            return f"{tlet_inputs[0]}[{prod_accesses[0]}] if ({select_conds[0]}) else {tlet_inputs[1]}[{prod_accesses[1]}]"
+        assert len(tlet_inputs) > 2
+        return f"{tlet_inputs[0]}[{prod_accesses[0]}] if ({select_conds[0]}) else ({write_tasklet_code(tlet_inputs[1:], select_conds[1:], prod_accesses[1:])})"
+
+    tlet_code = f"{tlet_output} = {write_tasklet_code(tlet_inputs, select_conds, prod_accesses)}"
 
     # Create the access Tasklet.
     names_of_existing_tasklets = {
