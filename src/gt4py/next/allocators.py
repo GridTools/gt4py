@@ -95,7 +95,7 @@ def is_field_allocation_tool_for(
     return is_field_allocator_for(obj, device) or is_field_allocator_factory_for(obj, device)
 
 
-# TODO do we have this function somewhere?
+# TODO do we have this function somewhere? maybe `_get_slices_from_domain_slice`
 def _absolute_to_relative_index(
     indices: Sequence[common.NamedIndex], domain: common.Domain
 ) -> Sequence[int]:
