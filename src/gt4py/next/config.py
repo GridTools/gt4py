@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import datetime
 import enum
 import os
 import pathlib
@@ -115,6 +116,26 @@ BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1
 #: Enabling metrics collection will do extra synchronization and will have
 #: impact on runtime performance.
 COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", default=0)
+
+
+#: File path to dump collected metrics at exit, if COLLECT_METRICS_LEVEL is enabled.
+#: If set to a True value, it defaults to "gt4py_metrics_YYYYMMDD_HHMMSS.json" in
+#: the current folder.
+DUMP_METRICS_AT_EXIT: str | None = None
+
+
+def _init_dump_metrics_filename() -> str:
+    return f"gt4py_metrics_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+
+_dump_metrics_at_exit_env = os.environ.get("GT4PY_DUMP_METRICS_AT_EXIT", None)
+if _dump_metrics_at_exit_env is not None:
+    try:
+        if env_flag_to_bool("GT4PY_DUMP_METRICS_AT_EXIT", default=False):
+            DUMP_METRICS_AT_EXIT = _init_dump_metrics_filename()
+    except ValueError:
+        DUMP_METRICS_AT_EXIT = _dump_metrics_at_exit_env
+
 
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.
