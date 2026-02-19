@@ -25,9 +25,21 @@ edges_ne = raw_edges[count_east : count_east + count_ne]
 count_se = nx * ny
 edges_se = raw_edges[count_east + count_ne : ]
 
+import sys
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Go up 4 levels to reach '.../gt4py/tests' 
+# (current: ffront_tests -> multi_feature_tests -> integration_tests -> next_tests -> tests)
+tests_root = os.path.abspath(os.path.join(current_dir, "../../../../"))
+if tests_root not in sys.path:
+    sys.path.append(tests_root)
+
 import gt4py.next as gtx
 from gt4py.next import where, broadcast
 from gt4py.next.experimental import concat_where
+from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
+    V2E,
+)
 # Define Dimensions
 # 'Edge' is the index along the specific edge type (e.g., 0 to count_east-1)
 IDim = gtx.Dimension("IDim")
@@ -104,31 +116,28 @@ def zavg(
     compute_zavgS_cartesian(pp, S_M, idx, out=out) # , domain={IDim: (0, 1), JDim: (0, 1), Color: (0, 3)}
 
 
-edges_east_2d = edges_east.reshape((nx, ny + 1))  # Shape: [nx, ny+1]
-edges_ne_2d   = edges_ne.reshape((nx + 1, ny))    # Shape: [nx+1, ny]
-edges_se_2d   = edges_se.reshape((nx, ny))        # Shape: [nx, ny]
+edges_east_2d = edges_east.reshape((ny+1, nx))  # Shape: [nx, ny+1]
+edges_ne_2d   = edges_ne.reshape((ny, nx+1))    # Shape: [nx+1, ny]
+edges_se_2d   = edges_se.reshape((ny, nx))        # Shape: [nx, ny]
 
 print("Edges East:", edges_east, "\n2D version:\n", edges_east_2d)
 
-# Also reshape vertices (pp) because you shift on them!
-pp_2d = raw_vertices.reshape((nx + 1, ny + 1))    # Shape: [nx+1, ny+1]
+pp_2d = raw_vertices.reshape((ny + 1, nx + 1))    # Shape: [nx+1, ny+1]
 
-# 2. Pad them to a common size for Gt4Py
-# To stack them in one field, they must all be the same shape (Max I, Max J).
-# We pad with 0.0 or NaN.
-max_i = nx + 1
-max_j = ny + 1
+# To stack them in one field
+max_j = nx + 1
+max_i = ny + 1
 
 S_M_field = np.zeros((max_i, max_j, 3)) # [IDim, JDim, Color]
 
 # Fill Color 0 (East) - fits in [0:nx, 0:ny+1]
-S_M_field[0:nx, 0:ny+1, 0] = edges_east_2d
+S_M_field[0:ny+1, 0:nx, 0] = edges_east_2d
 
 # Fill Color 1 (NE) - fits in [0:nx+1, 0:ny]
-S_M_field[0:nx+1, 0:ny, 1] = edges_ne_2d
+S_M_field[0:ny, 0:nx+1, 1] = edges_ne_2d
 
 # Fill Color 2 (SE) - fits in [0:nx, 0:ny]
-S_M_field[0:nx, 0:ny, 2]   = edges_se_2d
+S_M_field[0:ny, 0:nx, 2]   = edges_se_2d
 
 # Prepare Vertices (pp)
 pp_field = np.zeros((max_i, max_j))
@@ -159,3 +168,71 @@ diff_i = pp.asnumpy()[1,0] - pp.asnumpy()[0,0]
 diff_j = pp.asnumpy()[0,1] - pp.asnumpy()[0,0]
 print("diff_i: ", diff_i)
 print("diff_j: ", diff_j)
+
+
+@gtx.field_operator
+def neighbor_sum(
+    edges_0: gtx.Field[[IDim, JDim], float],
+    edges_1: gtx.Field[[IDim, JDim], float],
+    edges_2: gtx.Field[[IDim, JDim], float],
+) -> gtx.Field[[IDim, JDim], float]:
+    # Correct relative offset syntax: field(Dim + offset, ...)
+    return (edges_0 
+        + edges_0(JDim - 1)
+        + edges_1
+        + edges_1(IDim - 1)
+        + edges_2(IDim - 1)
+        + edges_2(JDim - 1)
+    )
+@gtx.program
+def neighbor_sum_program(
+    edges_0: gtx.Field[[IDim, JDim], float],
+    edges_1: gtx.Field[[IDim, JDim], float],
+    edges_2: gtx.Field[[IDim, JDim], float],
+    out: gtx.Field[[IDim, JDim], float],
+):
+    neighbor_sum(edges_0, edges_1, edges_2, out=out)
+
+# Test the neighbor_sum operator on the output of compute_zavgS_cartesian
+neighbor_sum_out = gtx.as_field([IDim, JDim], np.zeros((max_i, max_j)))
+
+# Slice the output field 'out' into its 3 color components in Python
+# We already computed 'out' in the previous step
+edges_field_np = out.asnumpy()
+
+# Create 3 separate 2D fields
+edges_0_field = gtx.as_field([IDim, JDim], edges_field_np[:,:,0])
+edges_1_field = gtx.as_field([IDim, JDim], edges_field_np[:,:,1])
+edges_2_field = gtx.as_field([IDim, JDim], edges_field_np[:,:,2])
+
+
+padded_shape = (max_i + 1, max_j + 1)
+edges_0_np = np.zeros(padded_shape)
+edges_1_np = np.zeros(padded_shape)
+edges_2_np = np.zeros(padded_shape)
+edges_0_np[1:, 1:] = edges_field_np[:,:,0]
+edges_1_np[1:, 1:] = edges_field_np[:,:,1]
+edges_2_np[1:, 1:] = edges_field_np[:,:,2]
+
+# Add padding and shift the origin
+edges_0_padded = gtx.as_field([IDim, JDim], edges_0_np, origin={IDim: 1, JDim: 1})
+edges_1_padded = gtx.as_field([IDim, JDim], edges_1_np, origin={IDim: 1, JDim: 1})
+edges_2_padded = gtx.as_field([IDim, JDim], edges_2_np, origin={IDim: 1, JDim: 1})
+
+
+neighbor_sum_program.with_backend(run_dace_cpu)(
+    edges_0=edges_0_padded,
+    edges_1=edges_1_padded,
+    edges_2=edges_2_padded,
+    out=neighbor_sum_out,
+    offset_provider={},
+)
+
+from gt4py.next.iterator.transforms import pass_manager
+
+# ir = neighbor_sum_program.gtir
+# print(ir)
+# # print(pass_manager.apply_fieldview_transforms(ir, offset_provider={}))
+# print(pass_manager.apply_common_transforms(ir, offset_provider={}))
+
+print("Neighbor sum output:\n", neighbor_sum_out.asnumpy())
