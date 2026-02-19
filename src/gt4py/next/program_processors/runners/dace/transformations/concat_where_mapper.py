@@ -134,7 +134,7 @@ def gt_replace_concat_where_node(
     concat_node: dace_nodes.AccessNode,
     tag: Optional[str] = None,
 ) -> int:
-    """Replaces all accesses to a `concat_where` AccessNode `concat_node` with Tasklets.
+    """Replaces all accesses to `concat_node`, result of a `concat_where`, with Tasklets.
 
     Instead of accessing the AccessNode, in which the result of the `concat_where`
     is written, directly, the function replaces accesses with Tasklets, that based
@@ -153,7 +153,7 @@ def gt_replace_concat_where_node(
     In order to check if a `concat_where` AccessNode can be replaced use
     `gt_check_if_concat_where_node_is_replaceable()` (it is a pre condition of this
     function that `gt_check_if_concat_where_node_is_replaceable()` returned `True`).
-    To replace all `concat_where` node in an entire SDFG
+    To replace all `concat_where` nodes in an entire SDFG
     `gt_apply_concat_where_replacement_on_sdfg()` is provided.
 
     Args:
@@ -236,9 +236,7 @@ def gt_check_if_concat_where_node_is_replaceable(
             return False
 
     descending_points = _find_consumer_specs_single_source_single_level(
-        state,
-        concat_node,
-        for_check=True,
+        state, concat_node, for_check=True
     )
     if descending_points is None:
         return False
@@ -284,7 +282,7 @@ def gt_apply_concat_where_replacement_on_sdfg(
             if (
                 isinstance(node, dace_nodes.AccessNode)
                 and scope_dict[node] is None
-                and (sdfg.arrays[node.data].transient)
+                and sdfg.arrays[node.data].transient
             ):
                 if node.data in single_use_data[
                     sdfg
@@ -388,7 +386,7 @@ class _ProducerSpec:
         subset: The range that is written into the `concat_where` node.
         desc: The data descriptor.
         data_source: Maps a scope location to a data source, i.e. the node and the
-            connector where the full producer data, `self` represents can be accessed.
+            connector where the full producer data, `self` represents, can be accessed.
             You should not access it directly but instead use `get_data_source()`.
     """
 
@@ -895,12 +893,12 @@ def _map_data_into_nested_scopes_impl(
     This is either done by reusing an already existing suitable Memlet or creating
     a new one.
 
-    If data data is not accessible inside the parent scope of `scope_to_handle`, all
+    If the data is not accessible inside the parent scope of `scope_to_handle`, all
     missing ancestor scopes will be handled first.
     Furthermore, it is not an error if `scope_to_handle` was already handled. This
-    might happen because `scope_to_handle` was handled because it was the parent of
-    a previous scope (think of nested scopes each containing proper consumers and they
-    are processing starting from the most deeply nested one).
+    might happen in case `scope_to_handle` was the parent of a scope previously
+    handled (think of nested scopes each containing proper consumers and they are
+    processing starting from the most deeply nested one).
 
     The only condition this function has is that the top level, i.e. `scope_to_handle`
     is `None`, has already been handled.
@@ -1236,7 +1234,6 @@ def _find_consumer_specs_single_source_single_level(
 
     Args:
         state: The state in which we operate.
-        scope_dict: The scope dict of for the state.
         concat_node: The node representing the `concat_where` result.
         for_check: Only perform checks.
 
@@ -1295,27 +1292,18 @@ def _find_consumer_specs_single_source_single_level(
         if consumed_subset.num_elements() == 1:  # Real consumer
             if not for_check:
                 consumer_specs.append(consumer_spec)
-            continue
-
-        if isinstance(consumer_spec.consumer, dace_nodes.NestedSDFG):
-            if consumed_subset.covers(concat_where_shape):
-                # The whole array is mapped into the nested SDFG, so we have to check it.
-                stairs_to_deeper_levels.append(consumer_spec)
-                continue
-
-            elif _handle_special_case_of_gt4py_scan_point(
-                state=state,
-                descending_point=consumer_spec,
-                concat_node=concat_node,
-                consumed_subset=consumed_subset,
-            ):
-                # Apply special rule.
-                stairs_to_deeper_levels.append(consumer_spec)
-                continue
-
-        if for_check:
-            return None
-        raise ValueError(f"Expected that partition for {concat_node} exists but it does not.")
+        elif isinstance(consumer_spec.consumer, dace_nodes.NestedSDFG) and (
+            consumed_subset.covers(concat_where_shape)
+            or _handle_special_case_of_gt4py_scan_point(
+                state, consumer_spec, concat_node, consumed_subset
+            )
+        ):
+            # The whole array is mapped into the nested SDFG.
+            stairs_to_deeper_levels.append(consumer_spec)
+        else:
+            if for_check:
+                return None
+            raise ValueError(f"Expected that partition for {concat_node} exists but it does not.")
 
     if for_check:
         return stairs_to_deeper_levels
@@ -1328,7 +1316,7 @@ def _handle_special_case_of_gt4py_scan_point(
     concat_node: dace_nodes.AccessNode,
     consumed_subset: dace_sbs.Range,
 ) -> bool:
-    """Performs special checking for nested SDFGs that fail to properly m
+    """Performs special checking for cases where data is not properly mapped into a nested SDFG.
 
     In certain cases, especially for scans, DaCe Memlet propagation (or related) will
     fail to properly annotate the consumer Memlet that maps the data inside a nested
@@ -1343,7 +1331,9 @@ def _handle_special_case_of_gt4py_scan_point(
     assert isinstance(descending_point.consumer, dace_nodes.NestedSDFG)
     nsdfg: dace_nodes.NestedSDFG = descending_point.consumer
 
-    if not nsdfg.label.startswith("scan_"):
+    # There must be one node in the nested SDFG that is not a state.
+    # TODO(phimuell): Find out if too restrictive.
+    if all(isinstance(node, dace.SDFGState) for node in nsdfg.sdfg.nodes()):
         return False
 
     # At this point `state` should be in a valid state so that it is safe to
