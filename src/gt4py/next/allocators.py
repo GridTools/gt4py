@@ -24,7 +24,6 @@ from gt4py.eve.extended_typing import (
     Protocol,
     Sequence,
     TypeAlias,
-    TypeGuard,
     TypeIs,
     cast,
 )
@@ -52,13 +51,13 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]: ...
 
 
-def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
+def is_field_allocator(obj: Any) -> TypeIs[FieldBufferAllocatorProtocol]:
     return hasattr(obj, "__gt_device_type__") and hasattr(obj, "__gt_allocate__")
 
 
 def is_field_allocator_for(
     obj: Any, device: core_defs.DeviceTypeT
-) -> TypeGuard[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
+) -> TypeIs[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
     return is_field_allocator(obj) and obj.__gt_device_type__ is device
 
 
@@ -76,7 +75,7 @@ def is_field_allocator_factory(obj: Any) -> TypeIs[FieldBufferAllocatorFactoryPr
 
 def is_field_allocator_factory_for(
     obj: Any, device: core_defs.DeviceTypeT
-) -> TypeGuard[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
+) -> TypeIs[FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeT]]:
     return is_field_allocator_factory(obj) and obj.__gt_allocator__.__gt_device_type__ is device
 
 
@@ -86,13 +85,13 @@ FieldBufferAllocationUtil = (
 )
 
 
-def is_field_allocation_tool(obj: Any) -> TypeGuard[FieldBufferAllocationUtil]:
+def is_field_allocation_tool(obj: Any) -> TypeIs[FieldBufferAllocationUtil]:
     return is_field_allocator(obj) or is_field_allocator_factory(obj)
 
 
 def is_field_allocation_tool_for(
     obj: Any, device: core_defs.DeviceTypeT
-) -> TypeGuard[FieldBufferAllocationUtil]:
+) -> TypeIs[FieldBufferAllocationUtil]:
     return is_field_allocator_for(obj, device) or is_field_allocator_factory_for(obj, device)
 
 
