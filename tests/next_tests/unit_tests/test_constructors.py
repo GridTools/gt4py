@@ -71,7 +71,7 @@ def _constructor_test_cases():
 
 @pytest.fixture(
     params=_constructor_test_cases(),
-    ids=lambda x: f"{type(x.allocator).__name__ if x.allocator is not None else 'None'}-device_type={x.device.device_type.name if x.device else None}-{x.expected_xp.__name__}",
+    ids=lambda x: f"{type(x.allocator).__name__ if x.allocator is not None else None}-device={x.device.device_type if x.device is not None and x.device.device_type is not None else None}-{x.expected_xp.__name__ if x.expected_xp is not None else None}",
 )
 def constructor_test_cases(request):
     yield request.param
