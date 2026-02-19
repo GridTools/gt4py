@@ -15,18 +15,8 @@ from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
 from gt4py.eve import utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import definitions, languages
+from gt4py.next.otf import code_specs, definitions
 from gt4py.next.otf.binding import interface
-
-
-PrgT = TypeVar("PrgT")
-ArgT = TypeVar("ArgT")
-SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
-TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
-SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
-SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
-TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
-SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
 
 
 def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
@@ -64,8 +54,12 @@ def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef
     return program_hash
 
 
+CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
+TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
+
+
 @dataclasses.dataclass(frozen=True)
-class ProgramSource(Generic[SrcL, SettingT]):
+class ProgramSource(Generic[CodeSpecT]):
     """
     Standalone source code translated from an IR along with information relevant for OTF compilation.
 
@@ -78,18 +72,11 @@ class ProgramSource(Generic[SrcL, SettingT]):
     entry_point: interface.Function
     source_code: str
     library_deps: tuple[interface.LibraryDependency, ...]
-    language: type[SrcL]
-    language_settings: SettingT
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.language_settings, self.language.settings_class):
-            raise TypeError(
-                f"Wrong language settings type for '{self.language}', must be subclass of '{self.language.settings_class}'."
-            )
+    code_spec: CodeSpecT
 
 
 @dataclasses.dataclass(frozen=True)
-class BindingSource(Generic[SrcL, TgtL]):
+class BindingSource(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Companion source code for translated program source code.
 
@@ -105,7 +92,7 @@ class BindingSource(Generic[SrcL, TgtL]):
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableProject(Generic[SrcL, SettingT, TgtL]):
+class CompilableProject(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
@@ -114,8 +101,8 @@ class CompilableProject(Generic[SrcL, SettingT, TgtL]):
     If bindings are required, it is recommended to create them in a separate step to ensure reusability.
     """
 
-    program_source: ProgramSource[SrcL, SettingT]
-    binding_source: Optional[BindingSource[SrcL, TgtL]]
+    program_source: ProgramSource[CodeSpecT]
+    binding_source: Optional[BindingSource[CodeSpecT, TargetCodeSpecT]]
 
     @property
     def library_deps(self) -> tuple[interface.LibraryDependency, ...]:
@@ -124,7 +111,11 @@ class CompilableProject(Generic[SrcL, SettingT, TgtL]):
         return _unique_libs(*self.program_source.library_deps, *self.binding_source.library_deps)
 
 
-class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
+CodeSpecT_co = TypeVar("CodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
+TargetCodeSpecT_co = TypeVar("TargetCodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
+
+
+class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
     """
     Use source code extracted from a ``CompilableSource`` to configure and build a GT4Py program.
 

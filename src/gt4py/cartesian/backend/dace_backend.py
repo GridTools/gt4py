@@ -18,7 +18,6 @@ from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, 
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
-from dace.transformation.passes import SimplifyPass
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config, definitions
@@ -258,16 +257,16 @@ def freeze_origin_domain_sdfg(
 
     inputs = set()
     outputs = set()
-    for inner_state in inner_sdfg.nodes():
-        for node in inner_state.nodes():
-            if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
-                continue
-            if node.has_reads(inner_state):
-                inputs.add(node.data)
-            if node.has_writes(inner_state):
-                outputs.add(node.data)
+    for node, parent in inner_sdfg.all_nodes_recursive():
+        if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
+            continue
 
-    nsdfg = state.add_nested_sdfg(inner_sdfg, None, inputs, outputs)
+        if node.has_reads(parent):
+            inputs.add(node.data)
+        if node.has_writes(parent):
+            outputs.add(node.data)
+
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
         field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
@@ -412,11 +411,7 @@ class SDFGManager:
             flipper.visit(stree)
 
         # Create SDFG
-        sdfg = stree.as_sdfg(
-            validate=validate,
-            simplify=simplify,
-            skip={"ScalarToSymbolPromotion"},
-        )
+        sdfg = stree.as_sdfg(validate=validate, simplify=simplify, skip={"ScalarToSymbolPromotion"})
 
         if do_cache:
             self._save_sdfg(sdfg, path)
@@ -478,7 +473,7 @@ class DaCeExtGenerator(BackendCodegen):
             sdfg,
             self.backend.storage_info,
         )
-        SimplifyPass(validate=True, skip={"ScalarToSymbolPromotion"}).apply_pass(sdfg, {})
+        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion"})
 
         # NOTE
         # The glue code in DaCeComputationCodegen.apply() (just below) will define all the
