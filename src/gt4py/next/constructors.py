@@ -161,7 +161,7 @@ class FieldConstructor:
     def as_field(
         self,
         domain: common.DomainLike | Sequence[common.Dimension],
-        data: core_defs.NDArrayObject,  # TODO rename to `array`?
+        data: core_defs.NDArrayObject,
         *,
         dtype: core_defs.DTypeLike | None = None,
         origin: Mapping[common.Dimension, int] | None = None,
@@ -303,7 +303,7 @@ class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]
     def asarray(
         self,
         domain: common.Domain,
-        data: core_defs.NDArrayObject,  # TODO rename to `array`?
+        data: core_defs.NDArrayObject,
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
@@ -354,7 +354,7 @@ class _FieldBufferCreationNamespace(_FieldArrayConstructionNamespace):
     def asarray(
         self,
         domain: common.Domain,
-        data: core_defs.NDArrayObject,  # TODO: rename to `array`?
+        data: core_defs.NDArrayObject,
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
