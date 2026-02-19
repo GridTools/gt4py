@@ -95,6 +95,26 @@ def is_field_allocation_tool_for(
     return is_field_allocator_for(obj, device) or is_field_allocator_factory_for(obj, device)
 
 
+# TODO do we have this function somewhere?
+def _absolute_to_relative_index(
+    indices: Sequence[common.NamedIndex], domain: common.Domain
+) -> Sequence[int]:
+    """Convert absolute indices to relative indices based on the domain's dimensions."""
+
+    dim_to_index = {named_idx.dim: int(named_idx.value) for named_idx in indices}
+    result = []
+    for named_range in domain:
+        dim = named_range.dim
+        abs_idx = dim_to_index.get(dim, named_range.unit_range.start)
+        if abs_idx < named_range.unit_range.start or abs_idx >= named_range.unit_range.stop:
+            raise ValueError(
+                f"Absolute index for dimension '{dim}' is {abs_idx}, "
+                f"which is outside the domain range [{named_range.unit_range.start}, {named_range.unit_range.stop})."
+            )
+        result.append(abs_idx - named_range.unit_range.start)
+    return result
+
+
 @dataclasses.dataclass(frozen=True)
 class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]):
     """Parametrizable field buffer allocator base class."""
@@ -121,11 +141,13 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
-        # TODO implement the alignment and add tests for both Cell and Edge in the aligned_index Sequence
-        assert aligned_index is None
+
+        relative_aligned_index = (
+            _absolute_to_relative_index(aligned_index, domain) if aligned_index else None
+        )
 
         return self.buffer_allocator.allocate(
-            shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
+            shape, dtype, device_id, layout_map, self.byte_alignment, relative_aligned_index
         )
 
 
