@@ -30,8 +30,15 @@ from gt4py.eve import extended_typing as xtyping
 
 
 # Type to be used by the end-user
-# TODO make all other types private? check usage in ICON4Py
 Allocator: TypeAlias = core_ndarray_utils.ArrayNamespace | next_allocators.FieldBufferAllocationUtil
+"""Type for field memory allocators.
+
+Accepts either:
+- An array namespace following the Array API standard (e.g. ``numpy``, ``cupy``, ``jax.numpy``),
+  which will be used directly for array creation.
+- A GT4Py field buffer allocator or allocator factory (e.g. a backend), which controls
+  memory layout and alignment.
+"""
 
 DEFAULT_DEVICE: core_defs.Device = core_defs.Device(core_defs.DeviceType.CPU, 0)
 DEFAULT_DTYPE: core_defs.DType = core_defs.Float64DType(())
