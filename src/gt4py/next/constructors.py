@@ -38,46 +38,6 @@ FieldAllocator: TypeAlias = (
 # TODO make all other types private? check usage in ICON4Py
 
 
-class _ArrayCreationNamespace(abc.ABC):
-    """
-    Abstract interface for array creation operations on a specific device/backend.
-
-    The translation from DomainLike and DTypeLike is already done in the public interface.
-    """
-
-    @abc.abstractmethod
-    def empty(
-        self, domain: common.Domain, *, dtype: core_defs.DType
-    ) -> core_defs.NDArrayObject: ...
-
-    @abc.abstractmethod
-    def zeros(
-        self, domain: common.Domain, *, dtype: core_defs.DType
-    ) -> core_defs.NDArrayObject: ...
-
-    @abc.abstractmethod
-    def ones(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject: ...
-
-    @abc.abstractmethod
-    def full(
-        self,
-        domain: common.Domain,
-        fill_value: core_defs.Scalar,
-        *,
-        dtype: core_defs.DType,
-    ) -> core_defs.NDArrayObject: ...
-
-    @abc.abstractmethod
-    def asarray(
-        self,
-        domain: common.Domain,
-        data: core_defs.NDArrayObject,
-        *,
-        dtype: core_defs.DType,
-        copy: bool | None,
-    ) -> core_defs.NDArrayObject: ...
-
-
 @dataclasses.dataclass(frozen=True)
 class FieldConstructionNamespace:
     """
@@ -86,7 +46,7 @@ class FieldConstructionNamespace:
     Delegates array creation to the composed `_array_constructor` and wraps the result in a Field.
     """
 
-    _array_constructor: _ArrayCreationNamespace
+    _array_constructor: _FieldArrayConstructionNamespace
 
     def empty(
         self,
@@ -198,11 +158,51 @@ class FieldConstructionNamespace:
         return res
 
 
+class _FieldArrayConstructionNamespace(abc.ABC):
+    """
+    Abstract interface for array creation operations on a specific device/backend.
+
+    The translation from DomainLike and DTypeLike is already done in the public interface.
+    """
+
+    @abc.abstractmethod
+    def empty(
+        self, domain: common.Domain, *, dtype: core_defs.DType
+    ) -> core_defs.NDArrayObject: ...
+
+    @abc.abstractmethod
+    def zeros(
+        self, domain: common.Domain, *, dtype: core_defs.DType
+    ) -> core_defs.NDArrayObject: ...
+
+    @abc.abstractmethod
+    def ones(self, domain: common.Domain, *, dtype: core_defs.DType) -> core_defs.NDArrayObject: ...
+
+    @abc.abstractmethod
+    def full(
+        self,
+        domain: common.Domain,
+        fill_value: core_defs.Scalar,
+        *,
+        dtype: core_defs.DType,
+    ) -> core_defs.NDArrayObject: ...
+
+    @abc.abstractmethod
+    def asarray(
+        self,
+        domain: common.Domain,
+        data: core_defs.NDArrayObject,
+        *,
+        dtype: core_defs.DType,
+        copy: bool | None,
+    ) -> core_defs.NDArrayObject: ...
+
+
 _ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayCreationNamespace)
 
 
 @dataclasses.dataclass(frozen=True)
-class _ArrayApiCreationNamespace(_ArrayCreationNamespace, Generic[_ANS]):
+class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]):
     array_ns: _ANS
     # device in the format expected by the array namespace
     device: Any = None
@@ -274,7 +274,7 @@ class _ArrayApiCreationNamespace(_ArrayCreationNamespace, Generic[_ANS]):
 
 
 @dataclasses.dataclass(frozen=True)
-class _FieldBufferCreationNamespace(_ArrayCreationNamespace):
+class _FieldBufferCreationNamespace(_FieldArrayConstructionNamespace):
     allocator: next_allocators.FieldBufferAllocatorProtocol
     device: core_defs.Device | None = None
     aligned_index: Sequence[common.NamedIndex] | None = None
