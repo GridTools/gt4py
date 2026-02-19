@@ -360,7 +360,7 @@ class SDFGManager:
         if validate:
             sdfg.validate()
         SDFGManager._strip_history(sdfg)
-        sdfg.save(str(path))
+        sdfg.save(str(path), compress=True)
 
     def sdfg_via_schedule_tree(self, *, validate: bool = True, simplify: bool = True) -> SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
@@ -371,7 +371,7 @@ class SDFGManager:
             validate: Validate resulting SDFG
             simplify: Simplify resulting SDFG
         """
-        filename = f"{self.builder.module_name}.sdfg"
+        filename = f"{self.builder.module_name}.sdfgz"
         path = (
             pathlib.Path(os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd()))
             / filename
@@ -426,7 +426,7 @@ class SDFGManager:
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]) -> SDFG:
         basename = self.builder.module_path.with_suffix("")
-        path = pathlib.Path(f"{basename}_{shash(origin, domain)}.sdfg")
+        path = pathlib.Path(f"{basename}_{shash(origin, domain)}.sdfgz")
 
         # check if the same sdfg is already loaded
         do_cache = self.builder.caching.name != "nocache"
@@ -845,7 +845,7 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
         res = super().generate_class_members()
         filepath = self.builder.module_path.joinpath(
             os.path.dirname(self.builder.module_path),
-            self.builder.module_name + ".sdfg",
+            self.builder.module_name + ".sdfgz",
         )
         res += f'\nSDFG_PATH = "{filepath}"\n'
         return res
