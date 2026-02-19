@@ -12,7 +12,7 @@ import abc
 import dataclasses
 import functools
 from collections.abc import Mapping, Sequence
-from typing import Any, Generic, TypeAlias, TypeVar, cast
+from typing import Any, Generic, Protocol, TypeAlias, TypeVar, cast
 
 import gt4py.eve as eve
 import gt4py.next.allocators as next_allocators
@@ -97,6 +97,23 @@ class FieldConstructor:
         else:
             raise ValueError(f"Invalid field allocator: {allocator}.")
 
+    class _NdArrayConstructor(Protocol):
+        def __call__(
+            self, domain: common.Domain, *, dtype: core_defs.DType
+        ) -> core_defs.NDArrayObject: ...
+
+    def _construct_from_array(
+        self,
+        domain: common.DomainLike,
+        dtype: core_defs.DTypeLike,
+        ndarray_constructor: _NdArrayConstructor,
+    ) -> nd_array_field.NdArrayField:
+        domain = common.domain(domain)
+        dtype = core_defs.dtype(dtype)
+        res = common._field(ndarray_constructor(domain, dtype=dtype), domain=domain)
+        assert isinstance(res, nd_array_field.NdArrayField)
+        return res
+
     def empty(
         self,
         domain: common.DomainLike,
@@ -104,11 +121,7 @@ class FieldConstructor:
         dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` of uninitialized values. See :func:`empty` for details."""
-        domain = common.domain(domain)
-        dtype = core_defs.dtype(dtype)
-        res = common._field(self._array_constructor.empty(domain, dtype=dtype), domain=domain)
-        assert isinstance(res, nd_array_field.NdArrayField)  # for typing
-        return res
+        return self._construct_from_array(domain, dtype, self._array_constructor.empty)
 
     def zeros(
         self,
@@ -117,11 +130,7 @@ class FieldConstructor:
         dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` containing all zeros. See :func:`zeros` for details."""
-        domain = common.domain(domain)
-        dtype = core_defs.dtype(dtype)
-        res = common._field(self._array_constructor.zeros(domain, dtype=dtype), domain=domain)
-        assert isinstance(res, nd_array_field.NdArrayField)  # for typing
-        return res
+        return self._construct_from_array(domain, dtype, self._array_constructor.zeros)
 
     def ones(
         self,
@@ -130,11 +139,7 @@ class FieldConstructor:
         dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` containing all ones. See :func:`ones` for details."""
-        domain = common.domain(domain)
-        dtype = core_defs.dtype(dtype)
-        res = common._field(self._array_constructor.ones(domain, dtype=dtype), domain=domain)
-        assert isinstance(res, nd_array_field.NdArrayField)  # for typing
-        return res
+        return self._construct_from_array(domain, dtype, self._array_constructor.ones)
 
     def full(
         self,
@@ -144,13 +149,14 @@ class FieldConstructor:
         dtype: core_defs.DTypeLike | None = None,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` filled with `fill_value`. See :func:`full` for details."""
-        domain = common.domain(domain)
-        dtype = core_defs.dtype(dtype) if dtype is not None else core_defs.dtype(type(fill_value))
-        res = common._field(
-            self._array_constructor.full(domain, fill_value=fill_value, dtype=dtype), domain=domain
+        dtype = dtype if dtype is not None else type(fill_value)
+        return self._construct_from_array(
+            domain,
+            dtype,
+            lambda domain, dtype: self._array_constructor.full(
+                domain, fill_value=fill_value, dtype=dtype
+            ),
         )
-        assert isinstance(res, nd_array_field.NdArrayField)  # for typing
-        return res
 
     def as_field(
         self,
@@ -161,8 +167,6 @@ class FieldConstructor:
         origin: Mapping[common.Dimension, int] | None = None,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` from an array-like object. See :func:`as_field` for details."""
-        dtype = core_defs.dtype(dtype) if dtype is not None else None
-
         if isinstance(domain, Sequence) and all(
             isinstance(dim, common.Dimension) for dim in domain
         ):
@@ -194,10 +198,11 @@ class FieldConstructor:
         if dtype is None:
             dtype = core_defs.dtype(data.dtype)
 
-        arr = self._array_constructor.asarray(actual_domain, data, dtype=dtype)
-        res = common._field(arr, domain=actual_domain)
-        assert isinstance(res, nd_array_field.NdArrayField)  # for typing
-        return res
+        return self._construct_from_array(
+            actual_domain,
+            dtype,
+            lambda domain, dtype: self._array_constructor.asarray(domain, data, dtype=dtype),
+        )
 
 
 class _FieldArrayConstructionNamespace(abc.ABC):
