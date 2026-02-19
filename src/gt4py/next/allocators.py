@@ -25,6 +25,7 @@ from gt4py.eve.extended_typing import (
     Sequence,
     TypeAlias,
     TypeGuard,
+    TypeIs,
     cast,
 )
 
@@ -69,7 +70,7 @@ class FieldBufferAllocatorFactoryProtocol(Protocol[core_defs.DeviceTypeT]):
     def __gt_allocator__(self) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]: ...
 
 
-def is_field_allocator_factory(obj: Any) -> TypeGuard[FieldBufferAllocatorFactoryProtocol]:
+def is_field_allocator_factory(obj: Any) -> TypeIs[FieldBufferAllocatorFactoryProtocol]:
     return hasattr(obj, "__gt_allocator__")
 
 
@@ -93,43 +94,6 @@ def is_field_allocation_tool_for(
     obj: Any, device: core_defs.DeviceTypeT
 ) -> TypeGuard[FieldBufferAllocationUtil]:
     return is_field_allocator_for(obj, device) or is_field_allocator_factory_for(obj, device)
-
-
-# TODO delete?
-def get_allocator(
-    obj: Any,
-    *,
-    default: Optional[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]] = None,
-    strict: bool = False,
-) -> Optional[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
-    """
-    Return a field-buffer-allocator from an object assumed to be an allocator or an allocator factory.
-
-    A default allocator can be provided as fallback in case `obj` is neither an allocator nor a factory.
-
-    Arguments:
-        obj: The allocator or allocator factory.
-        default: Fallback allocator.
-        strict: If `True`, raise an exception if there is no way to get a valid allocator
-            from `obj` or `default`.
-
-    Returns:
-        A field buffer allocator.
-
-    Raises:
-        TypeError: If `obj` is neither a field allocator nor a field allocator factory and no default
-            is provided in `strict` mode.
-    """
-    if is_field_allocator(obj):
-        return obj
-    elif is_field_allocator_factory(obj):
-        return obj.__gt_allocator__
-    elif not strict or is_field_allocator(default):
-        return default
-    else:
-        raise TypeError(
-            f"Object '{obj}' is neither a field allocator nor a field allocator factory."
-        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -287,54 +251,3 @@ StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cas
     if core_defs.CUPY_DEVICE_TYPE
     else InvalidGPUFieldBufferAllocator,
 )
-
-
-# TODO delete?
-def allocate(
-    domain: common.DomainLike,
-    dtype: core_defs.DType[core_defs.ScalarT],
-    *,
-    aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[FieldBufferAllocationUtil] = None,
-    device: Optional[core_defs.Device] = None,
-) -> core_allocators.TensorBuffer:
-    """
-    Allocate a TensorBuffer for the given domain and device or allocator.
-
-    The arguments `device` and `allocator` are mutually exclusive.
-    If `device` is specified, the corresponding default allocator
-    (defined in :data:`device_allocators`) is used.
-
-    Arguments:
-        domain: The domain which should be backed by the allocated tensor buffer.
-        dtype: Data type.
-        aligned_index: N-dimensional index of the first aligned element
-        allocator: The allocator to use for the allocation.
-        device: The device to allocate the tensor buffer on (using the default
-            allocator for this kind of device from :data:`device_allocators`).
-
-    Returns:
-        The allocated tensor buffer.
-
-    Raises:
-        ValueError
-            If illegal or inconsistent arguments are specified.
-
-    """
-    if device is None and allocator is None:
-        raise ValueError("No 'device' or 'allocator' specified.")
-    actual_allocator = get_allocator(allocator)
-    if actual_allocator is None:
-        assert device is not None  # for mypy
-        actual_allocator = device_allocators[device.device_type]
-    elif device is None:
-        device = core_defs.Device(actual_allocator.__gt_device_type__, 0)
-    elif device.device_type != actual_allocator.__gt_device_type__:
-        raise ValueError(f"Device '{device}' and allocator '{actual_allocator}' are incompatible.")
-
-    return actual_allocator.__gt_allocate__(
-        domain=common.domain(domain),
-        dtype=dtype,
-        device_id=device.device_id,
-        aligned_index=aligned_index,
-    )

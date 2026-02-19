@@ -76,10 +76,8 @@ class FieldConstructor:
                 array_ns=allocator, device=translated_device
             )
         elif next_allocators.is_field_allocation_tool(allocator):
-            allocator = next_allocators.get_allocator(
-                allocator, strict=True
-            )  # TODO this function could be inlined here?
-            assert allocator is not None  # for mypy
+            if next_allocators.is_field_allocator_factory(allocator):
+                allocator = allocator.__gt_allocator__
             if device is not None and allocator.__gt_device_type__ != device.device_type:
                 raise ValueError(
                     f"Allocator {allocator} is for device type {allocator.__gt_device_type__}, but device type {device.device_type} was specified."
