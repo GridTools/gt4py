@@ -60,6 +60,13 @@ class FieldConstructor:
             allocator = next_allocators.device_allocators[device.device_type]
 
         if core_ndarray_utils.is_array_namespace(allocator):
+            if aligned_index is not None:
+                import warnings
+
+                warnings.warn(
+                    "`aligned_index` is not supported when using an array namespace allocator and will be ignored.",
+                    stacklevel=2,
+                )
             translated_device = (
                 core_ndarray_utils.get_device_translator(allocator)(device)
                 if device is not None
