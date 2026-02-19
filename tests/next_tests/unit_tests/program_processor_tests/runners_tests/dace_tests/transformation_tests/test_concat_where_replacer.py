@@ -137,13 +137,16 @@ def test_concat_where_same_inputs():
     sdfg, state, concat_node, me, a = _make_concat_where_same_inputs()
 
     access_nodes_before = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    tasklets_before = util.count_nodes(state, dace_nodes.Tasklet, return_nodes=True)
     assert len(access_nodes_before) == 4
     assert a in access_nodes_before
     assert state.out_degree(a) == 2
     assert all(oedge.dst is concat_node for oedge in state.out_edges(a))
     assert concat_node.data == "c"
     assert [ac for ac in access_nodes_before if ac.desc(sdfg).transient] == [concat_node]
-    assert util.count_nodes(state, dace_nodes.Tasklet) == 1
+    assert len(tasklets_before) == 1
+    compute_tasklet = tasklets_before[0]
+    assert all(iedge.data.data != "a" for iedge in state.in_edges(compute_tasklet))
     assert state.in_degree(me) == 2
 
     ref, res = util.make_sdfg_args(sdfg)
@@ -157,6 +160,7 @@ def test_concat_where_same_inputs():
     sdfg.validate()
 
     access_nodes_after = util.count_nodes(state, dace_nodes.AccessNode, return_nodes=True)
+    tasklets_after = util.count_nodes(state, dace_nodes.Tasklet, return_nodes=True)
     assert len(access_nodes_after) == 4
     assert a in access_nodes_after
     assert concat_node not in access_nodes_after
@@ -173,8 +177,14 @@ def test_concat_where_same_inputs():
     assert all(oedge.dst is me for oedge in state.out_edges(a))
     a_to_me_edge = next(iter(state.out_edges(a)))
     assert a_to_me_edge.dst_conn.startswith("IN_")
+
+    assert len(tasklets_after) == 2
+    assert compute_tasklet in tasklets_after
+    concat_where_tlet = next(iter(tlet for tlet in tasklets_after if tlet is not compute_tasklet))
     inner_map_a_edges = list(state.out_edges_by_connector(me, "OUT_" + a_to_me_edge.dst_conn[3:]))
-    assert len(inner_map_a_edges) == 2
+    assert len(inner_map_a_edges) == 1  # Automatic compaction.
+    assert inner_map_a_edges[0].dst is concat_where_tlet
+    assert state.in_degree(concat_where_tlet) == 1
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
@@ -344,7 +354,7 @@ def test_concat_where_mixed_inputs():
     a_to_me_edge = next(iter(state.out_edges(a)))
     assert a_to_me_edge.dst_conn.startswith("IN_")
     inner_map_a_edges = list(state.out_edges_by_connector(me, "OUT_" + a_to_me_edge.dst_conn[3:]))
-    assert len(inner_map_a_edges) == 3
+    assert len(inner_map_a_edges) == 2  # Automatic compaction.
     assert len({e.dst for e in inner_map_a_edges if isinstance(e.dst, dace_nodes.Tasklet)}) == 2
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)

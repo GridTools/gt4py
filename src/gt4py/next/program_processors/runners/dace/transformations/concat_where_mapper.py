@@ -1011,19 +1011,28 @@ def _replace_single_read(
         producer_specs: Descriptions of how the `concat_where` converges.
         tag: Used to give newly created elements a unique name.
     """
-
     assert consumer_spec.edge.data.wcr is None
     assert consumer_spec.edge.data.subset.num_elements() == 1
 
-    tlet_inputs: list[str] = [f"__inp{i}" for i in range(len(producer_specs))]
+    # For every producer specification one entry. The names might not be unique, in
+    #  case two producers refer to the same data the corresponding input names will
+    #  be the same.
+    tlet_inputs: list[str] = []
     tlet_output = "__out"
+
+    # Maps the name of a producer (`_ProducerSpec::data_name`) to a pair. The first
+    #  element is the corresponding Tasklet input connector and second is _a_
+    #  `_ProducerSpec`. Note in this context the `offset` and `subset` attribute
+    #  have no meaning.
+    tinput_map: dict[str, tuple[str, _ProducerSpec]] = {}
 
     select_conds: list[str] = []
     prod_accesses: list[str] = []
     consumed_subset = consumer_spec.consumed_subset(state)
-    for prod_spec in producer_specs:
-        prod_subset = prod_spec.subset
-        prod_offsets = prod_spec.offset
+    for i in range(len(producer_specs)):
+        producer_spec = producer_specs[i]
+        prod_subset = producer_spec.subset
+        prod_offsets = producer_spec.offset
 
         this_select_cond: list[str] = []
         this_prod_access: list[str] = []
@@ -1042,6 +1051,15 @@ def _replace_single_read(
         prod_accesses.append(", ".join(this_prod_access))
         select_conds.append(" and ".join(this_select_cond))
 
+        # Generate the name of the input that is used.
+        if producer_spec.data_name in tinput_map:
+            # Data is known reuse it.
+            tlet_inputs.append(tinput_map[producer_spec.data_name][0])
+        else:
+            # Data is not known, so create a new name.
+            tlet_inputs.append(f"__in{i}")
+            tinput_map[producer_spec.data_name] = (tlet_inputs[-1], producer_spec)
+
     if len(producer_specs) == 2:
         tlet_code = f"{tlet_output} = {tlet_inputs[0]}[{prod_accesses[0]}] if ({select_conds[0]}) else {tlet_inputs[1]}[{prod_accesses[1]}]"
     else:
@@ -1054,6 +1072,7 @@ def _replace_single_read(
         tlet_code_lines.append(f"else:\n\t{tlet_output} = {tlet_inputs[-1]}[{prod_accesses[-1]}]")
         tlet_code = "\n".join(tlet_code_lines)
 
+    # Create the access Tasklet.
     names_of_existing_tasklets = {
         node.label for node in state.nodes() if isinstance(node, dace_nodes.Tasklet)
     }
@@ -1067,7 +1086,9 @@ def _replace_single_read(
         code=tlet_code,
     )
 
-    for tlet_input, producer_spec in zip(tlet_inputs, producer_specs):
+    # Connect the tasklet to the source.
+    for data_name, (tlet_input, producer_spec) in tinput_map.items():
+        assert data_name == producer_spec.data_name
         data_source = producer_spec.get_data_source(consumer_spec, scope_dict)
         state.add_edge(
             data_source.node,
@@ -1075,7 +1096,7 @@ def _replace_single_read(
             concat_where_tasklet,
             tlet_input,
             dace.Memlet(
-                data=producer_spec.data_name,
+                data=data_name,
                 subset=dace_sbs.Range.from_array(producer_spec.desc),
             ),
         )
@@ -1089,7 +1110,6 @@ def _replace_single_read(
         find_new_name=True,
     )
     intermediate_node = state.add_access(intermediate_data)
-
     state.add_edge(
         concat_where_tasklet,
         tlet_output,
