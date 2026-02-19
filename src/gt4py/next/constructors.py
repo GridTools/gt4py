@@ -91,9 +91,7 @@ class FieldConstructor:
         *,
         dtype: core_defs.DTypeLike | None = None,
     ) -> nd_array_field.NdArrayField:
-        """
-        TODO summary + refer to other function
-        """
+        """Create a `Field` of uninitialized values. See :func:`empty` for details."""
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
         assert dtype is not None  # TODO check where to put the default
@@ -106,6 +104,7 @@ class FieldConstructor:
         domain: common.DomainLike,
         dtype: core_defs.DTypeLike | None = None,
     ) -> nd_array_field.NdArrayField:
+        """Create a `Field` containing all zeros. See :func:`zeros` for details."""
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
         assert dtype is not None
@@ -118,6 +117,7 @@ class FieldConstructor:
         domain: common.DomainLike,
         dtype: core_defs.DTypeLike | None = None,
     ) -> nd_array_field.NdArrayField:
+        """Create a `Field` containing all ones. See :func:`ones` for details."""
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
         assert dtype is not None
@@ -131,6 +131,7 @@ class FieldConstructor:
         fill_value: core_defs.Scalar,
         dtype: core_defs.DTypeLike | None = None,
     ) -> nd_array_field.NdArrayField:
+        """Create a `Field` filled with `fill_value`. See :func:`full` for details."""
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype) if dtype is not None else core_defs.dtype(type(fill_value))
         assert dtype is not None
@@ -148,6 +149,7 @@ class FieldConstructor:
         dtype: core_defs.DTypeLike | None = None,
         origin: Mapping[common.Dimension, int] | None = None,
     ) -> nd_array_field.NdArrayField:
+        """Create a `Field` from an array-like object. See :func:`as_field` for details."""
         dtype = core_defs.dtype(dtype) if dtype is not None else None
         assert dtype is None or dtype.tensor_shape == ()  # TODO in the other cases as well?
 
@@ -380,15 +382,15 @@ def empty(
 
     Keyword Arguments:
         aligned_index: Index in the definition domain which should be used as reference
-            point for memory aligment computations. It can be set to the most common origin
+            point for memory alignment computations. It can be set to the most common origin
             of computations in this domain (if known) for performance reasons.
-        allocator: The allocator or allocator factory (e.g. backend) used for memory buffer
-            allocation, which knows how to optimize the memory layout for a given device.
-            Required if `device` is `None`. If both are valid, `allocator` will be chosen over
-            the default device allocator.
+        allocator: An array namespace (e.g. ``numpy``, ``cupy``) or an allocator /
+            allocator factory (e.g. backend) used for memory buffer allocation.
+            If neither `allocator` nor `device` is given, a default CPU allocator is used.
+            If both are given, `allocator` takes precedence over the default device allocator.
         device: The device (CPU, type of accelerator) to optimize the memory layout for.
-            Required if `allocator` is `None` and will cause the default device allocator
-            to be used in that case.
+            If neither `allocator` nor `device` is given, a default CPU device is used.
+            When only `device` is given, the default allocator for that device type is used.
 
     Returns:
         A field, backed by a buffer with memory layout as specified by allocator and alignment requirements.
@@ -408,7 +410,7 @@ def empty(
 
         Initialize a field in one dimension from an array namespace:
 
-        >>> import numpy as
+        >>> import numpy as np
         >>> from gt4py import next as gtx
         >>> IDim = gtx.Dimension("I")
         >>> a = gtx.empty({IDim: range(3, 10)}, allocator=np)
@@ -537,8 +539,10 @@ def as_field(
     Keyword Arguments:
         origin: Only allowed if `domain` is a sequence of dimensions. The indicated index in `data`
             will be the zero point of the resulting field.
-        allocator: Fully optional, in contrast to `empty`.
-        device: Fully optional, in contrast to `empty`, defaults to the same device as `data`.
+        allocator: An array namespace (e.g. ``numpy``) or an allocator / allocator factory (e.g. backend).
+            If not given, defaults to the device of `data` (if available) or the default CPU allocator.
+        device: The device to optimize memory layout for. If not given, defaults to the device
+            of `data` (if available) or the default CPU device.
 
     Examples:
         >>> import numpy as np
@@ -573,9 +577,6 @@ def as_field(
     )
 
 
-# TODO update all docstrings!
-
-
 @eve.utils.with_fluid_partial
 def as_connectivity(
     domain: common.DomainLike | Sequence[common.Dimension],
@@ -598,10 +599,16 @@ def as_connectivity(
         codomain: The codomain dimension of the connectivity.
         data: The data used to construct the connectivity field.
         dtype: The data type of the connectivity. If not provided, it will be inferred from the data.
-        allocator: The allocator used to allocate the buffer for the connectivity. If not provided,
-            a default allocator will be used.
-        device: The device on which the connectivity will be allocated. If not provided, the default
-            device will be used.
+
+    Keyword Arguments:
+        origin: Only allowed if `domain` is a sequence of dimensions. The indicated index in `data`
+            will be the zero point of the resulting connectivity.
+        aligned_index: Index in the definition domain which should be used as reference
+            point for memory alignment computations.
+        allocator: An array namespace or an allocator / allocator factory (e.g. backend).
+            If not provided, defaults to the device of `data` or the default CPU allocator.
+        device: The device on which the connectivity will be allocated. If not provided,
+            defaults to the device of `data` or the default CPU device.
         skip_value: The value that signals missing entries in the neighbor table. Defaults to the default
             skip value if it is found in data, otherwise to `None` (= no skip value).
 
@@ -610,6 +617,21 @@ def as_connectivity(
 
     Raises:
         ValueError: If the domain or codomain is invalid, or if the shape of the data does not match the domain shape.
+
+    Examples:
+        >>> import numpy as np
+        >>> from gt4py import next as gtx
+        >>> Vertex = gtx.Dimension("Vertex")
+        >>> Edge = gtx.Dimension("Edge")
+        >>> V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+        >>> data = np.array([[0, 1], [1, 2], [2, 0]])
+        >>> conn = gtx.as_connectivity([Vertex, V2EDim], Edge, data)
+        >>> conn.ndarray
+        array([[0, 1],
+               [1, 2],
+               [2, 0]])
+        >>> conn.domain
+        Domain(dims=(Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='V2E', kind=<DimensionKind.LOCAL: 'local'>)), ranges=(UnitRange(0, 3), UnitRange(0, 2)))
     """
     if skip_value is eve.NOTHING:
         skip_value = (
