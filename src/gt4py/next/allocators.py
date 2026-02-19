@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+# TODO custom_layout_allocators ?
+
 import abc
 import dataclasses
 import functools
@@ -93,6 +95,7 @@ def is_field_allocation_tool_for(
     return is_field_allocator_for(obj, device) or is_field_allocator_factory_for(obj, device)
 
 
+# TODO delete?
 def get_allocator(
     obj: Any,
     *,
@@ -155,7 +158,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
-        # TODO(egparedes): add support for non-empty aligned index values
+        # TODO implement the alignment and add tests for both Cell and Edge in the aligned_index Sequence
         assert aligned_index is None
 
         return self.buffer_allocator.allocate(
@@ -286,6 +289,7 @@ StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cas
 )
 
 
+# TODO delete?
 def allocate(
     domain: common.DomainLike,
     dtype: core_defs.DType[core_defs.ScalarT],

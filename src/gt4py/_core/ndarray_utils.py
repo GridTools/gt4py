@@ -21,9 +21,11 @@ except ImportError:
     cupy = None
 
 
-class ArrayCreationNamespace(Hashable, Protocol):
+class ArrayNamespace(Hashable, Protocol):
     """
-    Subset of the Array API standard namespace with functions relevant for array creation.
+    Currently only a subset of the Array API standard namespace with functions relevant for array creation.
+
+    TODO(havogt): replace by ... or make it more complete and put next to NDArrayObject definition.
 
     See also 'ArrayNamespace'.
     """
@@ -59,42 +61,25 @@ class ArrayCreationNamespace(Hashable, Protocol):
         copy: bool | None = None,
     ) -> core_defs.NDArrayObject: ...
 
-    @property
-    def bool(self) -> Any: ...
-
-    @property
-    def int8(self) -> Any: ...
-
-    @property
-    def int16(self) -> Any: ...
-
-    @property
-    def int32(self) -> Any: ...
-
-    @property
-    def int64(self) -> Any: ...
-
-    @property
-    def uint8(self) -> Any: ...
-
-    @property
-    def uint16(self) -> Any: ...
-
-    @property
-    def uint32(self) -> Any: ...
-
-    @property
-    def uint64(self) -> Any: ...
-
-    @property
-    def float32(self) -> Any: ...
-
-    @property
-    def float64(self) -> Any: ...
+    bool: type
+    int8: type
+    int16: type
+    int32: type
+    int64: type
+    uint8: type
+    uint16: type
+    uint32: type
+    uint64: type
+    float32: type
+    float64: type
 
 
-def is_array_api_creation_namespace(obj: Any) -> TypeGuard[ArrayCreationNamespace]:
-    """Check whether `obj` (structurally) supports the subset of the array API relevant for array creation."""
+def is_array_namespace(obj: Any) -> TypeGuard[ArrayNamespace]:
+    """
+    Check whether `obj` (structurally) is a namespace of the array API.
+
+    See description in 'ArrayNamespace'.
+    """
 
     return (
         hasattr(obj, "empty")
@@ -116,16 +101,6 @@ def is_array_api_creation_namespace(obj: Any) -> TypeGuard[ArrayCreationNamespac
     )
 
 
-class ArrayNamespace(ArrayCreationNamespace, Protocol):
-    """
-    An array namespace is any module that follows the Array API standard
-    (https://data-apis.org/array-api/latest/).
-    """
-
-    # TODO(havogt): replace by https://github.com/data-apis/array-api-typing once fully supported
-    ...
-
-
 def array_namespace(array: core_defs.NDArrayObject) -> ArrayNamespace:
     """
     Get the namespace of the array.
@@ -133,6 +108,7 @@ def array_namespace(array: core_defs.NDArrayObject) -> ArrayNamespace:
     This is defined in https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.__array_namespace__.html,
     however not implemented in CuPy < 14.
     """
+    # TODO(havogt): this function can be replaced by https://data-apis.org/array-api-compat/
     if hasattr(array, "__array_namespace__"):
         return array.__array_namespace__()
     else:
@@ -151,10 +127,16 @@ def _numpy_device_translator(device: core_defs.Device | None) -> Any:
     raise ValueError(f"NumPy does not support device type {device.device_type}.")
 
 
-# TODO(egparedes): Replace by single dispatch on types (instead of instances)
-_device_translation_registry: dict[ArrayCreationNamespace, Callable[[core_defs.Device], Any]] = {
-    cast(ArrayCreationNamespace, np): _numpy_device_translator
+# Currently private as we only support a concrete set of array namespaces.
+_device_translation_registry: dict[ArrayNamespace, Callable[[core_defs.Device], Any]] = {
+    cast(ArrayNamespace, np): _numpy_device_translator
 }
+"""
+Registry for mappings from array namespaces to device_translators.
+
+Device translators are functions mapping GT4Py 'Device' objects to the corresponding device objects for the given array namespace.
+It's responsibility of the translator to check if 'Device' is valid for the given array namespace and raise a 'ValueError' if not.
+"""
 
 if cupy is not None:
 
@@ -172,9 +154,10 @@ if cupy is not None:
 
 
 @functools.cache
-def get_device_translator(
-    array_ns: ArrayCreationNamespace,
-) -> Callable[[core_defs.Device], Any]:
+def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Device], Any]:
+    """
+    Returns a mapping from a GT4Py 'Device' to the corresponding device object for the given array namespace.
+    """
     if array_ns not in _device_translation_registry:
         raise ValueError(f"No device translator registered for array namespace {array_ns}.")
     return _device_translation_registry[array_ns]

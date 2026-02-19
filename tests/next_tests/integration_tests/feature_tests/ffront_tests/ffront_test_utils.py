@@ -419,7 +419,7 @@ def skip_value_mesh(allocator) -> MeshDescriptor:
         simple_mesh,
         pytest.param(skip_value_mesh, marks=pytest.mark.uses_mesh_with_skip_values),
     ],
-    ids=lambda p: p.__name__,  # TODO previously it is allocating the mesh and then throws it away...
+    ids=lambda p: p.__name__,
 )
 def mesh_descriptor(request, exec_alloc_descriptor) -> MeshDescriptor:
     yield request.param(exec_alloc_descriptor.allocator)
