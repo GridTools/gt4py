@@ -18,7 +18,6 @@ import gt4py.eve as eve
 import gt4py.next.allocators as next_allocators
 import gt4py.next.common as common
 import gt4py.next.embedded.nd_array_field as nd_array_field
-import gt4py.storage.cartesian.utils as storage_utils
 from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.eve import extended_typing as xtyping
 
@@ -107,11 +106,7 @@ class FieldConstructionNamespace:
         *,
         dtype: core_defs.DTypeLike | None = None,
         origin: Mapping[common.Dimension, int] | None = None,
-        copy: bool | None = None,
     ) -> nd_array_field.NdArrayField:
-        if copy is not None:
-            raise NotImplementedError("The 'copy' argument is not yet implemented.")
-
         dtype = core_defs.dtype(dtype) if dtype is not None else None
         assert dtype is None or dtype.tensor_shape == ()  # TODO in the other cases as well?
 
@@ -140,20 +135,14 @@ class FieldConstructionNamespace:
                 raise ValueError(f"Cannot specify origin for a concrete domain {domain}")
             actual_domain = common.domain(cast(common.DomainLike, domain))
 
-        shape = storage_utils.asarray(
-            data
-        ).shape  # TODO this is a quite expensive throw-away operation...
-        if shape != actual_domain.shape:
-            raise ValueError(f"Cannot construct 'Field' from array of shape '{shape}'.")
+        if data.shape != actual_domain.shape:
+            raise ValueError(f"Cannot construct 'Field' from array of shape '{data.shape}'.")
 
-        if dtype is None:  # TODO does this make sense?
-            dtype = core_defs.dtype(storage_utils.asarray(data).dtype)
+        if dtype is None:
+            dtype = core_defs.dtype(data.dtype)
 
-        arr = self._array_constructor.asarray(actual_domain, data, dtype=dtype, copy=copy)
-        res = common._field(
-            arr,
-            domain=actual_domain,
-        )
+        arr = self._array_constructor.asarray(actual_domain, data, dtype=dtype, copy=False)
+        res = common._field(arr, domain=actual_domain)
         assert isinstance(res, nd_array_field.NdArrayField)  # for typing
         return res
 
@@ -534,7 +523,6 @@ def as_field(
     aligned_index: Sequence[common.NamedIndex] | None = None,
     allocator: FieldAllocator | None = None,
     device: core_defs.Device | None = None,
-    copy: bool | None = None,
 ) -> nd_array_field.NdArrayField:
     """Create a Field from an array-like object using the given (or device-default) allocator.
 
@@ -584,7 +572,7 @@ def as_field(
         device = core_defs.Device(*data.__dlpack_device__())
     return _as_field_allocation_namespace(
         allocator, aligned_index=aligned_index, device=device
-    ).as_field(domain=domain, data=data, dtype=dtype, origin=origin, copy=copy)
+    ).as_field(domain=domain, data=data, dtype=dtype, origin=origin)
 
 
 @eve.utils.with_fluid_partial
@@ -594,7 +582,8 @@ def as_connectivity(
     data: core_defs.NDArrayObject,
     dtype: core_defs.DType | None = None,
     *,
-    # TODO what about origin?
+    origin: Mapping[common.Dimension, int] | None = None,
+    aligned_index: Sequence[common.NamedIndex] | None = None,
     allocator: FieldAllocator | None = None,
     device: core_defs.Device | None = None,
     skip_value: core_defs.IntegralScalar | eve.NothingType | None = eve.NOTHING,
@@ -631,6 +620,8 @@ def as_connectivity(
         domain=domain,
         data=data,
         dtype=dtype,
+        origin=origin,
+        aligned_index=aligned_index,
         allocator=allocator,
         device=device,
     )
