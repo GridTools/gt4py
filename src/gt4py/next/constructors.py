@@ -12,7 +12,7 @@ import abc
 import dataclasses
 import functools
 from collections.abc import Mapping, Sequence
-from typing import Any, Generic, Optional, TypeAlias, TypeVar, cast
+from typing import Any, Generic, TypeAlias, TypeVar, cast
 
 import gt4py.eve as eve
 import gt4py.next.allocators as next_allocators
@@ -356,7 +356,7 @@ class _FieldBufferCreationNamespace(_FieldArrayConstructionNamespace):
 
 # TODO check if backend is hashable, if yes add
 @eve.utils.optional_lru_cache
-def field_constructor(
+def _field_constructor(
     allocator: Allocator | None,
     aligned_index: Sequence[common.NamedIndex] | None = None,
     device: core_defs.Device | None = None,
@@ -429,7 +429,7 @@ def empty(
         >>> b.shape
         (3, 3)
     """
-    return field_constructor(allocator, aligned_index=aligned_index, device=device).empty(
+    return _field_constructor(allocator, aligned_index=aligned_index, device=device).empty(
         domain, dtype=dtype
     )
 
@@ -439,9 +439,9 @@ def zeros(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     *,
-    aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    aligned_index: Sequence[common.NamedIndex] | None = None,
     allocator: Allocator | None = None,
-    device: Optional[core_defs.Device] = None,
+    device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
     """Create a Field containing all zeros using the given (or device-default) allocator.
 
@@ -454,7 +454,7 @@ def zeros(
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
-    return field_constructor(allocator, aligned_index=aligned_index, device=device).zeros(
+    return _field_constructor(allocator, aligned_index=aligned_index, device=device).zeros(
         domain, dtype=dtype
     )
 
@@ -479,7 +479,7 @@ def ones(
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
-    return field_constructor(allocator, aligned_index=aligned_index, device=device).ones(
+    return _field_constructor(allocator, aligned_index=aligned_index, device=device).ones(
         domain, dtype=dtype
     )
 
@@ -510,7 +510,7 @@ def full(
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
-    return field_constructor(allocator, aligned_index=aligned_index, device=device).full(
+    return _field_constructor(allocator, aligned_index=aligned_index, device=device).full(
         domain, fill_value=fill_value, dtype=dtype
     )
 
@@ -574,7 +574,7 @@ def as_field(
     if allocator is None and device is None and xtyping.supports_dlpack(data):
         # allocate for the device of the input data if no explicit allocator or device is given
         device = core_defs.Device(*data.__dlpack_device__())
-    return field_constructor(allocator, aligned_index=aligned_index, device=device).as_field(
+    return _field_constructor(allocator, aligned_index=aligned_index, device=device).as_field(
         domain=domain, data=data, dtype=dtype, origin=origin
     )
 

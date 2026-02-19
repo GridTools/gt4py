@@ -33,7 +33,7 @@ from .common import (
     domain,
     unit_range,
 )
-from .constructors import as_connectivity, as_field, empty, full, ones, zeros
+from .constructors import FieldConstructor, as_connectivity, as_field, empty, full, ones, zeros
 from .embedded import (  # Just for registering field implementations
     nd_array_field as _nd_array_field,
 )
@@ -73,6 +73,7 @@ __all__ = [
     "unit_range",
     "UnitRange",
     # from constructors
+    "FieldConstructor",
     "empty",
     "zeros",
     "ones",
