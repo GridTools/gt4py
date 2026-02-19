@@ -89,12 +89,11 @@ class FieldConstructor:
         self,
         domain: common.DomainLike,
         *,
-        dtype: core_defs.DTypeLike | None = None,
+        dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` of uninitialized values. See :func:`empty` for details."""
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
-        assert dtype is not None  # TODO check where to put the default
         res = common._field(self._array_constructor.empty(domain, dtype=dtype), domain=domain)
         assert isinstance(res, nd_array_field.NdArrayField)  # for typing
         return res
@@ -102,12 +101,12 @@ class FieldConstructor:
     def zeros(
         self,
         domain: common.DomainLike,
-        dtype: core_defs.DTypeLike | None = None,
+        *,
+        dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` containing all zeros. See :func:`zeros` for details."""
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
-        assert dtype is not None
         res = common._field(self._array_constructor.zeros(domain, dtype=dtype), domain=domain)
         assert isinstance(res, nd_array_field.NdArrayField)  # for typing
         return res
@@ -115,12 +114,12 @@ class FieldConstructor:
     def ones(
         self,
         domain: common.DomainLike,
-        dtype: core_defs.DTypeLike | None = None,
+        *,
+        dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` containing all ones. See :func:`ones` for details."""
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
-        assert dtype is not None
         res = common._field(self._array_constructor.ones(domain, dtype=dtype), domain=domain)
         assert isinstance(res, nd_array_field.NdArrayField)  # for typing
         return res
@@ -129,12 +128,12 @@ class FieldConstructor:
         self,
         domain: common.DomainLike,
         fill_value: core_defs.Scalar,
+        *,
         dtype: core_defs.DTypeLike | None = None,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` filled with `fill_value`. See :func:`full` for details."""
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype) if dtype is not None else core_defs.dtype(type(fill_value))
-        assert dtype is not None
         res = common._field(
             self._array_constructor.full(domain, fill_value=fill_value, dtype=dtype), domain=domain
         )
@@ -151,7 +150,6 @@ class FieldConstructor:
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` from an array-like object. See :func:`as_field` for details."""
         dtype = core_defs.dtype(dtype) if dtype is not None else None
-        assert dtype is None or dtype.tensor_shape == ()  # TODO in the other cases as well?
 
         if isinstance(domain, Sequence) and all(
             isinstance(dim, common.Dimension) for dim in domain
@@ -238,16 +236,14 @@ class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]
     # device in the format expected by the array namespace
     device: Any = None
 
-    def _to_array_ns_dtype(self, dtype: core_defs.DType | None) -> Any:
-        if dtype is None:
-            return None
+    def _to_array_ns_dtype(self, dtype: core_defs.DType) -> Any:
         return getattr(self.array_ns, core_defs.dtype_to_name[dtype.scalar_type])
 
     def empty(
         self,
         domain: common.Domain,
         *,
-        dtype: core_defs.DType | None = None,
+        dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
         return self.array_ns.empty(
             domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
@@ -257,7 +253,7 @@ class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]
         self,
         domain: common.Domain,
         *,
-        dtype: core_defs.DType | None = None,
+        dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
         return self.array_ns.zeros(
             domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
@@ -267,7 +263,7 @@ class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]
         self,
         domain: common.Domain,
         *,
-        dtype: core_defs.DType | None = None,
+        dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
         return self.array_ns.ones(
             domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
@@ -292,7 +288,7 @@ class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]
         domain: common.Domain,
         data: core_defs.NDArrayObject,  # TODO rename to `array`?
         *,
-        dtype: core_defs.DType | None = None,
+        dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
         arr = self.array_ns.asarray(
             data, dtype=self._to_array_ns_dtype(dtype), device=self.device, copy=False
@@ -335,7 +331,7 @@ class _FieldBufferCreationNamespace(_FieldArrayConstructionNamespace):
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
         arr = self.empty(domain, dtype=dtype)
-        arr[...] = fill_value  # type: ignore[index] # # `NDArrayObject` typing is not complete
+        arr[...] = fill_value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return arr
 
     def asarray(
@@ -345,7 +341,6 @@ class _FieldBufferCreationNamespace(_FieldArrayConstructionNamespace):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        assert dtype is not None
         arr = self.empty(domain, dtype=dtype)
 
         arr[...] = core_ndarray_utils.array_namespace(arr).asarray(data)  # type: ignore[index] # `NDArrayObject` typing is not complete
