@@ -98,12 +98,6 @@ class ConcatWhereCopyToMap(dace_transformation.SingleStateTransformation):
         if graph.scope_dict()[map_entry] is not None:
             return False
 
-        # The concat where node must act as a converging point and no Map can write
-        #  into it directly.
-        # TODO(phimuell): Lift this restriction once we allow for other types of producers.
-        if graph.in_degree(concat_node) < 2:
-            return False
-
         # Check if the accesses are valid.
         if not gt_check_if_concat_where_node_is_replaceable(
             state=graph,
@@ -157,8 +151,10 @@ def gt_replace_concat_where_node(
     The function returns the number of edges that were replaced.
 
     In order to check if a `concat_where` AccessNode can be replaced use
-    `gt_check_if_concat_where_node_is_replaceable()`. For the application of the
-    transformation to an entire SDFG use `gt_apply_concat_where_replacement_on_sdfg()`.
+    `gt_check_if_concat_where_node_is_replaceable()` (it is a pre condition of this
+    function that `gt_check_if_concat_where_node_is_replaceable()` returned `True`).
+    To replace all `concat_where` node in an entire SDFG
+    `gt_apply_concat_where_replacement_on_sdfg()` is provided.
 
     Args:
         sdfg: The SDFG in which we operate.
@@ -173,7 +169,6 @@ def gt_replace_concat_where_node(
     genuine_consumer_specs, descending_points = _find_consumer_specs_single_source_single_level(
         state, concat_node, for_check=False
     )
-    assert all(_check_descending_point(descending_point) for descending_point in descending_points)
 
     scope_dict = state.scope_dict()
     initial_producer_specs = _setup_initial_producer_description_on_top_level(
@@ -392,7 +387,8 @@ class _ProducerSpec:
         offset: The range that is read from the data descriptor.
         subset: The range that is written into the `concat_where` node.
         desc: The data descriptor.
-        data_source: Maps a scope location to a data source.
+        data_source: Maps a scope location to a data source, i.e. the node and the
+            connector where the full producer data, `self` represents can be accessed.
             You should not access it directly but instead use `get_data_source()`.
     """
 
@@ -859,21 +855,26 @@ def _map_data_into_nested_scopes(
         In most cases you should pass both the genuine consumer and the descending
         points to this function.
     """
+    # Pre-Condition: The top level AccessNodes, which constitute the producers of the
+    #  `concat_where` expression must be handled already.
     assert all(None in prod_spec.data_source for prod_spec in initial_producer_specs)
     producer_specs = [copy.copy(producer_spec) for producer_spec in initial_producer_specs]
 
-    # These are the scopes in which (legal) accesses to the `concat_where`. We now have
-    #  to make the individual data, i.e. the producer available there.
-    accessed_scopes: set[_ScopeLocation] = {
-        scope_dict[consumer_spec.consumer] for consumer_spec in consumer_specs
-    }
-
-    # Process the nested scopes.
-    for needed_scope in accessed_scopes:
+    # These are the scopes in which _accesses_ to the `concat_where` happens, It does
+    #  not (necessarily) contains their parent scopes as well. Note that in order to
+    #  make the data accessible in a scope, the data needs to be accessible in all of
+    #  its ancestors scopes too. We will bring them in a deterministic order before
+    #  process them, handling missing parent scopes on the fly, see
+    #  `_map_data_into_nested_scopes_impl()`.
+    scopes_containing_consumers: list[_ScopeLocation] = sorted(
+        {scope_dict[consumer_spec.consumer] for consumer_spec in consumer_specs},
+        key=lambda scope: "NONE" if scope is None else str(scope),
+    )
+    for scope in scopes_containing_consumers:
         _map_data_into_nested_scopes_impl(
             state=state,
             scope_dict=scope_dict,
-            scope_to_handle=needed_scope,
+            scope_to_handle=scope,
             producer_specs=producer_specs,
         )
 
@@ -888,21 +889,35 @@ def _map_data_into_nested_scopes_impl(
 ) -> None:
     """Helper function of `_map_data_into_nested_scopes()`.
 
-    This function will ensure that the data is available inside `scope_to_handle`
-    and store this information inside the `data_source` attributes of the passed
-    `_ProducerSpec` objects.
-    If the parent scope, i.e. the scope containing `scope_to_handle` is not handle,
-    the function will ensure that it is handled first by recursively processing it.
+    This function will ensure that the producers of the `concat_where` expression are
+    accessible inside `scope_to_handle`. The information is returned inside the
+    `data_source` attribute of the passed `producer_specs` objects.
+    This is either done by reusing an already existing suitable Memlet or creating
+    a new one.
+
+    If data data is not accessible inside the parent scope of `scope_to_handle`, all
+    missing ancestor scopes will be handled first.
+    Furthermore, it is not an error if `scope_to_handle` was already handled. This
+    might happen because `scope_to_handle` was handled because it was the parent of
+    a previous scope (think of nested scopes each containing proper consumers and they
+    are processing starting from the most deeply nested one).
+
+    The only condition this function has is that the top level, i.e. `scope_to_handle`
+    is `None`, has already been handled.
     """
+
+    # Test if the scope is already handled. It is enough to check the first producer
+    #  because if a scope was handled for one producer it was handled for all.
     if scope_to_handle in producer_specs[0].data_source:
         assert all(scope_to_handle in producer_spec.data_source for producer_spec in producer_specs)
         return
 
-    # The global scope, i.e. the AccessNodes referring to the data, must already
-    #  be created.
+    # The global scope, i.e. the AccessNodes referring to the data, has already been
+    #  handled outside, thus `scope_to_handle` (at this point) can only be a `MapEntry`.
     assert isinstance(scope_to_handle, dace_nodes.EntryNode)
 
-    # Check if the parent scope was handled before, if not handle it.
+    # Check if we have to handle the parent scope first. Again it is enough to check
+    #  the first producer.
     parent_scope = scope_dict[scope_to_handle]
     if parent_scope not in producer_specs[0].data_source:
         _map_data_into_nested_scopes_impl(
@@ -925,8 +940,8 @@ def _map_data_into_nested_scopes_impl(
 
         else:
             # This data has never been seen. Check if there is a already a connection
-            #  between them (for some other reason). We have to make sure that the
-            #  full data is available inside it.
+            #  between scope and its parent (for some other reason). We have to make
+            #  sure that the full data is fully transferred.
             parent_source = producer_spec.data_source[parent_scope]
             full_shape = dace_sbs.Range.from_array(producer_spec.desc)  # Might be consumed later.
             potential_reusable_edge = next(
