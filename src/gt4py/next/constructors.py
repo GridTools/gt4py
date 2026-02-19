@@ -298,7 +298,7 @@ class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
         arr = self.array_ns.asarray(
-            data, dtype=self._to_array_ns_dtype(dtype), device=self.device, copy=False
+            data, dtype=self._to_array_ns_dtype(dtype), device=self.device, copy=True
         )
         assert domain.shape == arr.shape, (
             f"pre-condition of `asarray` not met: {data.shape=} and {domain.shape} need to agree."
@@ -584,7 +584,7 @@ def as_connectivity(
     domain: common.DomainLike | Sequence[common.Dimension],
     codomain: common.Dimension,
     data: core_defs.NDArrayObject,
-    dtype: core_defs.DType | None = None,
+    dtype: core_defs.DTypeLike | None = None,
     *,
     origin: Mapping[common.Dimension, int] | None = None,
     aligned_index: Sequence[common.NamedIndex] | None = None,
