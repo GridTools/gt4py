@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import platform
 from typing import Any, List, TypeAlias
 
 from dace import data, dtypes, symbolic
@@ -40,9 +39,7 @@ def _resolve_default_map_schedule(
         return dtypes.ScheduleType.GPU_Device
 
     if device_type != dtypes.DeviceType.CPU:
-        raise NotImplementedError(
-            f"Schedule Tree bridge does not support {device_type}"
-        )
+        raise NotImplementedError(f"Schedule Tree bridge does not support {device_type}")
 
     if not uses_openmp:
         # See `pyext_builder.get_gt_pyext_build_opts`, the OpenMP section

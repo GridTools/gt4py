@@ -74,7 +74,7 @@ class StencilBuilder:
         # Dev NOTE: MacOS is not issue, apple-clang is. But because a proper OpenMP
         # would require brew, we cancel it altogether. A slightly narrower configuration
         # would run a test on the compiler for OpenMP directives support
-        self.builder.options.uses_openmp = True
+        self.options.uses_openmp = True
         if platform.system() != "Darwin":
             warnings.warn(
                 "Multithreading is deactivated under MacOS due to apple-clang "
@@ -82,7 +82,7 @@ class StencilBuilder:
                 category=UserWarning,
                 stacklevel=2,
             )
-            self.builder.options.uses_openmp = False
+            self.options.uses_openmp = False
 
     def build(self) -> type[StencilObject]:
         """Generate, compile and/or load everything necessary to provide a usable stencil class."""
