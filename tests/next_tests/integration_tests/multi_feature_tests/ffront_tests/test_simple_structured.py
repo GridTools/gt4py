@@ -171,8 +171,12 @@ def neighbor_sum_program(
     edges_1: gtx.Field[[IDim, JDim], float],
     edges_2: gtx.Field[[IDim, JDim], float],
     out: gtx.Field[[IDim, JDim], float],
+    domain_max_i: int,
+    domain_max_j: int,
 ):
-    neighbor_sum(edges_0, edges_1, edges_2, out=out)
+    neighbor_sum(edges_0, edges_1, edges_2,
+                  out=out, domain={IDim: (0, domain_max_i), JDim: (0, domain_max_j)},
+)
 
 # Test the neighbor_sum operator on the output of compute_zavgS_cartesian
 neighbor_sum_out = gtx.as_field([IDim, JDim], np.zeros((max_i, max_j)))
@@ -180,12 +184,6 @@ neighbor_sum_out = gtx.as_field([IDim, JDim], np.zeros((max_i, max_j)))
 # Slice the output field 'out' into its 3 color components in Python
 # We already computed 'out' in the previous step
 edges_field_np = out.asnumpy()
-
-# Create 3 separate 2D fields
-edges_0_field = gtx.as_field([IDim, JDim], edges_field_np[:,:,0])
-edges_1_field = gtx.as_field([IDim, JDim], edges_field_np[:,:,1])
-edges_2_field = gtx.as_field([IDim, JDim], edges_field_np[:,:,2])
-
 
 padded_shape = (max_i + 1, max_j + 1)
 edges_0_np = np.zeros(padded_shape)
@@ -206,7 +204,9 @@ neighbor_sum_program.with_backend(run_dace_cpu)(
     edges_1=edges_1_padded,
     edges_2=edges_2_padded,
     out=neighbor_sum_out,
-    offset_provider={},
+    domain_max_i=np.int64(max_i), 
+    domain_max_j=np.int64(max_j),
+    offset_provider={}
 )
 
 from gt4py.next.iterator.transforms import pass_manager
