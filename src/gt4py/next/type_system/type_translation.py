@@ -180,8 +180,12 @@ def from_type_hint(
         case builtins.tuple:
             if not args:
                 raise ValueError(f"Tuple annotation '{type_hint}' requires at least one argument.")
-            if Ellipsis in args:
-                raise ValueError(f"Unbound tuples '{type_hint}' are not allowed.")
+            if len(args) == 2 and args[1] is Ellipsis:
+                return ts.VarArgType(element_type=from_type_hint_same_ns(args[0]))
+            elif Ellipsis in args:
+                raise ValueError(
+                    f"Vararg tuple annotation '{type_hint}' cannot have more than one argument."
+                )
             tuple_types = [from_type_hint_same_ns(arg) for arg in args]
             assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
             return ts.TupleType(types=tuple_types)
@@ -321,7 +325,19 @@ def from_value(value: Any) -> ts.TypeSpec:
         return UnknownPythonObject(value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
-        symbol_type = from_type_hint(type_)
+        if type_ == type[tuple]:
+            # TODO: this special casing here is not nice, but infer_type is also called on the annotations where
+            #  we don't want to allow unparameterized tuples (or do we?).
+            symbol_type = ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=None)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=ts.DeferredType(constraint=ts.VarArgType),
+                )
+            )
+        else:
+            symbol_type = from_type_hint(type_)
 
     if isinstance(symbol_type, (ts.DataType, ts.CallableType, ts.OffsetType, ts.DimensionType)):
         return symbol_type

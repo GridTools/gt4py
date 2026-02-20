@@ -118,6 +118,8 @@ class _PrettyPrinter(TemplatedGenerator):
 
     TupleExpr = as_fmt("({', '.join(elts)}{',' if len(elts)==1 else ''})")
 
+    TupleComprehension = as_fmt("tuple(({element_expr} for {target} in {iterable}))")
+
     UnaryOp = as_fmt("{op}{operand}")
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> str:
