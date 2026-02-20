@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import platform
 from typing import Any, List, TypeAlias
 
 from dace import data, dtypes, symbolic
@@ -29,11 +30,22 @@ DEFAULT_STORAGE_TYPE = {
 }
 """Default dace residency types per device type."""
 
-DEFAULT_MAP_SCHEDULE = {
-    dtypes.DeviceType.CPU: dtypes.ScheduleType.Default,
-    dtypes.DeviceType.GPU: dtypes.ScheduleType.GPU_Device,
-}
-"""Default kernel target per device type."""
+
+def _resolve_default_map_schedule(
+    device_type: dtypes.DeviceType,
+) -> dtypes.ScheduleType:
+    """Default kernel target per device type."""
+    if device_type == dtypes.DeviceType.GPU:
+        return dtypes.ScheduleType.GPU_Device
+
+    if device_type != dtypes.DeviceType.CPU:
+        raise NotImplementedError(f"Schedule Tree bridge does not support {device_type}")
+
+    if platform.system() == "Darwin":
+        # See `pyext_builder.get_gt_pyext_build_opts`, the OpenMP section
+        return dtypes.ScheduleType.Sequential
+
+    return dtypes.ScheduleType.Default
 
 
 class OIRToTreeIR(eve.NodeVisitor):
@@ -137,7 +149,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         loop = tir.HorizontalLoop(
             bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
             bounds_j=tir.Bounds(start=axis_start_j, end=axis_end_j),
-            schedule=DEFAULT_MAP_SCHEDULE[self._device_type],
+            schedule=_resolve_default_map_schedule(self._device_type),
             children=[],
             parent=ctx.current_scope,
         )
@@ -258,7 +270,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         if self._device_type == dtypes.DeviceType.GPU:
             return dtypes.ScheduleType.Sequential
 
-        return DEFAULT_MAP_SCHEDULE[self._device_type]
+        return _resolve_default_map_schedule(self._device_type)
 
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, ctx: tir.Context, loop_order: common.LoopOrder

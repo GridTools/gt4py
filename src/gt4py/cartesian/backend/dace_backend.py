@@ -603,10 +603,19 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
-        computations = cls._postprocess_dace_code(code_objects, is_gpu)
-        if not is_gpu and any(
-            array.transient and array.lifetime == dtypes.AllocationLifetime.Persistent
-            for *_, array in sdfg.arrays_recursive()
+        has_all_sequential_compute = all(
+            me.schedule == dtypes.ScheduleType.Sequential
+            for me, state in sdfg.all_nodes_recursive()
+            if isinstance(me, nodes.MapEntry)
+        )
+
+        if (
+            not is_gpu
+            and not has_all_sequential_compute
+            and any(
+                array.transient and array.lifetime == dtypes.AllocationLifetime.Persistent
+                for *_, array in sdfg.arrays_recursive()
+            )
         ):
             omp_threads = "int omp_max_threads = omp_get_max_threads();"
             omp_header = "#include <omp.h>"
@@ -623,6 +632,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
             state_suffix=config.Config.get("compiler.codegen_state_struct_suffix"),
         )
+        computations = cls._postprocess_dace_code(code_objects, is_gpu)
         generated_code = f"""\
 #include <gridtools/sid/sid_shift_origin.hpp>
 #include <gridtools/sid/allocator.hpp>
