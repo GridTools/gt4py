@@ -252,6 +252,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
                 ),
                 add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
+                uses_openmp=self.builder.options.uses_openmp,
             ),
         )
 

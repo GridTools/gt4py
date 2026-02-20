@@ -10,10 +10,8 @@ import contextlib
 import copy
 import io
 import os
-import platform
 import shutil
 import threading
-import warnings
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypedDict, Union
 
 import pybind11
@@ -161,19 +159,6 @@ def get_gt_pyext_build_opts(
             extra_link_args=extra_link_args,
         )
 
-    # We deactivate OpenMP on MacOS by default due to apple-clang incapacity
-    # to do OpenMP.
-    # Dev NOTE: MacOS is not issue, apple-clang is. But because a proper OpenMP
-    # would require brew, we cancel it altogether. A slightly narrower configuration
-    # would run a test on the compiler for OpenMP directives support
-    if platform.system() != "Darwin":
-        warnings.warn(
-            "Multithreading is deactivated under MacOS due to apple-clang "
-            "not handling OpenMP by default.",
-            category=UserWarning,
-            stacklevel=2,
-        )
-        
     if uses_openmp:
         cpp_flags = gt_config.build_settings["openmp_cppflags"]
         if uses_cuda:

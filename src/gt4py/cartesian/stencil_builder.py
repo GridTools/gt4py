@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import pathlib
+import platform
+import warnings
 from typing import TYPE_CHECKING, Any
 
 from gt4py import cartesian as gt4pyc
@@ -67,6 +69,20 @@ class StencilBuilder:
         self.with_caching("jit")
         self._externals: dict[str, Any] = {}
         self._dtypes: dict[type, type] = {}
+        # We deactivate OpenMP on MacOS by default due to apple-clang incapacity
+        # to do OpenMP.
+        # Dev NOTE: MacOS is not issue, apple-clang is. But because a proper OpenMP
+        # would require brew, we cancel it altogether. A slightly narrower configuration
+        # would run a test on the compiler for OpenMP directives support
+        self.builder.options.uses_openmp = True
+        if platform.system() != "Darwin":
+            warnings.warn(
+                "Multithreading is deactivated under MacOS due to apple-clang "
+                "not handling OpenMP by default.",
+                category=UserWarning,
+                stacklevel=2,
+            )
+            self.builder.options.uses_openmp = False
 
     def build(self) -> type[StencilObject]:
         """Generate, compile and/or load everything necessary to provide a usable stencil class."""
