@@ -18,16 +18,28 @@ import gt4py.eve as eve
 import gt4py.next.allocators as next_allocators
 import gt4py.next.common as common
 import gt4py.next.embedded.nd_array_field as nd_array_field
-from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
+from gt4py._core import (
+    definitions as core_defs,
+    ndarray_utils as core_ndarray_utils,
+    types as core_types,
+)
 from gt4py.eve import extended_typing as xtyping
 
 
-# TODO translate into a description somewhere
-# Notes (3 concepts): we need
-# - translation of dtype/device to target namespace
-# - absolute (domain) to relative (shape), includes aligned index
-# - backing array api OR FieldBufferAllocator
+"""
+Field construction API.
 
+The user-facing API consists of the functions 'empty', 'zeros', 'ones', 'full' and 'as_field',
+or the 'FieldConstructor' class for more advanced use cases.
+
+These functions create GT4Py 'Field's backed by arrays created using a specified allocator, which can be either an array namespace
+(e.g. 'numpy', 'cupy') or a GT4Py field buffer allocator (e.g. a backend).
+
+This module deals with 3 concepts:
+- allocating with a backing array API or 'FieldBufferAllocator'
+- translating from absolute (domain) to relative (shape) indexing, e.g. for handling of 'aligned_index'
+- translating from GT4Py dtypes and devices to the format expected by the backing array API.
+"""
 
 # Type to be used by the end-user
 Allocator: TypeAlias = core_ndarray_utils.ArrayNamespace | next_allocators.FieldBufferAllocationUtil
@@ -253,7 +265,7 @@ class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]
     device: Any = None
 
     def _to_array_ns_dtype(self, dtype: core_defs.DType) -> Any:
-        return getattr(self.array_ns, core_defs.dtype_to_name[dtype.scalar_type])
+        return getattr(self.array_ns, core_types.type_to_name[dtype.scalar_type])
 
     def empty(
         self,
