@@ -27,6 +27,8 @@ uint64 = np.uint64
 float32 = np.float32
 float64 = np.float64
 
+# This is used to map between dtypes of different array namespaces, as only the name is defined in the array API.
+# We don't use `<type>.__name__` for the mapping to be on the safe side.
 type_to_name = {
     globals()[name]: name
     for name in (
