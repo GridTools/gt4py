@@ -566,6 +566,8 @@ def as_field(
         device: The device to optimize memory layout for. If not given, defaults to the device
             of `data` (if available) or the default CPU device.
 
+    Note: we do not support a 'copy' argument as we want to avoid creating fields aliasing other data/fields.
+
     Examples:
         >>> import numpy as np
         >>> from gt4py import next as gtx
