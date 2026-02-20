@@ -11,7 +11,8 @@
 import numpy as np
 
 
-bool = np.bool  # noqa: A001
+# TODO(havogt): change to `np.bool` once we drop numpy 1.x support
+bool = np.bool_  # noqa: A001
 
 int8 = np.int8
 int16 = np.int16
@@ -27,7 +28,7 @@ float32 = np.float32
 float64 = np.float64
 
 type_to_name = {
-    getattr(np, name): name
+    globals()[name]: name
     for name in (
         "bool",
         "int8",
