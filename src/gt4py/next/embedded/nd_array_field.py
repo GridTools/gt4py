@@ -43,8 +43,10 @@ except ImportError:
     cp: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 try:
+    import jax
     from jax import numpy as jnp
 except ImportError:
+    jax: Optional[ModuleType] = None  # type: ignore[no-redef]
     jnp: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 try:
@@ -1087,7 +1089,10 @@ if cp:
 
 # JAX
 if jnp:
+    assert jax is not None
+
     _nd_array_implementations.append(jnp)
+    jax.config.update("jax_enable_x64", True)
 
     @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayField(NdArrayField):
@@ -1102,10 +1107,23 @@ if jnp:
             index: common.AnyIndexSpec,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
-            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
-            raise NotImplementedError("'__setitem__' for JaxArrayField not yet implemented.")
+            target_domain, target_slice = self._slice(index)
+
+            if isinstance(value, common.Field):
+                if not value.domain == target_domain:
+                    raise ValueError(
+                        f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
+                    )
+                value = value.ndarray
+
+            object.__setattr__(self, "_ndarray", self._ndarray.at[target_slice].set(value))  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+
+    @dataclasses.dataclass(frozen=True, eq=False)
+    class JaxArrayConnectivityField(NdArrayConnectivityField):
+        array_ns: ClassVar[ModuleType] = jnp
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
+    common._connectivity.register(jnp.ndarray, JaxArrayConnectivityField.from_array)
 
 
 def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) -> common.Field:
