@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from gt4py.next import config as gt_config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import arguments
 
@@ -426,3 +427,40 @@ def test_dump_json(sample_source_metrics: Mapping[str, metrics.Source], tmp_path
         assert list(data[source_id]["metrics"].values()) == [
             metric.samples for metric in sample_source_metrics[source_id].metrics.values()
         ]
+
+
+class TestDumpMetricsAtExit:
+    @pytest.mark.parametrize("mode", ["explicit", "auto", None])
+    def test_dump_metrics_at_exit_enabled(
+        self,
+        sample_source_metrics: Mapping[str, metrics.Source],
+        tmp_path: pathlib.Path,
+        mode: str | None,
+    ):
+        """Test _dump_metrics_at_exit writes to a file when enabled."""
+        explicit_output_filename = str(tmp_path / "explicit_metrics.json")
+        auto_output_filename = str(tmp_path / gt_config._init_dump_metrics_filename())
+
+        if mode == "explicit":
+            output_filename = explicit_output_filename
+        elif mode == "auto":
+            output_filename = auto_output_filename
+        else:
+            output_filename = None
+
+        with unittest.mock.patch("gt4py.next.config.DUMP_METRICS_AT_EXIT", output_filename):
+            with unittest.mock.patch(
+                "gt4py.next.instrumentation.metrics.sources", sample_source_metrics
+            ):
+                metrics._dump_metrics_at_exit()
+
+        assert (output_filename is None) == (mode is None)
+        if output_filename:
+            assert pathlib.Path(output_filename).exists()
+            data = json.loads(pathlib.Path(output_filename).read_text())
+            assert "program1" in data
+            assert "program2" in data
+            pathlib.Path(output_filename).unlink()  # Clean up after test
+        else:
+            assert not pathlib.Path(explicit_output_filename).exists()
+            assert not pathlib.Path(auto_output_filename).exists()

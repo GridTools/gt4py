@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.otf import definitions, languages, stages, workflow
+from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
@@ -40,38 +40,29 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+        stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec],
     ],
     workflow.ChainableWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+        stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec],
     ],
 ):
-    language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
+    code_spec: Optional[code_specs.HeaderAndSourceCodeSpec] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-    symbolic_domain_sizes: Optional[dict[str, str]] = None
+    symbolic_domain_sizes: dict[str, itir.Expr] | None = None
+    use_max_domain_range_on_unstructured_shift: bool | None = None
 
-    def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
+    def _default_code_spec(self) -> code_specs.HeaderAndSourceCodeSpec:
         match self.device_type:
             case core_defs.DeviceType.CUDA:
-                return languages.LanguageWithHeaderFilesSettings(
-                    formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
-                    formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
-                    file_extension="cu",
-                    header_extension="cuh",
-                )
+                return code_specs.CUDACodeSpec()
             case core_defs.DeviceType.ROCM:
-                return languages.LanguageWithHeaderFilesSettings(
-                    formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
-                    formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
-                    file_extension="hip",
-                    header_extension="h",
-                )
+                return code_specs.HIPCodeSpec()
             case core_defs.DeviceType.CPU:
-                return cpp_interface.CPP_DEFAULT
+                return code_specs.CPPCodeSpec()
             case _:
                 raise self._not_implemented_for_device_type()
 
@@ -163,6 +154,7 @@ class GTFNTranslationStep(
             extract_temporaries=True,
             offset_provider=offset_provider,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
         )
 
         new_program = apply_common_transforms(
@@ -207,7 +199,7 @@ class GTFNTranslationStep(
 
     def __call__(
         self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
+    ) -> stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
 
@@ -241,7 +233,7 @@ class GTFNTranslationStep(
             inp.args.column_axis,
         )
         source_code = interface.format_source(
-            self._language_settings(),
+            self._code_spec(),
             f"""
                     #include <{self._backend_header()}>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
@@ -250,14 +242,11 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
-        module: stages.ProgramSource[
-            languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings
-        ] = stages.ProgramSource(
+        module: stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec] = stages.ProgramSource(
             entry_point=function,
             library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
             source_code=source_code,
-            language=self._language(),
-            language_settings=self._language_settings(),
+            code_spec=self._code_spec(),
         )
         return module
 
@@ -279,23 +268,8 @@ class GTFNTranslationStep(
             case _:
                 raise self._not_implemented_for_device_type()
 
-    def _language(self) -> type[languages.NanobindSrcL]:
-        match self.device_type:
-            case core_defs.DeviceType.CUDA:
-                return languages.CUDA
-            case core_defs.DeviceType.ROCM:
-                return languages.HIP
-            case core_defs.DeviceType.CPU:
-                return languages.CPP
-            case _:
-                raise self._not_implemented_for_device_type()
-
-    def _language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
-        return (
-            self.language_settings
-            if self.language_settings is not None
-            else self._default_language_settings()
-        )
+    def _code_spec(self) -> code_specs.HeaderAndSourceCodeSpec:
+        return self.code_spec if self.code_spec is not None else self._default_code_spec()
 
     def _library_name(self) -> str:
         match self.device_type:

@@ -113,6 +113,15 @@ class StaticArg(ArgStaticDescriptor, Generic[core_defs.ScalarT]):
 
 
 @dataclasses.dataclass(frozen=True)
+class FieldDomainDescriptor(ArgStaticDescriptor):
+    domain: common.Domain
+
+    @classmethod
+    def attribute_extractor_exprs(cls, arg_expr: str) -> dict[str, str]:
+        return {"domain": f"({arg_expr}).domain"}
+
+
+@dataclasses.dataclass(frozen=True)
 class JITArgs:
     """Concrete (runtime) arguments to a GTX program in a format that can be passed into the toolchain."""
 
