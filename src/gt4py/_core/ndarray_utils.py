@@ -88,7 +88,7 @@ def is_array_namespace(obj: Any) -> TypeGuard[ArrayNamespace]:
         and hasattr(obj, "ones")
         and hasattr(obj, "full")
         and hasattr(obj, "asarray")
-        and hasattr(obj, "bool")
+        and (hasattr(obj, "bool") or hasattr(obj, "bool_"))  # for NumPy 1.x compatibility
         and hasattr(obj, "int8")
         and hasattr(obj, "int16")
         and hasattr(obj, "int32")

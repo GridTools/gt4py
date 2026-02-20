@@ -34,3 +34,14 @@ def cuda_device(id_: int) -> Any:
 def test_get_device_translator_np(array_ns, gt4py_device, expected_device):
     translator = ndarray_utils.get_device_translator(array_ns)
     assert translator(gt4py_device) == expected_device
+
+
+@pytest.mark.parametrize(
+    "array_ns",
+    [
+        ndarray_utils.np,
+        pytest.param(ndarray_utils.cupy, marks=pytest.mark.requires_gpu),
+    ],
+)
+def test_is_array_namespace(array_ns):
+    assert ndarray_utils.is_array_namespace(array_ns)
