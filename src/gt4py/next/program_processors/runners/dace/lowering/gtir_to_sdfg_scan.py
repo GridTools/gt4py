@@ -194,17 +194,21 @@ def _create_scan_field_operator_impl(
 
     if str(field_shape[scan_dim_index]) == "1":
         # We represent the inner result as a single value and let the scan loop override it.
-        inner_output_desc.set_shape(new_shape=[1], strides=(1,))
-        assert set(st.label for st in nsdfg_scan.sdfg.states()) == {"scan_compute", "scan_update"}
+        nsdfg_scan.sdfg.arrays[inner_output_name] = dace.data.Scalar(inner_output_desc.dtype)
+        assert set(st.label for st in nsdfg_scan.sdfg.states()) == {
+            "scan_entry",
+            "scan_compute",
+            "scan_update",
+        }
         scan_compute_state = next(s for s in nsdfg_scan.sdfg.states() if s.label == "scan_compute")
         inner_output_node = next(
             n for n in scan_compute_state.data_nodes() if n.data == inner_output_name
         )
         assert (
-            ctx.state.in_degree(inner_output_node) == 1
-            and ctx.state.out_degree(inner_output_node) == 0
+            scan_compute_state.in_degree(inner_output_node) == 1
+            and scan_compute_state.out_degree(inner_output_node) == 0
         )
-        inner_write_edge = ctx.state.in_edges(inner_output_node)[0]
+        inner_write_edge = scan_compute_state.in_edges(inner_output_node)[0]
         src_subset = inner_write_edge.data.get_src_subset(inner_write_edge, scan_compute_state)
         inner_write_edge.data = dace.Memlet(
             data=inner_output_name, subset="0", other_subset=src_subset
