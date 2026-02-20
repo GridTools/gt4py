@@ -15,7 +15,7 @@ from typing import Final
 
 import pytest
 
-from gt4py.next import allocators as next_allocators
+from gt4py.next import custom_layout_allocators as next_allocators
 
 
 # Skip definitions

@@ -14,7 +14,12 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend as next_backend, common, allocators as next_allocators, constructors
+from gt4py.next import (
+    backend as next_backend,
+    common,
+    constructors,
+    custom_layout_allocators as next_allocators,
+)
 from gt4py.next.ffront import decorator
 
 import next_tests
