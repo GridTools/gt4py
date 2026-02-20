@@ -16,7 +16,6 @@ from typing import Final
 import pytest
 
 from gt4py.next import allocators as next_allocators
-from gt4py.next.embedded import nd_array_field
 
 
 # Skip definitions
@@ -66,13 +65,11 @@ numpy_execution = EmbeddedDummyBackend(
 cupy_execution = EmbeddedDummyBackend(
     "EmbeddedCuPy", next_allocators.StandardGPUFieldBufferAllocator()
 )
-jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", nd_array_field.jnp)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
-    JAX_NUMPY_EXECUTION = "next_tests.definitions.jax_numpy_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -131,7 +128,6 @@ USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_PROGRAM_METRICS = "uses_program_metrics"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 USES_CONCAT_WHERE = "uses_concat_where"
-USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS = "uses_program_with_sliced_out_arguments"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -175,9 +171,6 @@ EMBEDDED_SKIP_LIST = [
     ),  # we can't extract the field type from scan args
     (USES_CONCAT_WHERE, XFAIL, UNSUPPORTED_MESSAGE),
 ]
-JAX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
-    (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
-]
 ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_PROGRAM_METRICS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
@@ -205,7 +198,6 @@ GTFN_SKIP_TEST_LIST = (
 BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
-    EmbeddedIds.JAX_NUMPY_EXECUTION: JAX_EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,

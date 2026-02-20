@@ -219,7 +219,6 @@ def prog_slicing(
     )
 
 
-@pytest.mark.uses_program_with_sliced_out_arguments
 def test_program_slicing(cartesian_case):
     a = cases.allocate(cartesian_case, prog, "a")()
     b = cases.allocate(cartesian_case, prog, "b")()

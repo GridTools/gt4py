@@ -214,7 +214,6 @@ def test_setup(exec_alloc_descriptor):
 
 
 @pytest.mark.uses_tuple_returns
-@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
     cases.verify(
         test_setup.case,
@@ -233,7 +232,6 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
-@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
     if test_setup.case.backend == test_definitions.ProgramBackendId.ROUNDTRIP.load():
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
@@ -253,7 +251,6 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
-@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like(test_setup):
     cases.run(
         test_setup.case,
@@ -270,7 +267,6 @@ def test_solve_nonhydro_stencil_52_like(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
-@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup):
     if test_setup.case.backend == test_definitions.ProgramBackendId.ROUNDTRIP.load():
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
