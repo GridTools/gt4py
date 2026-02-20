@@ -1118,7 +1118,12 @@ if jnp:
 
             object.__setattr__(self, "_ndarray", self._ndarray.at[target_slice].set(value))  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
+    @dataclasses.dataclass(frozen=True, eq=False)
+    class JaxArrayConnectivityField(NdArrayConnectivityField):
+        array_ns: ClassVar[ModuleType] = jnp
+
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
+    common._connectivity.register(jnp.ndarray, JaxArrayConnectivityField.from_array)
 
 
 def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) -> common.Field:
