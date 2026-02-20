@@ -213,8 +213,6 @@ def test_as_connectivity(nd_array_implementation, data, skip_value):
     assert testee.skip_value is skip_value
 
 
-
-
 class TestFieldConstructorInit:
     """Tests for the different codepaths of FieldConstructor.__init__."""
 

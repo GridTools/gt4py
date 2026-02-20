@@ -12,7 +12,7 @@ import abc
 import dataclasses
 import functools
 from collections.abc import Mapping, Sequence
-from typing import Any, Callable, Generic, TypeAlias, TypeVar, cast
+from typing import Any, Callable, Final, Generic, TypeAlias, TypeVar, cast
 
 import gt4py.eve as eve
 import gt4py.next.common as common
