@@ -1340,16 +1340,41 @@ def _handle_special_case_of_gt4py_scan_point(
     SDFG. This function applies some heuristic checks if the nested SDFG can be
     processed or not.
 
-    The pathological case is a scan that is inside a Map. In that case it can happen
-    that `consumed_subset` is not the full shape of `concat_node` but #  something
-    like `[0:i_Cell_gtx_horizontal + 1, 0:3]` this function applies #  some empirical
-    checks to see if this is the case and then concludes "it is safe to do".
+    The pathological case is a nested SDFG inside a Map scope, which is used for the
+    scan expressions. By construction, the scan nested SDFG does access to a single
+    point in the horizontal domain. However, for unknown reason, DaCe replaces the
+    point access with a subset, as an example `[i_Cell_gtx_horizontal, 0:3]` becomes
+    `[0:i_Cell_gtx_horizontal + 1, 0:3]`. Thus, `consumed_subset` is not a point
+    nor the full shape either, but we know that it is safe to apply the transformation.
     """
     assert isinstance(descending_point.consumer, dace_nodes.NestedSDFG)
     nsdfg: dace_nodes.NestedSDFG = descending_point.consumer
 
+    if _handle_special_case_of_gt4py_scan_point_impl(
+        state, descending_point, concat_node, consumed_subset
+    ):
+        warnings.warn(
+            f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}`.",
+            stacklevel=1,
+        )
+        return True
+    else:
+        warnings.warn(
+            f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}` was rejected.",
+            stacklevel=1,
+        )
+        return False
+
+
+def _handle_special_case_of_gt4py_scan_point_impl(
+    state: dace.SDFGState,
+    descending_point: _FinalConsumerSpec,
+    concat_node: dace_nodes.AccessNode,
+    consumed_subset: dace_sbs.Range,
+) -> bool:
     # There must be one node in the nested SDFG that is not a state.
-    # TODO(phimuell): Find out if too restrictive.
+    # TODO(phimuell): Come up with a better test.
+    nsdfg: dace_nodes.NestedSDFG = descending_point.consumer
     if all(isinstance(node, dace.SDFGState) for node in nsdfg.sdfg.nodes()):
         return False
 
@@ -1362,9 +1387,10 @@ def _handle_special_case_of_gt4py_scan_point(
     parent_desc = concat_node.desc(state.sdfg)
     nested_desc = nsdfg.sdfg.arrays[descending_point.edge.dst_conn]
 
-    if len(parent_desc.shape) != len(nested_desc.shape):
-        return False
     if type(parent_desc) is not type(nested_desc):
+        return False
+    # TODO(phimuell): Make the test involving the shape a bit smarter.
+    if len(parent_desc.shape) != len(nested_desc.shape):
         return False
 
     if not all((start == 0) == True for start in consumed_subset.min_element()):  # noqa: E712 [true-false-comparison]  # SymPy comparison
@@ -1383,23 +1409,18 @@ def _handle_special_case_of_gt4py_scan_point(
     assert scope_dict[edge.dst] is None  # really strange case.
 
     for i, end in enumerate(consumed_subset.max_element()):
-        if str(end).isdigit():
-            if (end + 1) != parent_desc.shape[i]:  # `+1` because of storage format.
+        end_str = str(end)
+        if end_str.isdigit():
+            if (int(end_str) + 1) != parent_desc.shape[i]:  # `+1` because of storage format.
                 return False
         else:
-            # It is a symbol.
-            # TODO(phimuell): For the pathological case one could check
-            #  `str(end) not in map_params`. However, I think we could also write
-            #  `not end.free_symbols.intersection(map_params)`, which allows DaCe a bit
-            #  more slack. However, it allows DaCe more slack. We should check if that
-            #  is okay.
-            if not map_params.intersection((str(fs) for fs in end.free_symbols)):
+            # It is a symbol, we only check for the pathological case, i.e. a Map
+            #  parameter is the end value. We also allow only one value.
+            if end_str not in map_params:
                 return False
+            else:
+                map_params.discard(end_str)
 
-    warnings.warn(
-        f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}`.",
-        stacklevel=1,
-    )
     return True
 
 
