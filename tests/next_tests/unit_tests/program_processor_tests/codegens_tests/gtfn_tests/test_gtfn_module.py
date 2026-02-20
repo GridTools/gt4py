@@ -19,7 +19,7 @@ from gt4py.next.otf import arguments, code_specs, stages, definitions
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_translation
-from gt4py.next import allocators as next_allocators
+from gt4py.next import custom_layout_allocators as next_allocators
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, cartesian_case_no_backend

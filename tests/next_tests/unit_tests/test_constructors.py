@@ -16,7 +16,7 @@ import dataclasses
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators, common
+from gt4py.next import common, custom_layout_allocators as next_allocators
 from gt4py.next.constructors import (
     FieldConstructor,
     _ArrayApiCreationNamespace,

@@ -15,8 +15,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Generic, Protocol, TypeAlias, TypeVar, cast
 
 import gt4py.eve as eve
-import gt4py.next.allocators as next_allocators
 import gt4py.next.common as common
+import gt4py.next.custom_layout_allocators as next_allocators
 import gt4py.next.embedded.nd_array_field as nd_array_field
 from gt4py._core import (
     definitions as core_defs,

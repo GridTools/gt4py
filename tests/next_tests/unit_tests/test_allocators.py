@@ -12,7 +12,7 @@ from typing import Optional
 import pytest
 
 import gt4py._core.definitions as core_defs
-import gt4py.next.allocators as next_allocators
+import gt4py.next.custom_layout_allocators as next_allocators
 import gt4py.next.common as common
 import gt4py.storage.allocators as core_allocators
 
@@ -94,7 +94,7 @@ def test_is_field_allocator_factory_for(test_function):
 
 
 def test_horizontal_first_layout_mapper():
-    from gt4py.next.allocators import horizontal_first_layout_mapper
+    from gt4py.next.custom_layout_allocators import horizontal_first_layout_mapper
 
     # Test with only horizontal dimensions
     dims = [
