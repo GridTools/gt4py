@@ -20,6 +20,10 @@ except ImportError:
     cupy = None
 
 
+class _EqualityComparable(Protocol):
+    def __eq__(self, other: Any) -> bool: ...
+
+
 class ArrayNamespace(Hashable, Protocol):
     """
     Currently only a subset of the Array API standard namespace with functions relevant for array creation.
@@ -58,17 +62,17 @@ class ArrayNamespace(Hashable, Protocol):
         copy: bool | None = None,
     ) -> core_defs.NDArrayObject: ...
 
-    bool: type
-    int8: type
-    int16: type
-    int32: type
-    int64: type
-    uint8: type
-    uint16: type
-    uint32: type
-    uint64: type
-    float32: type
-    float64: type
+    bool: _EqualityComparable
+    int8: _EqualityComparable
+    int16: _EqualityComparable
+    int32: _EqualityComparable
+    int64: _EqualityComparable
+    uint8: _EqualityComparable
+    uint16: _EqualityComparable
+    uint32: _EqualityComparable
+    uint64: _EqualityComparable
+    float32: _EqualityComparable
+    float64: _EqualityComparable
 
 
 def is_array_namespace(obj: Any) -> TypeGuard[ArrayNamespace]:
