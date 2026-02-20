@@ -35,26 +35,12 @@ if tests_root not in sys.path:
     sys.path.append(tests_root)
 
 import gt4py.next as gtx
-from gt4py.next import where, broadcast
 from gt4py.next.experimental import concat_where
-from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
-    V2E,
-)
+
 # Define Dimensions
-# 'Edge' is the index along the specific edge type (e.g., 0 to count_east-1)
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 Color = gtx.Dimension("Kolor")
-
-# mask_0 = broadcast( (1, 0, 0), (IDim, JDim, Color) )
-    
-# mask_1 = broadcast( (0, 1, 0), (IDim, JDim, Color) )
-
-# @gtx.field_operator
-# def get_color_indices() -> gtx.Field[[Color], int]:
-#     # This creates a Local Field implicitly.
-#     # Gt4Py understands tuples as values along the last dimension.
-#     return (0, 1, 2)
 
 @gtx.field_operator
 def compute_zavgS_cartesian_0(
@@ -84,36 +70,32 @@ def on_edges(
     f0: gtx.Field[[IDim, JDim, Color], float],
     f1: gtx.Field[[IDim, JDim, Color], float],
     f2: gtx.Field[[IDim, JDim, Color], float],
-    idx: gtx.Field[[Color], np.int32]
 ) -> gtx.Field[[IDim, JDim, Color], float]:
-    return where(
-        idx == 0,
+    return concat_where(
+        Color == 0, 
         f0,
-        where(idx == 1, f1, f2),
+        concat_where(Color == 1, f1, f2),
     )
 
 @gtx.field_operator
 def compute_zavgS_cartesian(
     pp: gtx.Field[[IDim, JDim], float],
     S_M: gtx.Field[[IDim, JDim, Color], float],
-    idx: gtx.Field[[Color], np.int32],
 ) -> gtx.Field[[IDim, JDim, Color], float]:
 
     return on_edges(
         compute_zavgS_cartesian_0(pp, S_M),
         compute_zavgS_cartesian_1(pp, S_M),
         compute_zavgS_cartesian_2(pp, S_M),
-        idx
     )
 
 @gtx.program
 def zavg(
     pp: gtx.Field[[IDim, JDim], float],
     S_M: gtx.Field[[IDim, JDim, Color], float],
-    idx: gtx.Field[[Color], np.int32],
     out: gtx.Field[[IDim, JDim, Color], float],
 ):
-    compute_zavgS_cartesian(pp, S_M, idx, out=out) # , domain={IDim: (0, 1), JDim: (0, 1), Color: (0, 3)}
+    compute_zavgS_cartesian(pp, S_M, out=out) 
 
 
 edges_east_2d = edges_east.reshape((ny+1, nx))  # Shape: [nx, ny+1]
@@ -156,7 +138,6 @@ zavg_dace = zavg.with_backend(run_dace_cpu)
 output = zavg_dace(
     pp=pp, 
     S_M=S_M,
-    idx=gtx.as_field([Color], np.array([0, 1, 2], dtype=np.int32)),
     out=out,
     offset_provider={},
 )
