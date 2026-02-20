@@ -363,8 +363,7 @@ class _FieldBufferCreationNamespace(_FieldArrayConstructionNamespace):
         return arr
 
 
-# TODO check if backend is hashable, if yes add
-@eve.utils.optional_lru_cache
+@functools.lru_cache
 def _field_constructor(
     allocator: Allocator | None,
     aligned_index: Sequence[common.NamedIndex] | None = None,
