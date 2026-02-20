@@ -363,7 +363,7 @@ class _FieldBufferCreationNamespace(_FieldArrayConstructionNamespace):
         return arr
 
 
-@functools.lru_cache
+@eve.utils.optional_lru_cache
 def _field_constructor(
     allocator: Allocator | None,
     aligned_index: Sequence[common.NamedIndex] | None = None,
