@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import functools
 from collections.abc import Hashable
 from typing import Any, Callable, Protocol, TypeGuard, cast
 
@@ -26,8 +25,6 @@ class ArrayNamespace(Hashable, Protocol):
     Currently only a subset of the Array API standard namespace with functions relevant for array creation.
 
     TODO(havogt): replace by ... or make it more complete and put next to NDArrayObject definition.
-
-    See also 'ArrayNamespace'.
     """
 
     def empty(
@@ -144,7 +141,6 @@ if cupy is not None:
         if device is None:
             return None
         if device.device_type != core_defs.CUPY_DEVICE_TYPE:
-            # TODO test this code path
             raise ValueError(
                 f"CuPy only supports GPU devices, got device type {device.device_type}."
             )
@@ -153,11 +149,13 @@ if cupy is not None:
     _device_translation_registry[cupy] = _cupy_device_translator
 
 
-@functools.cache
 def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Device], Any]:
     """
     Returns a mapping from a GT4Py 'Device' to the corresponding device object for the given array namespace.
     """
-    if array_ns not in _device_translation_registry:
-        raise ValueError(f"No device translator registered for array namespace {array_ns}.")
-    return _device_translation_registry[array_ns]
+    try:
+        return _device_translation_registry[array_ns]
+    except KeyError:
+        raise ValueError(
+            f"No device translator registered for array namespace {array_ns}."
+        ) from None

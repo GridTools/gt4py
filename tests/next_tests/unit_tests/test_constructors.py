@@ -19,8 +19,8 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, custom_layout_allocators as next_allocators
 from gt4py.next.constructors import (
     FieldConstructor,
-    _ArrayApiCreationNamespace,
-    _FieldBufferCreationNamespace,
+    _ArrayAPIArrayConstructor,
+    _CustomLayoutConstructor,
 )
 
 
@@ -222,20 +222,20 @@ class TestFieldConstructorInit:
     def test_no_allocator_no_device_uses_default_cpu(self):
         """allocator=None, device=None → default CPU device allocator → _FieldBufferCreationNamespace."""
         fc = FieldConstructor(allocator=None, device=None)
-        assert isinstance(fc._array_constructor, _FieldBufferCreationNamespace)
+        assert isinstance(fc._array_constructor, _CustomLayoutConstructor)
         assert fc._array_constructor.allocator.__gt_device_type__ == core_defs.DeviceType.CPU
 
     def test_no_allocator_with_device(self):
         """allocator=None, device=given → device_allocators lookup → _FieldBufferCreationNamespace."""
         device = core_defs.Device(core_defs.DeviceType.CPU, 0)
         fc = FieldConstructor(allocator=None, device=device)
-        assert isinstance(fc._array_constructor, _FieldBufferCreationNamespace)
+        assert isinstance(fc._array_constructor, _CustomLayoutConstructor)
         assert fc._array_constructor.device == device
 
     def test_array_namespace_allocator_no_device(self):
         """allocator=numpy, device=None → _ArrayApiCreationNamespace with device=None."""
         fc = FieldConstructor(allocator=np, device=None)
-        assert isinstance(fc._array_constructor, _ArrayApiCreationNamespace)
+        assert isinstance(fc._array_constructor, _ArrayAPIArrayConstructor)
         assert fc._array_constructor.array_ns is np
         assert fc._array_constructor.device is None
 
@@ -243,7 +243,7 @@ class TestFieldConstructorInit:
         """allocator=numpy, device=CPU → _ArrayApiCreationNamespace with translated device."""
         device = core_defs.Device(core_defs.DeviceType.CPU, 0)
         fc = FieldConstructor(allocator=np, device=device)
-        assert isinstance(fc._array_constructor, _ArrayApiCreationNamespace)
+        assert isinstance(fc._array_constructor, _ArrayAPIArrayConstructor)
         assert fc._array_constructor.array_ns is np
         # numpy device translator maps CPU → None
         assert fc._array_constructor.device is None
@@ -256,13 +256,13 @@ class TestFieldConstructorInit:
             fc = FieldConstructor(allocator=np, aligned_index=aligned_index)
             assert len(w) == 1
             assert "aligned_index" in str(w[0].message)
-        assert isinstance(fc._array_constructor, _ArrayApiCreationNamespace)
+        assert isinstance(fc._array_constructor, _ArrayAPIArrayConstructor)
 
     def test_field_buffer_allocator(self):
         """allocator=FieldBufferAllocator → _FieldBufferCreationNamespace."""
         allocator = next_allocators.StandardCPUFieldBufferAllocator()
         fc = FieldConstructor(allocator=allocator)
-        assert isinstance(fc._array_constructor, _FieldBufferCreationNamespace)
+        assert isinstance(fc._array_constructor, _CustomLayoutConstructor)
         assert fc._array_constructor.allocator is allocator
 
     def test_field_buffer_allocator_with_aligned_index(self):
@@ -270,7 +270,7 @@ class TestFieldConstructorInit:
         allocator = next_allocators.StandardCPUFieldBufferAllocator()
         aligned_index = [common.NamedIndex(I, 0)]
         fc = FieldConstructor(allocator=allocator, aligned_index=aligned_index)
-        assert isinstance(fc._array_constructor, _FieldBufferCreationNamespace)
+        assert isinstance(fc._array_constructor, _CustomLayoutConstructor)
         assert fc._array_constructor.aligned_index == aligned_index
 
     def test_field_buffer_allocator_factory(self):
@@ -283,7 +283,7 @@ class TestFieldConstructorInit:
                 return inner_allocator
 
         fc = FieldConstructor(allocator=FakeFactory())
-        assert isinstance(fc._array_constructor, _FieldBufferCreationNamespace)
+        assert isinstance(fc._array_constructor, _CustomLayoutConstructor)
         assert fc._array_constructor.allocator is inner_allocator
 
     def test_field_buffer_allocator_device_mismatch_raises(self):
@@ -298,7 +298,7 @@ class TestFieldConstructorInit:
         allocator = next_allocators.StandardCPUFieldBufferAllocator()
         device = core_defs.Device(core_defs.DeviceType.CPU, 0)
         fc = FieldConstructor(allocator=allocator, device=device)
-        assert isinstance(fc._array_constructor, _FieldBufferCreationNamespace)
+        assert isinstance(fc._array_constructor, _CustomLayoutConstructor)
         assert fc._array_constructor.device == device
 
     def test_invalid_allocator_raises(self):

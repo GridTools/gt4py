@@ -12,7 +12,7 @@ import abc
 import dataclasses
 import functools
 from collections.abc import Mapping, Sequence
-from typing import Any, Generic, Protocol, TypeAlias, TypeVar, cast
+from typing import Any, Callable, Generic, TypeAlias, TypeVar, cast
 
 import gt4py.eve as eve
 import gt4py.next.common as common
@@ -63,7 +63,7 @@ class FieldConstructor:
     Delegates array creation to the composed `_array_constructor` and wraps the result in a Field.
     """
 
-    _array_constructor: _FieldArrayConstructionNamespace
+    _array_constructor: _FieldArrayConstructor
 
     def __init__(
         self,
@@ -90,7 +90,7 @@ class FieldConstructor:
                 if device is not None
                 else None
             )
-            self._array_constructor = _ArrayApiCreationNamespace(
+            self._array_constructor = _ArrayAPIArrayConstructor(
                 array_ns=allocator, device=translated_device
             )
         elif next_allocators.is_field_allocation_tool(allocator):
@@ -100,7 +100,7 @@ class FieldConstructor:
                 raise ValueError(
                     f"Allocator {allocator} is for device type {allocator.__gt_device_type__}, but device type {device.device_type} was specified."
                 )
-            self._array_constructor = _FieldBufferCreationNamespace(
+            self._array_constructor = _CustomLayoutConstructor(
                 allocator=allocator,
                 device=device,
                 aligned_index=aligned_index,
@@ -108,16 +108,11 @@ class FieldConstructor:
         else:
             raise ValueError(f"Invalid field allocator: {allocator}.")
 
-    class _NdArrayConstructor(Protocol):
-        def __call__(
-            self, domain: common.Domain, *, dtype: core_defs.DType
-        ) -> core_defs.NDArrayObject: ...
-
     def _construct_from_array(
         self,
         domain: common.DomainLike,
         dtype: core_defs.DTypeLike,
-        ndarray_constructor: _NdArrayConstructor,
+        ndarray_constructor: Callable,
     ) -> nd_array_field.NdArrayField:
         domain = common.domain(domain)
         dtype = core_defs.dtype(dtype)
@@ -216,7 +211,7 @@ class FieldConstructor:
         )
 
 
-class _FieldArrayConstructionNamespace(abc.ABC):
+class _FieldArrayConstructor(abc.ABC):
     """
     Abstract interface for array creation operations on a specific device/backend.
 
@@ -259,7 +254,7 @@ _ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayNamespace)
 
 
 @dataclasses.dataclass(frozen=True)
-class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]):
+class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ANS]):
     array_ns: _ANS
     # device in the format expected by the array namespace
     device: Any = None
@@ -328,7 +323,7 @@ class _ArrayApiCreationNamespace(_FieldArrayConstructionNamespace, Generic[_ANS]
 
 
 @dataclasses.dataclass(frozen=True)
-class _FieldBufferCreationNamespace(_FieldArrayConstructionNamespace):
+class _CustomLayoutConstructor(_FieldArrayConstructor):
     allocator: next_allocators.FieldBufferAllocatorProtocol
     device: core_defs.Device | None = None
     aligned_index: Sequence[common.NamedIndex] | None = None
@@ -375,6 +370,8 @@ class _FieldBufferCreationNamespace(_FieldArrayConstructionNamespace):
         return arr
 
 
+# Our typical `Allocator`s are hashable, but in case they are not we fall-back to non cached.
+# E.g. it's up to the user to make types implementing `__gt_allocator__` hashable.
 @eve.utils.optional_lru_cache
 def _field_constructor(
     allocator: Allocator | None,
