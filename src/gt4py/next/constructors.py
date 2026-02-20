@@ -32,7 +32,7 @@ Field construction API.
 The user-facing API consists of the functions 'empty', 'zeros', 'ones', 'full' and 'as_field',
 or the 'FieldConstructor' class for more advanced use cases.
 
-These functions create GT4Py 'Field's backed by arrays created using a specified allocator, which can be either an array namespace
+These functions create GT4Py 'Field's backed by arrays (NDArrayField) created using a specified allocator, which can be either an array namespace
 (e.g. 'numpy', 'cupy') or a GT4Py field buffer allocator (e.g. a backend).
 
 This module deals with 3 concepts:
@@ -52,8 +52,8 @@ Accepts either:
   memory layout and alignment.
 """
 
-DEFAULT_DEVICE: core_defs.Device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-DEFAULT_DTYPE: core_defs.DType = core_defs.Float64DType(())
+DEFAULT_DEVICE: Final[core_defs.Device] = core_defs.Device(core_defs.DeviceType.CPU, 0)
+DEFAULT_DTYPE: Final[core_defs.DType] = core_defs.Float64DType(())
 
 
 class FieldConstructor:
