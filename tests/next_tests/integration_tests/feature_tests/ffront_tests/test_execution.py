@@ -337,6 +337,36 @@ def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+def test_tuple_comprehension(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        tracers: tuple[cases.IFloatField, ...], factor: float
+    ) -> tuple[cases.IFloatField, ...]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_tuple_vararg(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        tracers: tuple[cases.IFloatField, ...], factor: float
+    ) -> tuple[cases.IFloatField, cases.IFloatField]:
+        return tracers[0] * factor, tracers[1] * factor
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t[:2]),
+    )
+
+
+@pytest.mark.uses_tuple_args
 @pytest.mark.xfail(reason="Iterator of tuple approach in lowering does not allow this.")
 def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     @gtx.field_operator

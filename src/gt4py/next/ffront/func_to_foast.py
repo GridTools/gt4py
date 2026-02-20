@@ -337,7 +337,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return self.visit(node.value)
 
     def visit_Name(self, node: ast.Name, **kwargs: Any) -> foast.Name:
-        return foast.Name(id=node.id, location=self.get_location(node))
+        loc = self.get_location(node)
+        if isinstance(node.ctx, ast.Store):
+            return foast.DataSymbol(id=node.id, location=loc, type=ts.DeferredType(constraint=None))
+        else:
+            assert isinstance(node.ctx, ast.Load)
+            return foast.Name(id=node.id, location=loc)
 
     def visit_UnaryOp(self, node: ast.UnaryOp, **kwargs: Any) -> foast.UnaryOp:
         return foast.UnaryOp(
@@ -469,8 +474,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.CompareOperator.NOTEQ
 
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
-        if len(node.args) > 0:
-            arg = node.args[0]
+        (arg,) = (
+            node.args
+        )  # note for review: the change here is unrelated to the actual pr and just a small cleanup
+        if node.func.id == "tuple":
             if not (
                 isinstance(arg, ast.Constant)
                 or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
@@ -484,9 +491,25 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.
 
     def visit_Call(self, node: ast.Call, **kwargs: Any) -> foast.Call:
-        # TODO(tehrengruber): is this still needed or redundant with the checks in type deduction?
         if isinstance(node.func, ast.Name):
             func_name = self._func_name(node)
+
+            if func_name == "tuple":
+                (gen_expr,) = node.args
+                assert (
+                    len(gen_expr.generators) == 1
+                )  # we don't support (... for ... in ... for ... in ...)
+                assert (
+                    gen_expr.generators[0].ifs == []
+                )  # we don't support if conditions in comprehensions
+                return foast.TupleComprehension(
+                    element_expr=self.visit(gen_expr.elt, **kwargs),
+                    target=self.visit(gen_expr.generators[0].target, **kwargs),
+                    iterable=self.visit(gen_expr.generators[0].iter, **kwargs),
+                    location=self.get_location(node),
+                )
+
+            # TODO(tehrengruber): is this still needed or redundant with the checks in type deduction?
             if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
                 self._verify_builtin_type_constructor(node)
 
