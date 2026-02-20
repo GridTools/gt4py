@@ -6,8 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# TODO custom_layout_allocators ?
-
 import abc
 import dataclasses
 import functools
@@ -95,11 +93,14 @@ def is_field_allocation_tool_for(
     return is_field_allocator_for(obj, device) or is_field_allocator_factory_for(obj, device)
 
 
-# TODO do we have this function somewhere? maybe `_get_slices_from_domain_slice`
 def _absolute_to_relative_index(
     indices: Sequence[common.NamedIndex], domain: common.Domain
 ) -> Sequence[int]:
-    """Convert absolute indices to relative indices based on the domain's dimensions."""
+    """Convert absolute indices to relative indices based on the domain's dimensions.
+
+    Indices for which the dimension isn't represented in the domain are ignored,
+    and the resulting relative index sequence is ordered according to the domain's dimensions.
+    """
 
     dim_to_index = {named_idx.dim: int(named_idx.value) for named_idx in indices}
     result = []
