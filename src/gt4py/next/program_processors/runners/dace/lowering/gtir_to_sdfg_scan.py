@@ -147,12 +147,28 @@ def _create_scan_field_operator_impl(
     # inside the map scope, therefore it is excluded from the map range
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
 
-    # the map scope writes the full-shape dimension corresponding to the scan column
-    field_subset = (
-        dace_subsets.Range(field_subset[:scan_dim_index])
-        + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
-        + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
-    )
+    if (field_shape[scan_dim_index] == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        # Special case where we only write the last level of the scan column.
+        # We can represent the result as a single value and override it inside the scan loop.
+        dataflow_output_desc.set_shape(new_shape=[1], strides=(1,))
+        for edge in ctx.state.in_edges(output_edge.result.dc_node):
+            edge.data = dace.Memlet(
+                data=output_edge.result.dc_node.data,
+                subset="0",
+                other_subset=edge.data.get_src_subset(edge, ctx.state),
+            )
+        field_subset = (
+            dace_subsets.Range(field_subset[:scan_dim_index])
+            + dace_subsets.Range.from_string("0")
+            + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
+        )
+    else:
+        # the map scope writes the full-shape dimension corresponding to the scan column
+        field_subset = (
+            dace_subsets.Range(field_subset[:scan_dim_index])
+            + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
+            + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
+        )
 
     # Create the final data storage, that is outside of the surrounding Map.
     field_name, field_desc = sdfg_builder.add_temp_array(
