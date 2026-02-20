@@ -29,11 +29,24 @@ DEFAULT_STORAGE_TYPE = {
 }
 """Default dace residency types per device type."""
 
-DEFAULT_MAP_SCHEDULE = {
-    dtypes.DeviceType.CPU: dtypes.ScheduleType.Default,
-    dtypes.DeviceType.GPU: dtypes.ScheduleType.GPU_Device,
-}
-"""Default kernel target per device type."""
+
+def _resolve_default_map_schedule(
+    device_type: dtypes.DeviceType,
+    uses_openmp: bool,
+) -> dtypes.ScheduleType:
+    """Default kernel target per device type."""
+    if device_type == dtypes.DeviceType.GPU:
+        return dtypes.ScheduleType.GPU_Device
+
+    if device_type != dtypes.DeviceType.CPU:
+        raise NotImplementedError(f"Schedule Tree bridge does not support {device_type}")
+
+    if not uses_openmp:
+        # See `pyext_builder.get_gt_pyext_build_opts`, the OpenMP section
+        # for some reasons why OpenMP could be disabled
+        return dtypes.ScheduleType.Sequential
+
+    return dtypes.ScheduleType.Default
 
 
 class OIRToTreeIR(eve.NodeVisitor):
@@ -61,6 +74,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         self._device_type = device_type_translate[device_type.upper()]
         self._api_signature = builder.gtir.api_signature
         self._k_bounds = compute_k_boundary(builder.gtir)
+        self._uses_openmp = builder.options.uses_openmp
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         dace_tasklet, inputs, outputs = oir_to_tasklet.OIRToTasklet().visit_CodeBlock(
@@ -137,7 +151,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         loop = tir.HorizontalLoop(
             bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
             bounds_j=tir.Bounds(start=axis_start_j, end=axis_end_j),
-            schedule=DEFAULT_MAP_SCHEDULE[self._device_type],
+            schedule=_resolve_default_map_schedule(self._device_type, self._uses_openmp),
             children=[],
             parent=ctx.current_scope,
         )
@@ -258,7 +272,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         if self._device_type == dtypes.DeviceType.GPU:
             return dtypes.ScheduleType.Sequential
 
-        return DEFAULT_MAP_SCHEDULE[self._device_type]
+        return _resolve_default_map_schedule(self._device_type, self._uses_openmp)
 
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, ctx: tir.Context, loop_order: common.LoopOrder
