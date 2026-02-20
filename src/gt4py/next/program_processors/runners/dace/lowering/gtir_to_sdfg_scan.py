@@ -147,12 +147,20 @@ def _create_scan_field_operator_impl(
     # inside the map scope, therefore it is excluded from the map range
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
 
-    # the map scope writes the full-shape dimension corresponding to the scan column
-    field_subset = (
-        dace_subsets.Range(field_subset[:scan_dim_index])
-        + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
-        + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
-    )
+    if str(field_shape[scan_dim_index]) == "1":
+        # Special case where we only write the last level of the scan column.
+        field_subset = (
+            dace_subsets.Range(field_subset[:scan_dim_index])
+            + dace_subsets.Range.from_string("0")
+            + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
+        )
+    else:
+        # The map scope writes the full-shape dimension corresponding to the scan column.
+        field_subset = (
+            dace_subsets.Range(field_subset[:scan_dim_index])
+            + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
+            + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
+        )
 
     # Create the final data storage, that is outside of the surrounding Map.
     field_name, field_desc = sdfg_builder.add_temp_array(
@@ -184,12 +192,36 @@ def _create_scan_field_operator_impl(
     inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
     assert len(inner_output_desc.shape) == 1
 
-    # The result field on the outside is a transient array, allocated inside this
-    # function, so we know that its stride is constant. We just need to set it on
-    # the inside array, and we do not need to map any stride symbol.
-    outside_output_stride = field_desc.strides[scan_dim_index]
-    assert str(outside_output_stride).isdigit()
-    inner_output_desc.set_shape(new_shape=inner_output_desc.shape, strides=(outside_output_stride,))
+    if str(field_shape[scan_dim_index]) == "1":
+        # We represent the inner result as a single value and let the scan loop override it.
+        nsdfg_scan.sdfg.arrays[inner_output_name] = dace.data.Scalar(inner_output_desc.dtype)
+        assert set(st.label for st in nsdfg_scan.sdfg.states()) == {
+            "scan_entry",
+            "scan_compute",
+            "scan_update",
+        }
+        scan_compute_state = next(s for s in nsdfg_scan.sdfg.states() if s.label == "scan_compute")
+        inner_output_node = next(
+            n for n in scan_compute_state.data_nodes() if n.data == inner_output_name
+        )
+        assert (
+            scan_compute_state.in_degree(inner_output_node) == 1
+            and scan_compute_state.out_degree(inner_output_node) == 0
+        )
+        inner_write_edge = scan_compute_state.in_edges(inner_output_node)[0]
+        src_subset = inner_write_edge.data.get_src_subset(inner_write_edge, scan_compute_state)
+        inner_write_edge.data = dace.Memlet(
+            data=inner_output_name, subset="0", other_subset=src_subset
+        )
+    else:
+        # The result field on the outside is a transient array, allocated inside this
+        # function, so we know that its stride is constant. We just need to set it on
+        # the inside array, and we do not need to map any stride symbol.
+        outside_output_stride = field_desc.strides[scan_dim_index]
+        assert str(outside_output_stride).isdigit()
+        inner_output_desc.set_shape(
+            new_shape=inner_output_desc.shape, strides=(outside_output_stride,)
+        )
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
