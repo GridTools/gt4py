@@ -52,8 +52,8 @@ Accepts either:
   memory layout and alignment.
 """
 
-DEFAULT_DEVICE: core_defs.Device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-DEFAULT_DTYPE: core_defs.DType = core_defs.Float64DType(())
+DEFAULT_DEVICE: Final[core_defs.Device] = core_defs.Device(core_defs.DeviceType.CPU, 0)
+DEFAULT_DTYPE: Final[core_defs.DType] = core_defs.Float64DType(())
 
 
 class FieldConstructor:
