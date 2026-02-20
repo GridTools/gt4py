@@ -153,6 +153,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
+        static_domains: dict[common.Dimension, tuple[int, int]] | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         """
@@ -194,12 +195,25 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             for op in offset_provider
         )
 
-        self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
+        if self.compilation_options.static_domains and static_domains is None:
+            raise ValueError(
+                "Static domains option is enabled, but no static domain information was "
+                "provided. Missing required argument 'static_domains'."
+            )
+        if not self.compilation_options.static_domains and static_domains is not None:
+            raise ValueError(
+                "Static domains may not be provided when 'static_domains' option is disabled."
+            )
+
+        self._compiled_programs.compile(
+            offset_providers=offset_provider, static_domains=static_domains, **static_args
+        )
         return self
 
 
 def _field_domain_descriptor_mapping_from_func_type(func_type: ts.FunctionType) -> list[str]:
     static_domain_args = []
+    assert func_type.pos_only_args == []
     param_types = func_type.pos_or_kw_args | func_type.kw_only_args
     for name, type_ in param_types.items():
         for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
@@ -483,6 +497,7 @@ class ProgramWithBoundArgs(Program):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
+        static_domains: dict[common.Dimension, tuple[int, int]] | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
