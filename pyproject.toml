@@ -304,6 +304,7 @@ markers = [
   'uses_mesh_with_skip_values: tests that use a mesh with skip values',
   'uses_concat_where: tests that use the concat_where builtin',
   'uses_program_metrics: tests that require backend support for program metrics',
+  'uses_program_with_sliced_out_arguments: tests that use a sliced argument which is not supported for non-mutable arrays, e.g. JAX',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']

@@ -83,6 +83,10 @@ no_backend = NoBackend(
             next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
         ),
         pytest.param(
+            next_tests.definitions.EmbeddedIds.JAX_NUMPY_EXECUTION,
+            marks=pytest.mark.requires_jax,
+        ),
+        pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
             marks=pytest.mark.requires_dace,
         ),
@@ -415,7 +419,7 @@ def skip_value_mesh(allocator) -> MeshDescriptor:
         simple_mesh,
         pytest.param(skip_value_mesh, marks=pytest.mark.uses_mesh_with_skip_values),
     ],
-    ids=lambda p: p(None).name,
+    ids=lambda p: p.__name__,
 )
 def mesh_descriptor(request, exec_alloc_descriptor) -> MeshDescriptor:
     yield request.param(exec_alloc_descriptor.allocator)
