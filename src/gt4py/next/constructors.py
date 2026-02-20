@@ -44,7 +44,6 @@ DEFAULT_DEVICE: core_defs.Device = core_defs.Device(core_defs.DeviceType.CPU, 0)
 DEFAULT_DTYPE: core_defs.DType = core_defs.Float64DType(())
 
 
-# TODO test this function
 class FieldConstructor:
     """
     Public-facing field construction API.
