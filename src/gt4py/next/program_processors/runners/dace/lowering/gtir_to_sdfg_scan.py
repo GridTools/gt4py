@@ -125,8 +125,9 @@ def _create_scan_field_operator_impl(
     assert isinstance(output_domain, domain_utils.SymbolicDomain)
     field_domain = gtir_domain.get_field_domain(output_domain)
 
-    dataflow_output_desc = output_edge.result.dc_node.desc(ctx.sdfg)
-    assert isinstance(dataflow_output_desc, dace.data.Array)
+    outer_output_name = output_edge.result.dc_node.data
+    outer_output_desc = ctx.sdfg.arrays[outer_output_name]
+    assert isinstance(outer_output_desc, dace.data.Array)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         assert isinstance(output_type.dtype, ts.ScalarType)
@@ -135,72 +136,48 @@ def _create_scan_field_operator_impl(
                 f"Type mismatch, expected {output_type.dtype} got {output_edge.result.gt_dtype}."
             )
         # the scan field operator computes a column of scalar values
-        assert len(dataflow_output_desc.shape) == 1
+        assert len(outer_output_desc.shape) == 1
     else:
         raise NotImplementedError("scan with list output is not supported")
 
     # the memory layout of the output field follows the field operator compute domain
     field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
+
+    # Create the final data storage, that is outside of the surrounding Map.
+    field_name, field_desc = sdfg_builder.add_temp_array(
+        ctx.sdfg, field_shape, outer_output_desc.dtype
+    )
+    field_node = ctx.state.add_access(field_name)
     field_subset = gtir_domain.get_element_subset(field_dims, field_origin)
 
     # the vertical dimension used as scan column is computed by the `LoopRegion`
     # inside the map scope, therefore it is excluded from the map range
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
 
+    outer_write_edge = ctx.state.in_edges(output_edge.result.dc_node)[0]
+    assert isinstance(outer_write_edge.src, dace_nodes.NestedSDFG)
+    scan_sdfg = outer_write_edge.src.sdfg
+    inner_output_name = outer_write_edge.src_conn
+    inner_output_desc = scan_sdfg.arrays[inner_output_name]
+    assert len(inner_output_desc.shape) == 1
+
     if str(field_shape[scan_dim_index]) == "1":
         # Special case where we only write the last level of the scan column.
+        outer_output_desc.set_shape(new_shape=(1,), strides=(1,))
+        outer_write_edge.data = dace.Memlet(data=outer_output_name, subset="0")
         field_subset = (
             dace_subsets.Range(field_subset[:scan_dim_index])
             + dace_subsets.Range.from_string("0")
             + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
         )
-    else:
-        # The map scope writes the full-shape dimension corresponding to the scan column.
-        field_subset = (
-            dace_subsets.Range(field_subset[:scan_dim_index])
-            + dace_subsets.Range.from_string(f"0:{dataflow_output_desc.shape[0]}")
-            + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
-        )
-
-    # Create the final data storage, that is outside of the surrounding Map.
-    field_name, field_desc = sdfg_builder.add_temp_array(
-        ctx.sdfg, field_shape, dataflow_output_desc.dtype
-    )
-    field_node = ctx.state.add_access(field_name)
-
-    # Now connect the output connector on the nested SDFG with the result field
-    #  outside the scan map scope. For 1D domain, containing only the column dimension,
-    #  there is no map scope, since the map range is only on the horizontal domain.
-    #  Up to now the nested SDFG is writing into a transient data container that
-    #  has the size to hold one column. The function below, that does the connection,
-    #  will remove that transient and write directly to the result field.
-    inner_map_output_temporary_removed = output_edge.connect(map_exit, field_node, field_subset)
-    if not inner_map_output_temporary_removed:
-        raise ValueError("The scan nested SDFG is expected to write directly to the result field.")
-
-    assert ctx.state.in_degree(field_node) == 1
-    field_node_path = ctx.state.memlet_path(next(iter(ctx.state.in_edges(field_node))))
-    assert field_node_path[-1].dst is field_node
-
-    # The temporary node which the nested SDFG was writing to has been deleted,
-    #  and the nested SDFG will write directly to the result field. Thus, we have
-    #  to modify the stride of the scan column array inside the nested SDFG to match
-    #  the strides outside.
-    nsdfg_scan = field_node_path[0].src
-    assert isinstance(nsdfg_scan, dace_nodes.NestedSDFG)
-    inner_output_name = field_node_path[0].src_conn
-    inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
-    assert len(inner_output_desc.shape) == 1
-
-    if str(field_shape[scan_dim_index]) == "1":
         # We represent the inner result as a single value and let the scan loop override it.
-        nsdfg_scan.sdfg.arrays[inner_output_name] = dace.data.Scalar(inner_output_desc.dtype)
-        assert set(st.label for st in nsdfg_scan.sdfg.states()) == {
+        scan_sdfg.arrays[inner_output_name] = dace.data.Scalar(inner_output_desc.dtype)
+        assert set(st.label for st in scan_sdfg.states()) == {
             "scan_entry",
             "scan_compute",
             "scan_update",
         }
-        scan_compute_state = next(s for s in nsdfg_scan.sdfg.states() if s.label == "scan_compute")
+        scan_compute_state = next(s for s in scan_sdfg.states() if s.label == "scan_compute")
         inner_output_node = next(
             n for n in scan_compute_state.data_nodes() if n.data == inner_output_name
         )
@@ -214,14 +191,28 @@ def _create_scan_field_operator_impl(
             data=inner_output_name, subset="0", other_subset=src_subset
         )
     else:
+        # The map scope writes the full-shape dimension corresponding to the scan column.
+        field_subset = (
+            dace_subsets.Range(field_subset[:scan_dim_index])
+            + dace_subsets.Range.from_string(f"0:{outer_output_desc.shape[0]}")
+            + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
+        )
         # The result field on the outside is a transient array, allocated inside this
         # function, so we know that its stride is constant. We just need to set it on
         # the inside array, and we do not need to map any stride symbol.
         outside_output_stride = field_desc.strides[scan_dim_index]
         assert str(outside_output_stride).isdigit()
-        inner_output_desc.set_shape(
-            new_shape=inner_output_desc.shape, strides=(outside_output_stride,)
-        )
+        inner_output_desc.set_shape(inner_output_desc.shape, strides=(outside_output_stride,))
+
+    # Now connect the output connector on the nested SDFG with the result field
+    #  outside the scan map scope. For 1D domain, containing only the column dimension,
+    #  there is no map scope, since the map range is only on the horizontal domain.
+    #  Up to now the nested SDFG is writing into a transient data container that
+    #  has the size to hold one column. The function below, that does the connection,
+    #  will remove that transient and write directly to the result field.
+    inner_map_output_temporary_removed = output_edge.connect(map_exit, field_node, field_subset)
+    if not inner_map_output_temporary_removed:
+        raise ValueError("The scan nested SDFG is expected to write directly to the result field.")
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
