@@ -30,9 +30,11 @@ DEFAULT_STORAGE_TYPE = {
 """Default dace residency types per device type."""
 
 
-def _resolve_default_map_schedule(device_type: dtypes.DeviceType) -> dtypes.ScheduleType:
+def _resolve_default_map_schedule(
+    device_type: dtypes.DeviceType,
+) -> dtypes.ScheduleType:
     # Reload the configuration to enable runtime switch
-    from gt4py.cartesian.config import GT4PY_ENABLE_OPENMP
+    from gt4py.cartesian.config import GT4PY_CARTESIAN_ENABLE_OPENMP
 
     """Default kernel target per device type."""
     if device_type == dtypes.DeviceType.GPU:
@@ -41,7 +43,7 @@ def _resolve_default_map_schedule(device_type: dtypes.DeviceType) -> dtypes.Sche
     if device_type != dtypes.DeviceType.CPU:
         raise NotImplementedError(f"Schedule Tree bridge does not support {device_type}")
 
-    if not GT4PY_ENABLE_OPENMP:
+    if not GT4PY_CARTESIAN_ENABLE_OPENMP:
         return dtypes.ScheduleType.Sequential
 
     return dtypes.ScheduleType.Default

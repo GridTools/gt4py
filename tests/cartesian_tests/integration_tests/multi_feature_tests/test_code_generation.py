@@ -1734,10 +1734,10 @@ def test_openmp_codegen_dace(backend: str) -> None:
 
     import gt4py.cartesian.config as gt_config
 
-    old_env_value = gt_config.GT4PY_ENABLE_OPENMP
+    old_env_value = gt_config.GT4PY_CARTESIAN_ENABLE_OPENMP
 
     # Test OpenMP code is present in generated code
-    gt_config.GT4PY_ENABLE_OPENMP = True
+    gt_config.GT4PY_CARTESIAN_ENABLE_OPENMP = True
 
     def test_openmp_code_enabled(A: Field[np.float64], B: Field[np.float64]) -> None:
         with computation(PARALLEL), interval(0, -1):
@@ -1752,7 +1752,7 @@ def test_openmp_codegen_dace(backend: str) -> None:
         assert "#pragma omp parallel for" in content and "#include <omp.h>" in content
 
     # Test OpenMP is absent in generated code
-    gt_config.GT4PY_ENABLE_OPENMP = False
+    gt_config.GT4PY_CARTESIAN_ENABLE_OPENMP = False
 
     @gtscript.stencil(backend=backend)
     def test_openmp_code_disabled(A: Field[np.float64], B: Field[np.float64]) -> None:
@@ -1767,4 +1767,4 @@ def test_openmp_codegen_dace(backend: str) -> None:
         content = f.read()
         assert "#pragma omp parallel for" not in content and "#include <omp.h>" not in content
 
-    gt_config.GT4PY_ENABLE_OPENMP = old_env_value
+    gt_config.GT4PY_CARTESIAN_ENABLE_OPENMP = old_env_value
