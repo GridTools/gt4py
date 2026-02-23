@@ -123,8 +123,6 @@ class BuildOptions(AttributeClassLike):
     "Literal precision for `int` types and casts. Defaults to architecture precision unless overwritten by the environment variable `GT4PY_LITERAL_INT_PRECISION`."
     literal_float_precision = attribute(of=int, default=LITERAL_FLOAT_PRECISION)
     "Literal precision for `float` types and casts. Defaults to architecture precision unless overwritten by the environment variable `GT4PY_LITERAL_FLOAT_PRECISION`."
-    uses_openmp = attribute(of=bool, default=True)
-    "Allow the generationof OpenMP multithreading directives, header includes and API calls."
 
     @property
     def qualified_name(self):

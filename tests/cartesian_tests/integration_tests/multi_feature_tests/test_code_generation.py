@@ -5,9 +5,9 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
 import numpy as np
 import pytest
+import pathlib
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import gtscript
@@ -1714,3 +1714,57 @@ def test_reset_mask_2d(backend: str) -> None:
     test_set_2d_mask(output, input, mask_2d)
 
     assert (mask_2d == 0).all()
+
+
+def _get_computation_hpp(stencil_object) -> pathlib.Path:
+    original_path = pathlib.Path(stencil_object.SDFG_PATH)
+    return (
+        original_path.parent
+        / (original_path.parts[-1].split(".")[0] + "_pyext_BUILD")
+        / "computation.hpp"
+    )
+
+
+@pytest.mark.parametrize("backend", ["dace:cpu"])
+def test_openmp_codegen_dace(backend: str) -> None:
+    domain = (5, 5, 5)
+
+    input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    import gt4py.cartesian.config as gt_config
+
+    old_env_value = gt_config.GT4PY_ENABLE_OPENMP
+
+    # Test OpenMP code is present in generated code
+    gt_config.GT4PY_ENABLE_OPENMP = True
+
+    def test_openmp_code_enabled(A: Field[np.float64], B: Field[np.float64]) -> None:
+        with computation(PARALLEL), interval(0, -1):
+            C = B
+
+        with computation(PARALLEL), interval(1, None):
+            A = C[0, 0, -1]
+
+    code = gtscript.stencil(definition=test_openmp_code_enabled, backend=backend)
+    with open(_get_computation_hpp(code), "r") as f:
+        content = f.read()
+        assert "#pragma omp parallel for" in content and "#include <omp.h>" in content
+
+    # Test OpenMP is absent in generated code
+    gt_config.GT4PY_ENABLE_OPENMP = False
+
+    @gtscript.stencil(backend=backend)
+    def test_openmp_code_disabled(A: Field[np.float64], B: Field[np.float64]) -> None:
+        with computation(PARALLEL), interval(0, -1):
+            C = B
+
+        with computation(PARALLEL), interval(1, None):
+            A = C[0, 0, -1]
+
+    code = gtscript.stencil(backend=backend, definition=test_openmp_code_disabled)
+    with open(_get_computation_hpp(code), "r") as f:
+        content = f.read()
+        assert "#pragma omp parallel for" not in content and "#include <omp.h>" not in content
+
+    gt_config.GT4PY_ENABLE_OPENMP = old_env_value
