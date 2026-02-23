@@ -163,7 +163,7 @@ def _create_scan_field_operator_impl(
 
     if str(field_shape[scan_dim_index]) == "1":
         # Special case where we only write the last level of the scan column.
-        outer_output_desc.set_shape(new_shape=(1,), strides=(1,))
+        outer_output_desc.set_shape(new_shape=(1,))
         outer_write_edge.data.dst_subset = "0"
         field_subset = (
             dace_subsets.Range(field_subset[:scan_dim_index])
@@ -171,7 +171,7 @@ def _create_scan_field_operator_impl(
             + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
         )
         # We represent the inner result as a single value and let the scan loop override it.
-        inner_output_desc.set_shape(new_shape=(1,), strides=(1,))
+        scan_sdfg.arrays[inner_output_name] = dace.data.Scalar(inner_output_desc.dtype)
         assert set(st.label for st in scan_sdfg.states()) == {
             "scan_entry",
             "scan_compute",
