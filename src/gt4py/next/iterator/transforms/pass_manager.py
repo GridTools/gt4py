@@ -115,7 +115,7 @@ def _process_symbolic_domains_option(
     has_dynamic_domains = _has_dynamic_domains(ir)
     if has_dynamic_domains and use_max_domain_range_on_unstructured_shift is None:
         use_max_domain_range_on_unstructured_shift = True
-    else:
+    elif use_max_domain_range_on_unstructured_shift is None:
         use_max_domain_range_on_unstructured_shift = False
     if use_max_domain_range_on_unstructured_shift:
         if not has_dynamic_domains:
