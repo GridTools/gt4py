@@ -1725,7 +1725,12 @@ def _get_computation_hpp(stencil_object) -> pathlib.Path:
     )
 
 
-@pytest.mark.parametrize("backend", ["dace:cpu"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
+    ],
+)
 def test_openmp_codegen_dace(backend: str) -> None:
     domain = (5, 5, 5)
 
