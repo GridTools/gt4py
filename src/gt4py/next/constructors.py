@@ -252,12 +252,12 @@ class _FieldArrayConstructor(abc.ABC):
     ) -> core_defs.NDArrayObject: ...
 
 
-_ANS = TypeVar("_ANS", bound=core_ndarray_utils.ArrayNamespace)
+_ArrayNST = TypeVar("_ArrayNST", bound=core_ndarray_utils.ArrayNamespace)
 
 
 @dataclasses.dataclass(frozen=True)
-class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ANS]):
-    array_ns: _ANS
+class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
+    array_ns: _ArrayNST
     # device in the format expected by the array namespace
     device: Any = None
 

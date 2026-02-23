@@ -20,7 +20,8 @@ except ImportError:
     cupy = None
 
 
-class _EqualityComparable(Protocol):
+class _ArrayDType(Protocol):
+    # The only requirement for array API dtypes is equality comparability.
     def __eq__(self, other: Any) -> bool: ...
 
 
@@ -62,17 +63,17 @@ class ArrayNamespace(Hashable, Protocol):
         copy: bool | None = None,
     ) -> core_defs.NDArrayObject: ...
 
-    bool: _EqualityComparable
-    int8: _EqualityComparable
-    int16: _EqualityComparable
-    int32: _EqualityComparable
-    int64: _EqualityComparable
-    uint8: _EqualityComparable
-    uint16: _EqualityComparable
-    uint32: _EqualityComparable
-    uint64: _EqualityComparable
-    float32: _EqualityComparable
-    float64: _EqualityComparable
+    bool: _ArrayDType
+    int8: _ArrayDType
+    int16: _ArrayDType
+    int32: _ArrayDType
+    int64: _ArrayDType
+    uint8: _ArrayDType
+    uint16: _ArrayDType
+    uint32: _ArrayDType
+    uint64: _ArrayDType
+    float32: _ArrayDType
+    float64: _ArrayDType
 
 
 def is_array_namespace(obj: Any) -> TypeGuard[ArrayNamespace]:
