@@ -34,31 +34,31 @@ cp = core_defs.cp
 
 
 @dataclasses.dataclass
-class ConstructureTestSetup:
-    allocator: Any  #: gtx.FieldAllocator
+class ConstructorTestSetup:
+    allocator: gtx.FieldAllocator
     device: core_defs.Device
     expected_xp: ModuleType
 
 
 def _constructor_test_cases():
     return [
-        ConstructureTestSetup(
+        ConstructorTestSetup(
             allocator=next_allocators.StandardCPUFieldBufferAllocator(),
             device=None,
             expected_xp=np,
         ),
-        ConstructureTestSetup(
+        ConstructorTestSetup(
             allocator=None,
             device=core_defs.Device(core_defs.DeviceType.CPU, 0),
             expected_xp=np,
         ),
-        ConstructureTestSetup(
+        ConstructorTestSetup(
             allocator=np,
             device=None,
             expected_xp=np,
         ),
         pytest.param(
-            ConstructureTestSetup(
+            ConstructorTestSetup(
                 allocator=next_allocators.StandardGPUFieldBufferAllocator(),
                 device=None,
                 expected_xp=cp,
@@ -66,7 +66,7 @@ def _constructor_test_cases():
             marks=pytest.mark.requires_gpu,
         ),
         pytest.param(
-            ConstructureTestSetup(
+            ConstructorTestSetup(
                 allocator=None,
                 device=core_defs.Device(core_defs.CUPY_DEVICE_TYPE, 0),
                 expected_xp=cp,
