@@ -2351,3 +2351,66 @@ def test_gtir_scan(id, use_symbolic_column_size):
 
     sdfg(a, b, z, **symbols)
     assert np.allclose(b, ref)
+
+
+def test_gtir_scan_single_level_output():
+    K = 20
+    VAL0 = 1.2
+    VAL1 = 2.1
+    domain0 = im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim, KDim])
+    domain1 = im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim, KDim])
+    domain1.args[1].args[1] = im.minus(domain1.args[1].args[2], 1)
+    testee = gtir.Program(
+        id="gtir_scan_single_level_output",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="y", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="z", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop(
+                    im.scan(
+                        im.lambda_("state", "inp")(
+                            im.make_tuple(
+                                im.plus(im.tuple_get(0, "state"), im.deref("inp")),
+                                im.plus(im.tuple_get(1, "state"), im.deref("inp")),
+                            ),
+                        ),
+                        True,
+                        im.make_tuple(VAL0, VAL1),
+                    )
+                )("x"),
+                domain=im.make_tuple(domain0, domain1),
+                target=im.make_tuple(gtir.SymRef(id="y"), gtir.SymRef(id="z")),
+            )
+        ],
+    )
+
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+
+    a = np.random.rand(N, K)
+    b = np.random.rand(N, K)
+    c = np.random.rand(N, K)
+    ref = np.add.accumulate(a, axis=1)
+
+    symbols = FSYMBOLS | {
+        "__x_KDim_range_0": 0,
+        "__x_KDim_range_1": a.shape[1],
+        "__x_IDim_stride": a.strides[0] // a.itemsize,
+        "__x_KDim_stride": a.strides[1] // a.itemsize,
+        "__y_KDim_range_0": 0,
+        "__y_KDim_range_1": b.shape[1],
+        "__y_IDim_stride": b.strides[0] // b.itemsize,
+        "__y_KDim_stride": b.strides[1] // b.itemsize,
+        "__z_KDim_range_0": 0,
+        "__z_KDim_range_1": c.shape[1],
+        "__z_IDim_stride": c.strides[0] // c.itemsize,
+        "__z_KDim_stride": c.strides[1] // c.itemsize,
+    }
+
+    sdfg(a, b, c, **symbols)
+    assert np.allclose(b, ref + VAL0)
+    assert np.allclose(c, np.concatenate([c[:, :-1], ref[:, -1:] + VAL1], axis=1))

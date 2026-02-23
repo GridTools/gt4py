@@ -164,14 +164,14 @@ def _create_scan_field_operator_impl(
     if str(field_shape[scan_dim_index]) == "1":
         # Special case where we only write the last level of the scan column.
         outer_output_desc.set_shape(new_shape=(1,), strides=(1,))
-        outer_write_edge.data = dace.Memlet(data=outer_output_name, subset="0")
+        outer_write_edge.data.dst_subset = "0"
         field_subset = (
             dace_subsets.Range(field_subset[:scan_dim_index])
             + dace_subsets.Range.from_string("0")
             + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
         )
         # We represent the inner result as a single value and let the scan loop override it.
-        scan_sdfg.arrays[inner_output_name] = dace.data.Scalar(inner_output_desc.dtype)
+        inner_output_desc.set_shape(new_shape=(1,), strides=(1,))
         assert set(st.label for st in scan_sdfg.states()) == {
             "scan_entry",
             "scan_compute",
@@ -186,10 +186,10 @@ def _create_scan_field_operator_impl(
             and scan_compute_state.out_degree(inner_output_node) == 0
         )
         inner_write_edge = scan_compute_state.in_edges(inner_output_node)[0]
-        src_subset = inner_write_edge.data.get_src_subset(inner_write_edge, scan_compute_state)
-        inner_write_edge.data = dace.Memlet(
-            data=inner_output_name, subset="0", other_subset=src_subset
-        )
+        if inner_write_edge.data.data == inner_output_name:
+            inner_write_edge.data.subset = "0"
+        else:
+            inner_write_edge.data.other_subset = "0"
     else:
         # The map scope writes the full-shape dimension corresponding to the scan column.
         field_subset = (
@@ -197,12 +197,6 @@ def _create_scan_field_operator_impl(
             + dace_subsets.Range.from_string(f"0:{outer_output_desc.shape[0]}")
             + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
         )
-        # The result field on the outside is a transient array, allocated inside this
-        # function, so we know that its stride is constant. We just need to set it on
-        # the inside array, and we do not need to map any stride symbol.
-        outside_output_stride = field_desc.strides[scan_dim_index]
-        assert str(outside_output_stride).isdigit()
-        inner_output_desc.set_shape(inner_output_desc.shape, strides=(outside_output_stride,))
 
     # Now connect the output connector on the nested SDFG with the result field
     #  outside the scan map scope. For 1D domain, containing only the column dimension,
@@ -213,6 +207,13 @@ def _create_scan_field_operator_impl(
     inner_map_output_temporary_removed = output_edge.connect(map_exit, field_node, field_subset)
     if not inner_map_output_temporary_removed:
         raise ValueError("The scan nested SDFG is expected to write directly to the result field.")
+
+    # The result field on the outside is a transient array, allocated inside this
+    # function, so we know that its stride is constant. We just need to set it on
+    # the inside array, and we do not need to map any stride symbol.
+    outside_output_stride = field_desc.strides[scan_dim_index]
+    assert str(outside_output_stride).isdigit()
+    inner_output_desc.set_shape(inner_output_desc.shape, strides=(outside_output_stride,))
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
