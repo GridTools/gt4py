@@ -9,6 +9,7 @@
 from collections.abc import Hashable
 from typing import Any, Callable, Protocol, TypeGuard, cast
 
+import array_api_compat
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -104,21 +105,7 @@ def is_array_namespace(obj: Any) -> TypeGuard[ArrayNamespace]:
 
 
 def array_namespace(array: core_defs.NDArrayObject) -> ArrayNamespace:
-    """
-    Get the namespace of the array.
-
-    This is defined in https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.__array_namespace__.html,
-    however not implemented in CuPy < 14.
-    """
-    # TODO(havogt): this function can be replaced by https://data-apis.org/array-api-compat/
-    if hasattr(array, "__array_namespace__"):
-        return array.__array_namespace__()
-    else:
-        if isinstance(array, np.ndarray):
-            return np
-        if cupy is not None and isinstance(array, cupy.ndarray):
-            return cupy
-        raise TypeError(f"Could not determine array namespace of {array} of type {type(array)}")
+    return cast(ArrayNamespace, array_api_compat.array_namespace(array))
 
 
 def _numpy_device_translator(device: core_defs.Device | None) -> Any:

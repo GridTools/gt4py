@@ -14,6 +14,8 @@ import functools
 from collections.abc import Mapping, Sequence
 from typing import Any, Callable, Final, Generic, TypeAlias, TypeVar, cast
 
+import array_api_compat
+
 import gt4py.eve as eve
 import gt4py.next.common as common
 import gt4py.next.custom_layout_allocators as next_allocators
@@ -260,6 +262,11 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
     array_ns: _ArrayNST
     # device in the format expected by the array namespace
     device: Any = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "array_ns", array_api_compat.array_namespace(self.array_ns.empty((1,)))
+        )
 
     def _to_array_ns_dtype(self, dtype: core_defs.DType) -> Any:
         return getattr(self.array_ns, core_types.type_to_name[dtype.scalar_type])

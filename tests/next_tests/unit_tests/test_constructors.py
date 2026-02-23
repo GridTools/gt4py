@@ -15,6 +15,7 @@ from types import ModuleType
 import dataclasses
 
 from gt4py import next as gtx
+from gt4py.next import typing as gtx_typing
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, custom_layout_allocators as next_allocators
 from gt4py.next.constructors import (
@@ -35,7 +36,7 @@ cp = core_defs.cp
 
 @dataclasses.dataclass
 class ConstructorTestSetup:
-    allocator: gtx.FieldAllocator
+    allocator: gtx_typing.Allocator
     device: core_defs.Device
     expected_xp: ModuleType
 
