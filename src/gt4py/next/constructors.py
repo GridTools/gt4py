@@ -262,12 +262,7 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
     device: Any = None
 
     def _to_array_ns_dtype(self, dtype: core_defs.DType) -> Any:
-        dtype_name = core_types.type_to_name[dtype.scalar_type]
-        if dtype_name == "bool" and not hasattr(self.array_ns, "bool"):
-            # some not-yet-compliant array namespaces use 'bool_' instead of 'bool'
-            # TODO(havogt): remove once we drop support for numpy 1.x and cupy < 14
-            dtype_name = "bool_"
-        return getattr(self.array_ns, dtype_name)
+        return getattr(self.array_ns, core_types.type_to_name[dtype.scalar_type])
 
     def empty(
         self,
@@ -275,13 +270,9 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        try:
-            return self.array_ns.empty(
-                domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
-            )
-        except TypeError:
-            # TODO(havogt): remove once we drop support for numpy 1.x which does not support the 'device' argument
-            return self.array_ns.empty(domain.shape, dtype=self._to_array_ns_dtype(dtype))
+        return self.array_ns.empty(
+            domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
+        )
 
     def zeros(
         self,
@@ -289,13 +280,9 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        try:
-            return self.array_ns.zeros(
-                domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
-            )
-        except TypeError:
-            # TODO(havogt): remove once we drop support for numpy 1.x which does not support the 'device' argument
-            return self.array_ns.zeros(domain.shape, dtype=self._to_array_ns_dtype(dtype))
+        return self.array_ns.zeros(
+            domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
+        )
 
     def ones(
         self,
@@ -303,13 +290,9 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        try:
-            return self.array_ns.ones(
-                domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
-            )
-        except TypeError:
-            # TODO(havogt): remove once we drop support for numpy 1.x which does not support the 'device' argument
-            return self.array_ns.ones(domain.shape, dtype=self._to_array_ns_dtype(dtype))
+        return self.array_ns.ones(
+            domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
+        )
 
     def full(
         self,
@@ -318,20 +301,12 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        try:
-            return self.array_ns.full(
-                domain.shape,
-                fill_value=fill_value,
-                dtype=self._to_array_ns_dtype(dtype),
-                device=self.device,
-            )
-        except TypeError:
-            # TODO(havogt): remove once we drop support for numpy 1.x which does not support the 'device' argument
-            return self.array_ns.full(
-                domain.shape,
-                fill_value=fill_value,
-                dtype=self._to_array_ns_dtype(dtype),
-            )
+        return self.array_ns.full(
+            domain.shape,
+            fill_value=fill_value,
+            dtype=self._to_array_ns_dtype(dtype),
+            device=self.device,
+        )
 
     def asarray(
         self,
@@ -340,13 +315,9 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        try:
-            arr = self.array_ns.asarray(
-                data, dtype=self._to_array_ns_dtype(dtype), device=self.device, copy=True
-            )
-        except TypeError:
-            # TODO(havogt): remove once we drop support for numpy 1.x which does not support the 'device' and 'copy' arguments
-            arr = self.array_ns.asarray(data, dtype=self._to_array_ns_dtype(dtype))
+        arr = self.array_ns.asarray(
+            data, dtype=self._to_array_ns_dtype(dtype), device=self.device, copy=True
+        )
         assert domain.shape == arr.shape, (
             f"pre-condition of `asarray` not met: {data.shape=} and {domain.shape} need to agree."
         )
