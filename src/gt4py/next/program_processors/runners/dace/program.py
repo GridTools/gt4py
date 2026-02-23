@@ -156,7 +156,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         used_connectivities: dict[str, gtx_common.NeighborConnectivity] = {
             conn_id: conn
             for offset, conn in self.compilation_options.connectivities.items()
-            if gtx_common.is_neighbor_table(conn)
+            if isinstance(conn, gtx_common.NeighborConnectivity)
             and (conn_id := gtx_dace_args.connectivity_identifier(offset))
             in self.sdfg_closure_cache["arrays"]
         }

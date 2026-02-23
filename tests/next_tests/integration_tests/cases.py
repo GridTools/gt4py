@@ -48,12 +48,11 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     E2VDim,
     Edge,
     IDim,
-    Ioff,
+    IHalfDim,
     JDim,
-    Joff,
+    JHalfDim,
     KDim,
     KHalfDim,
-    Koff,
     V2EDim,
     Vertex,
     exec_alloc_descriptor,
@@ -67,6 +66,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 # mypy does not accept [IDim, ...] as a type
 
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
+IHalfField: TypeAlias = gtx.Field[[IHalfDim], np.int32]  # type: ignore [valid-type]
 JField: TypeAlias = gtx.Field[[JDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
@@ -494,6 +494,7 @@ def verify_with_default_data(
     case: Case,
     fieldop: decorator.FieldOperator,
     ref: Callable,
+    offset_provider: Optional[OffsetProvider] = None,
     comparison: Callable[[Any, Any], bool] = tree_mapped_np_allclose,
 ) -> None:
     """
@@ -508,6 +509,8 @@ def verify_with_default_data(
         fieldview_prog: The field operator or program to be verified.
         ref: A callable which will be called with all the input arguments
             of the fieldview code, after applying ``.ndarray`` on the fields.
+        offset_provider: An override for the test case's offset_provider.
+            Use with care!
         comparison: A comparison function, which will be called as
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
@@ -521,7 +524,7 @@ def verify_with_default_data(
         *inps,
         **kwfields,
         ref=ref(*ref_args),
-        offset_provider=case.offset_provider,
+        offset_provider=offset_provider,
         comparison=comparison,
     )
 
@@ -572,7 +575,7 @@ def unstructured_case_3d(unstructured_case):
     return dataclasses.replace(
         unstructured_case,
         default_sizes={**unstructured_case.default_sizes, KDim: 10},
-        offset_provider={**unstructured_case.offset_provider, "Koff": KDim},
+        offset_provider={**unstructured_case.offset_provider},
     )
 
 
@@ -724,7 +727,9 @@ class Case:
                 IDim: grid_descriptor.sizes[0],
                 JDim: grid_descriptor.sizes[1],
                 KDim: grid_descriptor.sizes[2],
-                KHalfDim: grid_descriptor.sizes[3],
+                IHalfDim: grid_descriptor.sizes[0] - 1,
+                JHalfDim: grid_descriptor.sizes[1] - 1,
+                KHalfDim: grid_descriptor.sizes[2] - 1,
             },
             grid_type=common.GridType.CARTESIAN,
             allocator=allocator,
