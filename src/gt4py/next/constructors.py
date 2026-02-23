@@ -44,7 +44,8 @@ This module deals with 3 concepts:
 
 # Type to be used by the end-user
 Allocator: TypeAlias = core_ndarray_utils.ArrayNamespace | next_allocators.FieldBufferAllocationUtil
-"""Type for field memory allocators.
+"""
+Type for field memory allocators.
 
 Accepts either:
 - An array namespace following the Array API standard (e.g. ``numpy``, ``cupy``, ``jax.numpy``),
