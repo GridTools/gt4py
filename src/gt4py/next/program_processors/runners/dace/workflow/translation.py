@@ -368,7 +368,7 @@ class DaCeTranslator(
 
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
-    use_max_domain_range_on_unstructured_shift: bool | None = None
+    use_max_domain_range_on_unstructured_shift: bool = True
 
     def generate_sdfg(
         self,
