@@ -2357,9 +2357,11 @@ def test_gtir_scan_single_level_output():
     K = 20
     VAL0 = 1.2
     VAL1 = 2.1
-    domain0 = im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim, KDim])
-    domain1 = im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim, KDim])
-    domain1.args[1].args[1] = im.minus(domain1.args[1].args[2], 1)
+    full_domain = im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", [IDim, KDim])
+    one_level_domain = im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim, KDim])
+    # We write only to the last level of `z` field (args[1] is range start, args[2] is range end)
+    one_level_domain.args[1].args[1] = im.minus(one_level_domain.args[1].args[2], 1)
+
     testee = gtir.Program(
         id="gtir_scan_single_level_output",
         function_definitions=[],
@@ -2383,7 +2385,7 @@ def test_gtir_scan_single_level_output():
                         im.make_tuple(VAL0, VAL1),
                     )
                 )("x"),
-                domain=im.make_tuple(domain0, domain1),
+                domain=im.make_tuple(full_domain, one_level_domain),
                 target=im.make_tuple(gtir.SymRef(id="y"), gtir.SymRef(id="z")),
             )
         ],

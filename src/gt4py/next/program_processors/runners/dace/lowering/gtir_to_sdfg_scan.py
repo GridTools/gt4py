@@ -194,7 +194,7 @@ def _create_scan_field_operator_impl(
     else:
         # Special case where we only write the last level of the scan column.
         assert isinstance(inner_output_desc, dace.data.Scalar)
-        assert str(field_shape[scan_dim_index]) == "1"
+        assert (field_shape[scan_dim_index] == 1) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
@@ -561,7 +561,7 @@ def _handle_dataflow_result_of_nested_sdfg(
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
     scan_column_size = field_shape[scan_dim_index]
 
-    if str(scan_column_size) == "1":
+    if (scan_column_size == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
         # Special case where we only write the last level of the scan column.
         # We represent the inner result as a single value and let the scan loop override it.
         inner_desc = dace.data.Scalar(inner_desc.dtype, transient=False)
