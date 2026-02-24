@@ -125,7 +125,17 @@ class SymbolicDomain:
         if len(shift) == 2:
             off, val = shift
             assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
-            connectivity_type = common.get_offset_type(offset_provider_type, off.value)
+            try:
+                connectivity_type = common.get_offset_type(offset_provider_type, off.value)
+            except KeyError:
+                fallback_dim = next(
+                    (dim for dim in self.ranges.keys() if dim.value == off.value), None
+                )
+                if fallback_dim is None:
+                    fallback_dim = common.Dimension(
+                        value=off.value, kind=common.DimensionKind.HORIZONTAL
+                    )
+                connectivity_type = fallback_dim
 
             if isinstance(connectivity_type, common.Dimension):
                 if val is trace_shifts.Sentinel.VALUE:
@@ -133,8 +143,13 @@ class SymbolicDomain:
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
                 current_dim = connectivity_type
                 # cartesian offset
+                if current_dim not in new_ranges:
+                    new_ranges[current_dim] = SymbolicRange(
+                        itir.InfinityLiteral.NEGATIVE,
+                        itir.InfinityLiteral.POSITIVE,
+                    )
                 new_ranges[current_dim] = SymbolicRange.translate(
-                    self.ranges[current_dim], val.value
+                    new_ranges[current_dim], val.value
                 )
             elif isinstance(connectivity_type, common.NeighborConnectivityType):
                 # unstructured shift

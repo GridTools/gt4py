@@ -57,7 +57,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
         program = gtir_stage.data
         program = itir_transforms.apply_fieldview_transforms(  # run the transforms separately because they require the runtime info
-            program, offset_provider=offset_provider
+            program,
+            offset_provider=offset_provider,
+            unroll_reduce=True,
         )
         object.__setattr__(
             gtir_stage,

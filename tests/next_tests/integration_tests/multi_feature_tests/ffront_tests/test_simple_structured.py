@@ -36,52 +36,54 @@ if tests_root not in sys.path:
 
 import gt4py.next as gtx
 from gt4py.next.experimental import concat_where
+from gt4py.next import neighbor_sum
+
 
 # Define Dimensions
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
-Color = gtx.Dimension("Kolor")
+Kolor = gtx.Dimension("Kolor")
 
 @gtx.field_operator
 def compute_zavgS_cartesian_0(
-    pp: gtx.Field[[IDim, JDim], float], S_M: gtx.Field[[IDim, JDim, Color], float]
-) -> gtx.Field[[IDim, JDim, Color], float]:
+    pp: gtx.Field[[IDim, JDim], float], S_M: gtx.Field[[IDim, JDim, Kolor], float]
+) -> gtx.Field[[IDim, JDim, Kolor], float]:
     zavg = 0.5 * (pp + pp(JDim + 1))
     return S_M * zavg
 
 
 @gtx.field_operator
 def compute_zavgS_cartesian_1(
-    pp: gtx.Field[[IDim, JDim], float], S_M: gtx.Field[[IDim, JDim, Color], float]
-) -> gtx.Field[[IDim, JDim, Color], float]:
+    pp: gtx.Field[[IDim, JDim], float], S_M: gtx.Field[[IDim, JDim, Kolor], float]
+) -> gtx.Field[[IDim, JDim, Kolor], float]:
     zavg = 0.5 * (pp + pp(IDim + 1))
     return S_M * zavg
 
 
 @gtx.field_operator
 def compute_zavgS_cartesian_2(
-    pp: gtx.Field[[IDim, JDim], float], S_M: gtx.Field[[IDim, JDim, Color], float]
-) -> gtx.Field[[IDim, JDim, Color], float]:
+    pp: gtx.Field[[IDim, JDim], float], S_M: gtx.Field[[IDim, JDim, Kolor], float]
+) -> gtx.Field[[IDim, JDim, Kolor], float]:
     zavg = 0.5 * (pp(IDim + 1) + pp(JDim + 1))
     return S_M * zavg
 
 @gtx.field_operator
 def on_edges(
-    f0: gtx.Field[[IDim, JDim, Color], float],
-    f1: gtx.Field[[IDim, JDim, Color], float],
-    f2: gtx.Field[[IDim, JDim, Color], float],
-) -> gtx.Field[[IDim, JDim, Color], float]:
+    f0: gtx.Field[[IDim, JDim, Kolor], float],
+    f1: gtx.Field[[IDim, JDim, Kolor], float],
+    f2: gtx.Field[[IDim, JDim, Kolor], float],
+) -> gtx.Field[[IDim, JDim, Kolor], float]:
     return concat_where(
-        Color == 0, 
+        Kolor == 0, 
         f0,
-        concat_where(Color == 1, f1, f2),
+        concat_where(Kolor == 1, f1, f2),
     )
 
 @gtx.field_operator
 def compute_zavgS_cartesian(
     pp: gtx.Field[[IDim, JDim], float],
-    S_M: gtx.Field[[IDim, JDim, Color], float],
-) -> gtx.Field[[IDim, JDim, Color], float]:
+    S_M: gtx.Field[[IDim, JDim, Kolor], float],
+) -> gtx.Field[[IDim, JDim, Kolor], float]:
 
     return on_edges(
         compute_zavgS_cartesian_0(pp, S_M),
@@ -92,8 +94,8 @@ def compute_zavgS_cartesian(
 @gtx.program
 def zavg(
     pp: gtx.Field[[IDim, JDim], float],
-    S_M: gtx.Field[[IDim, JDim, Color], float],
-    out: gtx.Field[[IDim, JDim, Color], float],
+    S_M: gtx.Field[[IDim, JDim, Kolor], float],
+    out: gtx.Field[[IDim, JDim, Kolor], float],
 ):
     compute_zavgS_cartesian(pp, S_M, out=out) 
 
@@ -110,15 +112,15 @@ pp_2d = raw_vertices.reshape((ny + 1, nx + 1))    # Shape: [nx+1, ny+1]
 max_j = nx + 1
 max_i = ny + 1
 
-S_M_field = np.zeros((max_i, max_j, 3)) # [IDim, JDim, Color]
+S_M_field = np.zeros((max_i, max_j, 3)) # [IDim, JDim, Kolor]
 
-# Fill Color 0 (East) - fits in [0:nx, 0:ny+1]
+# Fill Kolor 0 (East) - fits in [0:nx, 0:ny+1]
 S_M_field[0:ny+1, 0:nx, 0] = edges_east_2d
 
-# Fill Color 1 (NE) - fits in [0:nx+1, 0:ny]
+# Fill Kolor 1 (NE) - fits in [0:nx+1, 0:ny]
 S_M_field[0:ny, 0:nx+1, 1] = edges_ne_2d
 
-# Fill Color 2 (SE) - fits in [0:nx, 0:ny]
+# Fill Kolor 2 (SE) - fits in [0:nx, 0:ny]
 S_M_field[0:ny, 0:nx, 2]   = edges_se_2d
 
 # Prepare Vertices (pp)
@@ -126,8 +128,8 @@ pp_field = np.zeros((max_i, max_j))
 pp_field[:, :] = pp_2d
 
 pp = gtx.as_field([IDim, JDim], pp_2d)
-S_M = gtx.as_field([IDim, JDim, Color], S_M_field)
-out = gtx.as_field([IDim, JDim, Color], np.zeros_like(S_M_field))
+S_M = gtx.as_field([IDim, JDim, Kolor], S_M_field)
+out = gtx.as_field([IDim, JDim, Kolor], np.zeros_like(S_M_field))
 print("pp: ", pp.asnumpy())
 print("S_M: ", S_M[:,:,2].asnumpy())
 print("Output before computation: ", out)
@@ -135,29 +137,28 @@ print("Output before computation: ", out)
 from gt4py.next.program_processors.runners.dace import run_dace_cpu
 zavg_dace = zavg.with_backend(run_dace_cpu)
 # Pseudo-code for execution
-output = zavg_dace(
-    pp=pp, 
-    S_M=S_M,
-    out=out,
-    offset_provider={},
-)
+# output = zavg_dace(
+#     pp=pp, 
+#     S_M=S_M,
+#     out=out,
+#     offset_provider={},
+# )
 
-print("Output data East:\n", out[:,:,0].asnumpy())
-print("Output data NE:\n", out[:,:,1].asnumpy())
-print("Output data SE:\n", out[:,:,2].asnumpy())
-diff_i = pp.asnumpy()[1,0] - pp.asnumpy()[0,0]
-diff_j = pp.asnumpy()[0,1] - pp.asnumpy()[0,0]
-print("diff_i: ", diff_i)
-print("diff_j: ", diff_j)
+# print("Output data East:\n", out[:,:,0].asnumpy())
+# print("Output data NE:\n", out[:,:,1].asnumpy())
+# print("Output data SE:\n", out[:,:,2].asnumpy())
+# diff_i = pp.asnumpy()[1,0] - pp.asnumpy()[0,0]
+# diff_j = pp.asnumpy()[0,1] - pp.asnumpy()[0,0]
+# print("diff_i: ", diff_i)
+# print("diff_j: ", diff_j)
 
 
 @gtx.field_operator
-def neighbor_sum(
+def neighbor_sum_cart(
     edges_0: gtx.Field[[IDim, JDim], float],
     edges_1: gtx.Field[[IDim, JDim], float],
     edges_2: gtx.Field[[IDim, JDim], float],
 ) -> gtx.Field[[IDim, JDim], float]:
-    # Correct relative offset syntax: field(Dim + offset, ...)
     return (edges_0 
         + edges_0(JDim - 1)
         + edges_1
@@ -165,6 +166,7 @@ def neighbor_sum(
         + edges_2(IDim - 1)
         + edges_2(JDim - 1)
     )
+
 @gtx.program
 def neighbor_sum_program(
     edges_0: gtx.Field[[IDim, JDim], float],
@@ -174,46 +176,111 @@ def neighbor_sum_program(
     domain_max_i: int,
     domain_max_j: int,
 ):
-    neighbor_sum(edges_0, edges_1, edges_2,
+    neighbor_sum_cart(edges_0, edges_1, edges_2,
                   out=out, domain={IDim: (0, domain_max_i), JDim: (0, domain_max_j)},
+)
+    
+
+# @gtx.field_operator
+# def reduce_Kolors(
+#     edges_0: gtx.Field[[IDim, JDim, Kolor], float],
+# ) -> gtx.Field[[IDim, JDim], float]:
+#     return edges_0(Kolor == 0) + edges_0(Kolor == 1) + edges_0(Kolor == 2)
+    
+@gtx.field_operator
+def compute_pnabla_cartesian(
+    pp: gtx.Field[[IDim, JDim], float],
+    S_M: gtx.Field[[IDim, JDim, Kolor], float],
+    sign: gtx.Field[[IDim, JDim, Kolor], float],
+    vol: gtx.Field[[IDim, JDim], float],
+) -> gtx.Field[[IDim, JDim], float]:
+    zavgS = compute_zavgS_cartesian(pp, S_M)
+    pnabla_M = concat_where(Kolor == 0, zavgS + zavgS(JDim - 1),
+                    concat_where(Kolor == 1, zavgS + zavgS(IDim - 1),
+                    zavgS(IDim - 1) + zavgS(JDim - 1)))
+    pnabla_M = pnabla_M * sign
+    return neighbor_sum(pnabla_M, axis=Kolor) / vol
+
+@gtx.program
+def pnabla_cartesian(
+    pp: gtx.Field[[IDim, JDim], float],
+    S_M: gtx.Field[[IDim, JDim, Kolor], float],
+    sign: gtx.Field[[IDim, JDim, Kolor], float],
+    vol: gtx.Field[[IDim, JDim], float],
+    out: gtx.Field[[IDim, JDim], float],
+    domain_max_i: int,
+    domain_max_j: int,
+):
+    compute_pnabla_cartesian(pp, S_M, sign, vol,
+                  out=out, domain={IDim: (0, domain_max_i), JDim: (0, domain_max_j), Kolor: (0, 3)},
 )
 
 # Test the neighbor_sum operator on the output of compute_zavgS_cartesian
 neighbor_sum_out = gtx.as_field([IDim, JDim], np.zeros((max_i, max_j)))
 
-# Slice the output field 'out' into its 3 color components in Python
+# Slice the output field 'out' into its 3 Kolor components in Python
 # We already computed 'out' in the previous step
-edges_field_np = out.asnumpy()
+# edges_field_np = out.asnumpy()
 
-padded_shape = (max_i + 1, max_j + 1)
-edges_0_np = np.zeros(padded_shape)
-edges_1_np = np.zeros(padded_shape)
-edges_2_np = np.zeros(padded_shape)
-edges_0_np[1:, 1:] = edges_field_np[:,:,0]
-edges_1_np[1:, 1:] = edges_field_np[:,:,1]
-edges_2_np[1:, 1:] = edges_field_np[:,:,2]
+# padded_shape = (max_i + 1, max_j + 1)
+# edges_0_np = np.zeros(padded_shape)
+# edges_1_np = np.zeros(padded_shape)
+# edges_2_np = np.zeros(padded_shape)
+# edges_0_np[1:, 1:] = edges_field_np[:,:,0]
+# edges_1_np[1:, 1:] = edges_field_np[:,:,1]
+# edges_2_np[1:, 1:] = edges_field_np[:,:,2]
 
-# Add padding and shift the origin
-edges_0_padded = gtx.as_field([IDim, JDim], edges_0_np, origin={IDim: 1, JDim: 1})
-edges_1_padded = gtx.as_field([IDim, JDim], edges_1_np, origin={IDim: 1, JDim: 1})
-edges_2_padded = gtx.as_field([IDim, JDim], edges_2_np, origin={IDim: 1, JDim: 1})
+# # Add padding and shift the origin
+# edges_0_padded = gtx.as_field([IDim, JDim], edges_0_np, origin={IDim: 1, JDim: 1})
+# edges_1_padded = gtx.as_field([IDim, JDim], edges_1_np, origin={IDim: 1, JDim: 1})
+# edges_2_padded = gtx.as_field([IDim, JDim], edges_2_np, origin={IDim: 1, JDim: 1})
 
 
-neighbor_sum_program.with_backend(run_dace_cpu)(
-    edges_0=edges_0_padded,
-    edges_1=edges_1_padded,
-    edges_2=edges_2_padded,
-    out=neighbor_sum_out,
+# neighbor_sum_program.with_backend(run_dace_cpu)(
+#     edges_0=edges_0_padded,
+#     edges_1=edges_1_padded,
+#     edges_2=edges_2_padded,
+#     out=neighbor_sum_out,
+#     domain_max_i=np.int64(max_i), 
+#     domain_max_j=np.int64(max_j),
+#     offset_provider={}
+# )
+
+# print("Neighbor sum output:\n", neighbor_sum_out.asnumpy())
+
+vol = np.ones((max_i, max_j))
+sign = np.ones((max_i, max_j, 3))
+vol_field = gtx.as_field([IDim, JDim], vol)
+sign_field = gtx.as_field([IDim, JDim, Kolor], sign)
+
+pnabla_out = gtx.as_field([IDim, JDim], np.zeros((max_i, max_j)))
+
+pnabla_cartesian.with_backend(run_dace_cpu)(
+    pp=pp,
+    S_M=S_M,
+    sign=sign_field,
+    vol=vol_field,
+    out=pnabla_out,
     domain_max_i=np.int64(max_i), 
     domain_max_j=np.int64(max_j),
-    offset_provider={}
+    offset_provider={},
 )
 
-from gt4py.next.iterator.transforms import pass_manager
+print("Output of pnabla_cartesian:\n", pnabla_out.asnumpy())
+
+
+# neighbor_sum_onefield_program.with_backend(run_dace_cpu)(
+#     edges=out,
+#     out=neighbor_sum_out,
+#     domain_max_i=np.int64(max_i), 
+#     domain_max_j=np.int64(max_j),
+#     offset_provider={},
+# )
+
+# from gt4py.next.iterator.transforms import pass_manager
 
 # ir = neighbor_sum_program.gtir
 # print(ir)
 # # print(pass_manager.apply_fieldview_transforms(ir, offset_provider={}))
 # print(pass_manager.apply_common_transforms(ir, offset_provider={}))
 
-print("Neighbor sum output:\n", neighbor_sum_out.asnumpy())

@@ -387,7 +387,11 @@ class ITIRTypeInference(eve.NodeTranslator):
         if isinstance(node, itir.Node):
             if isinstance(result, ts.TypeSpec):
                 if node.type and not isinstance(node.type, ts.DeferredType):
-                    assert type_info.is_compatible_type(node.type, result)
+                    if not type_info.is_compatible_type(node.type, result):
+                        raise TypeError(
+                            "Incompatible inferred type for node "
+                            f"{node}: existing={node.type}, inferred={result}."
+                        )
                 node.type = result
             elif isinstance(result, ObservableTypeSynthesizer) or result is None:
                 pass
@@ -454,7 +458,11 @@ class ITIRTypeInference(eve.NodeTranslator):
             assert isinstance(target_type, (ts.FieldType, ts.DeferredType))
             assert isinstance(expr_type, (ts.FieldType, ts.DeferredType))
             if isinstance(target_type, ts.FieldType) and isinstance(expr_type, ts.FieldType):
-                assert expr_type.dims == target_type.dims
+                if expr_type.dims != target_type.dims:
+                    raise TypeError(
+                        "SetAt domain mismatch: expr dims "
+                        f"{expr_type.dims} vs target dims {target_type.dims}."
+                    )
                 assert target_type.dtype == expr_type.dtype
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs) -> ts.DimensionType:

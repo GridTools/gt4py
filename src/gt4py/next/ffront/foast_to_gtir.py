@@ -448,6 +448,16 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
+        axis = node.kwargs["axis"].type.dim
+
+        if axis.kind is not common.DimensionKind.LOCAL:
+            val = im.call("cartesian_reduce")(
+                op,
+                init_expr,
+                itir.AxisLiteral(value=axis.value, kind=axis.kind),
+            )
+            return im.as_fieldop(val)(it)
+
         val = im.reduce(op, init_expr)
         return im.op_as_fieldop(val)(it)
 

@@ -117,6 +117,10 @@ class CombinedTracer(Tracer):
 
 
 def _combine(*values):
+    tracer_values = tuple(val for val in values if isinstance(val, Tracer))
+    if tracer_values:
+        return CombinedTracer(tracer_values)
+
     # `OffsetLiteral`s may occur in `list_get` calls
     if not all(
         val in [Sentinel.VALUE, Sentinel.TYPE] or isinstance(val, ir.OffsetLiteral)
@@ -170,6 +174,10 @@ def _lift(f):
 
 
 def _reduce(f, init):
+    return _combine
+
+
+def _cartesian_reduce(f, init, axis):
     return _combine
 
 
@@ -258,6 +266,7 @@ _START_CTX: Final = {
     "lift": _lift,
     "scan": _scan,
     "reduce": _reduce,
+    "cartesian_reduce": _cartesian_reduce,
     "neighbors": _neighbors,
     "map_": _map,
     "if_": _if,

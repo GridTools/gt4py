@@ -78,6 +78,11 @@ def reduce(*args):
 
 
 @builtin_dispatch
+def cartesian_reduce(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def scan(*args):
     raise BackendNotSelectedError()
 
@@ -502,6 +507,7 @@ BUILTINS = {
     "named_range",
     "neighbors",
     "reduce",
+    "cartesian_reduce",
     "scan",
     "tuple_get",
     "unstructured_domain",

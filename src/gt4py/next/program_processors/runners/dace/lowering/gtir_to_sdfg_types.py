@@ -82,6 +82,9 @@ class FieldopData:
                     dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
                     for dim, index in zip(domain_dims, domain_indices)
                 }
+                for dim in self.gt_type.dims:
+                    if dim not in it_indices:
+                        it_indices[dim] = gtir_dataflow.SymbolExpr(0, INDEX_DTYPE)
             field_origin = [
                 (dim, dace.symbolic.SymExpr(0) if self.origin is None else self.origin[i])
                 for i, dim in enumerate(self.gt_type.dims)

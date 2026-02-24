@@ -134,6 +134,9 @@ class PythonCodegen(codegen.TemplatedGenerator):
 
     Literal = as_fmt("{value}")
 
+    def visit_OffsetLiteral(self, node: gtir.OffsetLiteral, **kwargs: Any) -> str:
+        return str(node.value)
+
     def visit_AxisLiteral(self, node: gtir.AxisLiteral, **kwargs: Any) -> str:
         return node.value
 

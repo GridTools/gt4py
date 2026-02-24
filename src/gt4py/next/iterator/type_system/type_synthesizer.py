@@ -133,12 +133,19 @@ def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_NUMBER_BUILTINS)
-def _(lhs: ts.ScalarType, rhs: ts.ScalarType) -> ts.ScalarType:
+def _(lhs: ts.ScalarType | it_ts.OffsetLiteralType, rhs: ts.ScalarType | it_ts.OffsetLiteralType) -> ts.ScalarType:
+    if isinstance(lhs, it_ts.OffsetLiteralType):
+        assert isinstance(lhs.value, ts.ScalarType)
+        lhs = lhs.value
+    if isinstance(rhs, it_ts.OffsetLiteralType):
+        assert isinstance(rhs.value, ts.ScalarType)
+        rhs = rhs.value
     if isinstance(lhs, ts.DeferredType):
         return rhs
     if isinstance(rhs, ts.DeferredType):
         return lhs
-    assert lhs == rhs
+    if lhs != rhs:
+        raise TypeError(f"Mismatched scalar types in binary operation: lhs={lhs}, rhs={rhs}.")
     return lhs
 
 
@@ -512,7 +519,12 @@ def _resolve_dimensions(
             shift_tuple[::2]
         ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
             assert isinstance(off_literal.value, str)
-            offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
+            try:
+                offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
+            except KeyError:
+                offset_type = common.Dimension(
+                    value=off_literal.value, kind=common.DimensionKind.HORIZONTAL
+                )
             if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
                 continue  # No shift applied
             if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
@@ -637,15 +649,53 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @type_synthesizer
     def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):
-        assert all(isinstance(arg, ts.ListType) for arg in args)
-        assert any(
-            arg.offset_type is not None for arg in args
-        )  # we only have `make_const_list`s in the reduce which is not allowed
+        if not all(isinstance(arg, ts.ListType) for arg in args):
+            arg_types = ", ".join(type(arg).__name__ for arg in args)
+            raise TypeError(
+                "Unsupported reduction arguments: expected list-like inputs (e.g. neighbors(...)) "
+                f"but got ({arg_types})."
+            )
+        if not any(arg.offset_type is not None for arg in args):
+            raise TypeError(
+                "Unsupported reduction arguments: all inputs are constant lists without connectivity offsets."
+            )
         return op(
             init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
         )
 
     return applied_reduce
+
+
+@_register_builtin_type_synthesizer
+def cartesian_reduce(
+    op: TypeSynthesizer, init: ts.TypeSpec, axis: ts.DimensionType
+) -> TypeSynthesizer:
+    @type_synthesizer
+    def applied_cartesian_reduce(
+        *args: ts.TypeSpec,
+        offset_provider_type: common.OffsetProviderType,
+    ) -> ts.DataType:
+        if not args:
+            raise TypeError("cartesian_reduce expects at least one scalar argument.")
+        assert isinstance(axis, ts.DimensionType)
+        if any(isinstance(arg, ts.DeferredType) for arg in args):
+            return ts.DeferredType(constraint=None)
+
+        arg_element_types: list[ts.DataType] = []
+        for arg in args:
+            if isinstance(arg, it_ts.IteratorType):
+                arg_element_types.append(arg.element_type)
+            elif isinstance(arg, ts.DataType):
+                arg_element_types.append(arg)
+            else:
+                raise TypeError(
+                    "Unsupported cartesian_reduce argument type: "
+                    f"{type(arg).__name__}."
+                )
+
+        return op(init, *arg_element_types, offset_provider_type=offset_provider_type)
+
+    return applied_cartesian_reduce
 
 
 @_register_builtin_type_synthesizer
@@ -667,7 +717,12 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                     offset_axis.value, str
                 )
-                type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
+                try:
+                    type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
+                except KeyError:
+                    type_ = common.Dimension(
+                        value=offset_axis.value, kind=common.DimensionKind.HORIZONTAL
+                    )
                 if isinstance(type_, common.Dimension):
                     pass
                 elif isinstance(type_, common.NeighborConnectivityType):

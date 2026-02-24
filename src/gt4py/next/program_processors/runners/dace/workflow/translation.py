@@ -385,7 +385,11 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+            ir = itir_transforms.apply_fieldview_transforms(
+                ir,
+                offset_provider=offset_provider,
+                unroll_reduce=True,
+            )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
