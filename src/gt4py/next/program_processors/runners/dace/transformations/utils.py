@@ -22,7 +22,13 @@ _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
 
 
 def unique_name(name: str) -> str:
-    """Adds a unique string to `name`."""
+    """Adds a unique string to `name`.
+
+    Note:
+        The names generates by this function are rather unstable and it should
+        not be used if a particular order should be enforced. This function is
+        marked for deprecation.
+    """
     maximal_length = 200
     unique_sufix = str(uuid.uuid1()).replace("-", "_")
     if len(name) > (maximal_length - len(unique_sufix)):
@@ -777,3 +783,67 @@ def associate_dimmensions(
     assert len(dim_mapping) + len(drop2) == sbs2.dims()
 
     return dim_mapping, drop1, drop2
+
+
+def gt_data_descriptor_mapping(
+    state: dace.SDFGState,
+    nsdfg: dace_nodes.NestedSDFG,
+    only_fully_mapped: bool,
+    only_inputs: bool = False,
+    only_outputs: bool = False,
+) -> dict[str, str]:
+    """Determine the mapping of the data descriptors for the NestedSDFG.
+
+    The returned `dict` maps the data descriptor names on the inside to the
+    corresponding data descriptor on the outside. Thus it is important that
+    some outside descriptor can be named multiple times. Note if a descriptor
+    is an input and output then the output takes precedence.
+
+    If `only_fully_mapped` is `True` then only data descriptors that are fully
+    mapped into the nested SDFG are returned. If it is `False` then all
+    descriptors are used.
+
+    Args:
+        state: The state in which we operate.
+        nsdfg: The nested SDFG node we want to process.
+        only_fully_mapped: Only look at the fully mapped data.
+        only_inputs: Only consider the data that are used as inputs.
+        only_inputs: Only consider the data that are used as outputs.
+    """
+    assert not (only_inputs and only_outputs)
+    name_mapping: dict[str, str] = {}
+    sdfg = state.sdfg
+
+    # When we have to return both, we start with the input such that the output
+    #  descriptors are dominant.
+    if not only_outputs:
+        iedges = sorted(
+            (iedge for iedge in state.in_edges(nsdfg) if not iedge.data.is_empty()),
+            key=lambda iedge: iedge.dst_conn,
+        )
+        for iedge in iedges:
+            data_outside = iedge.data.data
+            data_inside = iedge.dst_conn
+            if only_fully_mapped and (
+                not iedge.data.subset.covers(dace_sbs.Range.from_array(sdfg.arrays[data_outside]))
+            ):
+                continue
+            name_mapping[data_inside] = data_outside
+
+    if only_inputs:
+        return name_mapping
+
+    oedges = sorted(
+        (oedge for oedge in state.out_edges(nsdfg) if not oedge.data.is_empty()),
+        key=lambda oedge: iedge.src_conn,
+    )
+    for oedge in oedges:
+        data_outside = oedge.data.data
+        data_inside = oedge.src_conn
+        if only_fully_mapped and (
+            not oedge.data.subset.covers(dace_sbs.Range.from_array(sdfg.arrays[data_outside]))
+        ):
+            continue
+        name_mapping[data_inside] = data_outside
+
+    return name_mapping
