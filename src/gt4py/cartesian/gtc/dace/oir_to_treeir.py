@@ -16,6 +16,7 @@ from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir, utils
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.oir_optimizations import utils as oir_utils
 from gt4py.cartesian.stencil_builder import StencilBuilder
+from gt4py.cartesian.config import GT4PY_CARTESIAN_ENABLE_OPENMP
 
 
 ControlFlow: TypeAlias = (
@@ -33,9 +34,6 @@ DEFAULT_STORAGE_TYPE = {
 def _resolve_default_map_schedule(
     device_type: dtypes.DeviceType,
 ) -> dtypes.ScheduleType:
-    # Reload the configuration to enable runtime switch
-    from gt4py.cartesian.config import GT4PY_CARTESIAN_ENABLE_OPENMP
-
     """Default kernel target per device type."""
     if device_type == dtypes.DeviceType.GPU:
         return dtypes.ScheduleType.GPU_Device

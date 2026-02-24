@@ -57,8 +57,11 @@ build_settings: Dict[str, Any] = {
     "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
     "cuda_arch": os.environ.get("CUDA_ARCH", None),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
-    "openmp_cppflags": _openmp_cppflags,
-    "openmp_ldflags": _openmp_ldflags,
+    "openmp": {
+        "use_openmp": GT4PY_CARTESIAN_ENABLE_OPENMP,
+        "cppflags": _openmp_cppflags,
+        "ldflags": _openmp_ldflags,
+    },
     "extra_compile_args": {"cxx": extra_compile_args, "cuda": extra_compile_args},
     "extra_link_args": extra_link_args,
     "parallel_jobs": multiprocessing.cpu_count(),
