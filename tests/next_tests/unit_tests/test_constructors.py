@@ -14,8 +14,12 @@ import pytest
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, custom_layout_allocators as next_allocators, typing as gtx_typing
-from gt4py.next.constructors import FieldConstructor
+from gt4py.next import (
+    common,
+    custom_layout_allocators as next_allocators,
+    typing as gtx_typing,
+    constructors,
+)
 
 
 I = gtx.Dimension("I")
@@ -218,7 +222,7 @@ class TestFieldConstructorInit:
 
     def test_no_allocator_no_device_uses_default_cpu(self):
         """allocator=None, device=None → default CPU custom-layout allocator."""
-        fc = FieldConstructor(allocator=None, device=None)
+        fc = constructors.FieldConstructor(allocator=None, device=None)
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
@@ -226,14 +230,14 @@ class TestFieldConstructorInit:
     def test_no_allocator_with_device(self):
         """allocator=None, device=CPU → device-lookup custom-layout allocator."""
         device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-        fc = FieldConstructor(allocator=None, device=device)
+        fc = constructors.FieldConstructor(allocator=None, device=device)
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
 
     def test_array_namespace_allocator_no_device(self):
         """allocator=numpy, device=None → array-API standard allocation."""
-        fc = FieldConstructor(allocator=np, device=None)
+        fc = constructors.FieldConstructor(allocator=np, device=None)
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert field.ndarray.flags["C_CONTIGUOUS"]  # standard array-API allocation
@@ -241,7 +245,7 @@ class TestFieldConstructorInit:
     def test_array_namespace_allocator_with_device(self):
         """allocator=numpy, device=CPU → array-API standard allocation with device translation."""
         device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-        fc = FieldConstructor(allocator=np, device=device)
+        fc = constructors.FieldConstructor(allocator=np, device=device)
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert field.ndarray.flags["C_CONTIGUOUS"]  # standard array-API allocation
@@ -250,7 +254,7 @@ class TestFieldConstructorInit:
         """allocator=numpy with aligned_index → warns and ignores aligned_index."""
         aligned_index = [common.NamedIndex(I, 0)]
         with pytest.warns(UserWarning, match="aligned_index"):
-            fc = FieldConstructor(allocator=np, aligned_index=aligned_index)
+            fc = constructors.FieldConstructor(allocator=np, aligned_index=aligned_index)
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert field.ndarray.flags["C_CONTIGUOUS"]  # standard array-API allocation
@@ -258,7 +262,7 @@ class TestFieldConstructorInit:
     def test_field_buffer_allocator(self):
         """allocator=FieldBufferAllocator → custom-layout allocation."""
         allocator = next_allocators.StandardCPUFieldBufferAllocator()
-        fc = FieldConstructor(allocator=allocator)
+        fc = constructors.FieldConstructor(allocator=allocator)
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
@@ -267,7 +271,7 @@ class TestFieldConstructorInit:
         """allocator=FieldBufferAllocator + aligned_index → accepted without error."""
         allocator = next_allocators.StandardCPUFieldBufferAllocator()
         aligned_index = [common.NamedIndex(I, 0)]
-        fc = FieldConstructor(allocator=allocator, aligned_index=aligned_index)
+        fc = constructors.FieldConstructor(allocator=allocator, aligned_index=aligned_index)
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
@@ -281,7 +285,7 @@ class TestFieldConstructorInit:
             def __gt_allocator__(self):
                 return inner_allocator
 
-        fc = FieldConstructor(allocator=FakeFactory())
+        fc = constructors.FieldConstructor(allocator=FakeFactory())
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
@@ -291,13 +295,13 @@ class TestFieldConstructorInit:
         allocator = next_allocators.StandardCPUFieldBufferAllocator()
         device = core_defs.Device(core_defs.DeviceType.CUDA, 0)
         with pytest.raises(ValueError, match="device type"):
-            FieldConstructor(allocator=allocator, device=device)
+            constructors.FieldConstructor(allocator=allocator, device=device)
 
     def test_field_buffer_allocator_device_matches(self):
         """allocator=CPU allocator, device=CPU → succeeds with custom layout."""
         allocator = next_allocators.StandardCPUFieldBufferAllocator()
         device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-        fc = FieldConstructor(allocator=allocator, device=device)
+        fc = constructors.FieldConstructor(allocator=allocator, device=device)
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
@@ -305,4 +309,4 @@ class TestFieldConstructorInit:
     def test_invalid_allocator_raises(self):
         """allocator=invalid object → raises ValueError."""
         with pytest.raises(ValueError, match="Invalid field allocator"):
-            FieldConstructor(allocator="not_an_allocator")
+            constructors.FieldConstructor(allocator="not_an_allocator")

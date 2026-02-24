@@ -8,11 +8,11 @@
 
 import pytest
 import numpy as np
-from gt4py.next import common, custom_layout_allocators as next_allocators
+from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
-from gt4py.next import backend as next_backend, common, constructors
+from gt4py.next import common, constructors
 
 I = common.Dimension("I")
 J = common.Dimension("J")

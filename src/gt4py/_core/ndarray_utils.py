@@ -117,7 +117,7 @@ def _numpy_device_translator(device: core_defs.Device | None) -> Any:
 
 
 # Currently private as we only support a concrete set of array namespaces.
-_device_translation_registry: dict[ArrayNamespace, Callable[[core_defs.Device], Any]] = {
+_device_translation_registry: dict[ArrayNamespace, Callable[[core_defs.Device | None], Any]] = {
     cast(ArrayNamespace, np): _numpy_device_translator
 }
 """
@@ -141,7 +141,7 @@ if cupy is not None:
     _device_translation_registry[cupy] = _cupy_device_translator
 
 
-def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Device], Any]:
+def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Device | None], Any]:
     """
     Returns a mapping from a GT4Py 'Device' to the corresponding device object for the given array namespace.
     """

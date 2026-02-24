@@ -31,7 +31,7 @@ def cuda_device(id_: int) -> Any:
         ),
     ],
 )
-def test_get_device_translator_np(array_ns, gt4py_device, expected_device):
+def test_get_device_translator(array_ns, gt4py_device, expected_device):
     translator = ndarray_utils.get_device_translator(array_ns)
     assert translator(gt4py_device) == expected_device
 
