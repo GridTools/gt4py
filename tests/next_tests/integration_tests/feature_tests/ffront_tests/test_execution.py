@@ -496,6 +496,7 @@ def test_scan_unused_parameter(cartesian_case):
     )
 
 
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_single_value_field(cartesian_case):
     @gtx.field_operator
     def testee_fo(a: cases.IKField) -> cases.IKField:
@@ -1199,6 +1200,7 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_domain_tuple(cartesian_case):
     @gtx.field_operator
     def fieldop_domain_tuple(
