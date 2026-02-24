@@ -216,12 +216,8 @@ def test_lower_dimensional_inputs(backend):
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
     res_field_3d = storage_utils.cpu_copy(field_3d)
-    np.testing.assert_allclose(
-        res_field_3d[1:-1, 1:-2, :1], 2, err_msg="expected 2 from K=0"
-    )
-    np.testing.assert_allclose(
-        res_field_3d[1:-1, 1:-2, 1:], 1, err_msg="expected 1 from K>=1"
-    )
+    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, :1], 2, err_msg="expected 2 from K=0")
+    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, 1:], 1, err_msg="expected 1 from K>=1")
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))
 
 
@@ -484,9 +480,7 @@ def test_write_data_dim_indirect_addressing(backend):
         full_shape, backend=backend, aligned_index=aligned_index, dtype=INT32_VEC2
     )
 
-    gtscript.stencil(definition=stencil, backend=backend)(
-        input_field, output_field, index := 1
-    )
+    gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
     assert output_field[0, 0, 0, index] == 1
 
 
@@ -579,9 +573,7 @@ def test_origin_k_fields(backend):
     inp = storage_utils.cpu_copy(inp)
     outp = storage_utils.cpu_copy(outp)
     np.testing.assert_allclose(data, inp)
-    np.testing.assert_allclose(
-        np.broadcast_to(data[2:], shape=(2, 2, 8)), outp[:, :, 1:-1]
-    )
+    np.testing.assert_allclose(np.broadcast_to(data[2:], shape=(2, 2, 8)), outp[:, :, 1:-1])
     np.testing.assert_allclose(0.0, outp[:, :, 0])
     np.testing.assert_allclose(0.0, outp[:, :, -1])
 
@@ -596,9 +588,7 @@ def test_tmp_stencil(backend):
     )
 
     @gtscript.stencil(backend=backend)
-    def stencil(
-        field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]
-    ):  # type: ignore
+    def stencil(field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]):  # type: ignore
         with computation(PARALLEL):
             with interval(...):
                 tmp = field_in + 1
@@ -628,9 +618,7 @@ def test_backward_stencil(backend):
     )
 
     @gtscript.stencil(backend=backend)
-    def stencil(
-        field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]
-    ):  # type: ignore
+    def stencil(field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]):  # type: ignore
         with computation(BACKWARD):
             with interval(-1, None):
                 field_in = 2
@@ -658,9 +646,7 @@ def test_while_stencil(backend):
     )
 
     @gtscript.stencil(backend=backend)
-    def stencil(
-        field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]
-    ):  # type: ignore
+    def stencil(field_in: gtscript.Field[np.float64], field_out: gtscript.Field[np.float64]):  # type: ignore
         with computation(PARALLEL):
             with interval(...):
                 while field_in < 10:
@@ -789,9 +775,7 @@ def test_ternary_operator_stencil(backend):
         out_field: gtscript.Field[np.float64],  # type: ignore
     ):
         with computation(PARALLEL), interval(...):
-            out_field[0, 0, 0] = (
-                in_field[0, 0, 0] if in_field > 10 else in_field[0, 0, 0] + 1
-            )
+            out_field[0, 0, 0] = in_field[0, 0, 0] if in_field > 10 else in_field[0, 0, 0] + 1
 
     test_stencil(field_in, field_out)
 
@@ -858,9 +842,7 @@ def test_k_offset_field_stencil(backend):
     field_in = gt_storage.ones(
         dtype=np.float64, backend=backend, shape=(4, 4, 4), aligned_index=(0, 0, 0)
     )
-    field_idx = gt_storage.ones(
-        dtype=np.int64, backend=backend, shape=(4, 4), aligned_index=(0, 0)
-    )
+    field_idx = gt_storage.ones(dtype=np.int64, backend=backend, shape=(4, 4), aligned_index=(0, 0))
     field_out = gt_storage.zeros(
         dtype=np.float64, backend=backend, shape=(4, 4, 4), aligned_index=(0, 0, 0)
     )
@@ -1032,9 +1014,7 @@ def test_K_offset_write_conditional(backend):
     K_values = arraylib.arange(start=40, stop=44)
 
     @gtscript.stencil(backend=backend)
-    def column_physics_conditional(
-        A: Field[np.float64], B: Field[np.float64], scalar: np.float64
-    ):  # type: ignore
+    def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):  # type: ignore
         with computation(BACKWARD), interval(1, -1):
             if A > 0 and B > 0:
                 A[0, 0, -1] = scalar
@@ -1182,17 +1162,13 @@ def test_read_after_write_stencil(backend):
                 pr = (pe2[0, 0, 1] - pe1[0, 0, lev]) / dp1[0, 0, lev]
                 q[0, 0, 0] = (
                     q4_2[0, 0, lev]
-                    + 0.5
-                    * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev])
-                    * (pr + pl)
+                    + 0.5 * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev]) * (pr + pl)
                     - q4_4[0, 0, lev] * 1.0 / 3.0 * (pr * (pr + pl) + pl * pl)
                 )
             else:
                 qsum = (pe1[0, 0, lev + 1] - pe2) * (
                     q4_2[0, 0, lev]
-                    + 0.5
-                    * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev])
-                    * (1.0 + pl)
+                    + 0.5 * (q4_4[0, 0, lev] + q4_3[0, 0, lev] - q4_2[0, 0, lev]) * (1.0 + pl)
                     - q4_4[0, 0, lev] * 1.0 / 3.0 * (1.0 + pl * (1.0 + pl))
                 )
                 lev = lev + 1
@@ -1230,9 +1206,7 @@ def test_read_after_write_stencil(backend):
 )
 def test_absolute_K_index_raise(backend):
     @gtscript.stencil(backend=backend)
-    def test_absolute_k_index(
-        in_field: Field[np.float64], out_field: Field[np.float64]
-    ) -> None:
+    def test_absolute_k_index(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
         with computation(PARALLEL), interval(...):
             out_field = in_field.at(K=2)
 
@@ -1242,28 +1216,20 @@ def test_absolute_K_index_raise(backend):
     [
         pytest.param("debug"),
         pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
-        pytest.param(
-            "dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]
-        ),
+        pytest.param("dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]),
     ],
 )
 def test_absolute_K_index(backend):
     domain = (5, 5, 5)
 
     in_arr = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
-    idx_arr = gt_storage.zeros(
-        backend=backend, shape=(domain[0], domain[1]), dtype=np.int64
-    )
-    idx_arr_32 = gt_storage.zeros(
-        backend=backend, shape=(domain[0], domain[1]), dtype=np.int32
-    )
+    idx_arr = gt_storage.zeros(backend=backend, shape=(domain[0], domain[1]), dtype=np.int64)
+    idx_arr_32 = gt_storage.zeros(backend=backend, shape=(domain[0], domain[1]), dtype=np.int32)
     k_arr = gt_storage.zeros(backend=backend, shape=(domain[2],), dtype=np.float64)
     out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
 
     @gtscript.stencil(backend=backend)
-    def test_literal_access(
-        in_field: Field[np.float64], out_field: Field[np.float64]
-    ) -> None:
+    def test_literal_access(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
         with computation(PARALLEL), interval(...):
             out_field = in_field.at(K=2)
 
@@ -1287,9 +1253,7 @@ def test_absolute_K_index(backend):
     assert (out_arr[:, :, :] == 42.42).all()
 
     @gtscript.stencil(backend=backend, externals={"K4": 4})
-    def test_external_access(
-        in_field: Field[np.float64], out_field: Field[np.float64]
-    ) -> None:
+    def test_external_access(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
         with computation(PARALLEL), interval(...):
             from __externals__ import K4
 
@@ -1414,9 +1378,7 @@ def test_iterator_access_raises_in_unsupported_backends(backend: str) -> None:
     field_B = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
 
     @gtscript.stencil(backend=backend)
-    def test_all_valid_usage(
-        field_A: Field[np.float64], field_B: Field[np.float64]
-    ) -> None:
+    def test_all_valid_usage(field_A: Field[np.float64], field_B: Field[np.float64]) -> None:
         with computation(PARALLEL), interval(...):
             if K == 2:
                 field_A = 20.20
@@ -1455,9 +1417,7 @@ def test_runtime_interval_bounds():
         with computation(PARALLEL), interval(0, index_field):
             out_field[0, 0, 0] = in_field
 
-    index_field = gt_storage.ones(
-        backend=backend, shape=(domain[0], domain[1]), dtype=np.int64
-    )
+    index_field = gt_storage.ones(backend=backend, shape=(domain[0], domain[1]), dtype=np.int64)
     index_field[:, :] = 4
     in_arr[:, :, :] = 1
     out_arr[:, :, :] = 0
@@ -1563,9 +1523,7 @@ def test_runtime_interval_raises(backend):
         pytest.param("debug"),
         pytest.param("numpy"),
         pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
-        pytest.param(
-            "dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]
-        ),
+        pytest.param("dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]),
     ],
 )
 def test_2d_temporaries(backend):
@@ -1575,9 +1533,7 @@ def test_2d_temporaries(backend):
     out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
 
     @gtscript.stencil(backend=backend)
-    def test_with_plain_gt4py(
-        in_field: Field[np.float64], out_field: Field[np.float64]
-    ) -> None:
+    def test_with_plain_gt4py(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
         with computation(FORWARD), interval(0, 1):
             tmp_2D: Field[IJ, np.float64] = 0
 
@@ -1593,9 +1549,7 @@ def test_2d_temporaries(backend):
     assert (out_arr[:, :, :] == domain[2]).all()
 
     @gtscript.stencil(backend=backend, dtypes={"MyFancySymbol": Field[IJ, np.float64]})
-    def test_with_user_dtype(
-        in_field: Field[np.float64], out_field: Field[np.float64]
-    ) -> None:
+    def test_with_user_dtype(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
         with computation(FORWARD), interval(0, 1):
             tmp_2D: MyFancySymbol = 0
 
@@ -1631,9 +1585,7 @@ def test_2d_temporaries(backend):
 )
 def test_2d_temporaries_raises(backend):
     @gtscript.stencil(backend=backend)
-    def test_with_user_dtypes(
-        in_field: Field[np.float64], out_field: Field[np.float64]
-    ) -> None:
+    def test_with_user_dtypes(in_field: Field[np.float64], out_field: Field[np.float64]) -> None:
         with computation(FORWARD), interval(0, 1):
             tmp_2D: Field[IJ, np.float64] = 0
 
@@ -1647,9 +1599,7 @@ def test_upcasting_both_sides_of_assignment(backend: str) -> None:
 
     input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
-    index_array = gt_storage.ones(
-        backend=backend, shape=(domain[0], domain[1]), dtype=np.int32
-    )
+    index_array = gt_storage.ones(backend=backend, shape=(domain[0], domain[1]), dtype=np.int32)
 
     @gtscript.stencil(backend=backend)
     def test_upcasting_stencil(
@@ -1665,18 +1615,14 @@ def test_upcasting_both_sides_of_assignment(backend: str) -> None:
 
 
 def test_no_write_and_read_with_horizontal_offset() -> None:
-    with pytest.raises(
-        ValueError, match="Self-assignment with offset in I or J is illegal."
-    ):
+    with pytest.raises(ValueError, match="Self-assignment with offset in I or J is illegal."):
 
         @gtscript.stencil(backend="debug")
         def self_assign_offset(field: Field[np.float64]) -> None:
             with computation(PARALLEL), interval(...):
                 field = (field[I - 1] + field[I + 1]) / 2
 
-    with pytest.raises(
-        ValueError, match="Illegal write and read with horizontal offset"
-    ):
+    with pytest.raises(ValueError, match="Illegal write and read with horizontal offset"):
 
         @gtscript.stencil(backend="debug")
         def self_assign_offset(field: Field[np.float64]) -> None:
@@ -1736,9 +1682,7 @@ def test_k_offsets_in_parallel_loops() -> None:
 
     # not mixing reads and writes are allowed (e.g. index fields)
     @gtscript.stencil(backend="debug")
-    def self_assignment_center_parallel(
-        field: Field[np.float32], index: Field[np.int32]
-    ) -> None:
+    def self_assignment_center_parallel(field: Field[np.float32], index: Field[np.int32]) -> None:
         with computation(PARALLEL), interval(1, None):
             field = index + index[K - 1] * 2
 
@@ -1772,9 +1716,7 @@ def test_reset_mask_2d(backend: str) -> None:
 
     input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
     output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
-    mask_2d = gt_storage.ones(
-        backend=backend, shape=(domain[0], domain[1]), dtype=np.int32
-    )
+    mask_2d = gt_storage.ones(backend=backend, shape=(domain[0], domain[1]), dtype=np.int32)
 
     @gtscript.stencil(backend=backend)
     def test_set_2d_mask(

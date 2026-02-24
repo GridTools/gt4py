@@ -11,12 +11,12 @@ from typing import Any, List, TypeAlias
 from dace import data, dtypes, symbolic
 
 from gt4py import eve
+from gt4py.cartesian.config import GT4PY_CARTESIAN_ENABLE_OPENMP
 from gt4py.cartesian.gtc import common, definitions, oir
 from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir, utils
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.oir_optimizations import utils as oir_utils
 from gt4py.cartesian.stencil_builder import StencilBuilder
-from gt4py.cartesian.config import GT4PY_CARTESIAN_ENABLE_OPENMP
 
 
 ControlFlow: TypeAlias = (
