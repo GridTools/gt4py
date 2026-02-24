@@ -15,7 +15,7 @@ from typing import Final
 import pytest
 
 from gt4py.next.embedded import nd_array_field
-from gt4py.next import custom_layout_allocators as next_allocators
+from gt4py.next import constructors
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -54,7 +54,7 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 @dataclasses.dataclass(frozen=True)
 class EmbeddedDummyBackend:
     name: str
-    allocator: next_allocators.FieldBufferAllocatorProtocol
+    allocator: constructors.Allocator
     executor: Final = None
 
 
