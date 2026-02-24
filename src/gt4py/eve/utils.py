@@ -527,6 +527,45 @@ class fluid_partial(functools.partial):
         return fluid_partial(self, *args, **kwargs)
 
 
+if xtyping.TYPE_CHECKING:
+
+    class TypeDispatcher(Generic[_P, _T]):
+        def __init__(self, func: Callable[_P, _T]) -> None: ...
+
+        def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+
+        @overload
+        def register(self, arg_type: type) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
+
+        @overload
+        def register(self, arg_type: type, func: Callable[_P, _T]) -> Callable[_P, _T]: ...
+
+        def register(
+            self, arg_type: type, func: Optional[Callable[_P, _T]] = None
+        ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]] | Callable[_P, _T]: ...
+
+
+def type_dispatcher(func: Callable[_P, _T]) -> TypeDispatcher[_P, _T]:
+    """
+    Decorator to create a single-dispatch generic function that dispatches of the first argument.
+    """
+    # reuse the singledispatch() dispatching mechanism but change the wrapper
+    indirect_dispatcher = functools.singledispatch(func)
+    dispatch = indirect_dispatcher.dispatch
+
+    def wrapper(*args: P.args, **kw: P.kwargs) -> _T:
+        if not args:
+            raise TypeError(f"{func.__name__} requires at least 1 positional argument")
+
+        return dispatch(args[0])(*args, **kw)
+
+    functools.update_wrapper(wrapper, func)
+    for attr in ("dispatch", "register", "registry", "_clear_cache"):
+        setattr(wrapper, attr, getattr(indirect_dispatcher, attr))
+
+    return wrapper
+
+
 @overload
 def with_fluid_partial(
     func: Literal[None] = None, *args: Any, **kwargs: Any
