@@ -6,6 +6,20 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+"""
+Configuration system for GT4Py.
+
+Precedence of effective option values (highest to lowest):
+1) Active context override (`ConfigManager.overrides`)
+2) Global runtime value (`ConfigManager.set`)
+3) Environment variable (`OptionDescriptor.env_var_name`)
+4) Descriptor default/default_factory
+
+Notes:
+- Context overrides are task-local via `contextvars`.
+- `set()` is disallowed while the same option is context-overridden.
+"""
+
 from __future__ import annotations
 
 import contextlib
@@ -16,29 +30,33 @@ import os
 import pathlib
 import sys
 import types
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Mapping
 from typing import Any, Final, Generic, Literal, Protocol, TypeVar, cast, final
-
 
 from gt4py.eve import utils
 from gt4py.eve.extended_typing import Self
 
 
 @final
-class _UNSET_SENTINEL: ...
+class Sentinel:
+    UNSET = enum.auto()
 
-
-_UNSET: Final = _UNSET_SENTINEL()
 
 _T = TypeVar("_T")
 _T_contra = TypeVar("_T_contra", contravariant=True)
+_EnumT = TypeVar("_EnumT", bound=enum.Enum)
 
 
 @utils.type_dispatcher
 def get_value_from_environment_var(
     as_type: type[_T], var_name: str, *, default: _T | None = None
 ) -> _T | None:
-    """Convert the content of environment variable a typed value."""
+    """
+    Create an instance of the provided type from the value of an environment variable.
+
+    The implementation uses a explicit type-dispatcher to allow custom parsing logic
+    for different types (e.g. bool, enums).
+    """
     env_value = os.environ.get(var_name, None)
     if env_value is None:
         return default
@@ -46,8 +64,9 @@ def get_value_from_environment_var(
         return as_type(env_value)
     except Exception as e:
         raise TypeError(
-            f"Unsupported conversion of GT4Py environment variable {var_name}: {env_value}) to type '{as_type.__name__}'."
-        ) from None
+            f"Unsupported conversion of GT4Py environment variable {var_name}: "
+            f"{env_value!r} to type '{as_type.__name__}'."
+        ) from e
 
 
 @get_value_from_environment_var.register(bool)
@@ -57,7 +76,7 @@ def _get_value_from_environment_var_as_bool(
     env_value = os.environ.get(var_name, None)
     if env_value is None:
         return default
-    match env_value.upper():
+    match env_value.strip().upper():
         case "0" | "FALSE" | "OFF":
             return False
         case "1" | "TRUE" | "ON":
@@ -68,36 +87,67 @@ def _get_value_from_environment_var_as_bool(
             )
 
 
+@get_value_from_environment_var.register(enum.Enum)
+def _get_value_from_environment_var_as_enum(
+    as_type: type[_EnumT], var_name: str, *, default: _EnumT | None = None
+) -> _EnumT | None:
+    """Create enum by member name."""
+    env_value = os.environ.get(var_name, None)
+    if env_value is None:
+        return default
+
+    try:
+        return as_type[env_value]
+    except Exception as e:
+        raise TypeError(
+            f"Invalid GT4Py enum value for {var_name}: {env_value!r}. Allowed: {[m.name for m in as_type]}."
+        ) from e
+
+
 class UpdateScope(str, enum.Enum):
     GLOBAL = sys.intern("global")
     CONTEXT = sys.intern("context")
 
 
 class OptionUpdateCallback(Protocol[_T_contra]):
+    """Callback invoked after an option changes (in a global or local context scope)."""
+
     def __call__(
         self, new_val: _T_contra, old_val: _T_contra | None, scope: UpdateScope
     ) -> None: ...
 
 
-ConfigRegistryT = TypeVar("ConfigRegistryT", bound="ConfigManager")
+ConfigManagerT = TypeVar("ConfigManagerT", bound="ConfigManager")
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class OptionDescriptor(Generic[_T, ConfigRegistryT]):
+class OptionDescriptor(Generic[_T, ConfigManagerT]):
+    """
+    Descriptor for a configuration option.
+
+    Instances of this class should be defined as class attributes of a
+    `ConfigManager` subclass. This class implements the descriptor protocol
+    to support the bare attribute-style access to the option value on the
+    manager instance (e.g. `config.debug`), which will be resolved properly
+    using the precedence rules defined in `ConfigManager.get()`.
+    """
+
     type: type[_T]
-    default: dataclasses.InitVar[_T | _UNSET_SENTINEL] = _UNSET
-    default_factory: Callable[[ConfigRegistryT], _T] | None = None
+    default: dataclasses.InitVar[_T | Literal[Sentinel.UNSET]] = Sentinel.UNSET
+    default_factory: Callable[[ConfigManagerT], _T] | None = None
     validator: Callable[[Any], Any] | Literal["type_check"] | None = "type_check"
     update_callback: OptionUpdateCallback[_T] | None = None
     env_prefix: str = "GT4PY_"
     name: str = dataclasses.field(init=False)
 
-    def __post_init__(self, default: _T | _UNSET_SENTINEL) -> None:
+    def __post_init__(self, default: _T | Literal[Sentinel.UNSET]) -> None:
+        # Initialize the validator
         if self.validator == "type_check":
             object.__setattr__(self, "validator", utils.isinstancechecker(self.type))
         assert self.validator is None or callable(self.validator)
 
-        if default is not _UNSET:
+        # Initialize the default factory based on the provided default/default_factory
+        if default is not Sentinel.UNSET:
             if self.default_factory is not None:
                 raise ValueError(
                     "Cannot specify both default and default_factory for a config option descriptor."
@@ -111,6 +161,7 @@ class OptionDescriptor(Generic[_T, ConfigRegistryT]):
             )
 
     def __set_name__(self, owner: type, name: str) -> None:
+        """Set the name of the option based on the attribute name in the owner class."""
         object.__setattr__(self, "name", name)
 
     def __get__(self, instance: Any, owner: type | None = None) -> _T | Self:
@@ -129,11 +180,18 @@ class OptionDescriptor(Generic[_T, ConfigRegistryT]):
 
     @property
     def env_var_name(self) -> str:
+        """Construct the name of the environment variable corresponding to this option."""
         return f"{self.env_prefix}{self.name}".upper()
 
 
 class ConfigManager:
-    """Central configuration registry with attribute-style access."""
+    """
+    Central configuration manager with attribute-style access.
+
+    Config options are defined as class attributes using `OptionDescriptor`.
+    The manager stores global values for all options and allows temporary
+    overrides in a context manager scope.
+    """
 
     def __init__(self) -> None:
         self._descriptors: dict[str, OptionDescriptor[Any, Config]] = {
@@ -159,62 +217,73 @@ class ConfigManager:
         # GC'd even if the instance goes out of scope), in this case we really want
         # per-registry isolation and we assume only very few ConfigRegistry instances
         # will be ever created.
-        self._local_context_cvar = contextvars.ContextVar[types.MappingProxyType](
+        self._local_context_cvar = contextvars.ContextVar[Mapping[str, Any]](
             f"{self.__class__.__name__}_cvar", default=types.MappingProxyType({})
         )
 
         self._global_context: dict[str, Any] = {}
         for name, desc in self._descriptors.items():
             assert desc.default_factory is not None  # Guaranteed by __post_init__
-            self._global_context[name] = get_value_from_environment_var(
+            init_value = get_value_from_environment_var(
                 desc.type, desc.env_var_name, default=desc.default_factory(self)
             )
+            if validator := self._validators.get(name):
+                validator(init_value)
+            self._global_context[name] = init_value
 
     def get(self, name: str) -> Any:
         if __debug__ and name not in self._keys:
             raise AttributeError(f"Unrecognized config option: {name}")
-        if (val := self._local_context_cvar.get().get(name, _UNSET)) is _UNSET:
+        if (val := self._local_context_cvar.get().get(name, Sentinel.UNSET)) is Sentinel.UNSET:
             return self._global_context[name]
         return val
 
-    def set(self, name: str, val: Any) -> None:
+    def set(self, name: str, value: Any) -> None:
         if __debug__ and name not in self._keys:
             raise AttributeError(f"Unrecognized config option: {name}")
         if name in self._local_context_cvar.get():
             raise AttributeError(
                 f"Cannot set config option {name!r} while it is overridden in a context manager"
             )
+        if validator := self._validators.get(name):
+            validator(value)
         old_val = self._global_context[name]
-        self._global_context[name] = val
+        self._global_context[name] = value
         if hook := self._hooks.get(name):
-            hook(val, old_val, UpdateScope.GLOBAL)
+            hook(value, old_val, UpdateScope.GLOBAL)
 
     @contextlib.contextmanager
     def overrides(self, **overrides: Any) -> Generator[None, None, None]:
-        if __debug__ and overrides.keys() - self._keys:
+        if overrides.keys() - self._keys:
             raise AttributeError(
                 f"Unrecognized config options: {set(overrides.keys()) - self._keys}"
             )
-        for name in overrides.keys() & self._validators.keys():
-            self._validators[name](overrides[name])
-        old_context = self._local_context_cvar.get()
-        new_context = old_context | overrides
 
+        old_values = {}
+        changes = {}
+        for name, new_value in overrides.items():
+            old_value = self.get(name)
+            if new_value != old_value:
+                old_values[name] = old_value
+                changes[name] = new_value
+
+        for name in changes.keys() & self._validators.keys():
+            self._validators[name](changes[name])
+
+        old_context = self._local_context_cvar.get()
+        new_context = types.MappingProxyType(**old_context, **changes)
         token = self._local_context_cvar.set(new_context)
 
         try:
-            for name in overrides.keys() & self._hooks.keys():
-                self._hooks[name](
-                    new_context[name],
-                    old_context.get(name, self._global_context[name]),
-                    UpdateScope.CONTEXT,
-                )
+            for name in changes.keys() & self._hooks.keys():
+                self._hooks[name](new_context[name], old_values[name], UpdateScope.CONTEXT)
 
             yield
 
         finally:
             self._local_context_cvar.reset(token)
-            for name in overrides.keys() & old_context.keys() & self._hooks.keys():
+
+            for name in changes.keys() & old_context.keys() & self._hooks.keys():
                 self._hooks[name](old_context.get(name), new_context.get(name), UpdateScope.CONTEXT)
 
     def as_dict(self) -> dict[str, Any]:
@@ -323,8 +392,3 @@ class Config(ConfigManager):
 
 
 config = Config()
-
-# if __name__ == "__main__":
-#     print(aa)
-#     self = sys.modules[__name__]
-#     print(self.aa)
