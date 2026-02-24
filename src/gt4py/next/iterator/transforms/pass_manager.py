@@ -119,7 +119,7 @@ def _process_symbolic_domains_option(
         if not has_dynamic_domains:
             warnings.warn(
                 "You are using static domains together with "
-                "'use_max_domain_range_on_unstructured_shift'. This is"
+                "'use_max_domain_range_on_unstructured_shift'. This is "
                 "likely not what you wanted.",
                 stacklevel=2,
             )
