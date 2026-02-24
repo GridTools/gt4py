@@ -18,9 +18,8 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import definitions, languages, stages, workflow
+from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import interface
-from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
     sdfg_args as gtx_dace_args,
@@ -357,9 +356,9 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
         definitions.CompilableProgramDef,
-        stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
+        stages.ProgramSource[code_specs.SDFGCodeSpec],
     ],
-    definitions.TranslationStep[languages.SDFG, languages.LanguageSettings],
+    definitions.TranslationStep[code_specs.SDFGCodeSpec],
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
@@ -369,6 +368,7 @@ class DaCeTranslator(
 
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
+    use_max_domain_range_on_unstructured_shift: bool | None = None
 
     def generate_sdfg(
         self,
@@ -385,7 +385,11 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+            ir = itir_transforms.apply_fieldview_transforms(
+                ir,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                offset_provider=offset_provider,
+            )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
@@ -442,7 +446,7 @@ class DaCeTranslator(
 
     def __call__(
         self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
+    ) -> stages.ProgramSource[code_specs.SDFGCodeSpec]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
@@ -460,19 +464,14 @@ class DaCeTranslator(
             for param, arg_type in zip(program.params, arg_types)
         )
 
-        module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
-            stages.ProgramSource(
-                entry_point=interface.Function(program.id, program_parameters),
-                # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
-                #   We compute the hash in order to refresh `cfg_list` on the SDFG,
-                #   which makes the JSON serialization stable.
-                source_code=sdfg.to_json(hash=True),
-                library_deps=tuple(),
-                language=languages.SDFG,
-                language_settings=languages.LanguageSettings(
-                    formatter_key="", formatter_style="", file_extension="sdfg"
-                ),
-            )
+        module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
+            entry_point=interface.Function(program.id, program_parameters),
+            # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
+            #   We compute the hash in order to refresh `cfg_list` on the SDFG,
+            #   which makes the JSON serialization stable.
+            source_code=sdfg.to_json(hash=True),
+            library_deps=tuple(),
+            code_spec=code_specs.SDFGCodeSpec(),
         )
         return module
 

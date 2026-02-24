@@ -18,7 +18,6 @@ from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, 
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
-from dace.transformation.passes import SimplifyPass
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config, definitions
@@ -258,16 +257,16 @@ def freeze_origin_domain_sdfg(
 
     inputs = set()
     outputs = set()
-    for inner_state in inner_sdfg.nodes():
-        for node in inner_state.nodes():
-            if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
-                continue
-            if node.has_reads(inner_state):
-                inputs.add(node.data)
-            if node.has_writes(inner_state):
-                outputs.add(node.data)
+    for node, parent in inner_sdfg.all_nodes_recursive():
+        if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
+            continue
 
-    nsdfg = state.add_nested_sdfg(inner_sdfg, None, inputs, outputs)
+        if node.has_reads(parent):
+            inputs.add(node.data)
+        if node.has_writes(parent):
+            outputs.add(node.data)
+
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
         field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
@@ -361,7 +360,7 @@ class SDFGManager:
         if validate:
             sdfg.validate()
         SDFGManager._strip_history(sdfg)
-        sdfg.save(str(path))
+        sdfg.save(str(path), compress=True)
 
     def sdfg_via_schedule_tree(self, *, validate: bool = True, simplify: bool = True) -> SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
@@ -372,7 +371,7 @@ class SDFGManager:
             validate: Validate resulting SDFG
             simplify: Simplify resulting SDFG
         """
-        filename = f"{self.builder.module_name}.sdfg"
+        filename = f"{self.builder.module_name}.sdfgz"
         path = (
             pathlib.Path(os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd()))
             / filename
@@ -412,11 +411,7 @@ class SDFGManager:
             flipper.visit(stree)
 
         # Create SDFG
-        sdfg = stree.as_sdfg(
-            validate=validate,
-            simplify=simplify,
-            skip={"ScalarToSymbolPromotion"},
-        )
+        sdfg = stree.as_sdfg(validate=validate, simplify=simplify, skip={"ScalarToSymbolPromotion"})
 
         if do_cache:
             self._save_sdfg(sdfg, path)
@@ -431,7 +426,7 @@ class SDFGManager:
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]) -> SDFG:
         basename = self.builder.module_path.with_suffix("")
-        path = pathlib.Path(f"{basename}_{shash(origin, domain)}.sdfg")
+        path = pathlib.Path(f"{basename}_{shash(origin, domain)}.sdfgz")
 
         # check if the same sdfg is already loaded
         do_cache = self.builder.caching.name != "nocache"
@@ -478,7 +473,7 @@ class DaCeExtGenerator(BackendCodegen):
             sdfg,
             self.backend.storage_info,
         )
-        SimplifyPass(validate=True, skip={"ScalarToSymbolPromotion"}).apply_pass(sdfg, {})
+        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion"})
 
         # NOTE
         # The glue code in DaCeComputationCodegen.apply() (just below) will define all the
@@ -850,7 +845,7 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
         res = super().generate_class_members()
         filepath = self.builder.module_path.joinpath(
             os.path.dirname(self.builder.module_path),
-            self.builder.module_name + ".sdfg",
+            self.builder.module_name + ".sdfgz",
         )
         res += f'\nSDFG_PATH = "{filepath}"\n'
         return res
