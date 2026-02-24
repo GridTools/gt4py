@@ -12,12 +12,10 @@ import dataclasses
 import enum
 import importlib
 from typing import Final
-
 import pytest
 
 from gt4py.next.embedded import nd_array_field
 from gt4py.next import custom_layout_allocators as next_allocators
-
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -60,12 +58,8 @@ class EmbeddedDummyBackend:
     executor: Final = None
 
 
-numpy_execution = EmbeddedDummyBackend(
-    "EmbeddedNumPy", next_allocators.StandardCPUFieldBufferAllocator()
-)
-cupy_execution = EmbeddedDummyBackend(
-    "EmbeddedCuPy", next_allocators.StandardGPUFieldBufferAllocator()
-)
+numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", nd_array_field.np)
+cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", nd_array_field.cp)
 jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", nd_array_field.jnp)
 
 
