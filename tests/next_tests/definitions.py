@@ -15,8 +15,8 @@ from typing import Final
 
 import pytest
 
-from gt4py.next import allocators as next_allocators
 from gt4py.next.embedded import nd_array_field
+from gt4py.next import custom_layout_allocators as next_allocators
 
 
 # Skip definitions

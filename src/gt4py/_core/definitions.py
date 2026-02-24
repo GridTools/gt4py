@@ -19,6 +19,7 @@ import numpy as np
 import numpy.typing as npt
 
 import gt4py.eve as eve
+from gt4py._core import types as core_types
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -57,22 +58,9 @@ CUPY_DEVICE_TYPE: Literal[None, DeviceType.CUDA, DeviceType.ROCM]
 """Type of the GPU accelerator device, if present."""
 
 # -- Scalar types supported by GT4Py --
-bool_ = np.bool_
 
-int8 = np.int8
-int16 = np.int16
-int32 = np.int32
-int64 = np.int64
 
-uint8 = np.uint8
-uint16 = np.uint16
-uint32 = np.uint32
-uint64 = np.uint64
-
-float32 = np.float32
-float64 = np.float64
-
-BoolScalar: TypeAlias = Union[bool_, bool]
+BoolScalar: TypeAlias = Union[core_types.bool, bool]
 BoolT = TypeVar("BoolT", bound=BoolScalar)
 BOOL_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
@@ -80,7 +68,9 @@ BOOL_TYPES: Final[Tuple[type, ...]] = cast(
 )
 
 
-IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
+IntScalar: TypeAlias = Union[
+    core_types.int8, core_types.int16, core_types.int32, core_types.int64, int
+]
 IntT = TypeVar("IntT", bound=IntScalar)
 INT_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
@@ -88,7 +78,9 @@ INT_TYPES: Final[Tuple[type, ...]] = cast(
 )
 
 
-UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
+UnsignedIntScalar: TypeAlias = Union[
+    core_types.uint8, core_types.uint16, core_types.uint32, core_types.uint64
+]
 UnsignedIntT = TypeVar("UnsignedIntT", bound=UnsignedIntScalar)
 UINT_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
@@ -101,7 +93,7 @@ IntegralT = TypeVar("IntegralT", bound=IntegralScalar)
 INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 
 
-FloatingScalar: TypeAlias = Union[float32, float64, float]
+FloatingScalar: TypeAlias = Union[core_types.float32, core_types.float64, float]
 FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
 FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
     Tuple[type, ...],
@@ -273,23 +265,31 @@ class UnsignedIntDType(DType[UnsignedIntT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt8DType(UnsignedIntDType[uint8]):
-    scalar_type: Final[Type[uint8]] = dataclasses.field(default=uint8, init=False)
+class UInt8DType(UnsignedIntDType[core_types.uint8]):
+    scalar_type: Final[Type[core_types.uint8]] = dataclasses.field(
+        default=core_types.uint8, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt16DType(UnsignedIntDType[uint16]):
-    scalar_type: Final[Type[uint16]] = dataclasses.field(default=uint16, init=False)
+class UInt16DType(UnsignedIntDType[core_types.uint16]):
+    scalar_type: Final[Type[core_types.uint16]] = dataclasses.field(
+        default=core_types.uint16, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt32DType(UnsignedIntDType[uint32]):
-    scalar_type: Final[Type[uint32]] = dataclasses.field(default=uint32, init=False)
+class UInt32DType(UnsignedIntDType[core_types.uint32]):
+    scalar_type: Final[Type[core_types.uint32]] = dataclasses.field(
+        default=core_types.uint32, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt64DType(UnsignedIntDType[uint64]):
-    scalar_type: Final[Type[uint64]] = dataclasses.field(default=uint64, init=False)
+class UInt64DType(UnsignedIntDType[core_types.uint64]):
+    scalar_type: Final[Type[core_types.uint64]] = dataclasses.field(
+        default=core_types.uint64, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -298,23 +298,31 @@ class SignedIntDType(DType[IntT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Int8DType(SignedIntDType[int8]):
-    scalar_type: Final[Type[int8]] = dataclasses.field(default=int8, init=False)
+class Int8DType(SignedIntDType[core_types.int8]):
+    scalar_type: Final[Type[core_types.int8]] = dataclasses.field(
+        default=core_types.int8, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class Int16DType(SignedIntDType[int16]):
-    scalar_type: Final[Type[int16]] = dataclasses.field(default=int16, init=False)
+class Int16DType(SignedIntDType[core_types.int16]):
+    scalar_type: Final[Type[core_types.int16]] = dataclasses.field(
+        default=core_types.int16, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class Int32DType(SignedIntDType[int32]):
-    scalar_type: Final[Type[int32]] = dataclasses.field(default=int32, init=False)
+class Int32DType(SignedIntDType[core_types.int32]):
+    scalar_type: Final[Type[core_types.int32]] = dataclasses.field(
+        default=core_types.int32, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class Int64DType(SignedIntDType[int64]):
-    scalar_type: Final[Type[int64]] = dataclasses.field(default=int64, init=False)
+class Int64DType(SignedIntDType[core_types.int64]):
+    scalar_type: Final[Type[core_types.int64]] = dataclasses.field(
+        default=core_types.int64, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -323,18 +331,24 @@ class FloatingDType(DType[FloatingT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Float32DType(FloatingDType[float32]):
-    scalar_type: Final[Type[float32]] = dataclasses.field(default=float32, init=False)
+class Float32DType(FloatingDType[core_types.float32]):
+    scalar_type: Final[Type[core_types.float32]] = dataclasses.field(
+        default=core_types.float32, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class Float64DType(FloatingDType[float64]):
-    scalar_type: Final[Type[float64]] = dataclasses.field(default=float64, init=False)
+class Float64DType(FloatingDType[core_types.float64]):
+    scalar_type: Final[Type[core_types.float64]] = dataclasses.field(
+        default=core_types.float64, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class BoolDType(DType[bool_]):
-    scalar_type: Final[Type[bool_]] = dataclasses.field(default=bool_, init=False)
+class BoolDType(DType[core_types.bool]):
+    scalar_type: Final[Type[core_types.bool]] = dataclasses.field(
+        default=core_types.bool, init=False
+    )
 
 
 DTypeLike = Union[DType, npt.DTypeLike]
