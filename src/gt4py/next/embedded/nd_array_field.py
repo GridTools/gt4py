@@ -1092,6 +1092,7 @@ if jnp:
     assert jax is not None
 
     _nd_array_implementations.append(jnp)
+    # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
     jax.config.update("jax_enable_x64", True)
 
     @dataclasses.dataclass(frozen=True, eq=False)
