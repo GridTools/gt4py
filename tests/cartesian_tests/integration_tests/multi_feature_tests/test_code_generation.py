@@ -1600,6 +1600,26 @@ def test_upcasting_both_sides_of_assignment(backend: str) -> None:
     assert (input == output).all()
 
 
+@pytest.mark.parametrize("backend", ("debug",))  # ALL_BACKENDS)
+def test_upcasting_leave_integer_power_arguments_alone(backend: str) -> None:
+    domain = (5, 5, 5)
+
+    input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float32)
+    output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float32)
+    squared = gt_storage.full(
+        fill_value=2, backend=backend, shape=(domain[0], domain[1]), dtype=np.int32
+    )
+
+    @gtscript.stencil(backend=backend)
+    def test_upcasting_stencil(
+        in_field: Field[np.float32], squared: Field[IJ, np.int32], out_field: Field[np.float32]
+    ) -> None:
+        with computation(FORWARD), interval(...):
+            out_field = in_field**squared
+
+    test_upcasting_stencil(input, squared, output)
+
+
 def test_no_write_and_read_with_horizontal_offset() -> None:
     with pytest.raises(ValueError, match="Self-assignment with offset in I or J is illegal."):
 
