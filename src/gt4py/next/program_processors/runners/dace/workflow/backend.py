@@ -74,6 +74,7 @@ def make_dace_backend(
     optimization_args: dict[str, Any] | None = None,
     use_metrics: bool = True,
     use_zero_origin: bool = False,
+    use_max_domain_range_on_unstructured_shift: bool | None = None,
 ) -> backend.Backend:
     """Customize the dace backend with the given configuration parameters.
 
@@ -128,6 +129,7 @@ def make_dace_backend(
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
+        otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
     )
 
 
