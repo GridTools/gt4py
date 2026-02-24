@@ -6,12 +6,20 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
+from types import ModuleType
+
 import numpy as np
 import pytest
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators, common
+from gt4py.next import (
+    common,
+    custom_layout_allocators as next_allocators,
+    typing as gtx_typing,
+    constructors,
+)
 
 
 I = gtx.Dimension("I")
@@ -20,35 +28,81 @@ K = gtx.Dimension("K")
 
 sizes = {I: 10, J: 10, K: 10}
 
+cp = core_defs.cp
 
-# TODO: parametrize with gpu backend and compare with cupy array
-@pytest.mark.parametrize(
-    "allocator, device",
-    [
-        [next_allocators.StandardCPUFieldBufferAllocator(), None],
-        [None, core_defs.Device(core_defs.DeviceType.CPU, 0)],
-    ],
+
+@dataclasses.dataclass
+class ConstructorTestSetup:
+    allocator: gtx_typing.Allocator
+    device: core_defs.Device
+    expected_xp: ModuleType
+
+
+def _constructor_test_cases():
+    return [
+        ConstructorTestSetup(
+            allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+            device=None,
+            expected_xp=np,
+        ),
+        ConstructorTestSetup(
+            allocator=None,
+            device=core_defs.Device(core_defs.DeviceType.CPU, 0),
+            expected_xp=np,
+        ),
+        ConstructorTestSetup(
+            allocator=np,
+            device=None,
+            expected_xp=np,
+        ),
+        pytest.param(
+            ConstructorTestSetup(
+                allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+                device=None,
+                expected_xp=cp,
+            ),
+            marks=pytest.mark.requires_gpu,
+        ),
+        pytest.param(
+            ConstructorTestSetup(
+                allocator=None,
+                device=core_defs.Device(core_defs.CUPY_DEVICE_TYPE, 0),
+                expected_xp=cp,
+            ),
+            marks=pytest.mark.requires_gpu,
+        ),
+    ]
+
+
+@pytest.fixture(
+    params=_constructor_test_cases(),
+    ids=lambda x: f"{type(x.allocator).__name__ if x.allocator is not None else None}-device={x.device.device_type if x.device is not None and x.device.device_type is not None else None}-{x.expected_xp.__name__ if x.expected_xp is not None else None}",
 )
-def test_empty(allocator, device):
-    ref = np.empty([sizes[I], sizes[J]]).astype(gtx.float32)
+def constructor_test_cases(request):
+    yield request.param
+
+
+def test_empty(constructor_test_cases):
+    allocator = constructor_test_cases.allocator
+    device = constructor_test_cases.device
+    expected_xp = constructor_test_cases.expected_xp
+
+    ref = expected_xp.empty([sizes[I], sizes[J]]).astype(gtx.float32)
     a = gtx.empty(
         domain={I: range(sizes[I]), J: range(sizes[J])},
         dtype=core_defs.dtype(np.float32),
         allocator=allocator,
         device=device,
     )
+    assert isinstance(a.ndarray, expected_xp.ndarray)
     assert a.shape == ref.shape
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
-@pytest.mark.parametrize(
-    "allocator, device",
-    [
-        [next_allocators.StandardCPUFieldBufferAllocator(), None],
-        [None, core_defs.Device(core_defs.DeviceType.CPU, 0)],
-    ],
-)
-def test_zeros(allocator, device):
+def test_zeros(constructor_test_cases):
+    allocator = constructor_test_cases.allocator
+    device = constructor_test_cases.device
+    expected_xp = constructor_test_cases.expected_xp
+
     a = gtx.zeros(
         common.Domain(
             dims=(I, J), ranges=(common.UnitRange(0, sizes[I]), common.UnitRange(0, sizes[J]))
@@ -57,40 +111,34 @@ def test_zeros(allocator, device):
         allocator=allocator,
         device=device,
     )
-    ref = np.zeros((sizes[I], sizes[J])).astype(gtx.float32)
+    ref = expected_xp.zeros((sizes[I], sizes[J])).astype(gtx.float32)
 
-    assert np.array_equal(a.ndarray, ref)
+    assert isinstance(a.ndarray, expected_xp.ndarray)
+    assert expected_xp.array_equal(a.ndarray, ref)
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
-@pytest.mark.parametrize(
-    "allocator, device",
-    [
-        [next_allocators.StandardCPUFieldBufferAllocator(), None],
-        [None, core_defs.Device(core_defs.DeviceType.CPU, 0)],
-    ],
-)
-def test_ones(allocator, device):
+def test_ones(constructor_test_cases):
+    allocator = constructor_test_cases.allocator
+    device = constructor_test_cases.device
+    expected_xp = constructor_test_cases.expected_xp
+
     a = gtx.ones(
         common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
         dtype=core_defs.dtype(np.float32),
         allocator=allocator,
         device=device,
     )
-    ref = np.ones((sizes[I], sizes[J])).astype(gtx.float32)
+    ref = expected_xp.ones((sizes[I], sizes[J])).astype(gtx.float32)
 
-    assert np.array_equal(a.ndarray, ref)
+    assert isinstance(a.ndarray, expected_xp.ndarray)
+    assert expected_xp.array_equal(a.ndarray, ref)
 
 
-# TODO: parametrize with gpu backend and compare with cupy array
-@pytest.mark.parametrize(
-    "allocator, device",
-    [
-        [next_allocators.StandardCPUFieldBufferAllocator(), None],
-        [None, core_defs.Device(core_defs.DeviceType.CPU, 0)],
-    ],
-)
-def test_full(allocator, device):
+def test_full(constructor_test_cases):
+    allocator = constructor_test_cases.allocator
+    device = constructor_test_cases.device
+    expected_xp = constructor_test_cases.expected_xp
+
     a = gtx.full(
         domain={I: range(sizes[I] - 2), J: (sizes[J] - 2)},
         fill_value=42.0,
@@ -98,9 +146,10 @@ def test_full(allocator, device):
         allocator=allocator,
         device=device,
     )
-    ref = np.full((sizes[I] - 2, sizes[J] - 2), 42.0).astype(gtx.float32)
+    ref = expected_xp.full((sizes[I] - 2, sizes[J] - 2), 42.0).astype(gtx.float32)
 
-    assert np.array_equal(a.ndarray, ref)
+    assert isinstance(a.ndarray, expected_xp.ndarray)
+    assert expected_xp.array_equal(a.ndarray, ref)
 
 
 def test_as_field():
@@ -144,7 +193,7 @@ def test_field_wrong_origin():
     with pytest.raises(ValueError, match=(r"Origin keys {'J'} not in domain")):
         gtx.as_field([I], np.random.rand(sizes[I]).astype(gtx.float32), origin={"J": 0})
 
-    with pytest.raises(ValueError, match=(r"Cannot specify origin for domain I")):
+    with pytest.raises(ValueError, match=(r"Cannot specify origin for .* domain I")):
         gtx.as_field("I", np.random.rand(sizes[J]).astype(gtx.float32), origin={"J": 0})
 
 
@@ -160,3 +209,104 @@ def test_aligned_index():
 def test_as_connectivity(nd_array_implementation, data, skip_value):
     testee = gtx.as_connectivity([I], J, nd_array_implementation.array(data))
     assert testee.skip_value is skip_value
+
+
+class TestFieldConstructorInit:
+    """Tests for the different codepaths of FieldConstructor.__init__.
+
+    Test relies on CustomLayoutAllocator not creating a c-layout.
+    """
+
+    # 2D domain so memory layout is observable (1D arrays are always both C and F contiguous).
+    _domain = common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 4), common.UnitRange(0, 5)))
+
+    def test_no_allocator_no_device_uses_default_cpu(self):
+        """allocator=None, device=None → default CPU custom-layout allocator."""
+        fc = constructors.FieldConstructor(allocator=None, device=None)
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
+
+    def test_no_allocator_with_device(self):
+        """allocator=None, device=CPU → device-lookup custom-layout allocator."""
+        device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+        fc = constructors.FieldConstructor(allocator=None, device=device)
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
+
+    def test_array_namespace_allocator_no_device(self):
+        """allocator=numpy, device=None → array-API standard allocation."""
+        fc = constructors.FieldConstructor(allocator=np, device=None)
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert field.ndarray.flags["C_CONTIGUOUS"]  # standard array-API allocation
+
+    def test_array_namespace_allocator_with_device(self):
+        """allocator=numpy, device=CPU → array-API standard allocation with device translation."""
+        device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+        fc = constructors.FieldConstructor(allocator=np, device=device)
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert field.ndarray.flags["C_CONTIGUOUS"]  # standard array-API allocation
+
+    def test_array_namespace_allocator_aligned_index_warns(self):
+        """allocator=numpy with aligned_index → warns and ignores aligned_index."""
+        aligned_index = [common.NamedIndex(I, 0)]
+        with pytest.warns(UserWarning, match="aligned_index"):
+            fc = constructors.FieldConstructor(allocator=np, aligned_index=aligned_index)
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert field.ndarray.flags["C_CONTIGUOUS"]  # standard array-API allocation
+
+    def test_field_buffer_allocator(self):
+        """allocator=FieldBufferAllocator → custom-layout allocation."""
+        allocator = next_allocators.StandardCPUFieldBufferAllocator()
+        fc = constructors.FieldConstructor(allocator=allocator)
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
+
+    def test_field_buffer_allocator_with_aligned_index(self):
+        """allocator=FieldBufferAllocator + aligned_index → accepted without error."""
+        allocator = next_allocators.StandardCPUFieldBufferAllocator()
+        aligned_index = [common.NamedIndex(I, 0)]
+        fc = constructors.FieldConstructor(allocator=allocator, aligned_index=aligned_index)
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
+
+    def test_field_buffer_allocator_factory(self):
+        """allocator=FieldBufferAllocatorFactory → unwraps and uses custom-layout allocation."""
+        inner_allocator = next_allocators.StandardCPUFieldBufferAllocator()
+
+        class FakeFactory:
+            @property
+            def __gt_allocator__(self):
+                return inner_allocator
+
+        fc = constructors.FieldConstructor(allocator=FakeFactory())
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
+
+    def test_field_buffer_allocator_device_mismatch_raises(self):
+        """allocator=CPU allocator, device=CUDA → raises ValueError."""
+        allocator = next_allocators.StandardCPUFieldBufferAllocator()
+        device = core_defs.Device(core_defs.DeviceType.CUDA, 0)
+        with pytest.raises(ValueError, match="device type"):
+            constructors.FieldConstructor(allocator=allocator, device=device)
+
+    def test_field_buffer_allocator_device_matches(self):
+        """allocator=CPU allocator, device=CPU → succeeds with custom layout."""
+        allocator = next_allocators.StandardCPUFieldBufferAllocator()
+        device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+        fc = constructors.FieldConstructor(allocator=allocator, device=device)
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
+
+    def test_invalid_allocator_raises(self):
+        """allocator=invalid object → raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid field allocator"):
+            constructors.FieldConstructor(allocator="not_an_allocator")

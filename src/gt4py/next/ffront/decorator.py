@@ -27,9 +27,9 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self, Unpack, override
 from gt4py.next import (
-    allocators as next_allocators,
     backend as next_backend,
     common,
+    custom_layout_allocators as next_allocators,
     embedded as next_embedded,
     errors,
     utils,

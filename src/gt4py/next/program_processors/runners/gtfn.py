@@ -13,7 +13,7 @@ import factory
 import numpy as np
 
 import gt4py._core.definitions as core_defs
-import gt4py.next.allocators as next_allocators
+import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import filecache
 from gt4py.next import backend, common, config, field_utils
 from gt4py.next.embedded import nd_array_field

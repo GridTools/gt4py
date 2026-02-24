@@ -12,7 +12,7 @@ import dataclasses
 from typing import Generic
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators
+from gt4py.next import custom_layout_allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_past,
