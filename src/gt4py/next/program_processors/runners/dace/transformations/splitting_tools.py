@@ -21,8 +21,10 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 class EdgeConnectionSpec:
     """Describes an edge in an abstract way, that is kind of independent of the direction.
 
-    It is always described in terms of a node, which is eader the `src` or the `dst`
-    of the edge, in terms of the subset the edge read or writes and the edge itself.
+    It is always described in terms of a node, which is either the source or the
+    destination of the edge. The subset it stores is always described for that node.
+    To get the "other side of the edge" use the `other_subset` and `other_node`
+    properties, respectively.
 
     To construct `EdgeConnectionSpec` you can use the `describe_incoming_edges()`
     and `describe_outgoing_edges()` function.
