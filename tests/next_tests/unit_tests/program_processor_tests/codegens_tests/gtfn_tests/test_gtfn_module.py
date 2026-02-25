@@ -15,11 +15,11 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import arguments, languages, stages, definitions
+from gt4py.next.otf import arguments, code_specs, stages, definitions
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_translation
-from gt4py.next import allocators as next_allocators
+from gt4py.next import custom_layout_allocators as next_allocators
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, cartesian_case_no_backend
@@ -82,7 +82,7 @@ def test_codegen(program_example):
     )
     assert module.entry_point.name == fencil.id
     assert any(d.name == "gridtools_cpu" for d in module.library_deps)
-    assert module.language is languages.CPP
+    assert isinstance(module.code_spec, code_specs.CPPCodeSpec)
 
 
 def test_hash_and_diskcache(program_example, tmp_path):

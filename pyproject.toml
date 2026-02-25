@@ -87,6 +87,7 @@ classifiers = [
 ]
 dependencies = [
   'attrs>=21.3',
+  'array-api-compat>=1.13',
   'black>=25.11',
   'boltons>=20.1',
   'cached-property>=1.5.1',
@@ -304,6 +305,7 @@ markers = [
   'uses_mesh_with_skip_values: tests that use a mesh with skip values',
   'uses_concat_where: tests that use the concat_where builtin',
   'uses_program_metrics: tests that require backend support for program metrics',
+  'uses_program_with_sliced_out_arguments: tests that use a sliced argument which is not supported for non-mutable arrays, e.g. JAX',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
@@ -374,6 +376,7 @@ combine-as-imports = true
 known-first-party = ['gt4py', '__externals__', '__gtscript__']
 known-third-party = [
   'attr',
+  'array-api-compat',
   'black',
   'boltons',
   'cached_property',
@@ -463,12 +466,12 @@ url = 'https://gridtools.github.io/pypi/'
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
-  {git = "https://github.com/GridTools/dace", branch = "romanc/stree-roundtrip", group = "dace-cartesian"},
+  {git = "https://github.com/GridTools/dace", branch = "romanc/stree-v2", group = "dace-cartesian"},
   {index = "gridtools", group = "dace-next"}
 ]
 
 [tool.versioningit]
-default-version = "1.1.4+unknown.version.details"
+default-version = "1.1.5+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty

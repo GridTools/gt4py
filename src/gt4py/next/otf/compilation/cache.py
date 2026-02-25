@@ -34,7 +34,7 @@ def _serialize_source(source: stages.ProgramSource) -> str:
     parameters = [_serialize_param(param) for param in source.entry_point.parameters]
     dependencies = [_serialize_library_dependency(dep) for dep in source.library_deps]
     return f"""\
-    language: {source.language}
+    language: {source.code_spec}
     name: {source.entry_point.name}
     params: {", ".join(parameters)}
     deps: {", ".join(dependencies)}

@@ -621,6 +621,11 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
             NativeFunction.FLOAT64,
         ):
             instance.dtype = _precision_to_datatype(instance.func)  # type: ignore[attr-defined]
+        elif instance.func == NativeFunction.POW:
+            # Use non-strict to derive return type as max(type(base), type(exponent))
+            common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=False)
+            if common_dtype:
+                instance.dtype = common_dtype  # type: ignore[attr-defined]
         else:
             # assumes all NativeFunction args have a common dtype
             common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
