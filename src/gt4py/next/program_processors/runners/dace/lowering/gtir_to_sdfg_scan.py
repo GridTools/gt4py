@@ -564,6 +564,7 @@ def _handle_dataflow_result_of_nested_sdfg(
     if bool(scan_column_size == 1):
         # Special case where we only write the last level of the scan column.
         # We represent the inner result as a single value and let the scan loop override it.
+        nlev = inner_desc.shape[0]
         inner_desc = dace.data.Scalar(inner_desc.dtype, transient=False)
         inner_ctx.sdfg.arrays[inner_dataname] = inner_desc
         # Update the write edge inside the scan nested SDFG to write into a scalar rather than a 1D array.
@@ -581,10 +582,27 @@ def _handle_dataflow_result_of_nested_sdfg(
             and scan_compute_state.out_degree(inner_output_node) == 0
         )
         inner_write_edge = scan_compute_state.in_edges(inner_output_node)[0]
-        if inner_write_edge.data.data == inner_dataname:
-            inner_write_edge.data.subset = "0"
-        else:
-            inner_write_edge.data.other_subset = "0"
+        assert isinstance(inner_write_edge.src, dace_nodes.AccessNode)
+        assert isinstance(inner_write_edge.src.desc(inner_ctx.sdfg), dace.data.Scalar)
+        scan_compute_state.remove_node(inner_output_node)
+
+        scan_loop = next(
+            node for node in inner_ctx.sdfg.nodes() if isinstance(node, dace.sdfg.state.LoopRegion)
+        )
+        scan_update_state = next(s for s in inner_ctx.sdfg.states() if s.label == "scan_update")
+        assert scan_loop.out_degree(scan_update_state) == 0
+        last_level_state = scan_loop.add_state("write_last_level")
+        scan_loop_var = gtir_to_sdfg_utils.get_map_variable(field_dims[scan_dim_index])
+        scan_loop.add_edge(
+            scan_update_state,
+            last_level_state,
+            dace.InterstateEdge(condition=f"{scan_loop_var} == {nlev} - 1"),
+        )
+        last_level_state.add_nedge(
+            last_level_state.add_access(inner_write_edge.src.data),
+            last_level_state.add_access(inner_dataname),
+            dace.Memlet(data=inner_dataname, subset="0", other_subset="0"),
+        )
     else:
         inner_desc.transient = False
 
