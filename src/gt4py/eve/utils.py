@@ -88,7 +88,9 @@ def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) ->
         raise error
 
 
-def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
+def isinstancechecker(
+    type_info: Union[Type, Iterable[Type], types.UnionType],
+) -> Callable[[Any], bool]:
     """Return a callable object that checks if operand is an instance of `type_info`.
 
     Examples:
@@ -101,18 +103,20 @@ def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any],
         False
 
     """
-    types: Tuple[Type, ...] = tuple()
+    all_types: Tuple[Type, ...] = tuple()
     if isinstance(type_info, type):
-        types = (type_info,)
+        all_types = (type_info,)
+    elif isinstance(type_info, types.UnionType):
+        all_types = type_info.__args__
     elif not isinstance(type_info, tuple) and is_collection(type_info):
-        types = tuple(type_info)
+        all_types = tuple(type_info)
     else:
-        types = type_info  # type:ignore  # it is checked at run-time
+        all_types = type_info  # type:ignore  # it is checked at run-time
 
-    if not isinstance(types, tuple) or not all(isinstance(t, type) for t in types):
-        raise ValueError(f"Invalid type(s) definition: '{types}'.")
+    if not isinstance(all_types, tuple) or not all(isinstance(t, type) for t in all_types):
+        raise ValueError(f"Invalid type(s) definition: '{all_types}'.")
 
-    return lambda obj: isinstance(obj, types)
+    return lambda obj: isinstance(obj, all_types)
 
 
 def attrchecker(*names: str) -> Callable[[Any], bool]:

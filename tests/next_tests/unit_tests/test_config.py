@@ -420,7 +420,7 @@ class TestStringValueParsing:
         with mock.patch.dict(os.environ, {"GT4PY_ITEMS": "a,b,c"}):
 
             class TestConfig(ConfigManager):
-                items = OptionDescriptor(option_type=list, default=[], parser=parse_list)
+                items = OptionDescriptor(option_type=list, default=[], env_var_parser=parse_list)
 
             cfg = TestConfig()
             assert cfg.items == ["a", "b", "c"]

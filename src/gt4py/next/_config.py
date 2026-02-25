@@ -29,6 +29,7 @@ import contextlib
 import contextvars
 import dataclasses
 import enum
+import functools
 import os
 import pathlib
 import sys
@@ -60,7 +61,6 @@ UNSET: Final[_UnsetSentinel] = _UnsetSentinel()
 
 _T = TypeVar("_T")
 _T_contra = TypeVar("_T_contra", contravariant=True)
-_EnumT = TypeVar("_EnumT", bound=enum.Enum)
 
 
 def parse_env_var(
@@ -109,6 +109,21 @@ def _parse_str_as_path(value: str) -> pathlib.Path:
     return pathlib.Path(expanded)
 
 
+@functools.cache
+def _type_check_validator(type_: type) -> Callable[[Any], None]:
+    """Generate a validator function that checks if a value is an instance of the given type."""
+
+    is_instance_checker = utils.isinstancechecker(type_)
+
+    def validator(value: Any) -> None:
+        if not is_instance_checker(value):
+            raise TypeError(
+                f"Expected value of type '{type_}', got type '{type(value)}' (value: {value})"
+            )
+
+    return validator
+
+
 class UpdateScope(str, enum.Enum):
     """Scope of a configuration option update."""
 
@@ -149,7 +164,8 @@ class OptionDescriptor(Generic[_T]):
         validator: Callable that validates the option value, or "type_check" for isinstance checking.
             Set to None to disable validation.
         update_callback: Optional callback invoked after the option is updated (globally or in context).
-        env_prefix: Prefix for the environment variable name.
+        env_var_parser: Optional parser for environment variable values.
+        env_var_prefix: Prefix for the environment variable name.
         name: Name of the option (set automatically via __set_name__).
 
     Example:
@@ -161,19 +177,19 @@ class OptionDescriptor(Generic[_T]):
         ...     )
     """
 
-    option_type: type[_T]
+    option_type: type[_T] | Any
     default: dataclasses.InitVar[_T | _UnsetSentinel] = UNSET
     default_factory: Callable[[ConfigManager], _T] | None = None
-    parser: Callable[[str], _T] | None = None
     validator: Callable[[Any], Any] | Literal["type_check"] | None = "type_check"
     update_callback: OptionUpdateCallback[_T] | None = None
-    env_prefix: str = "GT4PY_"
+    env_var_parser: Callable[[str], _T] | None = None
+    env_var_prefix: str = "GT4PY_"
     name: str = dataclasses.field(init=False, default="")
 
     def __post_init__(self, default: _T | _UnsetSentinel) -> None:
         # Initialize the validator
         if self.validator == "type_check":
-            object.__setattr__(self, "validator", utils.isinstancechecker(self.option_type))
+            object.__setattr__(self, "validator", _type_check_validator(self.option_type))
         assert self.validator is None or callable(self.validator)
 
         # Initialize the default factory based on the provided default/default_factory
@@ -231,7 +247,7 @@ class OptionDescriptor(Generic[_T]):
     @property
     def env_var_name(self) -> str:
         """Construct the name of the environment variable corresponding to this option."""
-        return f"{self.env_prefix}{self.name}".upper()
+        return f"{self.env_var_prefix}{self.name}".upper()
 
 
 class ConfigManager:
@@ -277,18 +293,19 @@ class ConfigManager:
         # instance. Though discouraged in general (values bind to ContextVar identity
         # and Context objects hold strong references to ContextVars, so they won't be
         # GC'd even if the instance goes out of scope), in this case we really want
-        # per-registry isolation and we assume only very few ConfigRegistry instances
+        # per-registry isolation and we assume only very few ConfigManager instances
         # will be ever created.
         self._local_context_cvar = contextvars.ContextVar[Mapping[str, Any]](
             f"{self.__class__.__name__}_cvar", default=types.MappingProxyType({})
         )
 
+        # Option values initialization with environment variable parsing and validation
         self._global_context: dict[str, Any] = {}
         for name, desc in self._descriptors.items():
             assert desc.default_factory is not None  # Guaranteed by __post_init__
             init_value = parse_env_var(
                 desc.env_var_name,
-                desc.parser or _parse_str[desc.option_type],
+                desc.env_var_parser or _parse_str[desc.option_type],
                 default=desc.default_factory(self),
             )
             if validator := self._validators.get(name):
@@ -305,9 +322,6 @@ class ConfigManager:
 
         Returns:
             The effective value of the option.
-
-        Raises:
-            AttributeError: If the option name is not recognized.
         """
         if name not in self._keys:
             raise AttributeError(f"Unrecognized config option: {name}")
@@ -323,11 +337,6 @@ class ConfigManager:
         Args:
             name: The name of the configuration option.
             value: The new value for the option.
-
-        Raises:
-            AttributeError: If the option name is not recognized, or if the option
-                           is currently overridden in a context manager.
-            Validation error: If the value fails validation.
         """
         if name not in self._keys:
             raise AttributeError(f"Unrecognized config option: {name}")
@@ -408,6 +417,15 @@ class ConfigManager:
         return types.MappingProxyType(self._descriptors)
 
 
+def _parse_dump_metrics_filename(value: str) -> bool | pathlib.Path:
+    try:
+        return _parse_str[bool](value)
+    except Exception:
+        # If parsing as a bool fails, try parsing as a path.
+        # This allows users to specify a file path or a boolean value for this option.
+        return _parse_str[pathlib.Path](value)
+
+
 class Config(ConfigManager):
     """
     GT4Py configuration manager.
@@ -424,9 +442,7 @@ class Config(ConfigManager):
     ## -- Debug options --
     #: Master debug flag. It changes defaults for all the other options to be as helpful
     #: for debugging as possible. Environment variable: GT4PY_DEBUG
-    debug = OptionDescriptor(
-        option_type=bool, default=False, validator=utils.isinstancechecker(bool)
-    )
+    debug = OptionDescriptor(option_type=bool, default=False)
 
     #: Verbose flag for DSL compilation errors. Defaults to the value of debug.
     #: Environment variable: GT4PY_VERBOSE_EXCEPTIONS
@@ -444,6 +460,13 @@ class Config(ConfigManager):
     #: Environment variable: GT4PY_ADD_GPU_TRACE_MARKERS
     #: FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
     add_gpu_trace_markers = OptionDescriptor(option_type=bool, default=False)
+
+    #: File path to dump collected metrics at exit, if GT4PY_COLLECT_METRICS_LEVEL is enabled.
+    #: If set to a True value, it defaults to "gt4py_metrics_YYYYMMDD_HHMMSS.json" in
+    #: the current folder.
+    dump_metrics_at_exit = OptionDescriptor(
+        option_type=bool | pathlib.Path, default=False, env_var_parser=_parse_dump_metrics_filename
+    )
 
     ## -- Build options --
     class BuildCacheLifetime(enum.Enum):

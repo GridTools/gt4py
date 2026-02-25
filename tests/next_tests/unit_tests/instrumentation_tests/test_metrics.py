@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from gt4py.next import config
+from gt4py.next import config as gt_config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import arguments
 
@@ -59,7 +59,7 @@ class TestSetCurrentSourceKey:
 
 class TestSourceKeyContextManager:
     def test_context_manager_sets_and_resets_key(self):
-        with config.overrides(collect_metrics_level=metrics.MINIMAL):
+        with gt_config.overrides(collect_metrics_level=metrics.MINIMAL):
             metrics._source_key_cvar.set(
                 metrics._NO_KEY_SET_MARKER_
             )  # Reset context variable before test
@@ -79,7 +79,7 @@ class TestSourceKeyContextManager:
             )
 
     def test_context_manager_with_no_key(self):
-        with config.overrides(collect_metrics_level=metrics.MINIMAL):
+        with gt_config.overrides(collect_metrics_level=metrics.MINIMAL):
             metrics._source_key_cvar.set("__BEFORE__MARKER__")  # Reset context variable before test
 
             with metrics.SourceKeyContextManager():
@@ -93,7 +93,7 @@ class TestSourceKeyContextManager:
             assert metrics._source_key_cvar.get(metrics._NO_KEY_SET_MARKER_) == "__BEFORE__MARKER__"
 
     def test_context_manager_nested(self):
-        with config.overrides(collect_metrics_level=metrics.MINIMAL):
+        with gt_config.overrides(collect_metrics_level=metrics.MINIMAL):
             metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
             key1 = "outer_key"
             key2 = "inner_key"
@@ -122,7 +122,7 @@ class TestBaseMetricsCollector:
         ): ...
 
         metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
-        with config.overrides(collect_metrics_level=metrics.MINIMAL):
+        with gt_config.overrides(collect_metrics_level=metrics.MINIMAL):
             outer_key = "outer_key"
             metrics.set_current_source_key("outer_key")
             assert metrics.get_current_source_key() == outer_key
@@ -141,7 +141,7 @@ class TestBaseMetricsCollector:
 
         key = "test_disabled"
         metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
-        with config.overrides(collect_metrics_level=metrics.DISABLED):
+        with gt_config.overrides(collect_metrics_level=metrics.DISABLED):
             metrics.set_current_source_key(key)
 
             with TestCollector(key=key):
@@ -162,7 +162,7 @@ class TestBaseMetricsCollector:
 
         key = "test_custom"
         metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
-        with config.overrides(collect_metrics_level=metrics.PERFORMANCE):
+        with gt_config.overrides(collect_metrics_level=metrics.PERFORMANCE):
             with CustomCollector(key=key):
                 pass
 
@@ -286,21 +286,17 @@ def sample_source_metrics(sample_source_metadata: dict[str, Any]) -> Mapping[str
     return {
         "program1": metrics.Source(
             metadata={"description": "Test program 1", **sample_source_metadata},
-            metrics=metrics.MetricsCollection(
-                **{
-                    metrics.COMPUTE_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
-                    metrics.TOTAL_METRIC: metrics.Metric(samples=[4.0, 5.0, 6.0]),
-                }
-            ),
+            metrics=metrics.MetricsCollection(**{
+                metrics.COMPUTE_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
+                metrics.TOTAL_METRIC: metrics.Metric(samples=[4.0, 5.0, 6.0]),
+            }),
         ),
         "program2": metrics.Source(
             metadata={"description": "Test program 2", **sample_source_metadata},
-            metrics=metrics.MetricsCollection(
-                **{
-                    metrics.COMPUTE_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
-                    metrics.TOTAL_METRIC: metrics.Metric(samples=[40.0, 50.0, 60.0]),
-                }
-            ),
+            metrics=metrics.MetricsCollection(**{
+                metrics.COMPUTE_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
+                metrics.TOTAL_METRIC: metrics.Metric(samples=[40.0, 50.0, 60.0]),
+            }),
         ),
     }
 
@@ -430,7 +426,7 @@ def test_dump_json(sample_source_metrics: Mapping[str, metrics.Source], tmp_path
 
 
 class TestDumpMetricsAtExit:
-    @pytest.mark.parametrize("mode", ["explicit", "auto", None])
+    @pytest.mark.parametrize("mode", ["explicit", "auto", False])
     def test_dump_metrics_at_exit_enabled(
         self,
         sample_source_metrics: Mapping[str, metrics.Source],
@@ -438,29 +434,29 @@ class TestDumpMetricsAtExit:
         mode: str | None,
     ):
         """Test _dump_metrics_at_exit writes to a file when enabled."""
-        explicit_output_filename = str(tmp_path / "explicit_metrics.json")
-        auto_output_filename = str(tmp_path / gt_config._init_dump_metrics_filename())
+        explicit_output_filename = tmp_path / "explicit_metrics.json"
+        auto_output_filename = tmp_path / metrics._init_dump_metrics_filename()
 
         if mode == "explicit":
             output_filename = explicit_output_filename
         elif mode == "auto":
             output_filename = auto_output_filename
         else:
-            output_filename = None
+            output_filename = False
 
-        with unittest.mock.patch("gt4py.next.config.DUMP_METRICS_AT_EXIT", output_filename):
+        with gt_config.overrides(dump_metrics_at_exit=output_filename):
             with unittest.mock.patch(
                 "gt4py.next.instrumentation.metrics.sources", sample_source_metrics
             ):
                 metrics._dump_metrics_at_exit()
 
-        assert (output_filename is None) == (mode is None)
+        assert (output_filename is False) == (mode is False)
         if output_filename:
-            assert pathlib.Path(output_filename).exists()
-            data = json.loads(pathlib.Path(output_filename).read_text())
+            assert output_filename.exists()
+            data = json.loads(output_filename.read_text())
             assert "program1" in data
             assert "program2" in data
-            pathlib.Path(output_filename).unlink()  # Clean up after test
+            output_filename.unlink()  # Clean up after test
         else:
-            assert not pathlib.Path(explicit_output_filename).exists()
-            assert not pathlib.Path(auto_output_filename).exists()
+            assert not explicit_output_filename.exists()
+            assert not auto_output_filename.exists()
