@@ -92,7 +92,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     monkeypatch.setattr(gtx_transformations, "gt_auto_optimize", mocked_auto_optimize)
     monkeypatch.setattr(gtx_transformations, "gt_gpu_transformation", mocked_gpu_transformation)
 
-    with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", on_gpu):
+    with mock.patch("gt4py.next.config.unstructured_horizontal_has_unit_stride", on_gpu):
         custom_backend = dace_wf_backend.make_dace_backend(
             gpu=on_gpu,
             cached=False,

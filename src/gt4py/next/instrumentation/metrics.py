@@ -52,17 +52,17 @@ ALL: Final[int] = 100
 
 def is_any_level_enabled() -> bool:
     """Check if any metrics collection level is enabled."""
-    return config.COLLECT_METRICS_LEVEL > DISABLED
+    return config.collect_metrics_level > DISABLED
 
 
 def is_level_enabled(level: int) -> bool:
     """Check if a given metrics collection level is enabled."""
-    return config.COLLECT_METRICS_LEVEL >= level
+    return config.collect_metrics_level >= level
 
 
 def get_current_level() -> int:
     """Retrieve the current metrics collection level (from the configuration module)."""
-    return config.COLLECT_METRICS_LEVEL
+    return config.collect_metrics_level
 
 
 @dataclasses.dataclass(frozen=True)

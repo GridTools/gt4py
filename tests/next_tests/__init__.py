@@ -16,7 +16,7 @@ from . import definitions
 __all__ = ["definitions", "get_processor_id"]
 
 
-if config.BUILD_CACHE_LIFETIME is config.BuildCacheLifetime.PERSISTENT:
+if config.build_cache_lifetime is config.BuildCacheLifetime.PERSISTENT:
     warnings.warn(
         "You are running GT4Py tests with BUILD_CACHE_LIFETIME set to PERSISTENT!", UserWarning
     )

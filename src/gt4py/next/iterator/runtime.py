@@ -67,7 +67,7 @@ class FendefDispatcher:
 
         fencil_definition = trace_fencil_definition(self.definition, args)
 
-        if config.DEBUG:
+        if config.debug:
             devtools.debug(fencil_definition)
         return fencil_definition
 

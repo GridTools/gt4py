@@ -44,7 +44,7 @@ def compilation_error_hook(
     """
     # in hard crashes of the interpreter, the `exceptions` module might be partially unloaded
     if exceptions.DSLError is not None and isinstance(value, exceptions.DSLError):
-        exc_strs = _format_uncaught_error(value, config.VERBOSE_EXCEPTIONS)
+        exc_strs = _format_uncaught_error(value, config.verbose_exceptions)
         print("".join(exc_strs), file=sys.stderr)
     else:
         fallback(type_, value, tb)

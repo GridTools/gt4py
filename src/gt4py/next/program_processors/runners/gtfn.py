@@ -113,7 +113,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
-            lambda: config.CMAKE_BUILD_TYPE
+            lambda: config.cmake_build_type
         )
         builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
@@ -124,7 +124,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
                     hash_function=stages.fingerprint_compilable_program,
-                    cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
+                    cache=filecache.FileCache(str(config.build_cache_dir / "gtfn_cache")),
                 )
             ),
         )
@@ -141,7 +141,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     )
     compilation = factory.SubFactory(
         compiler.CompilerFactory,
-        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        cache_lifetime=factory.LazyFunction(lambda: config.build_cache_lifetime),
         builder_factory=factory.SelfAttribute("..builder_factory"),
     )
     decoration = factory.LazyAttribute(

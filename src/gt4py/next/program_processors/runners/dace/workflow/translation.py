@@ -39,7 +39,7 @@ def find_constant_symbols(
     """Helper function to find symbols to replace with constant values."""
     constant_symbols: dict[str, int] = {}
 
-    if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE:
+    if config.unstructured_horizontal_has_unit_stride:
         # Search the stride symbols corresponding to the horizontal dimension
         for p in ir.params:
             if isinstance(p.type, ts.FieldType):
@@ -268,7 +268,7 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         dace.Memlet(f"{output}[0]"),
     )
 
-    if gpu and _has_gpu_schedule(sdfg) and config.ADD_GPU_TRACE_MARKERS:
+    if gpu and _has_gpu_schedule(sdfg) and config.add_gpu_trace_markers:
         sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
         for node, _ in sdfg.all_nodes_recursive():
             if isinstance(

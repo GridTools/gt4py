@@ -64,7 +64,7 @@ def get_cache_folder(
         case config.BuildCacheLifetime.SESSION:
             base_path = _session_cache_dir_path
         case config.BuildCacheLifetime.PERSISTENT:
-            base_path = config.BUILD_CACHE_DIR
+            base_path = config.build_cache_dir
         case _:
             raise ValueError("Unsupported caching lifetime.")
 

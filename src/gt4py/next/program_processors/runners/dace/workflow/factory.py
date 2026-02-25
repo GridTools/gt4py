@@ -39,7 +39,7 @@ class DaCeWorkflowFactory(factory.Factory):
         auto_optimize: bool = False
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
-            lambda: config.CMAKE_BUILD_TYPE
+            lambda: config.cmake_build_type
         )
 
         cached_translation = factory.Trait(
@@ -47,7 +47,7 @@ class DaCeWorkflowFactory(factory.Factory):
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
                     hash_function=stages.fingerprint_compilable_program,
-                    cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "translation_cache")),
+                    cache=filecache.FileCache(str(config.build_cache_dir / "translation_cache")),
                 )
             ),
         )
@@ -68,7 +68,7 @@ class DaCeWorkflowFactory(factory.Factory):
     compilation = factory.SubFactory(
         DaCeCompilationStepFactory,
         bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
-        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        cache_lifetime=factory.LazyFunction(lambda: config.build_cache_lifetime),
         device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )

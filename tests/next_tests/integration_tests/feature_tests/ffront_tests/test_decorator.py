@@ -60,7 +60,7 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
         testee_op(a, a, out=out)
 
     with (
-        mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level),
+        mock.patch("gt4py.next.config.collect_metrics_level", metrics_level),
         mock.patch(
             "gt4py.next.instrumentation.metrics.sources", collections.defaultdict(metrics.Source)
         ),

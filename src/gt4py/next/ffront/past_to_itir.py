@@ -141,7 +141,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDe
         inp.args, args=args, kwargs=kwargs, column_axis=_column_axis(all_closure_vars)
     )
 
-    if config.DEBUG or inp.data.debug:
+    if config.debug or inp.data.debug:
         devtools.debug(itir_program)
 
     return definitions.CompilableProgramDef(data=itir_program, args=compile_time_args)

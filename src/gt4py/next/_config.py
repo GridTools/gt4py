@@ -31,7 +31,7 @@ import pathlib
 import sys
 import types
 from collections.abc import Callable, Generator, Mapping
-from typing import Any, Final, Generic, Literal, Protocol, TypeVar, cast, final
+from typing import Any, Generic, Literal, Protocol, TypeVar, cast, final
 
 from gt4py.eve import utils
 from gt4py.eve.extended_typing import Self
@@ -39,7 +39,7 @@ from gt4py.eve.extended_typing import Self
 
 @final
 class Sentinel:
-    UNSET = enum.auto()
+    UNSET = object()
 
 
 _T = TypeVar("_T")
@@ -259,8 +259,8 @@ class ConfigManager:
                 f"Unrecognized config options: {set(overrides.keys()) - self._keys}"
             )
 
-        old_values = {}
-        changes = {}
+        old_values: dict[str, Any] = {}
+        changes: dict[str, Any] = {}
         for name, new_value in overrides.items():
             old_value = self.get(name)
             if new_value != old_value:
@@ -271,7 +271,7 @@ class ConfigManager:
             self._validators[name](changes[name])
 
         old_context = self._local_context_cvar.get()
-        new_context = types.MappingProxyType(**old_context, **changes)
+        new_context = types.MappingProxyType({**old_context, **changes})
         token = self._local_context_cvar.set(new_context)
 
         try:

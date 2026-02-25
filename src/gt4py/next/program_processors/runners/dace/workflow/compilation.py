@@ -96,7 +96,7 @@ class CompiledDaceProgram:
             "Argument vector was not set properly."
         )
         self.sdfg_program.fast_call(
-            self.csdfg_argv, self.csdfg_init_argv, do_gpu_check=config.DEBUG
+            self.csdfg_argv, self.csdfg_init_argv, do_gpu_check=config.debug
         )
 
     def __call__(self, **kwargs: Any) -> None:

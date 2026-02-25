@@ -97,7 +97,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
         ],
     )
 
-    with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", has_unit_stride):
+    with mock.patch("gt4py.next.config.unstructured_horizontal_has_unit_stride", has_unit_stride):
         sdfg = _translate_gtir_to_sdfg(
             ir=ir,
             offset_provider=SKIP_VALUE_MESH.offset_provider,
