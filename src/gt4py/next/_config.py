@@ -31,15 +31,29 @@ import pathlib
 import sys
 import types
 from collections.abc import Callable, Generator, Mapping
-from typing import Any, Generic, Literal, Protocol, TypeVar, cast, final
+from typing import Any, Final, Generic, Literal, Protocol, TypeVar, final, overload
 
 from gt4py.eve import utils
 from gt4py.eve.extended_typing import Self
 
 
 @final
-class Sentinel:
-    UNSET = object()
+class _UnsetSentinel:
+    """Sentinel value for unset configuration options."""
+
+    __slots__ = ()
+    _instance: _UnsetSentinel | None = None
+
+    def __new__(cls) -> _UnsetSentinel:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:
+        return "<UNSET>"
+
+
+UNSET: Final[_UnsetSentinel] = _UnsetSentinel()
 
 
 _T = TypeVar("_T")
@@ -47,70 +61,66 @@ _T_contra = TypeVar("_T_contra", contravariant=True)
 _EnumT = TypeVar("_EnumT", bound=enum.Enum)
 
 
-@utils.type_dispatcher
-def get_value_from_environment_var(
-    as_type: type[_T], var_name: str, *, default: _T | None = None
+def parse_env_var(
+    var_name: str, parser: Callable[[str], _T], *, default: _T | None = None
 ) -> _T | None:
-    """
-    Create an instance of the provided type from the value of an environment variable.
-
-    The implementation uses a explicit type-dispatcher to allow custom parsing logic
-    for different types (e.g. bool, enums).
-    """
-    env_value = os.environ.get(var_name, None)
-    if env_value is None:
+    """Get a python value from an environment variable."""
+    env_var_value = os.environ.get(var_name, None)
+    if env_var_value is None:
         return default
+
     try:
-        return as_type(env_value)
+        return parser(env_var_value)
     except Exception as e:
-        raise TypeError(
-            f"Unsupported conversion of GT4Py environment variable {var_name}: "
-            f"{env_value!r} to type '{as_type.__name__}'."
+        raise RuntimeError(
+            f"Parsing '{var_name}' (value: '{env_var_value}') environment variable {var_name} failed!"
         ) from e
 
 
-@get_value_from_environment_var.register(bool)
-def _get_value_from_environment_var_as_bool(
-    as_type: type[bool], var_name: str, *, default: bool | None = None
-) -> bool | None:
-    env_value = os.environ.get(var_name, None)
-    if env_value is None:
-        return default
-    match env_value.strip().upper():
+@utils.TypeMapping
+def _parse_str(type_: type) -> Callable[[str], Any]:
+    """Default parser: the type string value as is."""
+    match type_:
+        case enum.Enum() as enum_type:
+            return lambda value: enum_type[value]  # parse enum values from their names
+        case _:
+            return lambda x: 1  # type constructor as parser
+
+
+@_parse_str.register(bool)
+def _parse_str_as_bool(value: str) -> bool:
+    match value.strip().upper():
         case "0" | "FALSE" | "OFF":
             return False
         case "1" | "TRUE" | "ON":
             return True
         case _:
             raise ValueError(
-                f"Invalid GT4Py environment flag value for {var_name}: use '0 | FALSE | OFF' or '1 | TRUE | ON'."
+                f"{value} cannot be parsed as a boolean value. Use '0 | FALSE | OFF' or '1 | TRUE | ON'."
             )
 
 
-@get_value_from_environment_var.register(enum.Enum)
-def _get_value_from_environment_var_as_enum(
-    as_type: type[_EnumT], var_name: str, *, default: _EnumT | None = None
-) -> _EnumT | None:
-    """Create enum by member name."""
-    env_value = os.environ.get(var_name, None)
-    if env_value is None:
-        return default
-
-    try:
-        return as_type[env_value]
-    except Exception as e:
-        raise TypeError(
-            f"Invalid GT4Py enum value for {var_name}: {env_value!r}. Allowed: {[m.name for m in as_type]}."
-        ) from e
+@_parse_str.register(pathlib.Path)
+def _parse_str_as_path(value: str) -> pathlib.Path:
+    expanded = os.path.expandvars(os.path.expanduser(value))
+    return pathlib.Path(expanded)
 
 
 class UpdateScope(str, enum.Enum):
+    """Scope of a configuration option update."""
+
     GLOBAL = sys.intern("global")
     CONTEXT = sys.intern("context")
 
 
 class OptionUpdateCallback(Protocol[_T_contra]):
-    """Callback invoked after an option changes (in a global or local context scope)."""
+    """
+    Callback invoked after an option changes.
+
+    Callbacks are invoked after both global (via set() or __setattr__)
+    and context-local (via overrides()) updates. This allows observers
+    to react to configuration changes.
+    """
 
     def __call__(
         self, new_val: _T_contra, old_val: _T_contra | None, scope: UpdateScope
@@ -130,24 +140,44 @@ class OptionDescriptor(Generic[_T, ConfigManagerT]):
     to support the bare attribute-style access to the option value on the
     manager instance (e.g. `config.debug`), which will be resolved properly
     using the precedence rules defined in `ConfigManager.get()`.
+
+    Attributes:
+        type: The Python type of this configuration option.
+        default: Initial fallback value for this option. Mutually exclusive with default_factory.
+        default_factory: Callable to compute the default value given a ConfigManager instance.
+            Mutually exclusive with default.
+        validator: Callable that validates the option value, or "type_check" for isinstance checking.
+            Set to None to disable validation.
+        update_callback: Optional callback invoked after the option is updated (globally or in context).
+        env_prefix: Prefix for the environment variable name.
+        name: Name of the option (set automatically via __set_name__).
+
+    Example:
+        >>> class Config(ConfigManager):
+        ...     debug = OptionDescriptor(
+        ...         type=bool,
+        ...         default=False,
+        ...         update_callback=lambda new, old, scope: print(f"Changed to {new}"),
+        ...     )
     """
 
-    type: type[_T]
-    default: dataclasses.InitVar[_T | Literal[Sentinel.UNSET]] = Sentinel.UNSET
+    option_type: type[_T]
+    default: dataclasses.InitVar[_T | _UnsetSentinel] = UNSET
     default_factory: Callable[[ConfigManagerT], _T] | None = None
+    parser: Callable[[str], _T] | None = None
     validator: Callable[[Any], Any] | Literal["type_check"] | None = "type_check"
     update_callback: OptionUpdateCallback[_T] | None = None
     env_prefix: str = "GT4PY_"
-    name: str = dataclasses.field(init=False)
+    name: str = dataclasses.field(init=False, default="")
 
-    def __post_init__(self, default: _T | Literal[Sentinel.UNSET]) -> None:
+    def __post_init__(self, default: _T | _UnsetSentinel) -> None:
         # Initialize the validator
         if self.validator == "type_check":
-            object.__setattr__(self, "validator", utils.isinstancechecker(self.type))
+            object.__setattr__(self, "validator", utils.isinstancechecker(self.option_type))
         assert self.validator is None or callable(self.validator)
 
         # Initialize the default factory based on the provided default/default_factory
-        if default is not Sentinel.UNSET:
+        if not isinstance(default, _UnsetSentinel):
             if self.default_factory is not None:
                 raise ValueError(
                     "Cannot specify both default and default_factory for a config option descriptor."
@@ -164,7 +194,26 @@ class OptionDescriptor(Generic[_T, ConfigManagerT]):
         """Set the name of the option based on the attribute name in the owner class."""
         object.__setattr__(self, "name", name)
 
-    def __get__(self, instance: Any, owner: type | None = None) -> _T | Self:
+    @overload
+    def __get__(
+        self, instance: ConfigManagerT, owner: type[ConfigManagerT] | None = None
+    ) -> _T: ...
+
+    @overload
+    def __get__(
+        self, instance: Literal[None], owner: type[ConfigManagerT] | None = None
+    ) -> Self: ...
+
+    def __get__(
+        self, instance: ConfigManagerT | None, owner: type[ConfigManagerT] | None = None
+    ) -> _T | Self:
+        """
+        Get the configuration option value.
+
+        If accessed on the class (instance is None), returns the descriptor itself.
+        If accessed on an instance, delegates to ConfigManager.get() to get the
+        effective current value.
+        """
         try:
             assert isinstance(instance, ConfigManager)
             return instance.get(self.name)
@@ -175,22 +224,43 @@ class OptionDescriptor(Generic[_T, ConfigManagerT]):
             raise AttributeError(f"Error reading config option {self.name!r}") from e
 
     def __set__(self, instance: Any, value: _T) -> None:
+        """
+        Set the global value of the configuration option.
+
+        This delegates to ConfigManager.set() which handles global updates and validation.
+        """
         assert isinstance(instance, ConfigManager)
         instance.set(self.name, value)
 
     @property
     def env_var_name(self) -> str:
-        """Construct the name of the environment variable corresponding to this option."""
+        """Construct the name of the environment variable corresponding to this option.
+
+        Returns the environment variable name by combining the prefix and option name in uppercase.
+        E.g., for env_prefix="GT4PY_" and name="debug", returns "GT4PY_DEBUG".
+        """
         return f"{self.env_prefix}{self.name}".upper()
 
 
 class ConfigManager:
-    """
-    Central configuration manager with attribute-style access.
+    """Central configuration manager with attribute-style access.
 
     Config options are defined as class attributes using `OptionDescriptor`.
     The manager stores global values for all options and allows temporary
     overrides in a context manager scope.
+
+    The effective value of an option follows this precedence (highest to lowest):
+    1. Active context override via the `overrides()` context manager
+    2. Global runtime value set via the `set()` method
+    3. Environment variable (if set)
+    4. Descriptor default or default_factory result
+
+    Example:
+        >>> config = ConfigManager()
+        >>> config.get("some_option")  # Apply precedence rules
+        >>> config.set("some_option", value)  # Set global value
+        >>> with config.overrides(some_option=value):  # Temporary override
+        ...     pass
     """
 
     def __init__(self) -> None:
@@ -224,22 +294,48 @@ class ConfigManager:
         self._global_context: dict[str, Any] = {}
         for name, desc in self._descriptors.items():
             assert desc.default_factory is not None  # Guaranteed by __post_init__
-            init_value = get_value_from_environment_var(
-                desc.type, desc.env_var_name, default=desc.default_factory(self)
+            init_value = parse_env_var(
+                desc.env_var_name, desc.parser or _parse_str[desc.option_type], default=None
             )
             if validator := self._validators.get(name):
                 validator(init_value)
             self._global_context[name] = init_value
 
     def get(self, name: str) -> Any:
-        if __debug__ and name not in self._keys:
+        """Get the effective value of a configuration option.
+
+        Applies precedence rules: context override > global value > environment > default.
+
+        Args:
+            name: The name of the configuration option.
+
+        Returns:
+            The effective value of the option.
+
+        Raises:
+            AttributeError: If the option name is not recognized.
+        """
+        if name not in self._keys:
             raise AttributeError(f"Unrecognized config option: {name}")
-        if (val := self._local_context_cvar.get().get(name, Sentinel.UNSET)) is Sentinel.UNSET:
-            return self._global_context[name]
-        return val
+        if (val := self._local_context_cvar.get().get(name, UNSET)) is not UNSET:
+            return val
+        return self._global_context[name]
 
     def set(self, name: str, value: Any) -> None:
-        if __debug__ and name not in self._keys:
+        """Set the global value of a configuration option.
+
+        Validates the value and invokes any registered callbacks.
+
+        Args:
+            name: The name of the configuration option.
+            value: The new value for the option.
+
+        Raises:
+            AttributeError: If the option name is not recognized, or if the option
+                           is currently overridden in a context manager.
+            Validation error: If the value fails validation.
+        """
+        if name not in self._keys:
             raise AttributeError(f"Unrecognized config option: {name}")
         if name in self._local_context_cvar.get():
             raise AttributeError(
@@ -254,6 +350,27 @@ class ConfigManager:
 
     @contextlib.contextmanager
     def overrides(self, **overrides: Any) -> Generator[None, None, None]:
+        """Context manager for temporary configuration overrides.
+
+        Overrides are task-local (isolated per thread/async task) and automatically
+        reverted when exiting the context manager. Nested contexts are supported.
+
+        Args:
+            **overrides: Configuration option names and their temporary values.
+
+        Yields:
+            None
+
+        Raises:
+            AttributeError: If any override name is not a recognized configuration option.
+            Validation error: If any override value fails validation.
+
+        Example:
+            >>> with config.overrides(debug=True, verbose_exceptions=True):
+            ...     # Use config with temporary overrides
+            ...     pass
+            >>> # Overrides are automatically reverted here
+        """
         if overrides.keys() - self._keys:
             raise AttributeError(
                 f"Unrecognized config options: {set(overrides.keys()) - self._keys}"
@@ -287,52 +404,79 @@ class ConfigManager:
                 self._hooks[name](old_context.get(name), new_context.get(name), UpdateScope.CONTEXT)
 
     def as_dict(self) -> dict[str, Any]:
-        """Get the current effective configuration options as a dictionary."""
+        """Get the current effective configuration options as a dictionary.
+
+        Returns all configuration options with their effective values, preserving
+        the order they were defined in the class.
+
+        Returns:
+            A dictionary mapping option names to their effective values.
+        """
         # We use self._descriptors to preserve the order of options as defined in the class.
         return {name: self.get(name) for name in self._descriptors.keys()}
 
     def _option_descriptors_(self) -> types.MappingProxyType[str, OptionDescriptor]:
-        """Get the option descriptors."""
+        """Get the option descriptors.
+
+        Returns a read-only mapping of option names to their descriptors.
+        This is useful for introspection and documentation purposes.
+
+        Returns:
+            A MappingProxyType mapping option names to OptionDescriptor instances.
+        """
         return types.MappingProxyType(self._descriptors)
 
 
 class Config(ConfigManager):
-    """
-    GT4Py configuration registry.
+    """GT4Py configuration registry.
 
-    This class is used to register configuration options for GT4Py.
+    This class is used to register and manage all configuration options for GT4Py.
+    All publicly exposed options should be defined here as OptionDescriptor instances.
+
+    Options defined here can be configured via:
+    - Environment variables (GT4PY_OPTION_NAME format)
+    - Direct calls to config.set()
+    - Context manager overrides with config.overrides()
     """
 
     ## -- Debug options --
     #: Master debug flag. It changes defaults for all the other options to be as helpful
-    #: for debugging as possible.
-    debug = OptionDescriptor(type=bool, default=False, validator=utils.isinstancechecker(bool))
+    #: for debugging as possible. Environment variable: GT4PY_DEBUG
+    debug = OptionDescriptor(
+        option_type=bool, default=False, validator=utils.isinstancechecker(bool)
+    )
 
-    #: Verbose flag for DSL compilation errors.
+    #: Verbose flag for DSL compilation errors. Defaults to the value of debug.
+    #: Environment variable: GT4PY_VERBOSE_EXCEPTIONS
     verbose_exceptions = OptionDescriptor[bool, "Config"](
-        type=bool, default_factory=(lambda cfg: cast(bool, cfg.debug))
+        option_type=bool, default_factory=(lambda cfg: cfg.debug)
     )
 
     ## -- Instrumentation options --
     #: User-defined level to enable metrics at lower or equal level.
     #: Enabling metrics collection will do extra synchronization and will have
-    #: impact on runtime performance.
-    collect_metrics_level = OptionDescriptor(type=int, default=0)
+    #: impact on runtime performance. Environment variable: GT4PY_COLLECT_METRICS_LEVEL
+    collect_metrics_level = OptionDescriptor(option_type=int, default=0)
 
     #: Add GPU trace markers (NVTX, ROC-TX) to the generated code, at compile time.
-    # FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
-    add_gpu_trace_markers = OptionDescriptor(type=bool, default=False)
+    #: Environment variable: GT4PY_ADD_GPU_TRACE_MARKERS
+    #: FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
+    add_gpu_trace_markers = OptionDescriptor(option_type=bool, default=False)
 
     ## -- Build options --
     class BuildCacheLifetime(enum.Enum):
+        """Build cache lifetime modes."""
+
         SESSION = "session"
         PERSISTENT = "persistent"
 
     #: Whether generated code projects should be kept around between runs.
     #: - SESSION: generated code projects get destroyed when the interpreter shuts down
-    #: - PERSISTENT: generated code projects are written to BUILD_CACHE_DIR and persist between runs
+    #: - PERSISTENT: generated code projects are written to build_cache_dir and persist between runs
+    #: Defaults to PERSISTENT in debug mode, SESSION otherwise.
+    #: Environment variable: GT4PY_BUILD_CACHE_LIFETIME
     build_cache_lifetime = OptionDescriptor[BuildCacheLifetime, "Config"](
-        type=BuildCacheLifetime,
+        option_type=BuildCacheLifetime,
         default_factory=(
             lambda cfg: cfg.BuildCacheLifetime.PERSISTENT
             if cfg.debug
@@ -340,9 +484,11 @@ class Config(ConfigManager):
         ),
     )
 
-    #: Where generated code projects should be persisted.
-    #: Only active if BUILD_CACHE_LIFETIME is set to PERSISTENT
-    build_cache_dir_root = OptionDescriptor(type=pathlib.Path, default=pathlib.Path.cwd())
+    #: Where generated code projects should be persisted when BUILD_CACHE_LIFETIME is PERSISTENT.
+    #: Supports ~ expansion and environment variable substitution ($VAR, ${VAR}).
+    #: The actual cache directory will be this path with '/.gt4py_cache' appended.
+    #: Environment variable: GT4PY_BUILD_CACHE_DIR_ROOT
+    build_cache_dir_root = OptionDescriptor(option_type=pathlib.Path, default=pathlib.Path.cwd())
 
     @property
     def build_cache_dir(self) -> pathlib.Path:
@@ -350,10 +496,15 @@ class Config(ConfigManager):
         return self.build_cache_dir_root / ".gt4py_cache"
 
     class CMakeBuildType(enum.Enum):
-        """
-        CMake build types enum.
+        """CMake build types enum.
 
         Member values have to be valid CMake syntax.
+
+        Attributes:
+            DEBUG: Debug build with symbols and no optimization.
+            RELEASE: Release build with optimization and no symbols.
+            REL_WITH_DEB_INFO: Release build with optimization and debug symbols.
+            MIN_SIZE_REL: Release build optimized for minimal size.
         """
 
         DEBUG = "Debug"
@@ -362,33 +513,42 @@ class Config(ConfigManager):
         MIN_SIZE_REL = "MinSizeRel"
 
     #: Build type to be used when CMake is used to compile generated code.
+    #: Defaults to DEBUG in debug mode, RELEASE otherwise.
     #: Might have no effect when CMake is not used as part of the toolchain.
-    # FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
+    #: Environment variable: GT4PY_CMAKE_BUILD_TYPE
+    #: FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
     cmake_build_type = OptionDescriptor[CMakeBuildType, "Config"](
-        type=CMakeBuildType,
+        option_type=CMakeBuildType,
         default_factory=(
             lambda cfg: cfg.CMakeBuildType.DEBUG if cfg.debug else cfg.CMakeBuildType.RELEASE
         ),
     )
 
-    #: Number of threads to use to use for compilation (0 = synchronous compilation).
-    #: Default:
-    #: - use os.cpu_count(), TODO(havogt): in Python >= 3.13 use `process_cpu_count()`
-    #: - if os.cpu_count() is None we are conservative and use 1 job,
-    #: - if the number is huge (e.g. HPC system) we limit to a smaller number
+    #: Number of threads to use for compilation (0 = synchronous compilation).
+    #: Default behavior:
+    #: - Uses os.cpu_count() if available (TODO: Python >= 3.13 use process_cpu_count())
+    #: - Falls back to 1 if os.cpu_count() returns None
+    #: - Caps the value at 32 to avoid excessive resource usage on HPC systems
+    #: Environment variable: GT4PY_BUILD_JOBS
     build_jobs = OptionDescriptor(
-        type=int,
+        option_type=int,
         default_factory=lambda ctx: min(os.cpu_count() or 1, 32),
     )
 
     ## -- Code-generation options --
     #: Experimental, use at your own risk: assume horizontal dimension has stride 1
-    # FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
-    unstructured_horizontal_has_unit_stride = OptionDescriptor(type=bool, default=False)
+    #: Environment variable: GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+    #: FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
+    unstructured_horizontal_has_unit_stride = OptionDescriptor(option_type=bool, default=False)
 
     #: The default for whether to allow jit-compilation for a compiled program.
-    #: This default can be overriden per program.
-    enable_jit_default = OptionDescriptor(type=bool, default=True)
+    #: This default can be overridden per program via their respective APIs.
+    #: Environment variable: GT4PY_ENABLE_JIT_DEFAULT
+    enable_jit_default = OptionDescriptor(option_type=bool, default=True)
 
 
+#: Global singleton instance of the GT4Py configuration manager.
+#: Use this to access and modify configuration options: config.debug, config.set(...), etc.
 config = Config()
+
+print(config.as_dict())

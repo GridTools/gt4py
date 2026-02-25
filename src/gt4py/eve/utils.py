@@ -527,43 +527,82 @@ class fluid_partial(functools.partial):
         return fluid_partial(self, *args, **kwargs)
 
 
-if xtyping.TYPE_CHECKING:
-
-    class TypeDispatcher(Generic[_P, _T]):
-        def __init__(self, func: Callable[_P, _T]) -> None: ...
-
-        def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
-
-        @overload
-        def register(self, arg_type: type) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
-
-        @overload
-        def register(self, arg_type: type, func: Callable[_P, _T]) -> Callable[_P, _T]: ...
-
-        def register(
-            self, arg_type: type, func: Optional[Callable[_P, _T]] = None
-        ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]] | Callable[_P, _T]: ...
-
-
-def type_dispatcher(func: Callable[_P, _T]) -> TypeDispatcher[_P, _T]:
+class TypeMapping(collections.abc.Mapping[type, _T]):
     """
-    Decorator to create a single-dispatch generic function that dispatches of the first argument.
+    A mapping from types to values supporting complex type-based dispatching.
+
+    The mapping supports registering values for specific types, and retrieving
+    values based on the type of the key, including support for inheritance
+    exactly in the same way as `functools.singledispatch()` works. For example,
+    if a value is registered for a base class, it will be returned for
+    instances of derived classes unless a more specific type is registered.
+
+    Examples:
+        >>> mapping = TypeMapping(lambda type_: f"Default for {type_}")
+        >>> mapping[int] = "Integer handler"
+        >>> mapping[int]
+        'Integer handler'
+        >>> mapping[float]
+        "Default for <class 'float'>"
+
+        >>> import collections
+        >>> mapping[tuple] = "Tuple handler"
+        >>> mapping[tuple]
+        'Tuple handler'
+        >>> mapping[collections.namedtuple("Point", ["x", "y"])]
+        'Tuple handler'
     """
-    # reuse the singledispatch() dispatching mechanism but change the wrapper
-    indirect_dispatcher = functools.singledispatch(func)
-    dispatch = indirect_dispatcher.dispatch
 
-    def wrapper(*args: P.args, **kw: P.kwargs) -> _T:
-        if not args:
-            raise TypeError(f"{func.__name__} requires at least 1 positional argument")
+    def __init__(self, fallback_factory: Callable[[type], _T]) -> None:
+        self._fallback_factory = fallback_factory
+        self._dispatcher = functools.singledispatch(self._fallback_factory)
 
-        return dispatch(args[0])(*args, **kw)
+    def __getitem__(self, type_: type) -> _T:
+        dispatched = self._dispatcher.dispatch(type_)
+        return (
+            self._fallback_factory(type_)
+            if dispatched is self._fallback_factory
+            else cast(_T, dispatched)
+        )
 
-    functools.update_wrapper(wrapper, func)
-    for attr in ("dispatch", "register", "registry", "_clear_cache"):
-        setattr(wrapper, attr, getattr(indirect_dispatcher, attr))
+    def __setitem__(self, type_: type, value: _T) -> None:
+        self._dispatcher.register(type_, value)  # type: ignore[call-overload]  # abusine singledispatch to register any value, not just callables
+        self.clear_cache()
 
-    return wrapper
+    def __iter__(self) -> Iterator[type]:
+        return iter(self._dispatcher.registry)
+
+    def __len__(self) -> int:
+        return len(self._dispatcher.registry)
+
+    def __contains__(self, type_: object) -> bool:
+        """Check if a type is registered in the mapping (including via superclasses)."""
+        return self._dispatcher.dispatch(type_) is not self._fallback_factory
+
+    @overload
+    def register(self, type_: type, value: _T) -> _T: ...
+
+    @overload
+    def register(self, type_: type, value: NothingType = NOTHING) -> Callable[[_T], _T]: ...
+
+    def register(self, type_: type, value: _T | NothingType = NOTHING) -> _T | Callable[[_T], _T]:
+        """Return a decorator to register a value for the given type."""
+
+        if value is not NOTHING:
+            assert not isinstance(value, NothingType)
+            self[type_] = value
+            return value
+        else:
+
+            def _decorator(value: _T) -> _T:
+                self[type_] = value
+                return value
+
+            return _decorator
+
+    def clear_cache(self) -> None:
+        """Clear the singledispatch cache."""
+        self._dispatcher._clear_cache()
 
 
 @overload
