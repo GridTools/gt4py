@@ -31,7 +31,7 @@ import pathlib
 import sys
 import types
 from collections.abc import Callable, Generator, Mapping
-from typing import Any, Final, Generic, Literal, Protocol, TypeVar, final, overload
+from typing import Any, Final, Generic, Literal, Protocol, TypeVar, cast, final, overload
 
 from gt4py.eve import utils
 from gt4py.eve.extended_typing import Self
@@ -82,6 +82,7 @@ def _parse_str(type_: type) -> Callable[[str], Any]:
     """Default parser: the type string value as is."""
     match type_:
         case enum.Enum() as enum_type:
+            assert issubclass(enum_type, enum.Enum)
             return lambda value: enum_type[value]  # parse enum values from their names
         case _:
             return lambda x: 1  # type constructor as parser
@@ -127,11 +128,11 @@ class OptionUpdateCallback(Protocol[_T_contra]):
     ) -> None: ...
 
 
-ConfigManagerT = TypeVar("ConfigManagerT", bound="ConfigManager")
+# ConfigManagerT = TypeVar("ConfigManagerT", bound="ConfigManager")
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class OptionDescriptor(Generic[_T, ConfigManagerT]):
+class OptionDescriptor(Generic[_T]):
     """
     Descriptor for a configuration option.
 
@@ -163,7 +164,7 @@ class OptionDescriptor(Generic[_T, ConfigManagerT]):
 
     option_type: type[_T]
     default: dataclasses.InitVar[_T | _UnsetSentinel] = UNSET
-    default_factory: Callable[[ConfigManagerT], _T] | None = None
+    default_factory: Callable[[ConfigManager], _T] | None = None
     parser: Callable[[str], _T] | None = None
     validator: Callable[[Any], Any] | Literal["type_check"] | None = "type_check"
     update_callback: OptionUpdateCallback[_T] | None = None
@@ -195,18 +196,14 @@ class OptionDescriptor(Generic[_T, ConfigManagerT]):
         object.__setattr__(self, "name", name)
 
     @overload
-    def __get__(
-        self, instance: ConfigManagerT, owner: type[ConfigManagerT] | None = None
-    ) -> _T: ...
+    def __get__(self, instance: ConfigManager, owner: type[ConfigManager]) -> _T: ...
 
     @overload
-    def __get__(
-        self, instance: Literal[None], owner: type[ConfigManagerT] | None = None
-    ) -> Self: ...
+    def __get__(self, instance: None, owner: None) -> OptionDescriptor[_T]: ...
 
     def __get__(
-        self, instance: ConfigManagerT | None, owner: type[ConfigManagerT] | None = None
-    ) -> _T | Self:
+        self, instance: ConfigManager | None, owner: type[ConfigManager] | None = None
+    ) -> _T | OptionDescriptor[_T]:
         """
         Get the configuration option value.
 
@@ -264,7 +261,7 @@ class ConfigManager:
     """
 
     def __init__(self) -> None:
-        self._descriptors: dict[str, OptionDescriptor[Any, Config]] = {
+        self._descriptors: dict[str, OptionDescriptor[Any]] = {
             name: attr
             for name, attr in type(self).__dict__.items()
             if isinstance(attr, OptionDescriptor)
@@ -448,8 +445,8 @@ class Config(ConfigManager):
 
     #: Verbose flag for DSL compilation errors. Defaults to the value of debug.
     #: Environment variable: GT4PY_VERBOSE_EXCEPTIONS
-    verbose_exceptions = OptionDescriptor[bool, "Config"](
-        option_type=bool, default_factory=(lambda cfg: cfg.debug)
+    verbose_exceptions = OptionDescriptor[bool](
+        option_type=bool, default_factory=(lambda cfg: cast(Config, cfg).debug)
     )
 
     ## -- Instrumentation options --
@@ -475,12 +472,12 @@ class Config(ConfigManager):
     #: - PERSISTENT: generated code projects are written to build_cache_dir and persist between runs
     #: Defaults to PERSISTENT in debug mode, SESSION otherwise.
     #: Environment variable: GT4PY_BUILD_CACHE_LIFETIME
-    build_cache_lifetime = OptionDescriptor[BuildCacheLifetime, "Config"](
+    build_cache_lifetime = OptionDescriptor[BuildCacheLifetime](
         option_type=BuildCacheLifetime,
         default_factory=(
-            lambda cfg: cfg.BuildCacheLifetime.PERSISTENT
-            if cfg.debug
-            else cfg.BuildCacheLifetime.SESSION
+            lambda cfg: cast(Config, cfg).BuildCacheLifetime.PERSISTENT
+            if cast(Config, cfg).debug
+            else cast(Config, cfg).BuildCacheLifetime.SESSION
         ),
     )
 
@@ -517,10 +514,12 @@ class Config(ConfigManager):
     #: Might have no effect when CMake is not used as part of the toolchain.
     #: Environment variable: GT4PY_CMAKE_BUILD_TYPE
     #: FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
-    cmake_build_type = OptionDescriptor[CMakeBuildType, "Config"](
+    cmake_build_type = OptionDescriptor[CMakeBuildType](
         option_type=CMakeBuildType,
         default_factory=(
-            lambda cfg: cfg.CMakeBuildType.DEBUG if cfg.debug else cfg.CMakeBuildType.RELEASE
+            lambda cfg: cast(Config, cfg).CMakeBuildType.DEBUG
+            if cast(Config, cfg).debug
+            else cast(Config, cfg).CMakeBuildType.RELEASE
         ),
     )
 
