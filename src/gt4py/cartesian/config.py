@@ -38,13 +38,30 @@ extra_compile_args: List[str] = (
 GT4PY_EXTRA_LINK_ARGS: str = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
 extra_link_args: List[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
 
+# Resolve OpenMP
+_enable_open_mp = os.environ.get("GT4PY_CARTESIAN_ENABLE_OPENMP", "True")
+GT4PY_CARTESIAN_ENABLE_OPENMP: bool = _enable_open_mp.lower() not in [
+    "0",
+    "false",
+    "off",
+]
+if GT4PY_CARTESIAN_ENABLE_OPENMP:
+    _openmp_cppflags = os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split()
+    _openmp_ldflags = os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split()
+else:
+    _openmp_cppflags = []
+    _openmp_ldflags = []
+
 build_settings: Dict[str, Any] = {
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
     "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
     "cuda_arch": os.environ.get("CUDA_ARCH", None),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
-    "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split(),
-    "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split(),
+    "openmp": {
+        "use_openmp": GT4PY_CARTESIAN_ENABLE_OPENMP,
+        "cppflags": _openmp_cppflags,
+        "ldflags": _openmp_ldflags,
+    },
     "extra_compile_args": {"cxx": extra_compile_args, "cuda": extra_compile_args},
     "extra_link_args": extra_link_args,
     "parallel_jobs": multiprocessing.cpu_count(),
