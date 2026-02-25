@@ -566,12 +566,29 @@ def _handle_dataflow_result_of_nested_sdfg(
         # We represent the inner result as a single value and let the scan loop override it.
         inner_desc = dace.data.Scalar(inner_desc.dtype, transient=False)
         inner_ctx.sdfg.arrays[inner_dataname] = inner_desc
+        if len(inner_ctx.sdfg.states()) == 3:
+            assert set(st.label for st in inner_ctx.sdfg.states()) == {
+                "scan_entry",
+                "scan_compute",
+                "scan_update",
+            }
+            scan_loop = next(
+                node
+                for node in inner_ctx.sdfg.nodes()
+                if isinstance(node, dace.sdfg.state.LoopRegion)
+            )
+            last_level_state = inner_ctx.sdfg.add_state_after(scan_loop, "scan_last_level")
+        else:
+            assert set(st.label for st in inner_ctx.sdfg.states()) == {
+                "scan_entry",
+                "scan_compute",
+                "scan_update",
+                "scan_last_level",
+            }
+            last_level_state = next(
+                s for s in inner_ctx.sdfg.states() if s.label == "scan_last_level"
+            )
         # Update the write edge inside the scan nested SDFG to write into a scalar rather than a 1D array.
-        assert set(st.label for st in inner_ctx.sdfg.states()) == {
-            "scan_entry",
-            "scan_compute",
-            "scan_update",
-        }
         scan_compute_state = next(s for s in inner_ctx.sdfg.states() if s.label == "scan_compute")
         inner_output_node = next(
             n for n in scan_compute_state.data_nodes() if n.data == inner_dataname
@@ -584,11 +601,6 @@ def _handle_dataflow_result_of_nested_sdfg(
         assert isinstance(inner_write_edge.src, dace_nodes.AccessNode)
         assert isinstance(inner_write_edge.src.desc(inner_ctx.sdfg), dace.data.Scalar)
         scan_compute_state.remove_node(inner_output_node)
-
-        scan_loop = next(
-            node for node in inner_ctx.sdfg.nodes() if isinstance(node, dace.sdfg.state.LoopRegion)
-        )
-        last_level_state = inner_ctx.sdfg.add_state_after(scan_loop, "write_last_level")
         last_level_state.add_nedge(
             last_level_state.add_access(inner_write_edge.src.data),
             last_level_state.add_access(inner_dataname),
