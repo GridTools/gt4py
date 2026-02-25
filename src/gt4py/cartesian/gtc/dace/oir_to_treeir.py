@@ -10,8 +10,8 @@ from typing import Any, List, TypeAlias
 
 from dace import data, dtypes, symbolic
 
+import gt4py.cartesian.config as gt_config
 from gt4py import eve
-from gt4py.cartesian.config import GT4PY_CARTESIAN_ENABLE_OPENMP
 from gt4py.cartesian.gtc import common, definitions, oir
 from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir, utils
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
@@ -41,7 +41,7 @@ def _resolve_default_map_schedule(
     if device_type != dtypes.DeviceType.CPU:
         raise NotImplementedError(f"Schedule Tree bridge does not support {device_type}")
 
-    if not GT4PY_CARTESIAN_ENABLE_OPENMP:
+    if not gt_config.build_settings["openmp"]["use_openmp"]:
         return dtypes.ScheduleType.Sequential
 
     return dtypes.ScheduleType.Default
