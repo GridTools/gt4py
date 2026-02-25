@@ -2,6 +2,18 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.5] - 2026-02-24
+
+### Cartesian
+
+- Switch to DaCe main development branch, which is going to be released as DaCe v2.x.
+- Changes in `dace:X` backends to reduce the size of SDFGs saved to disk.
+- Fix casting of arguments of power function.
+
+### Next
+
+See commit history.
+
 ## [1.1.4] - 2026-02-12
 
 ### Cartesian
