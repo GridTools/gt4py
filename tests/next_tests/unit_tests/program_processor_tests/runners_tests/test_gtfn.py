@@ -51,12 +51,14 @@ def test_backend_factory_trait_cached():
 
 
 def test_backend_factory_build_cache_config(monkeypatch):
-    monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.SESSION)
-    session_version = gtfn.GTFNBackendFactory()
-    monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.PERSISTENT)
-    persistent_version = gtfn.GTFNBackendFactory()
+    with config.overrides(build_cache_lifetime=config.BuildCacheLifetime.SESSION):
+        session_version = gtfn.GTFNBackendFactory()
 
     assert session_version.executor.compilation.cache_lifetime is config.BuildCacheLifetime.SESSION
+
+    with config.overrides(build_cache_lifetime=config.BuildCacheLifetime.PERSISTENT):
+        persistent_version = gtfn.GTFNBackendFactory()
+
     assert (
         persistent_version.executor.compilation.cache_lifetime
         is config.BuildCacheLifetime.PERSISTENT
@@ -64,15 +66,17 @@ def test_backend_factory_build_cache_config(monkeypatch):
 
 
 def test_backend_factory_build_type_config(monkeypatch):
-    monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.RELEASE)
-    release_version = gtfn.GTFNBackendFactory()
-    monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.MIN_SIZE_REL)
-    min_size_version = gtfn.GTFNBackendFactory()
+    with config.overrides(cmake_build_type=config.CMakeBuildType.RELEASE):
+        release_version = gtfn.GTFNBackendFactory()
 
     assert (
         release_version.executor.compilation.builder_factory.cmake_build_type
         is config.CMakeBuildType.RELEASE
     )
+
+    with config.overrides(cmake_build_type=config.CMakeBuildType.MIN_SIZE_REL):
+        min_size_version = gtfn.GTFNBackendFactory()
+
     assert (
         min_size_version.executor.compilation.builder_factory.cmake_build_type
         is config.CMakeBuildType.MIN_SIZE_REL

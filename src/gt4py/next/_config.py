@@ -7,17 +7,20 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Configuration system for GT4Py.
+GT4Py configuration system.
 
-Precedence of effective option values (highest to lowest):
-1) Active context override (`ConfigManager.overrides`)
-2) Global runtime value (`ConfigManager.set`)
-3) Environment variable (`OptionDescriptor.env_var_name`)
-4) Descriptor default/default_factory
+This module defines a typed configuration framework based on descriptors:
 
-Notes:
-- Context overrides are task-local via `contextvars`.
-- `set()` is disallowed while the same option is context-overridden.
+- `OptionDescriptor`: declares one option (type, default/default_factory, parser,
+  validator, environment variable mapping, and optional update callback).
+- `ConfigManager`: stores option values, resolves effective values using precedence,
+  and supports task-local temporary overrides.
+- `Config`: concrete registry of GT4Py public options.
+
+Configuration can be changed globally via attribute assignment or `set()`, and
+temporarily via `overrides()`.
+
+The public singleton instance is exposed as `gt4py.next.config`.
 """
 
 from __future__ import annotations
@@ -34,7 +37,6 @@ from collections.abc import Callable, Generator, Mapping
 from typing import Any, Final, Generic, Literal, Protocol, TypeVar, cast, final, overload
 
 from gt4py.eve import utils
-from gt4py.eve.extended_typing import Self
 
 
 @final
@@ -126,9 +128,6 @@ class OptionUpdateCallback(Protocol[_T_contra]):
     def __call__(
         self, new_val: _T_contra, old_val: _T_contra | None, scope: UpdateScope
     ) -> None: ...
-
-
-# ConfigManagerT = TypeVar("ConfigManagerT", bound="ConfigManager")
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -231,11 +230,7 @@ class OptionDescriptor(Generic[_T]):
 
     @property
     def env_var_name(self) -> str:
-        """Construct the name of the environment variable corresponding to this option.
-
-        Returns the environment variable name by combining the prefix and option name in uppercase.
-        E.g., for env_prefix="GT4PY_" and name="debug", returns "GT4PY_DEBUG".
-        """
+        """Construct the name of the environment variable corresponding to this option."""
         return f"{self.env_prefix}{self.name}".upper()
 
 
@@ -292,7 +287,9 @@ class ConfigManager:
         for name, desc in self._descriptors.items():
             assert desc.default_factory is not None  # Guaranteed by __post_init__
             init_value = parse_env_var(
-                desc.env_var_name, desc.parser or _parse_str[desc.option_type], default=None
+                desc.env_var_name,
+                desc.parser or _parse_str[desc.option_type],
+                default=desc.default_factory(self),
             )
             if validator := self._validators.get(name):
                 validator(init_value)
@@ -355,13 +352,6 @@ class ConfigManager:
         Args:
             **overrides: Configuration option names and their temporary values.
 
-        Yields:
-            None
-
-        Raises:
-            AttributeError: If any override name is not a recognized configuration option.
-            Validation error: If any override value fails validation.
-
         Example:
             >>> with config.overrides(debug=True, verbose_exceptions=True):
             ...     # Use config with temporary overrides
@@ -405,9 +395,6 @@ class ConfigManager:
 
         Returns all configuration options with their effective values, preserving
         the order they were defined in the class.
-
-        Returns:
-            A dictionary mapping option names to their effective values.
         """
         # We use self._descriptors to preserve the order of options as defined in the class.
         return {name: self.get(name) for name in self._descriptors.keys()}
@@ -417,15 +404,13 @@ class ConfigManager:
 
         Returns a read-only mapping of option names to their descriptors.
         This is useful for introspection and documentation purposes.
-
-        Returns:
-            A MappingProxyType mapping option names to OptionDescriptor instances.
         """
         return types.MappingProxyType(self._descriptors)
 
 
 class Config(ConfigManager):
-    """GT4Py configuration registry.
+    """
+    GT4Py configuration manager.
 
     This class is used to register and manage all configuration options for GT4Py.
     All publicly exposed options should be defined here as OptionDescriptor instances.

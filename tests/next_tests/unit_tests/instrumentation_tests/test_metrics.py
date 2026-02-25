@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from gt4py.next import config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import arguments
 
@@ -58,7 +59,7 @@ class TestSetCurrentSourceKey:
 
 class TestSourceKeyContextManager:
     def test_context_manager_sets_and_resets_key(self):
-        with unittest.mock.patch("gt4py.next.config.collect_metrics_level", metrics.MINIMAL):
+        with config.overrides(collect_metrics_level=metrics.MINIMAL):
             metrics._source_key_cvar.set(
                 metrics._NO_KEY_SET_MARKER_
             )  # Reset context variable before test
@@ -78,7 +79,7 @@ class TestSourceKeyContextManager:
             )
 
     def test_context_manager_with_no_key(self):
-        with unittest.mock.patch("gt4py.next.config.collect_metrics_level", metrics.MINIMAL):
+        with config.overrides(collect_metrics_level=metrics.MINIMAL):
             metrics._source_key_cvar.set("__BEFORE__MARKER__")  # Reset context variable before test
 
             with metrics.SourceKeyContextManager():
@@ -92,7 +93,7 @@ class TestSourceKeyContextManager:
             assert metrics._source_key_cvar.get(metrics._NO_KEY_SET_MARKER_) == "__BEFORE__MARKER__"
 
     def test_context_manager_nested(self):
-        with unittest.mock.patch("gt4py.next.config.collect_metrics_level", metrics.MINIMAL):
+        with config.overrides(collect_metrics_level=metrics.MINIMAL):
             metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
             key1 = "outer_key"
             key2 = "inner_key"
@@ -121,7 +122,7 @@ class TestBaseMetricsCollector:
         ): ...
 
         metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
-        with unittest.mock.patch("gt4py.next.config.collect_metrics_level", metrics.MINIMAL):
+        with config.overrides(collect_metrics_level=metrics.MINIMAL):
             outer_key = "outer_key"
             metrics.set_current_source_key("outer_key")
             assert metrics.get_current_source_key() == outer_key
@@ -140,7 +141,7 @@ class TestBaseMetricsCollector:
 
         key = "test_disabled"
         metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
-        with unittest.mock.patch("gt4py.next.config.collect_metrics_level", metrics.DISABLED):
+        with config.overrides(collect_metrics_level=metrics.DISABLED):
             metrics.set_current_source_key(key)
 
             with TestCollector(key=key):
@@ -161,7 +162,7 @@ class TestBaseMetricsCollector:
 
         key = "test_custom"
         metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
-        with unittest.mock.patch("gt4py.next.config.collect_metrics_level", metrics.PERFORMANCE):
+        with config.overrides(collect_metrics_level=metrics.PERFORMANCE):
             with CustomCollector(key=key):
                 pass
 
