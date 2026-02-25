@@ -5,9 +5,9 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+
 import numpy as np
 import pytest
-import pathlib
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import gtscript
@@ -1197,8 +1197,7 @@ def test_read_after_write_stencil(backend):
         pytest.param(
             backend,
             marks=pytest.mark.xfail(
-                raises=NotImplementedError,
-                reason="Absolute K indexing not yet supported.",
+                raises=NotImplementedError, reason="Absolute K indexing not yet supported."
             ),
         )
         for backend in ["gt:cpu_ifirst", "numpy"]
@@ -1267,9 +1266,7 @@ def test_absolute_K_index(backend):
 
     @gtscript.stencil(backend=backend)
     def test_field_access(
-        in_field: Field[np.float64],
-        index_field: Field[IJ, np.int64],
-        out_field: Field[np.float64],
+        in_field: Field[np.float64], index_field: Field[IJ, np.int64], out_field: Field[np.float64]
     ) -> None:
         with computation(PARALLEL), interval(...):
             out_field = in_field.at(K=index_field)
@@ -1283,9 +1280,7 @@ def test_absolute_K_index(backend):
 
     @gtscript.stencil(backend=backend)
     def test_field_access_computation(
-        in_field: Field[np.float64],
-        index_field: Field[IJ, np.int32],
-        out_field: Field[np.float64],
+        in_field: Field[np.float64], index_field: Field[IJ, np.int32], out_field: Field[np.float64]
     ) -> None:
         with computation(PARALLEL), interval(...):
             out_field = in_field.at(K=index_field - 1)
@@ -1342,9 +1337,7 @@ def test_iterator_access(backend: str) -> None:
 
     @gtscript.stencil(backend=backend)
     def test_all_valid_usage(
-        field_A: Field[np.float64],
-        field_B: Field[np.float64],
-        offsets: Field[K, np.int32],
+        field_A: Field[np.float64], field_B: Field[np.float64], offsets: Field[K, np.int32]
     ) -> None:
         with computation(PARALLEL), interval(...):
             if K == 2:
@@ -1364,8 +1357,7 @@ def test_iterator_access(backend: str) -> None:
         pytest.param(
             backend,
             marks=pytest.mark.xfail(
-                raises=NotImplementedError,
-                reason="Iterator access (K) is not implemented for",
+                raises=NotImplementedError, reason="Iterator access (K) is not implemented for"
             ),
         )
         for backend in ["gt:cpu_kfirst"]
@@ -1448,29 +1440,25 @@ def test_runtime_interval_bounds():
         pytest.param(
             "numpy",
             marks=pytest.mark.xfail(
-                raises=NotImplementedError,
-                reason="Runtime interval bounds not implemented yet.",
+                raises=NotImplementedError, reason="Runtime interval bounds not implemented yet."
             ),
         ),
         pytest.param(
             "gt:cpu_ifirst",
             marks=pytest.mark.xfail(
-                raises=NotImplementedError,
-                reason="Runtime interval bounds not implemented yet.",
+                raises=NotImplementedError, reason="Runtime interval bounds not implemented yet."
             ),
         ),
         pytest.param(
             "gt:cpu_kfirst",
             marks=pytest.mark.xfail(
-                raises=NotImplementedError,
-                reason="Runtime interval bounds not implemented yet.",
+                raises=NotImplementedError, reason="Runtime interval bounds not implemented yet."
             ),
         ),
         pytest.param(
             "gt:gpu",
             marks=pytest.mark.xfail(
-                raises=NotImplementedError,
-                reason="Runtime interval bounds not implemented yet.",
+                raises=NotImplementedError, reason="Runtime interval bounds not implemented yet."
             ),
         ),
         pytest.param(
@@ -1603,9 +1591,7 @@ def test_upcasting_both_sides_of_assignment(backend: str) -> None:
 
     @gtscript.stencil(backend=backend)
     def test_upcasting_stencil(
-        in_field: Field[np.float64],
-        index_field: Field[IJ, np.int32],
-        out_field: Field[np.float64],
+        in_field: Field[np.float64], index_field: Field[IJ, np.int32], out_field: Field[np.float64]
     ) -> None:
         with computation(FORWARD), interval(...):
             out_field[0, 0, index_field - 1] = in_field
@@ -1648,8 +1634,7 @@ def test_k_offsets_in_parallel_loops() -> None:
                 field = tmp * 2
 
     with pytest.raises(
-        ValueError,
-        match="write and read with `VariableKOffset` and/or `AbsoluteKIndex`",
+        ValueError, match="write and read with `VariableKOffset` and/or `AbsoluteKIndex`"
     ):
 
         @gtscript.stencil(backend="debug")
@@ -1659,8 +1644,7 @@ def test_k_offsets_in_parallel_loops() -> None:
                 field = 2 * level
 
     with pytest.raises(
-        ValueError,
-        match="write and read with `VariableKOffset` and/or `AbsoluteKIndex`",
+        ValueError, match="write and read with `VariableKOffset` and/or `AbsoluteKIndex`"
     ):
 
         @gtscript.stencil(backend="debug")
