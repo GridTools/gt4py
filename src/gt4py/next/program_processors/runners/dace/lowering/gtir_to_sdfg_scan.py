@@ -566,12 +566,13 @@ def _handle_dataflow_result_of_nested_sdfg(
         # We represent the inner result as a single value and let the scan loop override it.
         inner_desc = dace.data.Scalar(inner_desc.dtype, transient=False)
         inner_ctx.sdfg.arrays[inner_dataname] = inner_desc
+        # We write the result to the output field after the loop region has ended.
         if len(inner_ctx.sdfg.states()) == 3:
-            assert set(st.label for st in inner_ctx.sdfg.states()) == {
-                "scan_entry",
+            assert sorted(st.label for st in inner_ctx.sdfg.states()) == [
                 "scan_compute",
+                "scan_entry",
                 "scan_update",
-            }
+            ]
             scan_loop = next(
                 node
                 for node in inner_ctx.sdfg.nodes()
@@ -579,12 +580,12 @@ def _handle_dataflow_result_of_nested_sdfg(
             )
             last_level_state = inner_ctx.sdfg.add_state_after(scan_loop, "scan_last_level")
         else:
-            assert set(st.label for st in inner_ctx.sdfg.states()) == {
-                "scan_entry",
+            assert sorted(st.label for st in inner_ctx.sdfg.states()) == [
                 "scan_compute",
-                "scan_update",
+                "scan_entry",
                 "scan_last_level",
-            }
+                "scan_update",
+            ]
             last_level_state = next(
                 s for s in inner_ctx.sdfg.states() if s.label == "scan_last_level"
             )
