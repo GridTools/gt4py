@@ -9,18 +9,18 @@
 """
 GT4Py configuration system.
 
-This module defines a typed configuration framework based on descriptors:
+This module defines a typed configuration framework based on these concepts:
 
-- `OptionDescriptor`: declares one option (type, default/default_factory, parser,
-  validator, environment variable mapping, and optional update callback).
+- `OptionDescriptor`: full description of an option (type, default/default_factory,
+  parser, validator, environment variable mapping, and optional update callback).
 - `ConfigManager`: stores option values, resolves effective values using precedence,
   and supports task-local temporary overrides.
 - `Config`: concrete registry of GT4Py public options.
 
-Configuration can be changed globally via attribute assignment or `set()`, and
-temporarily via `overrides()`.
+Configuration can be changed globally in a ConfigManaget instance via attribute
+assignment or `set()`, and temporarily via `overrides()`.
 
-The public singleton instance is exposed as `gt4py.next.config`.
+The global GT4Py ConfigManager instance is exposed as `gt4py.next.config`.
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ import contextlib
 import contextvars
 import dataclasses
 import enum
-import functools
 import os
 import pathlib
 import sys
@@ -85,7 +84,7 @@ def _parse_str(type_: type) -> Callable[[str], Any]:
     if issubclass(type_, enum.Enum):
         return lambda value: type_[value]  # parse enum values from their names
 
-    return lambda x: type_(x)  # type constructor as parser
+    return lambda x: type_(x)  # type: ignore[call-arg]  # use type constructor as parser
 
 
 @_parse_str.register(bool)
@@ -107,7 +106,6 @@ def _parse_str_as_path(value: str) -> pathlib.Path:
     return pathlib.Path(expanded)
 
 
-@functools.cache
 def _type_check_validator(type_: type) -> Callable[[Any], None]:
     """Generate a validator function that checks if a value is an instance of the given type."""
 
@@ -249,7 +247,8 @@ class OptionDescriptor(Generic[_T]):
 
 
 class ConfigManager:
-    """Central configuration manager with attribute-style access.
+    """
+    Central configuration manager with attribute-style access.
 
     Config options are defined as class attributes using `OptionDescriptor`.
     The manager stores global values for all options and allows temporary
@@ -281,7 +280,7 @@ class ConfigManager:
             for name, desc in self._descriptors.items()
             if callable(desc.validator)
         }
-        self._hooks: dict[str, OptionUpdateCallback[Any]] = {
+        self._callbacks: dict[str, OptionUpdateCallback[Any]] = {
             name: desc.update_callback
             for name, desc in self._descriptors.items()
             if desc.update_callback is not None
@@ -311,7 +310,8 @@ class ConfigManager:
             self._global_context[name] = init_value
 
     def get(self, name: str) -> Any:
-        """Get the effective value of a configuration option.
+        """
+        Get the effective value of a configuration option.
 
         Applies precedence rules: context override > global value > environment > default.
 
@@ -328,7 +328,8 @@ class ConfigManager:
         return self._global_context[name]
 
     def set(self, name: str, value: Any) -> None:
-        """Set the global value of a configuration option.
+        """
+        Set the global value of a configuration option.
 
         Validates the value and invokes any registered callbacks.
 
@@ -346,12 +347,13 @@ class ConfigManager:
             validator(value)
         old_val = self._global_context[name]
         self._global_context[name] = value
-        if hook := self._hooks.get(name):
-            hook(value, old_val, UpdateScope.GLOBAL)
+        if callback := self._callbacks.get(name):
+            callback(value, old_val, UpdateScope.GLOBAL)
 
     @contextlib.contextmanager
     def overrides(self, **overrides: Any) -> Generator[None, None, None]:
-        """Context manager for temporary configuration overrides.
+        """
+        Context manager for temporary configuration overrides.
 
         Overrides are task-local (isolated per thread/async task) and automatically
         reverted when exiting the context manager. Nested contexts are supported.
@@ -386,19 +388,22 @@ class ConfigManager:
         token = self._local_context_cvar.set(new_context)
 
         try:
-            for name in changes.keys() & self._hooks.keys():
-                self._hooks[name](new_context[name], old_values[name], UpdateScope.CONTEXT)
+            for name in changes.keys() & self._callbacks.keys():
+                self._callbacks[name](new_context[name], old_values[name], UpdateScope.CONTEXT)
 
             yield
 
         finally:
             self._local_context_cvar.reset(token)
 
-            for name in changes.keys() & old_context.keys() & self._hooks.keys():
-                self._hooks[name](old_context.get(name), new_context.get(name), UpdateScope.CONTEXT)
+            for name in changes.keys() & old_context.keys() & self._callbacks.keys():
+                self._callbacks[name](
+                    old_context.get(name), new_context.get(name), UpdateScope.CONTEXT
+                )
 
     def as_dict(self) -> dict[str, Any]:
-        """Get the current effective configuration options as a dictionary.
+        """
+        Get the current effective configuration options as a dictionary.
 
         Returns all configuration options with their effective values, preserving
         the order they were defined in the class.
@@ -407,7 +412,8 @@ class ConfigManager:
         return {name: self.get(name) for name in self._descriptors.keys()}
 
     def _option_descriptors_(self) -> types.MappingProxyType[str, OptionDescriptor]:
-        """Get the option descriptors.
+        """
+        Get the option descriptors.
 
         Returns a read-only mapping of option names to their descriptors.
         This is useful for introspection and documentation purposes.
@@ -463,7 +469,9 @@ class Config(ConfigManager):
     #: If set to a True value, it defaults to "gt4py_metrics_YYYYMMDD_HHMMSS.json" in
     #: the current folder.
     dump_metrics_at_exit = OptionDescriptor(
-        option_type=bool | pathlib.Path, default=False, env_var_parser=_parse_dump_metrics_filename
+        option_type=bool | pathlib.Path,
+        default=False,
+        env_var_parser=_parse_dump_metrics_filename,  # type: ignore[arg-type]  # mypy gets confused with the overloaded return type of the parser
     )
 
     ## -- Build options --
@@ -556,4 +564,7 @@ class Config(ConfigManager):
 #: Use this to access and modify configuration options: config.debug, config.set(...), etc.
 config = Config()
 
-print(config.as_dict())
+if config.debug:
+    print("GT4Py configuration:")
+    for name, value in sorted(config.as_dict().items()):
+        print(f"  - {name}: {value}")

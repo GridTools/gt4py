@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import factory
 import numpy as np
@@ -23,6 +23,10 @@ from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
+
+
+if TYPE_CHECKING:
+    from gt4py.next import config_type
 
 
 def convert_arg(arg: Any) -> Any:
@@ -112,7 +116,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
+        cmake_build_type: config_type.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.cmake_build_type
         )
         builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough

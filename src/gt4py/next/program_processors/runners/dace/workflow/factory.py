@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 import factory
 
@@ -28,6 +28,9 @@ from gt4py.next.program_processors.runners.dace.workflow.translation import (
 )
 
 
+if TYPE_CHECKING:
+    from gt4py.next import config_type
+
 _GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
 
 
@@ -38,7 +41,7 @@ class DaCeWorkflowFactory(factory.Factory):
     class Params:
         auto_optimize: bool = False
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
+        cmake_build_type: config_type.CMakeBuildType = factory.LazyFunction(
             lambda: config.cmake_build_type
         )
 

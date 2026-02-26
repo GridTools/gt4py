@@ -103,20 +103,22 @@ def isinstancechecker(
         False
 
     """
-    all_types: Tuple[Type, ...] = tuple()
+    accepted_types: Tuple[Type, ...] = tuple()
     if isinstance(type_info, type):
-        all_types = (type_info,)
+        accepted_types = (type_info,)
     elif isinstance(type_info, types.UnionType):
-        all_types = type_info.__args__
+        accepted_types = type_info.__args__
     elif not isinstance(type_info, tuple) and is_collection(type_info):
-        all_types = tuple(type_info)
+        accepted_types = tuple(type_info)
     else:
-        all_types = type_info  # type:ignore  # it is checked at run-time
+        accepted_types = type_info  # type:ignore  # it is checked at run-time
 
-    if not isinstance(all_types, tuple) or not all(isinstance(t, type) for t in all_types):
-        raise ValueError(f"Invalid type(s) definition: '{all_types}'.")
+    if not isinstance(accepted_types, tuple) or not all(
+        isinstance(t, type) for t in accepted_types
+    ):
+        raise ValueError(f"Invalid type(s) definition: '{accepted_types}'.")
 
-    return lambda obj: isinstance(obj, all_types)
+    return lambda obj: isinstance(obj, accepted_types)
 
 
 def attrchecker(*names: str) -> Callable[[Any], bool]:
@@ -535,11 +537,11 @@ class TypeMapping(collections.abc.Mapping[type, _T]):
     """
     A mapping from types to values supporting complex type-based dispatching.
 
-    The mapping supports registering values for specific types, and retrieving
-    values based on the type of the key, including support for inheritance
-    exactly in the same way as `functools.singledispatch()` works. For example,
-    if a value is registered for a base class, it will be returned for
-    instances of derived classes unless a more specific type is registered.
+    The mapping supports registering values for specific types, and
+    retrieving values based on the type key, supporting subtyping
+    relationship exactly in the same way as `functools.singledispatch()` works.
+    For example, if a value is registered for a base class, it will be returned
+    for instances of derived classes unless a more specific type is registered.
 
     Examples:
         >>> mapping = TypeMapping(lambda type_: f"Default for {type_}")
@@ -605,7 +607,7 @@ class TypeMapping(collections.abc.Mapping[type, _T]):
             return _decorator
 
     def clear_cache(self) -> None:
-        """Clear the singledispatch cache."""
+        """Clear the type dispatching cache."""
         self._dispatcher._clear_cache()
 
 

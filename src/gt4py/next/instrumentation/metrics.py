@@ -29,7 +29,7 @@ from typing import ClassVar
 import numpy as np
 
 from gt4py.eve import extended_typing as xtyping, utils
-from gt4py.eve.extended_typing import Any, Final
+from gt4py.eve.extended_typing import Any, Final, assert_never
 from gt4py.next import config
 from gt4py.next.otf import arguments
 
@@ -458,11 +458,8 @@ def _dump_metrics_at_exit() -> None:
             metrics_dump_file = _init_dump_metrics_filename()
         case pathlib.Path() as user_path:
             metrics_dump_file = user_path
-        case _:
-            assert False, (
-                f"Invalid type for 'dump_metrics_at_exit' config option: {config.dump_metrics_at_exit}"
-                f"({type(config.dump_metrics_at_exit)})"
-            )
+        case _ as unreachable:
+            assert_never(unreachable)
 
     if metrics_dump_file is not None and (is_any_level_enabled() or sources):
         try:

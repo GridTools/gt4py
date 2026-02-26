@@ -8,12 +8,15 @@
 
 import contextlib
 import os
-from typing import Any, Final, Generator, Optional
+from typing import TYPE_CHECKING, Any, Final, Generator, Optional
 
 import dace
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config
+
+
+if TYPE_CHECKING:
+    from gt4py.next import config_type
 
 
 SDFG_ARG_METRIC_LEVEL: Final[str] = "gt_metrics_level"
@@ -26,7 +29,7 @@ SDFG_ARG_METRIC_COMPUTE_TIME: Final[str] = "gt_compute_time"
 
 def set_dace_config(
     device_type: core_defs.DeviceType,
-    cmake_build_type: Optional[config.CMakeBuildType] = None,
+    cmake_build_type: Optional[config_type.CMakeBuildType] = None,
 ) -> None:
     """Set the DaCe configuration as required by GT4Py.
 

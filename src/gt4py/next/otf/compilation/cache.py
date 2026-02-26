@@ -11,10 +11,15 @@
 import hashlib
 import pathlib
 import tempfile
+from typing import TYPE_CHECKING
 
 from gt4py.next import config
 from gt4py.next.otf import stages
 from gt4py.next.otf.binding import interface
+
+
+if TYPE_CHECKING:
+    from gt4py.next import config_type
 
 
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
@@ -50,7 +55,7 @@ def _cache_folder_name(source: stages.ProgramSource) -> str:
 
 
 def get_cache_folder(
-    compilable_source: stages.CompilableProject, lifetime: config.BuildCacheLifetime
+    compilable_source: stages.CompilableProject, lifetime: config_type.BuildCacheLifetime
 ) -> pathlib.Path:
     """
     Construct the path to where the build system project artifact of a compilable source should be cached.
