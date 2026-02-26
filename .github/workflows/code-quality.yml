@@ -60,4 +60,4 @@ jobs:
 
       - name: "Run external typing checks"
         run: |
-          .noxfile.py -s 'test_external_typing-${{ fromJson(needs.get-python-versions.outputs.python-versions) }}'
+          ./noxfile.py -s 'test_external_typing-${{ fromJson(needs.get-python-versions.outputs.python-versions) }}'
