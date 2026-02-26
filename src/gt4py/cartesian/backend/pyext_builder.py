@@ -56,7 +56,6 @@ def get_gt_pyext_build_opts(
     opt_level: Literal["0", "1", "2", "3", "s"] = "3",
     extra_opt_flags: str = "",
     add_profile_info: bool = False,
-    uses_openmp: bool = True,
     uses_cuda: bool = False,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
     include_dirs: list[str] = []
@@ -159,8 +158,8 @@ def get_gt_pyext_build_opts(
             extra_link_args=extra_link_args,
         )
 
-    if uses_openmp:
-        cpp_flags = gt_config.build_settings["openmp_cppflags"]
+    if gt_config.build_settings["openmp"]["use_openmp"]:
+        cpp_flags = gt_config.build_settings["openmp"]["cppflags"]
         if uses_cuda:
             cuda_flags = []
             for cpp_flag in cpp_flags:
@@ -172,7 +171,7 @@ def get_gt_pyext_build_opts(
         elif cpp_flags:
             build_opts["extra_compile_args"].extend(cpp_flags)
 
-        ld_flags = gt_config.build_settings["openmp_ldflags"]
+        ld_flags = gt_config.build_settings["openmp"]["ldflags"]
         if ld_flags:
             build_opts["extra_link_args"].extend(ld_flags)
 

@@ -35,8 +35,8 @@ AN_UNIMPORTANT_LITERAL = LiteralFactory(value="", dtype=DataType.DEFAULT)
 
 
 def contains_cast_node(cast_node, expr):
-    # Checks if `expr` contains `cast_node`. If `cast_node` contains `expr=Placeholder()`
-    # we skip equality check of `expr` and `cast_node.expr`
+    """Checks if `expr` contains `cast_node`. If `cast_node` contains `expr=Placeholder()`
+    we skip equality check of `expr` and `cast_node.expr`."""
     return (
         len(
             expr.walk_values()
@@ -51,6 +51,11 @@ def contains_cast_node(cast_node, expr):
     )
 
 
+def contains_no_cast_nodes(expr):
+    """Checks that `expr` contains no `cast_node`s."""
+    return len(expr.walk_values().if_isinstance(Cast).to_list()) == 0
+
+
 def upcast_and_validate(expr, expected_cast_nodes):
     assert isinstance(expected_cast_nodes, List)
     assert all([isinstance(cast, Cast) for cast in expected_cast_nodes])
@@ -60,6 +65,9 @@ def upcast_and_validate(expr, expected_cast_nodes):
 
     for cast in expected_cast_nodes:
         assert contains_cast_node(cast, result)
+
+    if not expected_cast_nodes:
+        assert contains_no_cast_nodes(result)
 
 
 def test_upcast_BinaryOp_BOOL_to_FLOAT():
@@ -119,4 +127,23 @@ def test_upcast_integers_division():
             Cast(dtype=DataType.FLOAT32, expr=LiteralFactory(value="1", dtype=DataType.INT32)),
             Cast(dtype=DataType.FLOAT32, expr=LiteralFactory(value="2", dtype=DataType.INT32)),
         ],
+    )
+
+
+def test_upcast_power_function():
+    testee = NativeFuncCall(func=NativeFunction.POW, args=[A_FLOAT64_LITERAL, A_INT64_LITERAL])
+    upcast_and_validate(
+        testee, []
+    )  # don't cast integer exponents of power function because of the base
+
+
+def test_upcast_power_function_arguments():
+    exponent = BinaryOp(
+        op=ArithmeticOperator.DIV,
+        left=LiteralFactory(value="1", dtype=DataType.INT32),
+        right=LiteralFactory(value="2", dtype=DataType.FLOAT32),
+    )
+    testee = NativeFuncCall(func=NativeFunction.POW, args=[A_FLOAT64_LITERAL, exponent])
+    upcast_and_validate(
+        testee, [Cast(dtype=DataType.FLOAT32, expr=LiteralFactory(value="1", dtype=DataType.INT32))]
     )

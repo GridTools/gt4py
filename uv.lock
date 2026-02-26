@@ -88,6 +88,15 @@ wheels = [
 ]
 
 [[package]]
+name = "array-api-compat"
+version = "1.13.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/36/f799b36d7025a92a23819f9f06541babdb84b6fd0bd4253f8be2eca348a4/array_api_compat-1.13.0.tar.gz", hash = "sha256:8b83a56aa8b9477472fee37f7731968dd213e20c198a05ac49caeff9b03f48a6", size = 103065, upload-time = "2025-12-28T11:26:57.734Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/5d/493b1b5528ab5072feae30821ff3a07b7a0474213d548efb1fdf135f85c1/array_api_compat-1.13.0-py3-none-any.whl", hash = "sha256:c15026a0ddec42815383f07da285472e1b1ff2e632eb7afbcfe9b08fcbad9bf1", size = 58585, upload-time = "2025-12-28T11:26:56.081Z" },
+]
+
+[[package]]
 name = "asttokens"
 version = "2.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1152,7 +1161,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-v2#852c4bf30d973668ec8ce117a28db183962254a9" }
+source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-v2#8f7601b4e4953a1b785ac676701fc1d4e6540b37" }
 resolution-markers = [
     "python_full_version >= '3.14'",
     "python_full_version == '3.13.*'",
@@ -1599,6 +1608,7 @@ wheels = [
 name = "gt4py"
 source = { editable = "." }
 dependencies = [
+    { name = "array-api-compat" },
     { name = "attrs" },
     { name = "black" },
     { name = "boltons" },
@@ -1697,7 +1707,7 @@ build = [
     { name = "wheel" },
 ]
 dace-cartesian = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-v2#852c4bf30d973668ec8ce117a28db183962254a9" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-v2#8f7601b4e4953a1b785ac676701fc1d4e6540b37" } },
 ]
 dace-next = [
     { name = "dace", version = "43!2026.2.12", source = { registry = "https://gridtools.github.io/pypi/" } },
@@ -1803,6 +1813,7 @@ typing = [
 
 [package.metadata]
 requires-dist = [
+    { name = "array-api-compat", specifier = ">=1.13" },
     { name = "attrs", specifier = ">=21.3" },
     { name = "black", specifier = ">=25.11" },
     { name = "boltons", specifier = ">=20.1" },

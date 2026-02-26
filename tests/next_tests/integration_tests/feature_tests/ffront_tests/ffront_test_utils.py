@@ -14,7 +14,12 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend as next_backend, common, allocators as next_allocators, constructors
+from gt4py.next import (
+    backend as next_backend,
+    common,
+    constructors,
+    custom_layout_allocators as next_allocators,
+)
 from gt4py.next.ffront import decorator
 
 import next_tests
@@ -81,6 +86,10 @@ no_backend = NoBackend(
         next_tests.definitions.EmbeddedIds.NUMPY_EXECUTION,
         pytest.param(
             next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
+        ),
+        pytest.param(
+            next_tests.definitions.EmbeddedIds.JAX_NUMPY_EXECUTION,
+            marks=pytest.mark.requires_jax,
         ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
@@ -415,7 +424,7 @@ def skip_value_mesh(allocator) -> MeshDescriptor:
         simple_mesh,
         pytest.param(skip_value_mesh, marks=pytest.mark.uses_mesh_with_skip_values),
     ],
-    ids=lambda p: p(None).name,
+    ids=lambda p: p.__name__,
 )
 def mesh_descriptor(request, exec_alloc_descriptor) -> MeshDescriptor:
     yield request.param(exec_alloc_descriptor.allocator)

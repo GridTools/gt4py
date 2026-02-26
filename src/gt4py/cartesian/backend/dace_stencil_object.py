@@ -125,11 +125,16 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
             origin=origin,
             domain=domain,
         )
+        # strip history from SDFG
+        for tmp_sdfg in frozen_sdfg.all_sdfgs_recursive():
+            tmp_sdfg.transformation_hist = []
+            tmp_sdfg.orig_sdfg = None
+
         self._frozen_cache[key] = DaCeFrozenStencil(self, origin, domain, frozen_sdfg)
 
         basename = os.path.splitext(self.SDFG_PATH)[0]
-        filename = f"{basename}_{shash(origin, domain)}.sdfg"
-        frozen_sdfg.save(filename)
+        filename = f"{basename}_{shash(origin, domain)}.sdfgz"
+        frozen_sdfg.save(filename, compress=True)
 
         return self._frozen_cache[key]
 

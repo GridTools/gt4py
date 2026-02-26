@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import allocators as gtx_allocators, common as gtx_common
+from gt4py.next import common as gtx_common, custom_layout_allocators as gtx_allocators
 
 from gt4py._core import definitions as core_defs
 from next_tests.integration_tests import cases
