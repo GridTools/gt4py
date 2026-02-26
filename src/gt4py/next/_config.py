@@ -82,12 +82,10 @@ def parse_env_var(
 @utils.TypeMapping
 def _parse_str(type_: type) -> Callable[[str], Any]:
     """Default parser: the type string value as is."""
-    match type_:
-        case enum.Enum() as enum_type:
-            assert issubclass(enum_type, enum.Enum)
-            return lambda value: enum_type[value]  # parse enum values from their names
-        case _:
-            return lambda x: 1  # type constructor as parser
+    if issubclass(type_, enum.Enum):
+        return lambda value: type_[value]  # parse enum values from their names
+
+    return lambda x: type_(x)  # type constructor as parser
 
 
 @_parse_str.register(bool)

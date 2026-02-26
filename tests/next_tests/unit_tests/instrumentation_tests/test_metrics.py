@@ -286,17 +286,21 @@ def sample_source_metrics(sample_source_metadata: dict[str, Any]) -> Mapping[str
     return {
         "program1": metrics.Source(
             metadata={"description": "Test program 1", **sample_source_metadata},
-            metrics=metrics.MetricsCollection(**{
-                metrics.COMPUTE_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
-                metrics.TOTAL_METRIC: metrics.Metric(samples=[4.0, 5.0, 6.0]),
-            }),
+            metrics=metrics.MetricsCollection(
+                **{
+                    metrics.COMPUTE_METRIC: metrics.Metric(samples=[1.0, 2.0, 3.0]),
+                    metrics.TOTAL_METRIC: metrics.Metric(samples=[4.0, 5.0, 6.0]),
+                }
+            ),
         ),
         "program2": metrics.Source(
             metadata={"description": "Test program 2", **sample_source_metadata},
-            metrics=metrics.MetricsCollection(**{
-                metrics.COMPUTE_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
-                metrics.TOTAL_METRIC: metrics.Metric(samples=[40.0, 50.0, 60.0]),
-            }),
+            metrics=metrics.MetricsCollection(
+                **{
+                    metrics.COMPUTE_METRIC: metrics.Metric(samples=[10.0, 20.0, 30.0]),
+                    metrics.TOTAL_METRIC: metrics.Metric(samples=[40.0, 50.0, 60.0]),
+                }
+            ),
         ),
     }
 
