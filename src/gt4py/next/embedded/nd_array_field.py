@@ -995,7 +995,7 @@ def _concat_where(
 
 
 # TODO(havogt): this is still the "old" concat_where, needs to be replaced in a next PR
-NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)
+NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[has-type]  # mypy bug? mypy cannot see experimental.concat_where type here
 
 
 def _make_reduction(

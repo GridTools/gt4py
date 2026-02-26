@@ -8,6 +8,8 @@
 
 """Caching for compiled backend artifacts."""
 
+from __future__ import annotations
+
 import hashlib
 import pathlib
 import tempfile

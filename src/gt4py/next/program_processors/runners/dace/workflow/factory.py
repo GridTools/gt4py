@@ -41,7 +41,7 @@ class DaCeWorkflowFactory(factory.Factory):
     class Params:
         auto_optimize: bool = False
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config_type.CMakeBuildType = factory.LazyFunction(
+        cmake_build_type: config_type.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment]  # factoryboy's type stubs seem incomplete
             lambda: config.cmake_build_type
         )
 

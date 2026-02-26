@@ -1630,7 +1630,7 @@ def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProvider
             )
 
 
-@runtime.set_at.register(EMBEDDED)
+@runtime.set_at.register(EMBEDDED)  # type: ignore[has-type]  # mypy bug? mypy cannot see runtime.set_at type here
 def set_at(
     expr: common.Field,
     domain_like: xtyping.MaybeNestedInTuple[common.DomainLike],
@@ -1640,12 +1640,12 @@ def set_at(
     operators._tuple_assign_field(target, expr, domain)
 
 
-@runtime.get_domain_range.register(EMBEDDED)
+@runtime.get_domain_range.register(EMBEDDED)  # type: ignore[has-type]  # mypy bug? mypy cannot see runtime.get_domain_range type here
 def get_domain_range(field: common.Field, dim: common.Dimension) -> tuple[int, int]:
     return (field.domain[dim].unit_range.start, field.domain[dim].unit_range.stop)
 
 
-@runtime.if_stmt.register(EMBEDDED)
+@runtime.if_stmt.register(EMBEDDED)  # type: ignore[has-type]  # mypy bug? mypy cannot see runtime.if_stmt type here
 def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[[], None]) -> None:
     """
     (Stateful) if statement.
@@ -1665,7 +1665,7 @@ def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[
         false_branch()
 
 
-@runtime.temporary.register(EMBEDDED)
+@runtime.temporary.register(EMBEDDED)  # type: ignore[has-type]  # mypy bug? mypy cannot see runtime.temporary type here
 def temporary(domain: runtime.CartesianDomain | runtime.UnstructuredDomain, dtype):
     type_ = runtime._dtypebuiltin_to_ts(dtype)
     new_domain = common.domain(domain)

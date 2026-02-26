@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import functools
 from typing import TYPE_CHECKING, Any
 
@@ -141,7 +143,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
 
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
-        nanobind.bind_source
+        nanobind.bind_source  # type: ignore[has-type]  # mypy bug? mypy cannot see nanobind.bind_source type here
     )
     compilation = factory.SubFactory(
         compiler.CompilerFactory,

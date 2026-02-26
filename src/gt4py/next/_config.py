@@ -9,15 +9,15 @@
 """
 GT4Py configuration system.
 
-This module defines a typed configuration framework based on these concepts:
+This module defines a configuration system based on these concepts:
 
 - `OptionDescriptor`: full description of an option (type, default/default_factory,
   parser, validator, environment variable mapping, and optional update callback).
-- `ConfigManager`: stores option values, resolves effective values using precedence,
-  and supports task-local temporary overrides.
+- `ConfigManager`: stores option values, supports task-local temporary overrides,
+  and resolves effective values using precedence.
 - `Config`: concrete registry of GT4Py public options.
 
-Configuration can be changed globally in a ConfigManaget instance via attribute
+Configuration can be changed globally in a ConfigManager instance via attribute
 assignment or `set()`, and temporarily via `overrides()`.
 
 The global GT4Py ConfigManager instance is exposed as `gt4py.next.config`.
