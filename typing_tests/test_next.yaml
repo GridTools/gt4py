@@ -1,0 +1,7 @@
+  - case: fieldop
+    main: |
+      from gt4py import next as gtx
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      @gtx.field_operator
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
