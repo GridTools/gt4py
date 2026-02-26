@@ -80,20 +80,33 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
     uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
+    offset_provider_type: common.OffsetProviderType
+    use_offset_literal_index: bool = True
 
+    def _make_unroll_index(self, i: int) -> itir.Expr:
+        if self.use_offset_literal_index:
+            return itir.OffsetLiteral(value=i)
+        return itir.Literal(
+            value=str(i),
+            type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+        )
+    
     @classmethod
     def apply(
         cls,
         node: itir.Node,
         offset_provider_type: common.OffsetProviderType,
         uids: utils.IDGeneratorPool,
+        *,
+        use_offset_literal_index: bool = True,
     ) -> itir.Node:
-        return cls(uids=uids).visit(node, offset_provider_type=offset_provider_type)
+        return cls(uids=uids,
+                    offset_provider_type=offset_provider_type,
+                    use_offset_literal_index=use_offset_literal_index
+                ).visit(node)
 
-    def _visit_reduce(
-        self, node: itir.FunCall, offset_provider_type: common.OffsetProviderType
-    ) -> itir.Expr:
-        connectivity_type = _get_connectivity(node, offset_provider_type)
+    def _visit_reduce(self, node: itir.FunCall) -> itir.Expr:
+        connectivity_type = _get_connectivity(node, self.offset_provider_type)
         max_neighbors = connectivity_type.max_neighbors
         has_skip_values = connectivity_type.has_skip_values
 
@@ -106,21 +119,22 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
 
         elems = [im.list_get(offset, arg) for arg in node.args]
         step_fun: itir.Expr = im.call(fun)(acc, *elems)
+
         if has_skip_values:
-            check_arg = next(_get_neighbors_args(node.args))
-            offset_tag, it = check_arg.args
-            can_deref = im.can_deref(im.shift(offset_tag, offset)(it))
-            step_fun = im.if_(can_deref, step_fun, acc)
+            neighbor_args = list(_get_neighbors_args(node.args))
+            if neighbor_args:
+                offset_tag, it = neighbor_args[0].args
+                can_deref = im.can_deref(im.shift(offset_tag, offset)(it))
+                step_fun = im.if_(can_deref, step_fun, acc)
+
         step_fun = im.lambda_(acc, offset)(step_fun)
         expr = init
         for i in range(max_neighbors):
-            expr = im.call(step)(expr, itir.OffsetLiteral(value=i))
-        expr = im.let(step, step_fun)(expr)
-
-        return expr
+            expr = im.call(step)(expr, self._make_unroll_index(i))
+        return im.let(step, step_fun)(expr)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.Expr:
         node = self.generic_visit(node, **kwargs)
         if cpm.is_applied_reduce(node):
-            return self._visit_reduce(node, **kwargs)
+            return self._visit_reduce(node)
         return node

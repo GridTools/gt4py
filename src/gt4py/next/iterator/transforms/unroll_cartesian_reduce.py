@@ -14,6 +14,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
+import gt4py.next as gtx
 
 
 def _is_applied_cartesian_reduce(node: itir.FunCall) -> bool:
@@ -30,6 +31,11 @@ def _is_applied_cartesian_reduce(node: itir.FunCall) -> bool:
         and len(node.fun.args[0].args) == 3
         and len(node.args) >= 1
     )
+    
+    # print(f"[GT4PY_DEBUG_UNROLL_CARTESIAN] Checking node {node} for cartesian_reduce: ")
+    # print(f"  node.fun.args: ", getattr(node.fun, "args", None))
+    # print(f"  direct_cartesian_reduce: {direct_cartesian_reduce}")
+    # print(f"  as_fieldop_cartesian_reduce: {as_fieldop_cartesian_reduce}")
     return direct_cartesian_reduce or as_fieldop_cartesian_reduce
 
 
@@ -44,22 +50,6 @@ def _maybe_int_bound(expr: itir.Expr) -> int | None:
         return expr.value
 
     return None
-
-
-class _ShiftDerefsAlongAxis(eve.NodeTranslator):
-    def __init__(self, axis: common.Dimension, offset: int):
-        self.axis = axis
-        self.offset = offset
-
-    def visit_FunCall(self, node: itir.FunCall, **kwargs):
-        node = self.generic_visit(node, **kwargs)
-        if cpm.is_call_to(node, "deref") and len(node.args) == 1:
-            shifted = im.shift(common.dimension_to_implicit_offset(self.axis.value), self.offset)(
-                node.args[0]
-            )
-            return im.deref(shifted)
-        return node
-
 
 class UnrollCartesianReduce(eve.NodeTranslator):
     """Unroll cartesian axis reductions with literal extents into scalar accumulation."""
@@ -109,9 +99,15 @@ class UnrollCartesianReduce(eve.NodeTranslator):
             if min_bound >= 0:
                 axis_ranges[axis] = (0, max_bound + 1)
         return axis_ranges
+    
 
     def visit_Program(self, node: itir.Program, **kwargs):
+        # IDim = gtx.Dimension("IDim")
+        # JDim = gtx.Dimension("JDim")
+        # Kolor = gtx.Dimension("Kolor")
         self.axis_ranges = self._collect_axis_ranges(node)
+        # looks like this: {Dimension(value='Kolor', kind=<DimensionKind.HORIZONTAL: 'horizontal'>): (0, 3), Dimension(value='IDim', kind=<DimensionKind.HORIZONTAL: 'horizontal'>): (0, 1), Dimension(value='JDim', kind=<DimensionKind.HORIZONTAL: 'horizontal'>): (0, 1)}
+        # self.axis_ranges = {IDim: (0, 1), JDim: (0, 1), Kolor: (0, 3)}
         if self._debug_enabled():
             print(
                 f"[GT4PY_DEBUG_UNROLL_CARTESIAN] axis_ranges={self.axis_ranges}",

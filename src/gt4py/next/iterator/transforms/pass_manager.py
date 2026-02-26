@@ -48,21 +48,6 @@ class GTIRTransform(Protocol):
     ) -> itir.Program: ...
 
 
-class _ClearAllTypes(eve.NodeTranslator):
-    def visit_Program(self, node: itir.Program, **kwargs):
-        saved_param_types = [param.type for param in node.params]
-        node = self.generic_visit(node, **kwargs)
-        for param, param_type in zip(node.params, saved_param_types, strict=True):
-            param.type = param_type
-        return node
-
-    def visit_Node(self, node: itir.Node, **kwargs):
-        node = self.generic_visit(node, **kwargs)
-        if not isinstance(node, itir.Literal):
-            node.type = None
-        return node
-
-
 class _FieldviewDebugStats(eve.NodeVisitor):
     def __init__(self) -> None:
         self.cartesian_reduce_nodes: list[itir.FunCall] = []
@@ -136,17 +121,30 @@ def _apply_unroll_reduce_pipeline(
     *,
     offset_provider_type: common.OffsetProviderType,
     uids: utils.IDGeneratorPool,
+    use_offset_literal_index: bool = True,
 ) -> itir.Program:
     for _ in range(10):
-        unrolled = UnrollReduce.apply(ir, offset_provider_type=offset_provider_type, uids=uids)
-        unrolled = CollapseListGet().visit(unrolled)
-        unrolled = NormalizeShifts().visit(unrolled)
-        unrolled = inline_lifts.InlineLifts().visit(unrolled)
-        unrolled = NormalizeShifts().visit(unrolled)
+        try:
+            unrolled = UnrollReduce.apply(
+            ir,
+            offset_provider_type=offset_provider_type,
+            uids=uids,
+            use_offset_literal_index=use_offset_literal_index,
+            )
+            unrolled = CollapseListGet().visit(unrolled)
+            unrolled = NormalizeShifts().visit(unrolled)
+            # this is required as nested neighbor reductions can contain lifts, e.g.,
+            # `neighbors(V2Eₒ, ↑f(...))`
+            unrolled = inline_lifts.InlineLifts().visit(unrolled)
+            unrolled = NormalizeShifts().visit(unrolled)
+        except Exception as e:
+            raise RuntimeError("Failed inside _apply_unroll_reduce_pipeline") from e
         if unrolled == ir:
-            return ir
+            break
         ir = unrolled
-    raise RuntimeError("Reduction unrolling failed.")
+    else:
+        raise RuntimeError("Reduction unrolling failed.")
+    return ir
 
 
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
@@ -171,11 +169,11 @@ def apply_common_transforms(
 
     uids = utils.IDGeneratorPool()
 
-    print("\n" + "="*60)
-    print("=== FINAL GTIR HANDED TO DACE BACKEND ===")
-    print("="*60)
-    print(ir)
-    print("="*60 + "\n")
+    # print("\n" + "="*60)
+    # print("=== FINAL GTIR HANDED TO DACE BACKEND ===")
+    # print("="*60)
+    # print(ir)
+    # print("="*60 + "\n")
     ir = MergeLet().visit(ir)
     ir = inline_fundefs.InlineFundefs().visit(ir)
 
@@ -282,33 +280,125 @@ def apply_fieldview_transforms(
 
     uids = utils.IDGeneratorPool()
 
+    print_ir = False
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR BEFORE FIELDVIEW TRANSFORMS ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
+
     ir = inline_fundefs.InlineFundefs().visit(ir)
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER INLINING FUNDEFS ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER PRUNING UNREFERENCED FUNDEFS ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     # required for dead-code-elimination and `prune_empty_concat_where` pass
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER EXPANDING CONCAT_WHERE TUPLE ARGS ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = dead_code_elimination.dead_code_elimination(
         ir, offset_provider_type=offset_provider_type, uids=uids
     )
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER DEAD CODE ELIMINATION ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
         ir, offset_provider_type=offset_provider_type, uids=uids
     )  # domain inference does not support dynamic offsets yet
-
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER INLINING DYNAMIC SHIFTS ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = infer_domain_ops.InferDomainOps.apply(ir)
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER INFERRING DOMAIN OPS ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = concat_where.canonicalize_domain_argument(ir)
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER CANONICALIZING CONCAT_WHERE DOMAIN ARGUMENTS ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER CONSTANT FOLDING ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = UnrollCartesianReduce.apply(ir)
-    ir = _ClearAllTypes().visit(ir)
-    _debug_dump_fieldview_ir("pre_infer_domain", ir)
-
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER UNROLLING CARTESIAN REDUCE ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER INFERRING DOMAIN ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = prune_empty_concat_where.prune_empty_concat_where(ir)
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER PRUNING EMPTY CONCAT_WHERE ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
-
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER REMOVING BROADCAST ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
+    print(f"Unrolling reduce: {unroll_reduce}")
     if unroll_reduce:
         ir = _apply_unroll_reduce_pipeline(
             ir,
             offset_provider_type=offset_provider_type,
             uids=uids,
+            use_offset_literal_index=False,  # Fieldview does not support non-literal offsets
         )
+        ir = MergeLet().visit(ir)
+        ir = InlineLambdas.apply(
+            ir,
+            opcount_preserving=True,
+            force_inline_lambda_args=True,
+        )
+        ir = NormalizeShifts().visit(ir)
+
+    
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER UNROLLING REDUCE (IF ENABLED) ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
 
     return ir
