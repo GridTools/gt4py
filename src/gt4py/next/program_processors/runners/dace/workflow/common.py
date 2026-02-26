@@ -71,10 +71,10 @@ def set_dace_config(
 
     if cmake_build_type == config.CMakeBuildType.DEBUG:
         dbginfo = "-g"
-        cuda_dbginfo = "-Xcompiler -g -Xcompiler --device-debug"
+        cuda_dbginfo = "--device-debug -Xcompiler -g"
     elif cmake_build_type == config.CMakeBuildType.REL_WITH_DEB_INFO:
         dbginfo = "-g"
-        cuda_dbginfo = "-Xcompiler -g -Xcompiler --generate-line-info"
+        cuda_dbginfo = "--generate-line-info -Xcompiler -g"
     else:
         dbginfo = ""
         cuda_dbginfo = ""
@@ -93,7 +93,7 @@ def set_dace_config(
     else:
         dace.Config.set(
             "compiler.cuda.args",
-            value=f"{cuda_dbginfo} -Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
+            value=f"{cuda_dbginfo} -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
         )
     dace.Config.set(
         "compiler.cuda.hip_args",
