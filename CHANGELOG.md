@@ -2,6 +2,17 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.6] - 2026-02-27
+
+### Cartesian
+
+- Added a `GT4PY_CARTESIAN_ENABLE_OPENMP` environment variable to disable OpenMP, which allows to support compilers (e.g. `apple-clang`) not shipping with OpenMP by default.
+- Fixed issue in the `numpy` backend related to `K`-query expressions, where an internal variable was shadowing any user-provided `k_mask` variable.
+
+### Next
+
+See commit history.
+
 ## [1.1.5] - 2026-02-24
 
 ### Cartesian
