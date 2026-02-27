@@ -11,6 +11,7 @@ from __future__ import annotations
 import collections
 import concurrent.futures
 import contextlib
+import contextvars
 import dataclasses
 import functools
 import itertools
@@ -45,21 +46,35 @@ ArgStaticDescriptorsByType: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
 
+_pools_per_root: contextvars.ContextVar[collections.Counter] = contextvars.ContextVar(
+    "_pools_per_root", default=collections.Counter()
+)
 
-_pools_per_root: collections.Counter = collections.Counter()
-
-_metrics_source_key_cache: dict[int, str] = {}
+# Cache metrics source keys for each compiled program pool id and key.
+# Note: we use a weakref finalizer to remove entries from this cache when a
+# compiled program pool is deleted, to avoid creating false cache entries
+# since the id of the program pool could be reused by another pool once the
+# original one has been deleted.
+_metrics_source_key_cache: contextvars.ContextVar[dict[tuple[int, CompiledProgramsKey], str]] = (
+    contextvars.ContextVar("_metrics_source_key_cache", default={})
+)
 
 
 def metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> str:
     """Generate a metrics source key from a concrete item of a compiled programs pool."""
     try:
-        return _metrics_source_key_cache[hash((id(pool), key))]
+        return _metrics_source_key_cache.get()[(id(pool), key)]
     except KeyError:
-        source_key = f"{pool.root[0]}<{pool.root[1]}>|{_pools_per_root[pool.root]}|[{hash(key)}]"
-        source_key_cache_entry = hash((id(pool), key))
-        _metrics_source_key_cache[source_key_cache_entry] = source_key
-        weakref.finalize(pool, lambda: _metrics_source_key_cache.pop(source_key_cache_entry, None))
+        pools_counter = _pools_per_root.get()
+        source_key = f"{pool.root[0]}<{pool.root[1]}>#{pools_counter[pool.root]}[{hash(key)}]"
+        source_key_cache_entry = (id(pool), key)
+        _metrics_source_key_cache.get()[source_key_cache_entry] = source_key
+        # Use a finalizer to remove the entry from the cache once the pool is deleted
+        weakref.finalize(
+            pool,
+            lambda entry: _metrics_source_key_cache.get().pop(entry, None),
+            source_key_cache_entry,
+        )
         return source_key
 
 
@@ -322,7 +337,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     @functools.cached_property
     def root(self) -> tuple[str, str]:
         result = (self.definition_stage.definition.__name__, self.backend.name)
-        _pools_per_root[result] += 1
+        _pools_per_root.get()[result] += 1
         return result
 
     def __post_init__(self) -> None:

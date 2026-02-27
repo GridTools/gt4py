@@ -6,6 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
+import collections
+import contextvars
+import gc
+import weakref
 
 import pytest
 
@@ -216,3 +220,80 @@ def test_make_param_context_from_func_type_for_named_collections():
     context = compiled_program._make_param_context_from_func_type(func_type)
     # both `extract` and `_make_param_context_from_func_type` need to use the same structure
     assert arguments.extract(DataclassNamedCollection(int32_t, int64_t)) == context["inp"]
+
+
+class _DummyPool:
+    def __init__(self, root):
+        self.root = root
+
+
+def test_metrics_source_key_caches_per_pool_and_key():
+    cache_token = compiled_program._metrics_source_key_cache.set({})
+    counter_token = compiled_program._pools_per_root.set(
+        collections.Counter({("prog", "backend"): 3})
+    )
+    try:
+        pool = _DummyPool(("prog", "backend"))
+        key = (("static",), 11, None)
+
+        first = compiled_program.metrics_source_key(pool, key)
+        # Change counter after first call; second call must come from cache.
+        compiled_program._pools_per_root.get()[pool.root] = 99
+        second = compiled_program.metrics_source_key(pool, key)
+
+        assert first == second
+        assert first == f"prog<backend>#3[{hash(key)}]"
+        assert compiled_program._metrics_source_key_cache.get()[(id(pool), key)] == first
+    finally:
+        compiled_program._metrics_source_key_cache.reset(cache_token)
+        compiled_program._pools_per_root.reset(counter_token)
+
+
+def test_metrics_source_key_uses_contextvars_isolation():
+    pool = _DummyPool(("prog", "backend"))
+    key = (("static",), 12, None)
+
+    base_cache_token = compiled_program._metrics_source_key_cache.set({})
+    base_counter_token = compiled_program._pools_per_root.set(collections.Counter({pool.root: 1}))
+    try:
+        key_in_base = compiled_program.metrics_source_key(pool, key)
+
+        def _run_in_new_context():
+            compiled_program._metrics_source_key_cache.set({})
+            compiled_program._pools_per_root.set(collections.Counter({pool.root: 7}))
+            return compiled_program.metrics_source_key(pool, key)
+
+        key_in_other_ctx = contextvars.Context().run(_run_in_new_context)
+
+        assert key_in_base != key_in_other_ctx
+        assert key_in_base == f"prog<backend>#1[{hash(key)}]"
+        assert key_in_other_ctx == f"prog<backend>#7[{hash(key)}]"
+        # Base context cache remains its own value.
+        assert compiled_program._metrics_source_key_cache.get()[(id(pool), key)] == key_in_base
+    finally:
+        compiled_program._metrics_source_key_cache.reset(base_cache_token)
+        compiled_program._pools_per_root.reset(base_counter_token)
+
+
+def test_metrics_source_key_finalizer_removes_cache_entry_when_pool_is_deleted():
+    cache_token = compiled_program._metrics_source_key_cache.set({})
+    counter_token = compiled_program._pools_per_root.set(
+        collections.Counter({("prog", "backend"): 2})
+    )
+    try:
+        pool = _DummyPool(("prog", "backend"))
+        key = (("static",), 13, None)
+
+        compiled_program.metrics_source_key(pool, key)
+        entry = (id(pool), key)
+        assert entry in compiled_program._metrics_source_key_cache.get()
+
+        pool_ref = weakref.ref(pool)
+        del pool
+        gc.collect()
+
+        assert pool_ref() is None
+        assert entry not in compiled_program._metrics_source_key_cache.get()
+    finally:
+        compiled_program._metrics_source_key_cache.reset(cache_token)
+        compiled_program._pools_per_root.reset(counter_token)
