@@ -163,14 +163,6 @@ class OptionDescriptor(Generic[_T]):
         env_var_parser: Optional parser for environment variable values.
         env_var_prefix: Prefix for the environment variable name.
         name: Name of the option (set automatically via __set_name__).
-
-    Example:
-        >>> class Config(ConfigManager):
-        ...     debug = OptionDescriptor(
-        ...         type=bool,
-        ...         default=False,
-        ...         update_callback=lambda new, old, scope: print(f"Changed to {new}"),
-        ...     )
     """
 
     option_type: type[_T] | Any
@@ -250,22 +242,28 @@ class ConfigManager:
     """
     Central configuration manager with attribute-style access.
 
-    Config options are defined as class attributes using `OptionDescriptor`.
-    The manager stores global values for all options and allows temporary
-    overrides in a context manager scope.
+    Config options are defined as `OptionDescriptor` class attributes in a
+    concrete subclass of `ConfigManager`. The manager stores global values
+    for all options and allows temporary overrides in a context manager scope.
 
     The effective value of an option follows this precedence (highest to lowest):
     1. Active context override via the `overrides()` context manager
     2. Global runtime value set via the `set()` method
-    3. Environment variable (if set)
-    4. Descriptor default or default_factory result
+    3. Default value from the environment variable (if set)
+    4. Default value from the descriptor (either `default` or `default_factory`)
 
     Example:
-        >>> config = ConfigManager()
+        >>> class MyConfig(ConfigManager):
+        ...     some_option = OptionDescriptor(option_type=str, default="default_value")
+        >>> config = MyConfig()
+        >>> config.get("some_option")  # Default value from descriptor
+        'default_value'
+        >>> config.set("some_option", "global_value")  # Set global value
         >>> config.get("some_option")  # Apply precedence rules
-        >>> config.set("some_option", value)  # Set global value
-        >>> with config.overrides(some_option=value):  # Temporary override
-        ...     pass
+        'global_value'
+        >>> with config.overrides(some_option="temporary_override"):  # Temporary override
+        ...     config.some_option
+        'temporary_override'
     """
 
     def __init__(self) -> None:
