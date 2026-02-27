@@ -45,7 +45,7 @@ def test_compiledb_project_is_relocatable(compilable_source_example, clean_examp
 
     builder.build()
 
-    with tempfile.TemporaryDirectory(dir=config.BUILD_CACHE_DIR) as tmpdir:
+    with tempfile.TemporaryDirectory(dir=config.build_cache_dir) as tmpdir:
         # copy the project to a new location
         relocated_dir = pathlib.Path(tmpdir) / "relocated"
         shutil.copytree(

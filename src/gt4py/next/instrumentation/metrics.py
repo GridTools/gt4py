@@ -29,7 +29,7 @@ from typing import ClassVar
 import numpy as np
 
 from gt4py.eve import extended_typing as xtyping, utils
-from gt4py.eve.extended_typing import Any, Final
+from gt4py.eve.extended_typing import Any, Final, assert_never
 from gt4py.next import config
 from gt4py.next.otf import arguments
 
@@ -53,17 +53,17 @@ ALL: Final[int] = 100
 
 def is_any_level_enabled() -> bool:
     """Check if any metrics collection level is enabled."""
-    return config.COLLECT_METRICS_LEVEL > DISABLED
+    return config.collect_metrics_level > DISABLED
 
 
 def is_level_enabled(level: int) -> bool:
     """Check if a given metrics collection level is enabled."""
-    return config.COLLECT_METRICS_LEVEL >= level
+    return config.collect_metrics_level >= level
 
 
 def get_current_level() -> int:
     """Retrieve the current metrics collection level (from the configuration module)."""
-    return config.COLLECT_METRICS_LEVEL
+    return config.collect_metrics_level
 
 
 @dataclasses.dataclass(frozen=True)
@@ -441,17 +441,31 @@ def dump_json(
     pathlib.Path(filename).write_text(dumps_json(metric_sources))
 
 
+def _init_dump_metrics_filename() -> pathlib.Path:
+    return pathlib.Path(f"gt4py_metrics_{time.strftime('%Y%m%d_%H%M%S')}.json")
+
+
 # Handler registration to automatically dump metrics at program exit if
 # the corresponding configuration flag is set.
 def _dump_metrics_at_exit() -> None:
     """Dump collected metrics to a file at program exit if required."""
 
     # It is assumed that 'gt4py.next.config' is still alive at this point
-    if config.DUMP_METRICS_AT_EXIT and (is_any_level_enabled() or sources):
+    match config.dump_metrics_at_exit:
+        case False:
+            metrics_dump_file = None
+        case True:
+            metrics_dump_file = _init_dump_metrics_filename()
+        case pathlib.Path() as user_path:
+            metrics_dump_file = user_path
+        case _ as unreachable:
+            assert_never(unreachable)
+
+    if metrics_dump_file is not None and (is_any_level_enabled() or sources):
         try:
-            pathlib.Path(config.DUMP_METRICS_AT_EXIT).write_text(dumps_json())
+            metrics_dump_file.write_text(dumps_json())
             print(
-                f"--- atexit: GT4Py performance metrics saved at {config.DUMP_METRICS_AT_EXIT} ---",
+                f"--- atexit: GT4Py performance metrics saved at {metrics_dump_file} ---",
                 file=sys.stderr,
             )
         except Exception as e:

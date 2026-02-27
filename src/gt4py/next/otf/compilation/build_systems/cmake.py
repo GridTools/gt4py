@@ -13,13 +13,17 @@ import os
 import pathlib
 import subprocess
 import warnings
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, errors
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.compilation import build_data, cache, common, compiler
 from gt4py.next.otf.compilation.build_systems import cmake_lists
+
+
+if TYPE_CHECKING:
+    from gt4py.next import config_type
 
 
 def get_device_arch() -> str | None:
@@ -69,13 +73,13 @@ class CMakeFactory(
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
 
     cmake_generator_name: str = "Ninja"
-    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+    cmake_build_type: config_type.CMakeBuildType = config.CMakeBuildType.DEBUG
     cmake_extra_flags: list[str] = dataclasses.field(default_factory=list)
 
     def __call__(
         self,
         source: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        cache_lifetime: config.BuildCacheLifetime,
+        cache_lifetime: config_type.BuildCacheLifetime,
     ) -> CMakeProject:
         if not source.binding_source:
             raise NotImplementedError(
@@ -128,7 +132,7 @@ class CMakeProject(stages.BuildSystemProject[CPPLikeCodeSpecT, code_specs.Python
     source_files: dict[str, str]
     program_name: str
     generator_name: str = "Ninja"
-    build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+    build_type: config_type.CMakeBuildType = config.CMakeBuildType.DEBUG
     extra_cmake_flags: list[str] = dataclasses.field(default_factory=list)
 
     def build(self) -> None:

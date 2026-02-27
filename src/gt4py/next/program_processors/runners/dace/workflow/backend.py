@@ -116,7 +116,7 @@ def make_dace_backend(
     # Set `unit_strides_kind` based on the gt4py env configuration.
     optimization_args = optimization_args | {
         "unit_strides_kind": common.DimensionKind.HORIZONTAL
-        if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        if config.unstructured_horizontal_has_unit_stride
         else None
     }
 

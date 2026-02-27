@@ -285,6 +285,172 @@ def test_fluid_partial():
     assert fp3() == 6
 
 
+class TestTypeMapping:
+    """Unit tests for TypeMapping class."""
+
+    def test_basic_getitem(self):
+        """Test basic type-to-value mapping retrieval."""
+        from gt4py.eve.utils import TypeMapping
+
+        def fallback(type_):
+            return f"default_{type_.__name__}"
+
+        mapping = TypeMapping(fallback)
+
+        # Register some types
+        mapping[int] = "integer"
+        mapping[str] = "string"
+
+        assert mapping[int] == "integer"
+        assert mapping[str] == "string"
+
+    def test_fallback_factory(self):
+        """Test that fallback factory is used for unregistered types."""
+        from gt4py.eve.utils import TypeMapping
+
+        def fallback(type_):
+            return f"default_{type_.__name__}"
+
+        mapping = TypeMapping(fallback)
+        mapping[int] = "integer"
+
+        # Unregistered type should use fallback
+        assert mapping[str] == "default_str"
+        assert mapping[float] == "default_float"
+        assert mapping[list] == "default_list"
+
+    def test_setitem_and_register(self):
+        """Test both __setitem__ and register methods."""
+        from gt4py.eve.utils import TypeMapping
+
+        mapping = TypeMapping(lambda t: None)
+
+        # Using __setitem__
+        mapping[int] = "via_setitem"
+        assert mapping[int] == "via_setitem"
+
+        # Using register method
+        result = mapping.register(str, "via_register")
+        assert result == "via_register"
+        assert mapping[str] == "via_register"
+
+        # Using register method in a decorator style
+        result = mapping.register(str)("via_register_decorator")
+        assert result == "via_register_decorator"
+        assert mapping[str] == "via_register_decorator"
+
+    def test_callable_value_registration(self):
+        """Test registering callable objects as values."""
+        from gt4py.eve.utils import TypeMapping
+
+        def int_handler(a):
+            return f"int_handler: {a}"
+
+        def str_handler(a):
+            return f"str_handler: {a}"
+
+        def any_handler(a):
+            return f"{type(a).__name__}_handler: {a}"
+
+        mapping = TypeMapping(lambda t: any_handler)
+        mapping[int] = int_handler
+        mapping[str] = str_handler
+
+        assert callable(mapping[int])
+        assert callable(mapping[str])
+        assert mapping[int](1) == "int_handler: 1"
+        assert mapping[str](2) == "str_handler: 2"
+        assert mapping[tuple]((3, 4)) == "tuple_handler: (3, 4)"
+
+    def test_multiple_type_registrations(self):
+        """Test registering and retrieving multiple types."""
+        from gt4py.eve.utils import TypeMapping
+
+        mapping = TypeMapping(lambda t: f"fallback_{t.__name__}")
+
+        types_values = {
+            int: "number",
+            str: "text",
+            float: "decimal",
+            list: "sequence",
+            dict: "mapping",
+            set: "unique",
+            tuple: "immutable",
+        }
+
+        for type_, value in types_values.items():
+            mapping[type_] = value
+
+        for type_, expected_value in types_values.items():
+            assert mapping[type_] == expected_value
+
+    def test_overwrite_registration(self):
+        """Test that re-registering a type overwrites the previous value."""
+        from gt4py.eve.utils import TypeMapping
+
+        mapping = TypeMapping(lambda t: None)
+
+        mapping[int] = "first"
+        assert mapping[int] == "first"
+
+        mapping[int] = "second"
+        assert mapping[int] == "second"
+
+        mapping[int] = "third"
+        assert mapping[int] == "third"
+
+    def test_subclass_dispatch(self):
+        """Test that singledispatch works with subclasses."""
+        from gt4py.eve.utils import TypeMapping
+
+        mapping = TypeMapping(lambda t: "default")
+
+        class BaseClass:
+            pass
+
+        class SubClass(BaseClass):
+            pass
+
+        mapping[BaseClass] = "base"
+
+        # Subclass should dispatch to BaseClass handler
+        assert mapping[SubClass] == "base"
+        assert mapping[BaseClass] == "base"
+
+    def test_complex_fallback_factory(self):
+        """Test TypeMapping with a complex fallback factory function."""
+        from gt4py.eve.utils import TypeMapping
+
+        def complex_fallback(type_):
+            if hasattr(type_, "__len__"):
+                return f"sized_{type_.__name__}"
+            else:
+                return f"unsized_{type_.__name__}"
+
+        mapping = TypeMapping(complex_fallback)
+
+        assert "sized" in mapping[str]
+        assert "sized" in mapping[list]
+        assert "sized" in mapping[dict]
+        assert "unsized" in mapping[float]
+        assert "unsized" in mapping[int]
+
+    def test_iteration(self):
+        """Test iteration over registered types."""
+        from gt4py.eve.utils import TypeMapping
+
+        mapping = TypeMapping(lambda t: None)
+        types_to_register = [int, str, float, list, dict]
+
+        for i, type_ in enumerate(types_to_register):
+            mapping[type_] = f"value_{i}"
+
+        # Check that all registered types are in iteration
+        registered_types = list(mapping)
+        for type_ in types_to_register:
+            assert type_ in registered_types
+
+
 def test_noninstantiable_class():
     @eve.utils.noninstantiable
     class NonInstantiableClass(eve.datamodels.DataModel):

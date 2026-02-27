@@ -121,9 +121,9 @@ _async_compilation_pool: concurrent.futures.Executor | None = None
 
 def _init_async_compilation_pool() -> None:
     global _async_compilation_pool
-    if _async_compilation_pool is None and config.BUILD_JOBS > 0:
+    if _async_compilation_pool is None and config.build_jobs > 0:
         _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(
-            max_workers=config.BUILD_JOBS
+            max_workers=config.build_jobs
         )
 
 

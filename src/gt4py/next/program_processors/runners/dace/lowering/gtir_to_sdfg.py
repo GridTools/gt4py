@@ -709,7 +709,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if dataname in data_args:
                 # Uninitialized arguments should not be used inside the nested SDFG.
                 if (arg_node := data_args[dataname]) is None:
-                    inner_ctx.sdfg.remove_data(dataname, validate=gtx_config.DEBUG)
+                    inner_ctx.sdfg.remove_data(dataname, validate=gtx_config.debug)
                 else:
                     input_memlets[dataname] = outer_ctx.sdfg.make_array_memlet(
                         arg_node.dc_node.data

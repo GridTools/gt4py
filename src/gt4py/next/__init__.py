@@ -19,6 +19,12 @@ module in question is a submodule, defines `__all__` and exports many public API
 """
 
 # ruff: noqa: F401
+from __future__ import annotations
+
+
+# reexport the actual configuration manager instance as a public attribute
+from ._config import Config as config_type, config  # ruff: isort: skip
+
 from .._core.definitions import CUPY_DEVICE_TYPE, Device, DeviceType, is_scalar_type
 from . import common, ffront, iterator, program_processors, typing
 from .common import (
@@ -52,6 +58,8 @@ from .program_processors.runners.roundtrip import default as itir_python
 __all__ = [
     # submodules
     "common",
+    "config",
+    "config_type",
     "ffront",
     "iterator",
     "program_processors",

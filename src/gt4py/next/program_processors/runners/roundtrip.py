@@ -220,7 +220,7 @@ class Roundtrip(workflow.Workflow[definitions.CompilableProgramDef, stages.Execu
     transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
 
     def __call__(self, inp: definitions.CompilableProgramDef) -> stages.ExecutableProgram:
-        debug = config.DEBUG if self.debug is None else self.debug
+        debug = config.debug if self.debug is None else self.debug
 
         fencil = fencil_generator(
             inp.data,
