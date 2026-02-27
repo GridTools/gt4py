@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Final, Generator, Optional
 import dace
 
 from gt4py._core import definitions as core_defs
+from gt4py.next import config
 
 
 if TYPE_CHECKING:

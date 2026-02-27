@@ -16,6 +16,7 @@ dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
+from gt4py.next import config as gt_config
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
 )
@@ -92,7 +93,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     monkeypatch.setattr(gtx_transformations, "gt_auto_optimize", mocked_auto_optimize)
     monkeypatch.setattr(gtx_transformations, "gt_gpu_transformation", mocked_gpu_transformation)
 
-    with mock.patch("gt4py.next.config.unstructured_horizontal_has_unit_stride", on_gpu):
+    with gt_config.overrides(unstructured_horizontal_has_unit_stride=on_gpu):
         custom_backend = dace_wf_backend.make_dace_backend(
             gpu=on_gpu,
             cached=False,

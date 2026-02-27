@@ -102,7 +102,7 @@ class TestStringValueParsing:
         [
             ("/tmp/test", pathlib.Path("/tmp/test")),
             ("./relative/path", pathlib.Path("./relative/path")),
-            ("~/user/path", pathlib.Path(os.environ["HOME"]) / "user" / "path"),
+            ("~/user/path", pathlib.Path(os.path.expanduser("~/user/path"))),
         ],
     )
     def test_parse_path(self, value, expected) -> None:

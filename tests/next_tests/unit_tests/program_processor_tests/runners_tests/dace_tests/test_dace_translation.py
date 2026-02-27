@@ -25,6 +25,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
     common as dace_wf_common,
 )
 from gt4py.next.type_system import type_specifications as ts
+from gt4py.next import config as gt_config
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     V2E,
@@ -97,7 +98,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
         ],
     )
 
-    with mock.patch("gt4py.next.config.unstructured_horizontal_has_unit_stride", has_unit_stride):
+    with gt_config.overrides(unstructured_horizontal_has_unit_stride=has_unit_stride):
         sdfg = _translate_gtir_to_sdfg(
             ir=ir,
             offset_provider=SKIP_VALUE_MESH.offset_provider,

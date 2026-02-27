@@ -41,18 +41,12 @@ from gt4py.eve import utils
 
 @final
 class _UnsetSentinel:
-    """Sentinel value for unset configuration options."""
-
-    __slots__ = ()
     _instance: _UnsetSentinel | None = None
 
     def __new__(cls) -> _UnsetSentinel:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-
-    def __repr__(self) -> str:
-        return "<UNSET>"
 
 
 UNSET: Final[_UnsetSentinel] = _UnsetSentinel()
@@ -394,10 +388,8 @@ class ConfigManager:
         finally:
             self._local_context_cvar.reset(token)
 
-            for name in changes.keys() & old_context.keys() & self._callbacks.keys():
-                self._callbacks[name](
-                    old_context.get(name), new_context.get(name), UpdateScope.CONTEXT
-                )
+            for name in changes.keys() & self._callbacks.keys():
+                self._callbacks[name](old_values[name], new_context.get(name), UpdateScope.CONTEXT)
 
     def as_dict(self) -> dict[str, Any]:
         """
@@ -561,8 +553,3 @@ class Config(ConfigManager):
 #: Global singleton instance of the GT4Py configuration manager.
 #: Use this to access and modify configuration options: config.debug, config.set(...), etc.
 config = Config()
-
-if config.debug:
-    print("GT4Py configuration:")
-    for name, value in sorted(config.as_dict().items()):
-        print(f"  - {name}: {value}")
