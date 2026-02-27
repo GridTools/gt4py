@@ -715,21 +715,23 @@ class FieldOperatorFromFoast(FieldOperator):
 
 @typing.overload
 def field_operator(
-    definition: types.FunctionType,
+    definition: Callable,
     *,
-    backend: next_backend.Backend | eve.NothingType | None,
-    grid_type: common.GridType | None,
+    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    grid_type: common.GridType | None = None,
 ) -> FieldOperator: ...
 
 
 @typing.overload
 def field_operator(
-    *, backend: next_backend.Backend | eve.NothingType | None, grid_type: common.GridType | None
-) -> Callable[[types.FunctionType], FieldOperator]: ...
+    *,
+    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    grid_type: common.GridType | None = None,
+) -> Callable[[Callable], FieldOperator]: ...
 
 
 def field_operator(
-    definition: types.FunctionType | None = None,
+    definition: Callable | None = None,
     *,
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
@@ -751,9 +753,9 @@ def field_operator(
         ...     ...
     """
 
-    def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
+    def field_operator_inner(definition: Callable) -> FieldOperator:
         return FieldOperator.from_function(
-            definition,
+            typing.cast(types.FunctionType, definition),
             typing.cast(
                 next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
             ),
