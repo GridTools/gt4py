@@ -134,15 +134,15 @@ def test_ij_field_reset(decorator, backend):
         origin=(0, 0, 0),
     )
     lev = OriginWrapper(
-        array=gt_storage.ones(dtype=np.float32, shape=(3, 5), backend=backend),
+        array=gt_storage.ones(dtype=np.int32, shape=(3, 5), backend=backend),
         origin=(0, 0),
     )
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
-    def call_stencil_object_2(dp1, pe1, lev):
+    def call_reset_mask_field(dp1, pe1, lev):
         reset_mask_field(dp1, pe1, lev)
 
-    call_stencil_object_2(dp1, pe1, lev)
+    call_reset_mask_field(dp1, pe1, lev)
 
     # Download the data from the wrapper cupy array to be compared on cpu
     mask = storage_utils.cpu_copy(lev.array)
