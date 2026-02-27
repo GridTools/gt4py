@@ -222,8 +222,8 @@ class SourceKeySetterAtEnter(SourceKeyContextManager):
         pass
 
 
-metrics_context = SourceKeyContextManager
-metrics_setter_at_enter = SourceKeySetterAtEnter
+metrics_context_key = SourceKeyContextManager
+metrics_context_key_at_enter = SourceKeySetterAtEnter
 
 
 @dataclasses.dataclass(slots=True)
