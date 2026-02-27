@@ -140,6 +140,11 @@ def fuse_as_fieldop(
     new_stencil_body: itir.Expr = stencil.expr
 
     for eligible, stencil_param, arg in zip(eligible_args, stencil.params, args, strict=True):
+        if eligible and cpm.is_applied_as_fieldop(arg):
+            arg_as_fieldop = ir_misc.canonicalize_as_fieldop(arg)
+            arg_stencil = arg_as_fieldop.fun.args[0]  # type: ignore[attr-defined]
+            if not isinstance(arg_stencil, itir.Lambda):
+                eligible = False
         if eligible:
             if cpm.is_applied_as_fieldop(arg):
                 pass
@@ -398,7 +403,8 @@ class FuseAsFieldOp(
         if cpm.is_applied_as_fieldop(node):
             node = ir_misc.canonicalize_as_fieldop(node)
             stencil = node.fun.args[0]  # type: ignore[attr-defined]  # ensure cpm.is_applied_as_fieldop
-            assert isinstance(stencil, itir.Lambda) or cpm.is_call_to(stencil, "scan")
+            if not (isinstance(stencil, itir.Lambda) or cpm.is_call_to(stencil, "scan")):
+                return None
             args: list[itir.Expr] = node.args
             shifts = trace_shifts.trace_stencil(stencil, num_args=len(args))
 

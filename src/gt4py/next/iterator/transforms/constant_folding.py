@@ -49,6 +49,17 @@ class UndoCanonicalizeMinus(eve.NodeTranslator):
 _COMMUTATIVE_OPS = ("plus", "multiplies", "minimum", "maximum")
 
 
+def _numeric_constant_value(node: ir.Node) -> int | float | None:
+    if isinstance(node, ir.Literal):
+        try:
+            return ir_misc.value_from_literal(node)
+        except ValueError:
+            return None
+    if isinstance(node, ir.OffsetLiteral) and isinstance(node.value, int):
+        return node.value
+    return None
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ConstantFolding(
     fixed_point_transformation.CombinedFixedPointTransform, eve.PreserveLocationVisitor
@@ -185,16 +196,13 @@ class ConstantFolding(
 
     def transform_fold_neutral_op(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # `a + 0` -> `a`, `a * 1` -> `a`
-        if (
-            cpm.is_call_to(node, "plus")
-            and isinstance(node.args[1], ir.Literal)
-            and node.args[1].value.isdigit()
-            and int(node.args[1].value) == 0
-        ) or (
-            cpm.is_call_to(node, "multiplies")
-            and isinstance(node.args[1], ir.Literal)
-            and node.args[1].value.isdigit()
-            and int(node.args[1].value) == 1
+        if not isinstance(node, ir.FunCall):
+            return None
+        if not cpm.is_call_to(node, ("plus", "multiplies")):
+            return None
+        rhs_value = _numeric_constant_value(node.args[1])
+        if (cpm.is_call_to(node, "plus") and rhs_value == 0) or (
+            cpm.is_call_to(node, "multiplies") and rhs_value == 1
         ):
             return node.args[0]
         return None
@@ -206,15 +214,14 @@ class ConstantFolding(
             isinstance(node, ir.FunCall)
             and isinstance(node.fun, ir.SymRef)
             and len(node.args) > 0
-            and all(isinstance(arg, ir.Literal) for arg in node.args)
+            and all(isinstance(arg, (ir.Literal, ir.OffsetLiteral)) for arg in node.args)
         ):
             try:
                 if node.fun.id in builtins.ARITHMETIC_BUILTINS:
                     fun = getattr(embedded, str(node.fun.id))
-                    arg_values = [
-                        ir_misc.value_from_literal(arg)  # type: ignore[arg-type] # arg type already established in if condition
-                        for arg in node.args
-                    ]
+                    arg_values = [_numeric_constant_value(arg) for arg in node.args]
+                    if any(value is None for value in arg_values):
+                        return None
                     return im.literal_from_value(fun(*arg_values))
             except ValueError:
                 pass  # happens for inf and neginf

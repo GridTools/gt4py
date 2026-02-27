@@ -16,8 +16,10 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_u
 
 
 def _filter_domain(
-    domain: domain_utils.SymbolicDomain, dims: Container[common.Dimension]
-) -> domain_utils.SymbolicDomain:
+    domain: domain_utils.SymbolicDomain | object, dims: Container[common.Dimension]
+) -> domain_utils.SymbolicDomain | object:
+    if not isinstance(domain, domain_utils.SymbolicDomain):
+        return domain
     return domain_utils.SymbolicDomain(
         grid_type=domain.grid_type,
         ranges={d: r for d, r in domain.ranges.items() if d in dims},
@@ -67,10 +69,9 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
             tb_domain, fb_domain = (
                 _filter_domain(arg.annex.domain, cond.ranges.keys()) for arg in node.args[1:]
             )
-            assert all(isinstance(d, domain_utils.SymbolicDomain) for d in (tb_domain, fb_domain))
-            if tb_domain.empty():
+            if isinstance(tb_domain, domain_utils.SymbolicDomain) and tb_domain.empty():
                 return node.args[2]
-            if fb_domain.empty():
+            if isinstance(fb_domain, domain_utils.SymbolicDomain) and fb_domain.empty():
                 return node.args[1]
 
         return node

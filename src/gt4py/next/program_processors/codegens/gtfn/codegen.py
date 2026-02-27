@@ -3,7 +3,6 @@
 # Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any, Collection, Final, Union
@@ -160,6 +159,30 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
+        if (
+            isinstance(node.fun, gtfn_ir_common.SymRef)
+            and node.fun.id in {"minimum", "maximum"}
+            and len(node.args) == 2
+            and any(
+                isinstance(arg, gtfn_ir.IntegralConstant)
+                or (isinstance(arg, gtfn_ir.OffsetLiteral) and isinstance(arg.value, int))
+                for arg in node.args
+            )
+        ):
+            normalized_args: list[gtfn_ir_common.Expr] = []
+            for arg in node.args:
+                if isinstance(arg, gtfn_ir.OffsetLiteral) and isinstance(arg.value, int):
+                    normalized_args.append(gtfn_ir.IntegralConstant(value=int(arg.value)))
+                elif (
+                    isinstance(arg, gtfn_ir.Literal)
+                    and arg.type.startswith(("int", "uint"))
+                    and str(arg.value).lstrip("-").isdigit()
+                ):
+                    normalized_args.append(gtfn_ir.IntegralConstant(value=int(arg.value)))
+                else:
+                    normalized_args.append(arg)
+            node = gtfn_ir.FunCall(fun=node.fun, args=normalized_args)
+
         # functions are represented as function objects that need to be instantiated
         instantiate = "{}()" if self.is_functor_call(node) else ""
         return self.generic_visit(node, instantiate=instantiate)

@@ -166,14 +166,15 @@ def apply_common_transforms(
     assert isinstance(ir, itir.Program)
 
     offset_provider_type = common.offset_provider_to_type(offset_provider)
+    print_ir = False
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== FINAL GTIR HANDED TO DACE BACKEND ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
 
     uids = utils.IDGeneratorPool()
-
-    # print("\n" + "="*60)
-    # print("=== FINAL GTIR HANDED TO DACE BACKEND ===")
-    # print("="*60)
-    # print(ir)
-    # print("="*60 + "\n")
     ir = MergeLet().visit(ir)
     ir = inline_fundefs.InlineFundefs().visit(ir)
 
@@ -183,7 +184,7 @@ def apply_common_transforms(
     # TODO(tehrengruber): Many iterator test contain lifts that need to be inlined, e.g.
     #  test_can_deref. We didn't notice previously as FieldOpFusion did this implicitly everywhere.
     ir = inline_lifts.InlineLifts().visit(ir)
-
+    
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = dead_code_elimination.dead_code_elimination(
         ir, uids=uids, offset_provider_type=offset_provider_type
@@ -193,17 +194,25 @@ def apply_common_transforms(
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
+    ir = UnrollCartesianReduce.apply(ir, axis_ranges={common.Dimension("Kolor"): (0, 3)})
 
     ir = infer_domain.infer_program(
         ir,
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
+        allow_uninferred=True
     )
     ir = prune_empty_concat_where.prune_empty_concat_where(ir)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
-
+    ir = ConstantFolding.apply(ir)
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER COMMON TRANSFORMS BEFORE INFER_DOMAIN ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = concat_where.transform_to_as_fieldop(ir)
-
+    print
     for _ in range(10):
         inlined = ir
 
@@ -223,9 +232,12 @@ def apply_common_transforms(
         # expressions like `tuple_get(make_tuple(as_fieldop(stencil)(...)))` where stencil returns
         # a list. Such expressions must be inlined however because no backend supports such
         # field operators right now.
-        inlined = fuse_as_fieldop.FuseAsFieldOp.apply(
-            inlined, uids=uids, offset_provider_type=offset_provider_type
-        )
+        try:
+            inlined = fuse_as_fieldop.FuseAsFieldOp.apply(
+                inlined, uids=uids, offset_provider_type=offset_provider_type
+            )
+        except Exception:
+            pass
 
         if inlined == ir:
             break
@@ -265,6 +277,12 @@ def apply_common_transforms(
     ir = InlineLambdas.apply(
         ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
     )
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR END ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
 
     assert isinstance(ir, itir.Program)
     return ir

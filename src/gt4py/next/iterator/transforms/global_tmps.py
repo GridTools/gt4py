@@ -197,7 +197,8 @@ def _transform_by_pattern(
                     set(next_utils.flatten_nested_tuple((tmp_domains,)))
                     - {infer_domain.DomainAccessDescriptor.NEVER}  # type: ignore[arg-type] # type should always be `SymbolicDomain`
                 )
-                assert len(domain) == 1
+                if len(domain) != 1:
+                    return None
                 # this is the domain used as initial value in the tuple construction below
                 tmp_domains = domain[0]
 
@@ -329,6 +330,7 @@ def create_global_tmps(
         program,
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
+        allow_uninferred=True,
         # Previous passes are allowed to create expressions without domains, but we must not
         # overwrite other domains here. Instead, only reinfer expressions without a domain. We must
         # not overwrite them since e.g. a `concat_where` expression might be rewritten into an
