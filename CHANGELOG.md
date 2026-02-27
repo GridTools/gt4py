@@ -6,7 +6,8 @@ Notable changes to this project will be documented in this file. The format is b
 
 ### Cartesian
 
-- Added a `GT4PY_CARTESIAN_ENABLE_OPENMP` environment variable to disable OpenMP, to support compilers (e.g. `apple-clang`) not shipping with OpenMP by default.
+- Added a `GT4PY_CARTESIAN_ENABLE_OPENMP` environment variable to disable OpenMP, which allows to support compilers (e.g. `apple-clang`) not shipping with OpenMP by default.
+- Fixed issue in the `numpy` backend related to `K`-query expressions, where an internal variable was shadowing any user-provided `k_mask` variable.
 
 ### Next
 
