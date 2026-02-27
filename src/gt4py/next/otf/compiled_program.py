@@ -51,8 +51,8 @@ _pools_per_root: collections.Counter = collections.Counter()
 _metrics_source_key_cache: dict[int, str] = {}
 
 
-def _metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> str:
-    """Generate a metrics prefix from a compiled programs pool root."""
+def metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> str:
+    """Generate a metrics source key from a concrete item of a compiled programs pool."""
     try:
         return _metrics_source_key_cache[hash((id(pool), key))]
     except KeyError:
@@ -76,7 +76,7 @@ def compile_variant_hook(
     if metrics.is_any_level_enabled():
         # Create a new metrics entity for this compiled program variant and
         # attach relevant metadata to it.
-        source_key = _metrics_source_key(program_pool, key)
+        source_key = metrics_source_key(program_pool, key)
         assert source_key not in metrics.sources, (
             "The key for the program variant being compiled is already set!!"
         )
@@ -84,6 +84,7 @@ def compile_variant_hook(
         metrics.sources[source_key].metadata |= dict(
             name=program_pool.definition_stage.definition.__name__,
             backend=backend.name,
+            compiled_program_pool_id=id(program_pool),
             compiled_program_pool_key=hash(key),
             **{
                 f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
@@ -118,7 +119,7 @@ def compiled_program_call_context(
     # which will take care of unsetting it. This is because the compiled program call
     # is part of a program call, but we want the metrics to be associated with a
     # specific compiled program variant, not just the generic outer program.
-    return metrics.metrics_context_key_at_enter(_metrics_source_key(program_pool, key))
+    return metrics.metrics_context_key_at_enter(metrics_source_key(program_pool, key))
 
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
