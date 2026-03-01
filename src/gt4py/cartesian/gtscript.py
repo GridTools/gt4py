@@ -20,14 +20,15 @@ from typing import Callable, Dict, Type, Union
 
 import numpy as np
 
-from gt4py.cartesian import definitions as gt_definitions
+from gt4py.cartesian import config as gt_config, definitions as gt_definitions
 from gt4py.cartesian.lazy_stencil import LazyStencil
 
 
-try:
-    from gt4py.cartesian.backend.dace_lazy_stencil import DaCeLazyStencil
-except ImportError:
-    DaCeLazyStencil = LazyStencil  # type: ignore
+if gt_config.GT4PY_CART_ENABLE_DACE:
+    try:
+        from gt4py.cartesian.backend.dace_lazy_stencil import DaCeLazyStencil
+    except ImportError:
+        DaCeLazyStencil = LazyStencil  # type: ignore
 
 # GTScript builtins
 MATH_BUILTINS = {
