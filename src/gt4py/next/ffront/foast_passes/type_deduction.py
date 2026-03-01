@@ -5,7 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+import collections
 from typing import Any, Optional, TypeAlias, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
@@ -501,6 +501,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         f"Tuples need to be indexed with literal integers, got '{node.index}'.",
                     ) from ex
                 new_type = types[index]
+            case ts.VarArgType(element_type=element_type):
+                new_type = (
+                    element_type  # TODO: we only temporarily allow any index for vararg types
+                )
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
@@ -746,6 +750,26 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_elts = self.visit(node.elts, **kwargs)
         new_type = ts.TupleType(types=[element.type for element in new_elts])
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
+
+    def visit_TupleComprehension(
+        self, node: foast.TupleComprehension, **kwargs: Any
+    ) -> foast.TupleComprehension:
+        symtable: collections.ChainMap = kwargs["symtable"]  # todo annotation
+        iterable = self.visit(node.iterable, **kwargs)
+        target = self.visit(node.target, **kwargs)
+        assert isinstance(iterable.type, ts.VarArgType)
+        target.type = iterable.type.element_type
+        element_expr = self.visit(
+            node.element_expr,
+            **{**kwargs, "symtable": symtable.new_child({node.target.id: target})},
+        )
+        return foast.TupleComprehension(
+            element_expr=element_expr,
+            target=target,
+            iterable=iterable,
+            location=node.location,
+            type=ts.VarArgType(element_type=element_expr.type),
+        )
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)

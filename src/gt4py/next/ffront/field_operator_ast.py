@@ -113,6 +113,18 @@ class TupleExpr(Expr):
     elts: list[Expr]
 
 
+# TODO: give a good error for tuple(... for el in iter if ...) so that users understand that and why we don't support conditionals
+# TODO: should this have SymbolTableTrait since target declares a new symbol. Write test that has two comprehensions using the same target name.
+class TupleComprehension(Expr):
+    """
+    tuple(element_expr for target in iterable)
+    """
+
+    element_expr: Expr
+    target: DataSymbol  # TODO: how about `tuple(el1+el2 for el1, el2 in var_arg)`?
+    iterable: Expr
+
+
 class UnaryOp(Expr):
     op: dialect_ast_enums.UnaryOperator
     operand: Expr

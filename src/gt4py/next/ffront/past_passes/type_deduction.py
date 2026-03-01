@@ -248,7 +248,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 operator_return_type = type_info.return_type(
                     new_func.type, with_args=arg_types, with_kwargs=kwarg_types
                 )
-                if operator_return_type != new_kwargs["out"].type:
+                if not type_info.is_compatible_type(operator_return_type, new_kwargs["out"].type):
                     raise ValueError(
                         "Expected keyword argument 'out' to be of "
                         f"type '{operator_return_type}', got "

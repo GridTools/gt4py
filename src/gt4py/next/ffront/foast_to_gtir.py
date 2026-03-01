@@ -257,6 +257,15 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> itir.Expr:
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
 
+    def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> itir.Expr:
+        return im.call(
+            im.call("map_tuple")(
+                im.lambda_(self.visit(node.target, **kwargs))(
+                    self.visit(node.element_expr, **kwargs)
+                )
+            )
+        )(self.visit(node.iterable, **kwargs))
+
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         dtype = type_info.extract_dtype(node.type)

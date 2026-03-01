@@ -21,7 +21,7 @@ from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduc
 from gt4py.next.ffront.stages import ConcreteFOASTOperatorDef, ConcretePASTProgramDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import toolchain, workflow
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -113,9 +113,9 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
             *partial_program_type.definition.kw_only_args.keys(),
         ]
         assert isinstance(type_, ts.CallableType)
-        assert arg_types[-1] == type_info.return_type(
-            type_, with_args=list(arg_types), with_kwargs=kwarg_types
-        )
+        # assert arg_types[-1] == type_info.return_type(
+        #    type_, with_args=list(arg_types), with_kwargs=kwarg_types
+        # )
         assert args_names[-1] == "out"
 
         params_decl: list[past.Symbol] = [

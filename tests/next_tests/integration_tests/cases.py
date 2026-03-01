@@ -603,6 +603,15 @@ def _allocate_from_type(
                     for t in types
                 )
             )
+        case ts.VarArgType(element_type=element_type):
+            return tuple(
+                (
+                    _allocate_from_type(
+                        case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
+                    )
+                    for t in [element_type] * 3  # TODO: revisit
+                )
+            )
         case ts.NamedCollectionType(types=types) as named_collection_type_spec:
             container_constructor = (
                 named_collections.make_named_collection_constructor_from_type_spec(
@@ -648,6 +657,8 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
             return sum([get_param_size(t, sizes=sizes) for t in types])
         case ts.NamedCollectionType(types=types):
             return sum([get_param_size(t, sizes=sizes) for t in types])
+        case ts.VarArgType(element_type=element_type):
+            return get_param_size(ts.TupleType(types=[element_type] * 3), sizes)  # TODO: revisit
         case _:
             raise TypeError(f"Can not get size for parameter of type '{param_type}'.")
 
