@@ -799,6 +799,7 @@ class IRMaker(ast.NodeVisitor):
         self.domain = domain or nodes.Domain.LatLonGrid()
         self.literal_int_precision = options.literal_int_precision
         self.literal_float_precision = options.literal_float_precision
+        self.force_annotated_temporaries = options.force_annotated_temporaries
         self.temp_decls = temp_decls or {}
         self.parsing_context = None
         self.iteration_order = None
@@ -1703,6 +1704,11 @@ class IRMaker(ast.NodeVisitor):
                     if data_index is not None and data_index:
                         raise GTScriptSyntaxError(
                             message="Temporaries with data dimensions need to be declared explicitly.",
+                            loc=nodes.Location.from_ast_node(t, scope=self.stencil_name),
+                        )
+                    if self.force_annotated_temporaries and target_annotation is None:
+                        raise GTScriptSyntaxError(
+                            message=f"Missing type hint for '{name}' in stencil '{self.stencil_name}'.",
                             loc=nodes.Location.from_ast_node(t, scope=self.stencil_name),
                         )
                     dtype = nodes.DataType.AUTO
