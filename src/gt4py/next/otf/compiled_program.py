@@ -28,7 +28,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.otf import arguments, stages
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
 
@@ -605,6 +605,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     def compile(
         self,
         offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
+        static_domains: dict[common.Dimension, tuple[int, int]] | None = None,
         **static_args: list[ScalarOrTupleOfScalars],
     ) -> None:
         """
@@ -619,17 +620,55 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
+
+        def _build_field_domain_descriptors(
+            program_type: ts_ffront.ProgramType,
+            static_domains: dict[common.Dimension, tuple[int, int]],
+        ) -> dict[str, arguments.FieldDomainDescriptor]:
+            field_domain_descriptors: dict[str, arguments.FieldDomainDescriptor] = {}
+            assert program_type.definition.pos_only_args == []
+            param_types = (
+                program_type.definition.pos_or_kw_args | program_type.definition.kw_only_args
+            )
+            for arg_name, arg_type_ in param_types.items():
+                for el_type_, path in type_info.primitive_constituents(
+                    arg_type_, with_path_arg=True
+                ):
+                    if isinstance(el_type_, ts.FieldType):
+                        path_as_expr = "".join(map(lambda idx: f"[{idx}]", path))
+                        if missing_dims := [
+                            dim for dim in el_type_.dims if dim not in static_domains
+                        ]:
+                            raise ValueError(
+                                f"Missing domain specification for dimension(s) {missing_dims} for {arg_name}{path_as_expr}. "
+                                f"Field has dimensions {list(el_type_.dims)}, but static_domains only contains {list(static_domains.keys())}."
+                            )
+                        domain_ranges = {dim: static_domains[dim] for dim in el_type_.dims}
+                        field_domain_descriptors[f"{arg_name}{path_as_expr}"] = (
+                            arguments.FieldDomainDescriptor(common.domain(domain_ranges))
+                        )
+
+            return field_domain_descriptors
+
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
+                argument_descriptor_dict: dict[
+                    type[arguments.ArgStaticDescriptor],
+                    dict[str, arguments.ArgStaticDescriptor],
+                ] = {
+                    arguments.StaticArg: dict(
+                        zip(
+                            static_args.keys(),
+                            [arguments.StaticArg(value=v) for v in static_values],
+                            strict=True,
+                        )
+                    ),
+                }
+                if static_domains:
+                    argument_descriptor_dict[arguments.FieldDomainDescriptor] = (
+                        _build_field_domain_descriptors(self.program_type, static_domains)  # type: ignore[assignment]
+                    )
                 self._compile_variant(
-                    argument_descriptors={
-                        arguments.StaticArg: dict(
-                            zip(
-                                static_args.keys(),
-                                [arguments.StaticArg(value=v) for v in static_values],
-                                strict=True,
-                            )
-                        ),
-                    },
+                    argument_descriptor_dict,
                     offset_provider=offset_provider,
                 )

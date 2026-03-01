@@ -35,7 +35,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     skip_value_mesh,
 )
 
-from gt4py.next.otf import arguments
 
 _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
@@ -62,6 +61,7 @@ def compile_testee(request, cartesian_case):
         testee_op(a, b, out=out)
 
     wrap_in_program = request.param
+
     if wrap_in_program:
         return testee
     else:
@@ -944,7 +944,8 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
 
 
-def test_compile_variants_decorator_static_domains(cartesian_case):
+@pytest.mark.parametrize("precompile", [True, False], ids=["precompile", "run"])
+def test_compile_variants_decorator_static_domains(cartesian_case, precompile):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
@@ -970,24 +971,32 @@ def test_compile_variants_decorator_static_domains(cartesian_case):
     def testee(inp: tuple[cases.IField, cases.IField, float], out: NamedTupleNamedCollection):
         identity_like(inp, out=out)
 
-    inp = cases.allocate(cartesian_case, testee, "inp")()
-    out = cases.allocate(cartesian_case, testee, "out")()
+    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+        inp = cases.allocate(cartesian_case, testee, "inp")()
+        out = cases.allocate(cartesian_case, testee, "out")()
+        if precompile:
+            testee.compile(
+                offset_provider=cartesian_case.offset_provider,
+                static_domains={
+                    dim: (0, size) for dim, size in cartesian_case.default_sizes.items()
+                },
+            )
+        else:
+            testee(inp, out, offset_provider={})
+            assert np.allclose(inp[0].ndarray, out[0].ndarray)
+            assert np.allclose(inp[1].ndarray, out[1].ndarray)
 
-    testee(inp, out, offset_provider={})
-    assert np.allclose(inp[0].ndarray, out[0].ndarray)
-    assert np.allclose(inp[1].ndarray, out[1].ndarray)
-
-    assert testee._compiled_programs.argument_descriptor_mapping[
-        arguments.FieldDomainDescriptor
-    ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
-    assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
-        "inp": (
-            arguments.FieldDomainDescriptor(inp[0].domain),
-            arguments.FieldDomainDescriptor(inp[1].domain),
-            None,
-        ),
-        "out": (
-            arguments.FieldDomainDescriptor(out[0].domain),
-            arguments.FieldDomainDescriptor(out[1].domain),
-        ),
-    }
+        assert testee._compiled_programs.argument_descriptor_mapping[
+            arguments.FieldDomainDescriptor
+        ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
+        assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
+            "inp": (
+                arguments.FieldDomainDescriptor(inp[0].domain),
+                arguments.FieldDomainDescriptor(inp[1].domain),
+                None,
+            ),
+            "out": (
+                arguments.FieldDomainDescriptor(out[0].domain),
+                arguments.FieldDomainDescriptor(out[1].domain),
+            ),
+        }
