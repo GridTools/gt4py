@@ -32,6 +32,11 @@ docs = [
   'sphinx-rtd-theme>=3.0.1',
   'sphinx-toolbox>=3.8.1'
 ]
+external_typing = [
+  {include-group = "typing"},
+  'types-six',
+  'pytest-mypy-plugins'
+]
 frameworks = [
   # 3rd party frameworks with some interoperability with gt4py
   'atlas4py>=0.41'
@@ -187,7 +192,7 @@ source_pkgs = ['gt4py']
 [tool.mypy]
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
-exclude = ['^setup\.py$', 'build/.*$', 'ci/*.$', 'docs/.*$', 'tests/.*$']
+exclude = ['^setup\.py$', 'build/.*$', 'ci/*.$', 'docs/.*$', '^tests/.*$']
 ignore_missing_imports = true
 implicit_optional = false
 implicit_reexport = false
@@ -256,10 +261,21 @@ ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
 
 [[tool.mypy.overrides]]
+# mypy can not see through runtime logic in "fbuiltins"
+disable_error_code = ["attr-defined"]
+module = 'gt4py.next'
+
+[[tool.mypy.overrides]]
 ignore_missing_imports = true
 implicit_reexport = true
 # factory-boy is broken, see https://github.com/FactoryBoy/factory_boy/pull/1114
 module = "factory.*"
+
+[[tool.mypy.overrides]]
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
+ignore_errors = false
+module = "typing_tests.test_next_exports"
 
 # -- pytest --
 [tool.pytest]
