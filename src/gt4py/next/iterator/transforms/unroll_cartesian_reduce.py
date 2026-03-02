@@ -58,30 +58,6 @@ class UnrollCartesianReduce(eve.NodeTranslator):
     def _debug_enabled() -> bool:
         return bool(os.environ.get("GT4PY_DEBUG_UNROLL_CARTESIAN"))
 
-    @staticmethod
-    def _domain_from_reduced_argument(
-        reduced_arg: itir.Expr, axis: common.Dimension
-    ) -> itir.Expr | None:
-        print(f"[GT4PY_DEBUG_UNROLL_CARTESIAN] Attempting to extract domain from reduced argument: {reduced_arg}", file=sys.stderr)
-        if not isinstance(reduced_arg, itir.FunCall) or not cpm.is_applied_as_fieldop(reduced_arg):
-            return None
-        if len(reduced_arg.fun.args) < 2:
-            return None
-
-        source_domain_expr = reduced_arg.fun.args[1]
-        try:
-            source_domain = domain_utils.SymbolicDomain.from_expr(source_domain_expr)
-        except Exception:
-            return None
-
-        reduced_ranges = {
-            dim: range_ for dim, range_ in source_domain.ranges.items() if dim != axis
-        }
-        return domain_utils.SymbolicDomain(
-            grid_type=source_domain.grid_type,
-            ranges=reduced_ranges,
-        ).as_expr()
-
     def visit_Program(self, node: itir.Program, **kwargs):
         return self.generic_visit(node, **kwargs)
 
@@ -129,7 +105,6 @@ class UnrollCartesianReduce(eve.NodeTranslator):
 
             domain_expr: itir.Expr | None = None
             if reduce_args and isinstance(reduce_args[0], itir.Expr):
-                # domain_expr = self._domain_from_reduced_argument(reduce_args[0], axis)
                 # print(f"[GT4PY_DEBUG_UNROLL_CARTESIAN] Extracted domain_expr: {domain_expr}", file=sys.stderr)
                 field_type = getattr(reduce_args[0], "type", None)
                 if domain_expr is None and isinstance(field_type, ts.FieldType):

@@ -1,0 +1,14 @@
+NoTagError: `git describe --long --dirty --always --tags '--match=v*'` could not find a tag
+NoTagError: `git describe --long --dirty --always --tags '--match=v*'` could not find a tag
+/home/raphael/Documents/Studium/Msc_thesis/gt4py-cop/src/gt4py/next/program_processors/runners/dace/transformations/split_access_nodes.py:364: UserWarning: 'SplitAccessNode': found producers map_7_fieldop_0[i_IDim_gtx_horizontal=0:13, i_JDim_gtx_horizontal=0:11, i_Kolor_gtx_horizontal=1]:OUT_gtir_tmp_24  -(gtir_tmp_24[0:13, 0:11, 0])->  gtir_tmp_24:None that generates data but that is never read.
+  warnings.warn(
+/home/raphael/Documents/Studium/Msc_thesis/gt4py-cop/src/gt4py/next/program_processors/runners/dace/transformations/split_access_nodes.py:364: UserWarning: 'SplitAccessNode': found producers map_27_fieldop_1[i_IDim_gtx_horizontal=0:13, i_JDim_gtx_horizontal=0:11, i_Kolor_gtx_horizontal=3:5]:OUT_gtir_tmp_88  -(gtir_tmp_88[0:13, 0:11, 3:5])->  gtir_tmp_88:None that generates data but that is never read.
+  warnings.warn(
+/home/raphael/Documents/Studium/Msc_thesis/gt4py-cop/src/gt4py/next/program_processors/runners/dace/transformations/split_memlet.py:97: UserWarning: Found multiple edges between 'gtir_tmp_51' and 'gtir_tmp_69'
+  warnings.warn(
+/home/raphael/Documents/Studium/Msc_thesis/gt4py-cop/src/gt4py/next/program_processors/runners/dace/transformations/split_memlet.py:97: UserWarning: Found multiple edges between 'gtir_tmp_51' and 'gtir_tmp_86'
+  warnings.warn(
+/home/raphael/Documents/Studium/Msc_thesis/gt4py-cop/src/gt4py/next/program_processors/runners/dace/transformations/split_memlet.py:97: UserWarning: Found multiple edges between 'gtir_tmp_69' and 'gtir_tmp_86'
+  warnings.warn(
+/home/raphael/Documents/Studium/Msc_thesis/gt4py-cop/src/gt4py/next/program_processors/runners/dace/transformations/split_access_nodes.py:364: UserWarning: 'SplitAccessNode': found producers map_19_fieldop_0[i_IDim_gtx_horizontal=1:13, i_JDim_gtx_horizontal=1:11, i_Kolor_gtx_horizontal=1]:OUT_gtir_tmp_57  -(gtir_tmp_69[1:13, 1:11, 0])->  gtir_tmp_69:None, map_22_fieldop_0[i_IDim_gtx_horizontal=0, i_JDim_gtx_horizontal=0, i_Kolor_gtx_horizontal=1]:OUT_gtir_tmp_65  -(gtir_tmp_69[0, 0, 0])->  gtir_tmp_69:None that generates data but that is never read.
+  warnings.warn(

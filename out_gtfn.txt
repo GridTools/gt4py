@@ -1,0 +1,298 @@
+Edges East: [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1.
+ 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1.
+ 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1.
+ 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1.
+ 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1.
+ 1. 1. 1. 1. 1. 1. 1. 1. 1. 1.] 
+2D version:
+ [[1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]]
+pp:  [[  0.   1.   2.   3.   4.   5.   6.   7.   8.   9.  10.]
+ [ 11.  12.  13.  14.  15.  16.  17.  18.  19.  20.  21.]
+ [ 22.  23.  24.  25.  26.  27.  28.  29.  30.  31.  32.]
+ [ 33.  34.  35.  36.  37.  38.  39.  40.  41.  42.  43.]
+ [ 44.  45.  46.  47.  48.  49.  50.  51.  52.  53.  54.]
+ [ 55.  56.  57.  58.  59.  60.  61.  62.  63.  64.  65.]
+ [ 66.  67.  68.  69.  70.  71.  72.  73.  74.  75.  76.]
+ [ 77.  78.  79.  80.  81.  82.  83.  84.  85.  86.  87.]
+ [ 88.  89.  90.  91.  92.  93.  94.  95.  96.  97.  98.]
+ [ 99. 100. 101. 102. 103. 104. 105. 106. 107. 108. 109.]
+ [110. 111. 112. 113. 114. 115. 116. 117. 118. 119. 120.]
+ [121. 122. 123. 124. 125. 126. 127. 128. 129. 130. 131.]
+ [132. 133. 134. 135. 136. 137. 138. 139. 140. 141. 142.]]
+S_M:  [[1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]]
+Output before computation:  ⟨Domain(IDim[horizontal]=(0:13), JDim[horizontal]=(0:11), Kolor[horizontal]=(0:3)) → DType(scalar_type=<class 'numpy.float64'>, tensor_shape=())⟩
+Output data East:
+ [[0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]]
+Output data NE:
+ [[0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]]
+Output data SE:
+ [[0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]]
+diff_i:  11.0
+diff_j:  1.0
+
+============================================================
+=== FINAL GTIR HANDED TO GTFN BACKEND ===
+============================================================
+pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max_kolor) {
+  compute_zavgS_cartesian_0 = λ(pp, S_M, domain_max_j) → 
+    (λ(zavgᐞ0) → (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(S_M, zavgᐞ0))(
+      (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
+        0.5, concat_where(
+               JDimₕ == domain_max_j - 1,
+               pp,
+               (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp))
+             )
+      )
+    );
+  compute_zavgS_cartesian_1 = λ(pp, S_M, domain_max_i) → 
+    (λ(zavgᐞ0) → (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(S_M, zavgᐞ0))(
+      (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
+        0.5, concat_where(
+               IDimₕ == domain_max_i - 1,
+               pp,
+               (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp))
+             )
+      )
+    );
+  compute_zavgS_cartesian_2 = λ(pp, S_M, domain_max_i, domain_max_j) → 
+    (λ(zavgᐞ0) → (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(S_M, zavgᐞ0))(
+      (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
+        0.5,
+        concat_where(
+          IDimₕ == domain_max_i - 1,
+          concat_where(
+            JDimₕ == domain_max_j - 1,
+            (⇑(λ(__arg0, __arg1) → ·__arg0 - ·__arg1))(pp, pp),
+            (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp))
+          ),
+          concat_where(JDimₕ == domain_max_j - 1,
+                       (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp),
+                       (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                         (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp), (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp)
+                       ))
+        )
+      )
+    );
+  on_edges = λ(f0, f1, f2) → concat_where(Kolorₕ == 0, f0, concat_where(Kolorₕ == 1, f1, f2));
+  compute_zavgS_cartesian = λ(pp, S_M, domain_max_i, domain_max_j) → 
+    on_edges(compute_zavgS_cartesian_0(pp, S_M, domain_max_j),
+             compute_zavgS_cartesian_1(pp, S_M, domain_max_i),
+             compute_zavgS_cartesian_2(pp, S_M, domain_max_i, domain_max_j));
+  compute_pnabla_cartesian = λ(pp, S_M, sign, vol, domain_max_i, domain_max_j) → 
+    (λ(zavgSᐞ0) → 
+       (λ(pnabla_Mᐞ0) → 
+          (λ(pnabla_Mᐞ1) → 
+             (⇑(λ(__arg0, __arg1) → ·__arg0 / ·__arg1))((⇑cartesian_reduce(plus, 0, Kolorₕ))(pnabla_Mᐞ1), vol))(
+            (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(pnabla_Mᐞ0, sign)
+          ))(
+         concat_where(
+           Kolorₕ == 0,
+           concat_where(
+             JDimₕ == 0,
+             zavgSᐞ0,
+             (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(zavgSᐞ0, (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0))
+           ),
+           concat_where(
+             Kolorₕ == 1,
+             concat_where(
+               IDimₕ == 0,
+               zavgSᐞ0,
+               (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(zavgSᐞ0, (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0))
+             ),
+             concat_where(
+               IDimₕ == 0,
+               concat_where(JDimₕ == 0,
+                            (⇑(λ(__arg0, __arg1) → ·__arg0 - ·__arg1))(zavgSᐞ0, zavgSᐞ0),
+                            (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)),
+               concat_where(
+                 JDimₕ == 0,
+                 (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0),
+                 (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                   (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0), (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)
+                 )
+               )
+             )
+           )
+         )
+       ))(compute_zavgS_cartesian(pp, S_M, domain_max_i, domain_max_j));
+  out @ c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[ ⟩ ← compute_pnabla_cartesian(pp, S_M, sign, vol, 13, 11);
+}
+============================================================
+
+
+============================================================
+=== GTIR AFTER UNROLLING CARTESIAN REDUCE ===
+============================================================
+pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max_kolor) {
+  out @ c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[ ⟩
+       ← (λ(zavgSᐞ0) → 
+            (⇑(λ(__arg0_, __arg1_) → ·__arg0_ / ·__arg1_))(
+              (λ(__cartred_arg0) → 
+                 (⇑(λ(__cartred_it0) → 0 + ·⟪_OffKolorₒ, 0ₒ⟫(__cartred_it0) + ·⟪_OffKolorₒ, 1ₒ⟫(__cartred_it0)
+                                       + ·⟪_OffKolorₒ, 2ₒ⟫(__cartred_it0)))(__cartred_arg0))(
+                (⇑(λ(__arg0__, __arg1__) → ·__arg0__ × ·__arg1__))(
+                  (λ(__cwcda_field_a, __cwcda_field_b) → 
+                     concat_where(c⟨ Kolorₕ: [-∞, 0[ ⟩,
+                                  __cwcda_field_a,
+                                  concat_where(c⟨ Kolorₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                    (λ(__cwcda_field_a, __cwcda_field_b) → 
+                       concat_where(c⟨ Kolorₕ: [-∞, 1[ ⟩,
+                                    __cwcda_field_a,
+                                    concat_where(c⟨ Kolorₕ: [1 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                      (λ(__cwcda_field_a, __cwcda_field_b) → 
+                         concat_where(c⟨ IDimₕ: [-∞, 0[ ⟩,
+                                      __cwcda_field_a,
+                                      concat_where(c⟨ IDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                        (λ(__cwcda_field_a, __cwcda_field_b) → 
+                           concat_where(c⟨ JDimₕ: [-∞, 0[ ⟩,
+                                        __cwcda_field_a,
+                                        concat_where(c⟨ JDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                          (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                            (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0), (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)
+                          ), (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)
+                        ), (λ(__cwcda_field_a, __cwcda_field_b) → 
+                              concat_where(c⟨ JDimₕ: [-∞, 0[ ⟩,
+                                           __cwcda_field_a,
+                                           concat_where(c⟨ JDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                             (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0),
+                             (⇑(λ(__arg0, __arg1) → ·__arg0 - ·__arg1))(zavgSᐞ0, zavgSᐞ0)
+                           )
+                      ),
+                      (λ(__cwcda_field_a, __cwcda_field_b) → 
+                         concat_where(c⟨ IDimₕ: [-∞, 0[ ⟩,
+                                      __cwcda_field_a,
+                                      concat_where(c⟨ IDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                        (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(zavgSᐞ0, (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)),
+                        zavgSᐞ0
+                      )
+                    ),
+                    (λ(__cwcda_field_a, __cwcda_field_b) → 
+                       concat_where(c⟨ JDimₕ: [-∞, 0[ ⟩,
+                                    __cwcda_field_a,
+                                    concat_where(c⟨ JDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                      (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(zavgSᐞ0, (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)),
+                      zavgSᐞ0
+                    )
+                  ), sign
+                )
+              ), vol
+            ))((λ(__cwcda_field_a, __cwcda_field_b) → 
+                  concat_where(c⟨ Kolorₕ: [-∞, 0[ ⟩,
+                               __cwcda_field_a,
+                               concat_where(c⟨ Kolorₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                 (λ(__cwcda_field_a, __cwcda_field_b) → 
+                    concat_where(c⟨ Kolorₕ: [-∞, 1[ ⟩,
+                                 __cwcda_field_a,
+                                 concat_where(c⟨ Kolorₕ: [1 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                   (⇑(λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_))(
+                     S_M,
+                     (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
+                       0.5,
+                       (λ(__cwcda_field_a, __cwcda_field_b) → 
+                          concat_where(c⟨ IDimₕ: [-∞, 12[ ⟩,
+                                       __cwcda_field_a,
+                                       concat_where(c⟨ IDimₕ: [12 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                         (λ(__cwcda_field_a, __cwcda_field_b) → 
+                            concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩,
+                                         __cwcda_field_a,
+                                         concat_where(c⟨ JDimₕ: [10 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                           (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                             (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp), (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp)
+                           ), (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp)
+                         ), (λ(__cwcda_field_a, __cwcda_field_b) → 
+                               concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩,
+                                            __cwcda_field_a,
+                                            concat_where(c⟨ JDimₕ: [10 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                              (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp)),
+                              (⇑(λ(__arg0, __arg1) → ·__arg0 - ·__arg1))(pp, pp)
+                            )
+                       )
+                     )
+                   ),
+                   (⇑(λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_))(
+                     S_M,
+                     (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
+                       0.5, (λ(__cwcda_field_a, __cwcda_field_b) → 
+                               concat_where(c⟨ IDimₕ: [-∞, 12[ ⟩,
+                                            __cwcda_field_a,
+                                            concat_where(c⟨ IDimₕ: [12 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                              (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp)), pp
+                            )
+                     )
+                   )
+                 ),
+                 (⇑(λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_))(
+                   S_M,
+                   (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
+                     0.5, (λ(__cwcda_field_a, __cwcda_field_b) → 
+                             concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩,
+                                          __cwcda_field_a,
+                                          concat_where(c⟨ JDimₕ: [10 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                            (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp)), pp
+                          )
+                   )
+                 )
+               ));
+}
+============================================================
+

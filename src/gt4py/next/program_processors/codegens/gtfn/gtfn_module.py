@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.otf import definitions, languages, stages, workflow
+from gt4py.next.otf import arguments, definitions, languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
@@ -157,12 +157,14 @@ class GTFNTranslationStep(
         self,
         program: itir.Program,
         offset_provider: common.OffsetProvider | common.OffsetProviderType,
+        cartesian_reduce_axis_ranges: Optional[dict[common.Dimension, tuple[int, int]]] = None,
     ) -> itir.Program:
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
             extract_temporaries=True,
             offset_provider=offset_provider,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
+            cartesian_reduce_axis_ranges=cartesian_reduce_axis_ranges,
         )
 
         new_program = apply_common_transforms(
@@ -179,14 +181,35 @@ class GTFNTranslationStep(
 
         return new_program
 
+    @staticmethod
+    def _resolve_cartesian_reduce_axis_ranges(
+        argument_descriptor_contexts: arguments.ArgStaticDescriptorsContextsByType,
+    ) -> Optional[dict[common.Dimension, tuple[int, int]]]:
+        static_arg_descriptors = argument_descriptor_contexts.get(arguments.StaticArg)
+        if static_arg_descriptors is None:
+            return None
+
+        domain_max_kolor = static_arg_descriptors.get("domain_max_kolor")
+        if not isinstance(domain_max_kolor, arguments.StaticArg):
+            return None
+        if not isinstance(domain_max_kolor.value, (int, np.integer)):
+            return None
+
+        return {common.Dimension("Kolor"): (0, int(domain_max_kolor.value) + 1)}
+
     def generate_stencil_source(
         self,
         program: itir.Program,
         offset_provider: common.OffsetProvider | common.OffsetProviderType,
         column_axis: Optional[common.Dimension],
+        cartesian_reduce_axis_ranges: Optional[dict[common.Dimension, tuple[int, int]]] = None,
     ) -> str:
         if self.enable_itir_transforms:
-            new_program = self._preprocess_program(program, offset_provider)
+            new_program = self._preprocess_program(
+                program,
+                offset_provider,
+                cartesian_reduce_axis_ranges=cartesian_reduce_axis_ranges,
+            )
         else:
             assert isinstance(program, itir.Program)
             new_program = program
@@ -235,10 +258,14 @@ class GTFNTranslationStep(
             f"{', '.join(connectivity_args_expr)})({', '.join(args_expr)});"
         )
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
+        cartesian_reduce_axis_ranges = self._resolve_cartesian_reduce_axis_ranges(
+            inp.args.argument_descriptor_contexts
+        )
         stencil_src = self.generate_stencil_source(
             program,
             inp.args.offset_provider,
             inp.args.column_axis,
+            cartesian_reduce_axis_ranges=cartesian_reduce_axis_ranges,
         )
         source_code = interface.format_source(
             self._language_settings(),

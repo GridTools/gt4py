@@ -4,7 +4,7 @@ import gt4py.next as gtx
 from gt4py.next.experimental import concat_where
 # from gt4py.next import where as concat_where
 from gt4py.next import neighbor_sum
-from program_setup_utils import setup_program
+from gt4py.next.program_processors.program_setup_utils import setup_program
 
 # Define Dimensions
 IDim = gtx.Dimension("IDim")
@@ -260,11 +260,11 @@ pnabla_out = gtx.as_field([IDim, JDim], np.zeros((max_i, max_j)))
 # pnabla_cartesian_dace = compute_pnabla_cartesian.with_backend(run_dace_cpu)
 pnabla_cartesian_dace = setup_program(
     pnabla_cartesian,
-    backend=gtfn_cpu,
+    backend=run_dace_cpu,
     horizontal_sizes={
         "domain_max_i": gtx.int32(max_i),
         "domain_max_j": gtx.int32(max_j),
-        "domain_max_kolor": gtx.int32(3),
+        "domain_max_kolor": gtx.int32(2),
     },
 )
 
@@ -292,5 +292,5 @@ print("Output of pnabla_cartesian:\n", pnabla_out.asnumpy()[:, :])
 # - write Hannes, gtfn /ohne concat_where
 # - look at unit test unroll_reduce what skip value does and 1d or 2d 
 # - see where max/min get introduced and look at test
-# - test direct Color dimension addressing in icon4py (see e.g. nabla4)
+# - test direct Color dimension addressing in icon4py (see e.g. nabla4) do Kolor[1] or similar
 

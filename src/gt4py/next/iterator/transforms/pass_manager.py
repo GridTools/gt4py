@@ -162,14 +162,15 @@ def apply_common_transforms(
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    cartesian_reduce_axis_ranges: Optional[dict[common.Dimension, tuple[int, int]]] = None,
 ) -> itir.Program:
     assert isinstance(ir, itir.Program)
 
     offset_provider_type = common.offset_provider_to_type(offset_provider)
-    print_ir = False
+    print_ir = True
     if print_ir:
         print("\n" + "="*60)
-        print("=== FINAL GTIR HANDED TO DACE BACKEND ===")
+        print("=== FINAL GTIR HANDED TO GTFN BACKEND ===")
         print("="*60)
         print(ir)
         print("="*60 + "\n")
@@ -194,8 +195,15 @@ def apply_common_transforms(
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
-    ir = UnrollCartesianReduce.apply(ir, axis_ranges={common.Dimension("Kolor"): (0, 3)})
-
+    if cartesian_reduce_axis_ranges is None:
+        cartesian_reduce_axis_ranges = {common.Dimension("Kolor"): (0, 3)}
+    ir = UnrollCartesianReduce.apply(ir, axis_ranges=cartesian_reduce_axis_ranges)
+    if print_ir:
+        print("\n" + "="*60)
+        print("=== GTIR AFTER UNROLLING CARTESIAN REDUCE ===")
+        print("="*60)
+        print(ir)
+        print("="*60 + "\n")
     ir = infer_domain.infer_program(
         ir,
         offset_provider=offset_provider,
@@ -399,23 +407,23 @@ def apply_fieldview_transforms(
         print("="*60)
         print(ir)
         print("="*60 + "\n")
-    # print(f"Unrolling reduce: {unroll_reduce}")
-    # if unroll_reduce:
-    #     ir = _apply_unroll_reduce_pipeline(
-    #         ir,
-    #         offset_provider_type=offset_provider_type,
-    #         uids=uids,
-    #         use_offset_literal_index=False,  # Fieldview does not support non-literal offsets
-    #     )
-    #     # ir = MergeLet().visit(ir)
-    #     # ir = InlineLambdas.apply(
-    #     #     ir,
-    #     #     opcount_preserving=True,
-    #     #     force_inline_lambda_args=True,
-    #     # )
-    #     # ir = NormalizeShifts().visit(ir)
+    print(f"Unrolling reduce: {unroll_reduce}")
+    if unroll_reduce:
+        ir = _apply_unroll_reduce_pipeline(
+            ir,
+            offset_provider_type=offset_provider_type,
+            uids=uids,
+            use_offset_literal_index=False,  # Fieldview does not support non-literal offsets
+        )
+        # ir = MergeLet().visit(ir)
+        # ir = InlineLambdas.apply(
+        #     ir,
+        #     opcount_preserving=True,
+        #     force_inline_lambda_args=True,
+        # )
+        # ir = NormalizeShifts().visit(ir)
 
-    # ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+    ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
 
     
     if print_ir:
