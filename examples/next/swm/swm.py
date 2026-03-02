@@ -240,7 +240,7 @@ def main():
             prog = timestep.with_backend(backend).compile(offset_provider={})
         gtx.wait_for_compilation()
     else:
-        prog = timestep
+        prog = timestep_program if USE_PROGRAM else timestep
 
     t0_start = perf_counter()
 
