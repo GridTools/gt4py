@@ -122,150 +122,126 @@ def _interior_to_halo(xp, interior):
     return xp.concat([top_row, middle_rows, bottom_row], axis=0)  # (M+2, N+2)
 
 
-def apply_periodic_halo(xp, interior, x):
-    """Apply periodic boundary conditions by filling the halo from the interior.
+# ---------------------------------------------------------------------------
+# Stencil building blocks – mirror the @gtx.field_operator functions in swm.py.
+#
+# Each function reduces shape by 1 only in its operating dimension, preserving
+# the full extent in the other dimension.  No M/N parameters are needed:
+#
+#   avg_x(f)   / delta_x(dx, f)   : (..., Mx, My) → (..., Mx-1, My)
+#   avg_y(f)   / delta_y(dy, f)   : (..., Mx, My) → (..., Mx, My-1)
+#
+# Both "forward" (avg_x) and "staggered/backward" (avg_x_staggered) averages
+# produce the same array 0.5*(f[1:]+f[:-1]).  The semantic difference is which
+# output slice maps to the interior — callers select the appropriate rows/cols:
+#   forward  in x → interior at rows [1:M+1, ...]   (index i maps to position i)
+#   backward in x → interior at rows [0:M,   ...]   (index i maps to position i+1)
+# ---------------------------------------------------------------------------
 
-    The array x has shape (M+2, N+2) where the interior is x[1:-1, 1:-1].
-    The halos are filled by wrapping around the interior periodically.
-    """
-    return _interior_to_halo(xp, x[1:-1, 1:-1])
+
+def avg_x(f):
+    """avg_x(f)[i,j] = 0.5*(f[i+1,j] + f[i,j])  — reduces x by 1"""
+    return 0.5 * (f[1:, :] + f[:-1, :])
+
+
+def avg_y(f):
+    """avg_y(f)[i,j] = 0.5*(f[i,j+1] + f[i,j])  — reduces y by 1"""
+    return 0.5 * (f[:, 1:] + f[:, :-1])
+
+
+def delta_x(dx, f):
+    """delta_x(f)[i,j] = (1/dx)*(f[i+1,j] - f[i,j])  — reduces x by 1"""
+    return (1.0 / dx) * (f[1:, :] - f[:-1, :])
+
+
+def delta_y(dy, f):
+    """delta_y(f)[i,j] = (1/dy)*(f[i,j+1] - f[i,j])  — reduces y by 1"""
+    return (1.0 / dy) * (f[:, 1:] - f[:, :-1])
 
 
 def timestep(xp, u, v, p, uold, vold, pold, dx, dy, dt_val, alpha_val, M, N):
     """Perform one timestep of the shallow water equations.
 
     All fields have shape (M+2, N+2) with 1-wide symmetric halos.
-    The computation domain is [0:M, 0:N] in the interior (indices [1:-1, 1:-1]).
-    With halo data available, stencil operations can read neighbors without bounds issues.
+    Mirrors the @gtx.field_operator timestep in swm.py via direct composition:
 
-    Following swm_next2_halo2_restructured.py, the stencil operations are:
-      cu = avg_x(p) * u           = 0.5*(p[i+1,j] + p[i,j]) * u[i,j]
-      cv = avg_y(p) * v           = 0.5*(p[i,j+1] + p[i,j]) * v[i,j]
-      z  = (delta_x(v) - delta_y(u)) / avg_x(avg_y(p))
-      h  = p + 0.5*(avg_x_staggered(u*u) + avg_y_staggered(v*v))
+      cu = avg_x(p) * u            # (M+1, N+2)
+      cv = avg_y(p) * v            # (M+2, N+1)
+      z  = (delta_x(v) - delta_y(u)) / avg_x(avg_y(p))   # (M+1, N+1)
+      h  = p + 0.5*(avg_x_staggered(u*u) + avg_y_staggered(v*v))  # (M+1, N+1)
 
       unew = uold + avg_y_staggered(z)*avg_y_staggered(avg_x(cv))*dt - delta_x(h)*dt
       vnew = vold - avg_x_staggered(z)*avg_x_staggered(avg_y(cu))*dt - delta_y(h)*dt
       pnew = pold - delta_x_staggered(cu)*dt - delta_y_staggered(cv)*dt
 
-    Where:
-      avg_x(f)[i,j]          = 0.5*(f[i+1,j] + f[i,j])
-      avg_y(f)[i,j]          = 0.5*(f[i,j+1] + f[i,j])
-      avg_x_staggered(f)[i,j]= 0.5*(f[i-1,j] + f[i,j])
-      avg_y_staggered(f)[i,j]= 0.5*(f[i,j-1] + f[i,j])
-      delta_x(f)[i,j]        = (1/dx)*(f[i+1,j] - f[i,j])
-      delta_y(f)[i,j]        = (1/dy)*(f[i,j+1] - f[i,j])
-      delta_x_staggered(f)[i,j] = (1/dx)*(f[i,j] - f[i-1,j])
-      delta_y_staggered(f)[i,j] = (1/dy)*(f[i,j] - f[i,j-1])
+    Each stencil function reduces shape by 1 only in its operating dimension, so
+    compositions chain directly without any intermediate _interior_to_halo calls.
 
-    Using the halo layout, if interior is [1:M+1, 1:N+1], then for a point i,j
-    in the interior, i+1 and i-1 and j+1 and j-1 are all valid array indices.
+    Slice convention for extracting the (M, N) interior from composed results:
+      forward  avg/delta in x → rows [1:M+1, ...]   (index i means position i)
+      backward avg/delta in x → rows [0:M,   ...]   (index i means position i+1)
+      forward  avg/delta in y → cols [..., 1:N+1]
+      backward avg/delta in y → cols [..., 0:N  ]
     """
-    # Slice aliases for readability (operating on the full (M+2, N+2) array)
-    # Interior points: [1:M+1, 1:N+1]
-    # We compute on interior and use neighbors via shifted slices.
-
-    # -- Step 1: compute intermediate fields cu, cv, z, h --
-
-    # avg_x(p) = 0.5*(p[i+1,j] + p[i,j]) for interior i in [1..M], j in [1..N]
-    # cu = avg_x(p) * u
-    cu_interior = (
-        0.5 * (p[2 : M + 2, 1 : N + 1] + p[1 : M + 1, 1 : N + 1]) * u[1 : M + 1, 1 : N + 1]
-    )
-
-    # avg_y(p) = 0.5*(p[i,j+1] + p[i,j])
-    # cv = avg_y(p) * v
-    cv_interior = (
-        0.5 * (p[1 : M + 1, 2 : N + 2] + p[1 : M + 1, 1 : N + 1]) * v[1 : M + 1, 1 : N + 1]
-    )
-
-    # z = (delta_x(v) - delta_y(u)) / avg_x(avg_y(p))
-    # delta_x(v) = (1/dx)*(v[i+1,j] - v[i,j])
-    # delta_y(u) = (1/dy)*(u[i,j+1] - u[i,j])
-    # avg_x(avg_y(p)) = avg_x(0.5*(p[i,j+1]+p[i,j]))
-    #                  = 0.5*(0.5*(p[i+1,j+1]+p[i+1,j]) + 0.5*(p[i,j+1]+p[i,j]))
-    #                  = 0.25*(p[i,j] + p[i+1,j] + p[i+1,j+1] + p[i,j+1])
-    delta_x_v = (1.0 / dx) * (v[2 : M + 2, 1 : N + 1] - v[1 : M + 1, 1 : N + 1])
-    delta_y_u = (1.0 / dy) * (u[1 : M + 1, 2 : N + 2] - u[1 : M + 1, 1 : N + 1])
-    avg_xy_p = 0.25 * (
-        p[1 : M + 1, 1 : N + 1]
-        + p[2 : M + 2, 1 : N + 1]
-        + p[2 : M + 2, 2 : N + 2]
-        + p[1 : M + 1, 2 : N + 2]
-    )
-    z_interior = (delta_x_v - delta_y_u) / avg_xy_p
-
-    # h = p + 0.5*(avg_x_staggered(u*u) + avg_y_staggered(v*v))
-    # avg_x_staggered(u*u) = 0.5*(u[i-1,j]^2 + u[i,j]^2)
-    # avg_y_staggered(v*v) = 0.5*(v[i,j-1]^2 + v[i,j]^2)
     uu = u * u
     vv = v * v
-    avg_xs_uu = 0.5 * (uu[0:M, 1 : N + 1] + uu[1 : M + 1, 1 : N + 1])
-    avg_ys_vv = 0.5 * (vv[1 : M + 1, 0:N] + vv[1 : M + 1, 1 : N + 1])
-    h_interior = p[1 : M + 1, 1 : N + 1] + 0.5 * (avg_xs_uu + avg_ys_vv)
+    # cu[i,j] = 0.5*(p[i+1,j]+p[i,j]) * u[i,j]  for i=0..M, j=0..N+1  → (M+1, N+2)
+    cu = avg_x(p) * u[:-1, :]
+    # cv[i,j] = 0.5*(p[i,j+1]+p[i,j]) * v[i,j]  for i=0..M+1, j=0..N  → (M+2, N+1)
+    cv = avg_y(p) * v[:, :-1]
 
-    # Embed cu, cv, z, h into (M+2, N+2) arrays with periodic halos
-    cu_full = _interior_to_halo(xp, cu_interior)
-    cv_full = _interior_to_halo(xp, cv_interior)
-    z_full = _interior_to_halo(xp, z_interior)
-    h_full = _interior_to_halo(xp, h_interior)
+    # z_wide at positions i=0..M, j=0..N (interior + 1 halo needed for staggered avgs)
+    # delta_x(v) → (M+1,N+2), slice [:,:N+1] keeps j=0..N
+    # delta_y(u) → (M+2,N+1), slice [:M+1,:] keeps i=0..M
+    # avg_x(avg_y(p)) → (M+1,N+1) exactly
+    z_wide = (delta_x(dx, v)[:, : N + 1] - delta_y(dy, u)[: M + 1, :]) / avg_x(
+        avg_y(p)
+    )  # (M+1, N+1)
 
-    # -- Step 2: compute new u, v, p --
+    # h_wide at positions i=1..M+1, j=1..N+1 (interior + 1 extra for forward delta)
+    #   avg_x_staggered(uu)[i,j] = avg_x(uu)[i-1,j]  → avg_x(uu)[0:M+1, 1:N+2]
+    #   avg_y_staggered(vv)[i,j] = avg_y(vv)[i,j-1]  → avg_y(vv)[1:M+2, 0:N+1]
+    h_wide = p[1 : M + 2, 1 : N + 2] + 0.5 * (
+        avg_x(uu)[0 : M + 1, 1 : N + 2] + avg_y(vv)[1 : M + 2, 0 : N + 1]
+    )  # (M+1, N+1)
 
-    # unew = uold + avg_y_staggered(z)*avg_y_staggered(avg_x(cv))*dt - delta_x(h)*dt
-    # avg_y_staggered(z) = 0.5*(z[i,j-1] + z[i,j])
-    avg_ys_z = 0.5 * (z_full[1 : M + 1, 0:N] + z_full[1 : M + 1, 1 : N + 1])
-    # avg_x(cv) = 0.5*(cv[i+1,j] + cv[i,j]), then avg_y_staggered needs halo
-    avg_x_cv_interior = 0.5 * (cv_full[2 : M + 2, 1 : N + 1] + cv_full[1 : M + 1, 1 : N + 1])
-    avg_x_cv_full = _interior_to_halo(xp, avg_x_cv_interior)
-    avg_ys_avg_x_cv = 0.5 * (avg_x_cv_full[1 : M + 1, 0:N] + avg_x_cv_full[1 : M + 1, 1 : N + 1])
-
-    # delta_x(h) = (1/dx)*(h[i+1,j] - h[i,j])
-    delta_x_h = (1.0 / dx) * (h_full[2 : M + 2, 1 : N + 1] - h_full[1 : M + 1, 1 : N + 1])
-
+    # avg_y_staggered(z)[i,j] = avg_y(z_wide)[i, j-1]  → [1:M+1, 0:N]
+    # avg_y_staggered(avg_x(cv))[i,j] = avg_y(avg_x(cv))[i, j-1]  → [1:M+1, 0:N]
+    # delta_x(h)[i,j] = delta_x(h_wide)[i-1, j-1]  → [0:M, 0:N]
     unew_interior = (
-        uold[1 : M + 1, 1 : N + 1] + avg_ys_z * avg_ys_avg_x_cv * dt_val - delta_x_h * dt_val
+        uold
+        + avg_y(z_wide)[1 : M + 1, 0:N] * avg_y(avg_x(cv))[1 : M + 1, 0:N] * dt_val
+        - delta_x(dx, h_wide)[0:M, 0:N] * dt_val
     )
-
-    # vnew = vold - avg_x_staggered(z)*avg_x_staggered(avg_y(cu))*dt - delta_y(h)*dt
-    avg_xs_z = 0.5 * (z_full[0:M, 1 : N + 1] + z_full[1 : M + 1, 1 : N + 1])
-    # avg_y(cu) = 0.5*(cu[i,j+1] + cu[i,j]), then avg_x_staggered needs halo
-    avg_y_cu_interior = 0.5 * (cu_full[1 : M + 1, 2 : N + 2] + cu_full[1 : M + 1, 1 : N + 1])
-    avg_y_cu_full = _interior_to_halo(xp, avg_y_cu_interior)
-    avg_xs_avg_y_cu = 0.5 * (avg_y_cu_full[0:M, 1 : N + 1] + avg_y_cu_full[1 : M + 1, 1 : N + 1])
-
-    # delta_y(h) = (1/dy)*(h[i,j+1] - h[i,j])
-    delta_y_h = (1.0 / dy) * (h_full[1 : M + 1, 2 : N + 2] - h_full[1 : M + 1, 1 : N + 1])
-
+    # avg_x_staggered(z)[i,j] = avg_x(z_wide)[i-1, j]  → [0:M, 1:N+1]
+    # avg_x_staggered(avg_y(cu))[i,j] = avg_x(avg_y(cu))[i-1, j]  → [0:M, 1:N+1]
+    # delta_y(h)[i,j] = delta_y(h_wide)[i-1, j-1]  → [0:M, 0:N]
     vnew_interior = (
-        vold[1 : M + 1, 1 : N + 1] - avg_xs_z * avg_xs_avg_y_cu * dt_val - delta_y_h * dt_val
+        vold
+        - avg_x(z_wide)[0:M, 1 : N + 1] * avg_x(avg_y(cu))[0:M, 1 : N + 1] * dt_val
+        - delta_y(dy, h_wide)[0:M, 0:N] * dt_val
+    )
+    # delta_x_staggered(cu)[i,j] = delta_x(cu)[i-1, j]  → [0:M, 1:N+1]
+    # delta_y_staggered(cv)[i,j] = delta_y(cv)[i, j-1]  → [1:M+1, 0:N]
+    pnew_interior = (
+        pold - delta_x(dx, cu)[0:M, 1 : N + 1] * dt_val - delta_y(dy, cv)[1 : M + 1, 0:N] * dt_val
     )
 
-    # pnew = pold - delta_x_staggered(cu)*dt - delta_y_staggered(cv)*dt
-    delta_xs_cu = (1.0 / dx) * (cu_full[1 : M + 1, 1 : N + 1] - cu_full[0:M, 1 : N + 1])
-    delta_ys_cv = (1.0 / dy) * (cv_full[1 : M + 1, 1 : N + 1] - cv_full[1 : M + 1, 0:N])
+    # -- Time filter (update old fields) --
+    uold_new = u[1 : M + 1, 1 : N + 1] + alpha_val * (
+        unew_interior - 2.0 * u[1 : M + 1, 1 : N + 1] + uold
+    )
+    vold_new = v[1 : M + 1, 1 : N + 1] + alpha_val * (
+        vnew_interior - 2.0 * v[1 : M + 1, 1 : N + 1] + vold
+    )
+    pold_new = p[1 : M + 1, 1 : N + 1] + alpha_val * (
+        pnew_interior - 2.0 * p[1 : M + 1, 1 : N + 1] + pold
+    )
 
-    pnew_interior = pold[1 : M + 1, 1 : N + 1] - delta_xs_cu * dt_val - delta_ys_cv * dt_val
-
-    # Build full arrays with halos
+    # Build full arrays with halos for all returned fields.
     unew = _interior_to_halo(xp, unew_interior)
     vnew = _interior_to_halo(xp, vnew_interior)
     pnew = _interior_to_halo(xp, pnew_interior)
-
-    # -- Step 3: time filter (update old fields) --
-    uold_new_interior = u[1 : M + 1, 1 : N + 1] + alpha_val * (
-        unew[1 : M + 1, 1 : N + 1] - 2.0 * u[1 : M + 1, 1 : N + 1] + uold[1 : M + 1, 1 : N + 1]
-    )
-    vold_new_interior = v[1 : M + 1, 1 : N + 1] + alpha_val * (
-        vnew[1 : M + 1, 1 : N + 1] - 2.0 * v[1 : M + 1, 1 : N + 1] + vold[1 : M + 1, 1 : N + 1]
-    )
-    pold_new_interior = p[1 : M + 1, 1 : N + 1] + alpha_val * (
-        pnew[1 : M + 1, 1 : N + 1] - 2.0 * p[1 : M + 1, 1 : N + 1] + pold[1 : M + 1, 1 : N + 1]
-    )
-
-    uold_new = _interior_to_halo(xp, uold_new_interior)
-    vold_new = _interior_to_halo(xp, vold_new_interior)
-    pold_new = _interior_to_halo(xp, pold_new_interior)
 
     return unew, vnew, pnew, uold_new, vold_new, pold_new
 
@@ -405,9 +381,9 @@ def main():
         p = array_api_strict.asarray(p_np, dtype=array_api_strict.float64)
         xp = array_api_strict
 
-    uold = xp.asarray(u, copy=True)
-    vold = xp.asarray(v, copy=True)
-    pold = xp.asarray(p, copy=True)
+    uold = xp.asarray(u, copy=True)[1 : M + 1, 1 : N + 1]
+    vold = xp.asarray(v, copy=True)[1 : M + 1, 1 : N + 1]
+    pold = xp.asarray(p, copy=True)[1 : M + 1, 1 : N + 1]
 
     if L_OUT:
         print(f" Number of points in the x direction: {M}")
