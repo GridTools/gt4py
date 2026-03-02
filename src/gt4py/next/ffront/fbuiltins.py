@@ -187,11 +187,11 @@ def broadcast(
 
 @WhereBuiltinFunction
 def where(
-    mask: common.Field,
-    true_field: common.Field | core_defs.ScalarT | Tuple,
-    false_field: common.Field | core_defs.ScalarT | Tuple,
+    mask: common.Field[common.DimsT, bool],
+    true_field: common.Field[common.DimsT, core_defs.ScalarT] | core_defs.ScalarT | Tuple,
+    false_field: common.Field[common.DimsT, core_defs.ScalarT] | core_defs.ScalarT | Tuple,
     /,
-) -> common.Field | Tuple:
+) -> common.Field[common.DimsT, core_defs.ScalarT] | Tuple:
     raise NotImplementedError()
 
 

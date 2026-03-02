@@ -198,6 +198,7 @@ implicit_optional = false
 implicit_reexport = false
 install_types = true
 namespace_packages = false
+plugins = ['gt4py.next.type_system.mypy_plugin']
 # pretty = true
 show_column_numbers = true
 show_error_codes = true

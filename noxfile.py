@@ -336,7 +336,11 @@ def test_external_typing(session: nox.Session) -> None:
     install_session_venv(session, extras=["standard"], groups=["test", "external_typing"])
 
     session.run(
-        "pytest", "--mypy-testing-base", "typing_tests", "--mypy-only-local-stub", "typing_tests"
+        "pytest",
+        "--mypy-testing-base",
+        "typing_tests",
+        "--mypy-only-local-stub",
+        "typing_tests",
     )
 
 
