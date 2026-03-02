@@ -14,13 +14,13 @@ parser.add_argument("--N", type=int, default=16, help="Number of points in the y
 parser.add_argument("--L_OUT", type=bool, default=True, help="a boolean for L_OUT")
 parser.add_argument("--ITMAX", type=int, default=4000, help="Number of iterations")
 parser.add_argument("--VAL_DEEP", type=bool, default=True, help="Do deep validation")
-# parser.add_argument('--backend', type=str, default='gt:cpu_ifirst', help='Backend to use: gt:cpu_ifirst, gt:cpu_kfirst, numpy, cuda, gt:gpu')
+parser.add_argument("--backend", type=str, default="gtfn_cpu", help="Backend to use")
 
 
 args = parser.parse_args()
 
 # Initialize model parameters
-# backend = args.backend
+backend = args.backend
 M = args.M
 N = args.N
 M_LEN = M + 1

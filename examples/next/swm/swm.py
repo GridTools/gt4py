@@ -20,29 +20,43 @@ for all fields
 """
 
 from gt4py import next as gtx
+from gt4py.next import common as gtx_common
 from time import perf_counter
 import initial_conditions
 import utils
 import config
 from gt4py.next.otf import compiled_program
+from gt4py.next.program_processors.runners.dace import run_dace_gpu_cached, run_dace_cpu_cached
 
 # from gt4py.next.program_processors.runners import jax_jit
 import jax.numpy as jnp
 import numpy as np
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
 dtype = gtx.float64
+
+BACKENDS = {
+    "gtfn_gpu": (gtx.gtfn_gpu, gtx.gtfn_gpu),
+    "gtfn_cpu": (gtx.gtfn_cpu, gtx.gtfn_cpu),
+    "dace_gpu": (run_dace_gpu_cached, run_dace_gpu_cached),
+    "dace_cpu": (run_dace_cpu_cached, run_dace_cpu_cached),
+    "numpy": (None, np),
+    "jnp": (None, jnp),
+}
+if cp is not None:
+    BACKENDS["cupy"] = (None, cp)
+
 allocator = None
 
-# backend, allocator = None, jnp
-# backend, allocator = None, np
-
-# backend, allocator = jax_jit.jax_jit, jnp
-# backend = gtx.gtfn_gpu
-backend = gtx.gtfn_cpu
-# backend = gtx.itir_python
-if allocator is None and backend is not None:
-    allocator = backend
-
+if config.backend not in BACKENDS:
+    raise ValueError(
+        f"Unsupported backend '{config.backend}'. Supported backends are: {list(BACKENDS.keys())}"
+    )
+backend, allocator = BACKENDS[config.backend]
 
 print(f"Using backend '{getattr(backend, 'name', backend)}'.")
 
@@ -138,9 +152,11 @@ def timestep(
 
 def apply_periodicity(x: IJField):
     """Apply periodicity to the field x."""
-    # TODO fix for jax
-    x.ndarray[...] = x.array_ns.pad(x.ndarray[1:-1, 1:-1], ((1, 1), (1, 1)), mode="wrap")
-    return x
+    return gtx_common._field(
+        x.array_ns.pad(x.ndarray[1:-1, 1:-1], ((1, 1), (1, 1)), mode="wrap"),
+        domain=x.domain,
+        dtype=x.dtype,
+    )
 
 
 def main():
