@@ -9,8 +9,8 @@
 import numpy as np
 
 
-def initialize_interior(M, N, dx, dy, a):
-    pi = 4.0 * np.arctan(1.0)
+def initialize_interior(xp, M, N, dx, dy, a):
+    pi = 4.0 * xp.arctan(1.0)
     tpi = 2.0 * pi
     d_i = tpi / M
     d_j = tpi / N
@@ -19,12 +19,12 @@ def initialize_interior(M, N, dx, dy, a):
 
     psi = (
         a
-        * np.sin((np.arange(0, M + 1)[:, np.newaxis] + 0.5) * d_i)
-        * np.sin((np.arange(0, N + 1) + 0.5) * d_j)
+        * xp.sin((xp.arange(0, M + 1).reshape(-1, 1) + 0.5) * d_i)
+        * xp.sin((xp.arange(0, N + 1) + 0.5) * d_j)
     )
     p = (
         pcf
-        * (np.cos(2.0 * np.arange(0, M)[:, np.newaxis] * d_i) + np.cos(2.0 * np.arange(0, N) * d_j))
+        * (xp.cos(2.0 * xp.arange(0, M).reshape(-1, 1) * d_i) + xp.cos(2.0 * xp.arange(0, N) * d_j))
         + 50000.0
     )
 
@@ -34,21 +34,54 @@ def initialize_interior(M, N, dx, dy, a):
     return u, v, p
 
 
-def initialize(M, N, dx, dy, a):
-    u, v, p = initialize_interior(M, N, dx, dy, a)
+def apply_periodic_halo(arr, top=0, bottom=0, left=0, right=0):
+    """Apply periodic (wrap-around) halo padding to an array.
 
+    Parameters
+    ----------
+    arr : array
+        Input array to pad
+    top : int
+        Number of rows to add at the top (from bottom of array)
+    bottom : int
+        Number of rows to add at the bottom (from top of array)
+    left : int
+        Number of columns to add at the left (from right of array)
+    right : int
+        Number of columns to add at the right (from left of array)
+    """
+    xp = arr.__array_namespace__()
+
+    # Apply vertical padding
+    if top > 0:
+        arr = xp.concatenate([arr[-top:, :], arr], axis=0)
+    if bottom > 0:
+        arr = xp.concatenate([arr, arr[:bottom, :]], axis=0)
+
+    # Apply horizontal padding
+    if left > 0:
+        arr = xp.concatenate([arr[:, -left:], arr], axis=1)
+    if right > 0:
+        arr = xp.concatenate([arr, arr[:, :right]], axis=1)
+
+    return arr
+
+
+def initialize(xp, M, N, dx, dy, a):
+    u, v, p = initialize_interior(xp, M, N, dx, dy, a)
+
+    # Apply staggered 1-halo padding
+    u = apply_periodic_halo(u, top=1, right=1)
+    v = apply_periodic_halo(v, bottom=1, left=1)
+    p = apply_periodic_halo(p, bottom=1, right=1)
+
+    return u, v, p
+
+
+def initialize_2halo(xp, M, N, dx, dy, a):
+    u, v, p = initialize_interior(xp, M, N, dx, dy, a)
     return (
-        np.pad(u, ((1, 0), (0, 1)), mode="wrap"),
-        np.pad(v, ((0, 1), (1, 0)), mode="wrap"),
-        np.pad(p, ((0, 1), (0, 1)), mode="wrap"),
-    )
-
-
-def initialize_2halo(M, N, dx, dy, a):
-    u, v, p = initialize_interior(M, N, dx, dy, a)
-
-    return (
-        np.pad(u, ((1, 1), (1, 1)), mode="wrap"),
-        np.pad(v, ((1, 1), (1, 1)), mode="wrap"),
-        np.pad(p, ((1, 1), (1, 1)), mode="wrap"),
+        apply_periodic_halo(u, 1, 1, 1, 1),
+        apply_periodic_halo(v, 1, 1, 1, 1),
+        apply_periodic_halo(p, 1, 1, 1, 1),
     )

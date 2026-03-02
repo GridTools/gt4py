@@ -208,7 +208,7 @@ def main():
     vnew = gtx.empty(domain, dtype=dtype, allocator=allocator)
 
     # Initialize fields
-    _u, _v, _p = initial_conditions.initialize_2halo(M, N, config.dx, config.dy, config.a)
+    _u, _v, _p = initial_conditions.initialize_2halo(np, M, N, config.dx, config.dy, config.a)
     u = gtx.as_field(domain, _u, dtype=dtype, allocator=allocator)
     v = gtx.as_field(domain, _v, dtype=dtype, allocator=allocator)
     p = gtx.as_field(domain, _p, dtype=dtype, allocator=allocator)
