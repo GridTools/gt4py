@@ -20,7 +20,7 @@ parser.add_argument("--VAL_DEEP", type=bool, default=True, help="Do deep validat
 args = parser.parse_args()
 
 # Initialize model parameters
-backend = args.backend
+# backend = args.backend
 M = args.M
 N = args.N
 M_LEN = M + 1
