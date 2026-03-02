@@ -150,6 +150,40 @@ def timestep(
     )
 
 
+@gtx.program(backend=backend)
+def timestep_program(
+    u: IJField,
+    v: IJField,
+    p: IJField,
+    dx: dtype,
+    dy: dtype,
+    dt: dtype,
+    uold: IJField,
+    vold: IJField,
+    pold: IJField,
+    alpha: dtype,
+    unew: IJField,
+    vnew: IJField,
+    pnew: IJField,
+    M: gtx.int32,
+    N: gtx.int32,
+):
+    timestep(
+        u=u,
+        v=v,
+        p=p,
+        dx=dx,
+        dy=dy,
+        dt=dt,
+        uold=uold,
+        vold=vold,
+        pold=pold,
+        alpha=alpha,
+        out=(unew, vnew, pnew, uold, vold, pold),
+        domain={I: (0, M), J: (0, N)},
+    )
+
+
 def apply_periodicity(x: IJField):
     """Apply periodicity to the field x."""
     return gtx_common._field(
@@ -197,9 +231,16 @@ def main():
         print(" Initial u:\n", u[:, :].ndarray.diagonal()[1:-1])
         print(" Initial v:\n", v[:, :].ndarray.diagonal()[1:-1])
 
+    USE_PROGRAM = True
+
     if backend is not None:
-        timestep.with_backend(backend).compile(offset_provider={})
+        if USE_PROGRAM:
+            prog = timestep_program.with_backend(backend).compile(offset_provider={}, M=[M], N=[N])
+        else:
+            prog = timestep.with_backend(backend).compile(offset_provider={})
         gtx.wait_for_compilation()
+    else:
+        prog = timestep
 
     t0_start = perf_counter()
 
@@ -221,21 +262,40 @@ def main():
             )
 
         t3_start = perf_counter()
-        timestep(
-            u=u,
-            v=v,
-            p=p,
-            dx=config.dx,
-            dy=config.dy,
-            dt=config.dt if ncycle == 0 else config.dt * 2.0,
-            uold=uold,
-            vold=vold,
-            pold=pold,
-            alpha=config.alpha if ncycle > 0 else 0.0,
-            offset_provider={},
-            out=(unew, vnew, pnew, uold, vold, pold),
-            domain={I: (0, M), J: (0, N)},
-        )
+        if USE_PROGRAM:
+            prog(
+                u=u,
+                v=v,
+                p=p,
+                dx=config.dx,
+                dy=config.dy,
+                dt=config.dt if ncycle == 0 else config.dt * 2.0,
+                uold=uold,
+                vold=vold,
+                pold=pold,
+                alpha=config.alpha if ncycle > 0 else 0.0,
+                unew=unew,
+                vnew=vnew,
+                pnew=pnew,
+                M=M,
+                N=N,
+            )
+        else:
+            prog(
+                u=u,
+                v=v,
+                p=p,
+                dx=config.dx,
+                dy=config.dy,
+                dt=config.dt if ncycle == 0 else config.dt * 2.0,
+                uold=uold,
+                vold=vold,
+                pold=pold,
+                alpha=config.alpha if ncycle > 0 else 0.0,
+                offset_provider={},
+                out=(unew, vnew, pnew, uold, vold, pold),
+                domain={I: (0, M), J: (0, N)},
+            )
 
         if hasattr(u.array_ns, "cuda"):
             u.array_ns.cuda.runtime.deviceSynchronize()
