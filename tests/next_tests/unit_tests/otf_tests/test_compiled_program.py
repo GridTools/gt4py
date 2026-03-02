@@ -228,11 +228,11 @@ class _DummyPool:
 
 
 def test_metrics_source_key_caches_per_pool_and_key():
-    cache_token = compiled_program._metrics_source_key_cache.set({})
-    counter_token = compiled_program._pools_per_root.set(
-        collections.Counter({("prog", "backend"): 3})
-    )
-    try:
+    ctx = contextvars.copy_context()
+
+    def test_f():
+        compiled_program._metrics_source_key_cache.set({})
+        compiled_program._pools_per_root.set(collections.Counter({("prog", "backend"): 3}))
         pool = _DummyPool(("prog", "backend"))
         key = (("static",), 11, None)
 
@@ -244,18 +244,19 @@ def test_metrics_source_key_caches_per_pool_and_key():
         assert first == second
         assert first == f"prog<backend>#3[{hash(key)}]"
         assert compiled_program._metrics_source_key_cache.get()[(id(pool), key)] == first
-    finally:
-        compiled_program._metrics_source_key_cache.reset(cache_token)
-        compiled_program._pools_per_root.reset(counter_token)
+
+    ctx.run(test_f)
 
 
 def test_metrics_source_key_uses_contextvars_isolation():
-    pool = _DummyPool(("prog", "backend"))
-    key = (("static",), 12, None)
+    ctx = contextvars.copy_context()
 
-    base_cache_token = compiled_program._metrics_source_key_cache.set({})
-    base_counter_token = compiled_program._pools_per_root.set(collections.Counter({pool.root: 1}))
-    try:
+    def test_f():
+        pool = _DummyPool(("prog", "backend"))
+        key = (("static",), 12, None)
+
+        compiled_program._metrics_source_key_cache.set({})
+        compiled_program._pools_per_root.set(collections.Counter({pool.root: 1}))
         key_in_base = compiled_program.metrics_source_key(pool, key)
 
         def _run_in_new_context():
@@ -270,17 +271,17 @@ def test_metrics_source_key_uses_contextvars_isolation():
         assert key_in_other_ctx == f"prog<backend>#7[{hash(key)}]"
         # Base context cache remains its own value.
         assert compiled_program._metrics_source_key_cache.get()[(id(pool), key)] == key_in_base
-    finally:
-        compiled_program._metrics_source_key_cache.reset(base_cache_token)
-        compiled_program._pools_per_root.reset(base_counter_token)
+
+    ctx.run(test_f)
 
 
 def test_metrics_source_key_finalizer_removes_cache_entry_when_pool_is_deleted():
-    cache_token = compiled_program._metrics_source_key_cache.set({})
-    counter_token = compiled_program._pools_per_root.set(
-        collections.Counter({("prog", "backend"): 2})
-    )
-    try:
+    ctx = contextvars.copy_context()
+
+    def test_f():
+        compiled_program._metrics_source_key_cache.set({})
+        compiled_program._pools_per_root.set(collections.Counter({("prog", "backend"): 2}))
+
         pool = _DummyPool(("prog", "backend"))
         key = (("static",), 13, None)
 
@@ -294,6 +295,5 @@ def test_metrics_source_key_finalizer_removes_cache_entry_when_pool_is_deleted()
 
         assert pool_ref() is None
         assert entry not in compiled_program._metrics_source_key_cache.get()
-    finally:
-        compiled_program._metrics_source_key_cache.reset(cache_token)
-        compiled_program._pools_per_root.reset(counter_token)
+
+    ctx.run(test_f)
