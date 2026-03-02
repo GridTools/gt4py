@@ -47,7 +47,7 @@ ArgStaticDescriptorsByType: TypeAlias = dict[
 ]
 
 _pools_per_root: contextvars.ContextVar[collections.Counter] = contextvars.ContextVar(
-    "_pools_per_root", default=collections.Counter()
+    "_pools_per_root"
 )
 
 # Cache metrics source keys for each compiled program pool id and key.
@@ -56,23 +56,24 @@ _pools_per_root: contextvars.ContextVar[collections.Counter] = contextvars.Conte
 # since the id of the program pool could be reused by another pool once the
 # original one has been deleted.
 _metrics_source_key_cache: contextvars.ContextVar[dict[tuple[int, CompiledProgramsKey], str]] = (
-    contextvars.ContextVar("_metrics_source_key_cache", default={})
+    contextvars.ContextVar("_metrics_source_key_cache")
 )
 
 
 def metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> str:
     """Generate a metrics source key from a concrete item of a compiled programs pool."""
+    _metrics_key_cache = _metrics_source_key_cache.get({})
     try:
-        return _metrics_source_key_cache.get()[(id(pool), key)]
+        return _metrics_key_cache[(id(pool), key)]
     except KeyError:
-        pools_counter = _pools_per_root.get()
+        pools_counter = _pools_per_root.get(collections.Counter())
         source_key = f"{pool.root[0]}<{pool.root[1]}>#{pools_counter[pool.root]}[{hash(key)}]"
         source_key_cache_entry = (id(pool), key)
-        _metrics_source_key_cache.get()[source_key_cache_entry] = source_key
+        _metrics_key_cache[source_key_cache_entry] = source_key
         # Use a finalizer to remove the entry from the cache once the pool is deleted
         weakref.finalize(
             pool,
-            lambda entry: _metrics_source_key_cache.get().pop(entry, None),
+            lambda entry: _metrics_source_key_cache.get({}).pop(entry, None),
             source_key_cache_entry,
         )
         return source_key
@@ -337,7 +338,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     @functools.cached_property
     def root(self) -> tuple[str, str]:
         result = (self.definition_stage.definition.__name__, self.backend.name)
-        _pools_per_root.get()[result] += 1
+        _pools_per_root.get(collections.Counter())[result] += 1
         return result
 
     def __post_init__(self) -> None:
