@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
+import array_api_compat
 
 
 def initialize_interior(xp, M, N, dx, dy, a):
@@ -50,7 +51,7 @@ def apply_periodic_halo(arr, top=0, bottom=0, left=0, right=0):
     right : int
         Number of columns to add at the right (from left of array)
     """
-    xp = arr.__array_namespace__()
+    xp = array_api_compat.array_namespace(arr)
 
     # Build vertical padding from the original array before any modification
     parts_v = []

@@ -98,6 +98,10 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     def __gt_type__(self) -> ts.CallableType: ...
 
     def with_backend(self, backend: next_backend.Backend) -> Self:
+        if backend.__module__.startswith("jax"):
+            if not isinstance(self.definition_stage, ffront_stages.DSLFieldOperatorDef):
+                raise ValueError("JAX backend is only supported for field operators.")
+            return backend(self.definition_stage.definition)
         return dataclasses.replace(self, backend=backend)
 
     def with_compilation_options(
@@ -253,10 +257,11 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        no_args_past = toolchain.ConcreteArtifact(
-            self.past_stage, arguments.CompileTimeArgs.empty()
-        )
-        _ = self._frontend_transforms.past_lint(no_args_past).data
+        if isinstance(self.backend, next_backend.Backend):
+            no_args_past = toolchain.ConcreteArtifact(
+                self.past_stage, arguments.CompileTimeArgs.empty()
+            )
+            _ = self._frontend_transforms.past_lint(no_args_past).data
 
     @property
     def __name__(self) -> str:
@@ -588,7 +593,8 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
         """This ensures that DSL linting occurs at decoration time."""
-        _ = self.foast_stage
+        if isinstance(self.backend, next_backend.Backend):
+            _ = self.foast_stage
 
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
@@ -639,10 +645,16 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         return self.foast_stage.closure_vars
 
     def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
+        if not next_embedded.context.within_valid_context() and (
+            self.backend is None or self.backend.__module__.startswith("jax")
+        ):
+            # TODO(havogt): only jax.jit for now (we are not setting up the embedded context and just call the operator as is)
+            return self.definition(*args, **kwargs)
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
             offset_provider = {**kwargs.pop("offset_provider", {})}
             if "out" not in kwargs:
+                print("oh")
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
             if "domain" in kwargs:

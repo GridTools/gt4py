@@ -29,13 +29,19 @@ from gt4py.next.otf import compiled_program
 from gt4py.next.program_processors.runners.dace import run_dace_gpu_cached, run_dace_cpu_cached
 
 # from gt4py.next.program_processors.runners import jax_jit
-import jax.numpy as jnp
 import numpy as np
 
 try:
     import cupy as cp
 except ImportError:
     cp = None
+
+try:
+    import jax.numpy as jnp
+    import jax
+except ImportError:
+    jnp = None
+    jax = None
 
 dtype = gtx.float64
 
@@ -46,9 +52,15 @@ BACKENDS = {
     "dace_cpu": (run_dace_cpu_cached, run_dace_cpu_cached),
     "numpy": (None, np),
     "jnp": (None, jnp),
+    "jax_jit": (jax.jit, jnp),
 }
 if cp is not None:
     BACKENDS["cupy"] = (None, cp)
+if jnp is not None:
+    assert jax is not None
+    BACKENDS["jax"] = (None, jnp)
+    BACKENDS["jax_jit"] = (jax.jit, jnp)
+
 
 allocator = None
 
@@ -193,6 +205,15 @@ def apply_periodicity(x: IJField):
     )
 
 
+def apply_periodicity_jax(x: IJField):
+    """Apply periodicity to the field x."""
+    return gtx_common._field(
+        x.array_ns.pad(x.ndarray, ((1, 1), (1, 1)), mode="wrap"),
+        domain=gtx.domain({I: (-1, x.shape[0] + 1), J: (-1, x.shape[1] + 1)}),
+        dtype=x.dtype,
+    )
+
+
 def main():
     dt0 = 0.0
     dt25 = 0.0
@@ -233,7 +254,9 @@ def main():
 
     USE_PROGRAM = True
 
-    if backend is not None:
+    if backend == jax.jit:
+        prog = timestep.with_backend(backend)
+    elif backend is not None:
         if USE_PROGRAM:
             prog = timestep_program.with_backend(backend).compile(offset_provider={}, M=[M], N=[N])
         else:
@@ -262,7 +285,22 @@ def main():
             )
 
         t3_start = perf_counter()
-        if USE_PROGRAM:
+        if backend == jax.jit:
+            unew, vnew, pnew, uold, vold, pold = prog(
+                u=u,
+                v=v,
+                p=p,
+                dx=config.dx,
+                dy=config.dy,
+                dt=config.dt if ncycle == 0 else config.dt * 2.0,
+                uold=uold,
+                vold=vold,
+                pold=pold,
+                alpha=config.alpha if ncycle > 0 else 0.0,
+                M=M,
+                N=N,
+            )
+        elif USE_PROGRAM:
             prog(
                 u=u,
                 v=v,
@@ -303,9 +341,14 @@ def main():
         dt3 = dt3 + (t3_stop - t3_start)
 
         t25_start = perf_counter()
-        unew = apply_periodicity(unew)
-        vnew = apply_periodicity(vnew)
-        pnew = apply_periodicity(pnew)
+        if backend == jax.jit:
+            unew = apply_periodicity_jax(unew)
+            vnew = apply_periodicity_jax(vnew)
+            pnew = apply_periodicity_jax(pnew)
+        else:
+            unew = apply_periodicity(unew)
+            vnew = apply_periodicity(vnew)
+            pnew = apply_periodicity(pnew)
         t25_stop = perf_counter()
         dt25 = dt25 + (t25_stop - t25_start)
 
