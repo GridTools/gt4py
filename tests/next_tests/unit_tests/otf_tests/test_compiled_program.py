@@ -228,24 +228,26 @@ class _DummyPool:
 
 
 def test_metrics_source_key_caches_per_pool_and_key():
-    ctx = contextvars.copy_context()
-
     def test_f():
         compiled_program._metrics_source_key_cache.set({})
-        compiled_program._pools_per_root.set(collections.Counter({("prog", "backend"): 3}))
         pool = _DummyPool(("prog", "backend"))
         key = (("static",), 11, None)
 
-        first = compiled_program.metrics_source_key(pool, key)
-        # Change counter after first call; second call must come from cache.
-        compiled_program._pools_per_root.get()[pool.root] = 99
-        second = compiled_program.metrics_source_key(pool, key)
+        with compiled_program._pools_per_root_lock:
+            _pools_per_root = compiled_program._pools_per_root
+            compiled_program._pools_per_root = collections.Counter({("prog", "backend"): 3})
+            first = compiled_program.metrics_source_key(pool, key)
+
+            # Change counter after first call; second call must come from cache.
+            compiled_program._pools_per_root[pool.root] = 99
+            second = compiled_program.metrics_source_key(pool, key)
+            _pools_per_root = compiled_program._pools_per_root
 
         assert first == second
         assert first == f"prog<backend>#3[{hash(key)}]"
         assert compiled_program._metrics_source_key_cache.get()[(id(pool), key)] == first
 
-    ctx.run(test_f)
+    contextvars.copy_context().run(test_f)
 
 
 def test_metrics_source_key_uses_contextvars_isolation():
@@ -256,13 +258,19 @@ def test_metrics_source_key_uses_contextvars_isolation():
         key = (("static",), 12, None)
 
         compiled_program._metrics_source_key_cache.set({})
-        compiled_program._pools_per_root.set(collections.Counter({pool.root: 1}))
-        key_in_base = compiled_program.metrics_source_key(pool, key)
+        with compiled_program._pools_per_root_lock:
+            _pools_per_root = compiled_program._pools_per_root
+            compiled_program._pools_per_root = collections.Counter({pool.root: 1})
+            key_in_base = compiled_program.metrics_source_key(pool, key)
+            compiled_program._pools_per_root = _pools_per_root
 
         def _run_in_new_context():
             compiled_program._metrics_source_key_cache.set({})
-            compiled_program._pools_per_root.set(collections.Counter({pool.root: 7}))
-            return compiled_program.metrics_source_key(pool, key)
+            with compiled_program._pools_per_root_lock:
+                compiled_program._pools_per_root = collections.Counter({pool.root: 7})
+                result = compiled_program.metrics_source_key(pool, key)
+                compiled_program._pools_per_root = _pools_per_root
+                return result
 
         key_in_other_ctx = contextvars.Context().run(_run_in_new_context)
 
@@ -280,20 +288,22 @@ def test_metrics_source_key_finalizer_removes_cache_entry_when_pool_is_deleted()
 
     def test_f():
         compiled_program._metrics_source_key_cache.set({})
-        compiled_program._pools_per_root.set(collections.Counter({("prog", "backend"): 2}))
+        with compiled_program._pools_per_root_lock:
+            _pools_per_root = compiled_program._pools_per_root
+            compiled_program._pools_per_root = collections.Counter({("prog", "backend"): 2})
+            pool = _DummyPool(("prog", "backend"))
+            key = (("static",), 13, None)
 
-        pool = _DummyPool(("prog", "backend"))
-        key = (("static",), 13, None)
+            compiled_program.metrics_source_key(pool, key)
+            entry = (id(pool), key)
+            assert entry in compiled_program._metrics_source_key_cache.get()
 
-        compiled_program.metrics_source_key(pool, key)
-        entry = (id(pool), key)
-        assert entry in compiled_program._metrics_source_key_cache.get()
+            pool_ref = weakref.ref(pool)
+            del pool
+            gc.collect()
 
-        pool_ref = weakref.ref(pool)
-        del pool
-        gc.collect()
-
-        assert pool_ref() is None
-        assert entry not in compiled_program._metrics_source_key_cache.get()
+            assert pool_ref() is None
+            assert entry not in compiled_program._metrics_source_key_cache.get()
+            compiled_program._pools_per_root = _pools_per_root
 
     ctx.run(test_f)
