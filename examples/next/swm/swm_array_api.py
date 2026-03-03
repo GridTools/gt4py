@@ -9,9 +9,8 @@
 """
 Shallow Water Model using the Python Array API standard.
 
-This implementation uses symmetric halo lines (1 on each side) for all fields,
-following the approach of swm_next2_halo2_restructured.py. The periodic boundary
-conditions are applied via halo exchange rather than asymmetric padding.
+This implementation uses symmetric halo lines (1 on each side) for all fields.
+Periodic boundary conditions are applied via halo exchange.
 
 Compatible with any array library supporting the Array API standard:
   numpy, jax.numpy, cupy, array_api_strict, etc.
@@ -85,19 +84,28 @@ def _interior_to_halo(xp, interior):
 
 
 # ---------------------------------------------------------------------------
-# Stencil building blocks – mirror the @gtx.field_operator functions in swm.py.
+# Stencil building blocks following Sadourny (1975), J. Atm. Sci. 32:680–688.
 #
-# Each function reduces shape by 1 only in its operating dimension, preserving
-# the full extent in the other dimension.  No M/N parameters are needed:
+# The model uses an Arakawa C-grid with four types of grid point:
+#   p-point  at (i,   j  )  —  pressure/height h
+#   u-point  at (i+½, j  )  —  zonal velocity u      (staggered ½-cell in x)
+#   v-point  at (i,   j+½)  —  meridional velocity v  (staggered ½-cell in y)
+#   ζ-point  at (i+½, j+½)  —  vorticity ζ            (staggered ½-cell in both)
 #
-#   avg_x(f)   / delta_x(dx, f)   : (..., Mx, My) → (..., Mx-1, My)
-#   avg_y(f)   / delta_y(dy, f)   : (..., Mx, My) → (..., Mx, My-1)
+# avg_x / delta_x shift the x-position by ½:   p ↔ u,  v ↔ ζ
+# avg_y / delta_y shift the y-position by ½:   p ↔ v,  u ↔ ζ
 #
-# Both "forward" (avg_x) and "staggered/backward" (avg_x_staggered) averages
-# produce the same array 0.5*(f[1:]+f[:-1]).  The semantic difference is which
-# output slice maps to the interior — callers select the appropriate rows/cols:
-#   forward  in x → interior at rows [1:M+1, ...]   (index i maps to position i)
-#   backward in x → interior at rows [0:M,   ...]   (index i maps to position i+1)
+# Each function reduces shape by 1 in its operating dimension:
+#   avg_x(f) / delta_x(dx, f)  : (Mx, My) → (Mx-1, My)
+#   avg_y(f) / delta_y(dy, f)  : (Mx, My) → (Mx, My-1)
+#
+# For an (M+2, N+2) halo array the interior of any point type is at [1:M+1, 1:N+1].
+# After an x-stencil op the (M+1, …) result's interior slice depends on input type:
+#   p- or v-point input  →  u- or ζ-point output,  interior at [1:M+1, ...]
+#   u- or ζ-point input  →  p- or v-point output,  interior at [0:M,   ...]
+# After a y-stencil op:
+#   p- or u-point input  →  v- or ζ-point output,  interior at [..., 1:N+1]
+#   v- or ζ-point input  →  p- or u-point output,  interior at [..., 0:N  ]
 # ---------------------------------------------------------------------------
 
 
@@ -125,66 +133,78 @@ def timestep(xp, u, v, p, uold, vold, pold, dx, dy, dt_val, alpha_val, M, N):
     """Perform one timestep of the shallow water equations.
 
     All fields have shape (M+2, N+2) with 1-wide symmetric halos.
-    Mirrors the @gtx.field_operator timestep in swm.py via direct composition:
+    Implements the Sadourny (1975) Arakawa C-grid scheme via direct array composition.
+    Grid-point types follow Sadourny's notation  (p-, u-, v-, ζ-points):
 
-      cu = avg_x(p) * u            # (M+1, N+2)
-      cv = avg_y(p) * v            # (M+2, N+1)
-      z  = (delta_x(v) - delta_y(u)) / avg_x(avg_y(p))   # (M+1, N+1)
-      h  = p + 0.5*(avg_x_staggered(u*u) + avg_y_staggered(v*v))  # (M+1, N+1)
+      cu  = avg_x(p) * u          # u-point  (i+½, j)
+      cv  = avg_y(p) * v          # v-point  (i, j+½)
+      z   = (delta_x(v) - delta_y(u)) / avg_x(avg_y(p))  # ζ-point  (i+½, j+½)
+      h   = p + 0.5*(avg_x(u²) + avg_y(v²))              # p-point  (i, j)
 
-      unew = uold + avg_y_staggered(z)*avg_y_staggered(avg_x(cv))*dt - delta_x(h)*dt
-      vnew = vold - avg_x_staggered(z)*avg_x_staggered(avg_y(cu))*dt - delta_y(h)*dt
-      pnew = pold - delta_x_staggered(cu)*dt - delta_y_staggered(cv)*dt
+      unew  at u-point:  avg_y(z) [ζ→u] * avg_y(avg_x(cv)) [v→ζ→u] * dt
+                       − delta_x(h)     [p→u]                       * dt
+      vnew  at v-point: −avg_x(z) [ζ→v] * avg_x(avg_y(cu)) [u→ζ→v] * dt
+                       − delta_y(h)     [p→v]                       * dt
+      pnew  at p-point: −delta_x(cu)    [u→p]                       * dt
+                       − delta_y(cv)    [v→p]                       * dt
 
     Each stencil function reduces shape by 1 only in its operating dimension, so
     compositions chain directly without any intermediate _interior_to_halo calls.
 
-    Slice convention for extracting the (M, N) interior from composed results:
-      forward  avg/delta in x → rows [1:M+1, ...]   (index i means position i)
-      backward avg/delta in x → rows [0:M,   ...]   (index i means position i+1)
-      forward  avg/delta in y → cols [..., 1:N+1]
-      backward avg/delta in y → cols [..., 0:N  ]
+    Slice convention for extracting the (M, N) interior from a composed result
+    (see stencil-block header for the full rule):
+      p- or v-point input → x-result at u- or ζ-point: interior rows [1:M+1, ...]
+      u- or ζ-point input → x-result at p- or v-point: interior rows [0:M,   ...]
+      p- or u-point input → y-result at v- or ζ-point: interior cols [..., 1:N+1]
+      v- or ζ-point input → y-result at p- or u-point: interior cols [..., 0:N  ]
     """
     uu = u * u
     vv = v * v
-    # cu[i,j] = 0.5*(p[i+1,j]+p[i,j]) * u[i,j]  for i=0..M, j=0..N+1  → (M+1, N+2)
+    # cu at u-points: avg_x(p) [p→u] * u[0:M+1,:]  → shape (M+1, N+2)
     cu = avg_x(p) * u[:-1, :]
-    # cv[i,j] = 0.5*(p[i,j+1]+p[i,j]) * v[i,j]  for i=0..M+1, j=0..N  → (M+2, N+1)
+    # cv at v-points: avg_y(p) [p→v] * v[:,0:N+1]  → shape (M+2, N+1)
     cv = avg_y(p) * v[:, :-1]
 
-    # z_wide at positions i=0..M, j=0..N (interior + 1 halo needed for staggered avgs)
-    # delta_x(v) → (M+1,N+2), slice [:,:N+1] keeps j=0..N
-    # delta_y(u) → (M+2,N+1), slice [:M+1,:] keeps i=0..M
-    # avg_x(avg_y(p)) → (M+1,N+1) exactly
+    # z_wide at ζ-points (i+½, j+½), shape (M+1, N+1):
+    #   delta_x(v) [v→ζ]: shape (M+1, N+2); [:, :N+1] trims to (M+1, N+1)
+    #   delta_y(u) [u→ζ]: shape (M+2, N+1); [:M+1, :] trims to (M+1, N+1)
+    #   avg_x(avg_y(p)) [p→v→ζ]: shape (M+1, N+1)
     z_wide = (delta_x(dx, v)[:, : N + 1] - delta_y(dy, u)[: M + 1, :]) / avg_x(
         avg_y(p)
-    )  # (M+1, N+1)
+    )  # (M+1, N+1), ζ-points
 
-    # h_wide at positions i=1..M+1, j=1..N+1 (interior + 1 extra for forward delta)
-    #   avg_x_staggered(uu)[i,j] = avg_x(uu)[i-1,j]  → avg_x(uu)[0:M+1, 1:N+2]
-    #   avg_y_staggered(vv)[i,j] = avg_y(vv)[i,j-1]  → avg_y(vv)[1:M+2, 0:N+1]
+    # h_wide at p-points covering x=1..M+1, y=1..N+1 (interior + right/top halo),
+    # shape (M+1, N+1).  The extended range is needed by the subsequent delta_x/delta_y.
+    #   p[1:M+2, 1:N+2]            : p-points at x=1..M+1, y=1..N+1
+    #   avg_x(uu) [u→p]: result[k] at x=k+1; slice [0:M+1, 1:N+2] → x=1..M+1
+    #   avg_y(vv) [v→p]: result[l] at y=l+1; slice [1:M+2, 0:N+1] → y=1..N+1
     h_wide = p[1 : M + 2, 1 : N + 2] + 0.5 * (
         avg_x(uu)[0 : M + 1, 1 : N + 2] + avg_y(vv)[1 : M + 2, 0 : N + 1]
-    )  # (M+1, N+1)
+    )  # (M+1, N+1), p-points
 
-    # avg_y_staggered(z)[i,j] = avg_y(z_wide)[i, j-1]  → [1:M+1, 0:N]
-    # avg_y_staggered(avg_x(cv))[i,j] = avg_y(avg_x(cv))[i, j-1]  → [1:M+1, 0:N]
-    # delta_x(h)[i,j] = delta_x(h_wide)[i-1, j-1]  → [0:M, 0:N]
+    # unew at interior u-points: all three terms evaluated at (i+½, j) for i=1..M, j=1..N.
+    #   avg_y(z_wide)    [ζ→u]: z_wide ζ-point → avg_y → u-point; interior at [1:M+1, 0:N]
+    #   avg_y(avg_x(cv)) [v→ζ→u]: cv v-point → avg_x →ζ-point → avg_y → u-point; same slice
+    #   delta_x(h_wide)  [p→u]: h_wide p-point at x=k+1 → delta_x → u-point at x=k+3/2;
+    #                           interior u at x=3/2..M+1/2 ↔ slice [0:M, 0:N]
     unew_interior = (
         uold
         + avg_y(z_wide)[1 : M + 1, 0:N] * avg_y(avg_x(cv))[1 : M + 1, 0:N] * dt_val
         - delta_x(dx, h_wide)[0:M, 0:N] * dt_val
     )
-    # avg_x_staggered(z)[i,j] = avg_x(z_wide)[i-1, j]  → [0:M, 1:N+1]
-    # avg_x_staggered(avg_y(cu))[i,j] = avg_x(avg_y(cu))[i-1, j]  → [0:M, 1:N+1]
-    # delta_y(h)[i,j] = delta_y(h_wide)[i-1, j-1]  → [0:M, 0:N]
+    # vnew at interior v-points: all three terms evaluated at (i, j+½) for i=1..M, j=1..N.
+    #   avg_x(z_wide)    [ζ→v]: z_wide ζ-point → avg_x → v-point; interior at [0:M, 1:N+1]
+    #   avg_x(avg_y(cu)) [u→ζ→v]: cu u-point → avg_y → ζ-point → avg_x → v-point; same slice
+    #   delta_y(h_wide)  [p→v]: h_wide p-point at y=l+1 → delta_y → v-point at y=l+3/2;
+    #                           interior v at y=3/2..N+1/2 ↔ slice [0:M, 0:N]
     vnew_interior = (
         vold
         - avg_x(z_wide)[0:M, 1 : N + 1] * avg_x(avg_y(cu))[0:M, 1 : N + 1] * dt_val
         - delta_y(dy, h_wide)[0:M, 0:N] * dt_val
     )
-    # delta_x_staggered(cu)[i,j] = delta_x(cu)[i-1, j]  → [0:M, 1:N+1]
-    # delta_y_staggered(cv)[i,j] = delta_y(cv)[i, j-1]  → [1:M+1, 0:N]
+    # pnew at interior p-points: both terms evaluated at (i, j) for i=1..M, j=1..N.
+    #   delta_x(cu) [u→p]: cu u-point → delta_x → p-point; interior at [0:M, 1:N+1]
+    #   delta_y(cv) [v→p]: cv v-point → delta_y → p-point; interior at [1:M+1, 0:N]
     pnew_interior = (
         pold - delta_x(dx, cu)[0:M, 1 : N + 1] * dt_val - delta_y(dy, cv)[1 : M + 1, 0:N] * dt_val
     )
@@ -206,27 +226,6 @@ def timestep(xp, u, v, p, uold, vold, pold, dx, dy, dt_val, alpha_val, M, N):
     pnew = _interior_to_halo(xp, pnew_interior)
 
     return unew, vnew, pnew, uold_new, vold_new, pold_new
-
-
-def to_reference_layout(arr, M, N):
-    """Convert from 2-halo (M+2, N+2) layout to reference (M+1, N+1) layout.
-
-    The reference data uses an asymmetric layout where:
-      u: padded with (1,0) in x and (0,1) in y  -> u_ref = [halo; interior_rows][interior_cols; halo]
-      v: padded with (0,1) in x and (1,0) in y
-      p: padded with (0,1) in x and (0,1) in y
-
-    For the 2-halo symmetric layout, the interior is at [1:M+1, 1:N+1].
-    The reference format stores M+1 x N+1 values.
-
-    For u: ref has rows [M, 0..M-1] and cols [0..N-1, 0] -> u_ref = u_2halo[0:M+1, 1:N+2]
-      which is u_2halo[:-1, 1:]
-    For v: ref has rows [0..N-1, 0] and cols [N, 0..N-1] -> v_ref = u_2halo[1:M+2, 0:N+1]
-      which is v_2halo[1:, :-1]
-    For p: ref has rows [0..M-1, 0] and cols [0..N-1, 0] -> p_ref = p_2halo[1:M+2, 1:N+2]
-      which is p_2halo[1:, 1:]
-    """
-    pass  # implemented inline in validation
 
 
 def main():
