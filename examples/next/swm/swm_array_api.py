@@ -80,17 +80,8 @@ def _interior_to_halo(xp, interior):
     Wraps the interior periodically: last col -> left halo, first col -> right halo,
     last row -> top halo, first row -> bottom halo.
     """
-    M, N = interior.shape
-
-    # Wrap columns: [last_col | interior | first_col]
-    left_col = interior[:, N - 1 : N]  # (M, 1)
-    right_col = interior[:, 0:1]  # (M, 1)
-    middle_rows = xp.concat([left_col, interior, right_col], axis=1)  # (M, N+2)
-
-    # Wrap rows: [last_row | middle | first_row]
-    top_row = middle_rows[M - 1 : M, :]  # (1, N+2)
-    bottom_row = middle_rows[0:1, :]  # (1, N+2)
-    return xp.concat([top_row, middle_rows, bottom_row], axis=0)  # (M+2, N+2)
+    middle_rows = xp.concat([interior[:, -1:], interior, interior[:, :1]], axis=1)
+    return xp.concat([middle_rows[-1:, :], middle_rows, middle_rows[:1, :]], axis=0)
 
 
 # ---------------------------------------------------------------------------
