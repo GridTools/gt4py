@@ -31,7 +31,6 @@ Usage:
 import argparse
 from time import perf_counter
 from array_api_compat import array_namespace
-import initial_conditions
 
 
 def _get_array_module(name):
@@ -72,6 +71,36 @@ def _to_numpy(arr):
     except ImportError:
         pass
     return np.asarray(arr)
+
+
+def initialize_interior(xp, M, N, dx, dy, a):
+    """Create initial u, v, p fields on the interior (M x N) grid."""
+    pi = 4.0 * xp.atan(xp.asarray(1.0, dtype=xp.float64))
+    tpi = 2.0 * pi
+    d_i = tpi / M
+    d_j = tpi / N
+    el = N * dx
+    pcf = (pi * pi * a * a) / (el * el)
+
+    i_vals = xp.arange(0, M + 1, dtype=xp.float64)
+    j_vals = xp.arange(0, N + 1, dtype=xp.float64)
+    i_interior = xp.arange(0, M, dtype=xp.float64)
+    j_interior = xp.arange(0, N, dtype=xp.float64)
+
+    # psi: (M+1) x (N+1), p: (M) x (N), u: (M) x (N), v: (M) x (N)
+    # Use reshape to create 2D broadcasting: column * row
+    i_col = xp.reshape(i_vals, (M + 1, 1))  # (M+1, 1)
+    j_row = xp.reshape(j_vals, (1, N + 1))  # (1, N+1)
+    psi = a * xp.sin((i_col + 0.5) * d_i) * xp.sin((j_row + 0.5) * d_j)
+
+    i_int_col = xp.reshape(i_interior, (M, 1))  # (M, 1)
+    j_int_row = xp.reshape(j_interior, (1, N))  # (1, N)
+    p = pcf * (xp.cos(2.0 * i_int_col * d_i) + xp.cos(2.0 * j_int_row * d_j)) + 50000.0
+
+    u = -(psi[1:, 1:] - psi[1:, :-1]) / dy
+    v = (psi[1:, 1:] - psi[:-1, 1:]) / dx
+
+    return u, v, p
 
 
 def _interior_to_halo(xp, interior):
@@ -217,6 +246,33 @@ def timestep(xp, u, v, p, uold, vold, pold, dx, dy, dt_val, alpha_val, M, N):
     return unew, vnew, pnew, uold_new, vold_new, pold_new
 
 
+def initialize_2halo(xp, M, N, dx, dy, a):
+    """Initialize fields with 2-halo (1 on each side) symmetric padding."""
+    u, v, p = initialize_interior(xp, M, N, dx, dy, a)
+    return _interior_to_halo(xp, u), _interior_to_halo(xp, v), _interior_to_halo(xp, p)
+
+
+def to_reference_layout(arr, M, N):
+    """Convert from 2-halo (M+2, N+2) layout to reference (M+1, N+1) layout.
+
+    The reference data uses an asymmetric layout where:
+      u: padded with (1,0) in x and (0,1) in y  -> u_ref = [halo; interior_rows][interior_cols; halo]
+      v: padded with (0,1) in x and (1,0) in y
+      p: padded with (0,1) in x and (0,1) in y
+
+    For the 2-halo symmetric layout, the interior is at [1:M+1, 1:N+1].
+    The reference format stores M+1 x N+1 values.
+
+    For u: ref has rows [M, 0..M-1] and cols [0..N-1, 0] -> u_ref = u_2halo[0:M+1, 1:N+2]
+      which is u_2halo[:-1, 1:]
+    For v: ref has rows [0..N-1, 0] and cols [N, 0..N-1] -> v_ref = u_2halo[1:M+2, 0:N+1]
+      which is v_2halo[1:, :-1]
+    For p: ref has rows [0..M-1, 0] and cols [0..N-1, 0] -> p_ref = p_2halo[1:M+2, 1:N+2]
+      which is p_2halo[1:, 1:]
+    """
+    pass  # implemented inline in validation
+
+
 def main():
     parser = argparse.ArgumentParser(description="Shallow Water Model (Array API)")
     parser.add_argument(
@@ -310,7 +366,7 @@ def main():
         print(f"Running with {args.array_library} via array_api_compat namespace")
 
     # Initialize fields
-    u, v, p = initial_conditions.initialize_2halo(xp, M, N, dx, dy, a)
+    u, v, p = initialize_2halo(xp, M, N, dx, dy, a)
 
     if args.strict and args.array_library != "array_api_strict":
         # Convert to array_api_strict arrays
