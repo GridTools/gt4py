@@ -297,8 +297,6 @@ def main():
                 vold=vold,
                 pold=pold,
                 alpha=config.alpha if ncycle > 0 else 0.0,
-                M=M,
-                N=N,
             )
         elif USE_PROGRAM:
             prog(
