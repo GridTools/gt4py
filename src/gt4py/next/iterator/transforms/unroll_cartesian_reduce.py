@@ -7,13 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import os
-import sys
 from collections.abc import Mapping
 
 from gt4py import eve
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils, ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -31,11 +30,6 @@ def _is_applied_cartesian_reduce(node: itir.FunCall) -> bool:
         and len(node.fun.args[0].args) == 3
         and len(node.args) >= 1
     )
-    
-    # print(f"[GT4PY_DEBUG_UNROLL_CARTESIAN] Checking node {node} for cartesian_reduce: ")
-    # print(f"  node.fun.args: ", getattr(node.fun, "args", None))
-    # print(f"  direct_cartesian_reduce: {direct_cartesian_reduce}")
-    # print(f"  as_fieldop_cartesian_reduce: {as_fieldop_cartesian_reduce}")
     return direct_cartesian_reduce or as_fieldop_cartesian_reduce
 
 
@@ -96,16 +90,15 @@ class UnrollCartesianReduce(eve.NodeTranslator):
         if is_as_fieldop_reduce:
             param_names = tuple(f"__cartred_it{i}" for i, _ in enumerate(reduce_args))
             bound_arg_names = tuple(f"__cartred_arg{i}" for i, _ in enumerate(reduce_args))
-            expr: itir.Expr = init
+            reduced_expr: itir.Expr = init
             for index in range(start, stop):
                 shifted_args = tuple(
                     im.deref(im.shift(axis_offset, index)(param_name)) for param_name in param_names
                 )
-                expr = itir.FunCall(fun=op, args=[expr, *shifted_args])
+                reduced_expr = itir.FunCall(fun=op, args=[reduced_expr, *shifted_args])
 
             domain_expr: itir.Expr | None = None
             if reduce_args and isinstance(reduce_args[0], itir.Expr):
-                # print(f"[GT4PY_DEBUG_UNROLL_CARTESIAN] Extracted domain_expr: {domain_expr}", file=sys.stderr)
                 field_type = getattr(reduce_args[0], "type", None)
                 if domain_expr is None and isinstance(field_type, ts.FieldType):
                     reduced_dims = [dim for dim in field_type.dims if dim != axis]
@@ -119,17 +112,19 @@ class UnrollCartesianReduce(eve.NodeTranslator):
                     domain_expr = im.domain(common.GridType.CARTESIAN, ranges)
 
             if domain_expr is None:
-                reduced_call = im.as_fieldop(im.lambda_(*param_names)(expr))(*bound_arg_names)
-            else:
-                reduced_call = im.as_fieldop(im.lambda_(*param_names)(expr), domain=domain_expr)(
+                reduced_call = im.as_fieldop(im.lambda_(*param_names)(reduced_expr))(
                     *bound_arg_names
                 )
+            else:
+                reduced_call = im.as_fieldop(
+                    im.lambda_(*param_names)(reduced_expr), domain=domain_expr
+                )(*bound_arg_names)
 
             return im.let(*tuple(zip(bound_arg_names, reduce_args, strict=True)))(reduced_call)
 
-        expr: itir.Expr = init
+        reduced_expr = init
         for index in range(start, stop):
             shifted_args = tuple(im.deref(im.shift(axis_offset, index)(arg)) for arg in reduce_args)
-            expr = itir.FunCall(fun=op, args=[expr, *shifted_args])
+            reduced_expr = itir.FunCall(fun=op, args=[reduced_expr, *shifted_args])
 
-        return expr
+        return reduced_expr

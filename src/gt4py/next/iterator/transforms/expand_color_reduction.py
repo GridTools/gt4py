@@ -98,9 +98,7 @@ class UnrollCartesianReduction(eve.NodeTranslator):
 
     def _pick_axis_range(self) -> tuple[str, tuple[int, int]] | None:
         literal_axes = [
-            (axis, bounds)
-            for axis, bounds in self.axis_ranges.items()
-            if bounds[1] > bounds[0]
+            (axis, bounds) for axis, bounds in self.axis_ranges.items() if bounds[1] > bounds[0]
         ]
         if not literal_axes:
             return None
@@ -146,7 +144,9 @@ class UnrollCartesianReduction(eve.NodeTranslator):
 
     def visit_Program(self, node: itir.Program, **kwargs) -> itir.Program:
         axis_ranges, axis_hints = self._collect_axis_info(node)
-        return dataclasses.replace(self, axis_ranges=axis_ranges, axis_hints=axis_hints).generic_visit(node, **kwargs)
+        return dataclasses.replace(
+            self, axis_ranges=axis_ranges, axis_hints=axis_hints
+        ).generic_visit(node, **kwargs)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
         node = self.generic_visit(node, **kwargs)

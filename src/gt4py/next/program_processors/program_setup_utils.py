@@ -1,11 +1,20 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import functools
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import gt4py.next as gtx
 import gt4py.next.typing as gtx_typing
 from gt4py.next import backend as gtx_backend
+
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +43,8 @@ def setup_program(
     backend: gtx_typing.Backend | None,
     constant_args: dict[str, gtx.Field | gtx_typing.Scalar] | None = None,
     variants: dict[str, list[gtx_typing.Scalar]] | None = None,
-    horizontal_sizes: dict[str, gtx.int32] | None = None,
-    vertical_sizes: dict[str, gtx.int32] | None = None,
+    horizontal_sizes: dict[str, int] | None = None,
+    vertical_sizes: dict[str, int] | None = None,
     offset_provider: gtx_typing.OffsetProvider | None = None,
 ) -> Callable[..., None]:
     constant_args = {} if constant_args is None else constant_args
@@ -47,10 +56,10 @@ def setup_program(
     backend = customize_backend(program, backend)
 
     bound_static_args = {k: v for k, v in constant_args.items() if gtx.is_scalar_type(v)}
-    static_args_program = program.with_backend(backend)
+    static_args_program = program if backend is None else program.with_backend(backend)
     if backend is not None:
         static_args_program = static_args_program.with_compilation_options(enable_jit=False)
-        static_args_program.compile(
+        cast(Any, static_args_program).compile(
             **dict_values_to_list(horizontal_sizes),
             **dict_values_to_list(vertical_sizes),
             **variants,
@@ -58,10 +67,13 @@ def setup_program(
             offset_provider=offset_provider,
         )
 
-    return functools.partial(
-        static_args_program,
-        **constant_args,
-        **horizontal_sizes,
-        **vertical_sizes,
-        offset_provider=offset_provider,
+    return cast(
+        Callable[..., None],
+        functools.partial(
+            cast(Any, static_args_program),
+            **constant_args,
+            **horizontal_sizes,
+            **vertical_sizes,
+            offset_provider=offset_provider,
+        ),
     )

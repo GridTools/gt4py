@@ -133,7 +133,9 @@ def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
 
 
 @_register_builtin_type_synthesizer(fun_names=builtins.BINARY_MATH_NUMBER_BUILTINS)
-def _(lhs: ts.ScalarType | it_ts.OffsetLiteralType, rhs: ts.ScalarType | it_ts.OffsetLiteralType) -> ts.ScalarType:
+def _(
+    lhs: ts.ScalarType | it_ts.OffsetLiteralType, rhs: ts.ScalarType | it_ts.OffsetLiteralType
+) -> ts.ScalarType:
     if isinstance(lhs, it_ts.OffsetLiteralType):
         assert isinstance(lhs.value, ts.ScalarType)
         lhs = lhs.value
@@ -674,7 +676,7 @@ def cartesian_reduce(
     def applied_cartesian_reduce(
         *args: ts.TypeSpec,
         offset_provider_type: common.OffsetProviderType,
-    ) -> ts.DataType:
+    ) -> ts.TypeSpec:
         if not args:
             raise TypeError("cartesian_reduce expects at least one scalar argument.")
         assert isinstance(axis, ts.DimensionType)
@@ -689,11 +691,15 @@ def cartesian_reduce(
                 arg_element_types.append(arg)
             else:
                 raise TypeError(
-                    "Unsupported cartesian_reduce argument type: "
-                    f"{type(arg).__name__}."
+                    f"Unsupported cartesian_reduce argument type: {type(arg).__name__}."
                 )
 
-        return op(init, *arg_element_types, offset_provider_type=offset_provider_type)
+        result = op(init, *arg_element_types, offset_provider_type=offset_provider_type)
+        if not isinstance(result, ts.DataType):
+            raise TypeError(
+                f"cartesian_reduce operation must return a DataType, got {type(result).__name__}."
+            )
+        return result
 
     return applied_cartesian_reduce
 

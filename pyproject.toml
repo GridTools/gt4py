@@ -352,7 +352,7 @@ docstring-code-format = true
 # TD: flake8-todos
 # UP: pyupgrade
 # YTT: flake8-2020
-exclude = ['docs/**', "examples/**", "tests/**"]
+exclude = ['docs/**', "examples/**", "tests/**", "typings/**"]
 explicit-preview-rules = true
 extend-select = ["F822"]  # TODO(egparedes): remove when not longer in preview
 ignore = [

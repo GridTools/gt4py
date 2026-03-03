@@ -52,7 +52,14 @@ _COMMUTATIVE_OPS = ("plus", "multiplies", "minimum", "maximum")
 def _numeric_constant_value(node: ir.Node) -> int | float | None:
     if isinstance(node, ir.Literal):
         try:
-            return ir_misc.value_from_literal(node)
+            value = ir_misc.value_from_literal(node)
+            if isinstance(value, (int, float)):
+                return value
+            if hasattr(value, "item"):
+                coerced = value.item()
+                if isinstance(coerced, (int, float)):
+                    return coerced
+            return None
         except ValueError:
             return None
     if isinstance(node, ir.OffsetLiteral) and isinstance(node.value, int):

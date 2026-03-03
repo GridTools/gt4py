@@ -129,6 +129,7 @@ def _extract_accessed_domains(
     symbolic_domain_sizes: Optional[dict[str, str]],
 ) -> dict[str, NonTupleDomainAccess]:
     accessed_domains: dict[str, NonTupleDomainAccess] = {}
+    offset_provider_type = common.offset_provider_to_type(offset_provider)
 
     shifts_results = trace_shifts.trace_stencil(stencil, num_args=len(input_ids))
 
@@ -146,18 +147,25 @@ def _extract_accessed_domains(
                 if (
                     len(shift) == 2
                     and isinstance(shift[0], itir.OffsetLiteral)
+                    and isinstance(shift[0].value, str)
                     and isinstance(shift[1], itir.OffsetLiteral)
                     and isinstance(shift[1].value, int)
                 ):
                     try:
-                        offset_type = common.get_offset_type(offset_provider, shift[0].value)
+                        offset_type = common.get_offset_type(offset_provider_type, shift[0].value)
                     except KeyError:
                         offset_type = common.Dimension(
                             value=shift[0].value, kind=common.DimensionKind.HORIZONTAL
                         )
-                    if isinstance(offset_type, common.Dimension) and offset_type not in target_domain.ranges:
+                    if (
+                        isinstance(offset_type, common.Dimension)
+                        and offset_type not in target_domain.ranges
+                    ):
                         minv, maxv = extra_ranges.get(offset_type, (shift[1].value, shift[1].value))
-                        extra_ranges[offset_type] = (min(minv, shift[1].value), max(maxv, shift[1].value))
+                        extra_ranges[offset_type] = (
+                            min(minv, shift[1].value),
+                            max(maxv, shift[1].value),
+                        )
 
             if extra_ranges:
                 ranges = {**target_domain.ranges}

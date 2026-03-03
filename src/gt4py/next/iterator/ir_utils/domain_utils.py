@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import sys
 import dataclasses
 import functools
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional
@@ -121,23 +120,12 @@ class SymbolicDomain:
 
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
-        # print(f"[GT4PY_DEBUG_DOMAIN_TRANSLATION] first new_ranges={new_ranges}", file=sys.stderr)
         if len(shift) == 0:
             return self
         if len(shift) == 2:
             off, val = shift
             assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
-            # try:
             connectivity_type = common.get_offset_type(offset_provider_type, off.value)
-            # except KeyError:
-            #     fallback_dim = next(
-            #         (dim for dim in self.ranges.keys() if dim.value == off.value), None
-            #     )
-            #     if fallback_dim is None:
-            #         fallback_dim = common.Dimension(
-            #             value=off.value, kind=common.DimensionKind.HORIZONTAL
-            #         )
-            #     connectivity_type = fallback_dim
 
             if isinstance(connectivity_type, common.Dimension):
                 if val is trace_shifts.Sentinel.VALUE:
@@ -153,8 +141,6 @@ class SymbolicDomain:
                 new_ranges[current_dim] = SymbolicRange.translate(
                     new_ranges[current_dim], val.value
                 )
-                # print(f"[GT4PY_DEBUG_DOMAIN_TRANSLATION] val.value={val.value} applied to dimension {current_dim}. New range: {new_ranges[current_dim]}", file=sys.stderr)
-                # print(f"[GT4PY_DEBUG_DOMAIN_TRANSLATION] Translated dimension {current_dim} by {val.value}. New range: {new_ranges[current_dim]}", file=sys.stderr)
             elif isinstance(connectivity_type, common.NeighborConnectivityType):
                 # unstructured shift
                 assert (

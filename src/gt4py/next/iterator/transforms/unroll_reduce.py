@@ -90,7 +90,7 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
             value=str(i),
             type=ts.ScalarType(kind=ts.ScalarKind.INT32),
         )
-    
+
     @classmethod
     def apply(
         cls,
@@ -100,10 +100,11 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
         *,
         use_offset_literal_index: bool = True,
     ) -> itir.Node:
-        return cls(uids=uids,
-                    offset_provider_type=offset_provider_type,
-                    use_offset_literal_index=use_offset_literal_index
-                ).visit(node)
+        return cls(
+            uids=uids,
+            offset_provider_type=offset_provider_type,
+            use_offset_literal_index=use_offset_literal_index,
+        ).visit(node)
 
     def _visit_reduce(self, node: itir.FunCall) -> itir.Expr:
         connectivity_type = _get_connectivity(node, self.offset_provider_type)

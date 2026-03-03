@@ -87,8 +87,8 @@ Output data SE:
  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]]
-diff_i:  11.0
-diff_j:  1.0
+diff_i:  [11.]
+diff_j:  [1.]
 
 ============================================================
 === FINAL GTIR HANDED TO GTFN BACKEND ===
@@ -107,11 +107,13 @@ pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max
   compute_zavgS_cartesian_1 = λ(pp, S_M, domain_max_i) → 
     (λ(zavgᐞ0) → (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(S_M, zavgᐞ0))(
       (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
-        0.5, concat_where(
-               IDimₕ == domain_max_i - 1,
-               pp,
-               (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp))
-             )
+        0.5,
+        concat_where(IDimₕ == domain_max_i - 1,
+                     (⇑(λ(__it) → ·⟪_OffKolorₒ, -1ₒ⟫(__it)))(pp),
+                     (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                       (⇑(λ(__it) → ·⟪_OffKolorₒ, -1ₒ⟫(__it)))(pp),
+                       (⇑(λ(__it) → ·⟪_OffKolorₒ, -1ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp))
+                     ))
       )
     );
   compute_zavgS_cartesian_2 = λ(pp, S_M, domain_max_i, domain_max_j) → 
@@ -120,15 +122,17 @@ pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max
         0.5,
         concat_where(
           IDimₕ == domain_max_i - 1,
-          concat_where(
-            JDimₕ == domain_max_j - 1,
-            (⇑(λ(__arg0, __arg1) → ·__arg0 - ·__arg1))(pp, pp),
-            (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp))
-          ),
           concat_where(JDimₕ == domain_max_j - 1,
-                       (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp),
+                       0.0,
                        (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
-                         (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp), (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp)
+                         (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))(pp),
+                         (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp))
+                       )),
+          concat_where(JDimₕ == domain_max_j - 1,
+                       (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp)),
+                       (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                         (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp)),
+                         (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp))
                        ))
         )
       )
@@ -175,7 +179,8 @@ pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max
            )
          )
        ))(compute_zavgS_cartesian(pp, S_M, domain_max_i, domain_max_j));
-  out @ c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[ ⟩ ← compute_pnabla_cartesian(pp, S_M, sign, vol, 13, 11);
+  out @ c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 1[ ⟩
+       ← compute_pnabla_cartesian(pp, S_M, sign, vol, 13, 11);
 }
 ============================================================
 
@@ -184,58 +189,59 @@ pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max
 === GTIR AFTER UNROLLING CARTESIAN REDUCE ===
 ============================================================
 pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max_kolor) {
-  out @ c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[ ⟩
+  out @ c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 1[ ⟩
        ← (λ(zavgSᐞ0) → 
             (⇑(λ(__arg0_, __arg1_) → ·__arg0_ / ·__arg1_))(
               (λ(__cartred_arg0) → 
-                 (⇑(λ(__cartred_it0) → 0 + ·⟪_OffKolorₒ, 0ₒ⟫(__cartred_it0) + ·⟪_OffKolorₒ, 1ₒ⟫(__cartred_it0)
-                                       + ·⟪_OffKolorₒ, 2ₒ⟫(__cartred_it0)))(__cartred_arg0))(
-                (⇑(λ(__arg0__, __arg1__) → ·__arg0__ × ·__arg1__))(
-                  (λ(__cwcda_field_a, __cwcda_field_b) → 
-                     concat_where(c⟨ Kolorₕ: [-∞, 0[ ⟩,
-                                  __cwcda_field_a,
-                                  concat_where(c⟨ Kolorₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                    (λ(__cwcda_field_a, __cwcda_field_b) → 
-                       concat_where(c⟨ Kolorₕ: [-∞, 1[ ⟩,
-                                    __cwcda_field_a,
-                                    concat_where(c⟨ Kolorₕ: [1 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                      (λ(__cwcda_field_a, __cwcda_field_b) → 
-                         concat_where(c⟨ IDimₕ: [-∞, 0[ ⟩,
-                                      __cwcda_field_a,
-                                      concat_where(c⟨ IDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                        (λ(__cwcda_field_a, __cwcda_field_b) → 
-                           concat_where(c⟨ JDimₕ: [-∞, 0[ ⟩,
-                                        __cwcda_field_a,
-                                        concat_where(c⟨ JDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                          (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
-                            (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0), (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)
-                          ), (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)
-                        ), (λ(__cwcda_field_a, __cwcda_field_b) → 
-                              concat_where(c⟨ JDimₕ: [-∞, 0[ ⟩,
-                                           __cwcda_field_a,
-                                           concat_where(c⟨ JDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                             (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0),
-                             (⇑(λ(__arg0, __arg1) → ·__arg0 - ·__arg1))(zavgSᐞ0, zavgSᐞ0)
-                           )
-                      ),
-                      (λ(__cwcda_field_a, __cwcda_field_b) → 
-                         concat_where(c⟨ IDimₕ: [-∞, 0[ ⟩,
-                                      __cwcda_field_a,
-                                      concat_where(c⟨ IDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                        (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(zavgSᐞ0, (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)),
-                        zavgSᐞ0
-                      )
-                    ),
-                    (λ(__cwcda_field_a, __cwcda_field_b) → 
-                       concat_where(c⟨ JDimₕ: [-∞, 0[ ⟩,
-                                    __cwcda_field_a,
-                                    concat_where(c⟨ JDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                      (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(zavgSᐞ0, (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)),
-                      zavgSᐞ0
-                    )
-                  ), sign
-                )
-              ), vol
+                 as_fieldop(
+                   λ(__cartred_it0) → 0 + ·⟪_OffKolorₒ, 0ₒ⟫(__cartred_it0) + ·⟪_OffKolorₒ, 1ₒ⟫(__cartred_it0)
+                                      + ·⟪_OffKolorₒ, 2ₒ⟫(__cartred_it0),
+                   c⟨ IDimₕ: [get_domain_range(__cartred_arg0, IDimₕ)[0], get_domain_range(__cartred_arg0, IDimₕ)[1][, JDimₕ: [get_domain_range(__cartred_arg0, JDimₕ)[0], get_domain_range(__cartred_arg0, JDimₕ)[1][ ⟩
+                 )(__cartred_arg0))((⇑(λ(__arg0__, __arg1__) → ·__arg0__ × ·__arg1__))(
+                                      (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                         concat_where(c⟨ Kolorₕ: [-∞, 0[ ⟩,
+                                                      __cwcda_field_a,
+                                                      concat_where(c⟨ Kolorₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                        (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                           concat_where(c⟨ Kolorₕ: [-∞, 1[ ⟩,
+                                                        __cwcda_field_a,
+                                                        concat_where(c⟨ Kolorₕ: [1 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                          (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                             concat_where(c⟨ IDimₕ: [-∞, 0[ ⟩,
+                                                          __cwcda_field_a,
+                                                          concat_where(c⟨ IDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                            (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                               concat_where(c⟨ JDimₕ: [-∞, 0[ ⟩,
+                                                            __cwcda_field_a,
+                                                            concat_where(c⟨ JDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                              (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                                                (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0), (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)
+                                              ), (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)
+                                            ), (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                                  concat_where(c⟨ JDimₕ: [-∞, 0[ ⟩,
+                                                               __cwcda_field_a,
+                                                               concat_where(c⟨ JDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                                 (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0),
+                                                 (⇑(λ(__arg0, __arg1) → ·__arg0 - ·__arg1))(zavgSᐞ0, zavgSᐞ0)
+                                               )
+                                          ),
+                                          (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                             concat_where(c⟨ IDimₕ: [-∞, 0[ ⟩,
+                                                          __cwcda_field_a,
+                                                          concat_where(c⟨ IDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                            (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(zavgSᐞ0, (⇑(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)),
+                                            zavgSᐞ0
+                                          )
+                                        ),
+                                        (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                           concat_where(c⟨ JDimₕ: [-∞, 0[ ⟩,
+                                                        __cwcda_field_a,
+                                                        concat_where(c⟨ JDimₕ: [0 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                          (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(zavgSᐞ0, (⇑(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it)))(zavgSᐞ0)),
+                                          zavgSᐞ0
+                                        )
+                                      ), sign
+                                    )), vol
             ))((λ(__cwcda_field_a, __cwcda_field_b) → 
                   concat_where(c⟨ Kolorₕ: [-∞, 0[ ⟩,
                                __cwcda_field_a,
@@ -247,39 +253,43 @@ pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max
                    (⇑(λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_))(
                      S_M,
                      (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
-                       0.5,
-                       (λ(__cwcda_field_a, __cwcda_field_b) → 
-                          concat_where(c⟨ IDimₕ: [-∞, 12[ ⟩,
-                                       __cwcda_field_a,
-                                       concat_where(c⟨ IDimₕ: [12 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                         (λ(__cwcda_field_a, __cwcda_field_b) → 
-                            concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩,
-                                         __cwcda_field_a,
-                                         concat_where(c⟨ JDimₕ: [10 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                           (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
-                             (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp), (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp)
-                           ), (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp)
-                         ), (λ(__cwcda_field_a, __cwcda_field_b) → 
-                               concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩,
-                                            __cwcda_field_a,
-                                            concat_where(c⟨ JDimₕ: [10 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                              (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp)),
-                              (⇑(λ(__arg0, __arg1) → ·__arg0 - ·__arg1))(pp, pp)
-                            )
-                       )
-                     )
-                   ),
-                   (⇑(λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_))(
-                     S_M,
-                     (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
                        0.5, (λ(__cwcda_field_a, __cwcda_field_b) → 
                                concat_where(c⟨ IDimₕ: [-∞, 12[ ⟩,
                                             __cwcda_field_a,
                                             concat_where(c⟨ IDimₕ: [12 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
-                              (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(pp, (⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp)), pp
+                              (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                 concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩,
+                                              __cwcda_field_a,
+                                              concat_where(c⟨ JDimₕ: [10 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                                  (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp)),
+                                  (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp))
+                                ), (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp))
+                              ), (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                    concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩,
+                                                 __cwcda_field_a,
+                                                 concat_where(c⟨ JDimₕ: [10 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                   (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                                     (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))(pp),
+                                     (⇑(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it)))(pp))
+                                   ), 0.0
+                                 )
                             )
                      )
-                   )
+                   ), (⇑(λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_))(
+                        S_M,
+                        (⇑(λ(__arg0, __arg1) → ·__arg0 × ·__arg1))(
+                          0.5, (λ(__cwcda_field_a, __cwcda_field_b) → 
+                                  concat_where(c⟨ IDimₕ: [-∞, 12[ ⟩,
+                                               __cwcda_field_a,
+                                               concat_where(c⟨ IDimₕ: [12 + 1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                                 (⇑(λ(__arg0, __arg1) → ·__arg0 + ·__arg1))(
+                                   (⇑(λ(__it) → ·⟪_OffKolorₒ, -1ₒ⟫(__it)))(pp),
+                                   (⇑(λ(__it) → ·⟪_OffKolorₒ, -1ₒ⟫(__it)))((⇑(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it)))(pp))
+                                 ), (⇑(λ(__it) → ·⟪_OffKolorₒ, -1ₒ⟫(__it)))(pp)
+                               )
+                        )
+                      )
                  ),
                  (⇑(λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_))(
                    S_M,
@@ -296,3 +306,241 @@ pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max
 }
 ============================================================
 
+
+============================================================
+=== GTIR AFTER COMMON TRANSFORMS BEFORE INFER_DOMAIN ===
+============================================================
+pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max_kolor) {
+  out @ c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 1[ ⟩
+       ← (λ(zavgSᐞ0) → 
+            as_fieldop(
+              λ(__arg0_, __arg1_) → ·__arg0_ / ·__arg1_, c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 1[ ⟩
+            )((λ(__cartred_arg0) → 
+                 as_fieldop(
+                   λ(__cartred_it0) → ·⟪_OffKolorₒ, 0ₒ⟫(__cartred_it0) + ·⟪_OffKolorₒ, 1ₒ⟫(__cartred_it0)
+                                      + ·⟪_OffKolorₒ, 2ₒ⟫(__cartred_it0), c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[ ⟩
+                 )(__cartred_arg0))(
+                as_fieldop(
+                  λ(__arg0__, __arg1__) → ·__arg0__ × ·__arg1__, c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 5[ ⟩
+                )((λ(__cwcda_field_a, __cwcda_field_b) → 
+                     concat_where(c⟨ Kolorₕ: [1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                    (λ(__cwcda_field_a, __cwcda_field_b) → 
+                       concat_where(c⟨ Kolorₕ: [-∞, 1[ ⟩,
+                                    __cwcda_field_a,
+                                    concat_where(c⟨ Kolorₕ: [2, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+                      (λ(__cwcda_field_a, __cwcda_field_b) → 
+                         concat_where(c⟨ IDimₕ: [1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                        (λ(__cwcda_field_a, __cwcda_field_b) → 
+                           concat_where(c⟨ JDimₕ: [1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                          as_fieldop(
+                            λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 5[ ⟩
+                          )(as_fieldop(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it), c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 5[ ⟩)(
+                              zavgSᐞ0
+                            ),
+                            as_fieldop(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it), c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 5[ ⟩)(
+                              zavgSᐞ0
+                            )),
+                          as_fieldop(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it), c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 1[, Kolorₕ: [0, 5[ ⟩)(
+                            zavgSᐞ0
+                          )
+                        ),
+                        (λ(__cwcda_field_a, __cwcda_field_b) → 
+                           concat_where(c⟨ JDimₕ: [1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                          as_fieldop(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it), c⟨ IDimₕ: [0, 1[, JDimₕ: [0, 11[, Kolorₕ: [0, 5[ ⟩)(
+                            zavgSᐞ0
+                          ),
+                          as_fieldop(λ(__arg0, __arg1) → ·__arg0 - ·__arg1, c⟨ IDimₕ: [0, 1[, JDimₕ: [0, 1[, Kolorₕ: [0, 5[ ⟩)(
+                            zavgSᐞ0, zavgSᐞ0
+                          )
+                        )
+                      ),
+                      (λ(__cwcda_field_a, __cwcda_field_b) → 
+                         concat_where(c⟨ IDimₕ: [1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                        as_fieldop(
+                          λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [1, 2[ ⟩
+                        )(zavgSᐞ0,
+                          as_fieldop(λ(__it) → ·⟪_OffIDimₒ, -1ₒ⟫(__it), c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [1, 2[ ⟩)(
+                            zavgSᐞ0
+                          )), zavgSᐞ0
+                      )
+                    ), (λ(__cwcda_field_a, __cwcda_field_b) → 
+                          concat_where(c⟨ JDimₕ: [1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                         as_fieldop(
+                           λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 1[ ⟩
+                         )(zavgSᐞ0,
+                           as_fieldop(λ(__it) → ·⟪_OffJDimₒ, -1ₒ⟫(__it), c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 1[ ⟩)(
+                             zavgSᐞ0
+                           )), zavgSᐞ0
+                       )
+                  ), sign)
+              ), vol))(
+           (λ(__cwcda_field_a, __cwcda_field_b) → 
+              concat_where(c⟨ Kolorₕ: [1, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+             (λ(__cwcda_field_a, __cwcda_field_b) → 
+                concat_where(c⟨ Kolorₕ: [-∞, 1[ ⟩,
+                             __cwcda_field_a,
+                             concat_where(c⟨ Kolorₕ: [2, ∞[ ⟩, __cwcda_field_a, __cwcda_field_b)))(
+               as_fieldop(
+                 λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_, c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩
+               )(S_M,
+                 as_fieldop(
+                   λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩
+                 )(0.5,
+                   (λ(__cwcda_field_a, __cwcda_field_b) → 
+                      concat_where(c⟨ IDimₕ: [-∞, 12[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                     (λ(__cwcda_field_a, __cwcda_field_b) → 
+                        concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                       as_fieldop(
+                         λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩
+                       )(as_fieldop(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩)(
+                           as_fieldop(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [-2, 3[ ⟩)(
+                             pp
+                           )
+                         ),
+                         as_fieldop(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩)(
+                           as_fieldop(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [-2, 3[ ⟩)(
+                             pp
+                           )
+                         )),
+                       as_fieldop(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [10, 11[, Kolorₕ: [0, 5[ ⟩)(
+                         as_fieldop(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [10, 11[, Kolorₕ: [-2, 3[ ⟩)(
+                           pp
+                         )
+                       )
+                     ),
+                     (λ(__cwcda_field_a, __cwcda_field_b) → 
+                        concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                       as_fieldop(
+                         λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [12, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩
+                       )(as_fieldop(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it), c⟨ IDimₕ: [12, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩)(
+                           pp
+                         ),
+                         as_fieldop(λ(__it) → ·⟪_OffKolorₒ, -2ₒ⟫(__it), c⟨ IDimₕ: [12, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩)(
+                           as_fieldop(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it), c⟨ IDimₕ: [12, 13[, JDimₕ: [-1, 11[, Kolorₕ: [-2, 3[ ⟩)(
+                             pp
+                           )
+                         )), 0.0
+                     )
+                   ))),
+               as_fieldop(
+                 λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_, c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [1, 2[ ⟩
+               )(S_M,
+                 as_fieldop(
+                   λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [1, 2[ ⟩
+                 )(0.5,
+                   (λ(__cwcda_field_a, __cwcda_field_b) → 
+                      concat_where(c⟨ IDimₕ: [-∞, 12[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                     as_fieldop(
+                       λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [1, 2[ ⟩
+                     )(as_fieldop(λ(__it) → ·⟪_OffKolorₒ, -1ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [1, 2[ ⟩)(
+                         pp
+                       ),
+                       as_fieldop(λ(__it) → ·⟪_OffKolorₒ, -1ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [1, 2[ ⟩)(
+                         as_fieldop(λ(__it) → ·⟪_OffIDimₒ, 1ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 1[ ⟩)(
+                           pp
+                         )
+                       )),
+                     as_fieldop(λ(__it) → ·⟪_OffKolorₒ, -1ₒ⟫(__it), c⟨ IDimₕ: [12, 13[, JDimₕ: [-1, 11[, Kolorₕ: [1, 2[ ⟩)(
+                       pp
+                     )
+                   )))
+             ), as_fieldop(
+                  λ(__arg0_, __arg1_) → ·__arg0_ × ·__arg1_, c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 1[ ⟩
+                )(S_M,
+                  as_fieldop(
+                    λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 1[ ⟩
+                  )(0.5,
+                    (λ(__cwcda_field_a, __cwcda_field_b) → 
+                       concat_where(c⟨ JDimₕ: [-∞, 10[ ⟩, __cwcda_field_a, __cwcda_field_b))(
+                      as_fieldop(
+                        λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 1[ ⟩
+                      )(pp,
+                        as_fieldop(λ(__it) → ·⟪_OffJDimₒ, 1ₒ⟫(__it), c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 1[ ⟩)(
+                          pp
+                        )), pp
+                    )))
+           )
+         );
+}
+============================================================
+
+
+============================================================
+=== GTIR END ===
+============================================================
+pnabla_cartesian(pp, S_M, sign, vol, out, domain_max_i, domain_max_j, domain_max_kolor) {
+  __tmp_0 = temporary(domain=c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 5[ ⟩, dtype=float64);
+  __tmp_1 = temporary(domain=c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩, dtype=float64);
+  __tmp_1 @ c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩
+       ← as_fieldop(
+           λ(__ct_flat_el_0___tcw_pos__, S_M, __iasfop_85, __iasfop_86, pp) → 
+             (λ(_cs_17) → 
+                if   1 <= _cs_17 ∧ True
+                then (λ(_icdlv_1) → 
+                        if   True ∧ _cs_17 < 1
+                        then _icdlv_1()
+                        else if   2 <= _cs_17 ∧ True
+                             then _icdlv_1()
+                             else (λ(_cs_8) → 
+                                     (λ(_cs_9) → if True ∧ ·__iasfop_85 < 12 then _cs_9 + ·⟪_OffIDimₒ, 1ₒ⟫(_cs_8) else _cs_9)(·_cs_8))(
+                                    ⟪_OffKolorₒ, -1ₒ⟫(pp)
+                                  ) × 0.5 × ·S_M)(
+                       λ() → 
+                         (λ(_cs_15) → 
+                            if   True ∧ ·__iasfop_85 < 12
+                            then (λ(_cs_12) → 
+                                    (λ(_cs_13) → if _cs_15 then _cs_13 + ·⟪_OffJDimₒ, 1ₒ⟫(_cs_12) else _cs_13)(·⟪_OffIDimₒ, 1ₒ⟫(_cs_12)))(
+                                   ⟪_OffKolorₒ, -2ₒ⟫(pp)
+                                 )
+                            else if _cs_15 then (λ(_cs_14) → ·_cs_14 + ·⟪_OffJDimₒ, 1ₒ⟫(_cs_14))(⟪_OffKolorₒ, -2ₒ⟫(pp)) else 0.0)(
+                           True ∧ ·__iasfop_86 < 10
+                         ) × 0.5 × ·S_M
+                     )
+                else (λ(_cs_16) → if True ∧ ·__iasfop_86 < 10 then _cs_16 + ·⟪_OffJDimₒ, 1ₒ⟫(pp) else _cs_16)(·pp) × 0.5
+                     × ·S_M)(·__ct_flat_el_0___tcw_pos__), c⟨ IDimₕ: [-1, 13[, JDimₕ: [-1, 11[, Kolorₕ: [0, 5[ ⟩
+         )(index(Kolorₕ), S_M, index(IDimₕ), index(JDimₕ), pp);
+  __tmp_0 @ c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 5[ ⟩
+       ← as_fieldop(
+           λ(__iasfop_30, __iasfop_31, __iasfop_32, zavgSᐞ0, sign) → 
+             (λ(_cs_6) → 
+                if   1 <= _cs_6 ∧ True
+                then (λ(_icdlv_0) → 
+                        if   True ∧ _cs_6 < 1
+                        then _icdlv_0()
+                        else if   2 <= _cs_6 ∧ True
+                             then _icdlv_0()
+                             else (λ(_cs_0) → if 1 <= ·__iasfop_31 ∧ True then _cs_0 + ·⟪_OffIDimₒ, -1ₒ⟫(zavgSᐞ0) else _cs_0)(·zavgSᐞ0))(
+                       λ() → 
+                         (λ(_cs_4) → 
+                            if   1 <= ·__iasfop_31 ∧ True
+                            then (λ(_cs_2) → if _cs_4 then _cs_2 + ·⟪_OffJDimₒ, -1ₒ⟫(zavgSᐞ0) else _cs_2)(·⟪_OffIDimₒ, -1ₒ⟫(zavgSᐞ0))
+                            else if _cs_4 then ·⟪_OffJDimₒ, -1ₒ⟫(zavgSᐞ0) else (λ(_cs_3) → _cs_3 - _cs_3)(·zavgSᐞ0))(
+                           1 <= ·__iasfop_32 ∧ True
+                         )
+                     )
+                else (λ(_cs_5) → if 1 <= ·__iasfop_32 ∧ True then _cs_5 + ·⟪_OffJDimₒ, -1ₒ⟫(zavgSᐞ0) else _cs_5)(·zavgSᐞ0))(·__iasfop_30)
+             × ·sign, c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 5[ ⟩
+         )(index(Kolorₕ), index(IDimₕ), index(JDimₕ), __tmp_1, sign);
+  out @ c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 1[ ⟩
+       ← as_fieldop(
+           λ(__iasfop_34, vol) → 
+             (·⟪_OffKolorₒ, 0ₒ⟫(__iasfop_34) + ·⟪_OffKolorₒ, 1ₒ⟫(__iasfop_34) + ·⟪_OffKolorₒ, 2ₒ⟫(__iasfop_34))
+             / ·vol, c⟨ IDimₕ: [0, 13[, JDimₕ: [0, 11[, Kolorₕ: [0, 1[ ⟩
+         )(__tmp_0, vol);
+}
+============================================================
+
+Output of pnabla_cartesian:
+ [[  6.   14.5  18.5  22.5  26.5  30.5  34.5  38.5  42.5  46.5  40. ]
+ [ 39.5  72.   78.   84.   90.   96.  102.  108.  114.  120.   88.5]
+ [ 83.5 138.  144.  150.  156.  162.  168.  174.  180.  186.  132.5]
+ [127.5 204.  210.  216.  222.  228.  234.  240.  246.  252.  176.5]
+ [171.5 270.  276.  282.  288.  294.  300.  306.  312.  318.  220.5]
+ [215.5 336.  342.  348.  354.  360.  366.  372.  378.  384.  264.5]
+ [259.5 402.  408.  414.  420.  426.  432.  438.  444.  450.  308.5]
+ [303.5 468.  474.  480.  486.  492.  498.  504.  510.  516.  352.5]
+ [347.5 534.  540.  546.  552.  558.  564.  570.  576.  582.  396.5]
+ [391.5 600.  606.  612.  618.  624.  630.  636.  642.  648.  440.5]
+ [435.5 666.  672.  678.  684.  690.  696.  702.  708.  714.  484.5]
+ [479.5 732.  738.  744.  750.  756.  762.  768.  774.  780.  528.5]
+ [386.  521.5 525.5 529.5 533.5 537.5 541.5 545.5 549.5 553.5 278. ]]

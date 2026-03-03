@@ -182,20 +182,72 @@ class GTFNTranslationStep(
         return new_program
 
     @staticmethod
+    def _infer_kolor_extent_from_program(program: itir.Program) -> Optional[int]:
+        kolor_offset = common.dimension_to_implicit_offset("Kolor")
+        kolor_shift_indices: list[int] = []
+
+        for node in program.pre_walk_values().if_isinstance(itir.FunCall):
+            if not (
+                isinstance(node.fun, itir.SymRef) and node.fun.id == "shift" and len(node.args) == 2
+            ):
+                continue
+
+            axis_offset, index_offset = node.args
+            if not (
+                isinstance(axis_offset, itir.OffsetLiteral)
+                and axis_offset.value == kolor_offset
+                and isinstance(index_offset, itir.OffsetLiteral)
+                and isinstance(index_offset.value, int)
+            ):
+                continue
+
+            kolor_shift_indices.append(index_offset.value)
+
+        if not kolor_shift_indices:
+            return None
+
+        max_backward_offset = max((-idx for idx in kolor_shift_indices if idx < 0), default=0)
+        inferred_extent = max_backward_offset + 1
+        return inferred_extent if inferred_extent >= 2 else None
+
+    @staticmethod
     def _resolve_cartesian_reduce_axis_ranges(
+        program: itir.Program,
         argument_descriptor_contexts: arguments.ArgStaticDescriptorsContextsByType,
     ) -> Optional[dict[common.Dimension, tuple[int, int]]]:
+        inferred_kolor_extent = GTFNTranslationStep._infer_kolor_extent_from_program(program)
+
         static_arg_descriptors = argument_descriptor_contexts.get(arguments.StaticArg)
         if static_arg_descriptors is None:
+            if inferred_kolor_extent is not None:
+                return {common.Dimension("Kolor"): (0, inferred_kolor_extent)}
             return None
 
         domain_max_kolor = static_arg_descriptors.get("domain_max_kolor")
         if not isinstance(domain_max_kolor, arguments.StaticArg):
+            if inferred_kolor_extent is not None:
+                return {common.Dimension("Kolor"): (0, inferred_kolor_extent)}
             return None
         if not isinstance(domain_max_kolor.value, (int, np.integer)):
+            if inferred_kolor_extent is not None:
+                return {common.Dimension("Kolor"): (0, inferred_kolor_extent)}
             return None
 
-        return {common.Dimension("Kolor"): (0, int(domain_max_kolor.value) + 1)}
+        domain_max_kolor_value = int(domain_max_kolor.value)
+        if domain_max_kolor_value >= 2:
+            return {common.Dimension("Kolor"): (0, domain_max_kolor_value)}
+
+        if inferred_kolor_extent is not None:
+            return {common.Dimension("Kolor"): (0, inferred_kolor_extent)}
+
+        if domain_max_kolor_value == 1:
+            # In many reduction kernels this static arg reflects the reduced output extent.
+            # Fall back to a 2-color reduction when no stronger signal is available.
+            return {common.Dimension("Kolor"): (0, 2)}
+
+        if domain_max_kolor_value <= 0:
+            return None
+        return None
 
     def generate_stencil_source(
         self,
@@ -259,7 +311,7 @@ class GTFNTranslationStep(
         )
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         cartesian_reduce_axis_ranges = self._resolve_cartesian_reduce_axis_ranges(
-            inp.args.argument_descriptor_contexts
+            program, inp.args.argument_descriptor_contexts
         )
         stencil_src = self.generate_stencil_source(
             program,
