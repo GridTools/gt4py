@@ -12,11 +12,11 @@ from __future__ import annotations
 import contextlib
 import warnings
 from collections.abc import Callable
-from typing import Any, ClassVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from gt4py._core import definitions as core_definitions
-from gt4py._core import types as core_types
+from gt4py._core import definitions as core_definitions, types as core_types
 from gt4py.next import common, typing as gtx_typing
+
 
 _current_profiler = None
 
