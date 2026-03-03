@@ -21,7 +21,7 @@ import numpy as np
 import numpy.typing as npt
 
 from gt4py import eve
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, types as core_types
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
     Any,
@@ -1117,8 +1117,8 @@ class IndexField(common.Field):
             return common.Domain()
 
     @property
-    def codomain(self) -> type[core_defs.int32]:
-        return core_defs.int32
+    def codomain(self) -> type[core_types.int32]:
+        return core_types.int32
 
     @property
     def dtype(self) -> core_defs.Int32DType:

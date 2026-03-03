@@ -12,11 +12,10 @@ import dataclasses
 import enum
 import importlib
 from typing import Final
-
 import pytest
 
-from gt4py.next import allocators as next_allocators
-
+from gt4py.next.embedded import nd_array_field
+from gt4py.next import constructors
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -55,21 +54,19 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 @dataclasses.dataclass(frozen=True)
 class EmbeddedDummyBackend:
     name: str
-    allocator: next_allocators.FieldBufferAllocatorProtocol
+    allocator: constructors.Allocator
     executor: Final = None
 
 
-numpy_execution = EmbeddedDummyBackend(
-    "EmbeddedNumPy", next_allocators.StandardCPUFieldBufferAllocator()
-)
-cupy_execution = EmbeddedDummyBackend(
-    "EmbeddedCuPy", next_allocators.StandardGPUFieldBufferAllocator()
-)
+numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", nd_array_field.np)
+cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", nd_array_field.cp)
+jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", nd_array_field.jnp)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
+    JAX_NUMPY_EXECUTION = "next_tests.definitions.jax_numpy_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -129,6 +126,7 @@ USES_PROGRAM_METRICS = "uses_program_metrics"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 USES_CONCAT_WHERE = "uses_concat_where"
 EMBEDDED_CONCAT_WHERE_INFINITE_DOMAIN = "embedded_concat_where_infinite_domain"
+USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS = "uses_program_with_sliced_out_arguments"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -139,7 +137,6 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
 )
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
-    (REQUIRES_ATLAS, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
@@ -173,6 +170,9 @@ EMBEDDED_SKIP_LIST = [
     ),  # we can't extract the field type from scan args
     (EMBEDDED_CONCAT_WHERE_INFINITE_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+JAX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
+    (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
+]
 ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_PROGRAM_METRICS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
@@ -200,6 +200,7 @@ GTFN_SKIP_TEST_LIST = (
 BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.JAX_NUMPY_EXECUTION: JAX_EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,

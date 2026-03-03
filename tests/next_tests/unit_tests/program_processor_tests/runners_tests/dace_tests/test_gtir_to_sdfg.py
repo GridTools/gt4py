@@ -22,6 +22,7 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -128,7 +129,11 @@ def build_dace_sdfg(
     """
     if not skip_domain_inference:
         # run domain inference in order to add the domain annex information to the IR nodes
-        ir = infer_domain.infer_program(ir, offset_provider=offset_provider)
+        ir = infer_domain.infer_program(
+            ir,
+            offset_provider=offset_provider,
+            symbolic_domain_sizes=pass_manager._max_domain_range_sizes(offset_provider),
+        )
     offset_provider_type = gtx_common.offset_provider_to_type(offset_provider)
     return dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
 
@@ -220,7 +225,7 @@ def test_gtir_copy_self():
         body=[
             gtir.SetAt(
                 expr=gtir.SymRef(id="x"),
-                domain=im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, 2)}),
+                domain=im.domain(gtx_common.GridType.CARTESIAN, {IDim: (1, 2)}),
                 target=gtir.SymRef(id="x"),
             )
         ],
@@ -414,7 +419,7 @@ def test_gtir_tuple_broadcast_scalar():
 
 def test_gtir_zero_dim_fields():
     domain = im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", [IDim])
-    empty_domain = im.domain(gtx_common.GridType.CARTESIAN, ranges={})
+    empty_domain = im.domain(gtx_common.GridType.CARTESIAN, {})
     testee = gtir.Program(
         id="gtir_zero_dim_fields",
         function_definitions=[],
@@ -1647,8 +1652,40 @@ def test_gtir_let_lambda():
     assert np.allclose(b, ref)
 
 
+def test_gtir_let_lambda_unused_arg():
+    testee = gtir.Program(
+        id="let_lambda_unused_arg",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="z", type=IFTYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                # Arg 'xᐞ1' is used inside the let-lambda, 'yᐞ1' is not.
+                expr=im.let(("xᐞ1", im.op_as_fieldop("multiplies")("x", 3.0)), ("yᐞ1", "y"))(
+                    im.op_as_fieldop("multiplies")("xᐞ1", 2.0)
+                ),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim]),
+                target=gtir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    c = np.random.rand(N)
+
+    sdfg = build_dace_sdfg(testee, {})
+
+    sdfg(a, b, c, **FSYMBOLS)
+    assert np.allclose(c, a * 6.0)
+
+
 def test_gtir_let_lambda_scalar_expression():
-    domain_inner = im.domain(gtx_common.GridType.CARTESIAN, ranges={IDim: (1, "size_inner")})
+    domain_inner = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (1, "size_inner")})
     domain_outer = im.get_field_domain(
         gtx_common.GridType.CARTESIAN,
         "y",
@@ -2150,8 +2187,6 @@ def test_gtir_concat_where():
             ],
         )
 
-        # run domain inference in order to add the domain annex information to the concat_where node.
-        testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
         sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
         c = np.empty_like(a)
 
@@ -2231,8 +2266,6 @@ def test_gtir_concat_where_two_dimensions():
         "__z_JDim_stride": d.strides[1] // d.itemsize,
     }
 
-    # run domain inference in order to add the domain annex information to the concat_where node.
-    testee = infer_domain.infer_program(testee, offset_provider=CARTESIAN_OFFSETS)
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     sdfg(a, b, c, d, **field_symbols)
@@ -2318,3 +2351,68 @@ def test_gtir_scan(id, use_symbolic_column_size):
 
     sdfg(a, b, z, **symbols)
     assert np.allclose(b, ref)
+
+
+def test_gtir_scan_single_level_output():
+    K = 20
+    VAL0 = 1.2
+    VAL1 = 2.1
+    full_domain = im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", [IDim, KDim])
+    one_level_domain = im.get_field_domain(gtx_common.GridType.CARTESIAN, "z", [IDim, KDim])
+    # We write only to the last level of `z` field (args[1] is range start, args[2] is range end)
+    one_level_domain.args[1].args[1] = im.minus(one_level_domain.args[1].args[2], 1)
+
+    testee = gtir.Program(
+        id="gtir_scan_single_level_output",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="y", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+            gtir.Sym(id="z", type=ts.FieldType(dims=[IDim, KDim], dtype=FLOAT_TYPE)),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=im.as_fieldop(
+                    im.scan(
+                        im.lambda_("state", "inp")(
+                            im.make_tuple(
+                                im.plus(im.tuple_get(0, "state"), im.deref("inp")),
+                                im.plus(im.tuple_get(1, "state"), im.deref("inp")),
+                            ),
+                        ),
+                        True,
+                        im.make_tuple(VAL0, VAL1),
+                    )
+                )("x"),
+                domain=im.make_tuple(full_domain, one_level_domain),
+                target=im.make_tuple(gtir.SymRef(id="y"), gtir.SymRef(id="z")),
+            )
+        ],
+    )
+
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
+
+    a = np.random.rand(N, K)
+    b = np.random.rand(N, K)
+    c = np.random.rand(N, K)
+    ref = np.add.accumulate(a, axis=1)
+
+    symbols = FSYMBOLS | {
+        "__x_KDim_range_0": 0,
+        "__x_KDim_range_1": a.shape[1],
+        "__x_IDim_stride": a.strides[0] // a.itemsize,
+        "__x_KDim_stride": a.strides[1] // a.itemsize,
+        "__y_KDim_range_0": 0,
+        "__y_KDim_range_1": b.shape[1],
+        "__y_IDim_stride": b.strides[0] // b.itemsize,
+        "__y_KDim_stride": b.strides[1] // b.itemsize,
+        "__z_KDim_range_0": 0,
+        "__z_KDim_range_1": c.shape[1],
+        "__z_IDim_stride": c.strides[0] // c.itemsize,
+        "__z_KDim_stride": c.strides[1] // c.itemsize,
+    }
+
+    sdfg(a, b, c, **symbols)
+    assert np.allclose(b, ref + VAL0)
+    assert np.allclose(c, np.concatenate([c[:, :-1], ref[:, -1:] + VAL1], axis=1))

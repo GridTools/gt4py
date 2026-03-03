@@ -25,7 +25,9 @@ import dace
 
 
 def _make_split_edge_two_ac_producer_one_ac_consumer_1d_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("split_edge_two_ac_producer_one_ac_consumer_1d"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("split_edge_two_ac_producer_one_ac_consumer_1d")
+    )
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array("src1", shape=(10,), dtype=dace.float64, transient=False)
@@ -79,7 +81,7 @@ def _make_split_edge_mock_apply_diffusion_to_w_sdfg() -> tuple[
 ]:
     # Test is roughly equivalent to what we see in `apply_diffusion_to_w`
     #  Although instead of Maps we sometimes use direct edges.
-    sdfg = dace.SDFG(util.unique_name("split_edge_mock_apply_diffusion_to_w"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("split_edge_mock_apply_diffusion_to_w"))
 
     state = sdfg.add_state(is_start_block=True)
 

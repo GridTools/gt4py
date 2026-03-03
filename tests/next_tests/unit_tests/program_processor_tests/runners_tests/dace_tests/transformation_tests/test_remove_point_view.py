@@ -25,7 +25,7 @@ def _make_sdfg_with_map_with_view(
     use_array_as_temp: bool = False,
 ) -> dace.SDFG:
     shape = (N, N)
-    sdfg = dace.SDFG(util.unique_name("simple_map_with_view"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple_map_with_view"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in ["a", "out"]:
