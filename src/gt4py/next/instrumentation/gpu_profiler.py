@@ -12,38 +12,40 @@ from __future__ import annotations
 import contextlib
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 from gt4py._core import definitions as core_definitions, types as core_types
 from gt4py.next import common, typing as gtx_typing
 from gt4py.next.instrumentation import hooks
 
 
+if core_definitions.CUPY_DEVICE_TYPE is not None:
+    import cupyx.profiler as cupy_profiler
 
+    time_range = cupy_profiler.time_range
 
-class time_range(contextlib.AbstractContextManager):
-    def __init__(
-        self,
-        message: str | None = None,
-        color_id: int | None = None,
-        argb_color: core_types.int32 | None = None,
-        sync=False,
-    ) -> None:
-        warnings.warn(
-            "GT4Py profiling is only supported when using a GPU.",
-            UserWarning,
-            stacklevel=2,
-        )
+else:
+
+    class time_range(contextlib.AbstractContextManager):
+        def __init__(
+            self,
+            message: str | None = None,
+            color_id: int | None = None,
+            argb_color: core_types.int32 | None = None,
+            sync=False,
+        ) -> None:
+            warnings.warn(
+                "GT4Py profiling is only supported when using a GPU.",
+                UserWarning,
+                stacklevel=2,
+            )
 
 
 @contextlib.contextmanager
 def profile_calls():
-    warnings.warn(
-        "GT4Py profiling is only supported when using a GPU.",
-        UserWarning,
-        stacklevel=2,
-    )
+    start_profiling_calls()
     yield
+    stop_profiling_calls()
 
 
 def start_profiling_calls() -> None:
@@ -57,14 +59,16 @@ def stop_profiling_calls() -> None:
 
 
 class ProgramProfiler(contextlib.AbstractContextManager):
-    __slots__ = ("name", "time_range")
     name: str
     time_range: cupy_profiler.time_range
+
     COLOR_ID: ClassVar[int]
 
+    __slots__ = ("name", "time_range")
+
     def __enter__(self) -> None:
-        self.time_range = time_range(self.name, color_id=self.COLOR_ID).__enter__()
         print(f"\n\n\n\nProfiling {self.name}...")
+        self.time_range = time_range(self.name, color_id=self.COLOR_ID).__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.time_range.__exit__(exc_type, exc_val, exc_tb)
@@ -98,13 +102,3 @@ class CompiledProgramCallProfiler(ProgramProfiler):
         key: gtx_typing.CompiledProgramsKey,
     ) -> None:
         self.name = f"{root[0]}<{root[1]}>"
-
-
-if not TYPE_CHECKING and core_definitions.CUPY_DEVICE_TYPE is not None:
-    import cupyx.profiler as cupy_profiler
-
-    time_range = cupy_profiler.time_range
-    #profile_all = cupy_profiler.profile
-
-
-assert cupy_profiler is not None, "cupy_profiler should be available when CUPY_DEVICE_TYPE is set"  
