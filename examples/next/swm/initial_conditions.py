@@ -52,17 +52,23 @@ def apply_periodic_halo(arr, top=0, bottom=0, left=0, right=0):
     """
     xp = arr.__array_namespace__()
 
-    # Apply vertical padding
+    # Build vertical padding from the original array before any modification
+    parts_v = []
     if top > 0:
-        arr = xp.concatenate([arr[-top:, :], arr], axis=0)
+        parts_v.append(arr[-top:, :])
+    parts_v.append(arr)
     if bottom > 0:
-        arr = xp.concatenate([arr, arr[:bottom, :]], axis=0)
+        parts_v.append(arr[:bottom, :])
+    arr = xp.concatenate(parts_v, axis=0)
 
-    # Apply horizontal padding
+    # Build horizontal padding from the vertically-padded array
+    parts_h = []
     if left > 0:
-        arr = xp.concatenate([arr[:, -left:], arr], axis=1)
+        parts_h.append(arr[:, -left:])
+    parts_h.append(arr)
     if right > 0:
-        arr = xp.concatenate([arr, arr[:, :right]], axis=1)
+        parts_h.append(arr[:, :right])
+    arr = xp.concatenate(parts_h, axis=1)
 
     return arr
 
