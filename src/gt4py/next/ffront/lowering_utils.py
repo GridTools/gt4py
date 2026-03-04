@@ -60,7 +60,7 @@ def _process_elements_impl(
     current_el_type: ts.TypeSpec,
     arg_types: Optional[Iterable[ts.TypeSpec]],
 ) -> itir.Expr:
-    if isinstance(current_el_type, ts.TupleType):
+    if isinstance(current_el_type, (ts.TupleType, ts.NamedCollectionType)):
         result = im.make_tuple(
             *(
                 _process_elements_impl(

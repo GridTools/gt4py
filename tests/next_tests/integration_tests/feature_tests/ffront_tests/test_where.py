@@ -80,7 +80,7 @@ def test_with_tuples(cartesian_case):
         boundary0: cases.IJField,
         boundary1: cases.IJField,
         boundary2: cases.IJField,
-    ) -> tuple[cases.IJKField, cases.IJKField]:
+    ) -> tuple[cases.IJKField, tuple[cases.IJKField, cases.IJKField]]:
         return where(
             broadcast(k, (IDim, JDim, KDim)) == 0, (boundary0, (boundary1, boundary2)), (interior0, (interior1, interior2))
         )
@@ -105,5 +105,5 @@ def test_with_tuples(cartesian_case):
         *interiors,
         *boundaries,
         out=out,
-        ref=refs,
+        ref=(refs[0], (refs[1], refs[2])),
     )
