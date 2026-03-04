@@ -239,6 +239,9 @@ class HorizontalIntervalParser(IntervalParser):
 
         if isinstance(node, ast.Slice):
             slice_node = node
+        elif isinstance(getattr(node, "slice", None), ast.Slice):
+            # This is the syntax with the inlined slice: K[3:4]
+            slice_node = node.slice
         else:
             # It is a single value and will therefore be (value):(value+1)
             slice_node = cls._slice_from_value(node)
@@ -313,6 +316,9 @@ class VerticalIntervalParser(IntervalParser):
             slice_node = node
         else:
             slice_node = cls._slice_from_value(node)
+
+        if isinstance(slice_node.lower, ast.Constant) and slice_node.lower.value is None:
+            raise parser.interval_error
 
         if slice_node.upper is None:
             slice_node.upper = ast.Constant(value=None)
