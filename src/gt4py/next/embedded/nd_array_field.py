@@ -827,7 +827,7 @@ NdArrayField.register_builtin_func(
     fbuiltins.fmod,  # type: ignore[attr-defined]
     _make_builtin("fmod", "fmod"),
 )
-NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
+NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))  # type: ignore[arg-type] # because where has overloads, that changes it's type according to mypy
 
 
 def _compute_mask_slices(

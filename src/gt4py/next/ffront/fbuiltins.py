@@ -12,7 +12,19 @@ import inspect
 import math
 import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
-from typing import Any, Callable, Final, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Final,
+    Generic,
+    ParamSpec,
+    Tuple,
+    TypeAlias,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 import numpy as np
 from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
@@ -138,13 +150,31 @@ class BuiltInFunction(Generic[_R, _P]):
 
 
 CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
-FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
+TrueFieldT = TypeVar("TrueFieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
+FalseFieldT = TypeVar("FalseFieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
 
 
 class WhereBuiltinFunction(
-    BuiltInFunction[_R, [CondT, FieldT, FieldT]], Generic[_R, CondT, FieldT]
+    BuiltInFunction[_R, [CondT, TrueFieldT, FalseFieldT]],
+    Generic[_R, CondT, TrueFieldT, FalseFieldT],
 ):
-    def __call__(self, cond: CondT, true_field: FieldT, false_field: FieldT) -> _R:
+    @overload
+    def __call__(
+        self,
+        cond: CondT,
+        true_field: common.Field | core_defs.ScalarT,
+        false_field: common.Field | core_defs.ScalarT,
+    ) -> common.Field: ...
+
+    @overload
+    def __call__(
+        self,
+        cond: CondT,
+        true_field: Tuple | core_defs.ScalarT,
+        false_field: Tuple | core_defs.ScalarT,
+    ) -> Tuple: ...
+
+    def __call__(self, cond: CondT, true_field: TrueFieldT, false_field: FalseFieldT) -> _R:
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(

@@ -1210,6 +1210,18 @@ class IndexField(common.Field):
     def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
+    def __lt__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __le__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __gt__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __ge__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
     def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
@@ -1330,6 +1342,18 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __lt__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __le__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __gt__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __ge__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
     def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
