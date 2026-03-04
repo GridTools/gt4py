@@ -32,7 +32,7 @@ def _get_simple_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], np
     can be taken out. This is because how it is constructed. However, applying
     some simplistic transformations will enable the transformation.
     """
-    sdfg = dace.SDFG(util.unique_name("simple_block_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple_block_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_symbol("N", dace.int32)
     sdfg.add_symbol("M", dace.int32)
@@ -55,7 +55,7 @@ def _get_chained_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], n
 
     The bottom Tasklet is the only dependent Tasklet.
     """
-    sdfg = dace.SDFG(util.unique_name("chained_block_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("chained_block_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_symbol("N", dace.int32)
     sdfg.add_symbol("M", dace.int32)
@@ -159,7 +159,7 @@ def _get_sdfg_with_empty_memlet(
         is either dependent or independent), the access node between the tasklets
         and the second tasklet that is always dependent.
     """
-    sdfg = dace.SDFG(util.unique_name("empty_memlet_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("empty_memlet_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_symbol("N", dace.int32)
     sdfg.add_symbol("M", dace.int32)
@@ -404,7 +404,7 @@ def test_direct_map_exit_connection() -> dace.SDFG:
 
     Because the tasklet is connected to the map exit it can not be independent.
     """
-    sdfg = dace.SDFG(util.unique_name("mapped_tasklet_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("mapped_tasklet_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_array("a", (10,), dace.float64, transient=False)
     sdfg.add_array("b", (10, 30), dace.float64, transient=False)
@@ -591,7 +591,7 @@ def _make_loop_blocking_sdfg_with_inner_map(
         The function will return the SDFG, the state and the map entry for the outer
         and inner map.
     """
-    sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_map"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("sdfg_with_inner_map"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "AB":
@@ -756,7 +756,7 @@ def _make_loop_blocking_sdfg_with_independent_inner_map() -> tuple[
     """
     Creates a nested Map that is independent from the blocking parameter.
     """
-    sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_independent_map"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("sdfg_with_inner_independent_map"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array("A", shape=(40, 3), dtype=dace.float64, transient=False)
@@ -833,7 +833,7 @@ def _make_loop_blocking_with_reduction(
     Depending on `reduction_is_dependent` the node is either dependent or not.
     """
     sdfg = dace.SDFG(
-        util.unique_name(
+        gtx_transformations.utils.unique_name(
             "sdfg_with_" + ("" if reduction_is_dependent else "in") + "dependent_reduction"
         )
     )
@@ -954,7 +954,7 @@ def _make_mixed_memlet_sdfg(
         - `tskl1`.
         - `tskl2`.
     """
-    sdfg = dace.SDFG(util.unique_name("mixed_memlet_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("mixed_memlet_sdfg"))
     state = sdfg.add_state(is_start_block=True)
     names_array = ["A", "B", "C"]
     names_scalar = ["tmp1", "tmp2"]
@@ -1148,7 +1148,7 @@ def test_loop_blocking_mixed_memlets_2():
 def test_loop_blocking_no_independent_nodes():
     import dace
 
-    sdfg = dace.SDFG(util.unique_name("mixed_memlet_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("mixed_memlet_sdfg"))
     state = sdfg.add_state(is_start_block=True)
     names = ["A", "B", "C"]
     for aname in names:
@@ -1210,7 +1210,7 @@ def test_loop_blocking_no_independent_nodes():
 
 
 def _make_only_last_two_elements_sdfg() -> dace.SDFG:
-    sdfg = dace.SDFG(util.unique_name("simple_block_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple_block_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_symbol("N", dace.int32)
     sdfg.add_symbol("B", dace.int32)
@@ -1279,7 +1279,7 @@ def test_blocking_size_too_big():
     Here the blocking size is larger than the size in that dimension. Thus the
     transformation will not apply.
     """
-    sdfg = dace.SDFG(util.unique_name("blocking_size_too_large"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("blocking_size_too_large"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "ab":
@@ -1325,7 +1325,7 @@ def test_blocking_size_too_big():
 def _make_loop_blocking_sdfg_with_semi_independent_map() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
 ]:
-    sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_semi_independent_map"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("sdfg_with_inner_semi_independent_map"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array("A", shape=(40, 3), dtype=dace.float64, transient=False)
@@ -1415,7 +1415,7 @@ def test_loop_blocking_sdfg_with_semi_independent_map():
 def _make_loop_blocking_only_independent_inner_map() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
 ]:
-    sdfg = dace.SDFG(util.unique_name("sdfg_with_only_independent_inner_map"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("sdfg_with_only_independent_inner_map"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array("A", shape=(40, 3), dtype=dace.float64, transient=False)
@@ -1479,7 +1479,7 @@ def _make_loop_blocking_output_access_node(
 ) -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.Tasklet, dace_nodes.AccessNode
 ]:
-    sdfg = dace.SDFG(util.unique_name("sdfg_with_direct_output_access_node"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("sdfg_with_direct_output_access_node"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array("A", shape=(40,), dtype=dace.float64, transient=False)

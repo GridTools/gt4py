@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import abc
+import contextlib
 import dataclasses
 import functools
 import types
@@ -26,9 +27,9 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self, Unpack, override
 from gt4py.next import (
-    allocators as next_allocators,
     backend as next_backend,
     common,
+    custom_layout_allocators as next_allocators,
     embedded as next_embedded,
     errors,
     utils,
@@ -44,13 +45,41 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.gtcallable import GTCallable
-from gt4py.next.instrumentation import metrics
+from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, options, toolchain
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
+
+
+ProgramCallMetricsCollector = metrics.make_collector(
+    level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
+)
+
+
+@hook_machinery.context_hook
+def program_call_context(
+    program: Program,
+    args: tuple[Any, ...],
+    offset_provider: common.OffsetProvider,
+    enable_jit: bool,
+    kwargs: dict[str, Any],
+) -> contextlib.AbstractContextManager:
+    """Hook called at the beginning and end of a program call."""
+    return ProgramCallMetricsCollector()
+
+
+@hook_machinery.context_hook
+def embedded_program_call_context(
+    program: Program,
+    args: tuple[Any, ...],
+    offset_provider: common.OffsetProvider,
+    kwargs: dict[str, Any],
+) -> contextlib.AbstractContextManager:
+    """Hook called at the beginning and end of an embedded program call."""
+    return metrics.metrics_context(f"{program.__name__}<'<embedded>')>")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -89,27 +118,33 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         # to `compile()` instead of re-using the existing compilations options.
         return self._make_compiled_programs_pool(
             static_params=self.compilation_options.static_params or (),
+            static_domains=self.compilation_options.static_domains,
         )
 
     def _make_compiled_programs_pool(
-        self,
-        static_params: Sequence[str],
+        self, static_params: Sequence[str], static_domains: bool
     ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
 
-        argument_descriptor_mapping = {
-            arguments.StaticArg: static_params,
-        }
-
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
+
+        argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
+
+        if static_params:
+            argument_descriptor_mapping[arguments.StaticArg] = static_params
+
+        if static_domains:
+            argument_descriptor_mapping[arguments.FieldDomainDescriptor] = (
+                _field_domain_descriptor_mapping_from_func_type(program_type.definition)
+            )
 
         return compiled_program.CompiledProgramsPool(
             backend=self.backend,
             definition_stage=self.definition_stage,
             program_type=program_type,
-            argument_descriptor_mapping=argument_descriptor_mapping,  # type: ignore[arg-type]  # covariant `type[T]` not possible
+            argument_descriptor_mapping=argument_descriptor_mapping,
         )
 
     def compile(
@@ -136,6 +171,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         if "_compiled_programs" not in self.__dict__:
             self.__dict__["_compiled_programs"] = self._make_compiled_programs_pool(
                 static_params=tuple(static_args.keys()),
+                static_domains=self.compilation_options.static_domains,
             )
 
         if self.compilation_options.connectivities is None and offset_provider is None:
@@ -162,9 +198,15 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         return self
 
 
-program_call_metrics_collector = metrics.make_collector(
-    level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
-)
+def _field_domain_descriptor_mapping_from_func_type(func_type: ts.FunctionType) -> list[str]:
+    static_domain_args = []
+    param_types = func_type.pos_or_kw_args | func_type.kw_only_args
+    for name, type_ in param_types.items():
+        for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
+            if isinstance(el_type_, ts.FieldType):
+                path_as_expr = "".join(f"[{idx}]" for idx in path)
+                static_domain_args.append(f"{name}{path_as_expr}")
+    return static_domain_args
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -333,7 +375,13 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
             offset_provider = {}
         enable_jit = self.compilation_options.enable_jit if enable_jit is None else enable_jit
 
-        with program_call_metrics_collector():
+        with program_call_context(
+            program=self,
+            args=args,
+            offset_provider=offset_provider,
+            enable_jit=enable_jit,
+            kwargs=kwargs,
+        ):
             if __debug__:
                 # TODO: remove or make dependency on self.past_stage optional
                 past_process_args._validate_args(
@@ -355,15 +403,9 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     stacklevel=2,
                 )
 
-                # Metrics source key needs to be set here. Embedded programs
-                # don't have variants so there's no other place to do it.
-                if metrics.is_level_enabled(metrics.MINIMAL):
-                    metrics.set_current_source_key(
-                        f"{self.__name__}<{getattr(self.backend, 'name', '<embedded>')}>"
-                    )
-
                 with next_embedded.context.update(offset_provider=offset_provider):
-                    self.definition_stage.definition(*args, **kwargs)
+                    with embedded_program_call_context(self, args, offset_provider, kwargs):
+                        self.definition_stage.definition(*args, **kwargs)
 
 
 try:

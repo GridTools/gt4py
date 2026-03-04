@@ -627,6 +627,7 @@ def _gt_auto_process_top_level_maps(
                 validate_all=validate_all,
             )
 
+        # TODO(phimuell): Deprecate this transformation.
         sdfg.apply_transformations_repeated(
             gtx_transformations.GT4PyMapBufferElimination(
                 assume_pointwise=assume_pointwise,
@@ -635,7 +636,7 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
-        # TODO(phimuell): Figuring out if this is is the correct location for doing it.
+        # TODO(phimuell): Figuring out if this is the correct location for doing it.
         if GT4PyAutoOptHook.TopLevelDataFlowStep in optimization_hooks:
             optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowStep](sdfg)  # type: ignore[call-arg]
 
@@ -652,6 +653,15 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
             skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
+
+    # Replace `concat_where` nodes
+    # TODO(phimuell): Are there better locations for this transformation?
+    gtx_transformations.gt_apply_concat_where_replacement_on_sdfg(
+        sdfg=sdfg,
+        single_use_data=single_use_data,
+        validate=False,
+        validate_all=validate_all,
+    )
 
     if GT4PyAutoOptHook.TopLevelDataFlowPost in optimization_hooks:
         optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPost](sdfg)  # type: ignore[call-arg]
@@ -724,6 +734,25 @@ def _gt_auto_process_dataflow_inside_maps(
         skip=gtx_transformations.constants._GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST,
         validate=False,
         validate_all=validate_all,
+    )
+
+    find_single_use_data = dace_analysis.FindSingleUseData()
+    single_use_data = find_single_use_data.apply_pass(sdfg, None)
+
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.RemoveScalarCopies(
+            single_use_data=single_use_data,
+        ),
+        validate=False,
+        validate_all=validate_all,
+    )
+
+    # Make sure that this runs before MoveDataflowIntoIfBody because atm it doesn't handle
+    # NestedSDFGs inside the ConditionalBlocks it fuses.
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.FuseHorizontalConditionBlocks(),
+        validate=True,
+        validate_all=True,
     )
 
     # Move dataflow into the branches of the `if` such that they are only evaluated

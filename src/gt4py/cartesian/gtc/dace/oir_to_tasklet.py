@@ -253,6 +253,18 @@ class OIRToTasklet(eve.NodeVisitor):
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> str:
         function_name = self.visit(node.func, **kwargs)
+
+        # special case for integer powers of non-integer base
+        base = node.args[0]
+        if node.func == common.NativeFunction.POW and not base.dtype.isinteger():
+            exponent = node.args[1]
+            if isinstance(exponent, oir.Literal) and exponent.dtype.isinteger():
+                exp_value = int(exponent.value)
+                if exp_value == 0:
+                    return self.visit(oir.Literal(value="1", dtype=base.dtype), **kwargs)
+                if exp_value >= 1 and exp_value < 4:
+                    function_name = "dace.math.ipow"
+
         arguments = ",".join([self.visit(a, **kwargs) for a in node.args])
 
         return f"{function_name}({arguments})"

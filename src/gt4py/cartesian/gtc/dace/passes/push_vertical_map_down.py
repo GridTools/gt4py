@@ -75,5 +75,5 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
             self._push_K_loop_in_IJ(node)
 
     def visit_ForScope(self, node: tn.ForScope):
-        if node.header.itervar.startswith("__k"):
+        if node.loop.loop_variable.startswith("__k"):
             self._push_K_loop_in_IJ(node)

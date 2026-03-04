@@ -90,6 +90,7 @@ ConcretePASTProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
     PASTProgramDef, arguments.CompileTimeArgs
 ]
 
+DSLDefinition = DSLFieldOperatorDef | DSLProgramDef
 DSLDefinitionT = TypeVar("DSLDefinitionT", DSLFieldOperatorDef, DSLProgramDef)
 
 
