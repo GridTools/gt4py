@@ -16,7 +16,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import common, Dims, gtfn_cpu, typing as gtx_typing
-from gt4py.next.instrumentation import hooks
+from gt4py.next.instrumentation import gpu_profiler, hooks
 
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
@@ -153,7 +153,9 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
     hooks.program_call_context.register(custom_program_callback)
     hooks.embedded_program_call_context.register(custom_embedded_program_callback)
     hooks.compiled_program_call_context.register(custom_compiled_program_callback)
-    test_program(True, a_field, b_field, out=out_field)
+    import gt4py.next.instrumentation.gpu_profiler 
+    with gpu_profiler.profile_calls():
+        test_program(True, a_field, b_field, out=out_field)
 
     # Check that the callbacks were called
     assert len(callback_results) == 2
