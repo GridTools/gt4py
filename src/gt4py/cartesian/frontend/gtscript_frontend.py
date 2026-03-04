@@ -257,6 +257,19 @@ class HorizontalIntervalParser(IntervalParser):
 
         return nodes.AxisInterval(start=start, end=end, loc=loc)
 
+    def visit_Subscript(self, node: ast.Subscript) -> nodes.AxisBound:
+        # This allows for the syntax
+        # `region[I[0] : I[2], J[0] : J[2]]`
+        # to exist
+        if not isinstance(node.value, ast.Name):
+            raise self.interval_error
+        if node.value.id != self.axis_name:
+            raise self.interval_error
+
+        index = self.visit(node.slice)
+
+        return gtscript.AxisIndex(axis=self.axis_name, index=index)
+
 
 class VerticalIntervalParser(IntervalParser):
     """Parse Python AST interval syntax in the form of a Slice.
@@ -1201,9 +1214,6 @@ class IRMaker(ast.NodeVisitor):
 
         raise AssertionError(f"Missing '{symbol}' symbol definition")
 
-    def visit_Index(self, node: ast.Index):
-        return self.visit(node.value)
-
     def _eval_new_spatial_index(
         self,
         index_nodes: Sequence[nodes.Expr],
@@ -1256,7 +1266,7 @@ class IRMaker(ast.NodeVisitor):
         node: ast.Subscript,
         field_axes: Optional[Set[Literal["I", "J", "K"]]] = None,
     ) -> list[int] | nodes.AbsoluteKIndex | None:
-        tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+        tuple_or_expr = node.slice
         index_nodes = gt_utils.listify(
             tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
         )
