@@ -997,27 +997,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         try:
             # TODO(tehrengruber): the construct_tuple_type function doesn't look correct
-            if isinstance(true_branch_type, ts.TupleType) and isinstance(
-                false_branch_type, ts.TupleType
-            ):
-                return_type = ts.TupleType(
-                    types=construct_tuple_type(
-                        true_branch_type.types, false_branch_type.types, mask_type
-                    )
-                )
-            elif isinstance(true_branch_type, ts.TupleType) or isinstance(
-                false_branch_type, ts.TupleType
-            ):
-                raise errors.DSLError(
-                    node.location,
-                    f"Return arguments need to be of same type in '{node.func!s}', got "
-                    f"'{node.args[1].type}' and '{node.args[2].type}'.",
-                )
-            else:
-                true_branch_fieldtype = cast(ts.FieldType, true_branch_type)
-                false_branch_fieldtype = cast(ts.FieldType, false_branch_type)
-                promoted_type = type_info.promote(true_branch_fieldtype, false_branch_fieldtype)
-                return_type = promote_to_mask_type(mask_type, promoted_type)
+            promoted_type = ti_ffront.tree_map_type(lambda tb, fb: type_info.promote(tb, fb))(
+                true_branch_type,
+                false_branch_type
+            )
+            return_type = ti_ffront.tree_map_type(lambda pt: promote_to_mask_type(mask_type, pt))(
+                promoted_type
+            )
 
         except ValueError as ex:
             raise errors.DSLError(
