@@ -94,7 +94,15 @@ def _make_if_block_with_two_args(
 ) -> dace_nodes.NestedSDFG:
     inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
 
-    types = {b1_name: b1_type, b2_name: b2_type, b3_name: b3_type, b4_name: b4_type, cond_name: dace.bool_, output1_name: output_type, output2_name: output_type}
+    types = {
+        b1_name: b1_type,
+        b2_name: b2_type,
+        b3_name: b3_type,
+        b4_name: b4_type,
+        cond_name: dace.bool_,
+        output1_name: output_type,
+        output2_name: output_type,
+    }
     for name in {b1_name, b2_name, b3_name, b4_name, cond_name, output1_name, output2_name}:
         inner_sdfg.add_scalar(
             name,
@@ -809,7 +817,10 @@ def test_if_mover_dependent_branch_4():
 
     # Computation involving `b`:
     tasklet_b1 = state.add_tasklet(
-        "tasklet_b1", inputs={"__in1", "__in2"}, outputs={"__out"}, code="__out = math.sin(__in1) * math.cos(__in2)"
+        "tasklet_b1",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = math.sin(__in1) * math.cos(__in2)",
     )
     tasklet_b2 = state.add_tasklet(
         "tasklet_b2",
@@ -878,7 +889,9 @@ def test_if_mover_dependent_branch_4():
         if_block.sdfg, dace_nodes.AccessNode, True
     )
     expected_data: set[str] = (
-        set(temporary_names).union(input_names).union(["__arg1", "__arg2", "__arg3", "__arg4", "__output1", "__output2"])
+        set(temporary_names)
+        .union(input_names)
+        .union(["__arg1", "__arg2", "__arg3", "__arg4", "__output1", "__output2"])
     )
     expected_data.difference_update(["c1", "c", "d", "e", "f", "s"])
     assert expected_data == {ac.data for ac in inner_ac}
