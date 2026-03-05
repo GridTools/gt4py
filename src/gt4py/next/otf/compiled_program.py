@@ -605,11 +605,20 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     def compile(
         self,
         offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
-        static_domains: dict[common.Dimension, tuple[int, int]] | None = None,
+        static_domains: dict[str, dict[common.Dimension, tuple[int, int]]] | None = None,
         **static_args: list[ScalarOrTupleOfScalars],
     ) -> None:
         """
         Compiles the program for all combinations of static arguments and the given 'OffsetProviderType'.
+
+        Args:
+            offset_providers: List of offset providers to compile for.
+            static_domains: Per-field domain specification.
+                Example::
+                    {
+                        "input_field": {IDim: (0, 55), JDim: (0, 30)},
+                        "out": {IHalfDim: (0, 52), JDim: (0, 30)},
+                    }
 
         Note: In case you want to compile for specific combinations of static arguments (instead
         of the combinatoral), you can call compile multiples times.
@@ -623,10 +632,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
         def _build_field_domain_descriptors(
             program_type: ts_ffront.ProgramType,
-            static_domains: dict[common.Dimension, tuple[int, int]],
+            static_domains: dict[str, dict[common.Dimension, tuple[int, int]]],
         ) -> dict[str, arguments.FieldDomainDescriptor]:
             field_domain_descriptors: dict[str, arguments.FieldDomainDescriptor] = {}
             assert program_type.definition.pos_only_args == []
+
+            matched_keys = set()
             param_types = (
                 program_type.definition.pos_or_kw_args | program_type.definition.kw_only_args
             )
@@ -636,17 +647,38 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                 ):
                     if isinstance(el_type_, ts.FieldType):
                         path_as_expr = "".join(map(lambda idx: f"[{idx}]", path))
-                        if missing_dims := [
-                            dim for dim in el_type_.dims if dim not in static_domains
-                        ]:
+                        field_expr = f"{arg_name}{path_as_expr}"
+
+                        if field_expr not in static_domains:
                             raise ValueError(
-                                f"Missing domain specification for dimension(s) {missing_dims} for {arg_name}{path_as_expr}. "
-                                f"Field has dimensions {list(el_type_.dims)}, but static_domains only contains {list(static_domains.keys())}."
+                                f"Missing static domain for field '{field_expr}'. "
+                                f"Expected domains for all field parameters. "
+                                f"Available keys in static_domains: {list(static_domains.keys())}"
                             )
-                        domain_ranges = {dim: static_domains[dim] for dim in el_type_.dims}
-                        field_domain_descriptors[f"{arg_name}{path_as_expr}"] = (
-                            arguments.FieldDomainDescriptor(common.domain(domain_ranges))
+
+                        field_domain = static_domains[field_expr]
+                        matched_keys.add(field_expr)
+
+                        expected_dims = set(el_type_.dims)
+                        provided_dims = set(field_domain.keys())
+                        if expected_dims != provided_dims:
+                            raise ValueError(
+                                f"Domain dimension mismatch for field '{field_expr}': "
+                                f"field has dimensions {set(d.value for d in expected_dims)}, "
+                                f"but static_domains provides {set(d.value for d in provided_dims)}."
+                            )
+
+                        domain_ranges = {dim: field_domain[dim] for dim in el_type_.dims}
+                        field_domain_descriptors[field_expr] = arguments.FieldDomainDescriptor(
+                            common.domain(domain_ranges)
                         )
+
+            extra_keys = set(static_domains.keys()) - matched_keys
+            if extra_keys:
+                raise ValueError(
+                    f"static_domains contains keys that do not correspond to any field parameter: "
+                    f"{list(extra_keys)}. Valid field expressions are: {list(matched_keys)}"
+                )
 
             return field_domain_descriptors
 

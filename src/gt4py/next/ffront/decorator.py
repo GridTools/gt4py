@@ -153,7 +153,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
-        static_domains: dict[common.Dimension, tuple[int, int]] | None = None,
+        static_domains: dict[str, dict[common.Dimension, tuple[int, int]]] | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         """
@@ -497,7 +497,7 @@ class ProgramWithBoundArgs(Program):
         | common.OffsetProvider
         | list[common.OffsetProviderType | common.OffsetProvider]
         | None = None,
-        static_domains: dict[common.Dimension, tuple[int, int]] | None = None,
+        static_domains: dict[str, dict[common.Dimension, tuple[int, int]]] | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
         raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
