@@ -5,12 +5,16 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import dataclasses
 
 import pytest
 
 from gt4py import eve, next as gtx
-from gt4py.next import errors, backend
-from gt4py.next.otf import compiled_program, toolchain, arguments
+from gt4py.next import utils
+from gt4py.next import errors, backend, broadcast, common
+from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
+from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import toolchain, arguments, compiled_program
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
@@ -58,17 +62,15 @@ TDim = gtx.Dimension("TDim")
 @pytest.fixture
 def testee_prog():
     @gtx.field_operator
-    def fop(cond: bool, a: gtx.Field[gtx.Dims[TDim], float], b: gtx.Field[gtx.Dims[TDim], float]):
-        return a if cond else b
+    def fop(cond: bool):
+        return broadcast(cond, (TDim,))
 
     @gtx.program(backend=gtfn.run_gtfn)
     def prog(
         cond: bool,
-        a: gtx.Field[gtx.Dims[TDim], gtx.float64],
-        b: gtx.Field[gtx.Dims[TDim], gtx.float64],
-        out: gtx.Field[gtx.Dims[TDim], gtx.float64],
+        out: gtx.Field[gtx.Dims[TDim], bool],
     ):
-        fop(cond, a, b, out=out)
+        fop(cond, out=out)
 
     return prog
 
@@ -115,14 +117,12 @@ def test_inlining_of_scalar_works_integration(testee_prog):
         hijacked_program = program
         return lambda *args, **kwargs: None
 
-    hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", otf_workflow=pirate)
+    hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", executor=pirate)
 
     testee = testee_prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
     testee(
         cond=True,
-        a=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
-        b=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
-        out=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
+        out=gtx.zeros(domain={TDim: 1}, dtype=bool),
         offset_provider={},
     )
 
@@ -162,3 +162,57 @@ def test_different_static_args_break_same_prg_after_static_params_change(testee_
         match="Argument descriptor StaticArg must be the same for all compiled programs",
     ):
         prg.compile(cond=[True], offset_provider={})
+
+
+def _verify_program_has_expected_domain(
+    program: itir.Program, expected_domain: gtx.Domain, uids: utils.IDGeneratorPool
+):
+    assert isinstance(program.body[0], itir.SetAt)
+    assert isinstance(program.body[0].expr, itir.FunCall)
+    assert program.body[0].expr.fun == itir.SymRef(id="fop")
+    domain = CollapseTuple.apply(program.body[0].domain, within_stencil=False, uids=uids)
+    assert domain == im.domain(common.GridType.CARTESIAN, expected_domain)
+
+
+def test_inlining_of_static_domain_works(testee_prog, uids: utils.IDGeneratorPool):
+    domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
+    input_pair = toolchain.ConcreteArtifact(
+        data=testee_prog.definition_stage,
+        args=arguments.CompileTimeArgs(
+            args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            kwargs={},
+            offset_provider={},
+            column_axis=None,
+            argument_descriptor_contexts={
+                arguments.FieldDomainDescriptor: {"out": arguments.FieldDomainDescriptor(domain)}
+            },
+        ),
+    )
+
+    transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
+    _verify_program_has_expected_domain(transformed, domain, uids)
+
+
+def test_make_param_context_from_func_type_for_named_collections():
+    int32_t, int64_t = (
+        ts.ScalarType(kind=ts.ScalarKind.INT32),
+        ts.ScalarType(kind=ts.ScalarKind.INT64),
+    )
+
+    @dataclasses.dataclass
+    class DataclassNamedCollection:
+        u: gtx.Field[gtx.Dims[TDim], int32_t]
+        v: gtx.Field[gtx.Dims[TDim], int64_t]
+
+    nc_type = ts.NamedCollectionType(
+        types=[int32_t, int64_t], keys=["a", "b"], original_python_type="DUMMY"
+    )
+    func_type = ts.FunctionType(
+        pos_only_args=[],
+        pos_or_kw_args={"inp": nc_type},
+        kw_only_args={},
+        returns=nc_type,
+    )
+    context = compiled_program._make_param_context_from_func_type(func_type)
+    # both `extract` and `_make_param_context_from_func_type` need to use the same structure
+    assert arguments.extract(DataclassNamedCollection(int32_t, int64_t)) == context["inp"]

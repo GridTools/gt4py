@@ -24,10 +24,10 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import (
-    allocators as next_allocators,
     backend as next_backend,
     common,
     constructors,
+    custom_layout_allocators as next_allocators,
     field_utils,
     named_collections,
     utils as gt_utils,
