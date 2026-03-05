@@ -158,8 +158,8 @@ class WhereBuiltinFunction(
     BuiltInFunction[_R, [CondT, TrueFieldT, FalseFieldT]],
     Generic[_R, CondT, TrueFieldT, FalseFieldT],
 ):
-    @overload
-    def __call__(
+    @overload  # type: ignore[override] # this technically clashes with the superclass
+    def __call__(  # type: ignore[overload-overlap] # without both overloads mypy raises false positives
         self,
         cond: CondT,
         true_field: common.Field | core_defs.ScalarT,
@@ -174,7 +174,7 @@ class WhereBuiltinFunction(
         false_field: Tuple | core_defs.ScalarT,
     ) -> Tuple: ...
 
-    def __call__(self, cond: CondT, true_field: TrueFieldT, false_field: FalseFieldT) -> _R:
+    def __call__(self, cond: CondT, true_field: TrueFieldT, false_field: FalseFieldT) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
