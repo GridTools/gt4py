@@ -339,7 +339,42 @@ class VerticalIntervalParser(IntervalParser):
         return nodes.AxisInterval(start=start, end=end, loc=loc)
 
     def visit_Subscript(self, node: ast.Subscript):
-        # This was previously allowed but is discontinued now.
+        # Check that this is a higher dimensional field
+        if isinstance(node.value, ast.Subscript) and isinstance(node.value.value, ast.Name):
+            field_name = node.value.value.id
+            # Ensure the indexing is correct, first we need a 0-offset in i and j
+            if isinstance(node.value.slice, ast.Tuple):
+                axis_offsets: list[ast.Constant] = node.value.slice.elts
+                if not all(offset.value == 0 for offset in axis_offsets):
+                    raise self.interval_error
+            else:
+                raise self.interval_error
+            # then we parse the actual offset in the higher dimension
+            if isinstance(node.slice, ast.Tuple):
+                higher_dim_offset = [self.visit(data_idx) for data_idx in node.slice.elts]
+            else:
+                higher_dim_offset = [self.visit(node.slice)]
+            literal_index = [
+                nodes.ScalarLiteral(value=i, data_type=nodes.DataType.INT32)
+                for i in higher_dim_offset
+            ]
+
+            return nodes.FieldRef.at_center(
+                name=field_name,
+                axes=self.fields[field_name].axes,
+                loc=nodes.Location.from_ast_node(node),
+                data_index=literal_index,
+            )
+        # This is a non-higher dimensional field, but a normal field accessed with an offset
+        if isinstance(node.value, ast.Name) and isinstance(node.slice, ast.Tuple):
+            # We need to check that the offset is 0 everywhere, since no horizontal dependencies are allowed
+            axis_offsets: list[ast.Constant] = node.slice.elts
+            if not all(offset.value == 0 for offset in axis_offsets):
+                raise self.interval_error
+            # If the offset is 0, we are safe to visit the field
+            return self.visit(node.value)
+
+        # Legal syntax never allows you to arrive here
         raise self.interval_error
 
 
