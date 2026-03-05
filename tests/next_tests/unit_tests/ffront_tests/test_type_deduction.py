@@ -430,7 +430,9 @@ def test_where_bad_dim():
     def bad_dim_where(a: Field[[ADim], bool], b: Field[[ADim], float64]):
         return where(a, ((5.0, 9.0), (b, 6.0)), b)
 
-    with pytest.raises(errors.DSLError, match=r"Return arguments need to be of same type"):
+    with pytest.raises(
+        errors.DSLError, match=r"Second and third argument must have the same tuple structure."
+    ):
         _ = FieldOperatorParser.apply_to_function(bad_dim_where)
 
 
