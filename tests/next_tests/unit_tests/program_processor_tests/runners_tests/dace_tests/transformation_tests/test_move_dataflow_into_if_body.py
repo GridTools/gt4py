@@ -84,7 +84,8 @@ def _make_if_block_with_two_args(
     b3_name: str = "__arg3",
     b4_name: str = "__arg4",
     cond_name: str = "__cond",
-    output_name: str = "__output",
+    output1_name: str = "__output1",
+    output2_name: str = "__output2",
     b1_type: dace.typeclass = dace.float64,
     b2_type: dace.typeclass = dace.float64,
     b3_type: dace.typeclass = dace.float64,
@@ -93,8 +94,8 @@ def _make_if_block_with_two_args(
 ) -> dace_nodes.NestedSDFG:
     inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
 
-    types = {b1_name: b1_type, b2_name: b2_type, b3_name: b3_type, b4_name: b4_type, cond_name: dace.bool_, output_name: output_type}
-    for name in {b1_name, b2_name, b3_name, b4_name, cond_name, output_name}:
+    types = {b1_name: b1_type, b2_name: b2_type, b3_name: b3_type, b4_name: b4_type, cond_name: dace.bool_, output1_name: output_type, output2_name: output_type}
+    for name in {b1_name, b2_name, b3_name, b4_name, cond_name, output1_name, output2_name}:
         inner_sdfg.add_scalar(
             name,
             dtype=types[name],
@@ -106,62 +107,28 @@ def _make_if_block_with_two_args(
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
     tstate = then_body.add_state("true_branch_0_1_2_3_4", is_start_block=True)
-    tasklet_true = tstate.add_tasklet(
-        "true_tasklet",
-        inputs={"__tasklet_in1", "__tasklet_in2"},
-        outputs={"__tasklet_out"},
-        code="__tasklet_out = __tasklet_in1 + __tasklet_in2",
-    )
-    tstate.add_edge(
+    tstate.add_nedge(
         tstate.add_access(b1_name),
-        None,
-        tasklet_true,
-        "__tasklet_in1",
-        dace.Memlet(f"{b1_name}[0]"),
+        tstate.add_access(output1_name),
+        dace.Memlet(f"{b1_name}[0] -> [0]"),
     )
-    tstate.add_edge(
+    tstate.add_nedge(
         tstate.add_access(b2_name),
-        None,
-        tasklet_true,
-        "__tasklet_in2",
-        dace.Memlet(f"{b2_name}[0]"),
-    )
-    tstate.add_edge(
-        tasklet_true,
-        "__tasklet_out",
-        tstate.add_access(output_name),
-        None,
-        dace.Memlet(f"{output_name}[0]"),
+        tstate.add_access(output2_name),
+        dace.Memlet(f"{b2_name}[0] -> [0]"),
     )
 
     else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
     fstate = else_body.add_state("false_branch_0_1_2_3_4", is_start_block=True)
-    tasklet_false = fstate.add_tasklet(
-        "false_tasklet",
-        inputs={"__tasklet_in1", "__tasklet_in2"},
-        outputs={"__tasklet_out"},
-        code="__tasklet_out = __tasklet_in1 - __tasklet_in2",
-    )
-    fstate.add_edge(
+    fstate.add_nedge(
         fstate.add_access(b3_name),
-        None,
-        tasklet_false,
-        "__tasklet_in1",
-        dace.Memlet(f"{b3_name}[0]"),
+        fstate.add_access(output1_name),
+        dace.Memlet(f"{b3_name}[0] -> [0]"),
     )
-    fstate.add_edge(
+    fstate.add_nedge(
         fstate.add_access(b4_name),
-        None,
-        tasklet_false,
-        "__tasklet_in2",
-        dace.Memlet(f"{b4_name}[0]"),
-    )
-    fstate.add_edge(
-        tasklet_false,
-        "__tasklet_out",
-        fstate.add_access(output_name),
-        None,
-        dace.Memlet(f"{output_name}[0]"),
+        fstate.add_access(output2_name),
+        dace.Memlet(f"{b4_name}[0] -> [0]"),
     )
 
     if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
@@ -170,7 +137,7 @@ def _make_if_block_with_two_args(
     return state.add_nested_sdfg(
         sdfg=inner_sdfg,
         inputs={b1_name, b2_name, b3_name, b4_name, cond_name},
-        outputs={output_name},
+        outputs={output1_name, output2_name},
     )
 
 
@@ -783,15 +750,17 @@ def test_if_mover_dependent_branch_4():
     e = qux(...)
     if c:
         d = a + b
+        f = a
     else:
         d = e + s
+        f = e
     ```
     """
     sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
-    input_names = ["a", "b", "c", "d", "e", "s"]
+    input_names = ["a", "b", "c", "d", "e", "f", "s"]
     for name in input_names:
         sdfg.add_array(
             name,
@@ -801,13 +770,13 @@ def test_if_mover_dependent_branch_4():
         )
 
     # Temporaries
-    temporary_names = ["a1", "a2", "b1", "b2", "c1", "s1", "e1"]
+    temporary_names = ["a1", "a2", "b1", "b2", "c1", "s1"]
     for name in temporary_names:
         sdfg.add_scalar(
             name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
         )
 
-    a1, a2, b1, b2, c1, s1, e1 = (state.add_access(name) for name in temporary_names)
+    a1, a2, b1, b2, c1, s1 = (state.add_access(name) for name in temporary_names)
     me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
 
     # The auxiliary computation involving `s`:
@@ -820,7 +789,6 @@ def test_if_mover_dependent_branch_4():
     state.add_edge(tasklet_s1, "__out", s1, None, dace.Memlet("s1[0]"))
 
     state.add_edge(state.add_access("e"), None, me, "IN_e", dace.Memlet("e[0:10]"))
-    state.add_edge(me, "OUT_e", e1, None, dace.Memlet("e1[0]"))
 
     # Computation involving `a`:
     tasklet_a1 = state.add_tasklet(
@@ -873,52 +841,57 @@ def test_if_mover_dependent_branch_4():
     if_block = _make_if_block_with_two_args(state=state, outer_sdfg=sdfg)
     state.add_edge(a2, None, if_block, "__arg1", dace.Memlet("a2[0]"))
     state.add_edge(b2, None, if_block, "__arg2", dace.Memlet("b2[0]"))
-    state.add_edge(e1, None, if_block, "__arg3", dace.Memlet("e1[0]"))
+    state.add_edge(me, "OUT_e", if_block, "__arg3", dace.Memlet("e[__i]"))
     state.add_edge(s1, None, if_block, "__arg4", dace.Memlet("s1[0]"))
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
     # Now handle the output.
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(if_block, "__output1", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(if_block, "__output2", mx, "IN_f", dace.Memlet("f[__i]"))
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
+    state.add_edge(mx, "OUT_f", state.add_access("f"), None, dace.Memlet("f[0:10]"))
 
     # Now add the connectors to the Map*
     for iname in input_names:
-        if iname == "d":
+        if iname == "d" or iname == "f":
             continue
         me.add_in_connector(f"IN_{iname}")
         me.add_out_connector(f"OUT_{iname}")
     mx.add_in_connector("IN_d")
     mx.add_out_connector("OUT_d")
+    mx.add_in_connector("IN_f")
+    mx.add_out_connector("OUT_f")
     sdfg.validate()
 
-    sdfg.view()
-    breakpoint()
+    # sdfg.view()
+    # breakpoint()
 
     _perform_test(sdfg, explected_applies=1)
 
-    sdfg.view()
-    breakpoint()
+    # sdfg.view()
+    # breakpoint()
 
     # # Examine the structure of the SDFG.
-    # top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
-    # assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1"])
-    # assert len(sdfg.arrays) == len(top_ac)
+    top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
+    assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1"])
+    assert len(sdfg.arrays) == len(top_ac)
 
-    # top_tlet: list[dace_nodes.Tasklet] = util.count_nodes(state, dace_nodes.Tasklet, True)
-    # assert len(top_tlet) == 2
-    # assert {"tasklet_cond", "tasklet_s1"} == {tlet.label for tlet in top_tlet}
+    top_tlet: list[dace_nodes.Tasklet] = util.count_nodes(state, dace_nodes.Tasklet, True)
+    assert len(top_tlet) == 2
+    assert {"tasklet_cond", "tasklet_s1"} == {tlet.label for tlet in top_tlet}
 
-    # inner_ac: list[dace_nodes.AccessNode] = util.count_nodes(
-    #     if_block.sdfg, dace_nodes.AccessNode, True
-    # )
-    # expected_data: set[str] = (
-    #     set(temporary_names).union(input_names).union(["__arg1", "__arg2", "__output"])
-    # )
-    # expected_data.difference_update(["c1", "c", "d", "s"])
-    # assert expected_data == {ac.data for ac in inner_ac}
-    # assert len([ac for ac in inner_ac if ac.data == "s1"]) == 2
-    # assert len([ac for ac in inner_ac if ac.data == "__output"]) == 2
-    # assert len(expected_data) + 2 == len(inner_ac)
+    inner_ac: list[dace_nodes.AccessNode] = util.count_nodes(
+        if_block.sdfg, dace_nodes.AccessNode, True
+    )
+    expected_data: set[str] = (
+        set(temporary_names).union(input_names).union(["__arg1", "__arg2", "__arg3", "__arg4", "__output1", "__output2"])
+    )
+    expected_data.difference_update(["c1", "c", "d", "e", "f", "s"])
+    assert expected_data == {ac.data for ac in inner_ac}
+    assert len([ac for ac in inner_ac if ac.data == "s1"]) == 1
+    assert len([ac for ac in inner_ac if ac.data == "__output1"]) == 2
+    assert len([ac for ac in inner_ac if ac.data == "__output2"]) == 2
+    assert len(expected_data) + 2 == len(inner_ac)
     # assert if_block.sdfg.arrays.keys() == expected_data.union(["__cond"])
 
     # inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
