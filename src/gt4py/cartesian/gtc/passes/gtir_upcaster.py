@@ -112,15 +112,17 @@ class _GTIRUpcasting(eve.NodeTranslator):
         )
 
     def visit_NativeFuncCall(self, node: gtir.NativeFuncCall) -> gtir.NativeFuncCall:
-        # Skip upcasting of cast operations
         if node.func in [
+            # Skip upcasting of cast operations
             common.NativeFunction.INT32,
             common.NativeFunction.INT64,
             common.NativeFunction.FLOAT32,
             common.NativeFunction.FLOAT64,
+            # Don't upcast the exponent of a power function because of the base, e.g. `3.0 ** 2`
+            common.NativeFunction.POW,
         ]:
-            # Make sure to upcast arguments of cast operations, e.g.
-            # float(my_int32 + my_int64) -> float(cast(int64, my_int32), my_int64)
+            # Make sure to upcast arguments of those operations anyway, e.g.
+            # float(my_int32 + my_int64) -> float(cast(int64, my_int32) + a my_int64)
             return _update_node(node, {"args": self.visit(node.args)})
 
         upcasting_rule = functools.partial(

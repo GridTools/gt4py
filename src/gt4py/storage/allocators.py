@@ -297,7 +297,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         pass
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class ArrayUtils:
     array_ns: types.ModuleType
     empty: Callable[..., _NDBuffer]
