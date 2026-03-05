@@ -32,13 +32,13 @@
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
           return a
 
-  - case: scanop_sig
+  - case: scanop_sig_min
     main: |
       from gt4py import next as gtx
 
       KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 
-      @gtx.scan_operator
+      @gtx.scan_operator(axis=KDim)
       def somescanop(
           carry: float,
           val: float,
