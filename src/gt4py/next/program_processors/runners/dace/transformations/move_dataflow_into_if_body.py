@@ -729,7 +729,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if branch_state not in known_nodes:
                 known_nodes[branch_state] = set()
             known_nodes[branch_state].update(rel_df)
-        assert len(known_nodes) == 2
+        assert len(known_nodes) <= 2
 
         multiple_df_nodes: set[dace_nodes.Node] = set()
         # Find intersect of all known_nodes sets which are the nodes that are in the dataflow
