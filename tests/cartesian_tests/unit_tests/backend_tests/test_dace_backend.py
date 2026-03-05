@@ -14,6 +14,7 @@ pytest.importorskip("dace")
 
 from dace import nodes
 from dace import sdfg as dace_sdfg
+from dace.sdfg.state import LoopRegion
 import dace.sdfg.analysis.schedule_tree.treenodes as tn
 
 from gt4py.cartesian import backend
@@ -109,21 +110,22 @@ def test_dace_cpu_kfirst_loop_structure():
     manager = SDFGManager(builder)
 
     sdfg = manager.sdfg_via_schedule_tree()
+    assert len(list(sdfg.states())) == 1, "expect one state"
     state = sdfg.states()[0]
 
-    # Expect IJ Map and For loop construct (Nested SDFG, four guard states)
-    assert [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)] == [
-        ["__i", "__j"]
-    ]
-    for_nested_nodes = [
-        node.sdfg.nodes() for node in state.nodes() if isinstance(node, nodes.NestedSDFG)
-    ]
-    assert [isinstance(node, dace_sdfg.SDFGState) for node in for_nested_nodes[0]] == [
-        True,
-        True,
-        True,
-        True,
-    ]
+    # Expect a Map for IJ outside
+    map_entry_nodes = [node for node in state.nodes() if isinstance(node, nodes.MapEntry)]
+    assert len(map_entry_nodes) == 1, "expect one MapEntry node"
+    assert map_entry_nodes[0].map.params == ["__i", "__j"]
+
+    # Expect LoopRegion for K inside map
+    nsdfg_nodes = [node for node in state.nodes() if isinstance(node, nodes.NestedSDFG)]
+    assert len(nsdfg_nodes) == 1
+    for_nested_nodes = nsdfg_nodes[0].sdfg.nodes()
+    assert len(for_nested_nodes) == 1
+    loop_region = for_nested_nodes[0]
+    assert isinstance(loop_region, LoopRegion)
+    assert loop_region.loop_variable.startswith("__k")
 
 
 def test_dace_cpu_KJI_loop_structure():
@@ -141,17 +143,13 @@ def test_dace_cpu_KJI_loop_structure():
     manager = SDFGManager(builder)
 
     sdfg = manager.sdfg_via_schedule_tree()
-    state = sdfg.states()[0]
 
-    # Expect top-level for loop guards (4)
-    assert [isinstance(node, dace_sdfg.SDFGState) for node in sdfg.states()] == [
-        True,
-        True,
-        True,
-        True,
-    ]
+    # Expect LoopRegion for K outside
+    loop_region: LoopRegion = list(sdfg.all_control_flow_blocks())[0]
+    assert loop_region.loop_variable.startswith("__k")
 
     # Expect JI Map and in loop_body state (#2)
-    assert [
-        node.map.params for node in sdfg.states()[2].nodes() if isinstance(node, nodes.MapEntry)
-    ] == [["__j", "__i"]]
+    state = loop_region.start_block
+    assert [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)] == [
+        ["__j", "__i"]
+    ]

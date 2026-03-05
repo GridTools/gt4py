@@ -15,7 +15,7 @@ from typing import Any, Optional, Sequence, cast
 import devtools
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next import common, config, errors, utils as gtx_utils
+from gt4py.next import common, config, errors, utils
 from gt4py.next.ffront import (
     fbuiltins,
     gtcallable,
@@ -28,7 +28,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.stages import ConcretePASTProgramDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms import remap_symbols
+from gt4py.next.iterator.transforms import remap_symbols, replace_get_domain_range_with_constants
 from gt4py.next.otf import arguments, definitions, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -102,14 +102,14 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDe
         static_arg_descriptors = inp.args.argument_descriptor_contexts[arguments.StaticArg]
         if not all(
             isinstance(arg_descriptor, arguments.StaticArg)
-            or all(el is None for el in gtx_utils.flatten_nested_tuple(arg_descriptor))  # type: ignore[arg-type]
+            or all(el is None for el in utils.flatten_nested_tuple(arg_descriptor))  # type: ignore[arg-type]
             for arg_descriptor in static_arg_descriptors.values()
         ):
             raise NotImplementedError("Only top-level arguments can be static.")
         static_args = {
             name: im.literal_from_tuple_value(descr.value)  # type: ignore[union-attr]  # type checked above
             for name, descr in static_arg_descriptors.items()
-            if not any(el is None for el in gtx_utils.flatten_nested_tuple(descr))  # type: ignore[arg-type]
+            if not any(el is None for el in utils.flatten_nested_tuple(descr))  # type: ignore[arg-type]
         }
         body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
         itir_program = itir.Program(
@@ -118,6 +118,18 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDe
             params=itir_program.params,
             declarations=itir_program.declarations,
             body=body,
+        )
+
+    # TODO(tehrengruber): Put this in a dedicated transformation step.
+    if context := inp.args.argument_descriptor_contexts.get(arguments.FieldDomainDescriptor, None):
+        field_domains = {
+            param: utils.tree_map(lambda x: x.domain if x is not None else x)(v)
+            for param, v in context.items()
+        }
+        itir_program = (
+            replace_get_domain_range_with_constants.ReplaceGetDomainRangeWithConstants.apply(
+                itir_program, sizes=field_domains
+            )
         )
 
     # Translate NamedCollectionTypes to TupleTypes in compile-time args
@@ -443,7 +455,7 @@ class ProgramLowering(
             "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."
         )
 
-        @gtx_utils.tree_map(
+        @utils.tree_map(
             collection_type=ts.COLLECTION_TYPE_SPECS,
             with_path_arg=True,
             unpack=True,

@@ -1600,6 +1600,26 @@ def test_upcasting_both_sides_of_assignment(backend: str) -> None:
     assert (input == output).all()
 
 
+@pytest.mark.parametrize("backend", ("debug",))  # ALL_BACKENDS)
+def test_upcasting_leave_integer_power_arguments_alone(backend: str) -> None:
+    domain = (5, 5, 5)
+
+    input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float32)
+    output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float32)
+    squared = gt_storage.full(
+        fill_value=2, backend=backend, shape=(domain[0], domain[1]), dtype=np.int32
+    )
+
+    @gtscript.stencil(backend=backend)
+    def test_upcasting_stencil(
+        in_field: Field[np.float32], squared: Field[IJ, np.int32], out_field: Field[np.float32]
+    ) -> None:
+        with computation(FORWARD), interval(...):
+            out_field = in_field**squared
+
+    test_upcasting_stencil(input, squared, output)
+
+
 def test_no_write_and_read_with_horizontal_offset() -> None:
     with pytest.raises(ValueError, match="Self-assignment with offset in I or J is illegal."):
 
@@ -1692,3 +1712,25 @@ def test_self_assignment_in_forward(backend: str) -> None:
         with computation(FORWARD), interval(1, None):
             tmp = field[K - 1]
             field = tmp * 2
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_reset_mask_2d(backend: str) -> None:
+    domain = (5, 5, 5)
+
+    input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+    mask_2d = gt_storage.ones(backend=backend, shape=(domain[0], domain[1]), dtype=np.int32)
+
+    @gtscript.stencil(backend=backend)
+    def test_set_2d_mask(
+        dp1: Field[np.float64], pe1: Field[np.float64], lev: Field[IJ, np.int32]
+    ) -> None:
+        with computation(PARALLEL), interval(0, -1):
+            dp1 = pe1[0, 0, 1] - pe1
+        with computation(FORWARD), interval(0, 1):
+            lev = 0
+
+    test_set_2d_mask(output, input, mask_2d)
+
+    assert (mask_2d == 0).all()
