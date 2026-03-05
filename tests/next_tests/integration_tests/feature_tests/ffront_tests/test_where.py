@@ -82,7 +82,9 @@ def test_with_tuples(cartesian_case):
         boundary2: cases.IJField,
     ) -> tuple[cases.IJKField, tuple[cases.IJKField, cases.IJKField]]:
         return where(
-            broadcast(k, (IDim, JDim, KDim)) == 0, (boundary0, (boundary1, boundary2)), (interior0, (interior1, interior2))
+            broadcast(k, (IDim, JDim, KDim)) == 0,
+            (boundary0, (boundary1, boundary2)),
+            (interior0, (interior1, interior2)),
         )
 
     k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
@@ -95,7 +97,8 @@ def test_with_tuples(cartesian_case):
             k.asnumpy()[np.newaxis, np.newaxis, :] == 0,
             boundary.asnumpy()[:, :, np.newaxis],
             interior.asnumpy(),
-        ) for boundary, interior in zip(boundaries, interiors)
+        )
+        for boundary, interior in zip(boundaries, interiors)
     )
 
     cases.verify(
