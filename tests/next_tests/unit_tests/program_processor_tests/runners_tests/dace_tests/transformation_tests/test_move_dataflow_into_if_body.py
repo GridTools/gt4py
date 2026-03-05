@@ -863,13 +863,7 @@ def test_if_mover_dependent_branch_4():
     mx.add_out_connector("OUT_f")
     sdfg.validate()
 
-    # sdfg.view()
-    # breakpoint()
-
     _perform_test(sdfg, explected_applies=1)
-
-    # sdfg.view()
-    # breakpoint()
 
     # # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -892,12 +886,12 @@ def test_if_mover_dependent_branch_4():
     assert len([ac for ac in inner_ac if ac.data == "__output1"]) == 2
     assert len([ac for ac in inner_ac if ac.data == "__output2"]) == 2
     assert len(expected_data) + 2 == len(inner_ac)
-    # assert if_block.sdfg.arrays.keys() == expected_data.union(["__cond"])
+    assert if_block.sdfg.arrays.keys() == expected_data.union(["__cond"])
 
-    # inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
-    # assert len(inner_tlet) == 4
-    # expected_tlet = {tlet.label for tlet in [tasklet_a1, tasklet_a2, tasklet_b1, tasklet_b2]}
-    # assert {tlet.label for tlet in inner_tlet} == expected_tlet
+    inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
+    assert len(inner_tlet) == 4
+    expected_tlet = {tlet.label for tlet in [tasklet_a1, tasklet_a2, tasklet_b1, tasklet_b2]}
+    assert {tlet.label for tlet in inner_tlet} == expected_tlet
 
 
 def test_if_mover_no_ops():
