@@ -953,7 +953,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         mask_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)
         assert isinstance(mask_type, ts.FieldType)
-        assert isinstance(mask_type, ts.FieldType)
         if not type_info.is_logical(mask_type):
             raise errors.DSLError(
                 node.location,
