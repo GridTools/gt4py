@@ -337,6 +337,7 @@ def test_external_typing(session: nox.Session) -> None:
 
     session.run(
         "pytest",
+        "-sv",
         "--mypy-testing-base",
         "typing_tests",
         "--mypy-only-local-stub",
