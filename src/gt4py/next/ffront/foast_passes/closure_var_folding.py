@@ -11,8 +11,8 @@ from typing import Any
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, traits
-from gt4py.eve.utils import FrozenNamespace
 from gt4py.next import errors
+from gt4py.next.type_system import type_translation
 
 
 @dataclass
@@ -44,7 +44,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             definition = symtable[node.id]
             if definition in current_closure_vars:
                 value = self.closure_vars[node.id]
-                if isinstance(value, FrozenNamespace):
+                if isinstance(value, type_translation.ConstantPythonNamespaceObject):
                     return foast.Constant(value=value, location=node.location)
         return node
 
