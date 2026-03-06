@@ -207,6 +207,18 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
 
         return True
 
+    def _order_conditional_blocks_based_on_number_of_states_and_label(
+        self, nested_sdfg_0: dace_nodes.NestedSDFG, nested_sdfg_1: dace_nodes.NestedSDFG
+    ) -> tuple[dace_nodes.NestedSDFG, dace_nodes.NestedSDFG]:
+        nested_sdfg_0_states = [state_0 for state_0 in next(iter(nested_sdfg_0.sdfg.nodes())).all_states()]
+        nested_sdfg_1_states = [state_1 for state_1 in next(iter(nested_sdfg_1.sdfg.nodes())).all_states()]
+        if len(nested_sdfg_0_states) > len(nested_sdfg_1_states):
+            return nested_sdfg_0, nested_sdfg_1
+        elif len(nested_sdfg_0_states) < len(nested_sdfg_1_states):
+            return nested_sdfg_1, nested_sdfg_0
+        else:
+            return self._order_conditional_blocks_based_on_label(nested_sdfg_1, nested_sdfg_0)
+
     def apply(
         self,
         graph: Union[dace.SDFGState, dace.SDFG],
@@ -214,13 +226,19 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
     ) -> None:
         conditional_access_node: dace_nodes.AccessNode = self.conditional_access_node
         nested_sdfg_of_extended_conditional_block, nested_sdfg_of_fused_conditional_block = (
-            self._order_conditional_blocks_based_on_label(self.nsdfg_a, self.nsdfg_b)
+            self._order_conditional_blocks_based_on_number_of_states_and_label(self.nsdfg_a, self.nsdfg_b)
         )
 
         extended_conditional_block = next(
             iter(nested_sdfg_of_extended_conditional_block.sdfg.nodes())
         )
         fused_conditional_block = next(iter(nested_sdfg_of_fused_conditional_block.sdfg.nodes()))
+
+        first_conditional_states = list(extended_conditional_block.all_states())
+        second_conditional_states = list(fused_conditional_block.all_states())
+
+        # if len(first_conditional_states) != len(second_conditional_states):
+        #     breakpoint()
 
         # Copy missing symbols from second conditional block to the first one.
         #  For the symbols that are already in `nested_sdfg_of_extended_conditional_block.symbol_mapping` we know
@@ -258,8 +276,6 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                     new_data_name, data_desc_renamed, find_new_name=True
                 )
             )
-
-        second_conditional_states = list(fused_conditional_block.all_states())
 
         # Move the connectors from the second conditional block to the first
         # TODO(iomaganaris): Here we copy empty memlets used for scheduling as well. This means that the first conditional blocks inherits the scheduling of the second one as well. Maybe that's not good in some cases to hide latency but for now we keep it as it is
