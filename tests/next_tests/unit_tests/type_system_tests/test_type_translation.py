@@ -422,16 +422,11 @@ def test_from_value_namespace_proxy():
         kind=ts.ScalarKind.INT32
     )
 
-
     class FooEnum(gtx.int64, enum.Enum):
         FOO = 10
 
-    assert isinstance(
-        type_translation.from_value(FooEnum), type_translation.NamespaceProxy
-    )
-    assert type_translation.from_value(FooEnum).FOO == ts.ScalarType(
-        kind=ts.ScalarKind.INT64
-    )
+    assert isinstance(type_translation.from_value(FooEnum), type_translation.NamespaceProxy)
+    assert type_translation.from_value(FooEnum).FOO == ts.ScalarType(kind=ts.ScalarKind.INT64)
 
 
 class SomeEnum(eve.IntEnum):

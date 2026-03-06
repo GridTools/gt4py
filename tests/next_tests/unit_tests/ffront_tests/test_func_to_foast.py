@@ -343,6 +343,40 @@ def test_closure_symbols():
     )
     assert pattern_node.match(parsed, raise_exception=True)
 
+    import enum
+
+    class NonLocals(gtx.float64, enum.Enum):
+        FOO = 2.3
+        BAR = 3.4
+
+    def operator_with_refs(inp: gtx.Field[[TDim], "float64"], inp2: gtx.Field[[TDim], "float32"]):
+        a = inp + NonLocals.FOO
+        b = inp2 + NonLocals.BAR
+        return a, b
+
+    parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
+    assert "nonlocals_unreferenced" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
+    assert "nonlocals" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
+
+    pattern_node = P(
+        foast.FunctionDefinition,
+        body=P(
+            foast.BlockStmt,
+            stmts=[
+                P(
+                    foast.Assign,
+                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.FOO)),
+                ),
+                P(
+                    foast.Assign,
+                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.BAR)),
+                ),
+                P(foast.Return),
+            ],
+        ),
+    )
+    assert pattern_node.match(parsed, raise_exception=True)
+
 
 def test_wrong_return_type_annotation():
     ADim = gtx.Dimension("ADim")
