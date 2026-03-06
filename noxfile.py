@@ -341,6 +341,7 @@ def test_external_typing(session: nox.Session) -> None:
         "typing_tests",
         "--mypy-only-local-stub",
         "typing_tests",
+        *session.posargs,
     )
 
 

@@ -225,6 +225,18 @@ def where(
     raise NotImplementedError()
 
 
+@overload
+def astype(value: common.Field, type_: type, /) -> common.Field: ...
+
+
+@overload
+def astype(value: core_defs.ScalarT, type_: type, /) -> core_defs.ScalarT: ...
+
+
+@overload
+def astype(value: Tuple, type_: type, /) -> Tuple: ...
+
+
 @BuiltInFunction
 def astype(
     value: common.Field | core_defs.ScalarT | Tuple, type_: type, /

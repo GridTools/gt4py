@@ -253,3 +253,20 @@
 
       def foo_prg_with_backend(backend: gtx.typing.Backend | None) -> None:
           _ = foo_prg.with_backend(backend)
+
+  - case: astype_return_type
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      CDim = gtx.Dimension("CDim", kind=gtx.DimensionKind.HORIZONTAL)
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator
+      def foo(
+          a: gtx.Field[gtx.Dims[CDim, KDim], gtx.float32],
+          d: gtx.float32
+      ) -> gtx.Field[gtx.Dims[CDim, KDim], gtx.float64]:
+          z = gtx.astype(d * a, gtx.float64)
+          return z
