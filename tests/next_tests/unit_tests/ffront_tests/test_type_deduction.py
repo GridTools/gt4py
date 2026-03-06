@@ -744,3 +744,31 @@ def test_tuples_and_named_collections():
     )
     assert parsed.params[0].type == expected
     assert parsed.body.stmts[-1].value.type == expected
+
+
+def test_concat_where_wrong_structure():
+    def testee(
+        interior: cnc.NamedTupleNamedCollection,
+        boundary: cnc.DataclassNamedCollection,
+    ) -> tuple[cnc.NamedTupleNamedCollection, cnc.NamedTupleNamedCollection]:
+        return concat_where(cnc.TDim == 0, boundary, interior)
+
+    with pytest.raises(
+        errors.DSLError, match=r"Second and third argument must have the same tuple structure\."
+    ):
+        parsed = FieldOperatorParser.apply_to_function(testee)
+
+
+def test_concat_where_wrong_structure_nested():
+    def testee(
+        interior0: cnc.NamedTupleNamedCollection,
+        interior1: cnc.NamedTupleNamedCollection,
+        boundary0: cnc.DataclassNamedCollection,
+        boundary1: cnc.NamedTupleNamedCollection,
+    ) -> tuple[cnc.NamedTupleNamedCollection, cnc.NamedTupleNamedCollection]:
+        return concat_where(cnc.TDim == 0, (boundary0, boundary1), (interior0, interior1))
+
+    with pytest.raises(
+        errors.DSLError, match=r"Second and third argument must have the same tuple structure\."
+    ):
+        parsed = FieldOperatorParser.apply_to_function(testee)

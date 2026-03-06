@@ -11,7 +11,7 @@ from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.next import errors, utils
+from gt4py.next import errors
 from gt4py.next.common import Dimension, DimensionKind, promote_dims
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -922,11 +922,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             for el in type_info.primitive_constituents(arg)
         )
 
-        extract_structure = utils.tree_map(
-            lambda x: None,
-            collection_type=ts.COLLECTION_TYPE_SPECS,
-            result_collection_constructor=lambda ct, elts: (type(ct), elts),
-        )
+        # replace all primitive constituents by the same type, `ts.DeferredType()` for convenience,
+        # to capture the structure of the two branches
+        extract_structure = ti_ffront.tree_map_type(lambda x: ts.DeferredType(constraint=None))
         tb_structure = extract_structure(true_branch)
         fb_structure = extract_structure(false_branch)
 
