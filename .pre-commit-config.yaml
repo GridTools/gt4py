@@ -6,15 +6,11 @@ repos:
       - id: check-useless-excludes
 
   - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-    rev: v2.16.0
+    rev: v2.15.0
     hooks:
       - id: pretty-format-toml
         args: [--autofix, --indent, "2"]
-        exclude: |
-          (?x)^(
-              tach.toml|
-              uv.lock
-          )$
+        exclude: tach.toml|uv.lock
       - id: pretty-format-yaml
         args: [--autofix, --preserve-quotes, --indent, "2", --offset, "2"]
 
@@ -32,7 +28,7 @@ repos:
         args: [--number]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: v5.0.0
     hooks:
       - id: check-added-large-files
       - id: check-case-conflict
@@ -41,7 +37,7 @@ repos:
       - id: check-yaml
 
   - repo: https://github.com/Lucas-C/pre-commit-hooks
-    rev: v1.5.6
+    rev: v1.5.5
     hooks:
       - id: insert-license
         types: [python]
