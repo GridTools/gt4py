@@ -45,7 +45,6 @@ from boltons.strutils import (
 
 from . import extended_typing as xtyping
 from .extended_typing import (
-    TYPE_CHECKING,
     Any,
     ArgsOnlyCallable,
     Callable,
@@ -832,10 +831,6 @@ class Namespace(types.SimpleNamespace, Generic[T]):
         return {**self.__dict__}
 
     asdict = as_dict
-
-    if TYPE_CHECKING:
-
-        def __getattr__(self, name: str) -> T: ...
 
 
 class FrozenNamespace(Namespace[T]):

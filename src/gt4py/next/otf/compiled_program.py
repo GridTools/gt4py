@@ -47,7 +47,8 @@ ArgStaticDescriptorsByType: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
 
-# Only used to provide a more meaningful name to the metrics source key
+#: Counter that uniquely identifies every compiled program pool created from the same root.
+#: It is only used to give a meaningful name to the metrics source key.
 _pools_per_root: collections.Counter = collections.Counter()
 _pools_per_root_lock: threading.Lock = threading.Lock()
 
