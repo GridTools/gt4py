@@ -304,10 +304,13 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
 
         def _find_corresponding_state_in_second(
             inner_state: dace.SDFGState,
-        ) -> dace.SDFGState:
+        ) -> dace.SDFGState | None:
             is_true_branch = "true_branch" in inner_state.name
             branch_type = "true_branch" if is_true_branch else "false_branch"
-            return next(state for state in second_conditional_states if branch_type in state.name)
+            found_states = [state for state in second_conditional_states if branch_type in state.name]
+            if len(found_states) == 0:
+                return None
+            return found_states[0]
 
         # Copy first the nodes from the second conditional block to the first
         # Create a dictionary that maps the original nodes in the second conditional
@@ -315,6 +318,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         nodes_renamed_map: dict[dace_nodes.Node, dace_nodes.Node] = {}
         for first_inner_state in extended_conditional_block.all_states():
             corresponding_state_in_second = _find_corresponding_state_in_second(first_inner_state)
+            if not corresponding_state_in_second:
+                continue
             # Save edges of second conditional block to a state to be able to delete the nodes from the second conditional block
             edges_to_copy = list(corresponding_state_in_second.edges())
             nodes_to_move = list(corresponding_state_in_second.nodes())
