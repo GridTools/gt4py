@@ -314,6 +314,7 @@ def test_closure_symbols():
     from gt4py.eve.utils import FrozenNamespace
 
     nonlocals = FrozenNamespace(float_value=2.3, np_value=np.float32(3.4))
+    nonlocals_unreferenced = "nonlocals_unreferenced"
 
     def operator_with_refs(inp: gtx.Field[[TDim], "float64"], inp2: gtx.Field[[TDim], "float32"]):
         a = inp + nonlocals.float_value
@@ -345,18 +346,18 @@ def test_closure_symbols():
 
     import enum
 
-    class NonLocals(gtx.float64, enum.Enum):
+    class NonLocals(gtx.float32, enum.Enum):
         FOO = 2.3
         BAR = 3.4
 
-    def operator_with_refs(inp: gtx.Field[[TDim], "float64"], inp2: gtx.Field[[TDim], "float32"]):
-        a = inp + NonLocals.FOO
+    def operator_with_refs(inp2: gtx.Field[[TDim], "float32"]):
+        a = inp2 + NonLocals.FOO
         b = inp2 + NonLocals.BAR
         return a, b
 
     parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
     assert "nonlocals_unreferenced" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
-    assert "nonlocals" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
+    assert "NonLocals" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
 
     pattern_node = P(
         foast.FunctionDefinition,
@@ -365,11 +366,11 @@ def test_closure_symbols():
             stmts=[
                 P(
                     foast.Assign,
-                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.FOO)),
+                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.FOO.value)),
                 ),
                 P(
                     foast.Assign,
-                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.BAR)),
+                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.BAR.value)),
                 ),
                 P(foast.Return),
             ],
