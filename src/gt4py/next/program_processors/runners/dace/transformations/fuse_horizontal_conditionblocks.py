@@ -122,31 +122,38 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             return False
 
         # Get the actual conditional blocks
-        extended_conditional_block = next(
-            iter(nested_sdfg_of_extended_conditional_block.sdfg.nodes())
-        )
-        fused_conditional_block = next(iter(nested_sdfg_of_fused_conditional_block.sdfg.nodes()))
-        # TODO(iomaganaris): For now the branches of the conditional blocks should have only one state. If there's a change in the future and they have more than one state the below checks need to be modified
-        if not (
-            isinstance(extended_conditional_block, dace.sdfg.state.ConditionalBlock)
-            and len(extended_conditional_block.sub_regions()) == 2
-            and isinstance(fused_conditional_block, dace.sdfg.state.ConditionalBlock)
-            and len(fused_conditional_block.sub_regions()) == 2
-        ):
-            return False
-        extended_conditional_block_state_names = [
-            state.name for state in extended_conditional_block.all_states()
-        ]
-        fused_conditional_block_state_names = [
-            state.name for state in fused_conditional_block.all_states()
-        ]
-        if not (
-            any("true_branch" in name for name in extended_conditional_block_state_names)
-            and any("false_branch" in name for name in extended_conditional_block_state_names)
-            and any("true_branch" in name for name in fused_conditional_block_state_names)
-            and any("false_branch" in name for name in fused_conditional_block_state_names)
-        ):
-            return False
+        # extended_conditional_block = next(
+        #     iter(nested_sdfg_of_extended_conditional_block.sdfg.nodes())
+        # )
+        # fused_conditional_block = next(iter(nested_sdfg_of_fused_conditional_block.sdfg.nodes()))
+        # # TODO(iomaganaris): For now the branches of the conditional blocks should have only one state. If there's a change in the future and they have more than one state the below checks need to be modified
+        # if not (
+        #     isinstance(extended_conditional_block, dace.sdfg.state.ConditionalBlock)
+        #     and len(extended_conditional_block.sub_regions()) <= 2
+        #     and isinstance(fused_conditional_block, dace.sdfg.state.ConditionalBlock)
+        #     and len(fused_conditional_block.sub_regions()) <= 2
+        # ):
+        #     return False
+        # extended_conditional_block_state_names = [
+        #     state.name for state in extended_conditional_block.all_states()
+        # ]
+        # fused_conditional_block_state_names = [
+        #     state.name for state in fused_conditional_block.all_states()
+        # ]
+        # if not (
+        #     any("true_branch" in name for name in extended_conditional_block_state_names)
+        #     and any("false_branch" in name for name in extended_conditional_block_state_names)
+        #     and any("true_branch" in name for name in fused_conditional_block_state_names)
+        #     and any("false_branch" in name for name in fused_conditional_block_state_names)
+        # ):
+        #     return False
+        # if not (
+        #     isinstance(extended_conditional_block, dace.sdfg.state.ConditionalBlock)
+        #     and isinstance(fused_conditional_block, dace.sdfg.state.ConditionalBlock)
+        #     and len(extended_conditional_block.sub_regions())
+        #     == len(fused_conditional_block.sub_regions())
+        # ):
+        #     return False
 
         # Make sure that both conditional blocks are in the same scope
         if (
