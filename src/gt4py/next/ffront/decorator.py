@@ -97,7 +97,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
 
-    def with_backend(self, backend: next_backend.Backend) -> Self:
+    def with_backend(self, backend: next_backend.Backend | None) -> Self:
         return dataclasses.replace(self, backend=backend)
 
     def with_compilation_options(
