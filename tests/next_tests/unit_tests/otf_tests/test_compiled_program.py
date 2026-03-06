@@ -6,6 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
+import collections
+import contextvars
+import gc
+import weakref
 
 import pytest
 
@@ -216,3 +220,90 @@ def test_make_param_context_from_func_type_for_named_collections():
     context = compiled_program._make_param_context_from_func_type(func_type)
     # both `extract` and `_make_param_context_from_func_type` need to use the same structure
     assert arguments.extract(DataclassNamedCollection(int32_t, int64_t)) == context["inp"]
+
+
+class _DummyPool:
+    def __init__(self, root):
+        self.root = root
+
+
+def test_metrics_source_key_caches_per_pool_and_key():
+    def test_f():
+        compiled_program._metrics_source_key_cache.set({})
+        pool = _DummyPool(("prog", "backend"))
+        key = (("static",), 11, None)
+
+        with compiled_program._pools_per_root_lock:
+            _pools_per_root = compiled_program._pools_per_root
+            compiled_program._pools_per_root = collections.Counter({("prog", "backend"): 3})
+            first = compiled_program.metrics_source_key(pool, key)
+
+            # Change counter after first call; second call must come from cache.
+            compiled_program._pools_per_root[pool.root] = 99
+            second = compiled_program.metrics_source_key(pool, key)
+            _pools_per_root = compiled_program._pools_per_root
+
+        assert first == second
+        assert first == f"prog<backend>#3[{hash(key)}]"
+        assert compiled_program._metrics_source_key_cache.get()[(id(pool), key)] == first
+
+    contextvars.copy_context().run(test_f)
+
+
+def test_metrics_source_key_uses_contextvars_isolation():
+    ctx = contextvars.copy_context()
+
+    def test_f():
+        pool = _DummyPool(("prog", "backend"))
+        key = (("static",), 12, None)
+
+        compiled_program._metrics_source_key_cache.set({})
+        with compiled_program._pools_per_root_lock:
+            _pools_per_root = compiled_program._pools_per_root
+            compiled_program._pools_per_root = collections.Counter({pool.root: 1})
+            key_in_base = compiled_program.metrics_source_key(pool, key)
+            compiled_program._pools_per_root = _pools_per_root
+
+        def _run_in_new_context():
+            compiled_program._metrics_source_key_cache.set({})
+            with compiled_program._pools_per_root_lock:
+                compiled_program._pools_per_root = collections.Counter({pool.root: 7})
+                result = compiled_program.metrics_source_key(pool, key)
+                compiled_program._pools_per_root = _pools_per_root
+                return result
+
+        key_in_other_ctx = contextvars.Context().run(_run_in_new_context)
+
+        assert key_in_base != key_in_other_ctx
+        assert key_in_base == f"prog<backend>#1[{hash(key)}]"
+        assert key_in_other_ctx == f"prog<backend>#7[{hash(key)}]"
+        # Base context cache remains its own value.
+        assert compiled_program._metrics_source_key_cache.get()[(id(pool), key)] == key_in_base
+
+    ctx.run(test_f)
+
+
+def test_metrics_source_key_finalizer_removes_cache_entry_when_pool_is_deleted():
+    ctx = contextvars.copy_context()
+
+    def test_f():
+        compiled_program._metrics_source_key_cache.set({})
+        with compiled_program._pools_per_root_lock:
+            _pools_per_root = compiled_program._pools_per_root
+            compiled_program._pools_per_root = collections.Counter({("prog", "backend"): 2})
+            pool = _DummyPool(("prog", "backend"))
+            key = (("static",), 13, None)
+
+            compiled_program.metrics_source_key(pool, key)
+            entry = (id(pool), key)
+            assert entry in compiled_program._metrics_source_key_cache.get()
+
+            pool_ref = weakref.ref(pool)
+            del pool
+            gc.collect()
+
+            assert pool_ref() is None
+            assert entry not in compiled_program._metrics_source_key_cache.get()
+            compiled_program._pools_per_root = _pools_per_root
+
+    ctx.run(test_f)

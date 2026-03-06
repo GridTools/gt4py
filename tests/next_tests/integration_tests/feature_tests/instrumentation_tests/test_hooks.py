@@ -101,12 +101,11 @@ def custom_embedded_program_callback(
 
 @contextlib.contextmanager
 def custom_compiled_program_callback(
-    compiled_program: Callable,
+    program_pool: "CompiledProgramsPool",
+    key: gtx_typing.CompiledProgramsKey,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     offset_provider: common.OffsetProvider,
-    root: tuple[str, str],
-    key: gtx_typing.CompiledProgramsKey,
 ) -> contextlib.AbstractContextManager:
     compiled_callback_results.append(("enter-compiled-program", None))
 
@@ -116,12 +115,11 @@ def custom_compiled_program_callback(
         (
             "custom_compiled_program_callback",
             {
-                "program": compiled_program,
+                "program_root": program_pool.root,
+                "key": key,
                 "args": args,
                 "kwargs": kwargs,
                 "offset_provider": offset_provider.keys(),
-                "root": root,
-                "key": key,
             },
         )
     )
@@ -183,10 +181,8 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
 
         hook_name, hook_call_info = compiled_callback_results[1]
         assert hook_name == "custom_compiled_program_callback"
-        assert (
-            hook_call_info["program"]
-            == test_program._compiled_programs.compiled_programs[hook_call_info["key"]]
-        )
+        assert hook_call_info["program_root"] == test_program._compiled_programs.root
+        assert hook_call_info["key"] in test_program._compiled_programs.compiled_programs
 
         assert len(embedded_callback_results) == 0
 
@@ -214,17 +210,17 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
 )
 def test_compile_variant_hook(backend: gtx_typing.Backend):
     def custom_compile_variant_hook(
-        program_definition: gtx_typing.DSLDefinition,
-        backend: gtx_typing.Backend,
-        offset_provider: common.OffsetProviderType | common.OffsetProvider,
-        argument_descriptors: dict[type, dict[str, Any]],
+        program_pool: "CompiledProgramsPool",
         key: gtx_typing.CompiledProgramsKey,
+        backend: gtx_typing.Backend,
+        argument_descriptors: dict[type, dict[str, Any]],
+        offset_provider: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:
         callback_results.append(
             (
                 "custom_compile_variant_hook",
                 {
-                    "program_definition": program_definition,
+                    "program_definition": program_pool.definition_stage,
                     "backend": backend.name,
                     "argument_descriptors": {
                         k.__name__: [*v.keys()] for k, v in argument_descriptors.items()
