@@ -712,7 +712,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         the parts that actually can be relocated and returns a `dict` mapping
         every relocatable input connector to the set of nodes that can be relocated.
 
-        Note that the sets that are returned by this function are distinct.
+        The returned sets can include duplicate nodes, i.e. a node can be in the
+        dataflow of multiple connectors. The function that performs the actual
+        relocation (_replicate_dataflow_into_branch) will take care of that and
+        make sure that such nodes are only copied once.
 
         Args:
             state: The state on which we operate.
