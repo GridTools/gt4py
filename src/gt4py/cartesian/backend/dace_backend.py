@@ -362,7 +362,7 @@ class SDFGManager:
         SDFGManager._strip_history(sdfg)
         sdfg.save(str(path), compress=True)
 
-    def sdfg_via_schedule_tree(self, *, validate: bool = True, simplify: bool = True) -> SDFG:
+    def sdfg_via_schedule_tree(self, *, validate: bool = False, simplify: bool = True) -> SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
 
         Cache the SDFG into the manager for re-use, unless the builder has a no-caching policy.
@@ -411,7 +411,11 @@ class SDFGManager:
             flipper.visit(stree)
 
         # Create SDFG
-        sdfg = stree.as_sdfg(validate=validate, simplify=simplify, skip={"ScalarToSymbolPromotion"})
+        sdfg = stree.as_sdfg(
+            validate=validate,
+            simplify=simplify,
+            skip={"ScalarToSymbolPromotion", "ControlFlowRaising"},
+        )
 
         if do_cache:
             self._save_sdfg(sdfg, path)
