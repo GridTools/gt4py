@@ -778,13 +778,13 @@ def test_if_mover_dependent_branch_4():
         )
 
     # Temporaries
-    temporary_names = ["a1", "a2", "b1", "b2", "c1", "s1"]
+    temporary_names = ["a1", "a2", "a3", "b1", "b2", "c1", "s1"]
     for name in temporary_names:
         sdfg.add_scalar(
             name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
         )
 
-    a1, a2, b1, b2, c1, s1 = (state.add_access(name) for name in temporary_names)
+    a1, a2, a3, b1, b2, c1, s1 = (state.add_access(name) for name in temporary_names)
     me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
 
     # The auxiliary computation involving `s`:
@@ -848,11 +848,21 @@ def test_if_mover_dependent_branch_4():
     state.add_edge(me, "OUT_c", tasklet_cond, "__in", dace.Memlet("c[__i]"))
     state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
 
+    tasklet_node_reuse = state.add_tasklet(
+        "tasklet_node_reuse",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
+    )
+    state.add_edge(me, "OUT_a", tasklet_node_reuse, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(me, "OUT_e", tasklet_node_reuse, "__in2", dace.Memlet("e[__i]"))
+    state.add_edge(tasklet_node_reuse, "__out", a3, None, dace.Memlet("a3[0]"))
+
     # Make the if selection.
     if_block = _make_if_block_with_two_args(state=state, outer_sdfg=sdfg)
     state.add_edge(a2, None, if_block, "__arg1", dace.Memlet("a2[0]"))
     state.add_edge(b2, None, if_block, "__arg2", dace.Memlet("b2[0]"))
-    state.add_edge(me, "OUT_e", if_block, "__arg3", dace.Memlet("e[__i]"))
+    state.add_edge(a3, None, if_block, "__arg3", dace.Memlet("a3[0]"))
     state.add_edge(s1, None, if_block, "__arg4", dace.Memlet("s1[0]"))
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
@@ -893,17 +903,19 @@ def test_if_mover_dependent_branch_4():
         .union(input_names)
         .union(["__arg1", "__arg2", "__arg3", "__arg4", "__output1", "__output2"])
     )
-    expected_data.difference_update(["c1", "c", "d", "e", "f", "s"])
+    expected_data.difference_update(["c1", "c", "d", "f", "s"])
     assert expected_data == {ac.data for ac in inner_ac}
     assert len([ac for ac in inner_ac if ac.data == "s1"]) == 1
     assert len([ac for ac in inner_ac if ac.data == "__output1"]) == 2
     assert len([ac for ac in inner_ac if ac.data == "__output2"]) == 2
-    assert len(expected_data) + 2 == len(inner_ac)
+    assert len(expected_data) + 3 == len(inner_ac)
     assert if_block.sdfg.arrays.keys() == expected_data.union(["__cond"])
 
     inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
-    assert len(inner_tlet) == 4
-    expected_tlet = {tlet.label for tlet in [tasklet_a1, tasklet_a2, tasklet_b1, tasklet_b2]}
+    assert len(inner_tlet) == 5
+    expected_tlet = {
+        tlet.label for tlet in [tasklet_a1, tasklet_a2, tasklet_b1, tasklet_b2, tasklet_node_reuse]
+    }
     assert {tlet.label for tlet in inner_tlet} == expected_tlet
 
 
