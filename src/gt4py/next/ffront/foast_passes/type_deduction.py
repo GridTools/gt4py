@@ -930,7 +930,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         if tb_structure != fb_structure:
             raise errors.DSLError(
-                location, "Second and third argument must have the same tuple structure."
+                location, "Second and third argument must have the same tuple/collection structure."
             )
 
         @ti_ffront.tree_map_type
