@@ -289,6 +289,12 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         `if_block`.
         At the end the function will remove the `connector`, but it will not remove
         the original dataflow.
+        In case of nodes existing in multiple `nodes_to_move` sets coming from multiple
+        connectors, the function will only copy the necessary nodes and edges only once
+        based on the `old_to_new_nodes_map` keys and values. In case a connector to the
+        NestedSDFG is exists in the dataflow of another connector, the function
+        will remove the connection of the original connector and replace the global
+        AccessNode of the NestedSDFG with a temporary one and remove the original connector.
 
         Args:
             sdfg: The sdfg that we process, the one that contains `state`.
@@ -322,21 +328,20 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             old_to_new_nodes_map[(old_node, branch_state)] = copy_of_old_node
             branch_state.add_node(copy_of_old_node)
 
-        # There might be AccessNodes inside `nodes_to_move`, we now have to make sure
-        #  that they are present inside the nested ones. By our base assumption they
-        #  are transients and single use, because they are only used in one place. Make
-        #  sure that we don't add new nodes if the nodes are already in the arrays of
-        #  the inner SDFG.
-        for node in nodes_to_move:
-            if not isinstance(node, dace_nodes.AccessNode):
+            # There might be AccessNodes inside `nodes_to_move`, we now have to make sure
+            #  that they are present inside the nested ones. By our base assumption they
+            #  are transients and single use, because they are only used in one place. Make
+            #  sure that we don't add new nodes if the nodes are already in the arrays of
+            #  the inner SDFG.
+            if not isinstance(old_node, dace_nodes.AccessNode):
                 continue
-            if node.data in inner_sdfg.arrays:
+            if old_node.data in inner_sdfg.arrays:
                 continue
-            assert sdfg.arrays[node.data].transient
+            assert sdfg.arrays[old_node.data].transient
             # TODO(phimuell): Handle the case we need to rename something.
             inner_sdfg.add_datadesc(
-                node.data,
-                sdfg.arrays[node.data].clone(),
+                old_node.data,
+                sdfg.arrays[old_node.data].clone(),
                 find_new_name=False,
             )
 
@@ -714,7 +719,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         The returned sets can include duplicate nodes, i.e. a node can be in the
         dataflow of multiple connectors. The function that performs the actual
-        relocation (_replicate_dataflow_into_branch) will take care of that and
+        relocation (`_replicate_dataflow_into_branch`) will take care of that and
         make sure that such nodes are only copied once.
 
         Args:
