@@ -947,7 +947,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
                 raise errors.DSLError(
                     location,
-                    f"Field arguments to {func_name} must be of same dtype, got '{t_dtype}' != "
+                    f"Field arguments to '{func_name}' must be of same dtype, got '{t_dtype}' != "
                     f"'{f_dtype}'.",
                 )
             return_dims = promote_dims(cond_dims, type_info.extract_dims(type_info.promote(tb, fb)))
