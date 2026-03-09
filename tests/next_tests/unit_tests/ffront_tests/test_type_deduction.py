@@ -432,7 +432,7 @@ def test_where_bad_dim():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Second and third argument must have the same tuple/collection structure",
+        match="Second and third argument to 'where' must have the same tuple/collection structure",
     ):
         _ = FieldOperatorParser.apply_to_function(bad_dim_where)
 
@@ -756,7 +756,7 @@ def test_concat_where_wrong_structure():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Second and third argument must have the same tuple/collection structure",
+        match="Second and third argument to 'concat_where' must have the same tuple/collection structure",
     ):
         parsed = FieldOperatorParser.apply_to_function(testee)
 
@@ -772,6 +772,6 @@ def test_concat_where_wrong_structure_nested():
 
     with pytest.raises(
         errors.DSLError,
-        match="Second and third argument must have the same tuple/collection structure",
+        match="Second and third argument to 'concat_where' must have the same tuple/collection structure",
     ):
         parsed = FieldOperatorParser.apply_to_function(testee)

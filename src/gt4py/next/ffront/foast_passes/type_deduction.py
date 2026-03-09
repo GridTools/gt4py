@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import textwrap
 from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
@@ -911,6 +912,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def _deduce_where_return_type(
         self,
+        func_name: str,
         cond_dims: Sequence[Dimension],
         true_branch: ts.FieldType | ts.TupleType | ts.NamedCollectionType,
         false_branch: ts.FieldType | ts.TupleType | ts.NamedCollectionType,
@@ -930,7 +932,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         if tb_structure != fb_structure:
             raise errors.DSLError(
-                location, "Second and third argument must have the same tuple/collection structure."
+                location,
+                f"Second and third argument to '{func_name}' must have the same tuple/collection "
+                f"structure.\n"
+                + textwrap.indent(
+                    f"true branch:  '{true_branch}'\nfalse branch:  '{false_branch}'", " "
+                ),
             )
 
         @ti_ffront.tree_map_type
@@ -940,7 +947,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
                 raise errors.DSLError(
                     location,
-                    f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'.",
+                    f"Field arguments to {func_name} must be of same dtype, got '{t_dtype}' != "
+                    f"'{f_dtype}'.",
                 )
             return_dims = promote_dims(cond_dims, type_info.extract_dims(type_info.promote(tb, fb)))
             return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
@@ -958,6 +966,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"a field with dtype 'bool', got '{mask_type}'.",
             )
         return_type = self._deduce_where_return_type(
+            "where",
             mask_type.dims,
             true_branch_type,  # type: ignore[arg-type]
             false_branch_type,  # type: ignore[arg-type]
@@ -977,6 +986,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         assert isinstance(cond_type, ts.DomainType)
         return_type = self._deduce_where_return_type(
+            "concat_where",
             cond_type.dims,
             true_branch_type,  # type: ignore[arg-type]
             false_branch_type,  # type: ignore[arg-type]
