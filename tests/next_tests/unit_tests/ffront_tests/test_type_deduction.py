@@ -769,6 +769,6 @@ def test_concat_where_wrong_structure_nested():
         return concat_where(cnc.TDim == 0, (boundary0, boundary1), (interior0, interior1))
 
     with pytest.raises(
-        errors.DSLError, match=r"Second and third argument must have the same tuple structure\."
+        errors.DSLError, match="Second and third argument must have the same tuple structure."
     ):
         parsed = FieldOperatorParser.apply_to_function(testee)
