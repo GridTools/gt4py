@@ -634,6 +634,19 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 
 
 @_register_builtin_type_synthesizer
+def map_tuple(op: TypeSynthesizer) -> TypeSynthesizer:
+    @type_synthesizer
+    def applied_map(
+        arg: ts.TupleType, offset_provider_type: common.OffsetProviderType
+    ) -> ts.TupleType:
+        return ts.TupleType(
+            types=[op(arg_, offset_provider_type=offset_provider_type) for arg_ in arg.types]
+        )
+
+    return applied_map
+
+
+@_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @type_synthesizer
     def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):

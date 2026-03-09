@@ -566,6 +566,14 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
         or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
+    if isinstance(symbol_type, ts.VarArgType) and isinstance(to_type, ts.VarArgType):
+        return is_concretizable(symbol_type.element_type, to_type.element_type)
+    if isinstance(symbol_type, ts.VarArgType) and isinstance(to_type, ts.TupleType):
+        if len(to_type.types) == 0 or (
+            all(type_ == to_type.types[0] for type_ in to_type.types)
+            and is_concretizable(symbol_type.element_type, to_type.types[0])
+        ):
+            return True
     elif is_concrete(symbol_type):
         return symbol_type == to_type
     return False
