@@ -817,10 +817,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         return None
                     if inner_state.out_degree(node) != exp_out_deg:
                         return None
-            # Each branch must write to all outputs.
-            # TODO(phimuell): Think if this should be lifted.
-            if any(count != 1 for count in output_count.values()):
-                return None
 
         # The connectors that can be pulled inside must appear exactly once.
         #  In theory they could appear more, but then we would have to replicate
