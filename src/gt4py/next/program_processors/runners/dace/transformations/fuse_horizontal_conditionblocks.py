@@ -143,8 +143,14 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         # Allow the states of conditional blocks to have either "true_branch" or "false_branch" in their name. This check is related to the function `_find_corresponding_state_in_second` below
         # TODO(iomaganaris): Raise this restriction if there's any need for that. Currently where statements generate only true/false branchs so this check is sufficient
         if not (
-            all("true_branch" in state_name or "false_branch" in state_name for state_name in extended_conditional_block_state_names)
-            and all("true_branch" in state_name or "false_branch" in state_name for state_name in fused_conditional_block_state_names)
+            all(
+                "true_branch" in state_name or "false_branch" in state_name
+                for state_name in extended_conditional_block_state_names
+            )
+            and all(
+                "true_branch" in state_name or "false_branch" in state_name
+                for state_name in fused_conditional_block_state_names
+            )
         ):
             return False
 
@@ -203,8 +209,12 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
     def _order_conditional_blocks_based_on_number_of_states_and_label(
         self, nested_sdfg_0: dace_nodes.NestedSDFG, nested_sdfg_1: dace_nodes.NestedSDFG
     ) -> tuple[dace_nodes.NestedSDFG, dace_nodes.NestedSDFG]:
-        nested_sdfg_0_states = [state_0 for state_0 in next(iter(nested_sdfg_0.sdfg.nodes())).all_states()]
-        nested_sdfg_1_states = [state_1 for state_1 in next(iter(nested_sdfg_1.sdfg.nodes())).all_states()]
+        nested_sdfg_0_states = [
+            state_0 for state_0 in next(iter(nested_sdfg_0.sdfg.nodes())).all_states()
+        ]
+        nested_sdfg_1_states = [
+            state_1 for state_1 in next(iter(nested_sdfg_1.sdfg.nodes())).all_states()
+        ]
         if len(nested_sdfg_0_states) > len(nested_sdfg_1_states):
             return nested_sdfg_0, nested_sdfg_1
         elif len(nested_sdfg_0_states) < len(nested_sdfg_1_states):
@@ -219,7 +229,9 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
     ) -> None:
         conditional_access_node: dace_nodes.AccessNode = self.conditional_access_node
         nested_sdfg_of_extended_conditional_block, nested_sdfg_of_fused_conditional_block = (
-            self._order_conditional_blocks_based_on_number_of_states_and_label(self.nsdfg_a, self.nsdfg_b)
+            self._order_conditional_blocks_based_on_number_of_states_and_label(
+                self.nsdfg_a, self.nsdfg_b
+            )
         )
 
         extended_conditional_block = next(
@@ -227,11 +239,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         )
         fused_conditional_block = next(iter(nested_sdfg_of_fused_conditional_block.sdfg.nodes()))
 
-        first_conditional_states = list(extended_conditional_block.all_states())
         second_conditional_states = list(fused_conditional_block.all_states())
-
-        # if len(first_conditional_states) != len(second_conditional_states):
-        #     breakpoint()
 
         # Copy missing symbols from second conditional block to the first one.
         #  For the symbols that are already in `nested_sdfg_of_extended_conditional_block.symbol_mapping` we know
@@ -300,7 +308,9 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         ) -> dace.SDFGState | None:
             is_true_branch = "true_branch" in inner_state.name
             branch_type = "true_branch" if is_true_branch else "false_branch"
-            found_states = [state for state in second_conditional_states if branch_type in state.name]
+            found_states = [
+                state for state in second_conditional_states if branch_type in state.name
+            ]
             if len(found_states) == 0:
                 return None
             return found_states[0]
