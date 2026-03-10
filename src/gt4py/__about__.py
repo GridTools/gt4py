@@ -30,22 +30,22 @@ __version__: str
 __version_info__: pkg_version.Version
 
 
-#: This should be overwritten by the `onbuild` hook of versioningit
-# with the actual version string at build time. If the hook is not
-# run for any reason, the fallback value defined here would be used,
-# so, for consistency, it should be set to the same value as the one
-# in `tool.versioningit.default-version` in pyproject.toml.
+#: This value should be overwritten with the actual version string at build
+#: time by the `onbuild` hook of versioningit. If the hook is not run for
+#: whatever reason, the current value defined here would be used as fallback.
+#: Therefore, for consistency, the hard-coded value here should be kept in sync
+#: with the `tool.versioningit.vcs.default-tag` field in pyproject.toml.
 on_build_version: Final = "1.1.6+unknown.version.details"
 
-_static_version: tuple[str, pkg_version.Version] | None = None
+_cached_version_data: tuple[str, pkg_version.Version] | None = None
 _dir: list[str] | None = None
 
 
 def _inspect_version() -> tuple[str, pkg_version.Version]:
-    global _static_version
+    global _cached_version_data
 
-    if _static_version is not None:
-        return _static_version
+    if _cached_version_data is not None:
+        return _cached_version_data
 
     import importlib.metadata
 
@@ -75,8 +75,8 @@ def _inspect_version() -> tuple[str, pkg_version.Version]:
 
             except Exception:
                 # There is something wrong in the current editable installation.
-                # Fallback to the static version, but don't store the result as a
-                # static version, since the package is installed in editable mode.
+                # Fallback to the static version, but don't cache the result as the
+                # final version data, since the package is installed in editable mode.
                 pass
 
             version_info = pkg_version.parse(version)
@@ -85,10 +85,10 @@ def _inspect_version() -> tuple[str, pkg_version.Version]:
 
         else:
             # If the package is not installed in editable mode, the version
-            # is the one reported by `importlib.metadata.version("gt4py")`.
-            _static_version = version, pkg_version.parse(version)
+            # is always correctly reported by `importlib.metadata.version("gt4py")`.
+            _cached_version_data = version, pkg_version.parse(version)
 
-            return _static_version
+            return _cached_version_data
 
     else:
         # This branch is a weird case: since `importlib.metadata`

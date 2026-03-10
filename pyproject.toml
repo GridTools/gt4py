@@ -479,7 +479,6 @@ explicit = true
 name = 'gridtools'
 url = 'https://gridtools.github.io/pypi/'
 
-# -- versioningit --
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
@@ -487,8 +486,8 @@ dace = [
   {index = "gridtools", group = "dace-next"}
 ]
 
+# -- versioningit --
 [tool.versioningit]
-default-version = "1.1.6+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
@@ -501,6 +500,6 @@ regex = "^\\s*on_build_version:\\s*Final\\s*=\\s*(?P<version>.*)"
 source-file = "src/gt4py/__about__.py"
 
 [tool.versioningit.vcs]
-default-tag = "v1.1.6+dev"
+default-tag = "1.1.6+unknown.version.details"
 describe-subst = "$Format:%(describe:tags,match=v*)$"
 method = "git-archive"

@@ -95,10 +95,10 @@ def package_version(new_version_number: str) -> None:
     try:
         with open(common.REPO_ROOT / "pyproject.toml", "rb") as f:
             data = tomllib.load(f)
-            current_version = data["tool"]["versioningit"]["default-version"]
+            current_version = data["tool"]["versioningit"]["vcs"]["default-tag"]
     except Exception as e:
         rich.print(
-            f"Incompatible or missing 'tool.versioningit.default-version' key in 'pyproject.toml': {e}"
+            f"Incompatible or missing 'tool.versioningit.vcs.default-tag' key in 'pyproject.toml': {e}"
         )
         raise typer.Exit(ExitCode.UNRECOGNIZED_PYPROJECT_TOML) from e
 
