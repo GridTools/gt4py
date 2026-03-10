@@ -8,6 +8,7 @@
 
 import copy
 import functools
+import collections
 from typing import Any, Optional
 
 import dace
@@ -128,8 +129,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if_block_spec = self._partition_if_block(if_block)
         if if_block_spec is None:
             return False
+        relocatable_connectors, non_relocatable_connectors, connector_usage_location = if_block_spec
 
         # Compute the dataflow that is relocated.
+        # NOTE: That the nodes sets are not sorted in any way, however, the
         raw_relocatable_dataflow, non_relocatable_dataflow = (
             {
                 conn_name: gtx_transformations.utils.find_upstream_nodes(
@@ -140,7 +143,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 )
                 for conn_name in conn_names
             }
-            for conn_names in if_block_spec
+            for conn_names in [relocatable_connectors, non_relocatable_connectors]
         )
         relocatable_dataflow = self._filter_relocatable_dataflow(
             sdfg=sdfg,
@@ -193,9 +196,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
     ) -> None:
         if_block: dace_nodes.NestedSDFG = self.if_block
-        if_block_spec = self._partition_if_block(if_block)
-        assert if_block_spec is not None
         enclosing_map = graph.scope_dict()[if_block]
+        relocatable_connectors, non_relocatable_connectors, connector_usage_location = self._partition_if_block(if_block)
 
         # Find the dataflow that should be relocated.
         raw_relocatable_dataflow, non_relocatable_dataflow = (
@@ -208,7 +210,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 )
                 for conn_name in conn_names
             }
-            for conn_names in if_block_spec
+            for conn_names in [relocatable_connectors, non_relocatable_connectors] 
         )
         relocatable_dataflow = self._filter_relocatable_dataflow(
             sdfg=sdfg,
@@ -216,6 +218,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if_block=if_block,
             raw_relocatable_dataflow=raw_relocatable_dataflow,
             non_relocatable_dataflow=non_relocatable_dataflow,
+            connector_usage_location=connector_usage_location,
             enclosing_map=enclosing_map,
         )
 
@@ -225,7 +228,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # a node in the dataflow of one connector might be the global AccessNode of another connector and we have to handle
         # it properly in `_replicate_dataflow_into_branch`.
         conn_name_to_access_node_map: dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]] = {}
-        for conn_name in relocatable_dataflow.keys():
+        for conn_name in relocatable_connectors:
             conn_name_to_access_node_map[conn_name] = self._find_branch_for(
                 if_block=if_block,
                 connector=conn_name,
@@ -621,36 +624,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         return True
 
-    def _find_branch_for(
-        self,
-        if_block: dace_nodes.NestedSDFG,
-        connector: str,
-    ) -> tuple[dace.SDFGState, dace_nodes.AccessNode]:
-        """
-        Locates the branch and the AccessNode to where the dataflow should be relocated.
-        """
-        inner_sdfg: dace.SDFG = if_block.sdfg
-        conditional_block: dace.sdfg.state.ConditionalBlock = next(iter(inner_sdfg.nodes()))
-
-        # This will locate the state where the first AccessNode that refers to
-        #  `connector` is found. Since `_partition_if_block()` makes sure that
-        #  there is only one match this is okay. But it must be changed, if we
-        #  lift this restriction.
-        for inner_state in conditional_block.all_states():
-            connector_nodes: list[dace_nodes.AccessNode] = [
-                dnode for dnode in inner_state.data_nodes() if dnode.data == connector
-            ]
-            if len(connector_nodes) == 0:
-                continue
-            break
-        else:
-            raise ValueError(f"Did not find a branch associated to '{connector}'.")
-
-        assert isinstance(inner_state, dace.SDFGState)
-        assert inner_state.in_degree(connector_nodes[0]) == 0
-        assert inner_state.out_degree(connector_nodes[0]) > 0
-        return inner_state, connector_nodes[0]
-
     def _has_if_block_relocatable_dataflow(
         self,
         sdfg: dace.SDFG,
@@ -675,6 +648,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if_block_spec = self._partition_if_block(upstream_if_block)
         if if_block_spec is None:
             return False
+        *classified_connectors, connector_usage_location = if_block_spec
 
         raw_relocatable_dataflow, non_relocatable_dataflow = (
             {
@@ -708,8 +682,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if_block: dace_nodes.NestedSDFG,
         raw_relocatable_dataflow: dict[str, set[dace_nodes.Node]],
         non_relocatable_dataflow: dict[str, set[dace_nodes.Node]],
+        connector_usage_location: dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]],
         enclosing_map: dace_nodes.MapEntry,
-    ) -> dict[str, set[dace_nodes.Node]]:
+    ) -> dict[str, list[dace_nodes.Node]]:
         """Partition the dependencies.
 
         The function expects the dataflow that is upstream of every connector
@@ -729,6 +704,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 that can be relocated, not yet filtered.
             non_relocatable_dataflow: The connectors and their associated dataflow
                 that can not be relocated.
+            connector_usage_location: Maps a connector to the state and AccessNode
+                inside the if block.
             enclosing_map: The limiting node, i.e. the MapEntry of the Map where
                 `if_block` is located in.
         """
@@ -743,16 +720,14 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         }
 
         # Find the known_nodes for each branch
-        known_nodes: dict[dace.SDFGState, set[dace_nodes.Node]] = dict()
+        known_nodes: dict[dace.SDFGState, set[dace_nodes.Node]] = collections.defaultdict(set)
         for conn_name, rel_df in relocatable_dataflow.items():
-            branch_state, _ = self._find_branch_for(if_block=if_block, connector=conn_name)
-            if branch_state not in known_nodes:
-                known_nodes[branch_state] = set()
+            branch_state = connector_usage_location[conn_name]
             known_nodes[branch_state].update(rel_df)
 
+        # Find intersect of all known_nodes sets which are the nodes that are in the
+        #  dataflow of multiple branches and thus doesn't make sense to relocate
         multiple_df_nodes: set[dace_nodes.Node] = set()
-        # Find intersect of all known_nodes sets which are the nodes that are in the dataflow
-        # of multiple branches and thus doesn't make sense to relocate
         for branch_state, known_nodes_set in known_nodes.items():
             for other_branch_state, other_known_nodes_set in known_nodes.items():
                 if branch_state != other_branch_state:
@@ -829,7 +804,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         nodes_proposed_for_reloc.remove(reloc_node)
                         has_been_updated = True
 
-            return nodes_proposed_for_reloc
+            # Bring the nodes into a deterministic order.
+            return gtx_transformations.utils.order_nodes(nodes_proposed_for_reloc)
 
         return {
             conn_name: filter_nodes(rel_df) for conn_name, rel_df in relocatable_dataflow.items()
@@ -837,8 +813,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
     def _partition_if_block(
         self,
+        sdfg: dace.SDFG,
         if_block: dace_nodes.NestedSDFG,
-    ) -> Optional[tuple[set[str], set[str]]]:
+    ) -> Optional[tuple[list[str], set[str], dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]]]]:
         """Check if `if_block` can be processed and partition the input connectors.
 
         The function will check if `if_block` has the right structure, i.e. if it is
@@ -849,16 +826,27 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         Returns:
             If `if_block` is unsuitable the function will return `None`.
             If `if_block` meets the structural requirements the function will return
-            two sets of strings. The first set contains the connectors that can be
-            relocated and the second one of the conditions that can not be relocated.
+            a tuple of length three. The first element is a `list` containing the
+            connectors whose dataflow can be relocated. The second element is a `set`
+            containing the connector names whose dataflow can not be relocated. The
+            third element is a `dict` that maps connectors to a pair containing the
+            state (inside the nested SDFG) and the `AccessNode` that refers to to the
+            connector.
+            Note that only the first element, the `list` containing the relocatable
+            dataflow, has a stable order that depends on the connector names. All
+            other elements have an unspecific order!
         """
-        # TODO(phimuell): Change the return type to `tuple[list[str], list[str]]` and sort the connectors, such that the operation is deterministic.
-        # There shall only be one output and three inputs with given names.
         if len(if_block.out_connectors.keys()) == 0:
             return None
 
-        # These are all the output names.
         output_names: set[str] = set(if_block.out_connectors.keys())
+
+        # If data is used as input and output we ignore it.
+        # TODO(phimuell): Think if this case can be handled.
+        input_names: set[str] = set(if_block.in_connectors.keys())
+        input_names.difference_update(output_names)
+        if not input_names:
+            return None
 
         # We require that the nested SDFG contains a single node, which is a
         #  `ConditionalBlock` containing two branches.
@@ -869,51 +857,80 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if not isinstance(inner_if_block, dace.sdfg.state.ConditionalBlock):
             return None
 
-        # Defining it outside will ensure that there is only one AccessNode for every
-        #  inconnector, which is something `_find_branch_for()` relies on.
-        reference_count: dict[str, int] = {conn_name: 0 for conn_name in if_block.in_connectors}
+        # Mapping between the connector and the inner access node.
+        connector_usage_location: dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]] = {}
 
+        # This is the dataflow that can not be relocated.
+        non_relocatable_connectors: set[str] = set()
+
+        # Now inspect all states.
         for _, branch in inner_if_block.branches:
             output_count: dict[str, int] = {conn_name: 0 for conn_name in output_names}
             for inner_state in branch.all_states():
                 assert isinstance(inner_state, dace.SDFGState)
-                for node in inner_state.nodes():
-                    if not isinstance(node, dace_nodes.AccessNode):
-                        return None
-                    if node.data in reference_count:
-                        reference_count[node.data] += 1
-                        exp_in_deg, exp_out_deg = 0, 1
-                    elif node.data in output_count:
-                        output_count[node.data] += 1
-                        exp_in_deg, exp_out_deg = 1, 0
+                for dnode in inner_state.data_nodes():
+                    node_data = dnode.data
+
+                    # Check if we can skip the data.
+                    if node_data in non_relocatable_connectors:
+                        continue
+                    elif dnode.desc(sdfg).transient:
+                        continue
+
+                    if node_data in connector_usage_location:
+                        # The connectors that can be pulled inside must appear exactly once
+                        #  inside a state. In theory they could appear more, but then we
+                        #  would have to replicate the dataflow to different locations
+                        #  which is not supported. We still allow such situation, but
+                        #  consider them as non relocatable.
+                        connector_usage_location.pop(node_data)
+                        non_relocatable_connectors.add(node_data)
+
                     else:
+                        if node_data in output_names:
+                            exp_in_deg, exp_out_deg = 0, 1
+                        else:
+                            assert node_data in output_count
+                            exp_in_deg, exp_out_deg = 1, 0
+
+                        # Check if the node has the right degree.
+                        # TODO(phimuell): Find out if we can remove or relax these checks.
+                        if (inner_state.in_degree(node) == exp_in_deg) and (inner_state.out_degree(node) == exp_out_deg):
+                            connector_usage_location[node_data] = (branch, dnode)
+                        else:
+                            non_relocatable_connectors.add(node_data)
+
+                    # All input connectors are now considered non relocatable, thus
+                    #  the decomposition does not exist.
+                    if len(non_relocatable_dataflow) == len(input_names):
+                        assert non_relocatable_dataflow == input_names.keys()
                         return None
-                    if inner_state.in_degree(node) != exp_in_deg:
-                        return None
-                    if inner_state.out_degree(node) != exp_out_deg:
-                        return None
+
             # Each branch must write to all outputs.
             # TODO(phimuell): Think if this should be lifted.
             if any(count != 1 for count in output_count.values()):
                 return None
 
-        # The connectors that can be pulled inside must appear exactly once.
-        #  In theory they could appear more, but then we would have to replicate
-        #  the dataflow to different locations which is not supported.
-        #  So the ones that can be relocated were found exactly once. Zero would
-        #  mean they can not be relocated and more than one means that we do not
-        #  support it yet.
-        relocatable_connectors = {
-            conn_name for conn_name, conn_count in reference_count.items() if conn_count == 1
-        }
-        non_relocatable_connectors = {
-            conn_name
-            for conn_name in reference_count.keys()
-            if conn_name not in relocatable_connectors
-        }
+        # There is nothing to relocate.
+        if len(connector_usage_location) == 0:
+            return None
 
-        if len(non_relocatable_connectors) == 0:
+        # In addition to the non relocatable connectors that were found above, we also
+        #  mark all connectors that were not found as non relocatable. These connectors
+        #  are used for conditions or are not used.
+        non_relocatable_dataflow.update(
+                conn for conn in input_names if conn not in connector_usage_location
+        )
+
+        # We require that at least one non relocatable dataflow is there, this is for
+        #  the condition. This is not strictly needed, as it could also be passed as
+        #  a symbol, but currently the lowering does not do this and we keep it as
+        #  a sanity check.
+        if len(non_relocatable_dataflow) == 0:
             return None
-        if len(relocatable_connectors) == 0:
-            return None
-        return relocatable_connectors, non_relocatable_connectors
+
+        # We only guarantee that `relocatable_connectors` has an stable order,
+        #  everything else has no guaranteed order, even `connector_usage_location`.
+        relocatable_connectors = sorted(connector_usage_location.keys())
+
+        return relocatable_connectors, non_relocatable_connectors, connector_usage_location
