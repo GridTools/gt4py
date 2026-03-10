@@ -152,19 +152,19 @@ class BuiltInFunction(Generic[_R, _P]):
 
 
 CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
-TrueFieldT = TypeVar(
-    "TrueFieldT",
+FieldT1 = TypeVar(
+    "FieldT1",
     bound=Union[common.Field, core_defs.Scalar, Tuple, named_collections.CustomNamedCollection],
 )
-FalseFieldT = TypeVar(
-    "FalseFieldT",
+FieldT2 = TypeVar(
+    "FieldT2",
     bound=Union[common.Field, core_defs.Scalar, Tuple, named_collections.CustomNamedCollection],
 )
 
 
 class WhereBuiltinFunction(
-    BuiltInFunction[_R, [CondT, TrueFieldT, FalseFieldT]],
-    Generic[_R, CondT, TrueFieldT, FalseFieldT],
+    BuiltInFunction[_R, [CondT, FieldT1, FieldT2]],
+    Generic[_R, CondT, FieldT1, FieldT2],
 ):
     @overload  # type: ignore[override] # this technically clashes with the superclass
     def __call__(  # type: ignore[overload-overlap] # without both overloads mypy raises false positives
@@ -182,7 +182,7 @@ class WhereBuiltinFunction(
         false_field: Tuple | core_defs.ScalarT,
     ) -> Tuple: ...
 
-    def __call__(self, cond: CondT, true_field: TrueFieldT, false_field: FalseFieldT) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
+    def __call__(self, cond: CondT, true_field: FieldT1, false_field: FieldT2) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
