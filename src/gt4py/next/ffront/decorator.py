@@ -532,8 +532,9 @@ def program(
     """
 
     def program_inner(definition: Callable) -> Program:
+        assert isinstance(definition, types.FunctionType)
         program = Program.from_function(
-            typing.cast(types.FunctionType, definition),
+            definition,
             backend=typing.cast(
                 next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
             ),
@@ -758,8 +759,9 @@ def field_operator(
     """
 
     def field_operator_inner(definition: Callable) -> FieldOperator:
+        assert isinstance(definition, types.FunctionType)
         return FieldOperator.from_function(
-            typing.cast(types.FunctionType, definition),
+            definition,
             typing.cast(
                 next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
             ),
@@ -848,8 +850,9 @@ def scan_operator(
     #  the above doctest fails when executed using `pytest --doctest-modules`.
 
     def scan_operator_inner(definition: Callable) -> FieldOperator:
+        assert isinstance(definition, types.FunctionType)
         return FieldOperator.from_function(
-            typing.cast(types.FunctionType, definition),
+            definition,
             typing.cast(
                 next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
             ),
