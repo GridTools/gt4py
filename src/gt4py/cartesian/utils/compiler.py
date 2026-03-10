@@ -47,8 +47,12 @@ def get_cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
         cxx_flags += "-ffp-contract=off "
 
     # Query the compiler version string
-    r = subprocess.run([ccompiler.compiler[0], "--version"], capture_output=True, text=True)
-    version_name_on_cli = r.stdout.split("\n")[0]
+    try:
+        compiler_exe_fullpath = ccompiler.compiler_cxx[0]  # type:ignore[attr-defined]
+        r = subprocess.run([compiler_exe_fullpath, "--version"], capture_output=True, text=True)
+        version_name_on_cli = r.stdout.split("\n")[0]
+    except AttributeError:
+        version_name_on_cli = "default"
     if "gcc" in version_name_on_cli.lower():
         name = CxxCompilerNames.GNU
     elif "icx" in version_name_on_cli.lower():
