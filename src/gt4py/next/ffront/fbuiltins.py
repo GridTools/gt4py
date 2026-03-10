@@ -30,7 +30,7 @@ import numpy as np
 from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import common, named_collections
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
@@ -90,6 +90,8 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
         assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
         return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
+    elif t in named_collections.CUSTOM_NAMED_COLLECTION_TYPES:
+        return ts.NamedCollectionType
     else:
         raise AssertionError("Illegal type encountered.")
 
@@ -150,8 +152,14 @@ class BuiltInFunction(Generic[_R, _P]):
 
 
 CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
-TrueFieldT = TypeVar("TrueFieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
-FalseFieldT = TypeVar("FalseFieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
+TrueFieldT = TypeVar(
+    "TrueFieldT",
+    bound=Union[common.Field, core_defs.Scalar, Tuple, named_collections.CustomNamedCollection],
+)
+FalseFieldT = TypeVar(
+    "FalseFieldT",
+    bound=Union[common.Field, core_defs.Scalar, Tuple, named_collections.CustomNamedCollection],
+)
 
 
 class WhereBuiltinFunction(
@@ -218,8 +226,8 @@ def broadcast(
 @WhereBuiltinFunction
 def where(
     mask: common.Field,
-    true_field: common.Field | core_defs.ScalarT | Tuple,
-    false_field: common.Field | core_defs.ScalarT | Tuple,
+    true_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
+    false_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     /,
 ) -> common.Field | Tuple:
     raise NotImplementedError()
