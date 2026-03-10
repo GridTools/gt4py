@@ -36,7 +36,7 @@ from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
 
-__all__ = [  # noqa: RUF022, F822 [undefined-export]
+__all__ = [  # noqa: RUF022 [undefined-export] # type: ignore[attr-defined]
     "bool",
     "float",
     "float32",
@@ -345,7 +345,7 @@ _UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL: Final = {
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL.keys()]
 
 
-def _make_unary_math_builtin(name: str) -> None:
+def _make_unary_math_builtin(name: str) -> BuiltInFunction:
     _math_builtin = (
         _UNARY_MATH_NUMBER_BUILTIN_IMPL
         | _UNARY_MATH_FP_BUILTIN_IMPL
@@ -361,20 +361,40 @@ def _make_unary_math_builtin(name: str) -> None:
         return cast(common.Field | core_defs.ScalarT, _math_builtin(value))  # type: ignore[operator, arg-type] # calling a function of unknown type; trunc not supported for all types
 
     impl.__name__ = name
-    globals()[name] = BuiltInFunction(impl)
+    return BuiltInFunction(impl)
 
 
-for f in (
-    UNARY_MATH_NUMBER_BUILTIN_NAMES
-    + UNARY_MATH_FP_BUILTIN_NAMES
-    + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
-):
-    _make_unary_math_builtin(f)
+abs = _make_unary_math_builtin("abs")  # noqa: A001 [shadowing]
+neg = _make_unary_math_builtin("neg")
+sin = _make_unary_math_builtin("sin")
+cos = _make_unary_math_builtin("cos")
+tan = _make_unary_math_builtin("tan")
+arcsin = _make_unary_math_builtin("arcsin")
+arccos = _make_unary_math_builtin("arccos")
+arctan = _make_unary_math_builtin("arctan")
+sinh = _make_unary_math_builtin("sinh")
+cosh = _make_unary_math_builtin("cosh")
+tanh = _make_unary_math_builtin("tanh")
+arcsinh = _make_unary_math_builtin("arcsinh")
+arccosh = _make_unary_math_builtin("arccosh")
+arctanh = _make_unary_math_builtin("arctanh")
+sqrt = _make_unary_math_builtin("sqrt")
+exp = _make_unary_math_builtin("exp")
+log = _make_unary_math_builtin("log")
+gamma = _make_unary_math_builtin("gamma")
+cbrt = _make_unary_math_builtin("cbrt")
+floor = _make_unary_math_builtin("floor")
+ceil = _make_unary_math_builtin("ceil")
+trunc = _make_unary_math_builtin("trunc")
+isfinite = _make_unary_math_builtin("isfinite")
+isinf = _make_unary_math_builtin("isinf")
+isnan = _make_unary_math_builtin("isnan")
+
 
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 
-def _make_binary_math_builtin(name: str) -> None:
+def _make_binary_math_builtin(name: str) -> BuiltInFunction:
     def impl(
         lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
     ) -> common.Field | core_defs.ScalarT:
@@ -384,11 +404,14 @@ def _make_binary_math_builtin(name: str) -> None:
         return getattr(np, name)(lhs, rhs)
 
     impl.__name__ = name
-    globals()[name] = BuiltInFunction(impl)
+    return BuiltInFunction(impl)
 
 
-for f in BINARY_MATH_NUMBER_BUILTIN_NAMES:
-    _make_binary_math_builtin(f)
+minimum = _make_binary_math_builtin("minimum")
+maximum = _make_binary_math_builtin("maximum")
+fmod = _make_binary_math_builtin("fmod")
+power = _make_binary_math_builtin("power")
+
 
 MATH_BUILTIN_NAMES = (
     UNARY_MATH_NUMBER_BUILTIN_NAMES
