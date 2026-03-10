@@ -117,7 +117,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         scope_dict = graph.scope_dict()
         if_block: dace_nodes.NestedSDFG = self.if_block
         assert isinstance(if_block, dace_nodes.NestedSDFG)
-
+        breakpoint()
         # NOTE: The main benefit of requiring that the `if_block` must be inside a
         #   Map is that we know that every transient we encounter is single use data.
         enclosing_map = scope_dict[if_block]
@@ -150,6 +150,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             non_relocatable_dataflow=non_relocatable_dataflow,
             enclosing_map=enclosing_map,
         )
+        print(f"[can_be_applied] Relocatable dataflow: {relocatable_dataflow}", flush=True)
 
         # If no branch has something to inline then we are done.
         if all(len(rel_df) == 0 for rel_df in relocatable_dataflow.values()):
@@ -210,6 +211,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             }
             for conn_names in if_block_spec
         )
+        print(f"Raw relocatable dataflow: {raw_relocatable_dataflow}", flush=True)
         relocatable_dataflow = self._filter_relocatable_dataflow(
             sdfg=sdfg,
             state=graph,
@@ -239,6 +241,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         old_to_new_nodes_map: dict[tuple[dace_nodes.Node, dace.SDFGState], dace_nodes.Node] = dict()
         # Finally relocate the dataflow
         for conn_name, nodes_to_move in relocatable_dataflow.items():
+            print(f"Relocating dataflow for connector {conn_name} with nodes {nodes_to_move}", flush=True)
             self._replicate_dataflow_into_branch(
                 state=graph,
                 sdfg=sdfg,
@@ -249,7 +252,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 conn_name_to_access_node_map=conn_name_to_access_node_map,
                 old_to_new_nodes_map=old_to_new_nodes_map,
             )
-
+        # breakpoint()
         self._update_symbol_mapping(if_block, sdfg)
 
         self._remove_outside_dataflow(
@@ -316,6 +319,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         inner_sdfg: dace.SDFG = if_block.sdfg
         branch_state, connector_node = conn_name_to_access_node_map[connector]
 
+        connectors_rename_map: dict[str, str] = {}
+
         # Replicate the nodes and store them in the `old_to_new_nodes_map` mapping.
         # Add the SDFGState to the key of the dictionary because we have to create
         # new node for the different branches.
@@ -325,6 +330,11 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 continue
             unique_old_nodes.append(old_node)
             copy_of_old_node = copy.deepcopy(old_node)
+            if isinstance(copy_of_old_node, dace_nodes.AccessNode):
+                if copy_of_old_node.data in if_block.in_connectors:
+                    new_name = gtx_transformations.utils.unique_name(copy_of_old_node.data) + "_movedataflowintoifbody"
+                    connectors_rename_map[copy_of_old_node.data] = new_name
+                    copy_of_old_node.data = new_name
             old_to_new_nodes_map[(old_node, branch_state)] = copy_of_old_node
             branch_state.add_node(copy_of_old_node)
 
@@ -335,12 +345,12 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             #  the inner SDFG.
             if not isinstance(old_node, dace_nodes.AccessNode):
                 continue
-            if old_node.data in inner_sdfg.arrays:
+            if copy_of_old_node.data in inner_sdfg.arrays:
                 continue
             assert sdfg.arrays[old_node.data].transient
             # TODO(phimuell): Handle the case we need to rename something.
             inner_sdfg.add_datadesc(
-                old_node.data,
+                copy_of_old_node.data,
                 sdfg.arrays[old_node.data].clone(),
                 find_new_name=False,
             )
@@ -357,12 +367,19 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         # This connection maps the outside data into the nested SDFG, thus its destination is technically the same data.
                         # TODO(phimuell): Make subsets complete.
                         # TODO(phimuell): Check if this Memlet is always correct, especially in case of slicing.
+                        new_data_name = oedge.data
+                        new_memlet = dace.Memlet.from_memlet(oedge.data)
+                        if connector in connectors_rename_map:
+                            new_data_name = connectors_rename_map[connector]
+                            if new_memlet.data == connector and new_memlet.data == connector:
+                                new_memlet = copy.deepcopy(oedge.data)
+                                new_memlet.data = new_data_name
                         branch_state.add_edge(
                             old_to_new_nodes_map[(oedge.src, branch_state)],
-                            oedge.src_conn,
+                            new_data_name if oedge.src_conn == old_to_new_nodes_map[(oedge.src, branch_state)].data else oedge.src_conn,
                             connector_node,
                             None,
-                            dace.Memlet.from_memlet(oedge.data),
+                            new_memlet,
                         )
                     else:
                         assert oedge.dst_conn in conn_name_to_access_node_map
@@ -376,13 +393,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                             None,
                             dace.Memlet.from_memlet(oedge.data),
                         )
-                        # Handle the other connector AccessNode and connector
-                        inner_access_node_of_connector_name = conn_name_to_access_node_map[
-                            oedge.dst_conn
-                        ][1].data
-                        if not inner_sdfg.arrays[inner_access_node_of_connector_name].transient:
-                            inner_sdfg.arrays[inner_access_node_of_connector_name].transient = True
-                            if_block.remove_in_connector(inner_access_node_of_connector_name)
+                        # # Handle the other connector AccessNode and connector
+                        # inner_access_node_of_connector_name = conn_name_to_access_node_map[
+                        #     oedge.dst_conn
+                        # ][1].data
+                        # if not inner_sdfg.arrays[inner_access_node_of_connector_name].transient:
+                        #     inner_sdfg.arrays[inner_access_node_of_connector_name].transient = True
+                        #     if_block.remove_in_connector(inner_access_node_of_connector_name)
                 else:
                     # Restore a connection between two nodes that were relocated.
                     assert oedge.dst in nodes_to_move
@@ -562,7 +579,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         enclosing_map: dace_nodes.MapEntry,
     ) -> bool:
         """Check if the relocation would cause any conflict, such as a symbol clash."""
-
+        breakpoint()
         # TODO(phimuell): There is an obscure case where the nested SDFG, on its own,
         #   defines a symbol that is also mapped, for example a dynamic Map range.
         #   It is probably not a problem, because of the scopes DaCe adds when
@@ -583,6 +600,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if (
                 isinstance(node_to_check, dace_nodes.AccessNode)
                 and node_to_check.data in inner_data_names
+                and node_to_check.data not in if_block.in_connectors
             ):
                 # There is already a data descriptor that is used on the inside as on
                 #  the outside. Thus we would have to perform some renaming, which we
@@ -758,6 +776,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 if branch_state != other_branch_state:
                     multiple_df_nodes.update(known_nodes_set.intersection(other_known_nodes_set))
 
+        print(f"Multiple df nodes: {multiple_df_nodes}", flush=True)
         if multiple_df_nodes:
             # Remove from the relocatable dataflow the nodes that appear in multiple branches
             # as it doesn't make sense to relocate them and duplicate them in both branches.
@@ -830,10 +849,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         has_been_updated = True
 
             return nodes_proposed_for_reloc
+        print(f"Relocatable dataflow before filtering: {relocatable_dataflow}", flush=True)
 
-        return {
+        relocatable_dataflow_after_filtering = {
             conn_name: filter_nodes(rel_df) for conn_name, rel_df in relocatable_dataflow.items()
         }
+        print(f"Relocatable dataflow after filtering: {relocatable_dataflow_after_filtering}", flush=True)
+        return relocatable_dataflow_after_filtering
 
     def _partition_if_block(
         self,
@@ -879,7 +901,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 assert isinstance(inner_state, dace.SDFGState)
                 for node in inner_state.nodes():
                     if not isinstance(node, dace_nodes.AccessNode):
-                        return None
+                        continue
                     if node.data in reference_count:
                         reference_count[node.data] += 1
                         exp_in_deg, exp_out_deg = 0, 1
@@ -887,15 +909,15 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         output_count[node.data] += 1
                         exp_in_deg, exp_out_deg = 1, 0
                     else:
-                        return None
-                    if inner_state.in_degree(node) != exp_in_deg:
-                        return None
-                    if inner_state.out_degree(node) != exp_out_deg:
-                        return None
-            # Each branch must write to all outputs.
-            # TODO(phimuell): Think if this should be lifted.
-            if any(count != 1 for count in output_count.values()):
-                return None
+                        continue
+                    # if inner_state.in_degree(node) < exp_in_deg:
+                    #     return None
+                    # if inner_state.out_degree(node) < exp_out_deg:
+                    #     return None
+            # # Each branch must write to all outputs.
+            # # TODO(phimuell): Think if this should be lifted.
+            # if any(count != 1 for count in output_count.values()):
+            #     return None
 
         # The connectors that can be pulled inside must appear exactly once.
         #  In theory they could appear more, but then we would have to replicate
@@ -911,6 +933,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             for conn_name in reference_count.keys()
             if conn_name not in relocatable_connectors
         }
+        # breakpoint()
 
         if len(non_relocatable_connectors) == 0:
             return None
