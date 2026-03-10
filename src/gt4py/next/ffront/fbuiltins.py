@@ -36,6 +36,60 @@ from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
 
+__all__ = [  # noqa: RUF022, F822 [undefined-export]
+    "bool",
+    "float",
+    "float32",
+    "float64",
+    "int",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "tuple",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "IndexType",
+    "neighbor_sum",
+    "max_over",
+    "min_over",
+    "where",
+    "broadcast",
+    "astype",
+    "abs",
+    "neg",
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
+    "minimum",
+    "maximum",
+    "fmod",
+    "power",
+    "isfinite",
+    "isinf",
+    "isnan",
+]
+
+
 PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
 PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 
@@ -357,7 +411,14 @@ BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
 
-__all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"})]
+should_export = (set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"}
+actual_export = set(__all__)
+assert (diff := should_export - actual_export) == set(), (
+    f"Missing symbol(s) in 'fbuiltins.__all__': {diff}"
+)
+assert (diff := actual_export - should_export) == set(), (
+    f"Symbol(s) exported but not defined in 'fbuiltins': {diff}"
+)
 
 
 # TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual

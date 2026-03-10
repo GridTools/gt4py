@@ -18,7 +18,7 @@ from dace.transformation.passes import analysis as dace_analysis
 @dace_properties.make_properties
 class RemoveScalarCopies(dace_transformation.SingleStateTransformation):
     r"""Removes copies between two scalar transient variables.
-    Exaxmple:
+    Example:
      ___
     /   \
     | A |
