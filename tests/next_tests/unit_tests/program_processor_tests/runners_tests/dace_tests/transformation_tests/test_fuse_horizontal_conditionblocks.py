@@ -246,3 +246,29 @@ def test_fuse_horizontal_condition_blocks_single_false():
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def test_fuse_horizontal_condition_blocks_unexpected_branch_names():
+    sdfg = _make_map_with_conditional_blocks()
+
+    conditional_blocks = [
+        n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, dace.sdfg.state.ConditionalBlock)
+    ]
+    assert len(conditional_blocks) == 2
+    second_conditional_block = conditional_blocks[1]
+    for state in second_conditional_block.sdfg.states():
+        if "true_branch" in state.label:
+            state.label = "unexpected_tbranch_name"
+        elif "false_branch" in state.label:
+            state.label = "unexpected_fbranch_name"
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    fuse_horizontal_blocks_applied = sdfg.apply_transformations_repeated(
+        gtx_transformations.FuseHorizontalConditionBlocks(),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert fuse_horizontal_blocks_applied == 0
