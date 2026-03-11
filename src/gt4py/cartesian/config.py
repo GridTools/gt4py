@@ -8,44 +8,40 @@
 
 import multiprocessing
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import gridtools_cpp
 
-from gt4py._core import definitions as core_defs
-from gt4py.cartesian.utils.compiler import get_cxx_compiler_defaults
+from gt4py.cartesian.utils.compiler import get_cxx_compiler_defaults, get_gpu_configuration
 
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
-
-CUDA_ROOT: str = os.environ.get(
-    "CUDA_HOME", os.environ.get("CUDA_PATH", os.path.abspath("/usr/local/cuda"))
-)
-
-CUDA_HOST_CXX: Optional[str] = os.environ.get("CUDA_HOST_CXX", None)
 
 GT_INCLUDE_PATH: str = os.path.abspath(gridtools_cpp.get_include_dir())
 
 GT_CPP_TEMPLATE_DEPTH: int = 1024
 
 GT4PY_COMPILE_OPT_LEVEL: str = os.environ.get("GT4PY_COMPILE_OPT_LEVEL", "3")
-_compiler_infos = get_cxx_compiler_defaults(GT4PY_COMPILE_OPT_LEVEL)
+_cxx_compiler_infos = get_cxx_compiler_defaults(GT4PY_COMPILE_OPT_LEVEL)
+_gpu_compiler_configuration = get_gpu_configuration(GT4PY_COMPILE_OPT_LEVEL)
 
 GT4PY_EXTRA_COMPILE_OPT_FLAGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_OPT_FLAGS", "")
 
 # Settings dict
 GT4PY_EXTRA_COMPILE_ARGS: str = os.environ.get(
-    "GT4PY_EXTRA_COMPILE_ARGS", _compiler_infos.cxx_compile_flags
+    "GT4PY_EXTRA_COMPILE_ARGS", _cxx_compiler_infos.cxx_compile_flags
 )
-extra_compile_args: List[str] = (
+_extra_compile_args: List[str] = (
     list(GT4PY_EXTRA_COMPILE_ARGS.split(" ")) if GT4PY_EXTRA_COMPILE_ARGS else []
 )
+
 GT4PY_EXTRA_LINK_ARGS: str = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
 extra_link_args: List[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
 
 # Resolve OpenMP
 _enable_open_mp = os.environ.get(
-    "GT4PY_CARTESIAN_ENABLE_OPENMP", "True" if _compiler_infos.enable_openmp else "False"
+    "GT4PY_CARTESIAN_ENABLE_OPENMP",
+    "True" if _cxx_compiler_infos.enable_openmp else "False",
 )
 GT4PY_CARTESIAN_ENABLE_OPENMP: bool = _enable_open_mp.lower() not in [
     "0",
@@ -53,34 +49,36 @@ GT4PY_CARTESIAN_ENABLE_OPENMP: bool = _enable_open_mp.lower() not in [
     "off",
 ]
 if GT4PY_CARTESIAN_ENABLE_OPENMP:
-    _openmp_cppflags = os.environ.get("OPENMP_CPPFLAGS", _compiler_infos.open_mp_flag).split()
-    _openmp_ldflags = os.environ.get("OPENMP_LDFLAGS", _compiler_infos.open_mp_flag).split()
+    _openmp_cppflags = os.environ.get("OPENMP_CPPFLAGS", _cxx_compiler_infos.open_mp_flag).split()
+    _openmp_ldflags = os.environ.get("OPENMP_LDFLAGS", _cxx_compiler_infos.open_mp_flag).split()
 else:
     _openmp_cppflags = []
     _openmp_ldflags = []
 
 build_settings: Dict[str, Any] = {
-    "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
-    "cuda_include_path": os.path.join(CUDA_ROOT, "include"),
-    "cuda_arch": os.environ.get("CUDA_ARCH", None),
+    "cuda_bin_path": _gpu_compiler_configuration.binary_path,
+    "cuda_include_path": _gpu_compiler_configuration.include_path,
+    "cuda_library_path": _gpu_compiler_configuration.library_path,
+    "cuda_arch": _gpu_compiler_configuration.arch,
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
     "openmp": {
         "use_openmp": GT4PY_CARTESIAN_ENABLE_OPENMP,
         "cppflags": _openmp_cppflags,
         "ldflags": _openmp_ldflags,
     },
-    "extra_compile_args": {"cxx": extra_compile_args, "cuda": extra_compile_args},
+    "extra_compile_args": {
+        "cxx": _extra_compile_args,
+        "cuda": _gpu_compiler_configuration.gpu_compile_flags,
+    },
     "extra_link_args": extra_link_args,
     "parallel_jobs": multiprocessing.cpu_count(),
     "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
 }
-if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
-    build_settings["cuda_library_path"] = os.path.join(CUDA_ROOT, "lib")
-else:
-    build_settings["cuda_library_path"] = os.path.join(CUDA_ROOT, "lib64")
 
-if CUDA_HOST_CXX is not None:
-    build_settings["extra_compile_args"]["cuda"].append(f"-ccbin={CUDA_HOST_CXX}")
+if _gpu_compiler_configuration.host_compiler is not None:
+    build_settings["extra_compile_args"]["cuda"].append(
+        f"-ccbin={_gpu_compiler_configuration.host_compiler}"
+    )
 
 cache_settings: Dict[str, Any] = {
     "dir_name": os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache"),
