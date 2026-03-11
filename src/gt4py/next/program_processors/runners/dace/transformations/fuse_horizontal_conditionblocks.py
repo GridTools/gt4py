@@ -83,9 +83,9 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             return None
         # Matching conditions between the two `ConditionalBlock`s is the same as the number of branches in both `ConditionalBlock`s.
         # This means that all branches have matching conditions and thus we can use the labels to distinguish which one is the fused and which one is the extended conditional block.
-        elif len(intersection_of_conditions) == len(branch_0_conditions) and len(
-            intersection_of_conditions
-        ) == len(branch_1_conditions):
+        elif (
+            len(intersection_of_conditions) == len(branch_0_conditions) == len(branch_1_conditions)
+        ):
             return FuseHorizontalConditionBlocks._order_conditional_blocks_based_on_label(
                 conditional_block_0, conditional_block_1
             )
@@ -153,15 +153,16 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         conditional_block_b = nsdfg_b.sdfg.nodes()[0]
 
         # This transformation accepts only a boolean condition. This means that the conditions of
-        # the branches can only be 2. Either `__cond` and `(not __cond)` or `__cond` and `None`.
-        if len(conditional_block_a.sub_regions()) > 2 or len(conditional_block_b.sub_regions()) > 2:
+        # the branches can only be 2 or 1. Either `__cond` and `(not __cond)` or `__cond` and `None`
+        # or just `__cond` or `(not __cond)`.
+        if len(conditional_block_a.branches) > 2 or len(conditional_block_b.branches) > 2:
             return False
 
         # Make sure that the branches of both `ConditionalBlock`s have only one state
         # TODO(iomaganaris): In case there are more states we can find a way to add one after the other
         for conditional_block in [conditional_block_a, conditional_block_b]:
             for control_flow_region in conditional_block.sub_regions():
-                if len(control_flow_region.nodes()) > 1 or not isinstance(
+                if len(control_flow_region.nodes()) != 1 or not isinstance(
                     control_flow_region.nodes()[0], dace.sdfg.state.SDFGState
                 ):
                     return False
@@ -175,7 +176,9 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             return False
         extended_conditional_block, fused_conditional_block = conditional_block_tuple
 
-        nested_sdfg_of_extended_conditional_block = extended_conditional_block.sdfg.parent_nsdfg_node
+        nested_sdfg_of_extended_conditional_block = (
+            extended_conditional_block.sdfg.parent_nsdfg_node
+        )
         nested_sdfg_of_fused_conditional_block = fused_conditional_block.sdfg.parent_nsdfg_node
 
         # Check that the symbol mappings are compatible. If there's a symbol that is in both mappings but mapped to different definitions then we skip fusing the conditional blocks.
@@ -256,7 +259,9 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         assert conditional_block_tuple is not None
         extended_conditional_block, fused_conditional_block = conditional_block_tuple
 
-        nested_sdfg_of_extended_conditional_block = extended_conditional_block.sdfg.parent_nsdfg_node
+        nested_sdfg_of_extended_conditional_block = (
+            extended_conditional_block.sdfg.parent_nsdfg_node
+        )
         nested_sdfg_of_fused_conditional_block = fused_conditional_block.sdfg.parent_nsdfg_node
 
         # Copy missing symbols from second conditional block to the first one.
