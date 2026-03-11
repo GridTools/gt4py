@@ -175,12 +175,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             return False
         extended_conditional_block, fused_conditional_block = conditional_block_tuple
 
-        nested_sdfg_of_extended_conditional_block = (
-            nsdfg_a if extended_conditional_block is conditional_block_a else nsdfg_b
-        )
-        nested_sdfg_of_fused_conditional_block = (
-            nsdfg_a if fused_conditional_block is conditional_block_a else nsdfg_b
-        )
+        nested_sdfg_of_extended_conditional_block = extended_conditional_block.sdfg.parent_nsdfg_node
+        nested_sdfg_of_fused_conditional_block = fused_conditional_block.sdfg.parent_nsdfg_node
 
         # Check that the symbol mappings are compatible. If there's a symbol that is in both mappings but mapped to different definitions then we skip fusing the conditional blocks.
         # TODO(iomaganaris): One could also rename the symbols instead of skipping the fusion but for now we keep it simple
@@ -260,12 +256,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         assert conditional_block_tuple is not None
         extended_conditional_block, fused_conditional_block = conditional_block_tuple
 
-        nested_sdfg_of_extended_conditional_block = (
-            nsdfg_a if extended_conditional_block is conditional_block_a else nsdfg_b
-        )
-        nested_sdfg_of_fused_conditional_block = (
-            nsdfg_a if fused_conditional_block is conditional_block_a else nsdfg_b
-        )
+        nested_sdfg_of_extended_conditional_block = extended_conditional_block.sdfg.parent_nsdfg_node
+        nested_sdfg_of_fused_conditional_block = fused_conditional_block.sdfg.parent_nsdfg_node
 
         # Copy missing symbols from second conditional block to the first one.
         #  For the symbols that are already in `nested_sdfg_of_extended_conditional_block.symbol_mapping` we know
