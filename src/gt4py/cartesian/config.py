@@ -44,7 +44,9 @@ GT4PY_EXTRA_LINK_ARGS: str = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
 extra_link_args: List[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
 
 # Resolve OpenMP
-_enable_open_mp = os.environ.get("GT4PY_CARTESIAN_ENABLE_OPENMP", "True")
+_enable_open_mp = os.environ.get(
+    "GT4PY_CARTESIAN_ENABLE_OPENMP", "True" if _compiler_infos.enable_openmp else "False"
+)
 GT4PY_CARTESIAN_ENABLE_OPENMP: bool = _enable_open_mp.lower() not in [
     "0",
     "false",
