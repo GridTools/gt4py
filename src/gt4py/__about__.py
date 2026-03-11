@@ -104,6 +104,9 @@ def _inspect_version() -> tuple[str, pkg_version.Version]:
             # Fallback to the on-build version, if everything else fails.
             version = on_build_version
 
+        version_parts = version.split("+")
+        if len(version_parts) > 2:
+            version = "+".join([version_parts[0], version_parts[-1]])
         version_info = pkg_version.parse(version)
 
         return version, version_info
