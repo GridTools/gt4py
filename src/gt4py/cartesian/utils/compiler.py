@@ -21,13 +21,15 @@ class CxxCompilerNames(enum.Enum):
     INTEL = "icx"
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class CxxCompilerDefaults:
-    name: CxxCompilerNames = CxxCompilerNames.DEFAULT
+    name: CxxCompilerNames
     """Name identifier of the compiler"""
-    open_mp_flag: str = "-fopenmp"
+    open_mp_flag: str
     """OpenMP flag expected on a default install of the compiler"""
-    cxx_compile_flags: str = ""
+    enable_openmp: bool
+    """Allow OpenMP acceleration"""
+    cxx_compile_flags: str
     """Cxx compile flags"""
 
 
@@ -38,9 +40,11 @@ def get_cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
     ccompiler = new_compiler()
     customize_compiler(ccompiler)
 
+    # Defaults
     name = CxxCompilerNames.DEFAULT
     open_mp_flags = "-fopenmp"
     cxx_flags = ""
+    enable_openmp = True
 
     # FMA is deactivated by default when running -O0
     if optimization_level == "0":
@@ -59,11 +63,12 @@ def get_cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
         name = CxxCompilerNames.INTEL
         open_mp_flags = "-qopenmp"
     elif "apple clang" in version_name_on_cli.lower():
-        # By default Apple Clang doesn;t have OpenMP install,
-        # so we remove the flag
+        # By default Apple Clang doesn't have OpenMP installed,
+        # so we remove the flag and disallow OpenMP altogether
         name = CxxCompilerNames.APPLE_CLANG
         open_mp_flags = ""
+        enable_openmp = False
     elif "clang" in version_name_on_cli.lower():
         name = CxxCompilerNames.CLANG
 
-    return CxxCompilerDefaults(name, open_mp_flags, cxx_flags)
+    return CxxCompilerDefaults(name, open_mp_flags, enable_openmp, cxx_flags)
