@@ -84,7 +84,10 @@ def _make_if_block_with_tasklet(
     if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
 
     if with_false_branch or with_else_branch:
-        if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}") if not with_else_branch else None, else_body)
+        if_region.add_branch(
+            dace.sdfg.state.CodeBlock(f"not {cond_name}") if not with_else_branch else None,
+            else_body,
+        )
 
     nested_sdfg = state.add_nested_sdfg(
         sdfg=inner_sdfg,
@@ -159,7 +162,13 @@ def _make_map_with_conditional_blocks(
     state.add_edge(tmp_a, None, tasklet_cond, "__in", dace.Memlet("tmp_a[0]"))
     state.add_edge(tasklet_cond, "__out", cond_var, None, dace.Memlet("cond_var"))
 
-    if_block_0 = _make_if_block(state=state, outer_sdfg=sdfg) if not both_ifs_with_taklets else _make_if_block_with_tasklet(state=state, with_false_branch=with_false_branch, with_else_branch=with_else_branch)
+    if_block_0 = (
+        _make_if_block(state=state, outer_sdfg=sdfg)
+        if not both_ifs_with_taklets
+        else _make_if_block_with_tasklet(
+            state=state, with_false_branch=with_false_branch, with_else_branch=with_else_branch
+        )
+    )
     state.add_edge(cond_var, None, if_block_0, "__cond", dace.Memlet("cond_var"))
     state.add_edge(tmp_a, None, if_block_0, "__arg1", dace.Memlet("tmp_a[0]"))
     state.add_edge(tmp_b, None, if_block_0, "__arg2", dace.Memlet("tmp_b[0]"))
