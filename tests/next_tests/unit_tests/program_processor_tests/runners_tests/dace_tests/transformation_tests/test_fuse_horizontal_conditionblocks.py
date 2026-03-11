@@ -132,9 +132,20 @@ def _make_map_with_conditional_blocks(
     )
     a, b, c, d = (state.add_access(name) for name in "abcd")
 
+    create_temporary_c = (not both_ifs_with_taklets) and (with_false_branch or with_else_branch)
+    create_temporary_d = with_false_branch or with_else_branch
+
     for tmp_name in ["tmp_a", "tmp_b", "tmp_c", "tmp_d"]:
+        if tmp_name == "tmp_c" and not create_temporary_c:
+            continue
+        if tmp_name == "tmp_d" and not create_temporary_d:
+            continue
         sdfg.add_scalar(tmp_name, dtype=dace.float64, transient=True)
-    tmp_a, tmp_b, tmp_c, tmp_d = (state.add_access(f"tmp_{name}") for name in "abcd")
+    tmp_a, tmp_b = (state.add_access(f"tmp_{name}") for name in "ab")
+    if create_temporary_c:
+        tmp_c = state.add_access("tmp_c")
+    if create_temporary_d:
+        tmp_d = state.add_access("tmp_d")
 
     sdfg.add_scalar("cond_var", dtype=dace.bool_, transient=True)
     cond_var = state.add_access("cond_var")
@@ -172,8 +183,12 @@ def _make_map_with_conditional_blocks(
     state.add_edge(cond_var, None, if_block_0, "__cond", dace.Memlet("cond_var"))
     state.add_edge(tmp_a, None, if_block_0, "__arg1", dace.Memlet("tmp_a[0]"))
     state.add_edge(tmp_b, None, if_block_0, "__arg2", dace.Memlet("tmp_b[0]"))
-    state.add_edge(if_block_0, "__output", tmp_c, None, dace.Memlet("tmp_c[0]"))
-    state.add_edge(tmp_c, None, mx, "IN_c", dace.Memlet("c[__i]"))
+    if create_temporary_c:
+        state.add_edge(if_block_0, "__output", tmp_c, None, dace.Memlet("tmp_c[0]"))
+        state.add_edge(tmp_c, None, mx, "IN_c", dace.Memlet("c[__i]"))
+    else:
+        new_edge = state.add_edge(if_block_0, "__output", mx, "IN_c", dace.Memlet("c[__i]"))
+        new_edge.data.allow_oob = True
 
     if_block_1 = _make_if_block_with_tasklet(
         state=state, with_false_branch=with_false_branch, with_else_branch=with_else_branch
@@ -181,8 +196,12 @@ def _make_map_with_conditional_blocks(
     state.add_edge(cond_var, None, if_block_1, "__cond", dace.Memlet("cond_var"))
     state.add_edge(tmp_a, None, if_block_1, "__arg1", dace.Memlet("tmp_a[0]"))
     state.add_edge(tmp_b, None, if_block_1, "__arg2", dace.Memlet("tmp_b[0]"))
-    state.add_edge(if_block_1, "__output", tmp_d, None, dace.Memlet("tmp_d[0]"))
-    state.add_edge(tmp_d, None, mx, "IN_d", dace.Memlet("d[__i]"))
+    if create_temporary_d:
+        state.add_edge(if_block_1, "__output", tmp_d, None, dace.Memlet("tmp_d[0]"))
+        state.add_edge(tmp_d, None, mx, "IN_d", dace.Memlet("d[__i]"))
+    else:
+        new_edge = state.add_edge(if_block_1, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+        new_edge.data.allow_oob = True
 
     state.add_edge(mx, "OUT_c", c, None, dace.Memlet("c[__i]"))
     state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[__i]"))
