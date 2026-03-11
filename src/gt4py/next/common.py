@@ -109,6 +109,24 @@ class Dimension:
         return self + (-offset)
 
 
+if TYPE_CHECKING:
+
+    @dataclasses.dataclass(frozen=True)
+    class DimA(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class DimB(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class DimC(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class DimD(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class AnyDim(Dimension): ...
+
+
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
 
