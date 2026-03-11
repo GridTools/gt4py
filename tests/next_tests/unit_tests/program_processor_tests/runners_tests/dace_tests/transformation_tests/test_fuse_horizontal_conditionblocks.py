@@ -25,7 +25,7 @@ import dace
 def _make_if_block_with_tasklet(
     state: dace.SDFGState,
     with_false_branch: bool = True,
-    with_extra_branch: bool = False,
+    with_else_branch: bool = False,
     b1_name: str = "__arg1",
     b2_name: str = "__arg2",
     cond_name: str = "__cond",
@@ -72,7 +72,7 @@ def _make_if_block_with_tasklet(
         dace.Memlet(f"{output_name}[0]"),
     )
 
-    if with_false_branch:
+    if with_false_branch or with_else_branch:
         else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
         fstate = else_body.add_state("false_branch_0_1_2_3_4", is_start_block=True)
         fstate.add_nedge(
@@ -83,18 +83,8 @@ def _make_if_block_with_tasklet(
 
     if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
 
-    if with_false_branch:
-        if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}"), else_body)
-
-    if with_extra_branch:
-        extra_body = dace.sdfg.state.ControlFlowRegion("extra_body", sdfg=inner_sdfg)
-        estate = extra_body.add_state("extra_branch_0_1_2_3_4", is_start_block=True)
-        estate.add_nedge(
-            estate.add_access(b2_name),
-            estate.add_access(output_name),
-            dace.Memlet(f"{b2_name}[0] -> [0]"),
-        )
-        if_region.add_branch(None, extra_body)
+    if with_false_branch or with_else_branch:
+        if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}") if not with_else_branch else None, else_body)
 
     nested_sdfg = state.add_nested_sdfg(
         sdfg=inner_sdfg,
@@ -106,8 +96,9 @@ def _make_if_block_with_tasklet(
 
 
 def _make_map_with_conditional_blocks(
+    both_ifs_with_taklets: bool = False,
     with_false_branch: bool = True,
-    with_extra_branch: bool = False,
+    with_else_branch: bool = False,
 ) -> dace.SDFG:
     sdfg = dace.SDFG(gtx_transformations.utils.unique_name("map_with_conditional_blocks"))
     state = sdfg.add_state(is_start_block=True)
@@ -168,7 +159,7 @@ def _make_map_with_conditional_blocks(
     state.add_edge(tmp_a, None, tasklet_cond, "__in", dace.Memlet("tmp_a[0]"))
     state.add_edge(tasklet_cond, "__out", cond_var, None, dace.Memlet("cond_var"))
 
-    if_block_0 = _make_if_block(state=state, outer_sdfg=sdfg)
+    if_block_0 = _make_if_block(state=state, outer_sdfg=sdfg) if not both_ifs_with_taklets else _make_if_block_with_tasklet(state=state, with_false_branch=with_false_branch, with_else_branch=with_else_branch)
     state.add_edge(cond_var, None, if_block_0, "__cond", dace.Memlet("cond_var"))
     state.add_edge(tmp_a, None, if_block_0, "__arg1", dace.Memlet("tmp_a[0]"))
     state.add_edge(tmp_b, None, if_block_0, "__arg2", dace.Memlet("tmp_b[0]"))
@@ -176,7 +167,7 @@ def _make_map_with_conditional_blocks(
     state.add_edge(tmp_c, None, mx, "IN_c", dace.Memlet("c[__i]"))
 
     if_block_1 = _make_if_block_with_tasklet(
-        state=state, with_false_branch=with_false_branch, with_extra_branch=with_extra_branch
+        state=state, with_false_branch=with_false_branch, with_else_branch=with_else_branch
     )
     state.add_edge(cond_var, None, if_block_1, "__cond", dace.Memlet("cond_var"))
     state.add_edge(tmp_a, None, if_block_1, "__arg1", dace.Memlet("tmp_a[0]"))
@@ -262,11 +253,12 @@ def test_fuse_horizontal_condition_blocks_single_false():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-def test_fuse_horizontal_condition_blocks_extra_branch():
+def test_fuse_horizontal_condition_blocks_else_branch():
     """
-    Test that the transformation can fuse conditional blocks even if one of them has an extra branch with a condition that does not match any of the conditions of the other `ConditionalBlock`. The transformation should fuse the two `ConditionalBlock`s using only the matching branches and leave the extra branch as it is in the fused `ConditionalBlock`.
+    Test that the transformation can fuse conditional blocks
+    that instead of a `(not __cond)` condition have an `else` (`None`) condition.
     """
-    sdfg = _make_map_with_conditional_blocks(with_extra_branch=True)
+    sdfg = _make_map_with_conditional_blocks(both_ifs_with_taklets=True, with_else_branch=True)
 
     conditional_blocks = [
         n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, dace.sdfg.state.ConditionalBlock)
@@ -290,9 +282,8 @@ def test_fuse_horizontal_condition_blocks_extra_branch():
     conditional_block_branches_conditions = [
         branch[0].as_string if branch[0] else None for branch in conditional_block.branches
     ]
-    assert len(conditional_block_branches_conditions) == 3
+    assert len(conditional_block_branches_conditions) == 2
     assert "__cond" in conditional_block_branches_conditions
-    assert "(not __cond)" in conditional_block_branches_conditions
     assert (
         None in conditional_block_branches_conditions
     )  # The extra branch has no condition and thus its condition is `None`
@@ -307,17 +298,11 @@ def test_fuse_horizontal_condition_blocks_extra_branch():
                 len([n for n in true_branch_state.nodes() if isinstance(n, dace_nodes.AccessNode)])
                 == 4
             )
-        elif subregion[0] is not None and subregion[0].as_string == "(not __cond)":
-            false_branch_state = subregion[1].nodes()[0]
-            assert (
-                len([n for n in false_branch_state.nodes() if isinstance(n, dace_nodes.AccessNode)])
-                == 4
-            )
         elif subregion[0] is None:
             extra_branch_state = subregion[1].nodes()[0]
             assert (
                 len([n for n in extra_branch_state.nodes() if isinstance(n, dace_nodes.AccessNode)])
-                == 2
+                == 4
             )
         else:
             raise AssertionError(

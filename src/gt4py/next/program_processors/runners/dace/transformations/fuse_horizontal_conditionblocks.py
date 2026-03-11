@@ -70,51 +70,32 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         branches_0 = conditional_block_0.branches
         branches_1 = conditional_block_1.branches
 
-        matching_conditions_0_to_1: list[str | None] = []
-        for branch_0 in branches_0:
-            branch_0_condition = branch_0[0].as_string if branch_0[0] else None
-            for branch_1 in branches_1:
-                branch_1_condition = branch_1[0].as_string if branch_1[0] else None
-                if branch_0_condition == branch_1_condition:
-                    matching_conditions_0_to_1.append(branch_0_condition)
+        # We compute a set of the conditions because we don't care about their order since all the
+        # conditions should either be based in a scalar boolean (`__cond`) or be None which means
+        # the `else` condition.
+        branch_0_conditions = {branch[0].as_string if branch[0] else None for branch in branches_0}
+        branch_1_conditions = {branch[0].as_string if branch[0] else None for branch in branches_1}
 
-        matching_conditions_1_to_0: list[str | None] = []
-        for branch_1 in branches_1:
-            branch_1_condition = branch_1[0].as_string if branch_1[0] else None
-            for branch_0 in branches_0:
-                branch_0_condition = branch_0[0].as_string if branch_0[0] else None
-                if branch_1_condition == branch_0_condition:
-                    matching_conditions_1_to_0.append(branch_1_condition)
+        intersection_of_conditions = branch_0_conditions.intersection(branch_1_conditions)
 
         # No matching conditions found between the two `ConditionalBlock`s
-        if not matching_conditions_0_to_1 or not matching_conditions_1_to_0:
+        if not intersection_of_conditions:
             return None
-        # If the intesection of the two lists has more elements that the maximum of the two it means that there is some condition which is different in the two
-        elif len(set(matching_conditions_0_to_1) & set(matching_conditions_1_to_0)) != max(
-            len(matching_conditions_0_to_1), len(matching_conditions_1_to_0)
-        ):
-            pass
         # Matching conditions between the two `ConditionalBlock`s is the same as the number of branches in both `ConditionalBlock`s.
         # This means that all branches have matching conditions and thus we can use the labels to distinguish which one is the fused and which one is the extended conditional block.
         elif (
-            len(matching_conditions_1_to_0) == len(branches_0)
-            and len(matching_conditions_0_to_1) == len(branches_1)
-            and len(branch_0) == len(branch_1)
+            len(intersection_of_conditions) == len(branch_0_conditions)
+            and len(intersection_of_conditions) == len(branch_1_conditions)
         ):
             return FuseHorizontalConditionBlocks._order_conditional_blocks_based_on_label(
                 conditional_block_0, conditional_block_1
             )
         # This means that all the branches of `conditional_block_1` match some or all of the conditions of `conditional_block_0` so we can merge `conditional_block_1` into `conditional_block_0`.
-        elif len(matching_conditions_0_to_1) == len(branches_1):
+        elif len(intersection_of_conditions) == len(branch_1_conditions):
             return conditional_block_0, conditional_block_1
         # This means that all the branches of `conditional_block_0` match some or all of the conditions of `conditional_block_1` so we can merge `conditional_block_0`` into `conditional_block_1`.
-        elif len(matching_conditions_1_to_0) == len(branches_0):
+        elif len(intersection_of_conditions) == len(branch_0_conditions):
             return conditional_block_1, conditional_block_0
-
-        # This means that there are unmatched branches between the two `ConditionalBlock`s which is something the transformation
-        print(
-            f"Warning: Found partially matching conditions between the two `ConditionalBlock`s which is not supported by the transformation. Conditions matching between the `ConditionalBlock`s 0 and 1: {matching_conditions_0_to_1} and conditions matching between the `ConditionalBlock`s 1 and 0: {matching_conditions_1_to_0}. Skipping fusion of these `ConditionalBlock`s {conditional_block_0} and {conditional_block_1}."
-        )
         return None
 
     @classmethod
@@ -150,7 +131,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             return False
 
         # Check that both conditional blocks are in the same parent SDFG
-        if nsdfg_a.sdfg.parent != nsdfg_b.sdfg.parent:
+        if nsdfg_a.sdfg.parent is not nsdfg_b.sdfg.parent:
             return False
 
         # Check that the nested SDFGs' names starts with "if_stmt"
@@ -159,30 +140,30 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         ):
             return False
 
-        # Make sure that the conditional blocks contain only one conditional block each
+        # Make sure that the nested SDFGs contain only one conditional block each
         if nsdfg_a.sdfg.number_of_nodes() != 1 or nsdfg_b.sdfg.number_of_nodes() != 1:
             return False
 
         if not (
-            isinstance(next(iter(nsdfg_a.sdfg.nodes())), dace.sdfg.state.ConditionalBlock)
-            and isinstance(next(iter(nsdfg_b.sdfg.nodes())), dace.sdfg.state.ConditionalBlock)
+            isinstance(nsdfg_a.sdfg.nodes()[0], dace.sdfg.state.ConditionalBlock)
+            and isinstance(nsdfg_b.sdfg.nodes()[0], dace.sdfg.state.ConditionalBlock)
         ):
             return False
 
-        conditional_block_a = next(iter(nsdfg_a.sdfg.nodes()))
-        conditional_block_b = next(iter(nsdfg_b.sdfg.nodes()))
+        conditional_block_a = nsdfg_a.sdfg.nodes()[0]
+        conditional_block_b = nsdfg_b.sdfg.nodes()[0]
+
+        # This transformation accepts only a boolean condition. This means that the conditions of
+        # the branches can only be 2. Either `__cond` and `(not __cond)` or `__cond` and `None`.
+        if len(conditional_block_a.sub_regions()) > 2 or len(conditional_block_b.sub_regions()) > 2:
+            return False
 
         # Make sure that the branches of both `ConditionalBlock`s have only one state
-        if any(
-            len(control_flow_region.nodes()) != 0
-            and not isinstance(next(iter(control_flow_region.nodes())), dace.SDFGState)
-            for control_flow_region in conditional_block_a.sub_regions()
-        ) or any(
-            len(control_flow_region.nodes()) != 0
-            and not isinstance(next(iter(control_flow_region.nodes())), dace.SDFGState)
-            for control_flow_region in conditional_block_b.sub_regions()
-        ):
-            return False
+        # TODO(iomaganaris): In case there are more states we can find a way to add one after the other
+        for conditional_block in [conditional_block_a, conditional_block_b]:
+            for control_flow_region in conditional_block.sub_regions():
+                if len(control_flow_region.nodes()) > 1 or not isinstance(control_flow_region.nodes()[0], dace.sdfg.state.SDFGState):
+                    return False
 
         conditional_block_tuple = (
             self._order_conditional_blocks_based_on_number_of_common_branches_and_label(
@@ -194,10 +175,10 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         extended_conditional_block, fused_conditional_block = conditional_block_tuple
 
         nested_sdfg_of_extended_conditional_block = (
-            nsdfg_a if extended_conditional_block in nsdfg_a.sdfg.nodes() else nsdfg_b
+            nsdfg_a if extended_conditional_block is conditional_block_a else nsdfg_b
         )
         nested_sdfg_of_fused_conditional_block = (
-            nsdfg_a if fused_conditional_block in nsdfg_a.sdfg.nodes() else nsdfg_b
+            nsdfg_a if fused_conditional_block is conditional_block_a else nsdfg_b
         )
 
         # Check that the symbol mappings are compatible. If there's a symbol that is in both mappings but mapped to different definitions then we skip fusing the conditional blocks.
@@ -268,8 +249,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         nsdfg_a = self.nsdfg_a
         nsdfg_b = self.nsdfg_b
         assert nsdfg_a.sdfg.number_of_nodes() == 1 and nsdfg_b.sdfg.number_of_nodes() == 1
-        conditional_block_a = next(iter(nsdfg_a.sdfg.nodes()))
-        conditional_block_b = next(iter(nsdfg_b.sdfg.nodes()))
+        conditional_block_a = nsdfg_a.sdfg.nodes()[0]
+        conditional_block_b = nsdfg_b.sdfg.nodes()[0]
         conditional_block_tuple = (
             self._order_conditional_blocks_based_on_number_of_common_branches_and_label(
                 conditional_block_a, conditional_block_b
@@ -279,10 +260,10 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         extended_conditional_block, fused_conditional_block = conditional_block_tuple
 
         nested_sdfg_of_extended_conditional_block = (
-            nsdfg_a if extended_conditional_block in nsdfg_a.sdfg.nodes() else nsdfg_b
+            nsdfg_a if extended_conditional_block is conditional_block_a else nsdfg_b
         )
         nested_sdfg_of_fused_conditional_block = (
-            nsdfg_a if fused_conditional_block in nsdfg_a.sdfg.nodes() else nsdfg_b
+            nsdfg_a if fused_conditional_block is conditional_block_a else nsdfg_b
         )
 
         # Copy missing symbols from second conditional block to the first one.
@@ -370,8 +351,8 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             )
             if not corresponding_branch_in_second:
                 continue
-            corresponding_state_in_second = next(iter(corresponding_branch_in_second[1].nodes()))
-            first_inner_state = next(iter(branch[1].nodes()))
+            corresponding_state_in_second = corresponding_branch_in_second[1].nodes()[0]
+            first_inner_state = branch[1].nodes()[0]
             # Save edges of second conditional block to a state to be able to delete the nodes from the second conditional block
             edges_to_copy = list(corresponding_state_in_second.edges())
             nodes_to_move = list(corresponding_state_in_second.nodes())
