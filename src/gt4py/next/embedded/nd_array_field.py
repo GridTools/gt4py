@@ -57,7 +57,7 @@ except ImportError:
 
 def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArrayField]:
     for f in fields:
-        if isinstance(f, NdArrayField):  # type: ignore[name-defined] # this is a weird interaction with the mypy plugin
+        if isinstance(f, NdArrayField):
             return f.__class__
     raise AssertionError("No 'NdArrayField' found in the arguments.")
 

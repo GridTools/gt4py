@@ -33,23 +33,22 @@ try:
         "numpy.int64",
         "numpy.integer",
         "numpy.signedinteger",
-        # "numpy.unsignedinteger",
-        # "optype.numpy._scalar.integer"
     ]
 
     def fixup_dims_type(ctx: mplugin.AnalyzeTypeContext) -> types.Type:
         module_name = "gt4py.next.common"
         dims = iter_dim_names()
+        args = []
         if ctx.type.args:
             for arg in ctx.type.args:
                 argname = getattr(arg, "name", "unknown")
                 if argname not in DIM_MAP:
-                    DIM_MAP[argname] = ctx.api.named_type(f"{module_name}.{next(dims)}", [])
-            return ctx.api.named_type(
-                "gt4py.next.common.Dims",
-                [DIM_MAP[getattr(arg, "name", "unknown")] for arg in ctx.type.args],
-            )
-        return ctx.type
+                    DIM_MAP[argname] = ctx.api.analyze_type(
+                        ctx.api.named_type(f"{module_name}.{next(dims)}", [])
+                    )
+                args.append(DIM_MAP[argname])
+        result = ctx.api.analyze_type(ctx.api.named_type("gt4py.next.common.Dims", args))
+        return result
 
     def ignore_type(ctx: mplugin.AnalyzeTypeContext) -> types.Type:
         return types.AnyType(types.TypeOfAny.explicit)
