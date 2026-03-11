@@ -1764,16 +1764,6 @@ docs = [
     { name = "sphinx-rtd-theme" },
     { name = "sphinx-toolbox" },
 ]
-external-typing = [
-    { name = "mypy", extra = ["faster-cache"] },
-    { name = "pytest-mypy-plugins" },
-    { name = "types-decorator" },
-    { name = "types-docutils" },
-    { name = "types-pytz" },
-    { name = "types-pyyaml" },
-    { name = "types-six" },
-    { name = "types-tabulate" },
-]
 frameworks = [
     { name = "atlas4py" },
 ]
@@ -1808,6 +1798,16 @@ typing = [
     { name = "types-docutils" },
     { name = "types-pytz" },
     { name = "types-pyyaml" },
+    { name = "types-tabulate" },
+]
+typing-exports = [
+    { name = "mypy", extra = ["faster-cache"] },
+    { name = "pytest-mypy-plugins" },
+    { name = "types-decorator" },
+    { name = "types-docutils" },
+    { name = "types-pytz" },
+    { name = "types-pyyaml" },
+    { name = "types-six" },
     { name = "types-tabulate" },
 ]
 
@@ -1917,16 +1917,6 @@ docs = [
     { name = "sphinx-rtd-theme", specifier = ">=3.0.1" },
     { name = "sphinx-toolbox", specifier = ">=3.8.1" },
 ]
-external-typing = [
-    { name = "mypy", extras = ["faster-cache"], specifier = ">=1.13.0" },
-    { name = "pytest-mypy-plugins" },
-    { name = "types-decorator", specifier = ">=5.1.8" },
-    { name = "types-docutils", specifier = ">=0.21.0" },
-    { name = "types-pytz", specifier = ">=2024.2.0" },
-    { name = "types-pyyaml", specifier = ">=6.0.10" },
-    { name = "types-six" },
-    { name = "types-tabulate", specifier = ">=0.8.10" },
-]
 frameworks = [{ name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" }]
 lint = [
     { name = "pre-commit", specifier = ">=4.0.1" },
@@ -1958,6 +1948,16 @@ typing = [
     { name = "types-docutils", specifier = ">=0.21.0" },
     { name = "types-pytz", specifier = ">=2024.2.0" },
     { name = "types-pyyaml", specifier = ">=6.0.10" },
+    { name = "types-tabulate", specifier = ">=0.8.10" },
+]
+typing-exports = [
+    { name = "mypy", extras = ["faster-cache"], specifier = ">=1.13.0" },
+    { name = "pytest-mypy-plugins" },
+    { name = "types-decorator", specifier = ">=5.1.8" },
+    { name = "types-docutils", specifier = ">=0.21.0" },
+    { name = "types-pytz", specifier = ">=2024.2.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.10" },
+    { name = "types-six" },
     { name = "types-tabulate", specifier = ">=0.8.10" },
 ]
 

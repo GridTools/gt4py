@@ -41,7 +41,7 @@ jobs:
       - name: "Run pre-commit"
         uses: pre-commit/action@v3.0.1
 
-  external-typing:
+  typing-exports:
     needs: [get-python-versions]
     runs-on: ubuntu-latest
     steps:
@@ -58,6 +58,6 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: "Run external typing checks"
+      - name: "Run typing checks on exported entities"
         run: |
-          ./noxfile.py -s 'test_external_typing-${{ fromJson(needs.get-python-versions.outputs.python-versions) }}'
+          ./noxfile.py -s 'test_typing_exports-${{ fromJson(needs.get-python-versions.outputs.python-versions) }}'

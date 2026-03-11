@@ -100,7 +100,7 @@ from .program_processors.runners.gtfn import (
 from .program_processors.runners.roundtrip import default as itir_python
 
 
-__all__ = [  # noqa: RUF022
+__all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     # submodules
     "common",
     "ffront",

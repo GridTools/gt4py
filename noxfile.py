@@ -331,9 +331,9 @@ def test_storage(
 
 
 @nox.session(python=PYTHON_VERSIONS, tags=["next"])
-def test_external_typing(session: nox.Session) -> None:
+def test_typing_exports(session: nox.Session) -> None:
     """Test GT4Py usability in a typed client context."""
-    install_session_venv(session, extras=["standard"], groups=["test", "external_typing"])
+    install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
 
     session.run(
         "pytest",

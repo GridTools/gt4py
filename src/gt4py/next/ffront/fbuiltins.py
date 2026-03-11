@@ -36,7 +36,7 @@ from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
 
-__all__ = [  # noqa: RUF022 [undefined-export] # type: ignore[attr-defined]
+__all__ = [  # noqa: RUF022 [unsorted-dunder-all] # type: ignore[attr-defined]
     "bool",
     "float",
     "float32",

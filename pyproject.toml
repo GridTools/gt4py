@@ -32,11 +32,6 @@ docs = [
   'sphinx-rtd-theme>=3.0.1',
   'sphinx-toolbox>=3.8.1'
 ]
-external_typing = [
-  {include-group = "typing"},
-  'types-six',
-  'pytest-mypy-plugins'
-]
 frameworks = [
   # 3rd party frameworks with some interoperability with gt4py
   'atlas4py>=0.41'
@@ -68,6 +63,11 @@ typing = [
   'types-decorator>=5.1.8',
   'types-docutils>=0.21.0',
   'types-pytz>=2024.2.0'
+]
+typing_exports = [
+  {include-group = "typing"},
+  'types-six',
+  'pytest-mypy-plugins'
 ]
 
 # -- Standard project description options (PEP 621) --
