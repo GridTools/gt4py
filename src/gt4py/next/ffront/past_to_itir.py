@@ -15,7 +15,7 @@ from typing import Any, Optional, Sequence, cast
 import devtools
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next import common, config, errors, utils as gtx_utils
+from gt4py.next import common, config, errors, utils
 from gt4py.next.ffront import (
     fbuiltins,
     gtcallable,
@@ -25,17 +25,17 @@ from gt4py.next.ffront import (
     type_info as ffront_ti,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.stages import AOT_PRG
+from gt4py.next.ffront.stages import ConcretePASTProgramDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms import remap_symbols
-from gt4py.next.otf import arguments, stages, workflow
+from gt4py.next.iterator.transforms import remap_symbols, replace_get_domain_range_with_constants
+from gt4py.next.otf import arguments, definitions, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 # FIXME[#1582](tehrengruber): This should only depend on the program not the arguments. Remove
 #  dependency as soon as column axis can be deduced from ITIR in consumers of the CompilableProgram.
-def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
+def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDef:
     """
     Lower a PAST program definition to Iterator IR.
 
@@ -63,7 +63,7 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         ... )
 
         >>> itir_copy = past_to_gtir(
-        ...     toolchain.CompilableProgram(copy_program.past_stage, compile_time_args)
+        ...     toolchain.ConcreteArtifact(copy_program.past_stage, compile_time_args)
         ... )
 
         >>> print(itir_copy.data.id)
@@ -102,14 +102,14 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
         static_arg_descriptors = inp.args.argument_descriptor_contexts[arguments.StaticArg]
         if not all(
             isinstance(arg_descriptor, arguments.StaticArg)
-            or all(el is None for el in gtx_utils.flatten_nested_tuple(arg_descriptor))  # type: ignore[arg-type]
+            or all(el is None for el in utils.flatten_nested_tuple(arg_descriptor))  # type: ignore[arg-type]
             for arg_descriptor in static_arg_descriptors.values()
         ):
             raise NotImplementedError("Only top-level arguments can be static.")
         static_args = {
             name: im.literal_from_tuple_value(descr.value)  # type: ignore[union-attr]  # type checked above
             for name, descr in static_arg_descriptors.items()
-            if not any(el is None for el in gtx_utils.flatten_nested_tuple(descr))  # type: ignore[arg-type]
+            if not any(el is None for el in utils.flatten_nested_tuple(descr))  # type: ignore[arg-type]
         }
         body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
         itir_program = itir.Program(
@@ -118,6 +118,18 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
             params=itir_program.params,
             declarations=itir_program.declarations,
             body=body,
+        )
+
+    # TODO(tehrengruber): Put this in a dedicated transformation step.
+    if context := inp.args.argument_descriptor_contexts.get(arguments.FieldDomainDescriptor, None):
+        field_domains = {
+            param: utils.tree_map(lambda x: x.domain if x is not None else x)(v)
+            for param, v in context.items()
+        }
+        itir_program = (
+            replace_get_domain_range_with_constants.ReplaceGetDomainRangeWithConstants.apply(
+                itir_program, sizes=field_domains
+            )
         )
 
     # Translate NamedCollectionTypes to TupleTypes in compile-time args
@@ -132,12 +144,12 @@ def past_to_gtir(inp: AOT_PRG) -> stages.CompilableProgram:
     if config.DEBUG or inp.data.debug:
         devtools.debug(itir_program)
 
-    return stages.CompilableProgram(data=itir_program, args=compile_time_args)
+    return definitions.CompilableProgramDef(data=itir_program, args=compile_time_args)
 
 
 def past_to_gtir_factory(
     cached: bool = True,
-) -> workflow.Workflow[AOT_PRG, stages.CompilableProgram]:
+) -> workflow.Workflow[ConcretePASTProgramDef, definitions.CompilableProgramDef]:
     wf = workflow.make_step(past_to_gtir)
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
@@ -443,7 +455,7 @@ class ProgramLowering(
             "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."
         )
 
-        @gtx_utils.tree_map(
+        @utils.tree_map(
             collection_type=ts.COLLECTION_TYPE_SPECS,
             with_path_arg=True,
             unpack=True,

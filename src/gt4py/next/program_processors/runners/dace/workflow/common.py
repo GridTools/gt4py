@@ -69,6 +69,16 @@ def set_dace_config(
     if cmake_build_type is not None:
         dace.Config.set("compiler.build_type", value=cmake_build_type.value)
 
+    if cmake_build_type == config.CMakeBuildType.DEBUG:
+        dbginfo = "-g"
+        cuda_dbginfo = "--device-debug -Xcompiler -g"
+    elif cmake_build_type == config.CMakeBuildType.REL_WITH_DEB_INFO:
+        dbginfo = "-g"
+        cuda_dbginfo = "--generate-line-info -Xcompiler -g"
+    else:
+        dbginfo = ""
+        cuda_dbginfo = ""
+
     # The dace dafault settings use fast-math in both cpu and gpu compilation,
     # we don't use it here.
     if gt_cxxargs := os.environ.get("CXXFLAGS", None):
@@ -76,18 +86,18 @@ def set_dace_config(
     else:
         dace.Config.set(
             "compiler.cpu.args",
-            value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
+            value=f"-fPIC {dbginfo} -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
         )
     if gt_cudaargs := os.environ.get("CUDAFLAGS", None):
         dace.Config.set("compiler.cuda.args", value=gt_cudaargs)
     else:
         dace.Config.set(
             "compiler.cuda.args",
-            value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
+            value=f"{cuda_dbginfo} -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
         )
     dace.Config.set(
         "compiler.cuda.hip_args",
-        value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
+        value=f"-fPIC {dbginfo} -O3 -march=native -Wno-unused-parameter",
     )
 
     # By design, we do not allow converting Memlets to Maps during code generation.
@@ -114,7 +124,7 @@ def set_dace_config(
         dace.Config.set("compiler.cuda.backend", value="cuda")
 
     # Instrumentation of SDFG timers
-    dace.Config.set("instrumentation", "report_each_invocation", value=True)
+    dace.Config.set("instrumentation", "report_each_invocation", value=False)
 
     # we are not interested in storing the history of SDFG transformations.
     dace.Config.set("store_history", value=False)

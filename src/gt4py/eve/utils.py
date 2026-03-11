@@ -281,6 +281,8 @@ class CustomDefaultDictBase(collections.defaultdict[_K, _V]):
 
     """
 
+    __slots__ = ()
+
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
 

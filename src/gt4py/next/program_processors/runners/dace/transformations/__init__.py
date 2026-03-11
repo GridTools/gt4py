@@ -19,7 +19,13 @@ from .auto_optimize import (
     GT4PyAutoOptHookStage,
     gt_auto_optimize,
 )
+from .concat_where_mapper import (
+    gt_apply_concat_where_replacement_on_sdfg,
+    gt_check_if_concat_where_node_is_replaceable,
+    gt_replace_concat_where_node,
+)
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
+from .fuse_horizontal_conditionblocks import FuseHorizontalConditionBlocks
 from .gpu_utils import (
     GPUSetBlockSize,
     gt_gpu_transform_non_standard_memlet,
@@ -53,7 +59,9 @@ from .multi_state_global_self_copy_elimination import (
 )
 from .redundant_array_removers import CopyChainRemover, DoubleWriteRemover, gt_remove_copy_chain
 from .remove_access_node_copies import RemoveAccessNodeCopies
+from .remove_scalar_copies import RemoveScalarCopies
 from .remove_views import RemovePointwiseViews
+from .scan_loop_unrolling import ScanLoopUnrolling
 from .simplify import (
     GT4PyMapBufferElimination,
     GT4PyMoveTaskletIntoMap,
@@ -76,12 +84,13 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
-from .utils import gt_make_transients_persistent
+from .utils import gt_make_transients_persistent, unique_name
 
 
 __all__ = [
     "CopyChainRemover",
     "DoubleWriteRemover",
+    "FuseHorizontalConditionBlocks",
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
@@ -104,6 +113,8 @@ __all__ = [
     "MultiStateGlobalSelfCopyElimination2",
     "RemoveAccessNodeCopies",
     "RemovePointwiseViews",
+    "RemoveScalarCopies",
+    "ScanLoopUnrolling",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
@@ -111,8 +122,10 @@ __all__ = [
     "VerticalMapFusionCallback",
     "VerticalMapSplitCallback",
     "constants",
+    "gt_apply_concat_where_replacement_on_sdfg",
     "gt_auto_optimize",
     "gt_change_strides",
+    "gt_check_if_concat_where_node_is_replaceable",
     "gt_create_local_double_buffering",
     "gt_eliminate_dead_dataflow",
     "gt_gpu_transform_non_standard_memlet",
@@ -128,6 +141,7 @@ __all__ = [
     "gt_reduce_distributed_buffering",
     "gt_remove_copy_chain",
     "gt_remove_map",
+    "gt_replace_concat_where_node",
     "gt_set_gpu_blocksize",
     "gt_set_iteration_order",
     "gt_simplify",
@@ -136,4 +150,5 @@ __all__ = [
     "gt_vertical_map_split_fusion",
     "inline_dataflow_into_map",
     "splitting_tools",
+    "unique_name",
 ]

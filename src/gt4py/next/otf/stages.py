@@ -9,51 +9,39 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar
+from collections.abc import Callable
+from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
 
 from gt4py.eve import utils
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, languages, toolchain
+from gt4py.next.otf import code_specs, definitions
 from gt4py.next.otf.binding import interface
 
 
-PrgT = TypeVar("PrgT")
-ArgT = TypeVar("ArgT")
-SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
-TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
-SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
-SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
-TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
-SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
-
-
-CompilableProgram: TypeAlias = toolchain.CompilableProgram[itir.Program, arguments.CompileTimeArgs]
-
-
-def compilation_hash(otf_closure: CompilableProgram) -> int:
+def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
-    offset_provider = otf_closure.args.offset_provider
+    offset_provider = program_def.args.offset_provider
     return hash(
         (
-            otf_closure.data,
+            program_def.data,
             # As the frontend types contain lists they are not hashable. As a workaround we just
             # use content_hash here.
-            utils.content_hash(tuple(arg for arg in otf_closure.args.args)),
+            utils.content_hash(tuple(arg for arg in program_def.args.args)),
             common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
-            otf_closure.args.column_axis,
+            program_def.args.column_axis,
         )
     )
 
 
-def fingerprint_compilable_program(inp: CompilableProgram) -> str:
+def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef) -> str:
     """
     Generates a unique hash string for a stencil source program representing
     the program, sorted offset_provider, and column_axis.
     """
-    program: itir.Program = inp.data
-    offset_provider: common.OffsetProvider = inp.args.offset_provider
-    column_axis: Optional[common.Dimension] = inp.args.column_axis
+    program: itir.Program = program_def.data
+    offset_provider: common.OffsetProvider = program_def.args.offset_provider
+    column_axis: Optional[common.Dimension] = program_def.args.column_axis
 
     offset_provider_arrays = {key: value.ndarray if hasattr(value, "ndarray") else value for key, value in offset_provider.items()}
     program_hash = utils.content_hash(
@@ -67,8 +55,12 @@ def fingerprint_compilable_program(inp: CompilableProgram) -> str:
     return program_hash
 
 
+CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
+TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
+
+
 @dataclasses.dataclass(frozen=True)
-class ProgramSource(Generic[SrcL, SettingT]):
+class ProgramSource(Generic[CodeSpecT]):
     """
     Standalone source code translated from an IR along with information relevant for OTF compilation.
 
@@ -81,18 +73,11 @@ class ProgramSource(Generic[SrcL, SettingT]):
     entry_point: interface.Function
     source_code: str
     library_deps: tuple[interface.LibraryDependency, ...]
-    language: type[SrcL]
-    language_settings: SettingT
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.language_settings, self.language.settings_class):
-            raise TypeError(
-                f"Wrong language settings type for '{self.language}', must be subclass of '{self.language.settings_class}'."
-            )
+    code_spec: CodeSpecT
 
 
 @dataclasses.dataclass(frozen=True)
-class BindingSource(Generic[SrcL, TgtL]):
+class BindingSource(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Companion source code for translated program source code.
 
@@ -108,7 +93,7 @@ class BindingSource(Generic[SrcL, TgtL]):
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableSource(Generic[SrcL, SettingT, TgtL]):
+class CompilableProject(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
@@ -117,8 +102,8 @@ class CompilableSource(Generic[SrcL, SettingT, TgtL]):
     If bindings are required, it is recommended to create them in a separate step to ensure reusability.
     """
 
-    program_source: ProgramSource[SrcL, SettingT]
-    binding_source: Optional[BindingSource[SrcL, TgtL]]
+    program_source: ProgramSource[CodeSpecT]
+    binding_source: Optional[BindingSource[CodeSpecT, TargetCodeSpecT]]
 
     @property
     def library_deps(self) -> tuple[interface.LibraryDependency, ...]:
@@ -127,7 +112,11 @@ class CompilableSource(Generic[SrcL, SettingT, TgtL]):
         return _unique_libs(*self.program_source.library_deps, *self.binding_source.library_deps)
 
 
-class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
+CodeSpecT_co = TypeVar("CodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
+TargetCodeSpecT_co = TypeVar("TargetCodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
+
+
+class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
     """
     Use source code extracted from a ``CompilableSource`` to configure and build a GT4Py program.
 
@@ -138,10 +127,7 @@ class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
     def build(self) -> None: ...
 
 
-class CompiledProgram(Protocol):
-    """Executable python representation of a program."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> None: ...
+ExecutableProgram: TypeAlias = Callable
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

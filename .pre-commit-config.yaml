@@ -10,7 +10,7 @@ repos:
     hooks:
       - id: pretty-format-toml
         args: [--autofix, --indent, "2"]
-        exclude: tach.toml
+        exclude: tach.toml|uv.lock
       - id: pretty-format-yaml
         args: [--autofix, --preserve-quotes, --indent, "2", --offset, "2"]
 

@@ -15,11 +15,11 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config, metrics
+from gt4py.next import common, config
+from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import interface
-from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
     sdfg_args as gtx_dace_args,
@@ -266,6 +266,18 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         None,
         dace.Memlet(f"{output}[0]"),
     )
+
+    if gpu and _has_gpu_schedule(sdfg) and config.ADD_GPU_TRACE_MARKERS:
+        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+        for node, _ in sdfg.all_nodes_recursive():
+            if isinstance(
+                node, dace.nodes.MapEntry
+            ):  # Add ranges to scopes and maps that are NOT scheduled to the GPU
+                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+            elif isinstance(node, dace.sdfg.state.SDFGState):
+                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+
+    # Check SDFG validity after applying the above changes.
     # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
     #  the wrapper provided by `DataflowBuilder`, that modifies the tasklet connectors
     #  to avoid name conflicts with program symbols. However, this method is not
@@ -343,9 +355,10 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+        definitions.CompilableProgramDef,
+        stages.ProgramSource[code_specs.SDFGCodeSpec],
     ],
-    step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
+    definitions.TranslationStep[code_specs.SDFGCodeSpec],
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
@@ -355,6 +368,7 @@ class DaCeTranslator(
 
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
+    use_max_domain_range_on_unstructured_shift: bool | None = None
 
     def generate_sdfg(
         self,
@@ -371,7 +385,11 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+            ir = itir_transforms.apply_fieldview_transforms(
+                ir,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                offset_provider=offset_provider,
+            )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
@@ -427,8 +445,8 @@ class DaCeTranslator(
         return sdfg
 
     def __call__(
-        self, inp: stages.CompilableProgram
-    ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
+        self, inp: definitions.CompilableProgramDef
+    ) -> stages.ProgramSource[code_specs.SDFGCodeSpec]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
@@ -446,19 +464,14 @@ class DaCeTranslator(
             for param, arg_type in zip(program.params, arg_types)
         )
 
-        module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
-            stages.ProgramSource(
-                entry_point=interface.Function(program.id, program_parameters),
-                # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
-                #   We compute the hash in order to refresh `cfg_list` on the SDFG,
-                #   which makes the JSON serialization stable.
-                source_code=sdfg.to_json(hash=True),
-                library_deps=tuple(),
-                language=languages.SDFG,
-                language_settings=languages.LanguageSettings(
-                    formatter_key="", formatter_style="", file_extension="sdfg"
-                ),
-            )
+        module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
+            entry_point=interface.Function(program.id, program_parameters),
+            # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
+            #   We compute the hash in order to refresh `cfg_list` on the SDFG,
+            #   which makes the JSON serialization stable.
+            source_code=sdfg.to_json(hash=True),
+            library_deps=tuple(),
+            code_spec=code_specs.SDFGCodeSpec(),
         )
         return module
 
