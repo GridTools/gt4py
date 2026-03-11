@@ -20,7 +20,12 @@ from typing import Any, Optional
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
+from gt4py.next import (
+    backend as next_backend,
+    common,
+    config,
+    custom_layout_allocators as next_allocators,
+)
 from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import definitions, stages, workflow

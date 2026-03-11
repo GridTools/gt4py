@@ -9,8 +9,7 @@
 from typing import Annotated, Final, TypeAlias
 
 from gt4py._core.definitions import Scalar
-from gt4py.next import allocators, backend
-from gt4py.next.common import OffsetProvider
+from gt4py.next import backend, common, constructors
 from gt4py.next.ffront import decorator, stages as ffront_stages
 from gt4py.next.otf import compiled_program
 
@@ -28,14 +27,14 @@ CompiledProgramsKey: TypeAlias = Annotated[compiled_program.CompiledProgramsKey,
 
 Backend: TypeAlias = Annotated[backend.Backend, _ONLY_FOR_TYPING]
 
-FieldBufferAllocationUtil: TypeAlias = Annotated[
-    allocators.FieldBufferAllocationUtil, _ONLY_FOR_TYPING
-]
+Allocator: TypeAlias = Annotated[constructors.Allocator, _ONLY_FOR_TYPING]
+
+OffsetProvider: TypeAlias = Annotated[common.OffsetProvider, _ONLY_FOR_TYPING]
 
 
 __all__ = [
+    "Allocator",
     "Backend",
-    "FieldBufferAllocationUtil",
     "FieldOperator",
     "OffsetProvider",
     "Program",
