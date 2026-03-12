@@ -241,11 +241,11 @@ def test_conditional_wrong_arg_type():
     ) -> gtx.Field[[TDim], float64]:
         return where(mask, a, b)
 
-    msg = r"Could not promote scalars of different dtype \(not implemented\)."
-    with pytest.raises(errors.DSLError) as exc_info:
+    with pytest.raises(
+        errors.DSLError,
+        match="Field arguments to 'where' must be of same dtype, got 'float32' != 'float64'.",
+    ):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
-
-    assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
 def test_ternary_with_field_condition():
