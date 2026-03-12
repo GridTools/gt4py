@@ -1375,6 +1375,20 @@ def test_constant_closure_vars(cartesian_case):
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
     )
 
+    import enum
+
+    class Constants(np.float64, enum.Enum):
+        PI = 3.142
+        E = 2.718
+
+    @gtx.field_operator
+    def consume_constants(input: cases.IFloatField) -> cases.IFloatField:
+        return Constants.PI * Constants.E * input
+
+    cases.verify_with_default_data(
+        cartesian_case, consume_constants, ref=lambda input: Constants.PI * Constants.E * input
+    )
+
 
 def test_local_index_premapped_field(request, unstructured_case):
     if request.node.get_closest_marker(pytest.mark.uses_mesh_with_skip_values.name):

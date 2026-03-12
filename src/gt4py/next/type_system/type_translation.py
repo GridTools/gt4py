@@ -13,12 +13,13 @@ from __future__ import annotations
 import builtins
 import collections.abc
 import dataclasses
+import enum
 import functools
 import pkgutil
 import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional
+from typing import Any, ForwardRef, Optional, TypeAlias
 
 import numpy as np
 import numpy.typing as npt
@@ -258,15 +259,19 @@ def from_type_hint(
     raise ValueError(f"'{type_hint}' type is not supported.")
 
 
-class UnknownPythonObject(ts.TypeSpec):
-    _object: Any
+ConstantPythonNamespaceObject: TypeAlias = eve_utils.FrozenNamespace | enum.EnumMeta
+PythonNamespaceObject: TypeAlias = ConstantPythonNamespaceObject | types.ModuleType
+
+
+class NamespaceProxy(ts.TypeSpec):
+    _object: PythonNamespaceObject
 
     def __getattr__(self, key: str) -> ts.TypeSpec:
         value = getattr(self._object, key)
         return from_value(value)
 
-    def __deepcopy__(self, _: dict[int, Any]) -> UnknownPythonObject:
-        return UnknownPythonObject(self._object)  # don't deep copy the module
+    def __deepcopy__(self, _: dict[int, Any]) -> NamespaceProxy:
+        return NamespaceProxy(self._object)  # don't deep copy the module
 
 
 def from_value(value: Any) -> ts.TypeSpec:
@@ -317,8 +322,8 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)
-    elif isinstance(value, (types.ModuleType, eve_utils.FrozenNamespace)):
-        return UnknownPythonObject(value)
+    elif isinstance(value, PythonNamespaceObject):
+        return NamespaceProxy(value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
