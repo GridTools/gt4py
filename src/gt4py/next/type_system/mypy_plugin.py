@@ -11,9 +11,6 @@ from __future__ import annotations
 import typing
 
 
-DIM_MAP = {}
-
-
 def iter_dim_names() -> typing.Iterator[str]:
     yield "DimA"
     yield "DimB"
@@ -25,6 +22,8 @@ def iter_dim_names() -> typing.Iterator[str]:
 
 try:
     from mypy import plugin as mplugin, types
+
+    DIM_MAP: dict[str, types.Type] = {}
 
     FLOAT_TYPES = ["builtins.float", "numpy.float32", "numpy.float64"]
     INT_TYPES = [
@@ -42,13 +41,21 @@ try:
         if ctx.type.args:
             for arg in ctx.type.args:
                 argname = getattr(arg, "name", "unknown")
-                if argname not in DIM_MAP:
-                    DIM_MAP[argname] = ctx.api.analyze_type(
-                        ctx.api.named_type(f"{module_name}.{next(dims)}", [])
+                args.append(
+                    DIM_MAP.setdefault(
+                        argname,
+                        ctx.api.analyze_type(ctx.api.named_type(f"{module_name}.{next(dims)}", [])),
                     )
-                args.append(DIM_MAP[argname])
+                )
+        else:
+            args = [types.UnpackType(typ=types.AnyType(types.TypeOfAny.explicit))]
         result = ctx.api.analyze_type(ctx.api.named_type("gt4py.next.common.Dims", args))
         return result
+
+    def fixup_dims_from_typealiases(ctx: mplugin.AnalyzeTypeContext) -> types.Type:
+        return DIM_MAP.setdefault(
+            ctx.type.name, ctx.api.analyze_type(ctx.api.named_type("gt4py.next.common.AnyDim", []))
+        )
 
     def ignore_type(ctx: mplugin.AnalyzeTypeContext) -> types.Type:
         return types.AnyType(types.TypeOfAny.explicit)
@@ -65,6 +72,8 @@ try:
         ) -> typing.Callable[[mplugin.AnalyzeTypeContext], types.Type] | None:
             if fullname == "gt4py.next.common.Dims":
                 return fixup_dims_type
+            elif fullname.endswith("Dim") and not fullname == "gt4py.next.common.AnyDim":
+                return fixup_dims_from_typealiases
             elif fullname in FLOAT_TYPES:
                 return blur_float_precision
             elif fullname in INT_TYPES:
