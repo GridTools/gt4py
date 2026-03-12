@@ -51,7 +51,7 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
 
     # FMA is deactivated by default when running -O0
     if optimization_level == "0":
-        cxx_flags += "-ffp-contract=off "
+        cxx_flags += "-ffp-contract=off"
 
     # Query the compiler version string
     try:
@@ -74,7 +74,12 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
     elif "clang" in version_name_on_cli.lower():
         name = CxxCompilerName.CLANG
 
-    return CxxCompilerDefaults(name, open_mp_flags, enable_openmp, cxx_flags)
+    return CxxCompilerDefaults(
+        name,
+        open_mp_flags,
+        enable_openmp,
+        cxx_flags.strip(),  # be overly cautious for old GCC bad behavior
+    )
 
 
 class GPUCompilerName(enum.Enum):
