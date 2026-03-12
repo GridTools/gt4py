@@ -484,6 +484,7 @@ dace = [
 
 # -- versioningit --
 [tool.versioningit]
+default-version = "1.1.7+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
@@ -496,6 +497,5 @@ regex = "^\\s*on_build_version:\\s*Final\\s*=\\s*(?P<version>.*)"
 source-file = "src/gt4py/__about__.py"
 
 [tool.versioningit.vcs]
-default-tag = "1.1.6"
 describe-subst = "$Format:%(describe:tags,match=v*)$"
 method = "git-archive"
