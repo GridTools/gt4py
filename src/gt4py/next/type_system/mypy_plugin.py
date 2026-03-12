@@ -53,9 +53,15 @@ try:
         return result
 
     def fixup_dims_from_typealiases(ctx: mplugin.AnalyzeTypeContext) -> types.Type:
-        return DIM_MAP.setdefault(
-            ctx.type.name, ctx.api.analyze_type(ctx.api.named_type("gt4py.next.common.AnyDim", []))
-        )
+        result: types.Type | types.AnyType = types.AnyType(types.TypeOfAny.explicit)
+        try:
+            result = DIM_MAP.setdefault(
+                ctx.type.name,
+                ctx.api.analyze_type(ctx.api.named_type("gt4py.next.common.AnyDim", [])),
+            )
+        except AssertionError:
+            pass
+        return result
 
     def ignore_type(ctx: mplugin.AnalyzeTypeContext) -> types.Type:
         return types.AnyType(types.TypeOfAny.explicit)

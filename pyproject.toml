@@ -67,7 +67,8 @@ typing = [
 typing_exports = [
   {include-group = "typing"},
   'types-six',
-  'pytest-mypy-plugins'
+  'pytest-mypy-plugins',
+  "xarray"
 ]
 
 # -- Standard project description options (PEP 621) --

@@ -270,3 +270,8 @@
       ) -> gtx.Field[gtx.Dims[CDim, KDim], gtx.float64]:
           z = gtx.astype(d * a, gtx.float64)
           return z
+
+  - case: xarray_typing
+    main: |
+      import xarray
+      a: xarray.NamedArray
