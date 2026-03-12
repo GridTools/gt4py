@@ -189,13 +189,9 @@ class NodeTranslator(NodeVisitor):
 
             return new_node
 
-        if (
-            (isinstance(node, (list, set, collections.abc.Set)))
-            or (isinstance(node, tuple) and not isinstance(node, enum.Enum))
-            or (
-                isinstance(node, collections.abc.Sequence)
-                and not isinstance(node, (str, bytes, enum.Enum))
-            )
+        if (isinstance(node, (list, set, collections.abc.Set))) or (
+            isinstance(node, collections.abc.Sequence)
+            and not isinstance(node, (str, bytes, enum.Enum))
         ):
             # Sequence or set: create a new container instance with the new values
             return node.__class__(  # type: ignore
