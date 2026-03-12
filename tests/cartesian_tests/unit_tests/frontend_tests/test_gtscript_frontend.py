@@ -658,7 +658,22 @@ class TestImportedExternals:
 
 
 class TestIntervalSyntax:
-    def test_simple(self):
+    # Static intervals
+    def test_ellipsis(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert def_ir.computations[0].interval.end.offset == 0
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.END
+
+    def test_positive_numbers(self):
         def definition_func(field: gtscript.Field[float]):
             with computation(PARALLEL), interval(0, 1):
                 field = 0
@@ -690,6 +705,20 @@ class TestIntervalSyntax:
             level=nodes.LevelMarker.END, offset=0, loc=loc
         )
 
+    def test_negative_numbers(self):
+        def definition_func(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(1, -2):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 1
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert def_ir.computations[0].interval.end.offset == -2
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.END
+
     def test_externals(self):
         def definition_func(field: gtscript.Field[float]):
             from gt4py.cartesian.__externals__ import kstart
@@ -715,6 +744,88 @@ class TestIntervalSyntax:
                 level=nodes.LevelMarker.END, offset=-1, loc=loc
             )
 
+    def test_nonoverlapping_intervals(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL):
+                with interval(0, 2):
+                    field = 0
+                with interval(3, -1):
+                    field = 1
+                with interval(-1, None):
+                    field = 2
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    # Dynamic intervals
+    def test_dynamic_scalar(self):
+        def definition_func(field: gtscript.Field[float], scalar: int):  # type: ignore
+            with computation(PARALLEL), interval(0, scalar):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.VarRef)
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
+
+    def test_dynamic_field(self):
+        def definition_func(
+            field: gtscript.Field[float],  # type: ignore
+            idx_field: gtscript.Field[gtscript.IJ, int],  # type: ignore
+        ):
+            with computation(PARALLEL), interval(0, idx_field):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.FieldRef)
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
+
+    def test_dynamic_field_zero_offset(self):
+        def definition_func(
+            field: gtscript.Field[float],  # type: ignore
+            idx_field: gtscript.Field[gtscript.IJ, int],  # type: ignore
+        ):
+            with computation(PARALLEL), interval(0, idx_field[0, 0]):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.FieldRef)
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
+
+    def test_dynamic_field_higher_dim(self):
+        def definition_func(
+            field: gtscript.Field[float],  # type: ignore
+            idx_field: gtscript.Field[gtscript.IJ, (int, 2)],  # type: ignore
+        ):
+            with computation(PARALLEL), interval(0, idx_field[0, 0][1]):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.FieldRef)
+        assert def_ir.computations[0].interval.end.offset.name == "idx_field"
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
+
+    # Illegal syntax
     def test_error_none(self):
         def definition_func(field: gtscript.Field[float]):
             with computation(PARALLEL), interval(None, -1):
@@ -790,19 +901,22 @@ class TestIntervalSyntax:
                 module=self.__class__.__name__,
             )
 
-    def test_nonoverlapping_intervals(self):
-        def definition_func(field: gtscript.Field[float]):
-            with computation(PARALLEL):
-                with interval(0, 2):
-                    field = 0
-                with interval(3, -1):
-                    field = 1
-                with interval(-1, None):
-                    field = 2
+    def test_field_index_with_offset(self):
+        def definition_func(
+            field: gtscript.Field[float],  # type: ignore
+            idx_field: gtscript.Field[gtscript.IJ, int],  # type: ignore
+        ):
+            with computation(PARALLEL), interval(0, idx_field[0, 0]):
+                field[0, 0, 0] = 1
 
-        parse_definition(
+        def_ir = parse_definition(
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.FieldRef)
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
 
 
 class TestRegions:
