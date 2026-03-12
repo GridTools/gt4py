@@ -180,7 +180,7 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
 
     def visit_AssignStmt(self, assignment_statement: oir.AssignStmt, **kwargs) -> None:
         self.body.append(
-            f"{self.visit(assignment_statement.left, **kwargs, is_lhs=True )} = {self.visit(assignment_statement.right, **kwargs)}"
+            f"{self.visit(assignment_statement.left, **kwargs, is_lhs=True)} = {self.visit(assignment_statement.right, **kwargs)}"
         )
 
     # The visitors for the rest of the code-generation all return their strings directly and are in the following section
