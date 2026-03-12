@@ -33,8 +33,9 @@ __version_info__: pkg_version.Version
 #: This value should be overwritten with the actual version string at build
 #: time by the `onbuild` hook of versioningit. If the hook is not run for
 #: whatever reason, the current value defined here would be used as fallback.
-#: Therefore, for consistency, the hard-coded value here should be kept in sync
-#: with the `tool.versioningit.vcs.default-tag` field in pyproject.toml.
+#: Therefore, for consistency, the base number of the version hard-coded here
+#: should be kept in sync with the `tool.versioningit.vcs.default-tag` field
+#: in `pyproject.toml`.
 on_build_version: Final = "1.1.6+unknown.version.details"
 
 _cached_version_data: tuple[str, pkg_version.Version] | None = None
