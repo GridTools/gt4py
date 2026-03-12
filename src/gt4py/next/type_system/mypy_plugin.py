@@ -59,7 +59,7 @@ try:
                 ctx.type.name,
                 ctx.api.analyze_type(ctx.api.named_type("gt4py.next.common.AnyDim", [])),
             )
-        except AssertionError:
+        except AssertionError:  # this probably happens when a dim type is analyzed in a context from where AnyDim is unreachable
             pass
         return result
 
