@@ -198,8 +198,9 @@ def add_instrumentation(
     else:
         # Keep the existing synchronization points, and put the entry if-region after the entry state
         entry_state, exit_state = sync_states
-        for edge in sdfg.out_edges(entry_state):
-            edge.src = entry_if_region
+        for edge in list(sdfg.out_edges(entry_state)):
+            sdfg.add_edge(entry_if_region, edge.dst, edge.data)
+            sdfg.remove_edge(edge)
         sdfg.add_edge(entry_state, entry_if_region, dace.InterstateEdge())
         # and the exit if-region after the exit state
         sdfg.add_edge(exit_state, exit_if_region, dace.InterstateEdge())
