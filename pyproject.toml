@@ -483,6 +483,6 @@ regex = "^\\s*on_build_version:\\s*Final\\s*=\\s*(?P<version>.*)"
 source-file = "src/gt4py/__about__.py"
 
 [tool.versioningit.vcs]
-default-tag = "1.1.6"
+default-tag = "1.1.7"
 describe-subst = "$Format:%(describe:tags,match=v*)$"
 method = "git-archive"
