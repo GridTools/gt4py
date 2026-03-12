@@ -183,7 +183,7 @@ def add_instrumentation(
         "metrics_exit", metrics_level, sdfg
     )
     if sync_states is None:
-        # Use the entry f-block as new source node
+        # Use the newly created entry if-region as new source node
         for source_state in sdfg.source_nodes():
             if source_state is entry_if_region:
                 continue
@@ -191,18 +191,19 @@ def add_instrumentation(
             source_state.is_start_block = False
         assert sdfg.out_degree(entry_if_region) > 0
         entry_if_region.is_start_block = True
-        # and the exit if-block as sink node
+        # and the exit if-region as sink node
         for sink_state in sdfg.sink_nodes():
             if sink_state is exit_if_region:
                 continue
             sdfg.add_edge(sink_state, exit_if_region, dace.InterstateEdge())
         assert sdfg.in_degree(exit_if_region) > 0
     else:
-        # Use the existing synchronization points
+        # Keep the existing synchronization points, and put the entry if-region after the entry state
         entry_state, exit_state = sync_states
         for edge in sdfg.out_edges(entry_state):
             edge.src = entry_if_region
         sdfg.add_edge(entry_state, entry_if_region, dace.InterstateEdge())
+        # and the exit if-region after the exit state
         sdfg.add_edge(exit_state, exit_if_region, dace.InterstateEdge())
 
     #### 1. Synchronize the CUDA device if the sync states are not provided.
@@ -228,13 +229,15 @@ def add_instrumentation(
         "gt_start_timer",
         inputs={},
         outputs={"time"},
-        code="""\
+        code=sync_code
+        + """\
 auto now = std::chrono::high_resolution_clock::now();
 time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
     ).count();
         """,
         language=dace.dtypes.Language.CPP,
+        side_effects=has_side_effects,
     )
     begin_state.add_edge(
         tlet_start_timer,
