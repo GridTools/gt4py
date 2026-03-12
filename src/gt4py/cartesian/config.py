@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 import gridtools_cpp
 
 from gt4py._core import definitions as core_defs
+from gt4py.cartesian.utils.compiler import get_cxx_compiler_defaults
 
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
@@ -28,10 +29,14 @@ GT_INCLUDE_PATH: str = os.path.abspath(gridtools_cpp.get_include_dir())
 GT_CPP_TEMPLATE_DEPTH: int = 1024
 
 GT4PY_COMPILE_OPT_LEVEL: str = os.environ.get("GT4PY_COMPILE_OPT_LEVEL", "3")
+_compiler_infos = get_cxx_compiler_defaults(GT4PY_COMPILE_OPT_LEVEL)
+
 GT4PY_EXTRA_COMPILE_OPT_FLAGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_OPT_FLAGS", "")
 
 # Settings dict
-GT4PY_EXTRA_COMPILE_ARGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
+GT4PY_EXTRA_COMPILE_ARGS: str = os.environ.get(
+    "GT4PY_EXTRA_COMPILE_ARGS", _compiler_infos.cxx_compile_flags
+)
 extra_compile_args: List[str] = (
     list(GT4PY_EXTRA_COMPILE_ARGS.split(" ")) if GT4PY_EXTRA_COMPILE_ARGS else []
 )
@@ -39,15 +44,17 @@ GT4PY_EXTRA_LINK_ARGS: str = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
 extra_link_args: List[str] = list(GT4PY_EXTRA_LINK_ARGS.split(" ")) if GT4PY_EXTRA_LINK_ARGS else []
 
 # Resolve OpenMP
-_enable_open_mp = os.environ.get("GT4PY_CARTESIAN_ENABLE_OPENMP", "True")
+_enable_open_mp = os.environ.get(
+    "GT4PY_CARTESIAN_ENABLE_OPENMP", "True" if _compiler_infos.enable_openmp else "False"
+)
 GT4PY_CARTESIAN_ENABLE_OPENMP: bool = _enable_open_mp.lower() not in [
     "0",
     "false",
     "off",
 ]
 if GT4PY_CARTESIAN_ENABLE_OPENMP:
-    _openmp_cppflags = os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split()
-    _openmp_ldflags = os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split()
+    _openmp_cppflags = os.environ.get("OPENMP_CPPFLAGS", _compiler_infos.open_mp_flag).split()
+    _openmp_ldflags = os.environ.get("OPENMP_LDFLAGS", _compiler_infos.open_mp_flag).split()
 else:
     _openmp_cppflags = []
     _openmp_ldflags = []
