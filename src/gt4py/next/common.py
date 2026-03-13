@@ -108,6 +108,54 @@ class Dimension:
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
 
+    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]  # returns Domain, not bool
+        return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+
+    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]  # returns Domain, not bool
+        return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+
+    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]  # returns Domain, not bool
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+
+    def __le__(self, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]  # returns Domain, not bool
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+
+    @overload
+    def __eq__(self, value: Dimension) -> bool: ...
+    @overload
+    def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...  # type: ignore[overload-overlap]  # intentionally returns Domain, not bool
+    @overload
+    def __eq__(self, value: object) -> bool: ...
+    def __eq__(self, value: object) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value == value.value
+        elif isinstance(value, core_defs.INTEGRAL_TYPES):
+            int_value = cast(core_defs.IntegralScalar, value)
+            return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
+        else:
+            return False
+
+    @overload
+    def __ne__(self, value: Dimension) -> bool: ...
+    @overload
+    def __ne__(self, value: core_defs.IntegralScalar) -> tuple[Domain, Domain]: ...  # type: ignore[overload-overlap]  # intentionally returns tuple[Domain, Domain], not bool
+    @overload
+    def __ne__(self, value: object) -> bool: ...
+    def __ne__(self, value: object) -> bool | tuple[Domain, Domain]:
+        # TODO(havogt): Non-consecutive domains are represented as tuples, this limits domain operations to
+        # simple, common cases. E.g. `I != 3 & I != 5` can't be handled as it would require a custom
+        # domain tuple type and operations on it, see ADR 22.
+        if isinstance(value, Dimension):
+            return self.value != value.value
+        elif isinstance(value, core_defs.INTEGRAL_TYPES):
+            int_value = cast(core_defs.IntegralScalar, value)
+            return (
+                Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, int_value),)),
+                Domain(dims=(self,), ranges=(UnitRange(int_value + 1, Infinity.POSITIVE),)),
+            )
+        else:
+            return True
+
 
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
@@ -498,6 +546,28 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             )
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
+
+    def __or__(self, other: Domain) -> Domain | tuple[Domain, Domain]:
+        """
+        Union of `Domain`s, currently limited to 1D domains.
+
+        Returns a single `Domain` if the ranges overlap or are adjacent,
+        otherwise returns a tuple of two disjoint `Domain`s.
+        """
+        if self.ndim > 1 or other.ndim > 1:
+            # TODO(havogt): Domain union is currently limited to 1D domains, see ADR 22.
+            raise NotImplementedError("Union of multidimensional domains is not supported.")
+        if self.ndim == 0:
+            return other
+        if other.ndim == 0:
+            return self
+        first, second = sorted((self, other), key=lambda x: x.ranges[0].start)
+        if first.ranges[0].stop >= second.ranges[0].start:
+            return Domain(
+                dims=(self.dims[0],),
+                ranges=(UnitRange(first.ranges[0].start, second.ranges[0].stop),),
+            )
+        return (first, second)
 
     @functools.cached_property
     def slice_at(self) -> utils.IndexerCallable[slice, Domain]:
