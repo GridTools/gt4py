@@ -65,10 +65,11 @@ typing = [
   'types-pytz>=2024.2.0'
 ]
 typing_exports = [
+  # to test typing with gt4py in downstream code
   {include-group = "typing"},
-  'types-six',
-  'pytest-mypy-plugins',
-  "xarray"
+  'types-six',  # can not let mypy auto-install types as that leads to unexpected stderr output (which means test failure)
+  'pytest-mypy-plugins',  # pytest plugin for running mypy on code snippets
+  "xarray"  # one of the regression tests requires xarray
 ]
 
 # -- Standard project description options (PEP 621) --
@@ -193,7 +194,7 @@ source_pkgs = ['gt4py']
 [tool.mypy]
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
-exclude = ['^setup\.py$', 'build/.*$', 'ci/*.$', 'docs/.*$', '^tests/.*$']
+exclude = ['^setup\.py$', 'build/.*$', 'ci/*.$', 'docs/.*$', 'tests/.*$']
 ignore_missing_imports = true
 implicit_optional = false
 implicit_reexport = false

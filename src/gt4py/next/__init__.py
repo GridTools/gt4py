@@ -195,3 +195,7 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "uint64",
     "where",
 ]
+
+assert not (diff := set(fbuiltins.__all__) - set(__all__)), (
+    f"public fbuiltins member(s) not exported: {diff}"
+)
