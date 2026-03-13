@@ -7,9 +7,9 @@ on:
 
   ## COMMENTED OUT: only for testing CI action changes.
   ## It only works for PRs to `main` branch from branches in the upstream gt4py repo.
-  # pull_request:
-  #   branches:
-  #     - main
+  pull_request:
+    branches:
+      - main
   ## END
 
 jobs:
@@ -36,9 +36,9 @@ jobs:
         # between the different compatible versions for a given package requirement
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["lowest-direct", "highest"]
-        gt4py-module: ["cartesian", "eve", "next", "storage"]
-        os: ["ubuntu-latest", "macos-latest"]
-        python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
+        gt4py-module: ["cartesian"] # ["cartesian", "eve", "next", "storage"]
+        os: ["macos-latest"] # ["ubuntu-latest", "macos-latest"]
+        python-version: ["3.10"] # ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -63,6 +63,7 @@ jobs:
           brew install libomp
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
           echo "CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw" >> $GITHUB_ENV
+          echo "GT4PY_CARTESIAN_ENABLE_OPENMP=True" >> $GITHUB_ENV
           echo "OPENMP_CPPFLAGS=-Xclang -fopenmp -Xclang -I$(brew --prefix libomp)/include" >> $GITHUB_ENV
           echo "OPENMP_LDFLAGS=-Xclang -fopenmp $(brew --prefix libomp)/lib/libomp.dylib" >> $GITHUB_ENV
 
