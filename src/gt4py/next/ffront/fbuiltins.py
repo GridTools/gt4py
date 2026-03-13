@@ -430,6 +430,10 @@ FUN_BUILTIN_NAMES = [
     *MATH_BUILTIN_NAMES,
 ]
 
+assert all(isinstance(globals()[f], BuiltInFunction) for f in FUN_BUILTIN_NAMES), (
+    "Missing builtin function"
+)
+
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
