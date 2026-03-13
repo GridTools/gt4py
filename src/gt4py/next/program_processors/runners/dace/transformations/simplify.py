@@ -10,7 +10,7 @@
 
 import collections
 import copy
-import uuid
+import hashlib
 import warnings
 from typing import Any, Iterable, Optional, TypeAlias
 
@@ -1007,8 +1007,13 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
 
         # This is the tasklet that we will put inside the map, note we have to do it
         #  this way to avoid some name clash stuff.
+        # Use a deterministic hash instead of uuid.uuid1() to ensure stable code
+        # generation across runs. The hash combines properties that are unique to
+        # this specific clone context.
+        _clone_key = f"{tasklet.label}_{tasklet.code.as_string}_{map_entry.label}_{access_node.data}"
+        _clone_hash = hashlib.md5(_clone_key.encode("utf-8")).hexdigest()
         inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
-            name=f"{tasklet.label}__clone_{str(uuid.uuid1()).replace('-', '_')}",
+            name=f"{tasklet.label}__clone_{_clone_hash}",
             outputs=tasklet.out_connectors.keys(),
             inputs=set(),
             code=tasklet.code,
