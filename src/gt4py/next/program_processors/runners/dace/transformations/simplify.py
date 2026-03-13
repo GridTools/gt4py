@@ -1010,7 +1010,9 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         # Use a deterministic hash instead of uuid.uuid1() to ensure stable code
         # generation across runs. The hash combines properties that are unique to
         # this specific clone context.
-        _clone_key = f"{tasklet.label}_{tasklet.code.as_string}_{map_entry.label}_{access_node.data}"
+        _clone_key = (
+            f"{tasklet.label}_{tasklet.code.as_string}_{map_entry.label}_{access_node.data}"
+        )
         _clone_hash = hashlib.md5(_clone_key.encode("utf-8")).hexdigest()
         inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
             name=f"{tasklet.label}__clone_{_clone_hash}",
