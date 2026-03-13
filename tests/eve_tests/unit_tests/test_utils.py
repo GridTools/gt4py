@@ -269,6 +269,7 @@ def test_lru_cache_key_id_called_once():
     assert cached.cache_info().hits == 1
     assert cached.cache_info().misses == 1
 
+
 def test_lru_cache_no_eq_call():
     class A:
         def __hash__(self) -> int:
@@ -283,6 +284,7 @@ def test_lru_cache_no_eq_call():
 
     func(A())
     func(A())
+
 
 def test_fluid_partial():
     from gt4py.eve.utils import fluid_partial
