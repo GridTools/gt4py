@@ -718,7 +718,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # For each branch inside the if block find the nodes that are relocated inside it.
         known_nodes_coll: dict[dace.SDFGState, set[dace_nodes.Node]] = collections.defaultdict(set)
         for conn_name, rel_df in relocatable_dataflow.items():
-            known_nodes_coll[connector_usage_location[conn_name]].update(rel_df)
+            known_nodes_coll[connector_usage_location[conn_name][0]].update(rel_df)
         known_nodes = list(known_nodes_coll.values())  # Order is unimportant here.
 
         # We allow that the set of nodes to relocated that are associated to a connector
