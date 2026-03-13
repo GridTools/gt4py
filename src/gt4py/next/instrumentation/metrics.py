@@ -187,8 +187,9 @@ class SourceKeySetterAtEnter(contextlib.AbstractContextManager):  # type: ignore
     When entering this context manager it saves the current source key
     for metrics collection and sets the new source key if provided, or
     a default marker indicating no key is set. Upon exiting the context,
-    it doesn't do anything, expecting that other component resets the source
-    key later.
+    it does not reset the source key itself, but instead relies on another
+    component (usually an outer `program_call_context`) to reset the
+    source key later.
     """
 
     key: str | None = None
