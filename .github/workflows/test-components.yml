@@ -64,7 +64,6 @@ jobs:
   # Test-running job
   test-component:
     needs: [get-python-versions, define-test-sessions-exclusions]
-    if: false
     strategy:
       matrix:
         os: ["ubuntu-latest"]
