@@ -8,6 +8,7 @@
 
 """Package metadata: version, authors, license and copyright."""
 
+import pathlib
 from typing import Any, Final
 
 from packaging import version as pkg_version
@@ -30,26 +31,47 @@ __version__: str
 __version_info__: pkg_version.Version
 
 
-#: This should be overwritten by the `onbuild` hook of versioningit
-# with the actual version string at build time. If the hook is not
-# run for any reason, the fallback value defined here would be used,
-# so, for consistency, it should be set to the same value as the one
-# in `tool.versioningit.default-version` in pyproject.toml.
-on_build_version: Final = "1.1.6+unknown.version.details"
+#: This value should be overwritten with the actual version string at build
+#: time by the `onbuild` hook of versioningit. If the hook is not run for
+#: whatever reason, the current value defined here would be used as fallback.
+#: Therefore, for consistency, the version hard-coded here should be kept in
+#: sync with the `tool.versioningit.default-version` field in `pyproject.toml`.
+on_build_version: Final = "1.1.7+unknown.version.details"
 
-_static_version: tuple[str, pkg_version.Version] | None = None
+_cached_version_data: tuple[str, pkg_version.Version] | None = None
 _dir: list[str] | None = None
 
 
-def _inspect_version() -> tuple[str, pkg_version.Version]:
-    global _static_version
-
-    if _static_version is not None:
-        return _static_version
-
-    import importlib.metadata
+def _get_version_from_versioningit(path: pathlib.Path | str) -> str:
+    import os
 
     import versioningit
+
+    devnull = open(os.devnull, "w")
+    try:
+        old_stdout_fd = os.dup(1)  # duplicate current stdout fd
+        os.dup2(devnull.fileno(), 1)  # replace fd 1 with /dev/null
+        old_stderr_fd = os.dup(2)
+        os.dup2(devnull.fileno(), 2)
+
+        version = versioningit.get_version(path)
+
+    finally:
+        os.dup2(old_stdout_fd, 1)
+        os.close(old_stdout_fd)
+        os.dup2(old_stderr_fd, 2)
+        os.close(old_stderr_fd)
+
+    return version
+
+
+def _inspect_version() -> tuple[str, pkg_version.Version]:
+    global _cached_version_data
+
+    if _cached_version_data is not None:
+        return _cached_version_data
+
+    import importlib.metadata
 
     if dist := importlib.metadata.distribution("gt4py"):
         version: str = dist.version  # static installation version
@@ -71,12 +93,11 @@ def _inspect_version() -> tuple[str, pkg_version.Version]:
                     raise ValueError("Not a local install")
 
                 src_path = url_data["url"][7:]
-                version = versioningit.get_version(src_path)
-
+                version = _get_version_from_versioningit(src_path)
             except Exception:
                 # There is something wrong in the current editable installation.
-                # Fallback to the static version, but don't store the result as a
-                # static version, since the package is installed in editable mode.
+                # Fallback to the static version, but don't cache the result as the
+                # final version data, since the package is installed in editable mode.
                 pass
 
             version_info = pkg_version.parse(version)
@@ -85,10 +106,10 @@ def _inspect_version() -> tuple[str, pkg_version.Version]:
 
         else:
             # If the package is not installed in editable mode, the version
-            # is the one reported by `importlib.metadata.version("gt4py")`.
-            _static_version = version, pkg_version.parse(version)
+            # is always correctly reported by `importlib.metadata.version("gt4py")`.
+            _cached_version_data = version, pkg_version.parse(version)
 
-            return _static_version
+            return _cached_version_data
 
     else:
         # This branch is a weird case: since `importlib.metadata`
@@ -97,9 +118,7 @@ def _inspect_version() -> tuple[str, pkg_version.Version]:
         # For example, when running directly from sources by adding the
         # project root to the `sys.path`.
         try:
-            import pathlib
-
-            version = versioningit.get_version(pathlib.Path(__file__).parent.resolve())
+            version = _get_version_from_versioningit(pathlib.Path(__file__).parent.resolve())
         except Exception:
             # Fallback to the on-build version, if everything else fails.
             version = on_build_version
