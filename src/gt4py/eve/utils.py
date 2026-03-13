@@ -464,6 +464,15 @@ def optional_lru_cache(
     return _decorator(func) if func is not None else _decorator
 
 
+class _LRUCacheValue(HashableBy):
+    __hash__ = HashableBy.__hash__
+
+    # we compare by hash here as the cache lookup in lru_cache is not only by hash but also by
+    # equality, but we only want to consider the key given by the user not the value.
+    def __eq__(self, other: Any) -> bool:
+        return hash(self) == hash(other)
+
+
 # TODO(egparedes): it would be more efficient to implement the caching logic
 # here instead of relying on `functools.lru_cache` and wrapping/unwrapping the
 # arguments.
@@ -504,8 +513,8 @@ def lru_cache(
             @functools.wraps(func)
             def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
                 return cached_func(
-                    *(hashable_by(key, arg) for arg in args),
-                    **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
+                    *(_LRUCacheValue(key, arg) for arg in args),
+                    **{k: _LRUCacheValue(key, arg) for k, arg in kwargs.items()},
                 )
 
             inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
