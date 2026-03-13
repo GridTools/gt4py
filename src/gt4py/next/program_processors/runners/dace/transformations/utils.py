@@ -9,7 +9,7 @@
 """Common functionality for the transformations/optimization pipeline."""
 
 import uuid
-from typing import Optional, Sequence, TypeVar, Union, Iterable
+from typing import Iterable, Optional, Sequence, TypeVar, Union
 
 import dace
 from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
@@ -29,6 +29,7 @@ def unique_name(name: str) -> str:
         not be used if a particular order should be enforced. This function is
         marked for deprecation.
     """
+    # TODO Stabilize this.
     maximal_length = 200
     unique_sufix = str(uuid.uuid1()).replace("-", "_")
     if len(name) > (maximal_length - len(unique_sufix)):
@@ -850,8 +851,8 @@ def gt_data_descriptor_mapping(
 
 
 def order_nodes(
-        nodes: Iterable[dace_nodes.Node],
-        state: dace.SDFGState,
+    nodes: Iterable[dace_nodes.Node],
+    state: dace.SDFGState,
 ) -> list[dace_nodes.Node]:
     """_Tries_ to order `nodes` in a stable and deterministic way.
 
@@ -883,7 +884,7 @@ def order_nodes(
 
 
 def order_edges(
-        edges: Iterable[dace_graph.MultiConnectorEdge[dace.Memlet]]
+    edges: Iterable[dace_graph.MultiConnectorEdge[dace.Memlet]],
 ) -> list[dace_graph.MultiConnectorEdge[dace.Memlet]]:
     """_Tries_ to order `edges` in a stable and deterministic way.
 
