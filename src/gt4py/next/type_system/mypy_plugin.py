@@ -84,12 +84,11 @@ try:
             # replacement 'Dims[OneDim, OtherDim]' -> 'Dims[_DimA, _DimB]' happens here
             for arg in ctx.type.args:
                 argname = getattr(arg, "name", "unknown")
-                args.append(
-                    DIM_MAP.setdefault(
-                        argname,
-                        ctx.api.analyze_type(ctx.api.named_type(f"{module_name}.{next(dims)}", [])),
+                if argname not in DIM_MAP:
+                    DIM_MAP[argname] = ctx.api.analyze_type(
+                        ctx.api.named_type(f"{module_name}.{next(dims)}", [])
                     )
-                )
+                args.append(DIM_MAP[argname])
         else:
             # do not accidentally replace 'Dims' -> 'Dims[Any]' (the former matches any number of dims, the latter only one)
             args = [types.UnpackType(typ=types.AnyType(types.TypeOfAny.explicit))]
@@ -112,10 +111,11 @@ try:
             types.TypeOfAny.explicit
         )  # Fallback to Any if _AnyDim is not found
         try:
-            result = DIM_MAP.setdefault(
-                ctx.type.name,
-                ctx.api.analyze_type(ctx.api.named_type("gt4py.next.common._AnyDim", [])),
-            )
+            if ctx.type.name not in DIM_MAP:
+                DIM_MAP[ctx.type.name] = ctx.api.analyze_type(
+                    ctx.api.named_type("gt4py.next.common._AnyDim", [])
+                )
+            result = DIM_MAP[ctx.type.name]
         except AssertionError:  # this probably happens when a dim type is analyzed in a context from where _AnyDim is unreachable
             pass
         return result
