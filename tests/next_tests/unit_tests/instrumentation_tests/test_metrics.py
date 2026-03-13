@@ -66,7 +66,7 @@ class TestSourceKeyContextManager:
             assert metrics.is_current_source_key_set() is False
 
             key = "context_test_key"
-            with metrics.metrics_context_key(key):
+            with metrics.metrics_source_key_context(key):
                 assert metrics.is_current_source_key_set() is True
                 assert metrics._source_key_cvar.get() == key
                 assert metrics.get_current_source_key() == key
