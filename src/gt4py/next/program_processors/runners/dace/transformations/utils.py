@@ -8,7 +8,6 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-import uuid
 from typing import Iterable, Optional, Sequence, TypeVar, Union
 
 import dace
@@ -25,16 +24,20 @@ def unique_name(name: str) -> str:
     """Adds a unique string to `name`.
 
     Note:
-        The names generates by this function are rather unstable and it should
-        not be used if a particular order should be enforced. This function is
-        marked for deprecation.
+        This function assumes that the "namespace" defined by `__gt4py_unique_name_`
+        can be used freely.
     """
-    # TODO Stabilize this.
     maximal_length = 200
-    unique_sufix = str(uuid.uuid1()).replace("-", "_")
-    if len(name) > (maximal_length - len(unique_sufix)):
-        name = name[: (maximal_length - len(unique_sufix) - 1)]
-    return f"{name}_{unique_sufix}"
+    if not hasattr(unique_name, "_counter"):
+        unique_name._counter = 0  # type: ignore[attr-defined]
+
+    proposed_name = f"__gt4py_unique_name_{name}_{unique_name._counter}"  # type: ignore[attr-defined]
+    unique_name._counter += 1  # type: ignore[attr-defined]
+
+    if len(proposed_name) > maximal_length:
+        raise ValueError("Name became too long.")
+
+    return proposed_name
 
 
 def gt_make_transients_persistent(
