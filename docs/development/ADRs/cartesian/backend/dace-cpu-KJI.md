@@ -4,11 +4,11 @@ In the context of performance optimizations, we decided to add `dace:cpu_KJI` ne
 
 ## Context
 
-During performance optimization work, we discovered that there's currently no way to stream memory directly (i.e. without copy) from Fortran into a DaCe-based backend. For hybrid Fortran/GT4Py applications, this can be a bottleneck.
+During performance optimization work, we discovered that there's currently no way to stream memory directly (i.e. without copy) from Fortran into a DaCe-based backend. For hybrid Fortran/GT4Py applications where we have no control over the memory layout of the data, this can be a bottleneck.
 
 ## Decision
 
-We decided to add a backend that allows directly streaming memory from Fortran into GT4Py stencils (and back) without any copies. To communicate the expected device and memory layout, we named the backend `dace:cpu_KJI`.
+We decided to add a backend that allows directly streaming memory from Fortran into GT4Py stencils (and back) without any copies. To communicate the expected device and memory layout, we named the backend `dace:cpu_KJI`. We chose to keep `cpu` as part of the name because we do not see the potential use-case of using such a poorly-fitting layout to do computation on GPU ever.
 
 ## Consequences
 
