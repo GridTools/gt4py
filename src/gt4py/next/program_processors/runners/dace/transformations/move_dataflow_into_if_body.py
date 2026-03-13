@@ -869,7 +869,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # Now inspect all states.
         for _, branch in inner_if_block.branches:
-            output_count: dict[str, int] = {conn_name: 0 for conn_name in output_names}
             for inner_state in branch.all_states():
                 assert isinstance(inner_state, dace.SDFGState)
                 for dnode in inner_state.data_nodes():
@@ -878,8 +877,11 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     # Check if we can skip the data.
                     if node_data in non_relocatable_connectors:
                         continue
+                    elif node_data in output_names:
+                        continue
                     elif dnode.desc(inner_sdfg).transient:
                         continue
+                    assert node_data in input_names
 
                     if node_data in connector_usage_location:
                         # The connectors that can be pulled inside must appear exactly once
@@ -890,32 +892,20 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         connector_usage_location.pop(node_data)
                         non_relocatable_connectors.add(node_data)
 
-                    else:
-                        if node_data in output_names:
-                            exp_in_deg, exp_out_deg = 0, 1
-                        else:
-                            assert node_data in input_names
-                            exp_in_deg, exp_out_deg = 1, 0
+                    elif inner_state.in_degree(dnode) != 0:
+                        # The node is also written to, a strange situation, that is
+                        #  however allowed. So we can not handle it.
+                        non_relocatable_connectors.add(node_data)
 
-                        # Check if the node has the right degree.
-                        # TODO(phimuell): Find out if we can remove or relax these checks.
-                        if (inner_state.in_degree(dnode) == exp_in_deg) and (
-                            inner_state.out_degree(dnode) == exp_out_deg
-                        ):
-                            connector_usage_location[node_data] = (branch, dnode)
-                        else:
-                            non_relocatable_connectors.add(node_data)
+                    else:
+                        # This is a proper input connector node.
+                        connector_usage_location[node_data] = (inner_state, dnode)
 
                     # All input connectors are now considered non relocatable, thus
                     #  the decomposition does not exist.
                     if len(non_relocatable_connectors) == len(input_names):
                         assert non_relocatable_connectors == input_names
                         return None
-
-            # Each branch must write to all outputs.
-            # TODO(phimuell): Think if this should be lifted.
-            if any(count != 1 for count in output_count.values()):
-                return None
 
         # There is nothing to relocate.
         if len(connector_usage_location) == 0:
