@@ -462,7 +462,6 @@ explicit = true
 name = 'gridtools'
 url = 'https://gridtools.github.io/pypi/'
 
-# -- versioningit --
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
@@ -470,6 +469,7 @@ dace = [
   {index = "gridtools", group = "dace-next"}
 ]
 
+# -- versioningit --
 [tool.versioningit]
 default-version = "1.1.7+unknown.version.details"
 
