@@ -15,9 +15,7 @@ from gt4py.next import float64
 
 
 IDim = gtx.Dimension("IDim")
-Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 JDim = gtx.Dimension("JDim")
-Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated
