@@ -41,6 +41,8 @@ def gt_remove_copy_chain(
         single_use_data: Which data descriptors are used only once.
             If not passed the function will run `FindSingleUseData`.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
 
     # To ensures that the `{src,dst}_subset` are properly set, run initialization.
     #  See [issue 1703](https://github.com/spcl/dace/issues/1703)

@@ -512,7 +512,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # Before we can clean the original nodes, we must clean the dataflow. If a
         #  node, that was relocated, has incoming connections we must remove them
         #  and the parent dataflow.
-        for node_to_remove in sorted(all_relocatable_dataflow, key=_node_sort_key):
+        for node_to_remove in all_relocatable_dataflow:
             for iedge in list(state.in_edges(node_to_remove)):
                 if iedge.src in all_relocatable_dataflow:
                     continue
