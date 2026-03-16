@@ -140,7 +140,7 @@ def compiled_program_call_context(
     # which will take care of unsetting it. This is because the compiled program call
     # is part of a program call, but we want the metrics to be associated with a
     # specific compiled program variant, not just the generic outer program.
-    return metrics.metrics_context_key_at_enter(metrics_source_key(program_pool, key))
+    return metrics.metrics_source_key_setter(metrics_source_key(program_pool, key))
 
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
