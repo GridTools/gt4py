@@ -144,9 +144,9 @@ class Dimension:
             return self.value != value.value
         elif isinstance(value, core_defs.INTEGRAL_TYPES):
             raise NotImplementedError(
-                f"'Dimension.__ne__' with an integer value produces two disjoint domains, "
-                f"which is not supported. Use 'concat_where(dim < value, ...) "
-                f"concat_where(dim > value, ...)' to express the condition, see ADR 22."
+                "'Dimension.__ne__' with an integer value produces two disjoint domains, "
+                "which is not supported. Use 'concat_where(dim < value, ...) "
+                "concat_where(dim > value, ...)' to express the condition, see ADR 22."
             )
         else:
             return True
