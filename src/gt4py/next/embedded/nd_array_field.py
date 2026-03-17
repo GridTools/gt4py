@@ -104,12 +104,12 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
-_GT4PY_FIELD_METADATA_NS: Final = "__gt4py__"
+_GT4PY_NDARRAY_FIELD_METADATA_NS: Final = "_gt4py_ndarray_field_"
 
 
 def _gt4py_field_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
     """Helper function to create a metadata dictionary for dataclass fields with a GT4Py-specific namespace."""
-    return {_GT4PY_FIELD_METADATA_NS: {**kwargs}}
+    return {_GT4PY_NDARRAY_FIELD_METADATA_NS: {**kwargs}}
 
 
 @functools.cache
@@ -120,7 +120,7 @@ def _get_pickleable_field_names(dataclass_type: type) -> tuple[str, ...]:
 
     names = []
     for field in dataclasses.fields(dataclass_type):
-        metadata = field.metadata.get("_GT4PY_FIELD_METADATA_NS", None)
+        metadata = field.metadata.get("_GT4PY_NDARRAY_FIELD_METADATA_NS", None)
         # Individual fields can opt out of serialization via dataclass
         # definitions:  field(<other args>, metadata=_gt4py_field_metadata(skip_pickle=True))
         if metadata and metadata.get("skip_pickle"):
