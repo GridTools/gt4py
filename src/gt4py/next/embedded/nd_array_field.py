@@ -444,6 +444,20 @@ class NdArrayField(
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
 
+    def __getstate__(self) -> dict[str, Any]:
+        # Make sure we only copy dataclass fields to get rid of runtime-only cached attributes
+        # that must not influence serialization or fingerprints.
+        state = {key: getattr(self, key) for key in self.__dataclass_fields__.keys()}
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        try:
+            object.__setattr__(self, "__dict__", state)
+        except AttributeError:
+            # In case the dataclass is frozen or uses slots, we need to use `object.__setattr__` for each field
+            for key, value in state.items():
+                object.__setattr__(self, key, value)
+
     if dace:
 
         def _dace_data_ptr(self) -> int:
@@ -558,14 +572,6 @@ class NdArrayConnectivityField(
     @functools.cached_property
     def _cache(self) -> dict:
         return {}
-
-    def __getstate__(self) -> dict[str, Any]:
-        state = self.__dict__.copy()
-        state.pop("_cache", None)
-        return state
-
-    def __setstate__(self, state: dict[str, Any]) -> None:
-        object.__setattr__(self, "__dict__", state)
 
     def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))

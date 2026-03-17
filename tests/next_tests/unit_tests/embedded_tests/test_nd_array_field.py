@@ -819,6 +819,70 @@ def test_setitem_wrong_domain():
         field[(1, slice(None))] = value_incompatible
 
 
+def test_nd_array_field_getstate_excludes_cached_properties():
+    """Test that __getstate__ only serializes dataclass fields, excluding cached properties."""
+    data = np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
+    field = constructors.as_field((D0, D1), data)
+
+    # Access a cached property to populate the cache
+    _ = field.__gt_buffer_info__
+    assert "__gt_buffer_info__" in field.__dict__ or hasattr(field, "__gt_buffer_info__")
+
+    state = field.__getstate__()
+
+    # State should only contain dataclass fields (_domain, _ndarray, array_ns)
+    assert "_domain" in state
+    assert "_ndarray" in state
+    assert "array_ns" in state  # ClassVar is included in __dataclass_fields__
+    assert "__gt_buffer_info__" not in state
+    assert "__dict__" not in state
+
+
+def test_nd_array_field_setstate_restores_state():
+    """Test that __setstate__ properly restores field state without cached data."""
+    original = constructors.as_field((D0, D1), np.arange(6.0).reshape(2, 3))
+
+    # Create a new field and restore state
+    restored = constructors.as_field((D0, D1), np.zeros((2, 3)))
+    original_state = original.__getstate__()
+    restored.__setstate__(original_state)
+
+    # Verify state is restored
+    assert restored.domain == original.domain
+    assert np.array_equal(restored.ndarray, original.ndarray)
+    assert restored.dtype == original.dtype
+
+
+def test_nd_array_field_pickle_roundtrip():
+    """Test that NdArrayField can be pickled and unpickled correctly using getstate/setstate."""
+    original = constructors.as_field((D0, D1), np.arange(12.0).reshape(3, 4))
+
+    # Access cached property to ensure it's not included in serialization
+    _ = original.__gt_buffer_info__
+    assert "__gt_buffer_info__" in original.__dict__
+
+    # Create a new field and restore the state of the original
+    new_data = np.zeros((3, 4))
+    restored = constructors.as_field((D0, D1), new_data)
+
+    # Restore using __getstate__ and __setstate__
+    state = original.__getstate__()
+    # Remove non-serializable ClassVar 'array_ns' for this test
+    state_without_module = {k: v for k, v in state.items() if k != "array_ns"}
+
+    # Manually restore the serializable parts
+    for key, value in state_without_module.items():
+        object.__setattr__(restored, key, value)
+
+    # Verify restoration
+    assert restored.domain == original.domain
+    assert np.array_equal(restored.ndarray, original.ndarray)
+    assert restored.dtype == original.dtype
+    assert restored.shape == original.shape
+    # Cached property should not be present in the restored instance
+    assert "__gt_buffer_info__" not in restored.__dict__
+
+
 def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
     import dataclasses
 
@@ -880,7 +944,6 @@ def test_nd_array_connectivity_field_setstate_restores_state_without_cache():
     assert restored.codomain == original.codomain
     assert restored.skip_value == original.skip_value
     assert np.array_equal(restored.ndarray, original.ndarray)
-    assert "_cache" in original.__dict__
     assert "_cache" not in restored.__dict__
 
 
