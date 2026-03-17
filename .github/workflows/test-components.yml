@@ -16,7 +16,7 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: get-versions
         uses: ./.github/actions/get-python-versions
 
@@ -26,12 +26,12 @@ jobs:
     outputs:
       test-sessions-exclusions: ${{ steps.test-sessions-exclusions.outputs.test-sessions-exclusions }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Use a deep clone to get target PR branch
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -90,9 +90,9 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
