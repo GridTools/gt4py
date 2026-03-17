@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import functools
 from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
@@ -28,6 +29,18 @@ from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.utils import RecursionGuard
 
 
+#: Generate a custom pickler which ignores "location" attribute for `eve.Node`s.
+nonlocated_node_pickler = eve_concepts.skipping_fields_node_pickler("location")
+
+#: Generate an unique fingerprint for an `eve.Node` that is location agnostic.
+nonlocated_fingerprint: eve_concepts.NodeFingerprinter = functools.partial(
+    eve_utils.content_hash, pickler=nonlocated_node_pickler
+)
+
+#: Compare two `eve.Node`s for equality, ignoring their `location` attribute.
+nonlocated_node_eq = functools.partial(eve_concepts.eq_node, fingerprint_fn=nonlocated_fingerprint)
+
+
 class LocatedNode(Node):
     location: SourceLocation = eve.field(repr=False, compare=False)
 
@@ -35,7 +48,7 @@ class LocatedNode(Node):
         """
         Generates a unique hash string for this node that is location agnostic.
         """
-        return eve_utils.content_hash(self, pickler=eve_concepts.selective_node_pickler("location"))
+        return nonlocated_fingerprint(self)
 
     def __str__(self) -> str:
         from gt4py.next.ffront.foast_pretty_printer import pretty_format

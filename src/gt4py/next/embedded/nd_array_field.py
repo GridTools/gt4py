@@ -19,6 +19,7 @@ from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import (
+    Any,
     ClassVar,
     Iterable,
     Never,
@@ -490,9 +491,35 @@ class NdArrayConnectivityField(
             self.domain.dim_index(self.codomain) is not None
         )
 
-    @functools.cached_property
-    def _cache(self) -> dict:
-        return {}
+    @classmethod
+    def from_array(  # type: ignore[override]
+        cls,
+        data: npt.ArrayLike | core_defs.NDArrayObject,
+        /,
+        codomain: common.DimT,
+        *,
+        domain: common.DomainLike,
+        dtype: Optional[core_defs.DTypeLike] = None,
+        skip_value: Optional[core_defs.IntegralScalar] = None,
+    ) -> NdArrayConnectivityField:
+        domain = common.domain(domain)
+        xp = cls.array_ns
+
+        xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
+        array = xp.asarray(data, dtype=xp_dtype)
+
+        if dtype is not None:
+            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
+
+        assert issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES)
+
+        assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
+        assert len(domain) == array.ndim
+        assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
+
+        assert isinstance(codomain, common.Dimension)
+
+        return cls(domain, array, codomain, _skip_value=skip_value)
 
     @classmethod
     def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
@@ -523,35 +550,20 @@ class NdArrayConnectivityField(
 
         return self._kind
 
-    @classmethod
-    def from_array(  # type: ignore[override]
-        cls,
-        data: npt.ArrayLike | core_defs.NDArrayObject,
-        /,
-        codomain: common.DimT,
-        *,
-        domain: common.DomainLike,
-        dtype: Optional[core_defs.DTypeLike] = None,
-        skip_value: Optional[core_defs.IntegralScalar] = None,
-    ) -> NdArrayConnectivityField:
-        domain = common.domain(domain)
-        xp = cls.array_ns
+    # This embedded run-time cache is only used to speed up repeated calls to
+    # `inverse_image` and `restrict`, and it should not be considered part of
+    # the connectivity field definition, and therefore it should not be serialized.
+    @functools.cached_property
+    def _cache(self) -> dict:
+        return {}
 
-        xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
-        array = xp.asarray(data, dtype=xp_dtype)
+    def __getstate__(self) -> dict[str, Any]:
+        state = self.__dict__.copy()
+        state.pop("_cache", None)
+        return state
 
-        if dtype is not None:
-            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
-
-        assert issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES)
-
-        assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
-        assert len(domain) == array.ndim
-        assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
-
-        assert isinstance(codomain, common.Dimension)
-
-        return cls(domain, array, codomain, _skip_value=skip_value)
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        object.__setattr__(self, "__dict__", state)
 
     def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))

@@ -58,6 +58,7 @@ from .extended_typing import (
     Optional,
     ParamSpec,
     Set,
+    SingleDispatchCallable,
     Tuple,
     Type,
     TypeVar,
@@ -653,6 +654,58 @@ def content_hash(
     assert isinstance(result, str)
 
     return result
+
+
+class CustomReducePickler(pickle.Pickler):
+    reducer_override: SingleDispatchCallable[[Any], tuple]
+
+    @overload
+    def register(
+        self, cls: Any, func: Literal[None] = None
+    ) -> Callable[[Callable[[Any], tuple]], Callable[[Any], tuple]]: ...
+
+    @overload
+    def register(self, cls: Any, func: Callable[[Any], tuple]) -> Callable[[Any], tuple]: ...
+
+    def register(
+        self, cls: Any, func: Callable[[Any], tuple] | None = None
+    ) -> Callable[[Callable[[Any], tuple]], Callable[[Any], tuple]] | Callable[[Any], tuple]:
+        return self.reducer_override.register(cls, func)
+
+
+def custom_pickler(
+    reducer: Callable[[Any], tuple],
+    name: str | None = None,
+) -> type[CustomReducePickler]:
+    """
+    Return a custom `pickle.Pickler` class that uses `reducer` to serialize objects.
+    """
+    if not xtyping.is_single_dispatch_callable(reducer):
+        raise ValueError("Reducer must be a single-dispatch callable.")
+
+    pickler = type(
+        name or f"CustomReducePickler_{name or id(reducer)}",
+        (CustomReducePickler,),
+        {"reducer_override": staticmethod(reducer)},
+    )
+
+    return pickler
+
+
+def custom_pickler_from_reducers(
+    custom_reducers: dict[type, Callable[[Any], tuple]],
+    name: str | None = None,
+) -> type[CustomReducePickler]:
+    """
+    Return a custom `pickle.Pickler` class that uses `reducer` to serialize objects.
+    """
+    reducer = functools.singledispatch(
+        cast(Callable[[Any], tuple | types.NotImplementedType], lambda _: NotImplemented)
+    )
+    for cls, func in custom_reducers.items():
+        reducer.register(cls)(func)
+
+    return custom_pickler(reducer, name=name)
 
 
 ddiff = deepdiff.diff.DeepDiff
