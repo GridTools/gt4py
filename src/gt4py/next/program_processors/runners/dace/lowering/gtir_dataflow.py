@@ -1598,7 +1598,8 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # a new iterator with a shifted index along one dimension
         shifted_indices = dict(
-            (new_dim, new_index) if dim == old_dim else (dim, index) for dim, index in it.indices.items()
+            (new_dim, new_index) if dim == old_dim else (dim, index)
+            for dim, index in it.indices.items()
         )
         return IteratorExpr(it.field, it.gt_dtype, it.field_domain, shifted_indices)
 

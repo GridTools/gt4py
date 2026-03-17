@@ -1392,10 +1392,12 @@ def flip_staggered(dim: Dimension) -> Dimension:
     else:
         return Dimension(f"{_STAGGERED_PREFIX}{dim.value}", dim.kind)
 
+
 def as_non_staggered(dim: Dimension) -> Dimension:
     if is_staggered(dim):
         return flip_staggered(dim)
     return dim
+
 
 def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> CartesianConnectivity:
     if isinstance(offset, float):
