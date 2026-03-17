@@ -496,6 +496,7 @@ def test_scan_unused_parameter(cartesian_case):
     )
 
 
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_single_value_field(cartesian_case):
     @gtx.field_operator
     def testee_fo(a: cases.IKField) -> cases.IKField:
@@ -1199,6 +1200,7 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_domain_tuple(cartesian_case):
     @gtx.field_operator
     def fieldop_domain_tuple(
@@ -1371,6 +1373,20 @@ def test_constant_closure_vars(cartesian_case):
 
     cases.verify_with_default_data(
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+    )
+
+    import enum
+
+    class Constants(np.float64, enum.Enum):
+        PI = 3.142
+        E = 2.718
+
+    @gtx.field_operator
+    def consume_constants(input: cases.IFloatField) -> cases.IFloatField:
+        return Constants.PI * Constants.E * input
+
+    cases.verify_with_default_data(
+        cartesian_case, consume_constants, ref=lambda input: Constants.PI * Constants.E * input
     )
 
 
