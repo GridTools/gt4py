@@ -414,3 +414,107 @@ def test_xenumerate():
     from gt4py.eve.utils import xenumerate
 
     assert list(xenumerate(string.ascii_letters[:3])) == [(0, "a"), (1, "b"), (2, "c")]
+
+
+# -- Custom Pickler utilities --
+@dataclasses.dataclass
+class _Offseter:
+    offset: int
+    calls_log: list[int] = dataclasses.field(default_factory=list)
+
+    def __call__(self, a: int) -> int:
+        self.calls_log.append(a)
+        return a + self.offset
+
+
+def test_custom_pickler_with_singledispatch_reducer():
+    import functools
+    import io
+    import pickle
+
+    from gt4py.eve.utils import custom_pickler, CustomReducePickler
+
+    offseter = _Offseter(4)
+    offseter(2)
+    offseter(3)
+    assert offseter.calls_log == [2, 3]
+
+    @functools.singledispatch
+    def my_reducer(obj):
+        return NotImplemented
+
+    my_reducer.register(
+        _Offseter,
+        lambda obj: (
+            obj.__class__,
+            (),
+            (
+                ("offset", obj.offset),
+                ("calls_log", []),
+            ),
+        ),
+    )
+
+    pickler_cls = custom_pickler(my_reducer, name="MyCustomPickler")
+
+    assert issubclass(pickler_cls, CustomReducePickler)
+    assert pickler_cls.__name__ == "MyCustomPickler"
+
+    # Verify we can instantiate the pickler
+    buf = io.BytesIO()
+    pickler = pickler_cls(buf)
+    assert hasattr(pickler, "reducer_override")
+
+    # Verify the custom pickler is used for objects of type _Offseter
+    # and that calls_log is ignored
+    pickler.dump([1, offseter])
+    custom_dump_1 = buf.getvalue()
+
+    std_buf = io.BytesIO()
+    std_pickler = pickle.Pickler(std_buf)
+    std_pickler.dump([1, offseter])
+    std_dump_1 = std_buf.getvalue()
+
+    assert custom_dump_1 != std_dump_1
+
+    buf2 = io.BytesIO()
+    pickler = pickler_cls(buf2)
+    pickler.dump([1, _Offseter(4)])  # calls_log should be an empty list
+    custom_dump_2 = buf2.getvalue()
+
+    assert custom_dump_1 == custom_dump_2
+
+    # Verify the custom pickler is not used for objects of other types
+    buf = io.BytesIO()
+    pickler = pickler_cls(buf)
+    pickler.dump([1])
+    custom_dump = buf.getvalue()
+
+    std_buf = io.BytesIO()
+    std_pickler = pickle.Pickler(std_buf)
+    std_pickler.dump([1])
+    std_dump = std_buf.getvalue()
+
+    # This time they should be equal
+    assert custom_dump == std_dump
+
+
+def test_custom_pickler_rejects_non_singledispatch_reducer():
+    from gt4py.eve.utils import custom_pickler
+
+    def not_singledispatch(obj):
+        return (type(obj), (obj,))
+
+    with pytest.raises(ValueError, match="single-dispatch"):
+        custom_pickler(not_singledispatch)
+
+
+def test_custom_pickler_from_reducers_creates_subclass():
+    from gt4py.eve.utils import custom_pickler_from_reducers, CustomReducePickler
+
+    reducers = {int: (lambda obj: (int, (obj,)))}
+    pickler_cls = custom_pickler_from_reducers(reducers, name="TestPickler")
+
+    assert issubclass(pickler_cls, CustomReducePickler)
+    assert pickler_cls.__name__ == "TestPickler"
+    assert hasattr(pickler_cls, "reducer_override")
