@@ -702,12 +702,9 @@ class TestDimensionComparisonOperators:
         assert result == Domain(dims=(IDim,), ranges=(UnitRange(3, 4),))
 
     def test_ne_int(self):
-        """Dimension.__ne__ with int returns tuple of two Domains."""
-        result = IDim != 3
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        assert result[0] == Domain(dims=(IDim,), ranges=(UnitRange(Infinity.NEGATIVE, 3),))
-        assert result[1] == Domain(dims=(IDim,), ranges=(UnitRange(4, Infinity.POSITIVE),))
+        """Dimension.__ne__ with int raises NotImplementedError."""
+        with pytest.raises(NotImplementedError):
+            IDim != 3
 
     def test_reverse_gt(self):
         assert (5 > IDim) == (IDim < 5)
@@ -725,7 +722,8 @@ class TestDimensionComparisonOperators:
         assert (3 == IDim) == (IDim == 3)
 
     def test_reverse_ne(self):
-        assert (3 != IDim) == (IDim != 3)
+        with pytest.raises(NotImplementedError):
+            3 != IDim
 
 
 class TestDomainAndOperator:
@@ -752,12 +750,11 @@ class TestDomainOrOperator:
         result = d1 | d2
         assert result == Domain(dims=(IDim,), ranges=(UnitRange(0, 8),))
 
-    def test_same_dim_disjoint(self):
+    def test_same_dim_disjoint_raises(self):
         d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 3),))
         d2 = Domain(dims=(IDim,), ranges=(UnitRange(5, 8),))
-        result = d1 | d2
-        assert isinstance(result, tuple)
-        assert len(result) == 2
+        with pytest.raises(NotImplementedError):
+            d1 | d2
 
     def test_multidim_raises(self):
         d1 = Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 3), UnitRange(0, 3)))

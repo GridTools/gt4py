@@ -138,20 +138,15 @@ class Dimension:
     @overload
     def __ne__(self, value: Dimension) -> bool: ...
     @overload
-    def __ne__(self, value: core_defs.IntegralScalar) -> tuple[Domain, Domain]: ...  # type: ignore[overload-overlap]  # intentionally returns tuple[Domain, Domain], not bool
-    @overload
     def __ne__(self, value: object) -> bool: ...
-    def __ne__(self, value: object) -> bool | tuple[Domain, Domain]:
-        # TODO(havogt): Non-consecutive domains are represented as tuples, this limits domain operations to
-        # simple, common cases. E.g. `I != 3 & I != 5` can't be handled as it would require a custom
-        # domain tuple type and operations on it, see ADR 22.
+    def __ne__(self, value: object) -> bool:
         if isinstance(value, Dimension):
             return self.value != value.value
         elif isinstance(value, core_defs.INTEGRAL_TYPES):
-            int_value = cast(core_defs.IntegralScalar, value)
-            return (
-                Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, int_value),)),
-                Domain(dims=(self,), ranges=(UnitRange(int_value + 1, Infinity.POSITIVE),)),
+            raise NotImplementedError(
+                f"'Dimension.__ne__' with an integer value produces two disjoint domains, "
+                f"which is not supported. Use 'concat_where(dim < value, ...) "
+                f"concat_where(dim > value, ...)' to express the condition, see ADR 22."
             )
         else:
             return True
@@ -547,16 +542,17 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
-    def __or__(self, other: Domain) -> Domain | tuple[Domain, Domain]:
+    def __or__(self, other: Domain) -> Domain:
         """
-        Union of `Domain`s, currently limited to 1D domains.
+        Union of `Domain`s, currently limited to 1D overlapping or adjacent domains.
 
-        Returns a single `Domain` if the ranges overlap or are adjacent,
-        otherwise returns a tuple of two disjoint `Domain`s.
+        Raises `NotImplementedError` for multidimensional domains or disjoint 1D domains.
+        See ADR 22.
         """
         if self.ndim > 1 or other.ndim > 1:
-            # TODO(havogt): Domain union is currently limited to 1D domains, see ADR 22.
-            raise NotImplementedError("Union of multidimensional domains is not supported.")
+            raise NotImplementedError(
+                "Union of multidimensional domains is not supported, see ADR 22."
+            )
         if self.ndim == 0:
             return other
         if other.ndim == 0:
@@ -567,7 +563,10 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
                 dims=(self.dims[0],),
                 ranges=(UnitRange(first.ranges[0].start, second.ranges[0].stop),),
             )
-        return (first, second)
+        raise NotImplementedError(
+            f"Union of disjoint domains '{first}' and '{second}' is not supported. "
+            f"Use nested 'concat_where' to express non-consecutive conditions, see ADR 22."
+        )
 
     @functools.cached_property
     def slice_at(self) -> utils.IndexerCallable[slice, Domain]:

@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2026-03-12
-- **Updated**: 2026-03-12
+- **Updated**: 2026-03-17
 
 In embedded execution, `concat_where` is, for now, limited to simple but common cases.
 
@@ -15,28 +15,27 @@ We do not support `concat_where` in cases
 
 - where the domain would be infinite and therefore can't be represented as an ndarray, e.g. `concat_where(I < 0, 0.0, somefield)` where the scalar 0.0 would be broadcasted to a field reaching to -infinity;
 - with multi-dimensional domains, e.g. `concat_where(I > 0 | J > 0, a, b)`. These cases need to be represented by a nested `concat_where(I > 0, a, concat_where(J > 0, a, b))`;
-
-Additionally, we only support the most basic cases of non-consecutive domains: a tuple of `Domain`s resulting from e.g. `I != 0` or the equivalent `I < 0 | I > 0`. Operations on tuples of `Domain`s are not supported.
+- with non-consecutive (disjoint) domain conditions, e.g. `concat_where(I != 0, a, b)`. These cases need to be expressed using nested `concat_where`, e.g. `concat_where(I < 0, a, concat_where(I > 0, a, b))`.
 
 ## Context
 
-`concat_where` requires expressing conditions like `I != i`, which produces two disjoint 1D domains (everything before index `i` and everything after). We need a way to represent these non-consecutive domains.
+`concat_where` requires expressing conditions like `I != i`, which would produce two disjoint 1D domains (everything before index `i` and everything after). We need a way to represent these non-consecutive domains.
 
 A complete implementation would require designing how to handle fields on non-hypercubic domains. Currently, `Domain` is a Cartesian product of per-dimension `UnitRange`s, which inherently describes hypercubic (rectangular) regions. Supporting arbitrary non-consecutive domains in multiple dimensions would mean fields could live on non-rectangular regions, requiring fundamental changes to field storage, slicing, and iteration.
 
 ## Decision
 
-We use a simple tuple-of-`Domain` representation for non-consecutive domains, restricted to:
+Non-consecutive (disjoint) domains are **not supported** in the domain expression API:
 
-- **1D only**: `Domain.__or__` raises `NotImplementedError` for multidimensional domains.
-- **At most 2 domains**: `Dimension.__ne__` produces exactly 2 disjoint domains. No attempt is made to support arbitrary numbers of disjoint regions.
+- `Dimension.__ne__(value)` raises `NotImplementedError` when called with an integer value, since it would produce two disjoint domains.
+- `Domain.__or__` raises `NotImplementedError` for both multidimensional domains and for 1D domains that are disjoint (non-overlapping and non-adjacent).
 
-This is sufficient for the most common `concat_where` use case (`I != i` splits a dimension into two parts) without requiring a general solution for non-hypercubic domains/fields.
+The domain expression API only supports operations that result in a single contiguous `Domain`.
 
 ## Consequences
 
-- `concat_where` works for 1D domain conditions, which covers the primary use case of vertical level exclusion.
-- Combining multiple exclusions (e.g. `(I != 2) & (I != 5)`) is not supported because it would require a custom tuple type to implement the intersection/union operations.
+- `concat_where` with `I != i` must be rewritten as `concat_where(I < i, ..., concat_where(I > i, ..., ...))`.
+- This keeps the domain expression API simple: all supported operations return a single `Domain`.
 
 ## Alternatives considered
 
