@@ -231,14 +231,6 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     return lambda obj: getitem_(obj, key, default=default)
 
 
-@functools.cache
-def get_dataclass_field_names(dataclass: type) -> tuple[str, ...]:
-    """Return the field names of a dataclass."""
-    if not dataclasses.is_dataclass(dataclass):
-        raise TypeError(f"Expected a dataclass or dataclass instance, got '{dataclass}'")
-    return tuple(field.name for field in dataclasses.fields(dataclass))
-
-
 _P = ParamSpec("_P")
 _S = TypeVar("_S")
 _T = TypeVar("_T")

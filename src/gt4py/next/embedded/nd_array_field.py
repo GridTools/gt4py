@@ -18,10 +18,10 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import (
     Any,
     ClassVar,
+    Final,
     Iterable,
     Never,
     Optional,
@@ -102,6 +102,32 @@ def _make_builtin(
 _Value: TypeAlias = common.Field | core_defs.ScalarT
 _P = ParamSpec("_P")
 _R = TypeVar("_R", _Value, tuple[_Value, ...])
+
+
+_GT4PY_FIELD_METADATA_NS: Final = "__gt4py__"
+
+
+def _gt4py_field_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
+    """Helper function to create a metadata dictionary for dataclass fields with a GT4Py-specific namespace."""
+    return {_GT4PY_FIELD_METADATA_NS: {**kwargs}}
+
+
+@functools.cache
+def _get_pickleable_field_names(dataclass_type: type) -> tuple[str, ...]:
+    """Return the field names of a dataclass type."""
+    if not isinstance(dataclass_type, type) or not dataclasses.is_dataclass(dataclass_type):
+        raise TypeError(f"Expected a dataclass type, got '{dataclass_type}'")
+
+    names = []
+    for field in dataclasses.fields(dataclass_type):
+        metadata = field.metadata.get("_GT4PY_FIELD_METADATA_NS", None)
+        # Individual fields can opt out of serialization via dataclass
+        # definitions:  field(<other args>, metadata=_gt4py_field_metadata(skip_pickle=True))
+        if metadata and metadata.get("skip_pickle"):
+            continue
+        names.append(field.name)
+
+    return tuple(names)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -448,9 +474,7 @@ class NdArrayField(
     def __getstate__(self) -> dict[str, Any]:
         # Make sure we only copy dataclass instance fields to get rid of runtime-only
         # cached attributes that must not influence serialization or fingerprints.
-        return {
-            name: getattr(self, name) for name in eve_utils.get_dataclass_field_names(type(self))
-        }
+        return {name: getattr(self, name) for name in _get_pickleable_field_names(type(self))}
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         if hasattr(self, "__dict__"):
