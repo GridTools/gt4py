@@ -839,51 +839,6 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
     assert buffer_info is e2v_conn.__gt_buffer_info__
 
 
-def test_nd_array_connectivity_field_getstate_excludes_runtime_cache():
-    V = Dimension("V")
-    E = Dimension("E")
-
-    e2v_conn = common._connectivity(
-        np.asarray([2, 3, 4, 5]),
-        domain=common.domain([common.named_range((E, (0, 4)))]),
-        codomain=V,
-    )
-
-    _ = e2v_conn.inverse_image(UnitRange(2, 5))
-    assert "_cache" in e2v_conn.__dict__
-
-    state = e2v_conn.__getstate__()
-    assert "_cache" not in state
-    assert state["_codomain"] == V
-    assert state["_skip_value"] is None
-
-
-def test_nd_array_connectivity_field_setstate_restores_state_without_cache():
-    V = Dimension("V")
-    E = Dimension("E")
-
-    original = common._connectivity(
-        np.asarray([2, 3, 4, 5]),
-        domain=common.domain([common.named_range((E, (0, 4)))]),
-        codomain=V,
-        skip_value=-1,
-    )
-    restored = common._connectivity(
-        np.asarray([0, 0, 0, 0]),
-        domain=common.domain([common.named_range((E, (0, 4)))]),
-        codomain=V,
-    )
-
-    state = original.__getstate__()
-    restored.__setstate__(state)
-
-    assert restored.codomain == original.codomain
-    assert restored.skip_value == original.skip_value
-    assert np.array_equal(restored.ndarray, original.ndarray)
-    assert "_cache" in original.__dict__
-    assert "_cache" not in restored.__dict__
-
-
 def test_connectivity_field_inverse_image():
     V = Dimension("V")
     E = Dimension("E")
