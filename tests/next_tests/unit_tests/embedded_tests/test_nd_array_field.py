@@ -8,6 +8,7 @@
 
 import math
 import operator
+import pickle
 from typing import Callable, Iterable, Optional
 
 import numpy as np
@@ -826,14 +827,14 @@ def test_nd_array_field_getstate_excludes_cached_properties():
 
     # Access a cached property to populate the cache
     _ = field.__gt_buffer_info__
-    assert "__gt_buffer_info__" in field.__dict__ or hasattr(field, "__gt_buffer_info__")
+    assert "__gt_buffer_info__" in field.__dict__
 
     state = field.__getstate__()
 
-    # State should only contain dataclass fields (_domain, _ndarray, array_ns)
+    # State should only contain dataclass instance fields (_domain, _ndarray)
     assert "_domain" in state
     assert "_ndarray" in state
-    assert "array_ns" in state  # ClassVar is included in __dataclass_fields__
+    assert "array_ns" not in state  # ClassVar
     assert "__gt_buffer_info__" not in state
     assert "__dict__" not in state
 
@@ -861,18 +862,9 @@ def test_nd_array_field_pickle_roundtrip():
     _ = original.__gt_buffer_info__
     assert "__gt_buffer_info__" in original.__dict__
 
-    # Create a new field and restore the state of the original
-    new_data = np.zeros((3, 4))
-    restored = constructors.as_field((D0, D1), new_data)
-
-    # Restore using __getstate__ and __setstate__
-    state = original.__getstate__()
-    # Remove non-serializable ClassVar 'array_ns' for this test
-    state_without_module = {k: v for k, v in state.items() if k != "array_ns"}
-
-    # Manually restore the serializable parts
-    for key, value in state_without_module.items():
-        object.__setattr__(restored, key, value)
+    # Perform a real pickle roundtrip, exercising __getstate__ and __setstate__
+    pickled = pickle.dumps(original)
+    restored = pickle.loads(pickled)
 
     # Verify restoration
     assert restored.domain == original.domain

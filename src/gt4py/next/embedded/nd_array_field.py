@@ -18,6 +18,7 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import (
     Any,
     ClassVar,
@@ -445,15 +446,17 @@ class NdArrayField(
         return new_domain, slice_
 
     def __getstate__(self) -> dict[str, Any]:
-        # Make sure we only copy dataclass fields to get rid of runtime-only cached attributes
-        # that must not influence serialization or fingerprints.
-        state = {key: getattr(self, key) for key in self.__dataclass_fields__.keys()}
-        return state
+        # Make sure we only copy dataclass instance fields to get rid of runtime-only
+        # cached attributes that must not influence serialization or fingerprints.
+        return {
+            name: getattr(self, name) for name in eve_utils.get_dataclass_field_names(type(self))
+        }
 
     def __setstate__(self, state: dict[str, Any]) -> None:
-        try:
-            object.__setattr__(self, "__dict__", state)
-        except AttributeError:
+        if hasattr(self, "__dict__"):
+            self.__dict__.clear()
+            self.__dict__.update(state)
+        else:
             # In case the dataclass is frozen or uses slots, we need to use `object.__setattr__` for each field
             for key, value in state.items():
                 object.__setattr__(self, key, value)
