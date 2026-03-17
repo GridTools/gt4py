@@ -1015,91 +1015,119 @@ def test_hyperslice(index_array, expected):
 
 @pytest.mark.uses_concat_where
 @pytest.mark.parametrize(
-    "mask_data, true_data, false_data, expected",
+    "cond, true_data, false_data, expected",
     [
+        (D0 == 0, ([0, 0], None), ([1, 1], None), ([0, 1], None)),
+        (D0 == -1, ([0, 0], {D0: (-1, 1)}), ([1, 1], {D0: (0, 2)}), ([0, 1, 1], {D0: (-1, 2)})),
+        (D0 < 0, ([0, 0], {D0: (-2, 0)}), ([1, 1], {D0: (0, 2)}), ([0, 0, 1, 1], {D0: (-2, 2)})),
+        (D0 == 1, ([0, 0, 0], None), ([1, 1, 1], None), ([1, 0, 1], None)),
+        # non-contiguous domain
+        (D0 <= 0, ([0, 0], {D0: (-2, 0)}), ([1, 1], {D0: (0, 2)}), None),
+        # empty result domain
         (
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], None),
-            ([6, 7, 8, 9, 10], None),
-            ([1, 7, 3, 9, 5], None),
-        ),
-        (
-            ([True, False, True, False], None),
-            ([1, 2, 3, 4, 5], {D0: (-2, 3)}),
-            ([6, 7, 8, 9], {D0: (1, 5)}),
-            ([3, 6, 5, 8], {D0: (0, 4)}),
-        ),
-        (
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], {D0: (-2, 3)}),
-            ([6, 7, 8, 9, 10], {D0: (1, 6)}),
-            ([3, 6, 5, 8], {D0: (0, 4)}),
-        ),
-        (
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], {D0: (-2, 3)}),
-            ([6, 7, 8, 9, 10], {D0: (2, 7)}),
-            None,
-        ),
-        (
-            # empty result domain
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], {D0: (-5, 0)}),
-            ([6, 7, 8, 9, 10], {D0: (5, 10)}),
+            D0 < 0,
+            ([0, 0], {D0: (0, 2)}),
+            ([1, 1], {D0: (-2, 0)}),
             ([], {D0: (0, 0)}),
         ),
+        # broadcasting from scalar
+        # pytest.param(
+        #     D0 == 0,
+        #     ([0, 0], None),
+        #     (1, None),
+        #     ([0, 1], None),
+        #     marks=pytest.mark.embedded_concat_where_infinite_domain,
+        # ),
+        # different dimensions
+        # (
+        #     D0 == 0,
+        #     ([0, 0], {D0: (0, 2)}),
+        #     ([1, 1], {D1: (0, 2)}),
+        #     # TODO
+        # ),
+        # 2D
         (
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], {D0: (-4, 1)}),
-            ([6, 7, 8, 9, 10], {D0: (5, 10)}),
-            ([5], {D0: (0, 1)}),
+            ((D0 == 0) & (D1 == 0)),
+            ([[0, 0], [0, 0]], None),
+            ([[1, 1], [1, 1]], None),
+            ([[0, 1], [1, 1]], None),
         ),
-        (
-            # broadcasting true_field
-            ([True, False, True, False, True], {D0: 5}),
-            ([1, 2, 3, 4, 5], {D0: 5}),
-            ([[6, 11], [7, 12], [8, 13], [9, 14], [10, 15]], {D0: 5, D1: 2}),
-            ([[1, 1], [7, 12], [3, 3], [9, 14], [5, 5]], {D0: 5, D1: 2}),
-        ),
-        (
-            ([True, False, True, False, True], None),
-            (42, None),
-            ([6, 7, 8, 9, 10], None),
-            ([42, 7, 42, 9, 42], None),
-        ),
-        (
-            # parts of mask_ranges are concatenated
-            ([True, True, False, False], None),
-            ([1, 2], {D0: (1, 3)}),
-            ([3, 4], {D0: (1, 3)}),
-            ([1, 4], {D0: (1, 3)}),
-        ),
-        (
-            # parts of mask_ranges are concatenated and yield non-contiguous domain
-            ([True, False, True, False], None),
-            ([1, 2], {D0: (0, 2)}),
-            ([3, 4], {D0: (2, 4)}),
-            None,
-        ),
+        # (
+        #     ([True, False, True, False, True], None),
+        #     ([1, 2, 3, 4, 5], None),
+        #     ([6, 7, 8, 9, 10], None),
+        #     ([1, 7, 3, 9, 5], None),
+        # ),
+        # (
+        #     ([True, False, True, False], None),
+        #     ([1, 2, 3, 4, 5], {D0: (-2, 3)}),
+        #     ([6, 7, 8, 9], {D0: (1, 5)}),
+        #     ([3, 6, 5, 8], {D0: (0, 4)}),
+        # ),
+        # (
+        #     ([True, False, True, False, True], None),
+        #     ([1, 2, 3, 4, 5], {D0: (-2, 3)}),
+        #     ([6, 7, 8, 9, 10], {D0: (1, 6)}),
+        #     ([3, 6, 5, 8], {D0: (0, 4)}),
+        # ),
+        # (
+        #     ([True, False, True, False, True], None),
+        #     ([1, 2, 3, 4, 5], {D0: (-2, 3)}),
+        #     ([6, 7, 8, 9, 10], {D0: (2, 7)}),
+        #     None,
+        # ),
+        # (
+        #     # empty result domain
+        #     ([True, False, True, False, True], None),
+        #     ([1, 2, 3, 4, 5], {D0: (-5, 0)}),
+        #     ([6, 7, 8, 9, 10], {D0: (5, 10)}),
+        #     ([], {D0: (0, 0)}),
+        # ),
+        # (
+        #     ([True, False, True, False, True], None),
+        #     ([1, 2, 3, 4, 5], {D0: (-4, 1)}),
+        #     ([6, 7, 8, 9, 10], {D0: (5, 10)}),
+        #     ([5], {D0: (0, 1)}),
+        # ),
+        # (
+        #     # broadcasting true_field
+        #     ([True, False, True, False, True], {D0: 5}),
+        #     ([1, 2, 3, 4, 5], {D0: 5}),
+        #     ([[6, 11], [7, 12], [8, 13], [9, 14], [10, 15]], {D0: 5, D1: 2}),
+        #     ([[1, 1], [7, 12], [3, 3], [9, 14], [5, 5]], {D0: 5, D1: 2}),
+        # ),
+        # (
+        #     ([True, False, True, False, True], None),
+        #     (42, None),
+        #     ([6, 7, 8, 9, 10], None),
+        #     ([42, 7, 42, 9, 42], None),
+        # ),
+        # (
+        #     # parts of mask_ranges are concatenated
+        #     ([True, True, False, False], None),
+        #     ([1, 2], {D0: (1, 3)}),
+        #     ([3, 4], {D0: (1, 3)}),
+        #     ([1, 4], {D0: (1, 3)}),
+        # ),
+        # (
+        #     # parts of mask_ranges are concatenated and yield non-contiguous domain
+        #     ([True, False, True, False], None),
+        #     ([1, 2], {D0: (0, 2)}),
+        #     ([3, 4], {D0: (2, 4)}),
+        #     None,
+        # ),
     ],
 )
 def test_concat_where(
     nd_array_implementation,
-    mask_data: tuple[list[bool], Optional[common.DomainLike]],
+    cond: common.Domain,
     true_data: tuple[list[int], Optional[common.DomainLike]],
     false_data: tuple[list[int], Optional[common.DomainLike]],
     expected: Optional[tuple[list[int], Optional[common.DomainLike]]],
 ):
-    mask_lst, mask_domain = mask_data
     true_lst, true_domain = true_data
     false_lst, false_domain = false_data
 
-    mask_field = _make_field_or_scalar(
-        mask_lst,
-        nd_array_implementation=nd_array_implementation,
-        domain=common.domain(mask_domain) if mask_domain is not None else None,
-        dtype=bool,
-    )
     true_field = _make_field_or_scalar(
         true_lst,
         nd_array_implementation=nd_array_implementation,
@@ -1115,7 +1143,7 @@ def test_concat_where(
 
     if expected is None:
         with pytest.raises(embedded_exceptions.NonContiguousDomain):
-            nd_array_field._concat_where(mask_field, true_field, false_field)
+            nd_array_field._concat_where(cond, true_field, false_field)
     else:
         expected_lst, expected_domain_like = expected
         expected_array = np.asarray(expected_lst)
@@ -1125,7 +1153,7 @@ def test_concat_where(
             else _make_default_domain(expected_array.shape)
         )
 
-        result = nd_array_field._concat_where(mask_field, true_field, false_field)
+        result = nd_array_field._concat_where(cond, true_field, false_field)
 
         assert expected_domain == result.domain
         np.testing.assert_allclose(result.asnumpy(), expected_array)
