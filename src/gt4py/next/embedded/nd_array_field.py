@@ -818,11 +818,11 @@ def _hyperslice(
 # -- Specialized implementations for builtin operations on array fields --
 
 NdArrayField.register_builtin_func(
-    fbuiltins.abs,  # type: ignore[attr-defined]
+    fbuiltins.abs,
     NdArrayField.__abs__,
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.power,  # type: ignore[attr-defined]
+    fbuiltins.power,
     NdArrayField.__pow__,
 )
 # TODO gamma
@@ -837,15 +837,15 @@ for name in (
     NdArrayField.register_builtin_func(getattr(fbuiltins, name), _make_builtin(name, name))
 
 NdArrayField.register_builtin_func(
-    fbuiltins.minimum,  # type: ignore[attr-defined]
+    fbuiltins.minimum,
     _make_builtin("minimum", "minimum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.maximum,  # type: ignore[attr-defined]
+    fbuiltins.maximum,
     _make_builtin("maximum", "maximum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.fmod,  # type: ignore[attr-defined]
+    fbuiltins.fmod,
     _make_builtin("fmod", "fmod"),
 )
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
@@ -1180,7 +1180,7 @@ def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdA
     raise AssertionError("This is the NdArrayField implementation of 'fbuiltins.astype'.")
 
 
-NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
+NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type]  # because fbuiltins.astype is overloaded
 
 
 def _get_slices_from_domain_slice(
