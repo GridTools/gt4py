@@ -154,7 +154,7 @@
       def foo(
           mask: CellKField[bool], a: CKTuple[gtx.float64], b: CKTuple[gtx.float64]
       ) -> CKTuple[T]:
-          return gtx.where(mask, b, 0.0)
+          return gtx.where(mask, a, b)
 
   - case: where_real_life
     main: |
