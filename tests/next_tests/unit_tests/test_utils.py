@@ -6,11 +6,88 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import inspect
+import pickle
 import pytest
-from typing import Final
 
+from gt4py.eve import datamodels
 from gt4py.next import utils
+
+
+# Module-level classes so pickle can resolve them by qualified name.
+@dataclasses.dataclass
+class _DataclassModel(utils.MetadataBasedPickling):
+    value: int
+    transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+
+
+@dataclasses.dataclass(slots=True)
+class _SlottedDataclassModel(utils.MetadataBasedPickling):
+    value: int
+    transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+
+
+@datamodels.datamodel(slots=False)
+class _DatamodelModel(utils.MetadataBasedPickling):
+    value: int
+    transient: str = datamodels.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+
+
+class TestGetMetadataBasedGetstate:
+    def test_get_metadata_based_getstate_rejects_non_dataclass_like_type(self):
+        with pytest.raises(TypeError, match="Expected a dataclass or datamodel type"):
+            utils._get_metadata_based_state_getstate(object)
+
+    def test_get_metadata_based_getstate_for_dataclass(self):
+        @dataclasses.dataclass
+        class Model:
+            value: int
+            transient: int = dataclasses.field(metadata=utils.gt4py_metadata(pickle=False))
+
+        getstate = utils._get_metadata_based_state_getstate(Model)
+
+        assert getstate(Model(1, 2)) == {"value": 1}
+        assert getstate is utils._get_metadata_based_state_getstate(Model)
+
+    def test_get_metadata_based_getstate_for_slotted_dataclass(self):
+        @dataclasses.dataclass(slots=True)
+        class Model:
+            value: int
+            transient: int = dataclasses.field(metadata=utils.gt4py_metadata(pickle=False))
+
+        getstate = utils._get_metadata_based_state_getstate(Model)
+
+        assert getstate(Model(1, 2)) == (None, {"value": 1})
+
+
+class TestMetadataBasedPickling:
+    def test_metadata_based_getstate_for_datamodel(self):
+        @datamodels.datamodel(slots=False)
+        class Model:
+            value: int
+            transient: int = datamodels.field(metadata=utils.gt4py_metadata(pickle=False))
+
+        getstate = utils._get_metadata_based_state_getstate(Model)
+        assert getstate(Model(1, 2)) == {"value": 1}
+
+    def test_pickle_roundtrip_dataclass(self):
+        obj = _DataclassModel(value=42, transient="ignored")
+        restored = pickle.loads(pickle.dumps(obj))
+        assert restored.value == 42
+        assert restored.transient == "skip"  # default, since transient is excluded
+
+    def test_pickle_roundtrip_slotted_dataclass(self):
+        obj = _SlottedDataclassModel(value=42, transient="ignored")
+        restored = pickle.loads(pickle.dumps(obj))
+        assert restored.value == 42
+        assert not hasattr(restored, "transient")
+
+    def test_pickle_roundtrip_datamodel(self):
+        obj = _DatamodelModel(value=42, transient="ignored")
+        restored = pickle.loads(pickle.dumps(obj))
+        assert restored.value == 42
+        assert not hasattr(restored, "transient")
 
 
 def test_tree_map_default():

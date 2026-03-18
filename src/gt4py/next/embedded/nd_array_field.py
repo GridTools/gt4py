@@ -28,7 +28,7 @@ from gt4py.eve.extended_typing import (
     TypeVar,
     cast,
 )
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.embedded import (
     common as embedded_common,
     context as embedded_context,
@@ -106,7 +106,7 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 class NdArrayField(
     common.MutableField[common.DimsT, core_defs.ScalarT],
     common.FieldBuiltinFuncRegistry,
-    common.MetadataBasedPickling,
+    utils.MetadataBasedPickling,
 ):
     """
     Shared field implementation for NumPy-like fields.
@@ -488,7 +488,7 @@ class NdArrayConnectivityField(
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
     _kind: Optional[common.ConnectivityKind] = dataclasses.field(
-        default=None, metadata=common.gt4py_metadata(pickle=False)
+        default=None, metadata=utils.gt4py_metadata(pickle=False)
     )
 
     def __post_init__(self) -> None:

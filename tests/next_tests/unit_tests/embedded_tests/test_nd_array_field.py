@@ -839,21 +839,6 @@ def test_nd_array_field_getstate_excludes_cached_properties():
     assert "__dict__" not in state
 
 
-def test_nd_array_field_setstate_restores_state():
-    """Test that __setstate__ properly restores field state without cached data."""
-    original = constructors.as_field((D0, D1), np.arange(6.0).reshape(2, 3))
-
-    # Create a new field and restore state
-    restored = constructors.as_field((D0, D1), np.zeros((2, 3)))
-    original_state = original.__getstate__()
-    restored.__setstate__(original_state)
-
-    # Verify state is restored
-    assert restored.domain == original.domain
-    assert np.array_equal(restored.ndarray, original.ndarray)
-    assert restored.dtype == original.dtype
-
-
 def test_nd_array_field_pickle_roundtrip():
     """Test that NdArrayField can be pickled and unpickled correctly using getstate/setstate."""
     original = constructors.as_field((D0, D1), np.arange(12.0).reshape(3, 4))
@@ -895,7 +880,7 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
     assert buffer_info is e2v_conn.__gt_buffer_info__
 
 
-def test_nd_array_connectivity_field_getstate_excludes_runtime_cache():
+def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
     V = Dimension("V")
     E = Dimension("E")
 
@@ -908,13 +893,17 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_cache():
     _ = e2v_conn.inverse_image(UnitRange(2, 5))
     assert "_cache" in e2v_conn.__dict__
 
+    _ = e2v_conn.__gt_buffer_info__
+    assert "__gt_buffer_info__" in e2v_conn.__dict__
+
     state = e2v_conn.__getstate__()
-    assert "_cache" not in state
     assert state["_codomain"] == V
     assert state["_skip_value"] is None
+    assert "_cache" not in state
+    assert "__gt_buffer_info__" not in state
 
 
-def test_nd_array_connectivity_field_setstate_restores_state_without_cache():
+def test_nd_array_connectivity_field_setstate_restores_state_without_caches():
     V = Dimension("V")
     E = Dimension("E")
 
@@ -930,13 +919,13 @@ def test_nd_array_connectivity_field_setstate_restores_state_without_cache():
         codomain=V,
     )
 
-    state = original.__getstate__()
-    restored.__setstate__(state)
+    restored = pickle.loads(pickle.dumps(original))
 
     assert restored.codomain == original.codomain
     assert restored.skip_value == original.skip_value
     assert np.array_equal(restored.ndarray, original.ndarray)
     assert "_cache" not in restored.__dict__
+    assert "__gt_buffer_info__" not in restored.__dict__
 
 
 def test_connectivity_field_inverse_image():

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import inspect
 import itertools
@@ -16,16 +17,119 @@ from typing import (
     Any,
     Callable,
     ClassVar,
+    Final,
     Optional,
     ParamSpec,
     Sequence,
+    TypeAlias,
     TypeGuard,
     TypeVar,
     cast,
     overload,
 )
 
-from gt4py.eve import utils as eve_utils
+from gt4py.eve import datamodels, utils as eve_utils
+
+
+GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
+
+
+def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
+    """Helper function to store dataclass/datamodel field metadata within a GT4Py namespace."""
+    return {GT4PY_CLASS_METADATA_NS: kwargs}
+
+
+_PicklingState = None | dict[str, Any] | tuple[dict[str, Any] | None, dict[str, Any]]
+_GetStateMethod: TypeAlias = Callable[[Any], _PicklingState]
+_SetStateMethod: TypeAlias = Callable[[Any, _PicklingState], None]
+
+
+@functools.cache
+def _get_metadata_based_state_getstate(cls: type) -> _GetStateMethod:
+    """
+    Helper function to make class-specific `__getstate__` method following the standard implementation.
+    """
+    if not isinstance(cls, type) or not (
+        (is_dataclass := dataclasses.is_dataclass(cls)) or datamodels.is_datamodel(cls)
+    ):
+        raise TypeError(f"Expected a dataclass or datamodel type, got '{cls}'")
+
+    dict_names = []
+    slot_names = []
+    if is_dataclass:
+        field_metadata = {
+            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
+            for field in dataclasses.fields(cls)
+        }
+    else:
+        field_metadata = {
+            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
+            for field in datamodels.get_fields(cls).values()
+        }
+
+    class_slots = set(cls.__slots__) if hasattr(cls, "__slots__") else set()
+    for name, metadata in field_metadata.items():
+        if metadata and metadata.get("pickle", True) is False:
+            continue
+        if name in class_slots:
+            slot_names.append(name)
+        else:
+            dict_names.append(name)
+
+    # It follows the default implementation of object.__getstate__():
+    # - for class instances with no __dict__ and no __slots__ -> state = None.
+    # - for class instances with __dict__ and no __slots__ -> state = self.__dict__.
+    # - for class instances with __dict__ and __slots__ -> state = (self.__dict__, {slot.name: slot.value for all slots}).
+    # - for class instances with __slots__ and no __dict__ -> state = (None, {slot.name: slot.value for all slots}).
+    if not dict_names and not class_slots:
+
+        def __getstate__(self: object) -> _PicklingState:
+            return None
+
+    elif not class_slots:
+
+        def __getstate__(self: object) -> _PicklingState:
+            return {name: getattr(self, name) for name in dict_names}
+
+    elif not dict_names:
+
+        def __getstate__(self: object) -> _PicklingState:
+            return (None, {name: getattr(self, name) for name in slot_names})
+
+    else:
+
+        def __getstate__(self: object) -> _PicklingState:
+            return (
+                {name: getattr(self, name) for name in dict_names},
+                {name: getattr(self, name) for name in slot_names},
+            )
+
+    return cast(_GetStateMethod, __getstate__)
+
+
+class MetadataBasedPickling:
+    """
+    Mixin for adding metadata-based pickling to dataclass-like objects.
+
+    It uses the class field information to select only instance fields which
+    are not marked with `pickle=False` in the 'GT4PY_META' metdata namespace.
+    Individual fields can therefore opt out of pickling.
+    For example: `foo = field(..., metadata=gt4py_metadata(pickle=False))`)
+    """
+
+    def __getstate__(self) -> _PicklingState:
+        """
+        Get the state of the object for pickling.
+
+        It returns the same kind of arguments as the default `__getstate__` implementation,
+        as documented in object.__getstate__.
+        (Check: https://devdocs.io/python~3.14/library/pickle#object.__getstate__)
+        """
+        return _get_metadata_based_state_getstate(type(self))(self)  # type: ignore[arg-type]  # type(self) should be hashable
+
+    # Note: we don't implement `__setstate__` as the output of our custom
+    #  `__getstate__` implementation should be compatible with the default
+    #  implementation of `pickle`.
 
 
 class RecursionGuard:
