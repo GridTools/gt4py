@@ -80,12 +80,12 @@ def test_push_vertical_map_down_for_scope():
     tn.validate_children_and_parents_align(root)
 
     assert len(root.children) == 1
-    assert isinstance(root.children[0], tn.MapScope)
-    assert root.children[0].node.map.params == ["__i", "__j"]
+    assert isinstance(root.children[0], tn.ForScope)
+    assert root.children[0].loop.loop_variable == "__k"
 
     assert len(root.children[0].children) == 1
-    assert isinstance(root.children[0].children[0], tn.ForScope)
-    assert root.children[0].children[0].loop.loop_variable == "__k"
+    assert isinstance(root.children[0].children[0], tn.MapScope)
+    assert root.children[0].children[0].node.map.params == ["__i", "__j"]
 
 
 def test_push_vertical_map_down_multiple_horizontal_maps():

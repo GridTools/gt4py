@@ -43,42 +43,28 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
             // computation here (2)
     """
 
-    def _push_K_loop_in_IJ(self, node: tn.MapScope | tn.ForScope):
-        # take refs before moving things around
-        parent = node
-        grandparent = node.parent
-        grandparent_children = node.parent.children
-        k_loop_index = utils.list_index(grandparent_children, parent)
+    def visit_MapScope(self, scope: tn.MapScope) -> None:
+        if not scope.node.map.params[0].startswith("__k"):
+            return
 
-        for child in node.children:
+        # take refs before moving things around
+        parent = scope.parent
+        parent_children = scope.parent.children
+        k_loop_index = utils.list_index(parent_children, scope)
+
+        for child in scope.children:
             if not isinstance(child, tn.MapScope):
                 raise NotImplementedError("We don't expect anything else than (IJ)-MapScopes here.")
 
-            # New loop with MapEntry (`node`) from parent and children from `child`
-            if isinstance(node, tn.MapScope):
-                new_loop = tn.MapScope(
-                    node=deepcopy(parent.node), children=[c for c in child.children], parent=child
+            child.children = [
+                # New loop with MapEntry (`node`) from parent and children from `child`
+                tn.MapScope(
+                    node=deepcopy(scope.node), children=[c for c in child.children], parent=child
                 )
-            else:
-                assert isinstance(node, tn.ForScope)
-                new_loop = tn.ForScope(
-                    loop=deepcopy(parent.loop),
-                    children=[c for c in child.children],
-                    parent=child,
-                )
-
-            child.children = [new_loop]
-            child.parent = grandparent
-            grandparent_children.insert(k_loop_index, child)
+            ]
+            child.parent = parent
+            parent_children.insert(k_loop_index, child)
             k_loop_index += 1
 
         # delete old (now unused) node
-        grandparent_children.remove(node)
-
-    def visit_MapScope(self, node: tn.MapScope):
-        if node.node.map.params[0].startswith("__k"):
-            self._push_K_loop_in_IJ(node)
-
-    def visit_ForScope(self, node: tn.ForScope):
-        if node.loop.loop_variable.startswith("__k"):
-            self._push_K_loop_in_IJ(node)
+        parent_children.remove(scope)
