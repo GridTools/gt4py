@@ -226,7 +226,7 @@ class HorizontalIntervalParser(IntervalParser):
     @classmethod
     def apply(
         cls,
-        node: Union[ast.Ellipsis, ast.Slice, ast.Subscript, ast.Constant],
+        node: Union[ast.Slice, ast.Subscript, ast.Constant],
         axis_name: str,
         fields: dict[str, nodes.FieldDecl],
         loc: Optional[nodes.Location] = None,
