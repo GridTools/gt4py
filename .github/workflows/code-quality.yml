@@ -15,7 +15,7 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: get-versions
         uses: ./.github/actions/get-python-versions
         with:
@@ -25,18 +25,39 @@ jobs:
     needs: [get-python-versions]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
       - name: "Run pre-commit"
         uses: pre-commit/action@v3.0.1
+
+  typing-exports:
+    needs: [get-python-versions]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: "Run typing checks on exported entities"
+        run: |
+          ./noxfile.py -s 'test_typing_exports-${{ fromJson(needs.get-python-versions.outputs.python-versions) }}'

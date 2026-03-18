@@ -579,6 +579,24 @@ def test_literal_tuple():
 
     assert lowered.expr == reference
 
+    import enum
+
+    class TupEnum(tuple, enum.Enum):
+        A = (4, 2)
+
+    def foo_enum():
+        return TupEnum.A
+
+    parsed = FieldOperatorParser.apply_to_function(foo_enum)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.make_tuple(
+        im.literal("4", "int32"),
+        im.literal("2", "int32"),
+    )
+
+    assert lowered.expr == reference
+
 
 def test_binary_mult():
     def foo(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):

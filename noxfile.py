@@ -330,5 +330,21 @@ def test_storage(
     )
 
 
+@nox.session(python=PYTHON_VERSIONS, tags=["next"])
+def test_typing_exports(session: nox.Session) -> None:
+    """Test GT4Py usability in a typed client context."""
+    install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
+
+    session.run(
+        "pytest",
+        "-sv",
+        "--mypy-testing-base",
+        "typing_tests",
+        "--mypy-only-local-stub",
+        "typing_tests",
+        *session.posargs,
+    )
+
+
 if __name__ == "__main__":
     nox.main()

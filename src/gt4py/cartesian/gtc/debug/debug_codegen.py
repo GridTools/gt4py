@@ -180,7 +180,7 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
 
     def visit_AssignStmt(self, assignment_statement: oir.AssignStmt, **kwargs) -> None:
         self.body.append(
-            f"{self.visit(assignment_statement.left, **kwargs)} = {self.visit(assignment_statement.right, **kwargs)}"
+            f"{self.visit(assignment_statement.left, **kwargs, is_lhs=True)} = {self.visit(assignment_statement.right, **kwargs)}"
         )
 
     # The visitors for the rest of the code-generation all return their strings directly and are in the following section
@@ -275,6 +275,14 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         else:
             offset_str = self.visit(field_access.offset, symtable=symtable, **kwargs)
 
+        # Since the Field-class pads the shape of lower dimensional fields to always be 3d,
+        # we need value extraction for the RHS otherwise we access arrays.
+        # This leads to exceptions since numpy 2.0
+        if not all(dimensions) and not kwargs.pop("is_lhs", False):
+            item_extractor = ".item()"
+        else:
+            item_extractor = ""
+
         if field_access.data_index:
             data_index_access = ",".join(
                 [
@@ -283,9 +291,9 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
                 ]
             )
             if offset_str == "":
-                return f"{field_access.name}[{data_index_access}]"
-            return f"{field_access.name}[{offset_str},{data_index_access}]"
-        return f"{field_access.name}[{offset_str}]"
+                return f"{field_access.name}[{data_index_access}]{item_extractor}"
+            return f"{field_access.name}[{offset_str},{data_index_access}]{item_extractor}"
+        return f"{field_access.name}[{offset_str}]{item_extractor}"
 
     def visit_AbsoluteKIndex(self, absolute_k_index: oir.AbsoluteKIndex, **kwargs) -> str:
         access_pattern = []
