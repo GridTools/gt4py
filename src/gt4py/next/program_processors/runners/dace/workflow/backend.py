@@ -87,8 +87,8 @@ def make_dace_backend(
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
-        horizontal_dimension_has_unit_stride: When the horizontal dimension of field
-            layout has unit stride, replace the field stride symbol with '1'.
+        horizontal_dimension_has_unit_stride: When the memory layout has unit stride
+            in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
             compute time.
         use_zero_origin: Can be set to `True` when all fields passed as program
