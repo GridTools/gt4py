@@ -145,7 +145,7 @@ class StridedConnectivityField(common.Connectivity):
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
-        return core_defs.Int32DType()  # type: ignore[return-value]
+        return core_defs.Int32DType()
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -163,7 +163,7 @@ class StridedConnectivityField(common.Connectivity):
     ) -> common.Field:
         if not isinstance(item, tuple) or (isinstance(item, tuple) and not len(item) == 2):
             raise NotImplementedError()  # TODO(havogt): add proper slicing
-        index = item[0] * self._max_neighbors + item[1]  # type: ignore[operator, call-overload]
+        index = item[0] * self._max_neighbors + item[1]  # type: ignore[operator]
         return ConstantField(index)
 
     def as_scalar(self) -> xtyping.Never:
@@ -1210,6 +1210,18 @@ class IndexField(common.Field):
     def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
+    def __lt__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __le__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __gt__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __ge__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
     def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
@@ -1330,6 +1342,18 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __lt__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __le__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __gt__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __ge__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
         raise NotImplementedError()
 
     def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
