@@ -327,7 +327,7 @@ class SDFGManager:
         self.builder = builder
         self.debug_stree = debug_stree
 
-    def schedule_tree(self) -> tn.ScheduleTreeRoot:
+    def schedule_tree(self, *, validate: bool = False) -> tn.ScheduleTreeRoot:
         """
         Schedule tree representation of the gtir (taken from the builder).
 
@@ -358,8 +358,13 @@ class SDFGManager:
         oir = oir_pipeline.run(oir)
 
         tir = OIRToTreeIR(self.builder).visit(oir)
+        stree = TreeIRToScheduleTree().visit(tir)
 
-        return TreeIRToScheduleTree().visit(tir)
+        if validate:
+            tn.validate_children_and_parents_align(stree)
+            tn.validate_has_no_other_node_types(stree)
+
+        return stree
 
     @staticmethod
     def _strip_history(sdfg: SDFG) -> None:
@@ -403,7 +408,7 @@ class SDFGManager:
         #  - we expect all 3-loops to be singled maps/for
         #  - we expect the layout to be K-JI
         #  - we expect all non-cartesian control flow to be innermost
-        stree = self.schedule_tree()
+        stree = self.schedule_tree(validate=validate)
 
         # Re-order cartesian loops to match loops with memory layout
         # - layout is _always_ given I-J-K
@@ -422,6 +427,10 @@ class SDFGManager:
         if layout[2] != 0:
             flipper = passes.PushVerticalMapDown()
             flipper.visit(stree)
+
+        if validate:
+            tn.validate_children_and_parents_align(stree)
+            tn.validate_has_no_other_node_types(stree)
 
         # Create SDFG
         sdfg = stree.as_sdfg(
