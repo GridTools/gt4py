@@ -339,6 +339,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> tuple[dace.SDFGState, dac
     # NOTE: We should actually wrap the `DeviceSynchronize` function inside a
     #   `DACE_GPU_CHECK()` macro. However, this only works in GPU context, but
     #   here we are in CPU context. Thus we can not do it.
+    # NOTE: Since the synchronization is done through the Tasklet explicitly,
+    #   we can disable synchronization for the state.
     for state in [entry_state, exit_state]:
         state.add_tasklet(
             "sync_tlet",
@@ -348,7 +350,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> tuple[dace.SDFGState, dac
             language=dace.dtypes.Language.CPP,
             side_effects=True,
         )
-
+        state.nosync = True
     return entry_state, exit_state
 
 
