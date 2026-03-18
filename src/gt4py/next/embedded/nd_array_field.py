@@ -487,7 +487,9 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    _kind: Optional[common.ConnectivityKind] = None
+    _kind: Optional[common.ConnectivityKind] = dataclasses.field(
+        default=None, metadata=common.gt4py_metadata(pickle=False)
+    )
 
     def __post_init__(self) -> None:
         assert self._kind is None or bool(self._kind & common.ConnectivityKind.ALTER_DIMS) == (
