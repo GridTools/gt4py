@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import copyreg
 import dataclasses
 import functools
 import inspect
@@ -39,9 +40,9 @@ def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
     return {GT4PY_CLASS_METADATA_NS: kwargs}
 
 
-_PicklingState = None | dict[str, Any] | tuple[dict[str, Any] | None, dict[str, Any]]
-_GetStateMethod: TypeAlias = Callable[[object], _PicklingState]
-_SetStateMethod: TypeAlias = Callable[[object, _PicklingState], None]
+_PickleState = None | dict[str, Any] | tuple[dict[str, Any] | None, dict[str, Any]]
+_GetStateMethod: TypeAlias = Callable[[object], _PickleState]
+_SetStateMethod: TypeAlias = Callable[[object, _PickleState], None]
 
 
 @functools.cache
@@ -65,44 +66,37 @@ def _get_metadata_based_state_getstate(cls: type) -> _GetStateMethod:
             for field in datamodels.get_fields(cls).values()
         }
 
-    has_slots = bool(getattr(cls, "__slots__", ()))
-    class_slots = set(cls.__slots__) if has_slots else set()  # type: ignore[attr-defined] # `has_slots` ensures cls.__slots__ exists
-    has_dict = not has_slots or "__dict__ " in cls.__slots__  # type: ignore[attr-defined] # `has_slots` ensures cls.__slots__ exists
+    class_slots = copyreg._slotnames(cls)  # type: ignore[attr-defined] # copyreg._slotnames is not recognized
+    has_slots = len(class_slots) > 0
+    has_dict = any("__dict__" in c.__dict__ for c in cls.__mro__)
+
     dict_names = []
     slot_names = []
-
     for name, metadata in field_metadata.items():
         if metadata and metadata.get("pickle", True) is False:
             continue
-        if has_slots and name in class_slots:
+        if name in class_slots:
             slot_names.append(name)
         else:
-            assert has_dict
             dict_names.append(name)
 
     # It follows the default implementation of object.__getstate__():
-    # - for class instances with no __dict__ and no __slots__ -> state = None.
     # - for class instances with __dict__ and no __slots__ -> state = self.__dict__.
-    # - for class instances with __dict__ and __slots__ -> state = (self.__dict__, {slot.name: slot.value for all slots}).
     # - for class instances with __slots__ and no __dict__ -> state = (None, {slot.name: slot.value for all slots}).
-    if not has_dict and not has_slots:
+    # - for class instances with __dict__ and __slots__ -> state = (self.__dict__, {slot.name: slot.value for all slots}).
+    if not has_slots:
 
-        def __getstate__(self: object) -> _PicklingState:
-            return None
-
-    elif not has_slots:
-
-        def __getstate__(self: object) -> _PicklingState:
+        def __getstate__(self: object) -> _PickleState:
             return {name: getattr(self, name) for name in dict_names}
 
     elif not has_dict:
 
-        def __getstate__(self: object) -> _PicklingState:
+        def __getstate__(self: object) -> _PickleState:
             return (None, {name: getattr(self, name) for name in slot_names})
 
     else:
 
-        def __getstate__(self: object) -> _PicklingState:
+        def __getstate__(self: object) -> _PickleState:
             return (
                 {name: getattr(self, name) for name in dict_names},
                 {name: getattr(self, name) for name in slot_names},
@@ -116,12 +110,12 @@ class MetadataBasedPickling:
     Mixin for adding metadata-based pickling to dataclass-like objects.
 
     It uses the class field information to select only instance fields which
-    are not marked with `pickle=False` in the 'GT4PY_META' metdata namespace.
+    are not marked with `pickle=False` in the 'GT4PY_META' metadata namespace.
     Individual fields can therefore opt out of pickling.
-    For example: `foo = field(..., metadata=gt4py_metadata(pickle=False))`)
+    For example: `foo = field(..., metadata=gt4py_metadata(pickle=False))`.
     """
 
-    def __getstate__(self) -> _PicklingState:
+    def __getstate__(self) -> _PickleState:
         """
         Get the state of the object for pickling.
 
@@ -133,7 +127,7 @@ class MetadataBasedPickling:
 
     # Note: we don't implement `__setstate__` as the output of our custom
     #  `__getstate__` implementation should be compatible with the default
-    #  implementation of `pickle`.
+    #  implementation.
 
 
 class RecursionGuard:
