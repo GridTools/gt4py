@@ -40,8 +40,8 @@ def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
 
 
 _PicklingState = None | dict[str, Any] | tuple[dict[str, Any] | None, dict[str, Any]]
-_GetStateMethod: TypeAlias = Callable[[Any], _PicklingState]
-_SetStateMethod: TypeAlias = Callable[[Any, _PicklingState], None]
+_GetStateMethod: TypeAlias = Callable[[object], _PicklingState]
+_SetStateMethod: TypeAlias = Callable[[object, _PicklingState], None]
 
 
 @functools.cache
@@ -54,8 +54,6 @@ def _get_metadata_based_state_getstate(cls: type) -> _GetStateMethod:
     ):
         raise TypeError(f"Expected a dataclass or datamodel type, got '{cls}'")
 
-    dict_names = []
-    slot_names = []
     if is_dataclass:
         field_metadata = {
             field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
@@ -67,13 +65,19 @@ def _get_metadata_based_state_getstate(cls: type) -> _GetStateMethod:
             for field in datamodels.get_fields(cls).values()
         }
 
-    class_slots = set(cls.__slots__) if hasattr(cls, "__slots__") else set()
+    has_slots = bool(getattr(cls, "__slots__", ()))
+    class_slots = set(cls.__slots__) if has_slots else set()  # type: ignore[attr-defined] # `has_slots` ensures cls.__slots__ exists
+    has_dict = not has_slots or "__dict__ " in cls.__slots__  # type: ignore[attr-defined] # `has_slots` ensures cls.__slots__ exists
+    dict_names = []
+    slot_names = []
+
     for name, metadata in field_metadata.items():
         if metadata and metadata.get("pickle", True) is False:
             continue
-        if name in class_slots:
+        if has_slots and name in class_slots:
             slot_names.append(name)
         else:
+            assert has_dict
             dict_names.append(name)
 
     # It follows the default implementation of object.__getstate__():
@@ -81,17 +85,17 @@ def _get_metadata_based_state_getstate(cls: type) -> _GetStateMethod:
     # - for class instances with __dict__ and no __slots__ -> state = self.__dict__.
     # - for class instances with __dict__ and __slots__ -> state = (self.__dict__, {slot.name: slot.value for all slots}).
     # - for class instances with __slots__ and no __dict__ -> state = (None, {slot.name: slot.value for all slots}).
-    if not dict_names and not class_slots:
+    if not has_dict and not has_slots:
 
         def __getstate__(self: object) -> _PicklingState:
             return None
 
-    elif not class_slots:
+    elif not has_slots:
 
         def __getstate__(self: object) -> _PicklingState:
             return {name: getattr(self, name) for name in dict_names}
 
-    elif not dict_names:
+    elif not has_dict:
 
         def __getstate__(self: object) -> _PicklingState:
             return (None, {name: getattr(self, name) for name in slot_names})
@@ -104,7 +108,7 @@ def _get_metadata_based_state_getstate(cls: type) -> _GetStateMethod:
                 {name: getattr(self, name) for name in slot_names},
             )
 
-    return cast(_GetStateMethod, __getstate__)
+    return __getstate__
 
 
 class MetadataBasedPickling:
@@ -121,9 +125,9 @@ class MetadataBasedPickling:
         """
         Get the state of the object for pickling.
 
-        It returns the same kind of arguments as the default `__getstate__` implementation,
-        as documented in object.__getstate__.
-        (Check: https://devdocs.io/python~3.14/library/pickle#object.__getstate__)
+        It returns the same kind of arguments as the default `__getstate__`
+        implementation, used by `pickle` (as documented in `object.__getstate__`,
+        check: https://devdocs.io/python~3.14/library/pickle#object.__getstate__)
         """
         return _get_metadata_based_state_getstate(type(self))(self)  # type: ignore[arg-type]  # type(self) should be hashable
 
