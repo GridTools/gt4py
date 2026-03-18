@@ -69,7 +69,7 @@ def _translate_gtir_to_sdfg(
             auto_optimize=auto_optimize,
             auto_optimize_args=None,
             async_sdfg_call=async_sdfg_call,
-            horizontal_dimension_has_unit_stride=False,
+            unstructured_horizontal_has_unit_stride=False,
             use_metrics=use_metrics,
         ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
 
@@ -107,7 +107,11 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     )
 
     constant_symbols = dace_wf_translation.find_constant_symbols(
-        ir, sdfg, SKIP_VALUE_MESH.offset_provider_type, disable_field_origin, has_unit_stride
+        ir=ir,
+        sdfg=sdfg,
+        offset_provider_type=SKIP_VALUE_MESH.offset_provider_type,
+        disable_field_origin_on_program_arguments=disable_field_origin,
+        unstructured_horizontal_has_unit_stride=has_unit_stride,
     )
 
     expected = {}
