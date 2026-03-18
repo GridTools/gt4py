@@ -221,11 +221,7 @@ class IntervalParser(gt_meta.ASTPass):
 
 
 class HorizontalIntervalParser(IntervalParser):
-    """Parse Python AST interval syntax in the form of a Slice.
-
-    Corner cases: `ast.Ellipsis` refers to the entire interval, and
-    if an `ast.Subscript` is passed, this parses its slice attribute.
-    """
+    """Parse Python AST interval syntax in the form of a Slice."""
 
     @classmethod
     def apply(
