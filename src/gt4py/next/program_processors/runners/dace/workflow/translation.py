@@ -171,6 +171,12 @@ def add_instrumentation(
 
     The execution time is measured in seconds and represented as a 'float64' value.
     It is written to the global array 'SDFG_ARG_METRIC_COMPUTE_TIME'.
+
+    Args:
+        sdfg: The SDFG to be instrumented with time measurements.
+        gpu: Flag that specifies if the SDFG is targeting GPU execution.
+        sync_states: If provided, a tuple of two states, the source state and the
+            sync state of the SDFG, containing tasklets with GPU device synchronization.
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
@@ -190,7 +196,7 @@ def add_instrumentation(
                 source_state.is_start_block = False
         assert sdfg.out_degree(entry_if_region) > 0
         entry_if_region.is_start_block = True
-        # and the exit if-region as sink node
+        # Similarly, the exit if-region as sink node.
         for sink_state in sdfg.sink_nodes():
             if sink_state not in [entry_if_region, exit_if_region]:
                 sdfg.add_edge(sink_state, exit_if_region, dace.InterstateEdge())
@@ -202,7 +208,7 @@ def add_instrumentation(
             sdfg.add_edge(entry_if_region, edge.dst, edge.data)
             sdfg.remove_edge(edge)
         sdfg.add_edge(entry_state, entry_if_region, dace.InterstateEdge())
-        # and the exit if-region after the exit state
+        # Put the exit if-region right after the exit state.
         sdfg.add_edge(exit_state, exit_if_region, dace.InterstateEdge())
 
     #### 1. Synchronize the CUDA device if the sync states are not provided.
@@ -303,7 +309,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> tuple[dace.SDFGState, dac
     have _finished_ and the results are available. This function only has an effect for
     work that runs on the GPU. Furthermore, all work is scheduled on the default stream.
 
-    Retruns:
+    Returns:
         The SDFG entry and exit states, each calling the GPU primitive for device synchronization.
     """
 
