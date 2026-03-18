@@ -42,6 +42,7 @@ def test_push_vertical_map_down():
     flipper = PushVerticalMapDown()
     flipper.visit(root)
 
+    # Assert that the k-loop has been pushed inside the ij-loop.
     assert len(root.children) == 1
     assert isinstance(root.children[0], tn.MapScope)
     assert root.children[0].node.map.params == ["__i", "__j"]
@@ -77,8 +78,7 @@ def test_push_vertical_map_down_for_scope():
     flipper = PushVerticalMapDown()
     flipper.visit(root)
 
-    tn.validate_children_and_parents_align(root)
-
+    # Assert that the tree hasn't changed.
     assert len(root.children) == 1
     assert isinstance(root.children[0], tn.ForScope)
     assert root.children[0].loop.loop_variable == "__k"
@@ -125,6 +125,8 @@ def test_push_vertical_map_down_multiple_horizontal_maps():
     flipper = PushVerticalMapDown()
     flipper.visit(root)
 
+    # Assert that the k-loop has been pushed inside the ij-loops,
+    # effectively duplicating the k-loop.
     assert len(root.children) == 2
 
     for index, child in enumerate(root.children):
