@@ -21,7 +21,7 @@ from collections.abc import Iterable, Mapping, Sequence
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils
+from gt4py.eve import datamodels, extended_typing as xtyping, utils
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -30,6 +30,7 @@ from gt4py.eve.extended_typing import (
     Final,
     Generic,
     Literal,
+    LiteralString,
     NamedTuple,
     Never,
     NoReturn,
@@ -1366,6 +1367,79 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     promoted_dims = order_dimensions(unique_dims)
     check_dims(promoted_dims)
     return promoted_dims
+
+
+GT4PY_CLASS_METADATA_NS: Final[LiteralString] = "GT4PY_META"
+
+
+def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
+    """Helper function to store dataclass/datamodel field metadata within a GT4Py namespace."""
+    return {GT4PY_CLASS_METADATA_NS: kwargs}
+
+
+@functools.cache
+def _get_metadata_based_getstate(
+    cls: type,
+) -> Callable[[Any], None | dict[str, Any] | tuple[dict[str, Any] | None, dict[str, Any]]]:
+    """Helper function to make class-specific `__getstate__` methods following the standard definition."""
+    if not isinstance(cls, type) or not (
+        (is_dataclass := dataclasses.is_dataclass(cls)) or datamodels.is_datamodel(cls)
+    ):
+        raise TypeError(f"Expected a dataclass or datamodel type, got '{cls}'")
+
+    dict_names = []
+    slot_names = []
+    if is_dataclass:
+        field_metadata = {
+            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
+            for field in dataclasses.fields(cls)
+        }
+    else:
+        field_metadata = {
+            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
+            for field in datamodels.get_fields(cls).values()
+        }
+
+    class_slots = set(cls.__slots__) if hasattr(cls, "__slots__") else set()
+    for name, metadata in field_metadata.items():
+        if metadata and metadata.get("pickle", True) is False:
+            continue
+        if name in class_slots:
+            slot_names.append(name)
+        else:
+            dict_names.append(name)
+
+    if not dict_names and not slot_names:
+        return lambda self: None
+    if not slot_names:
+        return lambda self: {name: getattr(self, name) for name in dict_names}
+    if not dict_names:
+        return lambda self: {name: getattr(self, name) for name in slot_names}
+    return lambda self: (
+        {name: getattr(self, name) for name in dict_names},
+        {name: getattr(self, name) for name in slot_names},
+    )
+
+
+class MetadataBasedPickling:
+    """
+    Mixin for adding metadata-based pickling to dataclass-like objects.
+
+    It uses the class field information to select only instance fields which
+    are not marked with `pickle=False` in the 'GT4PY_META' namespace in their
+    definition metadata. Individual fields can therefore opt out of pickling.
+    For example: `foo = field(..., metadata=gt4py_metadata(pickle=False))`)
+    """
+
+    def __getstate__(self) -> None | dict[str, Any] | tuple[dict[str, Any] | None, dict[str, Any]]:
+        """
+        Get the state of the object for pickling.
+
+        It returns the same kind of arguments as the default `__getstate__` implementation,
+        as documented in object.__getstate__.
+        (Check: https://devdocs.io/python~3.14/library/pickle#object.__getstate__)
+        """
+        return _get_metadata_based_getstate(type(self))(self)  # type: ignore[arg-type]  # type(self) should be hashable
 
 
 class FieldBuiltinFuncRegistry:

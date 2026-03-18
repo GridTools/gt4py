@@ -19,9 +19,7 @@ from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import (
-    Any,
     ClassVar,
-    Final,
     Iterable,
     Never,
     Optional,
@@ -104,35 +102,11 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
-_GT4PY_NDARRAY_FIELD_METADATA_NS: Final = "_gt4py_ndarray_field_"
-
-
-def _gt4py_field_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
-    """Helper function to create a metadata dictionary for dataclass fields with a GT4Py-specific namespace."""
-    return {_GT4PY_NDARRAY_FIELD_METADATA_NS: {**kwargs}}
-
-
-@functools.cache
-def _get_pickleable_field_names(dataclass_type: type) -> tuple[str, ...]:
-    """Return the field names of a dataclass type."""
-    if not isinstance(dataclass_type, type) or not dataclasses.is_dataclass(dataclass_type):
-        raise TypeError(f"Expected a dataclass type, got '{dataclass_type}'")
-
-    names = []
-    for field in dataclasses.fields(dataclass_type):
-        metadata = field.metadata.get("_GT4PY_NDARRAY_FIELD_METADATA_NS", None)
-        # Individual fields can opt out of serialization via dataclass
-        # definitions:  field(<other args>, metadata=_gt4py_field_metadata(skip_pickle=True))
-        if metadata and metadata.get("skip_pickle"):
-            continue
-        names.append(field.name)
-
-    return tuple(names)
-
-
 @dataclasses.dataclass(frozen=True)
 class NdArrayField(
-    common.MutableField[common.DimsT, core_defs.ScalarT], common.FieldBuiltinFuncRegistry
+    common.MutableField[common.DimsT, core_defs.ScalarT],
+    common.FieldBuiltinFuncRegistry,
+    common.MetadataBasedPickling,
 ):
     """
     Shared field implementation for NumPy-like fields.
@@ -470,20 +444,6 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
-
-    def __getstate__(self) -> dict[str, Any]:
-        # Make sure we only copy dataclass instance fields to get rid of runtime-only
-        # cached attributes that must not influence serialization or fingerprints.
-        return {name: getattr(self, name) for name in _get_pickleable_field_names(type(self))}
-
-    def __setstate__(self, state: dict[str, Any]) -> None:
-        if hasattr(self, "__dict__"):
-            self.__dict__.clear()
-            self.__dict__.update(state)
-        else:
-            # In case the dataclass is frozen or uses slots, we need to use `object.__setattr__` for each field
-            for key, value in state.items():
-                object.__setattr__(self, key, value)
 
     if dace:
 
