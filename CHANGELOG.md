@@ -2,6 +2,18 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.7] - 2026-03-11
+
+### Cartesian
+
+- Leverage unrolling of integer power calls, in dace backends, for exponents 1, 2, and 3.
+- Faster SDFG construction in dace backends.
+- Introduce default compiler flags.
+
+### Next
+
+See commit history.
+
 ## [1.1.6] - 2026-02-27
 
 ### Cartesian
