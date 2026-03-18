@@ -58,7 +58,7 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
 
     # Query the compiler version string
     try:
-        compiler_exe_fullpath = ccompiler.compiler_cxx[0]  # type:ignore[attr-defined]
+        compiler_exe_fullpath = ccompiler.compiler_cxx[0]
         r = subprocess.run([compiler_exe_fullpath, "--version"], capture_output=True, text=True)
         version_name_on_cli = r.stdout.split("\n")[0]
     except AttributeError:
