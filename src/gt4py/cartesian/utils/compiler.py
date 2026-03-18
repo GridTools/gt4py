@@ -65,7 +65,7 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
         version_name_on_cli = "default"
     if "gcc" in version_name_on_cli.lower():
         name = CxxCompilerName.GNU
-    elif version_name_on_cli.lower() in ["icx", "icpx"]:
+    elif "icx" in version_name_on_cli.lower() or "icpx" in version_name_on_cli.lower():
         name = CxxCompilerName.INTEL
         open_mp_flags = "-qopenmp"
     elif "apple clang" in version_name_on_cli.lower():
