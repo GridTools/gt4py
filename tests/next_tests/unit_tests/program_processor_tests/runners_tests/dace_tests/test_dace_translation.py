@@ -8,7 +8,6 @@
 
 """Test the translation stage of the dace backend workflow."""
 
-from unittest import mock
 import pytest
 
 import re

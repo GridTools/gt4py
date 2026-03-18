@@ -9,7 +9,6 @@
 """Test the bindings stage of the dace backend workflow."""
 
 import pytest
-import typing
 import unittest.mock as mock
 
 dace = pytest.importorskip("dace")
