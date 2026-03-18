@@ -28,6 +28,17 @@ from dace.sdfg import (
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
+def _node_sort_key(node: dace_nodes.Node) -> str:
+    """Return a deterministic string key for sorting DaCe nodes.
+
+    Used to impose a stable iteration order on sets/collections of nodes,
+    preventing non-deterministic code generation caused by arbitrary set
+    iteration order.
+    """
+    label = getattr(node, "data", getattr(node, "label", ""))
+    return f"{type(node).__name__}_{label}"
+
+
 @dace_properties.make_properties
 class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     """The transformation moves dataflow into the if branches.
@@ -320,7 +331,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # Add the SDFGState to the key of the dictionary because we have to create
         # new node for the different branches.
         unique_old_nodes: list[dace_nodes.Node] = []
-        for old_node in nodes_to_move:
+        for old_node in sorted(nodes_to_move, key=_node_sort_key):
             if (old_node, branch_state) in old_to_new_nodes_map:
                 continue
             unique_old_nodes.append(old_node)
@@ -838,7 +849,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     def _partition_if_block(
         self,
         if_block: dace_nodes.NestedSDFG,
-    ) -> Optional[tuple[set[str], set[str]]]:
+    ) -> Optional[tuple[list[str], list[str]]]:
         """Check if `if_block` can be processed and partition the input connectors.
 
         The function will check if `if_block` has the right structure, i.e. if it is
@@ -849,10 +860,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         Returns:
             If `if_block` is unsuitable the function will return `None`.
             If `if_block` meets the structural requirements the function will return
-            two sets of strings. The first set contains the connectors that can be
-            relocated and the second one of the conditions that can not be relocated.
+            two sorted lists of strings. The first list contains the connectors that
+            can be relocated and the second one the connectors that can not be relocated.
+            Sorting ensures deterministic downstream iteration order.
         """
-        # TODO(phimuell): Change the return type to `tuple[list[str], list[str]]` and sort the connectors, such that the operation is deterministic.
         # There shall only be one output and three inputs with given names.
         if len(if_block.out_connectors.keys()) == 0:
             return None
@@ -899,14 +910,14 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #  So the ones that can be relocated were found exactly once. Zero would
         #  mean they can not be relocated and more than one means that we do not
         #  support it yet.
-        relocatable_connectors = {
+        relocatable_connectors = sorted(
             conn_name for conn_name, conn_count in reference_count.items() if conn_count == 1
-        }
-        non_relocatable_connectors = {
+        )
+        non_relocatable_connectors = sorted(
             conn_name
             for conn_name in reference_count.keys()
             if conn_name not in relocatable_connectors
-        }
+        )
 
         if len(non_relocatable_connectors) == 0:
             return None

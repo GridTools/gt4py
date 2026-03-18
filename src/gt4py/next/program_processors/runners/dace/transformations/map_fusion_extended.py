@@ -124,6 +124,8 @@ def gt_horizontal_map_split_fusion(
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
 
     transformations = [
         HorizontalSplitMapRange(
@@ -216,6 +218,9 @@ def gt_vertical_map_split_fusion(
         - Due to a bug in the transformation, not all Maps, that were created by
             the splitting were fused. Especially "chains" might still be present.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
+
     if single_use_data is None:
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
@@ -795,4 +800,6 @@ class VerticalSplitMapRange(SplitMapRange):
             trafo._single_use_data = self._single_use_data
 
             # This is not efficient, but it is currently the only way to run it
+            # Sort SDFG for deterministic pattern matching.
+            sdfg.sort_sdfg_alphabetically()
             sdfg.apply_transformations_repeated(trafo, validate=False, validate_all=False)

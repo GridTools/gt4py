@@ -199,6 +199,8 @@ def gt_gpu_transform_non_standard_memlet(
     # Now try to fuse the maps together, but restrict them that at least one map
     #  needs to be new.
     # TODO(phimuell): Improve this by replacing it by an explicit loop.
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
     sdfg.apply_transformations_repeated(
         [
             gtx_transformations.MapFusionVertical(
@@ -791,6 +793,8 @@ def gt_remove_trivial_gpu_maps(
 
     Todo: Improve this function.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
 
     # First we try to promote and fuse them with other non-trivial maps.
     sdfg.apply_transformations_once_everywhere(
@@ -828,6 +832,8 @@ def gt_remove_trivial_gpu_maps(
         return True
 
     # TODO(phimuell): Replace this with a more performant loop.
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
     sdfg.apply_transformations_repeated(
         [
             gtx_transformations.MapFusionVertical(

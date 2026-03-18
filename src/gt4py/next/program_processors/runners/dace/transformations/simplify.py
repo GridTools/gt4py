@@ -10,7 +10,7 @@
 
 import collections
 import copy
-import uuid
+import hashlib
 import warnings
 from typing import Any, Iterable, Optional, TypeAlias
 
@@ -83,6 +83,9 @@ def gt_simplify(
         elimination at the end. The whole process is run inside a loop that ensures
         that `gt_simplify()` results in a fix point.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
+
     # Ensure that `skip` is a `set`
     skip = gtx_transformations.constants.GT_SIMPLIFY_DEFAULT_SKIP_SET if skip is None else set(skip)
 
@@ -476,6 +479,9 @@ def gt_reduce_distributed_buffering(
     validate_all: bool = False,
 ) -> Optional[dict[dace.SDFG, dict[dace.SDFGState, set[str]]]]:
     """Removes distributed write back buffers."""
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
+
     pipeline = dace_ppl.Pipeline([DistributedBufferRelocator()])
     all_result = {}
 
@@ -1007,8 +1013,15 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
 
         # This is the tasklet that we will put inside the map, note we have to do it
         #  this way to avoid some name clash stuff.
+        # Use a deterministic hash instead of uuid.uuid1() to ensure stable code
+        # generation across runs. The hash combines properties that are unique to
+        # this specific clone context.
+        _clone_key = (
+            f"{tasklet.label}_{tasklet.code.as_string}_{map_entry.label}_{connector_name}_{access_node.data}"
+        )
+        _clone_hash = hashlib.md5(_clone_key.encode("utf-8")).hexdigest()
         inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
-            name=f"{tasklet.label}__clone_{str(uuid.uuid1()).replace('-', '_')}",
+            name=f"{tasklet.label}__clone_{_clone_hash}",
             outputs=tasklet.out_connectors.keys(),
             inputs=set(),
             code=tasklet.code,

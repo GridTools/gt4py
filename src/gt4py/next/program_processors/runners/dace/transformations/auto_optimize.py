@@ -235,6 +235,9 @@ def gt_auto_optimize(
     optimization_hooks = optimization_hooks or {}
 
     with dace.config.temporary_config():
+        # Enable deterministic SDFG sorting for reproducible code generation.
+        dace.Config.set("compiler", "sdfg_alphabetical_sorting", value=True)
+
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
 
@@ -434,6 +437,8 @@ def _gt_auto_process_top_level_maps(
         The function assumes that `gt_simplify()` has been called on the SDFG
         before it is passed to this function.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
 
     # NOTE: Inside this function we have to disable the consolidation of edges.
     #   This is because it might block the application of `SpliAccessNode`. As
@@ -690,6 +695,8 @@ def _gt_auto_process_dataflow_inside_maps(
     over a constant range, e.g. the number of neighbours, which is known at compile
     time, so the compiler will fully unroll them anyway.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
 
     # Separate Tasklets into dependent and independent parts to promote data
     #  reusability. It is important that this step has to be performed before
