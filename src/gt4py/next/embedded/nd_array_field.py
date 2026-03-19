@@ -487,14 +487,6 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    _kind: Optional[common.ConnectivityKind] = dataclasses.field(
-        default=None, metadata=utils.gt4py_metadata(pickle=False)
-    )
-
-    def __post_init__(self) -> None:
-        assert self._kind is None or bool(self._kind & common.ConnectivityKind.ALTER_DIMS) == (
-            self.domain.dim_index(self.codomain) is not None
-        )
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -538,22 +530,13 @@ class NdArrayConnectivityField(
     def skip_value(self) -> Optional[core_defs.IntegralScalar]:
         return self._skip_value
 
-    @property
+    @functools.cached_property
     def kind(self) -> common.ConnectivityKind:
-        if self._kind is None:
-            object.__setattr__(
-                self,
-                "_kind",
-                common.ConnectivityKind.ALTER_STRUCT
-                | (
-                    common.ConnectivityKind.ALTER_DIMS
-                    if self.domain.dim_index(self.codomain) is None
-                    else common.ConnectivityKind(0)
-                ),
-            )
-            assert self._kind is not None
-
-        return self._kind
+        return common.ConnectivityKind.ALTER_STRUCT | (
+            common.ConnectivityKind.ALTER_DIMS
+            if self.domain.dim_index(self.codomain) is None
+            else common.ConnectivityKind(0)
+        )
 
     # This embedded run-time cache is only used to speed up repeated calls to
     # `inverse_image` and `restrict`, and it should not be considered part of
