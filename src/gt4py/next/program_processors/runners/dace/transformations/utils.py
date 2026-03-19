@@ -27,12 +27,15 @@ def unique_name(name: str) -> str:
         This function assumes that the "namespace" defined by `__gt4py_unique_name_`
         can be used freely.
     """
+
+    # TODO(phimuell, reviewer): How does this behaves in multiple process scenarios?
+    #   It should be okay as long as the update is atomic, I would say.
     maximal_length = 200
     if not hasattr(unique_name, "_counter"):
         unique_name._counter = 0  # type: ignore[attr-defined]
 
-    proposed_name = f"__gt4py_unique_name_{name}_{unique_name._counter}"  # type: ignore[attr-defined]
     unique_name._counter += 1  # type: ignore[attr-defined]
+    proposed_name = f"__gt4py_unique_name_{name}_{unique_name._counter}"  # type: ignore[attr-defined]
 
     if len(proposed_name) > maximal_length:
         raise ValueError("Name became too long.")

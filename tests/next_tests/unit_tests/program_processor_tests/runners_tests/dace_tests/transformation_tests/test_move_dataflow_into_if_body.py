@@ -986,9 +986,6 @@ def test_if_mover_dependent_branch_4():
     assert {tlet.label for tlet in inner_tlet} == expected_tlet
 
 
-@pytest.mark.xfail(
-    reason="This test is currently expected to fail. For the explanation see: https://github.com/GridTools/gt4py/pull/2514#discussion_r2906948120"
-)
 def test_if_mover_dependent_branch_5():
     """
     Essentially tests the following situation:
@@ -1134,7 +1131,9 @@ def test_if_mover_dependent_branch_5():
     mx.add_out_connector("OUT_f")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=2)
+    # TODO(iomaginaris, phimuell): Why was `explected_applies` set to `2`? This makes
+    #   only sense if we have multiple `if` blocks or do I miss something here?
+    _perform_test(sdfg, explected_applies=1)
 
     # # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
