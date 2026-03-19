@@ -34,60 +34,61 @@ class _DatamodelModel(utils.MetadataBasedPickling):
     transient: str = datamodels.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
 
 
-class TestGetMetadataBasedGetstate:
+@dataclasses.dataclass
+class _EmptyDataclassModel(utils.MetadataBasedPickling):
+    pass
+
+
+@dataclasses.dataclass(slots=True)
+class _EmptySlottedDataclassModel(utils.MetadataBasedPickling):
+    pass
+
+
+@datamodels.datamodel(slots=False)
+class _EmptyDatamodelModel(utils.MetadataBasedPickling):
+    pass
+
+
+class TestMetadataBasedPickling:
     def test_get_metadata_based_getstate_rejects_non_dataclass_like_type(self):
         with pytest.raises(TypeError, match="Expected a dataclass or datamodel type"):
             utils._get_metadata_based_state_getstate(object)
 
-    def test_get_metadata_based_getstate_for_dataclass(self):
-        @dataclasses.dataclass
-        class Model:
-            value: int
-            transient: int = dataclasses.field(metadata=utils.gt4py_metadata(pickle=False))
+    @pytest.mark.parametrize(
+        "instance,expected_state",
+        [
+            (_DataclassModel(1, "foo"), {"value": 1}),
+            (_SlottedDataclassModel(1, "foo"), (None, {"value": 1})),
+            (_DatamodelModel(1, "foo"), {"value": 1}),
+            (_EmptyDataclassModel(), {}),
+            (_EmptySlottedDataclassModel(), None),
+            (_EmptyDatamodelModel(), {}),
+        ],
+    )
+    def test_get_metadata_based_getstate(self, instance, expected_state):
+        cls = type(instance)
+        getstate = utils._get_metadata_based_state_getstate(cls)
+        assert getstate is utils._get_metadata_based_state_getstate(cls)  # cached
 
-        getstate = utils._get_metadata_based_state_getstate(Model)
+        assert getstate(instance) == expected_state
 
-        assert getstate(Model(1, 2)) == {"value": 1}
-        assert getstate is utils._get_metadata_based_state_getstate(Model)
-
-    def test_get_metadata_based_getstate_for_slotted_dataclass(self):
-        @dataclasses.dataclass(slots=True)
-        class Model:
-            value: int
-            transient: int = dataclasses.field(metadata=utils.gt4py_metadata(pickle=False))
-
-        getstate = utils._get_metadata_based_state_getstate(Model)
-
-        assert getstate(Model(1, 2)) == (None, {"value": 1})
-
-
-class TestMetadataBasedPickling:
-    def test_metadata_based_getstate_for_datamodel(self):
-        @datamodels.datamodel(slots=False)
-        class Model:
-            value: int
-            transient: int = datamodels.field(metadata=utils.gt4py_metadata(pickle=False))
-
-        getstate = utils._get_metadata_based_state_getstate(Model)
-        assert getstate(Model(1, 2)) == {"value": 1}
-
-    def test_pickle_roundtrip_dataclass(self):
-        obj = _DataclassModel(value=42, transient="ignored")
+    @pytest.mark.parametrize(
+        "instance,expected_fields",
+        [
+            (_DataclassModel(42, "skip"), {"value": 42}),
+            (_SlottedDataclassModel(42, "skip"), {"value": 42}),
+            (_DatamodelModel(42, "skip"), {"value": 42}),
+            (_EmptyDataclassModel(), {}),
+            (_EmptySlottedDataclassModel(), {}),
+            (_EmptyDatamodelModel(), {}),
+        ],
+    )
+    def test_pickle_roundtrip(self, instance, expected_fields):
+        obj = instance
         restored = pickle.loads(pickle.dumps(obj))
-        assert restored.value == 42
-        assert restored.transient == "skip"  # default, since transient is excluded
 
-    def test_pickle_roundtrip_slotted_dataclass(self):
-        obj = _SlottedDataclassModel(value=42, transient="ignored")
-        restored = pickle.loads(pickle.dumps(obj))
-        assert restored.value == 42
-        assert not hasattr(restored, "transient")
-
-    def test_pickle_roundtrip_datamodel(self):
-        obj = _DatamodelModel(value=42, transient="ignored")
-        restored = pickle.loads(pickle.dumps(obj))
-        assert restored.value == 42
-        assert not hasattr(restored, "transient")
+        for field_name, expected_value in expected_fields.items():
+            assert getattr(restored, field_name) == expected_value
 
 
 def test_tree_map_default():
