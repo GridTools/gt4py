@@ -127,13 +127,12 @@ class Dimension:
     def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
         if isinstance(value, Dimension):
             return self.value == value.value
-        elif isinstance(value, core_defs.INTEGRAL_TYPES):
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
             int_value = cast(core_defs.IntegralScalar, value)
             return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
-        else:
-            raise TypeError(
-                "'Dimension' can only be compared for equality with another 'Dimension' or an integer."
-            )
+        # This will fallback to default identity comparison if reflection also returns `NotImplemented`,
+        # which does identity comparison, see https://docs.python.org/3/reference/datamodel.html#object.__eq__.
+        return NotImplemented
 
     @overload  # type: ignore[override]  # incompatible with supertype `object.__ne__` which returns `bool`.
     def __ne__(self, value: Dimension) -> bool: ...
@@ -142,16 +141,13 @@ class Dimension:
     def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
         if isinstance(value, Dimension):
             return self.value != value.value
-        elif isinstance(value, core_defs.INTEGRAL_TYPES):
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
             raise NotImplementedError(
                 "'Dimension.__ne__' with an integer value produces two disjoint domains, "
                 "which is not supported. Use 'concat_where(dim < value, ...) "
                 "concat_where(dim > value, ...)' to express the condition, see ADR 22."
             )
-        else:
-            raise TypeError(
-                "'Dimension' can only be compared for inequality with another 'Dimension' or an integer."
-            )
+        return NotImplemented
 
 
 class Infinity(enum.Enum):
