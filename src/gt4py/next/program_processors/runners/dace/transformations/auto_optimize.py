@@ -875,7 +875,6 @@ def _gt_auto_configure_maps_and_strides(
 
     if gpu:
         if unit_strides_kind != gtx_common.DimensionKind.HORIZONTAL:
-            # TODO(reviewer): I am not sure if we should always print it.
             gtx_transformations.utils.warn(
                 "The GT4Py DaCe GPU backend assumes that the leading dimension, i.e."
                 " where stride is 1, is of kind 'HORIZONTAL', however it was"

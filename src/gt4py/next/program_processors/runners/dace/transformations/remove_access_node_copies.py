@@ -152,7 +152,6 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
 
         first_node_writes_subset = gtx_dace_split.subset_merger(ranges_written_to_first_node)
         if len(first_node_writes_subset) != 1:
-            # TODO(reviewer): I am actually not sure, if we should keep these warnings active all the times?
             gtx_transformations.utils.warn(
                 "[RemoveAccessNodeCopies] The range of writes to the first node is not a single range.",
                 stacklevel=0,
