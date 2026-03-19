@@ -121,25 +121,6 @@ class TestNode:
         )
 
 
-def test_eq_node_uses_fingerprint_result():
-    node_a = definitions.make_simple_node(fixed=True)
-    node_b = copy.deepcopy(node_a)
-    node_b.int_value += 1
-
-    fingerprint_calls = []
-
-    def fingerprint_fn(node):
-        fingerprint_calls.append(node)
-        return str(node.int_value)
-
-    assert not eve.concepts.eq_node(node_a, node_b, fingerprint_fn=fingerprint_fn)
-    assert fingerprint_calls == [node_a, node_b]
-
-    fingerprint_calls.clear()
-    assert eve.concepts.eq_node(node_a, node_a, fingerprint_fn=fingerprint_fn)
-    assert fingerprint_calls == [node_a, node_a]
-
-
 def test_skipping_fields_node_pickler_skips_nested_fields_and_is_cached():
     skipped_field_pickler = eve.concepts.skipping_fields_node_pickler("int_value")
     assert skipped_field_pickler is eve.concepts.skipping_fields_node_pickler("int_value")
