@@ -120,26 +120,26 @@ class Dimension:
     def __le__(self, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]  # returns Domain, not bool
         return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
 
-    @overload
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__eq__` which returns `bool`.
     def __eq__(self, value: Dimension) -> bool: ...
     @overload
-    def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...  # type: ignore[overload-overlap]  # intentionally returns Domain, not bool
-    @overload
-    def __eq__(self, value: object) -> bool: ...
-    def __eq__(self, value: object) -> bool | Domain:
+    def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
         if isinstance(value, Dimension):
             return self.value == value.value
         elif isinstance(value, core_defs.INTEGRAL_TYPES):
             int_value = cast(core_defs.IntegralScalar, value)
             return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
         else:
-            return False
+            raise TypeError(
+                "'Dimension' can only be compared for equality with another 'Dimension' or an integer."
+            )
 
-    @overload
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__ne__` which returns `bool`.
     def __ne__(self, value: Dimension) -> bool: ...
     @overload
-    def __ne__(self, value: object) -> bool: ...
-    def __ne__(self, value: object) -> bool:
+    def __ne__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
         if isinstance(value, Dimension):
             return self.value != value.value
         elif isinstance(value, core_defs.INTEGRAL_TYPES):
@@ -149,7 +149,9 @@ class Dimension:
                 "concat_where(dim > value, ...)' to express the condition, see ADR 22."
             )
         else:
-            return True
+            raise TypeError(
+                "'Dimension' can only be compared for inequality with another 'Dimension' or an integer."
+            )
 
 
 class Infinity(enum.Enum):
