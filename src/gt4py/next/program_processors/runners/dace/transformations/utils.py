@@ -29,17 +29,16 @@ def warn(
     category: type[Warning] | None = None,
     stacklevel: int = 1,
     source: Any | None = None,
-    *,
-    skip_file_prefixes: tuple[Any, ...] = (),
 ) -> None:
     """Wrapper around `warnings.warn()` function that is only enabled in debug mode."""
     if __debug__:
-        warnings.warn(  # type: ignore[call-overload]  # For some reason MyPy complains about the last argument.
+        # NOTE: The `skip_file_prefixes` argument was introduced in Python 3.12 and is
+        #   ignored.
+        warnings.warn(
             message=message,
             category=category,
             stacklevel=(stacklevel + 1),
             source=source,
-            skip_file_prefixes=skip_file_prefixes,
         )
 
 
