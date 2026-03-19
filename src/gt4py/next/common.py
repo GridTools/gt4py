@@ -557,6 +557,10 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             return other
         if other.ndim == 0:
             return self
+        if self.dims[0] != other.dims[0]:
+            raise NotImplementedError(
+                f"Union of 1D domains with different dimensions '{self.dims[0]}' and '{other.dims[0]}' is not supported."
+            )
         first, second = sorted((self, other), key=lambda x: x.ranges[0].start)
         if first.ranges[0].stop >= second.ranges[0].start:
             return Domain(
@@ -565,7 +569,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             )
         raise NotImplementedError(
             f"Union of disjoint domains '{first}' and '{second}' is not supported. "
-            f"Use nested 'concat_where' to express non-consecutive conditions, see ADR 22."
+            f"Use nested 'concat_where' to express non-contiguous conditions, see ADR 22."
         )
 
     @functools.cached_property

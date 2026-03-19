@@ -761,3 +761,9 @@ class TestDomainOrOperator:
         d2 = Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 8), UnitRange(5, 8)))
         with pytest.raises(NotImplementedError):
             d1 | d2
+
+    def test_different_dims_raises(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        d2 = Domain(dims=(JDim,), ranges=(UnitRange(3, 10),))
+        with pytest.raises(NotImplementedError, match="different dimensions"):
+            d1 | d2
