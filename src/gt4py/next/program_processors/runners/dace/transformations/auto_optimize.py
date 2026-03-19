@@ -237,7 +237,7 @@ def gt_auto_optimize(
     with dace.config.temporary_config():
         # Do not print the transformation progress, unless enabled through env variable.
         dace.Config.set(
-            "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=False)
+            "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
         )
 
         # Do not store which transformations were applied inside the SDFG.
