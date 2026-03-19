@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
-import warnings
 from typing import Any, Callable, Mapping, Optional, TypeAlias, Union
 
 import dace
@@ -211,7 +210,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         self._bypass_fusion_test = False
 
         if not self.fuse_after_promotion:
-            warnings.warn(
+            gtx_transformations.utils.warn(
                 "Created a `MapPromoter` that does not fuse immediately, which might lead to borderline invalid SDFGs.",
                 stacklevel=1,
             )
@@ -286,7 +285,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
             if (second_map_iterations > 0) != True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
                 return False
         else:
-            warnings.warn(
+            gtx_transformations.utils.warn(
                 "Was unable to determine if the second Map ({second_map_entry}) is executed.",
                 stacklevel=0,
             )

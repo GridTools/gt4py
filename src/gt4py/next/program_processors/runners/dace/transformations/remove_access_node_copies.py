@@ -14,7 +14,6 @@
 # be removed because the same data are copied from the first all the way to fourth node.
 # The split should be done using SplitAccessNode transformation.
 
-import warnings
 from typing import Any, Optional
 
 import dace
@@ -26,6 +25,7 @@ from dace import (
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
     splitting_tools as gtx_dace_split,
     strides as gtx_transformations_strides,
@@ -152,14 +152,15 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
 
         first_node_writes_subset = gtx_dace_split.subset_merger(ranges_written_to_first_node)
         if len(first_node_writes_subset) != 1:
-            warnings.warn(
+            # TODO(reviewer): I am actually not sure, if we should keep these warnings active all the times?
+            gtx_transformations.utils.warn(
                 "[RemoveAccessNodeCopies] The range of writes to the first node is not a single range.",
                 stacklevel=0,
             )
             return False
         fourth_node_writes_subset = gtx_dace_split.subset_merger(ranges_written_to_fourth_node)
         if len(fourth_node_writes_subset) != 1:
-            warnings.warn(
+            gtx_transformations.utils.warn(
                 "[RemoveAccessNodeCopies] The range of writes to the fourth node is not a single range.",
                 stacklevel=0,
             )
@@ -170,13 +171,13 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
             [union_written_to_first_node_data, union_written_to_fourth_node_data]
         )
         if len(union_written_to_common_data) != 1:
-            warnings.warn(
+            gtx_transformations.utils.warn(
                 "[RemoveAccessNodeCopies] The union of the ranges written to the first and fourth nodes is not a single range.",
                 stacklevel=0,
             )
             return False
         if union_written_to_common_data != first_node_range:
-            warnings.warn(
+            gtx_transformations.utils.warn(
                 "[RemoveAccessNodeCopies] The whole range of the first node is not written.",
                 stacklevel=0,
             )

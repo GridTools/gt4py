@@ -8,8 +8,10 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
+import functools
 import uuid
-from typing import Optional, Sequence, TypeVar, Union
+import warnings
+from typing import Any, Optional, Sequence, TypeVar, Union
 
 import dace
 from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
@@ -19,6 +21,26 @@ from dace.transformation.passes import analysis as dace_analysis
 
 
 _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
+
+
+@functools.wraps(warnings.warn)
+def warn(
+    message: str,
+    category: type[Warning] | None = None,
+    stacklevel: int = 1,
+    source: Any | None = None,
+    *,
+    skip_file_prefixes: tuple[Any, ...] = (),
+) -> None:
+    """Wrapper around `warnings.warn()` function that is only enabled in debug mode."""
+    if __debug__:
+        warnings.warn(  # type: ignore[call-overload]  # For some reason MyPy complains about the last argument.
+            message=message,
+            category=category,
+            stacklevel=(stacklevel + 1),
+            source=source,
+            skip_file_prefixes=skip_file_prefixes,
+        )
 
 
 def unique_name(name: str) -> str:

@@ -9,7 +9,6 @@
 """Fast access to the auto optimization on DaCe."""
 
 import enum
-import warnings
 from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 
 import dace
@@ -275,7 +274,7 @@ def gt_auto_optimize(
         if demote_fields is not None:
             for field_to_demote in demote_fields:
                 if field_to_demote not in sdfg.arrays:
-                    warnings.warn(
+                    gtx_transformations.utils.warn(
                         f"Requested the demotion of field '{field_to_demote}' but the field is unknown.",
                         stacklevel=0,
                     )
@@ -283,7 +282,7 @@ def gt_auto_optimize(
                 field_desc = sdfg.arrays[field_to_demote]
 
                 if field_desc.transient:
-                    warnings.warn(
+                    gtx_transformations.utils.warn(
                         f"Requested the demotion of field '{field_to_demote}' but the field is a transient.",
                         stacklevel=0,
                     )
@@ -364,7 +363,7 @@ def gt_auto_optimize(
                 sdfg.arrays[demoted_field].transient = False
 
             else:
-                warnings.warn(
+                gtx_transformations.utils.warn(
                     f"Could not restore the demoted field '{demoted_field}' back to a global.",
                     stacklevel=0,
                 )
@@ -871,7 +870,8 @@ def _gt_auto_configure_maps_and_strides(
 
     if gpu:
         if unit_strides_kind != gtx_common.DimensionKind.HORIZONTAL:
-            warnings.warn(
+            # TODO(reviewer): I am not sure if we should always print it.
+            gtx_transformations.utils.warn(
                 "The GT4Py DaCe GPU backend assumes that the leading dimension, i.e."
                 " where stride is 1, is of kind 'HORIZONTAL', however it was"
                 f" '{unit_strides_kind}'. Furthermore, it should be the last dimension."

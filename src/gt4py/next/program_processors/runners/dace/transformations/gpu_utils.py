@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import copy
-import warnings
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
@@ -622,14 +621,14 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         if block_size_1d is not None:
             self.block_size_1d = block_size_1d
             if self.block_size_1d[1] != 1 or self.block_size_1d[2] != 1:
-                warnings.warn(
+                gtx_transformations.utils.warn(
                     f"1D map block size specified with more than one dimension larger than 1. Configured 1D block size: {self.block_size_1d}.",
                     stacklevel=0,
                 )
         if block_size_2d is not None:
             self.block_size_2d = block_size_2d
             if self.block_size_2d[2] != 1:
-                warnings.warn(
+                gtx_transformations.utils.warn(
                     f"2D map block size specified with more than twi dimensions larger than 1. Configured 2D block size: {self.block_size_2d}.",
                     stacklevel=0,
                 )
@@ -707,7 +706,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
 
             if is_degenerated_1d_map:
                 num_map_params = 1
-                warnings.warn(
+                gtx_transformations.utils.warn(
                     f"Map '{gpu_map}', size '{map_size}', is a degenerated 1d Map. Handle it as a 1d Map.",
                     stacklevel=0,
                 )
@@ -728,7 +727,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                 )
                 block_size[block_size_1D_index] = self.block_size_1d[0]
                 if block_size_1D_index != 0:
-                    warnings.warn(
+                    gtx_transformations.utils.warn(
                         f"Blocksize of 1d Map '{gpu_map}' was set to {block_size}, but the iteration index is not the x dimension.",
                         stacklevel=0,
                     )
