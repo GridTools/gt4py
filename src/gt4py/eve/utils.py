@@ -656,27 +656,16 @@ def content_hash(
     return result
 
 
-class CustomReducePickler(pickle.Pickler):
-    """
-    Custom pickler class that uses a `singledispatch` function as reducer override.
-
-    This class extends `pickle.Pickler` to allow customization of object serialization
-    through a `singledispatch` reducer function.
-    """
-
-    reducer_override: Callable[[Any], tuple | types.NotImplementedType]
-
-
 def custom_pickler(
     reducer: Callable[[Any], tuple | types.NotImplementedType],
     name: str | None = None,
-) -> type[CustomReducePickler]:
+) -> type[pickle.Pickler]:
     """
     Create a custom pickler class using the provided function as reducer override.
     """
     pickler = type(
         name or f"CustomReducePickler_{name or id(reducer)}",
-        (CustomReducePickler,),
+        (pickle.Pickler,),
         {"reducer_override": staticmethod(reducer)},
     )
 
@@ -686,7 +675,7 @@ def custom_pickler(
 def custom_pickler_from_reducers(
     custom_reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
     name: str | None = None,
-) -> type[CustomReducePickler]:
+) -> type[pickle.Pickler]:
     """
     Create a pickler with the provided reducers registered in reducer override.
 

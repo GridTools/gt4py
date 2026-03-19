@@ -432,7 +432,7 @@ def test_custom_pickler_with_singledispatch_reducer():
     import io
     import pickle
 
-    from gt4py.eve.utils import custom_pickler, CustomReducePickler
+    from gt4py.eve.utils import custom_pickler
 
     offseter = _Offseter(4)
     offseter(2)
@@ -457,7 +457,7 @@ def test_custom_pickler_with_singledispatch_reducer():
 
     pickler_cls = custom_pickler(my_reducer, name="MyCustomPickler")
 
-    assert issubclass(pickler_cls, CustomReducePickler)
+    assert issubclass(pickler_cls, pickle.Pickler)
     assert pickler_cls.__name__ == "MyCustomPickler"
 
     # Verify we can instantiate the pickler
@@ -500,11 +500,12 @@ def test_custom_pickler_with_singledispatch_reducer():
 
 
 def test_custom_pickler_from_reducers_creates_subclass():
-    from gt4py.eve.utils import custom_pickler_from_reducers, CustomReducePickler
+    import pickle
+    from gt4py.eve.utils import custom_pickler_from_reducers
 
     reducers = {int: (lambda obj: (int, (obj,)))}
     pickler_cls = custom_pickler_from_reducers(reducers, name="TestPickler")
 
-    assert issubclass(pickler_cls, CustomReducePickler)
+    assert issubclass(pickler_cls, pickle.Pickler)
     assert pickler_cls.__name__ == "TestPickler"
     assert hasattr(pickler_cls, "reducer_override")
