@@ -14,7 +14,7 @@ import pathlib
 import re
 import shutil
 import subprocess
-from typing import Optional, TypeVar
+from typing import TYPE_CHECKING, Optional, TypeVar
 
 from gt4py._core import locking
 from gt4py.next import config, errors
@@ -23,6 +23,9 @@ from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake
 
+
+if TYPE_CHECKING:
+    from gt4py.next import config_type
 
 CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
 
@@ -39,14 +42,14 @@ class CompiledbFactory(
     and library dependencies.
     """
 
-    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+    cmake_build_type: config_type.CMakeBuildType = config.CMakeBuildType.DEBUG
     cmake_extra_flags: list[str] = dataclasses.field(default_factory=list)
     renew_compiledb: bool = False
 
     def __call__(
         self,
         source: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        cache_lifetime: config.BuildCacheLifetime,
+        cache_lifetime: config_type.BuildCacheLifetime,
     ) -> CompiledbProject:
         if not source.binding_source:
             raise NotImplementedError(
@@ -244,7 +247,7 @@ def _cc_prototype_program_name(
 
 def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
-    build_type: config.CMakeBuildType,
+    build_type: config_type.CMakeBuildType,
     cmake_flags: list[str],
     code_spec: code_specs.CPPLikeCodeSpec,
 ) -> stages.ProgramSource:
@@ -260,9 +263,9 @@ def _cc_prototype_program_source(
 def _cc_get_compiledb(
     renew_compiledb: bool,
     prototype_program_source: stages.ProgramSource,
-    build_type: config.CMakeBuildType,
+    build_type: config_type.CMakeBuildType,
     cmake_flags: list[str],
-    cache_lifetime: config.BuildCacheLifetime,
+    cache_lifetime: config_type.BuildCacheLifetime,
 ) -> pathlib.Path:
     cache_path = cache.get_cache_folder(
         stages.CompilableProject(prototype_program_source, None), cache_lifetime
@@ -293,9 +296,9 @@ def _cc_find_compiledb(path: pathlib.Path) -> Optional[pathlib.Path]:
 
 def _cc_create_compiledb(
     prototype_program_source: stages.ProgramSource,
-    build_type: config.CMakeBuildType,
+    build_type: config_type.CMakeBuildType,
     cmake_flags: list[str],
-    cache_lifetime: config.BuildCacheLifetime,
+    cache_lifetime: config_type.BuildCacheLifetime,
 ) -> pathlib.Path:
     prototype_project = cmake.CMakeFactory(
         cmake_generator_name="Ninja",

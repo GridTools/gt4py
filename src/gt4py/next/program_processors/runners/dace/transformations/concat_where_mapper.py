@@ -529,7 +529,7 @@ def _process_descending_points_of_state(
         #  nested SDFG and also delete its alias inside it.
         _cleanup_memlet_path(state, descending_point)
         descending_point.consumer.remove_in_connector(descending_point.edge.dst_conn)
-        nsdfg.sdfg.remove_data(descending_point.edge.dst_conn, validate=gtx_config.DEBUG)
+        nsdfg.sdfg.remove_data(descending_point.edge.dst_conn, validate=gtx_config.debug)
 
     return nb_applies
 

@@ -64,7 +64,7 @@ def convert_args(
                 filter_args=False,
             )
             this_call_args |= {
-                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
+                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.collect_metrics_level,
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
             fun.construct_arguments(**this_call_args)

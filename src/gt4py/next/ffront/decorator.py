@@ -20,7 +20,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Any, Generic, Optional, Sequence, TypeAlias
+from typing import Any, Final, Generic, Optional, Sequence, TypeAlias
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -54,7 +54,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
-ProgramCallMetricsCollector = metrics.make_collector(
+ProgramCallMetricsCollector: Final[type[metrics.BaseMetricsCollector]] = metrics.make_collector(  # type: ignore[has-type]  # mypy bug? mypy cannot see metrics.make_collector type here
     level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
 )
 

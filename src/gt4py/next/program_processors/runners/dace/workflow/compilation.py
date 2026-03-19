@@ -12,7 +12,7 @@ import dataclasses
 import os
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import dace
 import factory
@@ -22,6 +22,10 @@ from gt4py.next import common, config
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
+
+
+if TYPE_CHECKING:
+    from gt4py.next import config_type
 
 
 class CompiledDaceProgram:
@@ -96,7 +100,7 @@ class CompiledDaceProgram:
             "Argument vector was not set properly."
         )
         self.sdfg_program.fast_call(
-            self.csdfg_argv, self.csdfg_init_argv, do_gpu_check=config.DEBUG
+            self.csdfg_argv, self.csdfg_init_argv, do_gpu_check=config.debug
         )
 
     def __call__(self, **kwargs: Any) -> None:
@@ -129,9 +133,9 @@ class DaCeCompiler(
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
     bind_func_name: str
-    cache_lifetime: config.BuildCacheLifetime
+    cache_lifetime: config_type.BuildCacheLifetime
     device_type: core_defs.DeviceType
-    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+    cmake_build_type: config_type.CMakeBuildType = config.CMakeBuildType.DEBUG
 
     def __call__(
         self,

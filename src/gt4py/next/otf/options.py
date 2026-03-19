@@ -25,7 +25,7 @@ class CompilationOptions:
     #: to `compile` before calling.
     # Uses a factory to make changes to the config after module import time take effect. This is
     # mostly important for testing. Users should not rely on it.
-    enable_jit: bool = dataclasses.field(default_factory=lambda: config.ENABLE_JIT_DEFAULT)
+    enable_jit: bool = dataclasses.field(default_factory=lambda: config.enable_jit_default)
 
     #: If the user requests static params, they will be used later to initialize CompiledPrograms.
     #: By default the set of static params is set when compiling for the first time, e.g. on call

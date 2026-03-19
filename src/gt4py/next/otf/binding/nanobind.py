@@ -209,7 +209,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
                     name=dim.value,
                     static_stride=1
                     if (
-                        config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+                        config.unstructured_horizontal_has_unit_stride
                         and dim.kind == common.DimensionKind.HORIZONTAL
                     )
                     else None,

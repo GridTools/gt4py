@@ -64,7 +64,7 @@ class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWor
     )
 
 
-PureCpp2WorkflowFactory(cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG)
+PureCpp2WorkflowFactory(cmake_build_type=gtx.config.cmake_build_type.DEBUG)
 ```
 
 ## Invent new Workflow Types
