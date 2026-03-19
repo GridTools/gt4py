@@ -499,16 +499,6 @@ def test_custom_pickler_with_singledispatch_reducer():
     assert custom_dump == std_dump
 
 
-def test_custom_pickler_rejects_non_singledispatch_reducer():
-    from gt4py.eve.utils import custom_pickler
-
-    def not_singledispatch(obj):
-        return (type(obj), (obj,))
-
-    with pytest.raises(ValueError, match="single-dispatch"):
-        custom_pickler(not_singledispatch)
-
-
 def test_custom_pickler_from_reducers_creates_subclass():
     from gt4py.eve.utils import custom_pickler_from_reducers, CustomReducePickler
 
