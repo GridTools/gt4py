@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import functools
+import pickle
 import typing
 from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
 
@@ -23,7 +24,7 @@ DimensionKind = common.DimensionKind
 
 
 #: A custom pickler which ignores "location" and "type" attribute of IR nodes.
-_semantic_node_pickler: type[eve_utils.CustomReducePickler] = concepts.skipping_fields_node_pickler(
+_semantic_node_pickler: type[pickle.Pickler] = concepts.skipping_fields_node_pickler(
     "location", "type"
 )
 

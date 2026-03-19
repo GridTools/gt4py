@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import functools
+import pickle
 import re
 from collections.abc import Callable
 
@@ -237,7 +238,7 @@ NodeFingerprinter: TypeAlias = Callable[[Node], str]
 
 
 @functools.cache
-def skipping_fields_node_pickler(*skipped_fields: str) -> type[utils.CustomReducePickler]:
+def skipping_fields_node_pickler(*skipped_fields: str) -> type[pickle.Pickler]:
     """
     Return a `pickle.Pickler` to serialize a node skipping the given fields in the node or any of
     its child nodes.
