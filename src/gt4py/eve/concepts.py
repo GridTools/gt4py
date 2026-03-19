@@ -234,12 +234,6 @@ class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ign
 
 
 NodeFingerprinter: TypeAlias = Callable[[Node], str]
-NodePredicate: TypeAlias = Callable[[Node], bool]
-
-
-def eq_node(a: Node, b: Node, *, fingerprint_fn: NodeFingerprinter) -> bool:
-    """Compare two nodes using a given fingerprint function."""
-    return fingerprint_fn(a) == fingerprint_fn(b)
 
 
 @functools.cache

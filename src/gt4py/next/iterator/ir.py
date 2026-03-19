@@ -32,9 +32,6 @@ semantic_fingerprint: concepts.NodeFingerprinter = functools.partial(
     eve_utils.content_hash, pickler=_semantic_node_pickler
 )
 
-#: Compare two IR nodes for equality, ignoring their location and type attributes.
-semantic_node_eq = functools.partial(concepts.eq_node, fingerprint_fn=semantic_fingerprint)
-
 
 @eve_utils.noninstantiable
 class Node(eve.Node):

@@ -59,7 +59,6 @@ from .extended_typing import (
     Optional,
     ParamSpec,
     Set,
-    SingleDispatchCallable,
     Tuple,
     Type,
     TypeVar,
@@ -661,38 +660,20 @@ class CustomReducePickler(pickle.Pickler):
     """
     Custom pickler class that uses a `singledispatch` function as reducer override.
 
-    This class extends pickle.Pickler to allow customization of object serialization
-    through a single-dispatch reducer function.
+    This class extends `pickle.Pickler` to allow customization of object serialization
+    through a `singledispatch` reducer function.
     """
 
-    reducer_override: SingleDispatchCallable[[Any], tuple]
-
-    @overload
-    def register(
-        self, cls: Any, func: Literal[None] = None
-    ) -> Callable[[Callable[[Any], tuple]], Callable[[Any], tuple]]: ...
-
-    @overload
-    def register(self, cls: Any, func: Callable[[Any], tuple]) -> Callable[[Any], tuple]: ...
-
-    def register(
-        self, cls: Any, func: Callable[[Any], tuple] | None = None
-    ) -> Callable[[Callable[[Any], tuple]], Callable[[Any], tuple]] | Callable[[Any], tuple]:
-        return self.reducer_override.register(cls, func)
+    reducer_override: Callable[[Any], tuple | types.NotImplementedType]
 
 
 def custom_pickler(
-    reducer: Callable[
-        [Any], tuple
-    ],  # It must be a singledispatch function, but this is checked at runtime
+    reducer: Callable[[Any], tuple | types.NotImplementedType],
     name: str | None = None,
 ) -> type[CustomReducePickler]:
     """
-    Create a custom pickler class that uses the `singledispatch` function as reducer override.
+    Create a custom pickler class using the provided function as reducer override.
     """
-    if not xtyping.is_single_dispatch_callable(reducer):
-        raise ValueError("Reducer must be a single-dispatch callable.")
-
     pickler = type(
         name or f"CustomReducePickler_{name or id(reducer)}",
         (CustomReducePickler,),
@@ -703,11 +684,17 @@ def custom_pickler(
 
 
 def custom_pickler_from_reducers(
-    custom_reducers: dict[type, Callable[[Any], tuple]],
+    custom_reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
     name: str | None = None,
 ) -> type[CustomReducePickler]:
     """
-    Create a pickler with the provided reducers registered in a `singledispatch` reducer override.
+    Create a pickler with the provided reducers registered in reducer override.
+
+    Since it uses `functools.singledispatch` for the implementation of the
+    reducer override, the custom reducers are used for the types in the keys
+    AND any of its subclasses. This explicitly deviates from the behavior of
+    the `dispatch_table` dict, to allow easy pickle customization of entire class
+    hierarchies.
     """
     reducer = functools.singledispatch(
         cast(Callable[[Any], tuple | types.NotImplementedType], lambda _: NotImplemented)

@@ -37,9 +37,6 @@ nonlocated_fingerprint: eve_concepts.NodeFingerprinter = functools.partial(
     eve_utils.content_hash, pickler=nonlocated_node_pickler
 )
 
-#: Compare two `eve.Node`s for equality, ignoring their `location` attribute.
-nonlocated_node_eq = functools.partial(eve_concepts.eq_node, fingerprint_fn=nonlocated_fingerprint)
-
 
 class LocatedNode(Node):
     location: SourceLocation = eve.field(repr=False, compare=False)
