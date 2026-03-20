@@ -350,62 +350,14 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 reloc_node.data = new_data_name
                 rename_map[(origin_node.data, branch_state)] = new_data_name
 
-        # We now recreate the edges
-        #  We insert them in the same order as we find them outside.
-        for origin_node, branch_state in relocation_destination.items():
-            for oedge in state.out_edges(origin_node):
-                if oedge.dst is if_block:
-                    # This defines the "argument" to the nested SDFG. This means that
-                    #  the new destination now is the single node inside `if_block`
-                    #  that represents the argument.
-                    assert not oedge.data.is_empty()
-                    assert not inner_sdfg.arrays[oedge.dst_conn].transient
-                    assert branch_state is connector_usage_location[oedge.dst_conn][0]
-                    assert isinstance(oedge.src, dace_nodes.AccessNode)
-                    assert oedge.data.wcr is None and oedge.data.other_subset is None
-
-                    branch_state.add_edge(
-                        node_map[(oedge.src, branch_state)],
-                        oedge.src_conn,
-                        connector_usage_location[oedge.dst_conn][1],
-                        None,
-                        dace.Memlet(
-                            data=rename_map[(oedge.data.data, branch_state)],
-                            subset=oedge.data.subset,  # Is always subset.
-                            other_subset=dace_sbs.Range.from_array(inner_sdfg.arrays[oedge.dst_conn]),
-                            volume=oedge.data.volume,
-                            dynamic=oedge.data.dynamic,
-                        ),
-                    )
-
-                    # The inner data is no longer a global but has become a transient.
-                    assert oedge.dst_conn in if_block.in_connectors
-                    inner_sdfg.arrays[oedge.dst_conn].transient = True
-                    if_block.remove_in_connector(oedge.dst_conn)
-
-                else:
-                    # Edges that do not go to the `if_block` must lead to a node
-                    #  that is also relocated.
-                    assert origin_node in relocation_destination
-                    new_oedge = branch_state.add_edge(
-                        node_map[(oedge.src, branch_state)],
-                        oedge.src_conn,
-                        node_map[(oedge.dst, branch_state)],
-                        oedge.dst_conn,
-                        dace.Memlet.from_memlet(oedge.data),
-                    )
-                    if not oedge.data.is_empty():
-                        new_oedge.data.data = rename_map[(oedge.data.data, branch_state)]
-
-        # Now we have to satisfy the data dependencies, i.e. forward all nodes that
-        #  could not have been moved inside `if_block` but are still needed to compute
-        #  the final result. We find them by scanning the input edges of the nodes
-        #  that have been relocated.
-        # TODO(phimuell): Can we merge the two outer loops?
+        # We now create the mapped nodes, i.e. the nodes that are not relocated but
+        #  have to be put inside the `if_block`. We find them by looking at the input
+        #  edges, that do not lead to a node that is relocated. Connections between
+        #  relocated nodes are handled later.
         for origin_node, branch_state in relocation_destination.items():
             for iedge in state.in_edges(origin_node):
                 if iedge.src in relocation_destination:
-                    # Dependency between two relocated nodes: Handled above.
+                    # Dependency between two relocated nodes: Handled below.
                     continue
                 elif iedge.data.is_empty():
                     # This is an empty Memlet that is between a node that is relocated
@@ -492,11 +444,11 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     inner_sdfg.arrays[inner_data].transient = False
 
                     state.add_edge(
-                            iedge.src,
-                            iedge.src_conn,
-                            if_block,
-                            inner_data,
-                            dace.Memlet.from_array(outer_data, outer_desc),
+                        iedge.src,
+                        iedge.src_conn,
+                        if_block,
+                        inner_data,
+                        dace.Memlet.from_array(outer_data, outer_desc),
                     )
                     if_block.add_in_connector(inner_data)
 
@@ -514,6 +466,57 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     copy.deepcopy(iedge.data),
                 )
                 new_edge.data.data = rename_map[(outer_data, branch_state)]
+
+        # Now create the edges between the relocated nodes, which are all the outgoing
+        #  edges, the `if_block` is handled as a special relocated node and its
+        #  connectors (but not the edges) are removed to.
+        # NOTE: This loop can not be fused with the one above and must run after it.
+        for origin_node, branch_state in relocation_destination.items():
+            for oedge in state.out_edges(origin_node):
+                if oedge.dst is if_block:
+                    # This defines the "argument" to the nested SDFG. This means that
+                    #  the new destination now is the single node inside `if_block`
+                    #  that represents the argument.
+                    assert not oedge.data.is_empty()
+                    assert not inner_sdfg.arrays[oedge.dst_conn].transient
+                    assert branch_state is connector_usage_location[oedge.dst_conn][0]
+                    assert isinstance(oedge.src, dace_nodes.AccessNode)
+                    assert oedge.data.wcr is None and oedge.data.other_subset is None
+
+                    branch_state.add_edge(
+                        node_map[(oedge.src, branch_state)],
+                        oedge.src_conn,
+                        connector_usage_location[oedge.dst_conn][1],
+                        None,
+                        dace.Memlet(
+                            data=rename_map[(oedge.data.data, branch_state)],
+                            subset=oedge.data.subset,  # Is always subset.
+                            other_subset=dace_sbs.Range.from_array(
+                                inner_sdfg.arrays[oedge.dst_conn]
+                            ),
+                            volume=oedge.data.volume,
+                            dynamic=oedge.data.dynamic,
+                        ),
+                    )
+
+                    # The inner data is no longer a global but has become a transient.
+                    assert oedge.dst_conn in if_block.in_connectors
+                    inner_sdfg.arrays[oedge.dst_conn].transient = True
+                    if_block.remove_in_connector(oedge.dst_conn)
+
+                else:
+                    # Edges that do not go to the `if_block` must lead to a node
+                    #  that is also relocated.
+                    assert origin_node in relocation_destination
+                    new_oedge = branch_state.add_edge(
+                        node_map[(oedge.src, branch_state)],
+                        oedge.src_conn,
+                        node_map[(oedge.dst, branch_state)],
+                        oedge.dst_conn,
+                        dace.Memlet.from_memlet(oedge.data),
+                    )
+                    if not oedge.data.is_empty():
+                        new_oedge.data.data = rename_map[(oedge.data.data, branch_state)]
 
     def _remove_outside_dataflow(
         self,
