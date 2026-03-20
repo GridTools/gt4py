@@ -466,6 +466,7 @@ def optional_lru_cache(
 
 class EqualityBy(HashableBy):
     """Use a hash function as the definition of equality for the wrapped object."""
+
     __hash__ = HashableBy.__hash__
 
     def __eq__(self, other: Any) -> bool:
@@ -513,8 +514,8 @@ def lru_cache(
             @functools.wraps(func)
             def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
                 return cached_func(
-                    *(_LRUCacheValue(key, arg) for arg in args),
-                    **{k: _LRUCacheValue(key, arg) for k, arg in kwargs.items()},
+                    *(EqualityBy(key, arg) for arg in args),
+                    **{k: EqualityBy(key, arg) for k, arg in kwargs.items()},
                 )
 
             inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
