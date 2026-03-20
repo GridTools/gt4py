@@ -569,6 +569,14 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         # key computed here
         call_key: CompiledProgramsKey | None = None,
     ) -> None:
+        if __debug__:
+            warnings.warn(
+                "Python is not running in optimized mode, which may impact performance when using a"
+                " compiled backend. Consider running with `python -O` or setting the environment"
+                " variable `PYTHONOPTIMIZE=1`.",
+                stacklevel=2,
+            )
+
         if not common.is_offset_provider(offset_provider):
             if common.is_offset_provider_type(offset_provider):
                 raise ValueError(

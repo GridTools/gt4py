@@ -53,12 +53,6 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
-_PYTHON_OPTIMIZE_WARNING = (
-    "Python is not running in optimized mode, which may impact performance when using a"
-    " compiled backend. Consider running with `python -O` or setting the environment"
-    " variable `PYTHONOPTIMIZE=1`."
-)
-
 
 ProgramCallMetricsCollector = metrics.make_collector(
     level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
@@ -397,8 +391,6 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                 )
 
             if self.backend is not None:
-                if __debug__:
-                    warnings.warn(_PYTHON_OPTIMIZE_WARNING, stacklevel=2)
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
@@ -654,8 +646,6 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
-            if __debug__:
-                warnings.warn(_PYTHON_OPTIMIZE_WARNING, stacklevel=2)
             offset_provider = {**kwargs.pop("offset_provider", {})}
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
