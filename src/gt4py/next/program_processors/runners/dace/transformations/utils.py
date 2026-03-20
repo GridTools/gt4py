@@ -8,10 +8,8 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-import functools
 import uuid
-import warnings
-from typing import Any, Optional, Sequence, TypeVar, Union
+from typing import Optional, Sequence, TypeVar, Union
 
 import dace
 from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
@@ -21,25 +19,6 @@ from dace.transformation.passes import analysis as dace_analysis
 
 
 _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
-
-
-@functools.wraps(warnings.warn)
-def warn(
-    message: str,
-    category: type[Warning] | None = None,
-    stacklevel: int = 1,
-    source: Any | None = None,
-) -> None:
-    """Wrapper around `warnings.warn()` function that is only enabled in debug mode."""
-    if __debug__:
-        # NOTE: The `skip_file_prefixes` argument was introduced in Python 3.12 and is
-        #   ignored.
-        warnings.warn(
-            message=message,
-            category=category,
-            stacklevel=(stacklevel + 1),
-            source=source,
-        )
 
 
 def unique_name(name: str) -> str:

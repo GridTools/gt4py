@@ -9,6 +9,7 @@
 import copy
 import dataclasses
 import functools
+import warnings
 from typing import Any, Collection, Literal, Mapping, Optional, Sequence, TypeAlias, Union, overload
 
 import dace
@@ -1352,13 +1353,13 @@ def _handle_special_case_of_gt4py_scan_point(
     if _handle_special_case_of_gt4py_scan_point_impl(
         state, descending_point, concat_node, consumed_subset
     ):
-        gtx_transformations.utils.warn(
+        warnings.warn(
             f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}`.",
             stacklevel=1,
         )
         return True
     else:
-        gtx_transformations.utils.warn(
+        warnings.warn(
             f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}` was rejected.",
             stacklevel=1,
         )

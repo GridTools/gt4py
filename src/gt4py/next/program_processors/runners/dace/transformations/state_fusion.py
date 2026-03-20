@@ -6,13 +6,12 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import warnings
 from typing import Any
 
 import dace
 from dace import transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
-
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 # Conditional import because `gt4py.cartesian` uses an older DaCe version without
@@ -223,7 +222,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 #   AccessNode to the same data. In case it is global this is most likely
                 #   valid. However, I think that simply allow it, is not okay, because
                 #   it might break some assumption in the fuse code.
-                gtx_transformations.utils.warn(
+                warnings.warn(
                     f"Detected that '{first_state}' writes to the data"
                     f" `{', '.join(all_data_producers.intersection(data_producers[-1]))}`"
                     " in multiple concurrent subgraphs. This might indicate an error.",

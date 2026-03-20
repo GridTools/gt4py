@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import warnings
 from typing import Any, Optional
 
 import dace
@@ -93,7 +94,7 @@ class SplitConsumerMemlet(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): For optimal result we should fuse these edges first.
         src_to_dest_edges = list(graph.edges_between(src_node, dst_node))
         if len(src_to_dest_edges) != 1:
-            gtx_transformations.utils.warn(
+            warnings.warn(
                 f"Found multiple edges between '{src_node.data}' and '{dst_node.data}'",
                 stacklevel=0,
             )

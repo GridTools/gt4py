@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+import warnings
 from typing import Final, Iterable, Optional, Sequence, TypeAlias
 
 import dace
@@ -563,7 +564,7 @@ def _populate_nested_sdfg(
                         "Connections to a non replicated node are only allowed if the source node is an AccessNode"
                     )
 
-                gtx_transformations.utils.warn(
+                warnings.warn(
                     "Detected computation of data that might not be needed in inline fuser.",
                     stacklevel=0,
                 )
