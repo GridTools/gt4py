@@ -24,6 +24,8 @@ import dace
 
 def _make_if_block_with_tasklet(
     state: dace.SDFGState,
+    with_false_branch: bool = True,
+    with_else_branch: bool = False,
     b1_name: str = "__arg1",
     b2_name: str = "__arg2",
     cond_name: str = "__cond",
@@ -70,16 +72,22 @@ def _make_if_block_with_tasklet(
         dace.Memlet(f"{output_name}[0]"),
     )
 
-    else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
-    fstate = else_body.add_state("false_branch_0_1_2_3_4", is_start_block=True)
-    fstate.add_nedge(
-        fstate.add_access(b2_name),
-        fstate.add_access(output_name),
-        dace.Memlet(f"{b2_name}[0] -> [0]"),
-    )
+    if with_false_branch or with_else_branch:
+        else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
+        fstate = else_body.add_state("false_branch_0_1_2_3_4", is_start_block=True)
+        fstate.add_nedge(
+            fstate.add_access(b2_name),
+            fstate.add_access(output_name),
+            dace.Memlet(f"{b2_name}[0] -> [0]"),
+        )
 
     if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
-    if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}"), else_body)
+
+    if with_false_branch or with_else_branch:
+        if_region.add_branch(
+            dace.sdfg.state.CodeBlock(f"not {cond_name}") if not with_else_branch else None,
+            else_body,
+        )
 
     nested_sdfg = state.add_nested_sdfg(
         sdfg=inner_sdfg,
@@ -90,7 +98,11 @@ def _make_if_block_with_tasklet(
     return nested_sdfg
 
 
-def _make_map_with_conditional_blocks() -> dace.SDFG:
+def _make_map_with_conditional_blocks(
+    both_ifs_with_taklets: bool = False,
+    with_false_branch: bool = True,
+    with_else_branch: bool = False,
+) -> dace.SDFG:
     sdfg = dace.SDFG(gtx_transformations.utils.unique_name("map_with_conditional_blocks"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -120,9 +132,20 @@ def _make_map_with_conditional_blocks() -> dace.SDFG:
     )
     a, b, c, d = (state.add_access(name) for name in "abcd")
 
+    create_temporary_c = (not both_ifs_with_taklets) and (with_false_branch or with_else_branch)
+    create_temporary_d = with_false_branch or with_else_branch
+
     for tmp_name in ["tmp_a", "tmp_b", "tmp_c", "tmp_d"]:
+        if tmp_name == "tmp_c" and not create_temporary_c:
+            continue
+        if tmp_name == "tmp_d" and not create_temporary_d:
+            continue
         sdfg.add_scalar(tmp_name, dtype=dace.float64, transient=True)
-    tmp_a, tmp_b, tmp_c, tmp_d = (state.add_access(f"tmp_{name}") for name in "abcd")
+    tmp_a, tmp_b = (state.add_access(f"tmp_{name}") for name in "ab")
+    if create_temporary_c:
+        tmp_c = state.add_access("tmp_c")
+    if create_temporary_d:
+        tmp_d = state.add_access("tmp_d")
 
     sdfg.add_scalar("cond_var", dtype=dace.bool_, transient=True)
     cond_var = state.add_access("cond_var")
@@ -150,19 +173,35 @@ def _make_map_with_conditional_blocks() -> dace.SDFG:
     state.add_edge(tmp_a, None, tasklet_cond, "__in", dace.Memlet("tmp_a[0]"))
     state.add_edge(tasklet_cond, "__out", cond_var, None, dace.Memlet("cond_var"))
 
-    if_block_0 = _make_if_block(state=state, outer_sdfg=sdfg)
+    if_block_0 = (
+        _make_if_block(state=state, outer_sdfg=sdfg)
+        if not both_ifs_with_taklets
+        else _make_if_block_with_tasklet(
+            state=state, with_false_branch=with_false_branch, with_else_branch=with_else_branch
+        )
+    )
     state.add_edge(cond_var, None, if_block_0, "__cond", dace.Memlet("cond_var"))
     state.add_edge(tmp_a, None, if_block_0, "__arg1", dace.Memlet("tmp_a[0]"))
     state.add_edge(tmp_b, None, if_block_0, "__arg2", dace.Memlet("tmp_b[0]"))
-    state.add_edge(if_block_0, "__output", tmp_c, None, dace.Memlet("tmp_c[0]"))
-    state.add_edge(tmp_c, None, mx, "IN_c", dace.Memlet("c[__i]"))
+    if create_temporary_c:
+        state.add_edge(if_block_0, "__output", tmp_c, None, dace.Memlet("tmp_c[0]"))
+        state.add_edge(tmp_c, None, mx, "IN_c", dace.Memlet("c[__i]"))
+    else:
+        new_edge = state.add_edge(if_block_0, "__output", mx, "IN_c", dace.Memlet("c[__i]"))
+        new_edge.data.allow_oob = True
 
-    if_block_1 = _make_if_block_with_tasklet(state=state)
+    if_block_1 = _make_if_block_with_tasklet(
+        state=state, with_false_branch=with_false_branch, with_else_branch=with_else_branch
+    )
     state.add_edge(cond_var, None, if_block_1, "__cond", dace.Memlet("cond_var"))
     state.add_edge(tmp_a, None, if_block_1, "__arg1", dace.Memlet("tmp_a[0]"))
     state.add_edge(tmp_b, None, if_block_1, "__arg2", dace.Memlet("tmp_b[0]"))
-    state.add_edge(if_block_1, "__output", tmp_d, None, dace.Memlet("tmp_d[0]"))
-    state.add_edge(tmp_d, None, mx, "IN_d", dace.Memlet("d[__i]"))
+    if create_temporary_d:
+        state.add_edge(if_block_1, "__output", tmp_d, None, dace.Memlet("tmp_d[0]"))
+        state.add_edge(tmp_d, None, mx, "IN_d", dace.Memlet("d[__i]"))
+    else:
+        new_edge = state.add_edge(if_block_1, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+        new_edge.data.allow_oob = True
 
     state.add_edge(mx, "OUT_c", c, None, dace.Memlet("c[__i]"))
     state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[__i]"))
@@ -196,6 +235,107 @@ def test_fuse_horizontal_condition_blocks():
     assert (
         len(conditional_block.sdfg.symbols) == 1 and "multiplier" in conditional_block.sdfg.symbols
     )
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def test_fuse_horizontal_condition_blocks_single_false():
+    """
+    Test that the transformation can fuse conditional blocks even if one of them does not have a false branch.
+    """
+    sdfg = _make_map_with_conditional_blocks(with_false_branch=False)
+
+    conditional_blocks = [
+        n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, dace.sdfg.state.ConditionalBlock)
+    ]
+    assert len(conditional_blocks) == 2
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.FuseHorizontalConditionBlocks(),
+        validate=True,
+        validate_all=True,
+    )
+
+    new_conditional_blocks = [
+        n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, dace.sdfg.state.ConditionalBlock)
+    ]
+    assert len(new_conditional_blocks) == 1
+    conditional_block = new_conditional_blocks[0]
+    assert (
+        len(conditional_block.sdfg.symbols) == 1 and "multiplier" in conditional_block.sdfg.symbols
+    )
+
+    true_branch_state = conditional_block.sdfg.states()[0]
+    false_branch_state = conditional_block.sdfg.states()[1]
+    assert "true_tasklet" in [
+        n.label for n in true_branch_state.nodes() if isinstance(n, dace_nodes.Tasklet)
+    ]
+    assert len([n for n in true_branch_state.nodes() if isinstance(n, dace_nodes.AccessNode)]) == 4
+    assert len([n for n in false_branch_state.nodes() if isinstance(n, dace_nodes.AccessNode)]) == 2
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def test_fuse_horizontal_condition_blocks_else_branch():
+    """
+    Test that the transformation can fuse conditional blocks
+    that instead of a `(not __cond)` condition have an `else` (`None`) condition.
+    """
+    sdfg = _make_map_with_conditional_blocks(both_ifs_with_taklets=True, with_else_branch=True)
+
+    conditional_blocks = [
+        n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, dace.sdfg.state.ConditionalBlock)
+    ]
+    assert len(conditional_blocks) == 2
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    sdfg.apply_transformations_repeated(
+        gtx_transformations.FuseHorizontalConditionBlocks(),
+        validate=True,
+        validate_all=True,
+    )
+
+    new_conditional_blocks = [
+        n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, dace.sdfg.state.ConditionalBlock)
+    ]
+    assert len(new_conditional_blocks) == 1
+    conditional_block = new_conditional_blocks[0]
+    conditional_block_branches_conditions = [
+        branch[0].as_string if branch[0] else None for branch in conditional_block.branches
+    ]
+    assert len(conditional_block_branches_conditions) == 2
+    assert "__cond" in conditional_block_branches_conditions
+    assert (
+        None in conditional_block_branches_conditions
+    )  # The extra branch has no condition and thus its condition is `None`
+
+    for subregion in conditional_block.branches:
+        if subregion[0] is not None and subregion[0].as_string == "__cond":
+            true_branch_state = subregion[1].nodes()[0]
+            assert "true_tasklet" in [
+                n.label for n in true_branch_state.nodes() if isinstance(n, dace_nodes.Tasklet)
+            ]
+            assert (
+                len([n for n in true_branch_state.nodes() if isinstance(n, dace_nodes.AccessNode)])
+                == 4
+            )
+        elif subregion[0] is None:
+            extra_branch_state = subregion[1].nodes()[0]
+            assert (
+                len([n for n in extra_branch_state.nodes() if isinstance(n, dace_nodes.AccessNode)])
+                == 4
+            )
+        else:
+            raise AssertionError(
+                f"Unexpected branch condition {subregion[0].as_string} in the fused `ConditionalBlock`."
+            )
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)

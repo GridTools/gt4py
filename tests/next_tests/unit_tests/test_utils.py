@@ -6,11 +6,89 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import inspect
+import pickle
 import pytest
-from typing import Final
 
+from gt4py.eve import datamodels
 from gt4py.next import utils
+
+
+# Module-level classes so pickle can resolve them by qualified name.
+@dataclasses.dataclass
+class _DataclassModel(utils.MetadataBasedPickling):
+    value: int
+    transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+
+
+@dataclasses.dataclass(slots=True)
+class _SlottedDataclassModel(utils.MetadataBasedPickling):
+    value: int
+    transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+
+
+@datamodels.datamodel(slots=False)
+class _DatamodelModel(utils.MetadataBasedPickling):
+    value: int
+    transient: str = datamodels.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+
+
+@dataclasses.dataclass
+class _EmptyDataclassModel(utils.MetadataBasedPickling):
+    pass
+
+
+@dataclasses.dataclass(slots=True)
+class _EmptySlottedDataclassModel(utils.MetadataBasedPickling):
+    pass
+
+
+@datamodels.datamodel(slots=False)
+class _EmptyDatamodelModel(utils.MetadataBasedPickling):
+    pass
+
+
+class TestMetadataBasedPickling:
+    def test_get_metadata_based_getstate_rejects_non_dataclass_like_type(self):
+        with pytest.raises(TypeError, match="Expected a dataclass or datamodel type"):
+            utils._get_metadata_based_state_getstate(object)
+
+    @pytest.mark.parametrize(
+        "instance,expected_state",
+        [
+            (_DataclassModel(1, "foo"), {"value": 1}),
+            (_SlottedDataclassModel(1, "foo"), (None, {"value": 1})),
+            (_DatamodelModel(1, "foo"), {"value": 1}),
+            (_EmptyDataclassModel(), {}),
+            (_EmptySlottedDataclassModel(), None),
+            (_EmptyDatamodelModel(), {}),
+        ],
+    )
+    def test_get_metadata_based_getstate(self, instance, expected_state):
+        cls = type(instance)
+        getstate = utils._get_metadata_based_state_getstate(cls)
+        assert getstate is utils._get_metadata_based_state_getstate(cls)  # cached
+
+        assert getstate(instance) == expected_state
+
+    @pytest.mark.parametrize(
+        "instance,expected_fields",
+        [
+            (_DataclassModel(42, "skip"), {"value": 42}),
+            (_SlottedDataclassModel(42, "skip"), {"value": 42}),
+            (_DatamodelModel(42, "skip"), {"value": 42}),
+            (_EmptyDataclassModel(), {}),
+            (_EmptySlottedDataclassModel(), {}),
+            (_EmptyDatamodelModel(), {}),
+        ],
+    )
+    def test_pickle_roundtrip(self, instance, expected_fields):
+        obj = instance
+        restored = pickle.loads(pickle.dumps(obj))
+
+        for field_name, expected_value in expected_fields.items():
+            assert getattr(restored, field_name) == expected_value
 
 
 def test_tree_map_default():

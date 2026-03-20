@@ -30,7 +30,9 @@ def test_version_info():
         int(p) for p in re.split("[\.\+]", gt4py.__version__)[:3]
     )
     assert gt4py.__version__.startswith(gt4py.__version_info__.public)
-    assert gt4py.__version__.endswith(gt4py.__version_info__.local)
+    assert gt4py.__version_info__.local is None or gt4py.__version__.endswith(
+        gt4py.__version_info__.local
+    )
     assert gt4py.__about__.__version_info__ == gt4py.__version_info__
 
 

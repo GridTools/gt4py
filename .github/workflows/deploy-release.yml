@@ -16,7 +16,7 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: get-versions
         uses: ./.github/actions/get-python-versions
         with:
@@ -27,12 +27,12 @@ jobs:
     needs: [get-python-versions]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Use a deep clone to get the correct version from tags
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
 
@@ -45,7 +45,7 @@ jobs:
           python -m build --sdist --wheel --outdir dist/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gt4py-dist
           path: ./dist/**
@@ -62,7 +62,7 @@ jobs:
       id-token: write
     steps:
       - name: Download wheel
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gt4py-dist
           path: dist
@@ -81,7 +81,7 @@ jobs:
       id-token: write
     steps:
       - name: Download wheel
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gt4py-dist
           path: dist

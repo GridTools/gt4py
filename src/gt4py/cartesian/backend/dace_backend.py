@@ -14,7 +14,7 @@ import pathlib
 import re
 from typing import TYPE_CHECKING, ClassVar
 
-from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
+from dace import SDFG, DebugInfo, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
@@ -145,7 +145,10 @@ def _sdfg_add_arrays_and_edges(
 
             if name in inputs:
                 state.add_edge(
-                    state.add_read(name),
+                    state.add_read(
+                        name,
+                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
+                    ),
                     None,
                     nsdfg,
                     name,
@@ -155,7 +158,10 @@ def _sdfg_add_arrays_and_edges(
                 state.add_edge(
                     nsdfg,
                     name,
-                    state.add_write(name),
+                    state.add_write(
+                        name,
+                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
+                    ),
                     None,
                     Memlet(name, subset=subsets.Range(ranges)),
                 )
@@ -168,7 +174,10 @@ def _sdfg_add_arrays_and_edges(
             )
             if name in inputs:
                 state.add_edge(
-                    state.add_read(name),
+                    state.add_read(
+                        name,
+                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
+                    ),
                     None,
                     nsdfg,
                     name,
@@ -178,7 +187,10 @@ def _sdfg_add_arrays_and_edges(
                 state.add_edge(
                     nsdfg,
                     name,
-                    state.add_write(name),
+                    state.add_write(
+                        name,
+                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
+                    ),
                     None,
                     Memlet(name),
                 )
@@ -266,7 +278,8 @@ def freeze_origin_domain_sdfg(
         if node.has_writes(parent):
             outputs.add(node.data)
 
-    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
+    # fake DebugInfo to avoid calls to `inspect`
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs, debuginfo=DebugInfo(123456))
 
     _sdfg_add_arrays_and_edges(
         field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
@@ -362,7 +375,7 @@ class SDFGManager:
         SDFGManager._strip_history(sdfg)
         sdfg.save(str(path), compress=True)
 
-    def sdfg_via_schedule_tree(self, *, validate: bool = True, simplify: bool = True) -> SDFG:
+    def sdfg_via_schedule_tree(self, *, validate: bool = False, simplify: bool = True) -> SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
 
         Cache the SDFG into the manager for re-use, unless the builder has a no-caching policy.
@@ -411,7 +424,11 @@ class SDFGManager:
             flipper.visit(stree)
 
         # Create SDFG
-        sdfg = stree.as_sdfg(validate=validate, simplify=simplify, skip={"ScalarToSymbolPromotion"})
+        sdfg = stree.as_sdfg(
+            validate=validate,
+            simplify=simplify,
+            skip={"ScalarToSymbolPromotion", "ControlFlowRaising"},
+        )
 
         if do_cache:
             self._save_sdfg(sdfg, path)

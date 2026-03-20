@@ -19,7 +19,7 @@ from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, config as gtx_config
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
@@ -235,6 +235,11 @@ def gt_auto_optimize(
     optimization_hooks = optimization_hooks or {}
 
     with dace.config.temporary_config():
+        # Do not print the transformation progress, unless enabled through env variable.
+        dace.Config.set(
+            "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
+        )
+
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
 

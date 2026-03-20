@@ -45,6 +45,7 @@ from boltons.strutils import (
 
 from . import extended_typing as xtyping
 from .extended_typing import (
+    TYPE_CHECKING,
     Any,
     ArgsOnlyCallable,
     Callable,
@@ -655,6 +656,44 @@ def content_hash(
     return result
 
 
+def custom_pickler(
+    reducer: Callable[[Any], tuple | types.NotImplementedType],
+    name: str | None = None,
+) -> type[pickle.Pickler]:
+    """
+    Create a custom pickler class using the provided function as reducer override.
+    """
+    pickler = type(
+        name or f"CustomReducePickler_{name or id(reducer)}",
+        (pickle.Pickler,),
+        {"reducer_override": staticmethod(reducer)},
+    )
+
+    return pickler
+
+
+def custom_pickler_from_reducers(
+    custom_reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
+    name: str | None = None,
+) -> type[pickle.Pickler]:
+    """
+    Create a pickler with the provided reducers registered in reducer override.
+
+    Since it uses `functools.singledispatch` for the implementation of the
+    reducer override, the custom reducers are used for the types in the keys
+    AND any of its subclasses. This explicitly deviates from the behavior of
+    the `dispatch_table` dict, to allow easy pickle customization of entire class
+    hierarchies.
+    """
+    reducer = functools.singledispatch(
+        cast(Callable[[Any], tuple | types.NotImplementedType], lambda _: NotImplemented)
+    )
+    for cls, func in custom_reducers.items():
+        reducer.register(cls)(func)
+
+    return custom_pickler(reducer, name=name)
+
+
 ddiff = deepdiff.diff.DeepDiff
 """Shortcut for deepdiff.diff.DeepDiff.
 
@@ -831,6 +870,10 @@ class Namespace(types.SimpleNamespace, Generic[T]):
         return {**self.__dict__}
 
     asdict = as_dict
+
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> T: ...
 
 
 class FrozenNamespace(Namespace[T]):
