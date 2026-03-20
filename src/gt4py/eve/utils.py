@@ -486,7 +486,7 @@ def lru_cache(
     Wrap :func:`functools.lru_cache` but allow customizing the cache key.
 
     Be careful, with custom `key` functions, `key(obj1) == key(obj2)` automatically
-    implies `obj1 == obj2`.
+    implies `obj1 == obj2`, i.e. they are considered equal.
 
     >>> @lru_cache(key=id)
     ... def func(x):
