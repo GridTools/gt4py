@@ -611,6 +611,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         requiered_symbols: set[str] = dace.sdfg.state.StateSubgraphView(
             state, relocatable_dataflow
         ).free_symbols
+        assert all(isinstance(sym, str) for sym in requiered_symbols)
 
         # The internal symbols missing the symbols that are needed by the nodes that
         #  are just mapped into the `if_block` as well as the connections that connects
@@ -618,7 +619,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         for node_to_check in relocatable_dataflow:
             for iedge in state.in_edges(node_to_check):
                 if iedge.src in relocatable_dataflow:
-                    continue  # Ignore internal connections.
+                    continue  # Ignore internal connections, handled in subgraph.
+                elif iedge.data.is_empty():
+                    continue  # Empty Memlets do not have symbols.
 
                 if iedge.src is enclosing_map:
                     # Outside-Map data must be mapped. Here we only have to consider
@@ -630,14 +633,18 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     #  edge thus in addition to the symbols of the data, we need the
                     #  symbols needed by the edge.
                     node_to_map = iedge.src
-                    requiered_symbols |= iedge.data.used_symbols(True, edge=iedge)
+                    requiered_symbols |= {
+                        str(sym) for sym in iedge.data.used_symbols(True, edge=iedge)
+                    }
 
                 # Only AccessNodes can be mapped into `if_block`.
                 if not isinstance(node_to_map, dace_nodes.AccessNode):
                     return False
 
                 # Add the symbols of the data.
-                requiered_symbols |= sdfg.arrays[node_to_map.data].used_symbols(True)
+                requiered_symbols |= {
+                    str(sym) for sym in sdfg.arrays[node_to_map.data].used_symbols(True)
+                }
 
         # A conflicting symbol is a free symbol of the relocatable dataflow, that is not a
         #  direct mapping. For example if there is a symbol `n` on the inside and outside

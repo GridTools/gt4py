@@ -1710,8 +1710,8 @@ def test_if_mover_symbolic_tasklet():
         sdfg,
         explected_applies=1,
     )
-    expected_symb = {"symbol_1", "symbol_2"}
 
+    expected_symb = {"symbol_1", "symbol_2"}
     assert if_block.sdfg.symbols.keys() == expected_symb.union(["__i"])
     assert all(if_block.sdfg.symbols[sym] == dace.float64 for sym in expected_symb)
     assert if_block.sdfg.symbols["__i"] in {dace.int32, dace.int64}
