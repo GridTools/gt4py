@@ -370,9 +370,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         connector_usage_location[oedge.dst_conn][1],
                         None,
                         dace.Memlet(
-                            data=rename_map[(oedge.src, branch_state)],
+                            data=rename_map[(oedge.data.data, branch_state)],
                             subset=oedge.data.subset,  # Is always subset.
-                            other_subset=dace.Memlet.from_array(inner_sdfg.arrays[oedge.dst_conn]),
+                            other_subset=dace_sbs.Range.from_array(inner_sdfg.arrays[oedge.dst_conn]),
                             volume=oedge.data.volume,
                             dynamic=oedge.data.dynamic,
                         ),
@@ -490,6 +490,15 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         find_new_name=True,
                     )
                     inner_sdfg.arrays[inner_data].transient = False
+
+                    state.add_edge(
+                            iedge.src,
+                            iedge.src_conn,
+                            if_block,
+                            inner_data,
+                            dace.Memlet.from_array(outer_data, outer_desc),
+                    )
+                    if_block.add_in_connector(inner_data)
 
                     inner_node = branch_state.add_access(inner_data)
                     rename_map[(outer_data, branch_state)] = inner_node.data
