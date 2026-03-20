@@ -953,10 +953,12 @@ def test_if_mover_dependent_branch_4():
 
     _perform_test(sdfg, explected_applies=1)
 
-    # # Examine the structure of the SDFG.
+    # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1"])
     assert len(sdfg.arrays) == len(top_ac)
+    assert all(state.out_degree(ac) == 1 for ac in [s1, c1])
+    assert all(oedge.dst_conn == "__arg4" for oedge in state.out_edges(s1))
 
     top_tlet: list[dace_nodes.Tasklet] = util.count_nodes(state, dace_nodes.Tasklet, True)
     assert len(top_tlet) == 2
@@ -970,12 +972,12 @@ def test_if_mover_dependent_branch_4():
         .union(input_names)
         .union(["__arg1", "__arg2", "__arg3", "__arg4", "__output1", "__output2"])
     )
-    expected_data.difference_update(["c1", "c", "d", "f", "s"])
+    expected_data.difference_update(["c1", "c", "d", "f", "s", "s1"])
     assert expected_data == {ac.data for ac in inner_ac}
-    assert len([ac for ac in inner_ac if ac.data == "s1"]) == 1
+    assert len([ac for ac in inner_ac if ac.data == "__arg4"]) == 2
     assert len([ac for ac in inner_ac if ac.data == "__output1"]) == 2
     assert len([ac for ac in inner_ac if ac.data == "__output2"]) == 2
-    assert len(expected_data) + 3 == len(inner_ac)
+    assert len(expected_data) + 4 == len(inner_ac)
     assert if_block.sdfg.arrays.keys() == expected_data.union(["__cond"])
 
     inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
