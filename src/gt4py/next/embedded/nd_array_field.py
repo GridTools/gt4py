@@ -28,7 +28,7 @@ from gt4py.eve.extended_typing import (
     TypeVar,
     cast,
 )
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.embedded import (
     common as embedded_common,
     context as embedded_context,
@@ -104,7 +104,9 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 @dataclasses.dataclass(frozen=True)
 class NdArrayField(
-    common.MutableField[common.DimsT, core_defs.ScalarT], common.FieldBuiltinFuncRegistry
+    common.MutableField[common.DimsT, core_defs.ScalarT],
+    common.FieldBuiltinFuncRegistry,
+    utils.MetadataBasedPickling,
 ):
     """
     Shared field implementation for NumPy-like fields.
@@ -485,45 +487,6 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    _kind: Optional[common.ConnectivityKind] = None
-
-    def __post_init__(self) -> None:
-        assert self._kind is None or bool(self._kind & common.ConnectivityKind.ALTER_DIMS) == (
-            self.domain.dim_index(self.codomain) is not None
-        )
-
-    @functools.cached_property
-    def _cache(self) -> dict:
-        return {}
-
-    @classmethod
-    def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
-        raise NotImplementedError()
-
-    @property
-    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
-        return self._codomain
-
-    @property
-    def skip_value(self) -> Optional[core_defs.IntegralScalar]:
-        return self._skip_value
-
-    @property
-    def kind(self) -> common.ConnectivityKind:
-        if self._kind is None:
-            object.__setattr__(
-                self,
-                "_kind",
-                common.ConnectivityKind.ALTER_STRUCT
-                | (
-                    common.ConnectivityKind.ALTER_DIMS
-                    if self.domain.dim_index(self.codomain) is None
-                    else common.ConnectivityKind(0)
-                ),
-            )
-            assert self._kind is not None
-
-        return self._kind
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -554,6 +517,33 @@ class NdArrayConnectivityField(
         assert isinstance(codomain, common.Dimension)
 
         return cls(domain, array, codomain, _skip_value=skip_value)
+
+    @classmethod
+    def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
+        raise NotImplementedError()
+
+    @property
+    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
+        return self._codomain
+
+    @property
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]:
+        return self._skip_value
+
+    @functools.cached_property
+    def kind(self) -> common.ConnectivityKind:
+        return common.ConnectivityKind.ALTER_STRUCT | (
+            common.ConnectivityKind.ALTER_DIMS
+            if self.domain.dim_index(self.codomain) is None
+            else common.ConnectivityKind(0)
+        )
+
+    # This embedded run-time cache is only used to speed up repeated calls to
+    # `inverse_image` and `restrict`, and it should not be considered part of
+    # the connectivity field definition, and therefore it should not be serialized.
+    @functools.cached_property
+    def _cache(self) -> dict:
+        return {}
 
     def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
