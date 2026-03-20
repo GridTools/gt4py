@@ -464,13 +464,12 @@ def optional_lru_cache(
     return _decorator(func) if func is not None else _decorator
 
 
-class _LRUCacheValue(HashableBy):
+class EqualityBy(HashableBy):
+    """Use a hash function as the definition of equality for the wrapped object."""
     __hash__ = HashableBy.__hash__
 
-    # we compare by hash here as the cache lookup in lru_cache is not only by hash but also by
-    # equality, but we only want to consider the key given by the user not the value.
     def __eq__(self, other: Any) -> bool:
-        return hash(self) == hash(other)
+        return self is other or hash(self) == hash(other)
 
 
 # TODO(egparedes): it would be more efficient to implement the caching logic
