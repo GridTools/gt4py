@@ -33,12 +33,13 @@ def find_constant_symbols(
     ir: itir.Program,
     sdfg: dace.SDFG,
     offset_provider_type: common.OffsetProviderType,
-    disable_field_origin_on_program_arguments: bool = False,
+    disable_field_origin_on_program_arguments: bool,
+    unstructured_horizontal_has_unit_stride: bool,
 ) -> dict[str, int]:
     """Helper function to find symbols to replace with constant values."""
     constant_symbols: dict[str, int] = {}
 
-    if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE:
+    if unstructured_horizontal_has_unit_stride:
         # Search the stride symbols corresponding to the horizontal dimension
         for p in ir.params:
             if isinstance(p.type, ts.FieldType):
@@ -364,6 +365,7 @@ class DaCeTranslator(
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
     async_sdfg_call: bool
+    unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
 
     disable_itir_transforms: bool = False
@@ -396,7 +398,11 @@ class DaCeTranslator(
         sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
-            ir, sdfg, offset_provider_type, self.disable_field_origin_on_program_arguments
+            ir,
+            sdfg,
+            offset_provider_type,
+            self.disable_field_origin_on_program_arguments,
+            self.unstructured_horizontal_has_unit_stride,
         )
 
         if self.auto_optimize:

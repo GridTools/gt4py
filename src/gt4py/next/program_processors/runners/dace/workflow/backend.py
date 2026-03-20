@@ -72,6 +72,7 @@ def make_dace_backend(
     auto_optimize: bool = True,
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
+    unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
@@ -86,6 +87,8 @@ def make_dace_backend(
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
+        unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
+            in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
             compute time.
         use_zero_origin: Can be set to `True` when all fields passed as program
@@ -116,7 +119,7 @@ def make_dace_backend(
     # Set `unit_strides_kind` based on the gt4py env configuration.
     optimization_args = optimization_args | {
         "unit_strides_kind": common.DimensionKind.HORIZONTAL
-        if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        if unstructured_horizontal_has_unit_stride
         else None
     }
 
@@ -127,6 +130,7 @@ def make_dace_backend(
         otf_workflow__cached_translation=cached,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
+        otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
         otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
