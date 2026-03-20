@@ -113,6 +113,14 @@ def compile_variant_hook(
             },
         )
 
+    if __debug__:
+        warnings.warn(
+            "Python is not running in optimized mode, which may impact performance when using a"
+            " compiled backend. Consider running with `python -O` or setting the environment"
+            " variable `PYTHONOPTIMIZE=1`.",
+            stacklevel=6,
+        )
+
 
 @hook_machinery.context_hook
 def compiled_program_call_context(
@@ -379,11 +387,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             # type, add the argument types to the cache key as the argument types are used during
             # compilation. In case the program is not generic we can avoid the potentially
             # expensive type deduction for all arguments and not include it in the key.
-            warnings.warn(
-                "Calling generic programs / direct calls to scan operators are not optimized. "
-                "Consider calling a specialized version instead.",
-                stacklevel=2,
-            )
+            if enable_jit:
+                warnings.warn(
+                    "Calling generic programs / direct calls to scan operators are not optimized. "
+                    "Consider calling a specialized version instead.",
+                    stacklevel=3,
+                )
             arg_specialization_key = eve_utils.content_hash(
                 (
                     tuple(type_translation.from_value(arg) for arg in canonical_args),
