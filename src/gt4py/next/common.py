@@ -108,16 +108,16 @@ class Dimension:
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
 
-    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]  # returns Domain, not bool
+    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
         return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
 
-    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]  # returns Domain, not bool
+    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:
         return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
 
-    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]  # returns Domain, not bool
+    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:
         return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
 
-    def __le__(self, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]  # returns Domain, not bool
+    def __le__(self, value: core_defs.IntegralScalar) -> Domain:
         return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
 
     @overload  # type: ignore[override]  # incompatible with supertype `object.__eq__` which returns `bool`.
