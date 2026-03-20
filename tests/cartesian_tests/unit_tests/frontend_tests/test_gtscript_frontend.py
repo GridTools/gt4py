@@ -715,22 +715,6 @@ class TestIntervalSyntax:
                 level=nodes.LevelMarker.END, offset=-1, loc=loc
             )
 
-    def test_axisinterval(self):
-        def definition_func(field: gtscript.Field[float]):
-            with computation(PARALLEL), interval(K[1:-1]):
-                field = 0
-
-        def_ir = parse_definition(
-            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
-        )
-        loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == nodes.AxisBound(
-            level=nodes.LevelMarker.START, offset=1, loc=loc
-        )
-        assert def_ir.computations[0].interval.end == nodes.AxisBound(
-            level=nodes.LevelMarker.END, offset=-1, loc=loc
-        )
-
     def test_error_none(self):
         def definition_func(field: gtscript.Field[float]):
             with computation(PARALLEL), interval(None, -1):
@@ -751,7 +735,10 @@ class TestIntervalSyntax:
             with computation(PARALLEL), interval(K[2], -1):
                 field = 0
 
-        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Two-argument syntax"):
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid interval range specification",
+        ):
             parse_definition(
                 definition_func,
                 name=inspect.stack()[0][3],

@@ -109,6 +109,28 @@ class Dimension:
         return self + (-offset)
 
 
+if TYPE_CHECKING:
+    # These exist as on-the fly replacements for Dimension instances
+    # (which are not types) during typechecking (with mypy). We can
+    # track up to four distinct dimensions at a time, everything beyond
+    # becomes AnyDim
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimA(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimB(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimC(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimD(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _AnyDim(Dimension): ...
+
+
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
 
@@ -773,6 +795,18 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
+    def __lt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __le__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __gt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __ge__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
     def __and__(self, other: Field | core_defs.ScalarT) -> Field:
         """Only defined for `Field` of value type `bool`."""
 
@@ -994,34 +1028,46 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __lt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __le__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __gt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __ge__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __and__(self, other: Field | core_defs.IntegralScalar) -> Never:
@@ -1205,7 +1251,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
-        return core_defs.Int32DType()  # type: ignore[return-value]
+        return core_defs.Int32DType()
 
     # This is a workaround to make this class concrete, since `codomain` is an
     # abstract property of the `Connectivity` Protocol.

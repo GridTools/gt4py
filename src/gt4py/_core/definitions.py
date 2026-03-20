@@ -166,7 +166,7 @@ def dtype_kind(
 
 
 @overload
-def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]: ...
+def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]: ...  # type: ignore[overload-cannot-match] # precision blurring from mypy plugin seems to interfere
 
 
 @overload
