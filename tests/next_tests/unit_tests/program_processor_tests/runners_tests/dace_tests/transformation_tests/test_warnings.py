@@ -7,20 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
-import numpy as np
 import warnings
 
-# Without this the test fails if DaCe is not installed, even when the `requires_dace`
-#  marker is configured in `__init__.py`.
-dace = pytest.importorskip("dace")
-
-from gt4py.next.program_processors.runners.dace import (
-    transformations as gtx_transformations,
-)
+from gt4py.next import config as gtx_config
 
 
 def test_if_warning_is_raised():
-    warn_msg = "This is a warning."
+    assert not gtx_config.SKIP_WARNINGS, "Tests do not run in debug mode."
 
+    warn_msg = "This is a warning."
     with pytest.warns(UserWarning, match=warn_msg):
         warnings.warn(warn_msg, UserWarning)
