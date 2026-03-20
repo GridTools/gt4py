@@ -8,7 +8,7 @@
 
 import pytest
 import numpy as np
-import copy
+import warnings
 
 # Without this the test fails if DaCe is not installed, even when the `requires_dace`
 #  marker is configured in `__init__.py`.
@@ -23,4 +23,4 @@ def test_if_warning_is_raised():
     warn_msg = "This is a warning."
 
     with pytest.warns(UserWarning, match=warn_msg):
-        gtx_transformations.utils.warn(warn_msg, UserWarning)
+        warnings.warn(warn_msg, UserWarning)
