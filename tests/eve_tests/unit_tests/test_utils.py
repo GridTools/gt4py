@@ -270,6 +270,22 @@ def test_lru_cache_key_id_called_once():
     assert cached.cache_info().misses == 1
 
 
+def test_lru_cache_no_eq_call():
+    class A:
+        def __hash__(self) -> int:
+            return 1
+
+        def __eq__(self, other):
+            raise ValueError()  # this function should never be called
+
+    @eve.utils.lru_cache(key=lambda x: hash(x))
+    def func(x):
+        pass
+
+    func(A())
+    func(A())
+
+
 def test_fluid_partial():
     from gt4py.eve.utils import fluid_partial
 
