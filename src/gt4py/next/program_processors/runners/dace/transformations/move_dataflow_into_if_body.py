@@ -13,7 +13,6 @@ from typing import Any, Optional
 
 import dace
 from dace import (
-    data as dace_data,
     dtypes as dace_dtypes,
     properties as dace_properties,
     subsets as dace_sbs,
@@ -191,7 +190,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     upstream_if_block=upstream_if_block,
                     enclosing_map=enclosing_map,
                 )
-                for upstream_if_block in relocated_dataflow
+                for upstream_if_block in relocatable_dataflow
                 if isinstance(upstream_if_block, dace_nodes.NestedSDFG)
             ):
                 return False
@@ -222,7 +221,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             }
             for conn_names in [relocatable_connectors, non_relocatable_connectors]
         )
-        relocatable_dataflow: set = self._filter_relocatable_dataflow(
+        relocatable_dataflow: set[dace_nodes.Node] = self._filter_relocatable_dataflow(
             sdfg=sdfg,
             state=graph,
             if_block=if_block,
@@ -234,22 +233,24 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # We have to bring the nodes in a deterministic order.
         nodes_to_move: list[dace_nodes.Node] = gtx_transformations.utils.order_nodes(
-            nodes_to_move, state
+            relocatable_dataflow, graph
         )
 
         # For each node we have to find out in which state inside the `if_block` it will
         #  end up. `relocation_destination` has a fixed order.
         relocation_destination: dict[dace_nodes.Node, dace.SDFGState] = {}
         for node_to_move in nodes_to_move:
+            # Although `node_top_move` could be reached through different connectors
+            #  they are all associated to the same branch.
+            target_state: Optional[dace.SDFGState] = None
             for conn, raw_reloc_dataflow_of_conn in raw_relocatable_dataflow.items():
                 if node_to_move in raw_reloc_dataflow_of_conn:
+                    target_state = connector_usage_location[conn][0]
                     break
             else:
                 raise ValueError("Could not find node '{node_to_move}'")
-            relocation_destination[node_to_move] = connector_usage_location[conn][0]
-
-        # TODO: LOOK INTO THIS FUNCTION IF IT IS UNSTABLE.
-        self._update_symbol_mapping(if_block, sdfg, nodes_to_move)
+            assert target_state is not None
+            relocation_destination[node_to_move] = target_state
 
         # Relocate the dataflow.
         self._replicate_dataflow_into_branch(
@@ -258,12 +259,19 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if_block=if_block,
             enclosing_map=enclosing_map,
             relocation_destination=relocation_destination,
+            connector_usage_location=connector_usage_location,
+        )
+
+        # Must be performed after relocation.
+        self._update_symbol_mapping(
+            sdfg=sdfg,
+            if_block=if_block,
         )
 
         self._remove_outside_dataflow(
             sdfg=sdfg,
             state=graph,
-            relocatable_dataflow=relocatable_dataflow,
+            relocation_destination=relocation_destination,
         )
 
         # Because we relocate some node it seems that DaCe gets a bit confused.
@@ -303,23 +311,22 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         """
         inner_sdfg = if_block.sdfg
 
-        # Data that has been fully mapped into the `if_block` and its name. Format is
-        #  because of aliasing.
-        fully_mapped_in_data: dict[str, set[str]] = collections.defaultdict(set)
-        for if_iedge in state.in_edges(if_block):
-            if if_iedge.data.is_empty():
-                continue
-            outer_data = if_iedge.data.data
-            mapped_in_range = if_iedge.data.subset
-            outer_desc = sdfg.arrays[outer_data]
-            if mapped_in_range.covers(dace_sbs.Range.from_array(outer_desc)) == True:
-                fully_mapped_in_data[outer_data].add(if_iedge.dst_conn)
-
         # Maps old nodes to the new relocated nodes inside the `if_block`. Note that
         #  the state _inside_ the `if_block` is part of the key. This is needed to
         #  handle the "outside Map data" which must be mapped into multiple states.
         node_map: dict[tuple[dace_nodes.Node, dace.SDFGState], dace_nodes.Node] = dict()
         rename_map: dict[tuple[str, dace.SDFGState], str] = dict()
+
+        # Data that has been fully mapped into the `if_block` and its name inside it.
+        fully_mapped_in_data: dict[str, set[str]] = collections.defaultdict(set)
+        for if_iedge in state.in_edges(if_block):
+            if if_iedge.data.is_empty():
+                continue
+            outer_data = if_iedge.data.data
+            mapped_in_range = if_iedge.data.subset  # Is always `.subset`.
+            outer_desc = sdfg.arrays[outer_data]
+            if mapped_in_range.covers(dace_sbs.Range.from_array(outer_desc)) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                fully_mapped_in_data[outer_data].add(if_iedge.dst_conn)
 
         # Replicate the nodes into the `if_block` and create the needed data The
         #  "outside Map data" will be handled when we handle the incoming edges.
@@ -344,19 +351,19 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 rename_map[(origin_node.data, branch_state)] = new_data_name
 
         # We now recreate the edges
+        #  We insert them in the same order as we find them outside.
         for origin_node, branch_state in relocation_destination.items():
-            for oedge in state.out_edges(node):
-                assert not oedge.data.is_empty()
+            for oedge in state.out_edges(origin_node):
                 if oedge.dst is if_block:
                     # This defines the "argument" to the nested SDFG. This means that
                     #  the new destination now is the single node inside `if_block`
                     #  that represents the argument.
+                    assert not oedge.data.is_empty()
                     assert not inner_sdfg.arrays[oedge.dst_conn].transient
                     assert branch_state is connector_usage_location[oedge.dst_conn][0]
                     assert isinstance(oedge.src, dace_nodes.AccessNode)
                     assert oedge.data.wcr is None and oedge.data.other_subset is None
 
-                    # TODO(reviewer): Make sure I added a test.
                     branch_state.add_edge(
                         node_map[(oedge.src, branch_state)],
                         oedge.src_conn,
@@ -372,12 +379,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     )
 
                     # The inner data is no longer a global but has become a transient.
+                    assert oedge.dst_conn in if_block.in_connectors
                     inner_sdfg.arrays[oedge.dst_conn].transient = True
                     if_block.remove_in_connector(oedge.dst_conn)
 
                 else:
-                    # If it is not going to the `if_block` it must be a connection
-                    #  between to relocated nodes, which we can simply copy.
+                    # Edges that do not go to the `if_block` must lead to a node
+                    #  that is also relocated.
                     assert origin_node in relocation_destination
                     new_oedge = branch_state.add_edge(
                         node_map[(oedge.src, branch_state)],
@@ -395,7 +403,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #  that have been relocated.
         # TODO(phimuell): Can we merge the two outer loops?
         for origin_node, branch_state in relocation_destination.items():
-            for iedge in state.in_edges(node):
+            for iedge in state.in_edges(origin_node):
                 if iedge.src in relocation_destination:
                     # Dependency between two relocated nodes: Handled above.
                     continue
@@ -403,7 +411,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     # This is an empty Memlet that is between a node that is relocated
                     #  and a node that is not relocated. Because we move the destination
                     #  of the edge into the `if_block` the "happens before" relation
-                    #  is automatically handled and we have to do nothing.
+                    #  is automatically handled and this edge is no longer needed.
                     continue
 
                 # Now we have to figuring out where the data is coming from, since
@@ -429,16 +437,16 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                 outer_data = outer_node.data
                 outer_desc = sdfg.arrays[outer_data]
 
-                # Check if the data is already mapped in and if not map it in.
                 if (outer_node, branch_state) in node_map:
-                    # The node is already mapped into this state, so nothing to do.
+                    # The node is already mapped into this state.
                     assert (outer_data, branch_state) in rename_map
                     assert not node_map[(outer_node, branch_state)].desc(inner_sdfg).transient
                     pass
 
                 elif outer_data in fully_mapped_in_data:
-                    # The data has already been mapped into the `if_block` thus
-                    #  check the state if there is a source node or create one.
+                    # The data has already been mapped into the `if_block`, but not in
+                    #  `branch_state`. We first look if the state contains an AccessNode
+                    #  referring to that data.
                     outer_aliases = fully_mapped_in_data[outer_data]
                     candidate_nodes: list[dace_nodes.AccessNode] = sorted(
                         (
@@ -449,15 +457,16 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         key=lambda dnode: dnode.data,
                     )
 
-                    if len(candidate_source_nodes) == 0:
+                    if len(candidate_nodes) == 0:
                         # There is no AccessNode in the state so we have to create one.
                         inner_data = sorted(outer_aliases)[0]
                         inner_node = branch_state.add_access(inner_data)
 
                     else:
-                        # This is to handle a legal but very unlikely case, that we
-                        #  do not handle. If there is any non sink node, then we might
-                        #  have a read-write conflict.
+                        # There is an AccessNode in the state. To handle some legal
+                        #  but unlikely case we check that nodes we found are all
+                        #  source nodes. We have to do this to prevent read-write
+                        #  conflicts.
                         candidate_source_nodes = [
                             dnode for dnode in candidate_nodes if branch_state.in_degree(dnode) == 0
                         ]
@@ -501,37 +510,37 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        relocatable_dataflow: dict[str, set[dace_nodes.Node]],
+        relocation_destination: dict[dace_nodes.Node, dace.SDFGState],
     ) -> None:
         """Removes the original dataflow, that has been relocated.
 
         The function will also remove data containers that are no longer in use.
         """
-        # Creating the union of all first ensures that a node is only removed once.
-        all_relocatable_dataflow: set[dace_nodes.Node] = functools.reduce(
-            lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), set()
-        )
 
-        # Before we can clean the original nodes, we must clean the dataflow. If a
-        #  node, that was relocated, has incoming connections we must remove them
-        #  and the parent dataflow.
-        for node_to_remove in all_relocatable_dataflow:
+        # Clean up the dataflow first, before removing the nodes.
+        for node_to_remove in relocation_destination:
+            # Create all "interface edges", i.e. connecting a relocated node with one
+            #  that is not. This is needed to properly remove dangling Memlet paths.
             for iedge in list(state.in_edges(node_to_remove)):
-                if iedge.src in all_relocatable_dataflow:
+                if iedge.src in relocation_destination:
                     continue
                 dace_sutils.remove_edge_and_dangling_path(state, iedge)
 
             if isinstance(node_to_remove, dace_nodes.AccessNode):
+                # NOTE: We can remove the data here, because by assumption data that is
+                #   referred to by an AccessNode inside a Map is single use data and
+                #   used nowhere else.
+                # NOTE: This will temporarily create an invalid SDFG.
                 assert node_to_remove.desc(sdfg).transient
                 sdfg.remove_data(node_to_remove.data, validate=False)
 
         # Remove the original nodes (data descriptors were deleted in the loop above).
-        state.remove_nodes_from(all_relocatable_dataflow)
+        state.remove_nodes_from(relocation_destination.keys())
 
     def _update_symbol_mapping(
         self,
+        sdfg: dace.SDFG,
         if_block: dace_nodes.NestedSDFG,
-        parent: dace.SDFG,
     ) -> None:
         """Updates the symbol mapping of the nested SDFG.
 
@@ -539,14 +548,17 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         are available in the parent SDFG.
         """
         symbol_mapping = if_block.symbol_mapping
-        missing_symbols = [ms for ms in if_block.sdfg.free_symbols if ms not in symbol_mapping]
+        missing_symbols = sorted(
+            (ms for ms in if_block.sdfg.free_symbols if ms not in symbol_mapping),
+            key=lambda sym: str(sym),
+        )
         symbol_mapping.update({s: s for s in missing_symbols})
         if_block.symbol_mapping = symbol_mapping  # Performs conversion.
 
         # Add new global symbols to nested SDFG.
         #  The code is based on `SDFGState.add_nested_sdfg()`.
         if_block_symbols = if_block.sdfg.symbols
-        parent_symbols = parent.symbols
+        parent_symbols = sdfg.symbols
         for new_sym in missing_symbols:
             if new_sym in if_block_symbols:
                 # The symbol is already known, so we check that it is the same type as in the
@@ -577,49 +589,43 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     ) -> bool:
         """Check if the relocation would cause any conflict, such as a symbol clash."""
 
-        # TODO: remove check ion data renaming but still require symbols.
-
         # TODO(phimuell): There is an obscure case where the nested SDFG, on its own,
         #   defines a symbol that is also mapped, for example a dynamic Map range.
         #   It is probably not a problem, because of the scopes DaCe adds when
         #   generating the C++ code.
 
-        # Create a subgraph to compute the free symbols, i.e. the symbols that
-        #  need to be supplied from the outside. However, this are not all.
+        # This will give us the "internal symbols" that need to be mapped into `if_block`.
+        #  It does not include all symbols, see bellow.
         requiered_symbols: set[str] = dace.sdfg.state.StateSubgraphView(
-            state, relocated_dataflow
+            state, relocatable_dataflow
         ).free_symbols
 
-        inner_data_names = if_block.sdfg.arrays.keys()
-        for node_to_check in relocated_dataflow:
-            if (
-                isinstance(node_to_check, dace_nodes.AccessNode)
-                and node_to_check.data in inner_data_names
-            ):
-                # There is already a data descriptor that is used on the inside as on
-                #  the outside. Thus we would have to perform some renaming, which we
-                #  currently do not.
-                # TODO(phimell): Handle this case.
-                return False
-
+        # The internal symbols missing the symbols that are needed by the nodes that
+        #  are just mapped into the `if_block` as well as the connections that connects
+        #  relocated and mapped nodes.
+        for node_to_check in relocatable_dataflow:
             for iedge in state.in_edges(node_to_check):
-                src_node = iedge.src
-                if src_node not in relocated_dataflow:
-                    # This means that `src_node` is not relocated but mapped into the
-                    #  `if` block. This means that `edge` is replicated as well.
-                    # NOTE: This code is based on the one found in `DataflowGraphView`.
-                    # TODO(phimuell): Do we have to inspect the full Memlet path here?
-                    assert isinstance(src_node, dace_nodes.AccessNode) or src_node is enclosing_map
+                if iedge.src in relocatable_dataflow:
+                    continue  # Ignore internal connections.
+
+                if iedge.src is enclosing_map:
+                    # Outside-Map data must be mapped. Here we only have to consider
+                    #  the symbols of the node and can ignore the symbols of the edge.
+                    memlet_path = state.memlet_path(iedge)
+                    node_to_map = memlet_path[0].src
+                else:
+                    # The mapped node is inside the Map this means we replicate this
+                    #  edge thus in addition to the symbols of the data, we need the
+                    #  symbols needed by the edge.
+                    node_to_map = iedge.src
                     requiered_symbols |= iedge.data.used_symbols(True, edge=iedge)
 
-        # The (beyond the enclosing Map) data is also mapped into the `if` block, so we
-        #  have to consider that as well.
-        for iedge in state.in_edges(if_block):
-            if iedge.src is enclosing_map and (not iedge.data.is_empty()):
-                outside_desc = sdfg.arrays[iedge.data.data]
-                if isinstance(outside_desc, dace_data.View):
-                    return False  # Handle this case.
-                requiered_symbols |= outside_desc.used_symbols(True)
+                # Only AccessNodes can be mapped into `if_block`.
+                if not isinstance(node_to_map, dace_nodes.AccessNode):
+                    return False
+
+                # Add the symbols of the data.
+                requiered_symbols |= sdfg.arrays[node_to_map.data].used_symbols(True)
 
         # A conflicting symbol is a free symbol of the relocatable dataflow, that is not a
         #  direct mapping. For example if there is a symbol `n` on the inside and outside
@@ -720,7 +726,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # These are the nodes that can not be relocated anyway.
         all_non_relocatable_dataflow: set[dace_nodes.Node] = functools.reduce(
-            lambda s1, s2: s1.union(s2), all_non_relocatable_dataflow.values(), set()
+            lambda s1, s2: s1.union(s2), non_relocatable_dataflow.values(), set()
         )
 
         # While we can relocate nodes that are needed by multiple connectors, we can
@@ -728,7 +734,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         nodes_in_states: dict[dace.SDFGState, set[dace_nodes.Node]] = collections.defaultdict(set)
         for conn_name, rel_df in raw_relocatable_dataflow.items():
             nodes_in_states[connector_usage_location[conn_name][0]].update(rel_df)
-        state_nodes_sets = list(nodes_per_state.values())  # Order is unimportant here.
+        state_nodes_sets = list(nodes_in_states.values())  # Order is unimportant here.
         for i, state_nodes in enumerate(state_nodes_sets):
             for j in range(i + 1, len(state_nodes_sets)):
                 all_non_relocatable_dataflow.update(state_nodes.intersection(state_nodes_sets[j]))
@@ -752,9 +758,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         while has_been_updated:
             has_been_updated = False
 
-            # TODO(phimuell): Look at me.
-            # TODO(reviewer): Make sure I looked at it.
-
             for reloc_node in list(nodes_proposed_for_reloc):
                 # The node was already removed in a previous iteration.
                 if reloc_node not in nodes_proposed_for_reloc:
@@ -774,8 +777,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     nodes_proposed_for_reloc.remove(reloc_node)
                     has_been_updated = True
                     continue
-
-                # Empty edges
 
                 # We do not look at incoming edges that comes from nodes that are not
                 #  mappable, i.e. AccessNodes. In addition to AccessNodes we also
@@ -811,7 +812,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         if_block: dace_nodes.NestedSDFG,
     ) -> Optional[
-        tuple[list[str], [ststr], dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]]]
+        tuple[list[str], list[str], dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]]]
     ]:
         """Check if `if_block` can be processed and partition the input connectors.
 
