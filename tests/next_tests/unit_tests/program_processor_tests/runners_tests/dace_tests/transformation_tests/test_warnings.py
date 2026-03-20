@@ -10,6 +10,10 @@ import pytest
 import numpy as np
 import copy
 
+# Without this the test fails if DaCe is not installed, even when the `requires_dace`
+#  marker is configured in `__init__.py`.
+dace = pytest.importorskip("dace")
+
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
