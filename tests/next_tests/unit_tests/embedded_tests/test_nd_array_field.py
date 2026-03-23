@@ -1171,3 +1171,129 @@ def test_concat_where(
 
         assert expected_domain == result.domain
         np.testing.assert_allclose(result.asnumpy(), expected_array)
+
+
+@pytest.mark.parametrize(
+    "domain, expected",
+    [
+        # finite domain → two complement regions (left and right of the domain)
+        (
+            common.Domain(dims=(D0,), ranges=(UnitRange(2, 5),)),
+            (
+                common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 2),)),
+                common.Domain(dims=(D0,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),
+            ),
+        ),
+        # single-point domain
+        (
+            D0 == 3,
+            (
+                common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 3),)),
+                common.Domain(dims=(D0,), ranges=(UnitRange(4, common.Infinity.POSITIVE),)),
+            ),
+        ),
+        # open on the left (D0 < 5) → only a right complement
+        (
+            common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)),
+            (common.Domain(dims=(D0,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),),
+        ),
+        # open on the right (D0 >= 5) → only a left complement
+        (
+            common.Domain(dims=(D0,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),
+            (common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)),),
+        ),
+        # full line (both infinite) → empty complement
+        (
+            common.Domain(
+                dims=(D0,),
+                ranges=(UnitRange(common.Infinity.NEGATIVE, common.Infinity.POSITIVE),),
+            ),
+            (),
+        ),
+        # empty domain [3, 3) → normalized to [0, 0), invert sees (0, 0)
+        (
+            common.Domain(dims=(D0,), ranges=(UnitRange(3, 3),)),
+            (
+                common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 0),)),
+                common.Domain(dims=(D0,), ranges=(UnitRange(0, common.Infinity.POSITIVE),)),
+            ),
+        ),
+    ],
+)
+def test_invert_domain(domain, expected):
+    result = nd_array_field._invert_domain(domain)
+    assert result == expected
+
+
+@pytest.mark.uses_concat_where
+@pytest.mark.parametrize(
+    "fields_data, dim, expected_data, expect_error",
+    [
+        # two adjacent fields, already ordered
+        (
+            [([1, 2], {D0: (0, 2)}), ([3, 4], {D0: (2, 4)})],
+            D0,
+            ([1, 2, 3, 4], {D0: (0, 4)}),
+            None,
+        ),
+        # two adjacent fields, reverse order → _concat sorts them
+        (
+            [([3, 4], {D0: (2, 4)}), ([1, 2], {D0: (0, 2)})],
+            D0,
+            ([1, 2, 3, 4], {D0: (0, 4)}),
+            None,
+        ),
+        # three fields
+        (
+            [([1], {D0: (0, 1)}), ([2], {D0: (1, 2)}), ([3], {D0: (2, 3)})],
+            D0,
+            ([1, 2, 3], {D0: (0, 3)}),
+            None,
+        ),
+        # single field (trivial concat)
+        (
+            [([10, 20, 30], {D0: (5, 8)})],
+            D0,
+            ([10, 20, 30], {D0: (5, 8)}),
+            None,
+        ),
+        # gap between fields → NonContiguousDomain
+        (
+            [([1, 2], {D0: (0, 2)}), ([3, 4], {D0: (3, 5)})],
+            D0,
+            None,
+            embedded_exceptions.NonContiguousDomain,
+        ),
+        # overlapping fields → ValueError
+        (
+            [([1, 2, 3], {D0: (0, 3)}), ([4, 5, 6], {D0: (2, 5)})],
+            D0,
+            None,
+            ValueError,
+        ),
+        # negative domain indices
+        (
+            [([1, 2], {D0: (-3, -1)}), ([3], {D0: (-1, 0)})],
+            D0,
+            ([1, 2, 3], {D0: (-3, 0)}),
+            None,
+        ),
+    ],
+)
+def test_concat(fields_data, dim, expected_data, expect_error):
+    fields = [
+        common._field(np.asarray(data, dtype=np.int32), domain=common.domain(domain))
+        for data, domain in fields_data
+    ]
+
+    if expect_error is not None:
+        with pytest.raises(expect_error):
+            nd_array_field._concat(*fields, dim=dim)
+    else:
+        expected_array = np.asarray(expected_data[0], dtype=np.int32)
+        expected_domain = common.domain(expected_data[1])
+
+        result = nd_array_field._concat(*fields, dim=dim)
+
+        assert result.domain == expected_domain
+        np.testing.assert_allclose(result.asnumpy(), expected_array)
