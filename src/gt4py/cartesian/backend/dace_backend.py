@@ -267,16 +267,10 @@ def freeze_origin_domain_sdfg(
     wrapper_sdfg = SDFG("frozen_" + inner_sdfg.name)
     state = wrapper_sdfg.add_state("frozen_" + inner_sdfg.name + "_state")
 
-    inputs = set()
-    outputs = set()
-    for node, parent in inner_sdfg.all_nodes_recursive():
-        if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
-            continue
-
-        if node.has_reads(parent):
-            inputs.add(node.data)
-        if node.has_writes(parent):
-            outputs.add(node.data)
+    # gather inputs & outputs (i.e. reads/writes without transients)
+    inputs, outputs = inner_sdfg.read_and_write_sets()
+    inputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, inputs))
+    outputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, outputs))
 
     # fake DebugInfo to avoid calls to `inspect`
     nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs, debuginfo=DebugInfo(123456))
