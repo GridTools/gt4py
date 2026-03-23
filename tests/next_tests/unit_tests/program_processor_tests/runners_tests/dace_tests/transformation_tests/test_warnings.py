@@ -13,7 +13,7 @@ from gt4py.next import config as gtx_config
 
 
 def test_if_warning_is_raised():
-    assert not gtx_config.SKIP_WARNINGS, "Tests do not run in debug mode."
+    assert not gtx_config.SKIP_WARNINGS or not __debug__, "Tests do not run in debug mode."
 
     warn_msg = "This is a warning."
     with pytest.warns(UserWarning, match=warn_msg):
