@@ -43,6 +43,9 @@ def gt_set_iteration_order(
         validate: Perform validation at the end of the function.
         validate_all: Perform validation also on intermediate steps.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
+
     return sdfg.apply_transformations_once_everywhere(
         MapIterationOrder(
             unit_strides_dims=unit_strides_dim,
