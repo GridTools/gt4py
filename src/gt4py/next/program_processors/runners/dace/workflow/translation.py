@@ -224,7 +224,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool, sdfg_has_synchronization: bo
         has_side_effects = True
 
     else:
-        sync_code = "// The SDFG execution should already be synchronized"
+        sync_code = "/* The SDFG execution should already be synchronized */"
         has_side_effects = False
 
     #### 2. Timestamp the SDFG entry point.
@@ -283,13 +283,13 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
 
     if gpu and _has_gpu_schedule(sdfg) and config.ADD_GPU_TRACE_MARKERS:
         sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for sink_node, _ in sdfg.all_nodes_recursive():
+        for node, _ in sdfg.all_nodes_recursive():
             if isinstance(
-                sink_node, dace.nodes.MapEntry
+                node, dace.nodes.MapEntry
             ):  # Add ranges to scopes and maps that are NOT scheduled to the GPU
-                sink_node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-            elif isinstance(sink_node, dace.sdfg.state.SDFGState):
-                sink_node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+            elif isinstance(node, dace.sdfg.state.SDFGState):
+                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
     # Check SDFG validity after applying the above changes.
     # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
@@ -327,6 +327,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
             continue
         sdfg.add_edge(entry_state, source_node, dace.InterstateEdge())
     assert sdfg.out_degree(entry_state) > 0
+    sdfg.start_block = sdfg.node_id(entry_state)
+    assert sdfg.start_block is entry_state
 
     exit_state = sdfg.add_state("sync_exit")
     for sink_node in sdfg.sink_nodes():
