@@ -127,10 +127,10 @@ DUMP_METRICS_AT_EXIT: str | None = None
 
 #: Filter out DaCe related warnings. If not set warnings will be suppressed if the
 #: code runs in no debug mode.
-SKIP_WARNINGS: bool = env_flag_to_bool("GT4PY_SKIP_WARNINGS", default=not __debug__)
+SKIP_DACE_WARNINGS: bool = env_flag_to_bool("GT4PY_SKIP_DACE_WARNINGS", default=not __debug__)
 
 
-if SKIP_WARNINGS:
+if SKIP_DACE_WARNINGS:
     # NOTE: Ideally we would suppress the warnings using context managers directly in
     #   the backend. However, because this is not thread safe in Python versions before
     #   3.14, we have to do it here.
