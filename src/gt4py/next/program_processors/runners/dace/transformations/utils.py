@@ -869,6 +869,7 @@ def order_nodes(
 
     # Describes when it works and when not.
     def key_fun(node: dace_nodes.Node) -> tuple[str, str, int, int]:
+        # TODO(phimuell): Deprecate once [DaCe PR#2320](https://github.com/spcl/dace/pull/2320) is in.
         if isinstance(node, dace_nodes.AccessNode):
             nid: str = node.data
         elif hasattr(node, "label"):
@@ -893,6 +894,8 @@ def order_edges(
     if the string (not serialization) representation of the involved nodes is unique,
     which means their label in most cases.
     """
+
+    # TODO(phimuell): Deprecate once [DaCe PR#2320](https://github.com/spcl/dace/pull/2320) is in.
 
     # This is probably the best way to sort edge, because it considers the source and
     #  destination node, as tie breaker the connectors are used and as second level of
