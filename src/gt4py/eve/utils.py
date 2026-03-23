@@ -465,6 +465,15 @@ def optional_lru_cache(
     return _decorator(func) if func is not None else _decorator
 
 
+class EqualityBy(HashableBy):
+    """Use a hash function as the definition of equality for the wrapped object."""
+
+    __hash__ = HashableBy.__hash__
+
+    def __eq__(self, other: Any) -> bool:
+        return self is other or hash(self) == hash(other)
+
+
 # TODO(egparedes): it would be more efficient to implement the caching logic
 # here instead of relying on `functools.lru_cache` and wrapping/unwrapping the
 # arguments.
@@ -478,7 +487,8 @@ def lru_cache(
     """
     Wrap :func:`functools.lru_cache` but allow customizing the cache key.
 
-    Be careful: `key(obj1) == key(obj2)` must imply `obj1 == obj2`.
+    Be careful, with custom `key` functions, `key(obj1) == key(obj2)` automatically
+    implies `obj1 == obj2`, i.e. they are considered equal.
 
     >>> @lru_cache(key=id)
     ... def func(x):
@@ -505,8 +515,8 @@ def lru_cache(
             @functools.wraps(func)
             def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
                 return cached_func(
-                    *(hashable_by(key, arg) for arg in args),
-                    **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
+                    *(EqualityBy(key, arg) for arg in args),
+                    **{k: EqualityBy(key, arg) for k, arg in kwargs.items()},
                 )
 
             inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
