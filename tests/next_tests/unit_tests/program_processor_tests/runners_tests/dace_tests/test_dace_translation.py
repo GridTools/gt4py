@@ -138,17 +138,17 @@ def _are_streams_set_to_default_stream(sdfg: dace.SDFG) -> bool:
     )
 
 
-def _is_device_synchronized(sdfg: dace.SDFG) -> bool:
-    re_device_sync = re.compile(r"\b(cuda|hip)DeviceSynchronize\(\)\b")
+def _are_streams_synchronized(sdfg: dace.SDFG) -> bool:
+    re_stream_sync = re.compile(r"\b(cuda|hip)StreamSynchronize\b")
     # The synchronization calls are in the CPU not the GPU code.
     return any(
-        re_device_sync.match(code.clean_code)
+        re_stream_sync.match(code.clean_code)
         for code in sdfg.generate_code()
         if code.language == "cpp"
     )
 
 
-def _check_sdfg_async_call(sdfg: dace.SDFG) -> None:
+def _check_sdfg_with_async_call(sdfg: dace.SDFG) -> None:
     # Because we are using the default stream, the launch is asynchronous. Thus we
     #  have to check if there is no synchronization state. However, we will do a
     #  stronger test. Instead we will make sure that there are no synchronization
@@ -158,59 +158,44 @@ def _check_sdfg_async_call(sdfg: dace.SDFG) -> None:
     #   edge. However, we do not have that case.
 
     assert not any(
-        state.label == "sync_entry"
-        for state in sdfg.source_nodes()
-        if isinstance(state, dace.SDFGState)
-    )
-    assert not any(
-        state.label == "sync_exit"
+        state.label == "sync_state"
         for state in sdfg.sink_nodes()
         if isinstance(state, dace.SDFGState)
     )
-    assert not _is_device_synchronized(sdfg)
+    assert not _are_streams_synchronized(sdfg)
     assert _are_streams_set_to_default_stream(sdfg)
 
 
-def _check_sdfg_sync_call(sdfg: dace.SDFG) -> None:
+def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
     states = sdfg.states()
-
-    # Test if the distinctive source and sink nodes are present.
-    assert len(states) > 2
-    source_states = sdfg.source_nodes()
-    assert len(source_states) == 1
-    entry_state = source_states[0]
-    assert isinstance(entry_state, dace.SDFGState)
-    assert entry_state.label == "sync_entry"
     sink_states = sdfg.sink_nodes()
+
+    # Test if the distinctive sink node is present.
     assert len(sink_states) == 1
-    exit_state = sink_states[0]
-    assert isinstance(exit_state, dace.SDFGState)
-    assert exit_state.label == "sync_exit"
+    assert len(sink_states) < len(states)
+    sync_state = sink_states[0]
+    assert isinstance(sync_state, dace.SDFGState)
+    assert sync_state.label == "sync_state"
+    assert sync_state.nosync == True  # Because sync is done through the tasklet.
+    assert sync_state.number_of_nodes() == 1
 
-    for state in [entry_state, exit_state]:
-        assert state.nosync == True  # Because sync is done through the tasklet.
-        assert state.number_of_nodes() == 1
+    sync_tlet = next(iter(sync_state.nodes()))
+    assert isinstance(sync_tlet, dace_nodes.Tasklet)
+    assert sync_tlet.side_effects
+    assert sync_tlet.label == "sync_tlet"
 
-        sync_tlet = next(iter(state.nodes()))
-        assert isinstance(sync_tlet, dace_nodes.Tasklet)
-        assert sync_tlet.side_effects
-        assert sync_tlet.label == "sync_tlet"
-        assert re.match(r"(cuda|hip)DeviceSynchronize\(\);", sync_tlet.code.as_string)
+    assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", sync_tlet.code.as_string)
+    assert _are_streams_set_to_default_stream(sdfg)
 
 
 def _check_cpu_sdfg_call(sdfg: dace.SDFG) -> None:
     # CPU is always synchronous execution, thus we check that there is no sync state.
     assert not any(
-        state.label == "sync_entry"
-        for state in sdfg.source_nodes()
-        if isinstance(state, dace.SDFGState)
-    )
-    assert not any(
-        state.label == "sync_exit"
+        state.label == "sync_state"
         for state in sdfg.sink_nodes()
         if isinstance(state, dace.SDFGState)
     )
-    assert not _is_device_synchronized(sdfg)
+    assert not _are_streams_synchronized(sdfg)
 
 
 @pytest.mark.parametrize(
@@ -249,9 +234,9 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
     if device_type == core_defs.DeviceType.CPU:
         _check_cpu_sdfg_call(sdfg)
     elif make_async_sdfg_call:
-        _check_sdfg_async_call(sdfg)
+        _check_sdfg_with_async_call(sdfg)
     else:
-        _check_sdfg_sync_call(sdfg)
+        _check_sdfg_without_async_call(sdfg)
 
 
 def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
@@ -285,7 +270,7 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
     if device_type == core_defs.DeviceType.CPU:
         _check_cpu_sdfg_call(sdfg)
     else:
-        _check_sdfg_async_call(sdfg)
+        _check_sdfg_with_async_call(sdfg)
 
 
 def _make_multi_state_sdfg_0(
@@ -427,7 +412,7 @@ def test_generate_sdfg_async_call_multi_state(
         #   by this. See https://github.com/spcl/dace/issues/2120 for more.
         #   In the case of `_make_multi_state_sdfg_3()` there would be a sync after the Map, before
         #   the Tasklet, if the default stream was not used!
-        assert not _is_device_synchronized(sdfg)
+        assert not _are_streams_synchronized(sdfg)
     else:
         # There is no dependency between the states, so no sync.
-        assert not _is_device_synchronized(sdfg)
+        assert not _are_streams_synchronized(sdfg)

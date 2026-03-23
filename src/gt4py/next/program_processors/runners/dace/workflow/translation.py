@@ -159,7 +159,7 @@ def _make_if_region_for_metrics_collection(
     return if_region, then_state
 
 
-def add_instrumentation(sdfg: dace.SDFG, gpu: bool, sdfg_has_synchronization: bool) -> None:
+def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     """
     Instrument SDFG with measurement of total execution time.
 
@@ -169,51 +169,16 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool, sdfg_has_synchronization: bo
 
     The execution time is measured in seconds and represented as a 'float64' value.
     It is written to the global array 'SDFG_ARG_METRIC_COMPUTE_TIME'.
-
-    Args:
-        sdfg: The SDFG to be instrumented with time measurements.
-        gpu: Flag that specifies if the SDFG is targeting GPU execution.
-        sdfg_has_synchronization: Whether the SDFG contains start and stop synchronization points.
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
 
-    # retrieve the sink nodes before adding the if-region nodes, because these will
-    #   become new sink nodes.
-    sink_nodes = sdfg.sink_nodes()
-    start_block = sdfg.start_block
-
-    entry_if_region, begin_state = _make_if_region_for_metrics_collection(
-        "metrics_entry", metrics_level, sdfg
-    )
-    exit_if_region, end_state = _make_if_region_for_metrics_collection(
-        "metrics_exit", metrics_level, sdfg
-    )
-
-    if sdfg_has_synchronization:
-        # Keep the existing synchronization points, and put the entry if-region
-        #  after the start block.
-        for edge in list(sdfg.out_edges(start_block)):
-            sdfg.add_edge(entry_if_region, edge.dst, edge.data)
-            sdfg.remove_edge(edge)
-        sdfg.add_edge(start_block, entry_if_region, dace.InterstateEdge())
-        # Put the exit if-region right after the last block.
-        assert len(sink_nodes) == 1
-        sdfg.add_edge(sink_nodes[0], exit_if_region, dace.InterstateEdge())
-    else:
-        # Use the newly created entry if-region as new start block.
-        sdfg.add_edge(entry_if_region, start_block, dace.InterstateEdge())
-        # Similarly, use the exit if-region as the last block.
-        for sink_node in sink_nodes:
-            sdfg.add_edge(sink_node, exit_if_region, dace.InterstateEdge())
-        assert sdfg.in_degree(exit_if_region) > 0
-
-    #### 1. Synchronize the CUDA device if the sync states are not provided.
+    #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
     # Even when the target device is GPU, it can happen that dace emits code without
     # GPU kernels. In this case, the cuda headers are not imported and the SDFG is
     # compiled as plain C++. Therefore, we also check here the schedule of SDFG maps.
-    if gpu and _has_gpu_schedule(sdfg) and not sdfg_has_synchronization:
+    if gpu and _has_gpu_schedule(sdfg):
         dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
         assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
 
@@ -228,6 +193,14 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool, sdfg_has_synchronization: bo
         has_side_effects = False
 
     #### 2. Timestamp the SDFG entry point.
+    start_block = sdfg.start_block
+    entry_if_region, begin_state = _make_if_region_for_metrics_collection(
+        "metrics_entry", metrics_level, sdfg
+    )
+    sdfg.add_edge(entry_if_region, start_block, dace.InterstateEdge())
+    sdfg.start_block = sdfg.node_id(entry_if_region)
+    assert sdfg.start_block is entry_if_region
+
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
@@ -251,6 +224,16 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
     )
 
     #### 3. Collect the SDFG end timestamp and produce the compute metric.
+    exit_if_region, end_state = _make_if_region_for_metrics_collection(
+        "metrics_exit", metrics_level, sdfg
+    )
+    for sink_node in sdfg.sink_nodes():
+        if sink_node is exit_if_region:
+            continue
+        sdfg.add_edge(sink_node, exit_if_region, dace.InterstateEdge())
+    assert sdfg.in_degree(exit_if_region) > 0
+
+    # Populate the branch that computes the stencil time metric
     tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
@@ -318,40 +301,50 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
         # are not imported and the SDFG is compiled as plain C++.
         return
 
-    dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
-    assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
+    assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1, (
+        f"Expected `max_concurrent_streams == -1` but it was `{dace.Config.get('compiler.cuda.max_concurrent_streams')}`."
+    )
 
-    entry_state = sdfg.add_state("sync_entry")
-    for source_node in sdfg.source_nodes():
-        if source_node is entry_state:
-            continue
-        sdfg.add_edge(entry_state, source_node, dace.InterstateEdge())
-    assert sdfg.out_degree(entry_state) > 0
-    sdfg.start_block = sdfg.node_id(entry_state)
-    assert sdfg.start_block is entry_state
-
-    exit_state = sdfg.add_state("sync_exit")
+    # If we are using the default stream, things are a bit simpler/harder. For some
+    #  reasons when using the default stream, DaCe seems to skip _all_ synchronization,
+    #  for more see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
+    #  Thus the `CompiledSDFG.fast_call()` call is truly asynchronous, i.e. just
+    #  launches the kernels and then exist. Thus we have to add a synchronization
+    #  at the end to have a synchronous call. We can not use `SDFG.append_exit_code()`
+    #  because that code is only run at the `exit()` stage, not after a call. Thus we
+    #  will generate an SDFGState that contains a Tasklet with the sync call.
+    sync_state = sdfg.add_state("sync_state")
     for sink_node in sdfg.sink_nodes():
-        if sink_node is exit_state:
+        if sink_node is sync_state:
             continue
-        sdfg.add_edge(sink_node, exit_state, dace.InterstateEdge())
-    assert sdfg.in_degree(exit_state) > 0
+        sdfg.add_edge(sink_node, sync_state, dace.InterstateEdge())
+    assert sdfg.in_degree(sync_state) > 0
 
-    # NOTE: We should actually wrap the `DeviceSynchronize` function inside a
+    # NOTE: Since the synchronization is done through the Tasklet explicitly,
+    #   we can disable synchronization for the last state. Might be useless.
+    sync_state.nosync = True
+
+    # NOTE: We should actually wrap the `StreamSynchronize` function inside a
     #   `DACE_GPU_CHECK()` macro. However, this only works in GPU context, but
     #   here we are in CPU context. Thus we can not do it.
-    # NOTE: Since the synchronization is done through the Tasklet explicitly,
-    #   we can disable synchronization for the state.
-    for state in [entry_state, exit_state]:
-        state.add_tasklet(
-            "sync_tlet",
-            inputs=set(),
-            outputs=set(),
-            code=f"{dace_gpu_backend}DeviceSynchronize();",
-            language=dace.dtypes.Language.CPP,
-            side_effects=True,
-        )
-        state.nosync = True
+    dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
+    assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
+    sync_state.add_tasklet(
+        "sync_tlet",
+        inputs=set(),
+        outputs=set(),
+        code=f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault);",
+        language=dace.dtypes.Language.CPP,
+        side_effects=True,
+    )
+
+    # DaCe [still generates a stream](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467)
+    #  despite not using it. Thus to be absolutely sure, we will not set that stream
+    #  to the default stream.
+    sdfg.append_init_code(
+        f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
+        location="cuda",
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -442,11 +435,7 @@ class DaCeTranslator(
             make_sdfg_call_sync(sdfg, on_gpu)
 
         if self.use_metrics:
-            add_instrumentation(
-                sdfg=sdfg,
-                gpu=on_gpu,
-                sdfg_has_synchronization=(on_gpu and not self.async_sdfg_call),
-            )
+            add_instrumentation(sdfg, on_gpu)
 
         return sdfg
 
