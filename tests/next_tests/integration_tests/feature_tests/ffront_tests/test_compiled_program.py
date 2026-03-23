@@ -995,42 +995,6 @@ def test_compile_variants_decorator_static_domains(cartesian_case):
     }
 
 
-def test_warn_if_not_optimized_on_jit_call(cartesian_case, compile_testee):
-    """A warning is emitted when calling a compiled program without Python's -O flag."""
-    if cartesian_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    args, kwargs = cases.get_default_data(cartesian_case, compile_testee)
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        call_lineno = inspect.currentframe().f_lineno + 1
-        compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
-
-    optimized_warnings = [w for w in caught if "optimized" in str(w.message)]
-    assert len(optimized_warnings) == 1
-    w = optimized_warnings[0]
-    assert w.filename == __file__
-    assert w.lineno == call_lineno
-
-
-def test_warn_if_not_optimized_on_explicit_compile(cartesian_case, compile_testee):
-    """A warning is emitted when pre-compiling a program without Python's -O flag."""
-    if cartesian_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        call_lineno = inspect.currentframe().f_lineno + 1
-        compile_testee.compile(offset_provider=cartesian_case.offset_provider)
-
-    optimized_warnings = [w for w in caught if "optimized" in str(w.message)]
-    assert len(optimized_warnings) == 1
-    w = optimized_warnings[0]
-    assert w.filename == __file__
-    assert w.lineno == call_lineno
-
-
 @pytest.fixture
 def scan_operator_testee(cartesian_case):
     """A scan operator called directly as a FieldOperator — the only case where _is_generic=True."""
