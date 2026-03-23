@@ -159,9 +159,7 @@ def _make_if_region_for_metrics_collection(
     return if_region, then_state
 
 
-def add_instrumentation(
-    sdfg: dace.SDFG, gpu: bool, sync_states: tuple[dace.SDFGState, dace.SDFGState] | None
-) -> None:
+def add_instrumentation(sdfg: dace.SDFG, gpu: bool, sdfg_has_synchronization: bool) -> None:
     """
     Instrument SDFG with measurement of total execution time.
 
@@ -175,12 +173,16 @@ def add_instrumentation(
     Args:
         sdfg: The SDFG to be instrumented with time measurements.
         gpu: Flag that specifies if the SDFG is targeting GPU execution.
-        sync_states: If provided, a tuple of two states, the source state and the
-            sync state of the SDFG, containing tasklets with GPU device synchronization.
+        sdfg_has_synchronization: Whether the SDFG contains start and stop synchronization points.
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
+
+    # retrieve the sink nodes before adding the if-region nodes, because these will
+    #   become new sink nodes.
+    sink_nodes = sdfg.sink_nodes()
+    start_block = sdfg.start_block
 
     entry_if_region, begin_state = _make_if_region_for_metrics_collection(
         "metrics_entry", metrics_level, sdfg
@@ -188,34 +190,32 @@ def add_instrumentation(
     exit_if_region, end_state = _make_if_region_for_metrics_collection(
         "metrics_exit", metrics_level, sdfg
     )
-    if sync_states is None:
-        # Use the newly created entry if-region as new source node
-        for source_state in sdfg.source_nodes():
-            if source_state not in [entry_if_region, exit_if_region]:
-                sdfg.add_edge(entry_if_region, source_state, dace.InterstateEdge())
-                source_state.is_start_block = False
-        assert sdfg.out_degree(entry_if_region) > 0
-        entry_if_region.is_start_block = True
-        # Similarly, the exit if-region as sink node.
-        for sink_state in sdfg.sink_nodes():
-            if sink_state not in [entry_if_region, exit_if_region]:
-                sdfg.add_edge(sink_state, exit_if_region, dace.InterstateEdge())
-        assert sdfg.in_degree(exit_if_region) > 0
-    else:
-        # Keep the existing synchronization points, and put the entry if-region after the entry state
-        entry_state, exit_state = sync_states
-        for edge in list(sdfg.out_edges(entry_state)):
+
+    if sdfg_has_synchronization:
+        # Keep the existing synchronization points, and put the entry if-region
+        #  after the start block.
+        for edge in list(sdfg.out_edges(start_block)):
             sdfg.add_edge(entry_if_region, edge.dst, edge.data)
             sdfg.remove_edge(edge)
-        sdfg.add_edge(entry_state, entry_if_region, dace.InterstateEdge())
-        # Put the exit if-region right after the exit state.
-        sdfg.add_edge(exit_state, exit_if_region, dace.InterstateEdge())
+        sdfg.add_edge(start_block, entry_if_region, dace.InterstateEdge())
+        # Put the exit if-region right after the last block.
+        assert len(sink_nodes) == 1
+        sdfg.add_edge(sink_nodes[0], exit_if_region, dace.InterstateEdge())
+    else:
+        # Use the newly created entry if-region as new start block.
+        sdfg.add_edge(entry_if_region, start_block, dace.InterstateEdge())
+        start_block.is_start_block = False
+        entry_if_region.is_start_block = True
+        # Similarly, use the exit if-region as the last block.
+        for node in sink_nodes:
+            sdfg.add_edge(node, exit_if_region, dace.InterstateEdge())
+        assert sdfg.in_degree(exit_if_region) > 0
 
     #### 1. Synchronize the CUDA device if the sync states are not provided.
     # Even when the target device is GPU, it can happen that dace emits code without
     # GPU kernels. In this case, the cuda headers are not imported and the SDFG is
     # compiled as plain C++. Therefore, we also check here the schedule of SDFG maps.
-    if gpu and _has_gpu_schedule(sdfg) and sync_states is None:
+    if gpu and _has_gpu_schedule(sdfg) and not sdfg_has_synchronization:
         dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
         assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
 
@@ -302,44 +302,41 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
     sdfg.validate()
 
 
-def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> tuple[dace.SDFGState, dace.SDFGState] | None:
+def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     """Process the SDFG such that the call is synchronous.
 
     This means that `CompiledSDFG.fast_call()` will return only after all computations
     have _finished_ and the results are available. This function only has an effect for
     work that runs on the GPU. Furthermore, all work is scheduled on the default stream.
-
-    Returns:
-        The SDFG entry and exit states, each calling the GPU primitive for device synchronization.
     """
 
     if not gpu:
         # This is only a problem on GPU. Dace uses OpenMP on CPU and
         # the OpenMP parallel region creates a synchronization point.
-        return None
+        return
     elif not _has_gpu_schedule(sdfg):
         # Even when the target device is GPU, it can happen that dace
         # emits code without GPU kernels. In this case, the cuda headers
         # are not imported and the SDFG is compiled as plain C++.
-        return None
+        return
 
     dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
     assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
 
     entry_state = sdfg.add_state("sync_entry")
-    for source_state in sdfg.source_nodes():
-        if source_state is entry_state:
+    for source_node in sdfg.source_nodes():
+        if source_node is entry_state:
             continue
-        sdfg.add_edge(entry_state, source_state, dace.InterstateEdge())
-        source_state.is_start_block = False
+        sdfg.add_edge(entry_state, source_node, dace.InterstateEdge())
+        source_node.is_start_block = False
     assert sdfg.out_degree(entry_state) > 0
     entry_state.is_start_block = True
 
     exit_state = sdfg.add_state("sync_exit")
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is exit_state:
+    for sink_node in sdfg.sink_nodes():
+        if sink_node is exit_state:
             continue
-        sdfg.add_edge(sink_state, exit_state, dace.InterstateEdge())
+        sdfg.add_edge(sink_node, exit_state, dace.InterstateEdge())
     assert sdfg.in_degree(exit_state) > 0
 
     # NOTE: We should actually wrap the `DeviceSynchronize` function inside a
@@ -357,7 +354,6 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> tuple[dace.SDFGState, dac
             side_effects=True,
         )
         state.nosync = True
-    return entry_state, exit_state
 
 
 @dataclasses.dataclass(frozen=True)
@@ -444,12 +440,15 @@ class DaCeTranslator(
 
         if self.async_sdfg_call:
             make_sdfg_call_async(sdfg, on_gpu)
-            sync_states = None
         else:
-            sync_states = make_sdfg_call_sync(sdfg, on_gpu)
+            make_sdfg_call_sync(sdfg, on_gpu)
 
         if self.use_metrics:
-            add_instrumentation(sdfg, on_gpu, sync_states)
+            add_instrumentation(
+                sdfg=sdfg,
+                gpu=on_gpu,
+                sdfg_has_synchronization=(on_gpu and not self.async_sdfg_call),
+            )
 
         return sdfg
 
