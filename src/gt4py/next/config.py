@@ -136,7 +136,7 @@ if SKIP_DACE_WARNINGS:
     #   3.14, we have to do it here.
     warnings.filterwarnings(action="ignore", module="^dace(\..+)?")
     warnings.filterwarnings(
-        action="ignore", module="^gt4py.next.program_processors.runners.dace(\..+)?"
+        action="ignore", module="^gt4py.next.program_processors.runners.dace.transformations(\..+)?"
     )
 
 
