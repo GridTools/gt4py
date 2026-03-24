@@ -205,8 +205,8 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         "gt_start_timer",
         inputs={},
         outputs={"time"},
-        code=sync_code
-        + """
+        code=f"""\
+{sync_code}
 auto now = std::chrono::high_resolution_clock::now();
 time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
@@ -238,8 +238,8 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
         outputs={"duration"},
-        code=sync_code
-        + """
+        code=f"""\
+{sync_code}
 auto now = std::chrono::high_resolution_clock::now();
 auto run_cpp_end_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
