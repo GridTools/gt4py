@@ -96,58 +96,7 @@ class AssertionChecker(ast.NodeTransformer):
         return node
 
 
-class AxisIntervalParser(gt_meta.ASTPass):
-    """Parse Python AST interval syntax in the form of a Slice.
-
-    Corner cases: `ast.Ellipsis` refers to the entire interval, and
-    if an `ast.Subscript` is passed, this parses its slice attribute.
-    """
-
-    @classmethod
-    def apply(
-        cls,
-        node: Union[ast.Ellipsis, ast.Slice, ast.Subscript, ast.Constant],
-        axis_name: str,
-        fields: dict[str, nodes.FieldDecl],
-        loc: Optional[nodes.Location] = None,
-    ) -> nodes.AxisInterval:
-        parser = cls(axis_name, fields, loc)
-
-        if isinstance(node, ELLIPSIS_TYPE) or (
-            isinstance(node, ast.Constant) and node.value is Ellipsis
-        ):
-            interval = nodes.AxisInterval.full_interval()
-            interval.loc = loc
-            return interval
-
-        if isinstance(node, ast.Slice):
-            slice_node = node
-        elif isinstance(getattr(node, "slice", None), ast.Slice):
-            slice_node = node.slice
-        else:
-            slice_node = cls.slice_from_value(node)
-
-        if slice_node.lower is None:
-            slice_node.lower = ast.Constant(value=None)
-
-        if (
-            isinstance(slice_node.lower, ast.Constant)
-            and slice_node.lower.value is None
-            and axis_name == nodes.Domain.LatLonGrid().sequential_axis.name
-        ):
-            raise parser.interval_error
-
-        if slice_node.upper is None:
-            slice_node.upper = ast.Constant(value=None)
-
-        lower = parser.visit(slice_node.lower)
-        upper = parser.visit(slice_node.upper)
-
-        start = parser._make_axis_bound(lower, nodes.LevelMarker.START)
-        end = parser._make_axis_bound(upper, nodes.LevelMarker.END)
-
-        return nodes.AxisInterval(start=start, end=end, loc=loc)
-
+class IntervalParser(gt_meta.ASTPass):
     def __init__(
         self,
         axis_name: str,
@@ -166,7 +115,7 @@ class AxisIntervalParser(gt_meta.ASTPass):
         self.interval_error = GTScriptSyntaxError(error_msg)
 
     @staticmethod
-    def slice_from_value(node: ast.Expr) -> ast.Slice:
+    def _slice_from_value(node: ast.Expr) -> ast.Slice:
         """Create an ast.Slice node from a general ast.Expr node."""
         slice_node = ast.Slice(
             lower=node,
@@ -203,19 +152,6 @@ class AxisIntervalParser(gt_meta.ASTPass):
             raise self.interval_error
 
         return nodes.AxisBound(level=level, offset=offset, loc=self.loc)
-
-    def visit_Name(self, node: ast.Name) -> nodes.Ref:
-        # Handle the field accesses
-        if node.id in self.fields:
-            if "K" in self.fields[node.id].axes:
-                raise ValueError(
-                    f"Using field `{node.id}` with a K-Axis as a bound for an interval is invalid."
-                )
-            return nodes.FieldRef.at_center(
-                name=node.id, axes=self.fields[node.id].axes, loc=nodes.Location.from_ast_node(node)
-            )
-        # Handle the scalar accesses
-        return nodes.VarRef(name=node.id, loc=nodes.Location.from_ast_node(node))
 
     def visit_Constant(self, node: ast.Constant) -> Union[int, gtscript.AxisIndex, None]:
         if isinstance(node.value, gtscript.AxisIndex):
@@ -283,16 +219,117 @@ class AxisIntervalParser(gt_meta.ASTPass):
 
         raise self.interval_error
 
+
+class HorizontalIntervalParser(IntervalParser):
+    """Parse Python AST interval syntax in the form of a Slice."""
+
+    @classmethod
+    def apply(
+        cls,
+        node: Union[ast.Slice, ast.Subscript, ast.Constant],
+        axis_name: str,
+        fields: dict[str, nodes.FieldDecl],
+        loc: Optional[nodes.Location] = None,
+    ) -> nodes.AxisInterval:
+        parser = cls(axis_name, fields, loc)
+
+        if isinstance(node, ast.Slice):
+            slice_node = node
+        elif isinstance(getattr(node, "slice", None), ast.Slice):
+            # This is the syntax with the inlined slice: K[3:4]
+            slice_node = node.slice
+        else:
+            # It is a single value and will therefore be (value):(value+1)
+            slice_node = cls._slice_from_value(node)
+
+        # This catches the region[XX, :] syntax
+        if slice_node.lower is None:
+            slice_node.lower = ast.Constant(value=None)
+        if slice_node.upper is None:
+            slice_node.upper = ast.Constant(value=None)
+
+        lower = parser.visit(slice_node.lower)
+        upper = parser.visit(slice_node.upper)
+
+        start = parser._make_axis_bound(lower, nodes.LevelMarker.START)
+        end = parser._make_axis_bound(upper, nodes.LevelMarker.END)
+
+        return nodes.AxisInterval(start=start, end=end, loc=loc)
+
     def visit_Subscript(self, node: ast.Subscript) -> nodes.AxisBound:
+        # This allows for the syntax
+        # `region[I[0] : I[2], J[0] : J[2]]`
+        # to exist
+        if not isinstance(node.value, ast.Name):
+            raise self.interval_error
         if node.value.id != self.axis_name:
             raise self.interval_error
 
-        if isinstance(node.slice, ast.Index):
-            index = self.visit(node.slice.value)
-        else:
-            index = self.visit(node.slice)
+        index = self.visit(node.slice)
 
         return gtscript.AxisIndex(axis=self.axis_name, index=index)
+
+
+class VerticalIntervalParser(IntervalParser):
+    """Parse Python AST interval syntax in the form of a Slice.
+
+    Corner cases: `ast.Ellipsis` refers to the entire interval, and
+    if an `ast.Subscript` is passed, this parses its slice attribute.
+    """
+
+    def visit_Name(self, node: ast.Name) -> nodes.Ref:
+        # Handle the field accesses
+        if node.id in self.fields:
+            if "K" in self.fields[node.id].axes:
+                raise ValueError(
+                    f"Using field `{node.id}` with a K-Axis as a bound for an interval is invalid."
+                )
+            return nodes.FieldRef.at_center(
+                name=node.id, axes=self.fields[node.id].axes, loc=nodes.Location.from_ast_node(node)
+            )
+        # Handle the scalar accesses
+        return nodes.VarRef(name=node.id, loc=nodes.Location.from_ast_node(node))
+
+    @classmethod
+    def apply(
+        cls,
+        node: Union[ast.Slice, ast.Subscript, ast.Constant],
+        axis_name: str,
+        fields: dict[str, nodes.FieldDecl],
+        loc: Optional[nodes.Location] = None,
+    ) -> nodes.AxisInterval:
+        parser = cls(axis_name, fields, loc)
+
+        if isinstance(node, ast.Subscript):
+            raise parser.interval_error
+
+        if isinstance(node, ast.Constant) and node.value is Ellipsis:
+            interval = nodes.AxisInterval.full_interval()
+            interval.loc = loc
+            return interval
+
+        if isinstance(node, ast.Slice):
+            slice_node = node
+        else:
+            slice_node = cls._slice_from_value(node)
+
+        if isinstance(slice_node.lower, ast.Constant) and slice_node.lower.value is None:
+            raise parser.interval_error
+
+        if slice_node.upper is None:
+            slice_node.upper = ast.Constant(value=None)
+
+        lower = parser.visit(slice_node.lower)
+        upper = parser.visit(slice_node.upper)
+
+        start = parser._make_axis_bound(lower, nodes.LevelMarker.START)
+        end = parser._make_axis_bound(upper, nodes.LevelMarker.END)
+
+        return nodes.AxisInterval(start=start, end=end, loc=loc)
+
+    def visit_Subscript(self, node: ast.Subscript):
+        # This was previously allowed but is discontinued now.
+        raise self.interval_error
 
 
 class ValueInliner(ast.NodeTransformer):
@@ -938,7 +975,7 @@ class IRMaker(ast.NodeVisitor):
         list_of_exprs = [axis_node for axis_node in node.elts]
         axes_names = [axis.name for axis in self.domain.parallel_axes]
         return {
-            name: AxisIntervalParser.apply(axis_node, name, self.fields)
+            name: HorizontalIntervalParser.apply(axis_node, name, self.fields)
             for axis_node, name in zip(list_of_exprs, axes_names)
         }
 
@@ -1004,17 +1041,13 @@ class IRMaker(ast.NodeVisitor):
                 raise range_error
 
         if len(args) == 2:
-            if any(isinstance(arg, ast.Subscript) for arg in args):
-                raise GTScriptSyntaxError(
-                    "Two-argument syntax should not use AxisIndices or AxisIntervals"
-                )
             interval_node = ast.Slice(lower=args[0], upper=args[1])
             ast.copy_location(interval_node, node)
         else:
             interval_node = args[0]
 
         seq_name = nodes.Domain.LatLonGrid().sequential_axis.name
-        interval = AxisIntervalParser.apply(interval_node, seq_name, self.fields, loc=loc)
+        interval = VerticalIntervalParser.apply(interval_node, seq_name, self.fields, loc=loc)
 
         if (
             interval.start.level == nodes.LevelMarker.END
@@ -1183,9 +1216,6 @@ class IRMaker(ast.NodeVisitor):
 
         raise AssertionError(f"Missing '{symbol}' symbol definition")
 
-    def visit_Index(self, node: ast.Index):
-        return self.visit(node.value)
-
     def _eval_new_spatial_index(
         self,
         index_nodes: Sequence[nodes.Expr],
@@ -1238,7 +1268,7 @@ class IRMaker(ast.NodeVisitor):
         node: ast.Subscript,
         field_axes: Optional[Set[Literal["I", "J", "K"]]] = None,
     ) -> list[int] | nodes.AbsoluteKIndex | None:
-        tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+        tuple_or_expr = node.slice
         index_nodes = gt_utils.listify(
             tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
         )

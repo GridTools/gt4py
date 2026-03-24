@@ -180,7 +180,7 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
 
     def visit_AssignStmt(self, assignment_statement: oir.AssignStmt, **kwargs) -> None:
         self.body.append(
-            f"{self.visit(assignment_statement.left, **kwargs, is_lhs=True)} = {self.visit(assignment_statement.right, **kwargs)}"
+            f"{self.visit(assignment_statement.left, **kwargs, is_write_access=True)} = {self.visit(assignment_statement.right, **kwargs)}"
         )
 
     # The visitors for the rest of the code-generation all return their strings directly and are in the following section
@@ -266,6 +266,8 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         symtable: Mapping[str, oir.FieldDecl],
         **kwargs,
     ) -> str:
+        is_write_access = kwargs.pop("is_write_access", False)
+
         if str(field_access.name) in symtable:
             dimensions = symtable[str(field_access.name)].dimensions
             kwargs.pop("dimensions", None)
@@ -278,7 +280,7 @@ class DebugCodeGen(eve.VisitorWithSymbolTableTrait):
         # Since the Field-class pads the shape of lower dimensional fields to always be 3d,
         # we need value extraction for the RHS otherwise we access arrays.
         # This leads to exceptions since numpy 2.0
-        if not all(dimensions) and not kwargs.pop("is_lhs", False):
+        if not all(dimensions) and not is_write_access:
             item_extractor = ".item()"
         else:
             item_extractor = ""
