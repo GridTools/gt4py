@@ -422,6 +422,7 @@ class TestDataDimensions:
         data_dimension_1d(ones)
         assert ones[0, 0][0] == 42.0
 
+    @pytest.mark.requires_dace
     def test_data_dimension_1d_warning(self):
         backend = "dace:cpu"
 
