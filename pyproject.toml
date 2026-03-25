@@ -284,6 +284,7 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
+  'requires_jax: tests that require `jax` package',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_can_deref: tests that require backend support for can_deref builtin function',
   'uses_composite_shifts: tests that use composite shifts in unstructured domain',
