@@ -114,11 +114,11 @@ def compile_variant_hook(
         )
 
     if __debug__:
-        # Note: We set the stack level to point to something internally as we don't want to show this warning more than once.
-        # It's an ad-hoc pragramatic choice that could be revisited in the future.
+        # Note: We set the stack level to point to something internally as we don't want to show this warning for every program call.
+        # It's an ad-hoc pragmatic choice that could be revisited in the future.
         warnings.warn(
-            "Python is not running in optimized mode, which may impact performance when using a"
-            " compiled backend. Consider running with `python -O` or setting the environment"
+            "Python is not running in optimized mode, which may impact performance."
+            " Consider running with `python -O` or setting the environment"
             " variable `PYTHONOPTIMIZE=1`.",
             stacklevel=3,
         )
