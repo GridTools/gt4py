@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import copyreg
+import dataclasses
 import functools
 import inspect
 import itertools
@@ -16,16 +18,124 @@ from typing import (
     Any,
     Callable,
     ClassVar,
+    Final,
     Optional,
     ParamSpec,
     Sequence,
+    TypeAlias,
     TypeGuard,
     TypeVar,
     cast,
     overload,
 )
 
-from gt4py.eve import utils as eve_utils
+from gt4py.eve import datamodels, utils as eve_utils
+
+
+GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
+
+
+def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
+    """Helper function to store dataclass/datamodel field metadata within a GT4Py namespace."""
+    return {GT4PY_CLASS_METADATA_NS: kwargs}
+
+
+_StandardPickleState = None | dict[str, Any] | tuple[dict[str, Any] | None, dict[str, Any]]
+_StandardGetStateMethod: TypeAlias = Callable[[object], _StandardPickleState]
+_StandardSetStateMethod: TypeAlias = Callable[[object, _StandardPickleState], None]
+
+
+@functools.cache
+def _get_metadata_based_state_getstate(cls: type) -> _StandardGetStateMethod:
+    """
+    Helper function to make class-specific `__getstate__` method following the standard implementation.
+    """
+    if not isinstance(cls, type) or not (
+        (is_dataclass := dataclasses.is_dataclass(cls)) or datamodels.is_datamodel(cls)
+    ):
+        raise TypeError(f"Expected a dataclass or datamodel type, got '{cls}'")
+
+    if is_dataclass:
+        field_metadata = {
+            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
+            for field in dataclasses.fields(cls)
+        }
+    else:
+        field_metadata = {
+            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
+            for field in datamodels.get_fields(cls).values()
+        }
+
+    # To gather all slots we need to traverse the whole MRO not just the class itself.
+    # We reuse the implementation of `copyreg._slotnames` to avoid code duplication and
+    # potential bugs, even if it is not (unfortunately) part of the module's public API.
+    class_slots = copyreg._slotnames(cls)  # type: ignore[attr-defined] # copyreg._slotnames is not recognized
+
+    has_slots = len(class_slots) > 0
+    has_dict = any("__dict__" in c.__dict__ for c in cls.__mro__)
+
+    dict_names = []
+    slot_names = []
+    for name, metadata in field_metadata.items():
+        if metadata and not metadata.get("pickle", True):
+            continue
+        if name in class_slots:
+            slot_names.append(name)
+        else:
+            dict_names.append(name)
+
+    # Comply with the default implementation of object.__getstate__() / object.__setstate__(state)
+    if not (has_slots or has_dict):
+        # for class instances without __dict__ nor __slots__: state = None.
+        def __getstate__(self: object) -> _StandardPickleState:
+            return None
+
+    elif not has_slots:
+        # for class instances with __dict__ and no __slots__: state = self.__dict__.
+        def __getstate__(self: object) -> _StandardPickleState:
+            return {name: getattr(self, name) for name in dict_names}
+
+    elif not has_dict:
+        # for class instances with __slots__ and no __dict__: state = (None, {slot.name: slot.value for all slots}).
+        def __getstate__(self: object) -> _StandardPickleState:
+            return (None, {name: getattr(self, name) for name in slot_names})
+
+    else:
+        # for class instances with __dict__ and __slots__: state = (self.__dict__, {slot.name: slot.value for all slots}).
+        def __getstate__(self: object) -> _StandardPickleState:
+            return (
+                {name: getattr(self, name) for name in dict_names},
+                {name: getattr(self, name) for name in slot_names},
+            )
+
+    return __getstate__
+
+
+class MetadataBasedPickling:
+    """
+    Mixin for adding metadata-based pickling to dataclass-like objects.
+
+    It uses the class field information to select only instance fields which
+    are not marked with `pickle=False` in the 'GT4PY_META' metadata namespace.
+    Individual fields can therefore opt out of pickling.
+    For example: `foo = field(..., metadata=gt4py_metadata(pickle=False))`.
+    """
+
+    __slots__ = ()  # to avoid creation of __dict__ when not needed
+
+    def __getstate__(self) -> _StandardPickleState:
+        """
+        Get the state of the object for pickling.
+
+        It returns the same kind of arguments as the default `__getstate__`
+        implementation, used by `pickle` (as documented in `object.__getstate__`,
+        check: https://devdocs.io/python~3.14/library/pickle#object.__getstate__)
+        """
+        return _get_metadata_based_state_getstate(type(self))(self)  # type: ignore[arg-type]  # type(self) should be hashable
+
+    # Note: we don't implement `__setstate__` as the output of our custom
+    #  `__getstate__` implementation should be compatible with the default
+    #  implementation.
 
 
 class RecursionGuard:

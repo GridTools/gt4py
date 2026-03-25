@@ -108,6 +108,47 @@ class Dimension:
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
 
+    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+
+    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+
+    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+
+    def __le__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__eq__` which returns `bool`.
+    def __eq__(self, value: Dimension) -> bool: ...
+    @overload
+    def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value == value.value
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            int_value = cast(core_defs.IntegralScalar, value)
+            return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
+        # This will fallback to default identity comparison if reflection also returns `NotImplemented`,
+        # which does identity comparison, see https://docs.python.org/3/reference/datamodel.html#object.__eq__.
+        return NotImplemented
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__ne__` which returns `bool`.
+    def __ne__(self, value: Dimension) -> bool: ...
+    @overload
+    def __ne__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value != value.value
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            raise NotImplementedError(
+                "'Dimension.__ne__' with an integer value produces two disjoint domains, "
+                "which is not supported. Use 'concat_where(dim < value, ...) "
+                "concat_where(dim > value, ...)' to express the condition, see ADR 22."
+            )
+        return NotImplemented
+
 
 if TYPE_CHECKING:
     # These exist as on-the fly replacements for Dimension instances
@@ -520,6 +561,36 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             )
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
+
+    def __or__(self, other: Domain) -> Domain:
+        """
+        Union of `Domain`s, currently limited to 1D overlapping or adjacent domains.
+
+        Raises `NotImplementedError` for multidimensional domains or disjoint 1D domains.
+        See ADR 22.
+        """
+        if self.ndim > 1 or other.ndim > 1:
+            raise NotImplementedError(
+                "Union of multidimensional domains is not supported, see ADR 22."
+            )
+        if self.ndim == 0:
+            return other
+        if other.ndim == 0:
+            return self
+        if self.dims[0] != other.dims[0]:
+            raise NotImplementedError(
+                f"Union of 1D domains with different dimensions '{self.dims[0]}' and '{other.dims[0]}' is not supported."
+            )
+        first, second = sorted((self, other), key=lambda x: x.ranges[0].start)
+        if first.ranges[0].stop >= second.ranges[0].start:
+            return Domain(
+                dims=(self.dims[0],),
+                ranges=(UnitRange(first.ranges[0].start, second.ranges[0].stop),),
+            )
+        raise NotImplementedError(
+            f"Union of disjoint domains '{first}' and '{second}' is not supported. "
+            f"Use nested 'concat_where' to express non-contiguous conditions, see ADR 22."
+        )
 
     @functools.cached_property
     def slice_at(self) -> utils.IndexerCallable[slice, Domain]:
