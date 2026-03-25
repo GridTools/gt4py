@@ -32,16 +32,6 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     """The transformation moves dataflow into the if branches.
 
-    ## TODO ##
-    - Slicing unit test
-    - Expending the unit test `_4` that Ioannis made such that it `__arg1` also has
-        something to relocate.
-    - Fix the naming issue thing in the if fuser.
-    - Make the `xfail` test run.
-    - Make Test where something is used in multiple branches.
-    - Check if symbol renaming is okay.
-    - test if map outside data is sliced into the if block.
-
     Essentially transforms code from this
     ```python
     __arg1 = foo(...)

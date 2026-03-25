@@ -1968,3 +1968,139 @@ def test_if_mover_symbol_aliasing():
         sdfg=sdfg,
         explected_applies=0,
     )
+
+
+def test_if_mover_slice_input():
+    def _make_nested_sdfg(cond_name: str, iter_name: str) -> dace.SDFG:
+        sdfg = dace.SDFG("If_block")
+
+        sdfg.add_scalar("arg1", dtype=dace.float64, transient=False)
+        sdfg.add_scalar("out", dtype=dace.float64, transient=False)
+        sdfg.add_scalar(cond_name, dtype=dace.bool_, transient=False)
+        sdfg.add_array("arg2", shape=(10,), dtype=dace.float64, transient=False)
+        sdfg.add_symbol(iter_name, stype=dace.int32)
+
+        then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=sdfg)
+        tstate = then_body.add_state("true_branch", is_start_block=True)
+        tstate.add_edge(
+            tstate.add_access("arg1"),
+            None,
+            tstate.add_access("out"),
+            None,
+            dace.Memlet("arg1[0] -> [0]"),
+        )
+
+        else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=sdfg)
+        fstate = else_body.add_state("false_branch", is_start_block=True)
+        f_tasklet = fstate.add_tasklet(
+            "f_tasklet", inputs={"__in"}, outputs={"__out"}, code="__out = __in + 1.0"
+        )
+        fstate.add_edge(
+            fstate.add_access("arg2"), None, f_tasklet, "__in", dace.Memlet(f"arg2[{iter_name}]")
+        )
+        fstate.add_edge(f_tasklet, "__out", fstate.add_access("out"), None, dace.Memlet("out[0]"))
+
+        if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
+        sdfg.add_node(if_region, is_start_block=True)
+        if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
+        if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}"), else_body)
+
+        sdfg.validate()
+        return sdfg
+
+    def _make_outer_sdfg(
+        cond_name: str, iter_name: str
+    ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.NestedSDFG]:
+        sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_slicing"))
+        state = sdfg.add_state(is_start_block=True)
+
+        # Inputs
+        input_names = list("abcd")
+        for name in input_names:
+            sdfg.add_array(
+                name,
+                shape=((10, 10) if name.startswith("b") else (10,)),
+                dtype=dace.float64,
+                transient=False,
+            )
+
+        # Temporaries
+        temporary_names = ["a1", "c1"]
+        for name in temporary_names:
+            sdfg.add_scalar(
+                name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
+            )
+        a1, c1 = (state.add_access(name) for name in temporary_names)
+
+        me, mx = state.add_map("map", ndrange={iter_name: "0:10"})
+        for name in input_names[:-1]:
+            state.add_edge(
+                state.add_access(name),
+                None,
+                me,
+                f"IN_{name}",
+                dace.Memlet(data=name, subset=("0:10, 0:10" if name == "b" else "0:10")),
+            )
+            me.add_scope_connectors(name)
+
+        state.add_edge(
+            mx, "OUT_d", state.add_access("d"), None, dace.Memlet(data="d", subset="0:10")
+        )
+        mx.add_scope_connectors("d")
+
+        # First branch.
+        tasklet_a1 = state.add_tasklet(
+            "tasklet_a1",
+            inputs={"__in1", "__in2"},
+            outputs={"__out"},
+            code="__out = __in1 + __in2",
+        )
+
+        state.add_edge(me, "OUT_a", tasklet_a1, "__in1", dace.Memlet(f"a[{iter_name}]"))
+        state.add_edge(
+            me, "OUT_b", tasklet_a1, "__in2", dace.Memlet(f"b[{iter_name}, {iter_name}]")
+        )
+        state.add_edge(tasklet_a1, "__out", a1, None, dace.Memlet("a1[0]"))
+
+        # Second branch
+        #  There is nothing.
+
+        # Condition
+        tasklet_c1 = state.add_tasklet(
+            "tasklet_c1",
+            inputs={"__in"},
+            outputs={"__out"},
+            code="__out = __in > 0.5",
+        )
+        state.add_edge(me, "OUT_c", tasklet_c1, "__in", dace.Memlet(f"c[{iter_name}]"))
+        state.add_edge(tasklet_c1, "__out", c1, None, dace.Memlet("c1[0]"))
+
+        # Nested SDFG
+        nsdfg = state.add_nested_sdfg(
+            sdfg=_make_nested_sdfg(cond_name=cond_name, iter_name=iter_name),
+            inputs={"arg1", "arg2", cond_name},
+            outputs={"out"},
+            symbol_mapping={iter_name: iter_name},
+        )
+        state.add_edge(a1, None, nsdfg, "arg1", dace.Memlet("a1[0]"))
+        state.add_edge(me, "OUT_b", nsdfg, "arg2", dace.Memlet(f"b[{iter_name}, 0:10]"))
+        state.add_edge(c1, None, nsdfg, cond_name, dace.Memlet("c1[0]"))
+        state.add_edge(nsdfg, "out", mx, "IN_d", dace.Memlet(f"d[{iter_name}]"))
+
+        sdfg.validate()
+        return sdfg, state, nsdfg
+
+    iter_name = "__i"
+    cond_name = "cond"
+
+    sdfg, state, nsdfg = _make_outer_sdfg(cond_name=cond_name, iter_name=iter_name)
+
+    _perform_test(
+        sdfg=sdfg,
+        explected_applies=1,
+    )
+
+    assert False, "Add structural checks."
+    assert False, (
+        "Add checks where `b` is copied fully inside the Map scope and then sliced into the `if_block`."
+    )
