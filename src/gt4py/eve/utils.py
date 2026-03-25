@@ -465,6 +465,15 @@ def optional_lru_cache(
     return _decorator(func) if func is not None else _decorator
 
 
+class EqualityBy(HashableBy):
+    """Use a hash function as the definition of equality for the wrapped object."""
+
+    __hash__ = HashableBy.__hash__
+
+    def __eq__(self, other: Any) -> bool:
+        return self is other or hash(self) == hash(other)
+
+
 # TODO(egparedes): it would be more efficient to implement the caching logic
 # here instead of relying on `functools.lru_cache` and wrapping/unwrapping the
 # arguments.
@@ -478,7 +487,8 @@ def lru_cache(
     """
     Wrap :func:`functools.lru_cache` but allow customizing the cache key.
 
-    Be careful: `key(obj1) == key(obj2)` must imply `obj1 == obj2`.
+    Be careful, with custom `key` functions, `key(obj1) == key(obj2)` automatically
+    implies `obj1 == obj2`, i.e. they are considered equal.
 
     >>> @lru_cache(key=id)
     ... def func(x):
@@ -505,12 +515,13 @@ def lru_cache(
             @functools.wraps(func)
             def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
                 return cached_func(
-                    *(hashable_by(key, arg) for arg in args),
-                    **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
+                    *(EqualityBy(key, arg) for arg in args),
+                    **{k: EqualityBy(key, arg) for k, arg in kwargs.items()},
                 )
 
             inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
             inner.cache_info = cached_func.cache_info  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+            inner.cache_clear = cached_func.cache_clear  # type: ignore[attr-defined]  # mypy not aware of functools.cache_clear behavior
 
             return typing.cast(Callable[_P, _T], inner)
 
@@ -654,6 +665,44 @@ def content_hash(
     assert isinstance(result, str)
 
     return result
+
+
+def custom_pickler(
+    reducer: Callable[[Any], tuple | types.NotImplementedType],
+    name: str | None = None,
+) -> type[pickle.Pickler]:
+    """
+    Create a custom pickler class using the provided function as reducer override.
+    """
+    pickler = type(
+        name or f"CustomReducePickler_{name or id(reducer)}",
+        (pickle.Pickler,),
+        {"reducer_override": staticmethod(reducer)},
+    )
+
+    return pickler
+
+
+def custom_pickler_from_reducers(
+    custom_reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
+    name: str | None = None,
+) -> type[pickle.Pickler]:
+    """
+    Create a pickler with the provided reducers registered in reducer override.
+
+    Since it uses `functools.singledispatch` for the implementation of the
+    reducer override, the custom reducers are used for the types in the keys
+    AND any of its subclasses. This explicitly deviates from the behavior of
+    the `dispatch_table` dict, to allow easy pickle customization of entire class
+    hierarchies.
+    """
+    reducer = functools.singledispatch(
+        cast(Callable[[Any], tuple | types.NotImplementedType], lambda _: NotImplemented)
+    )
+    for cls, func in custom_reducers.items():
+        reducer.register(cls)(func)
+
+    return custom_pickler(reducer, name=name)
 
 
 ddiff = deepdiff.diff.DeepDiff
