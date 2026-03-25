@@ -511,6 +511,7 @@ def lru_cache(
 
             inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
             inner.cache_info = cached_func.cache_info  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+            inner.cache_clear = cached_func.cache_clear  # type: ignore[attr-defined]  # mypy not aware of functools.cache_clear behavior
 
             return typing.cast(Callable[_P, _T], inner)
 
