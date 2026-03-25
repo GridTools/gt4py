@@ -6,9 +6,9 @@ Notable changes to this project will be documented in this file. The format is b
 
 ### Cartesian
 
-- Fix default compile flags for for various compilers
-- Generate numpy >= 2.0 compatible code in the debug backend
-- Support for data dims of size one in dace backends
+- Fix default compile flags for for various compilers.
+- Generate numpy >= 2.0 compatible code in the debug backend.
+- Support for data dims of size one in dace backends.
 
 ### Next
 
