@@ -231,10 +231,11 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             enclosing_map=enclosing_map,
         )
 
-        # We have to bring the nodes in a deterministic order.
-        nodes_to_move: list[dace_nodes.Node] = gtx_transformations.utils.order_nodes(
-            relocatable_dataflow, graph
-        )
+        # Bring the nodes in a deterministic order, which is induced by the underlying state.
+        # NOTE: The following key function is equivalent to use `lambda n: graph.node_id(n)`
+        #   but instead of O[N^2] it is O[N].
+        node_keys = {node: i for i, node in enumerate(graph.nodes())}
+        nodes_to_move = sorted(relocatable_dataflow, key=lambda n: node_keys[n])
 
         # For each node we have to find out in which state inside the `if_block` it will
         #  end up. `relocation_destination` has a fixed order.
@@ -477,7 +478,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     # This defines the "argument" to the nested SDFG. This means that
                     #  the new destination now is the single node inside `if_block`
                     #  that represents the argument.
-                    assert not oedge.data.is_empty()
                     assert not inner_sdfg.arrays[oedge.dst_conn].transient
                     assert branch_state is connector_usage_location[oedge.dst_conn][0]
                     assert isinstance(oedge.src, dace_nodes.AccessNode)
@@ -758,6 +758,21 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             for j in range(i + 1, len(state_nodes_sets)):
                 all_non_relocatable_dataflow.update(state_nodes.intersection(state_nodes_sets[j]))
 
+        # The dataflow that must happen before the `if_block`, i.e that is connected
+        #  with it by an empty Memlet can not be reconnected.
+        for if_block_iedge in state.in_edges(if_block):
+            if if_block_iedge.src is enclosing_map:
+                continue
+            elif not if_block_iedge.data.is_empty():
+                continue
+            all_non_relocatable_dataflow.update(
+                gtx_transformations.utils.find_upstream_nodes(
+                    start=if_block_iedge.src,
+                    state=state,
+                )
+            )
+            all_non_relocatable_dataflow.add(if_block_iedge.src)
+
         # Instead of scanning the nodes associated to each connector separately we will
         #  process all of them together. We do this because a node can be associated to
         #  multiple connectors and as such data dependencies can show up. We will,
@@ -770,9 +785,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if all_non_relocatable_dataflow:
             nodes_proposed_for_reloc.difference_update(all_non_relocatable_dataflow)
 
-        # TODO(phimuell): If we operate outside of a Map we also have to make sure that
-        #   the data is single use data, is not an AccessNode that refers to global
-        #   memory nor is a source AccessNode.
+        # TODO(phimuell): Better screening of empty Memlets.
         has_been_updated = True
         while has_been_updated:
             has_been_updated = False
