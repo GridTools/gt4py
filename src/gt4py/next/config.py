@@ -12,6 +12,7 @@ import datetime
 import enum
 import os
 import pathlib
+import warnings
 from typing import Final
 
 
@@ -122,6 +123,21 @@ COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", defa
 #: If set to a True value, it defaults to "gt4py_metrics_YYYYMMDD_HHMMSS.json" in
 #: the current folder.
 DUMP_METRICS_AT_EXIT: str | None = None
+
+
+#: Filter out DaCe related warnings. If not set warnings will be suppressed if the
+#: code runs in no debug mode.
+SKIP_DACE_WARNINGS: bool = env_flag_to_bool("GT4PY_SKIP_DACE_WARNINGS", default=not __debug__)
+
+
+if SKIP_DACE_WARNINGS:
+    # NOTE: Ideally we would suppress the warnings using context managers directly in
+    #   the backend. However, because this is not thread safe in Python versions before
+    #   3.14, we have to do it here.
+    warnings.filterwarnings(action="ignore", module="^dace(\..+)?")
+    warnings.filterwarnings(
+        action="ignore", module="^gt4py.next.program_processors.runners.dace.transformations(\..+)?"
+    )
 
 
 def _init_dump_metrics_filename() -> str:

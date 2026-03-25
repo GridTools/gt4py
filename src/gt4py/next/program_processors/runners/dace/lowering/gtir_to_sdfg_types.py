@@ -73,7 +73,7 @@ class FieldopData:
                 # The invariant below is ensured by calling `make_field()` to construct `FieldopData`.
                 # The `make_field` constructor converts any local dimension, if present, to `ListType`
                 # element type, while leaving the field domain with all global dimensions.
-                assert all(dim != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
+                assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in self.gt_type.dims)
                 domain_dims = [domain_range.dim for domain_range in domain]
                 domain_indices = gtir_domain.get_element_subset(
                     domain_dims, origin=None
