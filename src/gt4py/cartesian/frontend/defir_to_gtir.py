@@ -15,6 +15,7 @@ from typing import Any, Dict, Final, List, Optional, Tuple, Union, cast
 import numpy as np
 
 from gt4py.cartesian import utils
+from gt4py.cartesian.frontend.exceptions import GTScriptSyntaxError
 from gt4py.cartesian.frontend.node_util import (
     IRNodeMapper,
     IRNodeVisitor,
@@ -98,6 +99,27 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
             )
         value = str(v)
     return gtir.Literal(dtype=dtype, value=value)
+
+
+class DataDimensionsChecker(IRNodeVisitor):
+    """Check data dimensions are fully indexed.
+
+    Call on a fully visited Definition IR.
+    """
+
+    @classmethod
+    def apply(cls, def_ir: StencilDefinition, field_decls: Dict[str, FieldDecl]) -> None:
+        return cls().visit(def_ir, field_decls=field_decls)
+
+    def visit_FieldRef(
+        self, node: FieldRef, *, field_decls: Dict[str, FieldDecl], **kwargs
+    ) -> None:
+        if len(field_decls[node.name].data_dims) != len(node.data_index):
+            raise GTScriptSyntaxError(
+                f"Field {node.name} has data dimensions but no data dimensions index is specified. "
+                "Use `.A[x, y]` or `[0, 0, 0][x, y]`.",
+                loc=node.loc,
+            )
 
 
 class UnrollVectorAssignments(IRNodeMapper):

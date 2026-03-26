@@ -35,7 +35,11 @@ import numpy as np
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.base import Frontend, register
-from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
+from gt4py.cartesian.frontend.defir_to_gtir import (
+    DataDimensionsChecker,
+    DefIRToGTIR,
+    UnrollVectorAssignments,
+)
 from gt4py.cartesian.frontend.exceptions import (
     GTScriptAssertionError,
     GTScriptDataTypeError,
@@ -1314,7 +1318,7 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(result, nodes.VarRef):
             assert index is not None
             result.index = index[0]
-        else:
+        elif isinstance(result, nodes.FieldRef):
             if isinstance(index, nodes.AbsoluteKIndex):
                 result.offset = index
             elif isinstance(node.value, ast.Name):
@@ -1362,6 +1366,12 @@ class IRMaker(ast.NodeVisitor):
                     "Unrecognized subscript expression",
                     loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
                 )
+
+        else:
+            raise GTScriptSyntaxError(
+                f"Unrecognized node type {type(result)} is subscripted",
+                loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
+            )
 
         return result
 
@@ -2458,6 +2468,9 @@ class GTScriptParser(ast.NodeVisitor):
             docstring=inspect.getdoc(self.definition) or "",
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),
         )
+
+        # We check fields with data dimensions are all fully indexed
+        DataDimensionsChecker.apply(self.definition_ir, fields_decls)
 
         self.definition_ir = UnrollVectorAssignments.apply(
             self.definition_ir, fields_decls=fields_decls
