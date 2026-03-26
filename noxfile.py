@@ -340,7 +340,6 @@ def test_typing_exports(session: nox.Session) -> None:
         "-sv",
         "--mypy-testing-base",
         "typing_tests",
-        "--mypy-no-silence-site-packages",
         "typing_tests",
         *session.posargs,
     )
