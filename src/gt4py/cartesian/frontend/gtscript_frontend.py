@@ -236,8 +236,8 @@ class HorizontalIntervalParser(IntervalParser):
         if isinstance(node, ast.Slice):
             slice_node = node
         elif isinstance(getattr(node, "slice", None), ast.Slice):
-            # This is the previously allowed syntax with the inlined slice: I[3:4]
-            raise parser.interval_error
+            # This is the syntax with the inlined slice: K[3:4]
+            slice_node = node.slice
         else:
             # It is a single value and will therefore be (value):(value+1)
             slice_node = cls._slice_from_value(node)
@@ -258,21 +258,12 @@ class HorizontalIntervalParser(IntervalParser):
 
     def visit_Subscript(self, node: ast.Subscript) -> nodes.AxisBound:
         # This allows for the syntax
-        # `region[I[0] : I[0] + 2, J[0] : J[0] + 2]`
+        # `region[I[0] : I[2], J[0] : J[2]]`
         # to exist
         if not isinstance(node.value, ast.Name):
             raise self.interval_error
         if node.value.id != self.axis_name:
-            raise GTScriptSyntaxError(
-                "Invalid horizontal range specification:"
-                f"Expected axis {self.axis_name}, got {node.value.id}"
-            )
-        if not isinstance(node.slice, ast.Constant) or node.slice.value not in (0, -1):
-            raise GTScriptSyntaxError(
-                "Invalid horizontal range specification:"
-                f"Expected specification {self.axis_name}[0] or {self.axis_name}[-1]"
-                f", got {self.axis_name}[{node.slice.value}]"
-            )
+            raise self.interval_error
 
         index = self.visit(node.slice)
 
