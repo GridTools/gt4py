@@ -47,6 +47,9 @@ jobs:
 
       - name: Install uv and set the python version
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Configure OpenMP for macos clang
         if: ${{ matrix.os == 'macos-latest' }}
