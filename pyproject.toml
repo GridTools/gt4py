@@ -284,6 +284,7 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
+  'requires_jax: tests that require `jax` package',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_can_deref: tests that require backend support for can_deref builtin function',
   'uses_composite_shifts: tests that use composite shifts in unstructured domain',
@@ -485,7 +486,7 @@ dace = [
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "1.1.7+unknown.version.details"
+default-version = "1.1.8+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
