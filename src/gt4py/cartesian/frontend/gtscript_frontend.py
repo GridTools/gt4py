@@ -236,7 +236,7 @@ class HorizontalIntervalParser(IntervalParser):
         if isinstance(node, ast.Slice):
             slice_node = node
         elif isinstance(getattr(node, "slice", None), ast.Slice):
-            # This is the previously allowed syntax with the inlined slice: I[3:4]
+            # This is the previously allowed syntax with the inlined slice: I[0:2]
             raise parser.interval_error
         else:
             # It is a single value and will therefore be (value):(value+1)
@@ -267,11 +267,26 @@ class HorizontalIntervalParser(IntervalParser):
                 "Invalid horizontal range specification:"
                 f"Expected axis {self.axis_name}, got {node.value.id}"
             )
-        if not isinstance(node.slice, ast.Constant) or node.slice.value not in (0, -1):
+        if isinstance(node.slice, ast.Constant):
+            if node.slice.value != 0:
+                raise GTScriptSyntaxError(
+                    "Invalid horizontal range specification:"
+                    f"Expected specification {self.axis_name}[0] or {self.axis_name}[-1]"
+                    f", got {self.axis_name}[{node.slice.value}]"
+                )
+        elif isinstance(node.slice, ast.UnaryOp):
+            if not isinstance(node.slice.operand, ast.Constant) or node.slice.operand.value not in (
+                0,
+                1,
+            ):
+                raise GTScriptSyntaxError(
+                    "Invalid horizontal range specification:"
+                    f"Expected specification {self.axis_name}[0] or {self.axis_name}[-1]."
+                )
+        else:
             raise GTScriptSyntaxError(
                 "Invalid horizontal range specification:"
-                f"Expected specification {self.axis_name}[0] or {self.axis_name}[-1]"
-                f", got {self.axis_name}[{node.slice.value}]"
+                f"Expected axis {self.axis_name}, got {node.value.id}"
             )
 
         index = self.visit(node.slice)
