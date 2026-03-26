@@ -33,7 +33,7 @@ from .gpu_utils import (
     gt_set_gpu_blocksize,
 )
 from .inline_fuser import inline_dataflow_into_map
-from .local_double_buffering import gt_create_local_double_buffering
+from .local_double_buffering import gt_create_local_double_buffering, _add_local_double_buffering_to
 from .loop_blocking import LoopBlocking
 from .map_fusion import (
     HorizontalMapFusionCallback,
@@ -127,6 +127,7 @@ __all__ = [
     "gt_change_strides",
     "gt_check_if_concat_where_node_is_replaceable",
     "gt_create_local_double_buffering",
+    "_add_local_double_buffering_to",
     "gt_eliminate_dead_dataflow",
     "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",

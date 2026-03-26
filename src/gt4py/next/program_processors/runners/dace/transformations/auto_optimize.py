@@ -87,6 +87,8 @@ class GT4PyAutoOptHook(enum.Enum):
     TopLevelDataFlowHorizontalSplitCallBack = enum.auto()
     TopLevelDataFlowStep = enum.auto()
     TopLevelDataFlowPost = enum.auto()
+    DataFlowInsideMapsPre = enum.auto()
+    DataFlowInsideMapsPost = enum.auto()
     AfterToGPU = enum.auto()
 
 
@@ -335,6 +337,7 @@ def gt_auto_optimize(
             scan_loop_unrolling_factor=scan_loop_unrolling_factor,
             fuse_tasklets=fuse_tasklets,
             validate_all=validate_all,
+            optimization_hooks=optimization_hooks,
         )
 
         # Configure the Maps:
@@ -683,6 +686,7 @@ def _gt_auto_process_dataflow_inside_maps(
     scan_loop_unrolling_factor: int,
     fuse_tasklets: bool,
     validate_all: bool,
+    optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
 
@@ -695,6 +699,8 @@ def _gt_auto_process_dataflow_inside_maps(
     over a constant range, e.g. the number of neighbours, which is known at compile
     time, so the compiler will fully unroll them anyway.
     """
+    if GT4PyAutoOptHook.DataFlowInsideMapsPre in optimization_hooks:
+        optimization_hooks[GT4PyAutoOptHook.DataFlowInsideMapsPre](sdfg)  # type: ignore[call-arg]
 
     # Separate Tasklets into dependent and independent parts to promote data
     #  reusability. It is important that this step has to be performed before
@@ -806,6 +812,9 @@ def _gt_auto_process_dataflow_inside_maps(
             validate=False,
             validate_all=validate_all,
         )
+
+    if GT4PyAutoOptHook.DataFlowInsideMapsPost in optimization_hooks:
+        optimization_hooks[GT4PyAutoOptHook.DataFlowInsideMapsPost](sdfg)  # type: ignore[call-arg]
 
     return sdfg
 
