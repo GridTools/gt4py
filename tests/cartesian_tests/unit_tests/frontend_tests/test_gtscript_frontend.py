@@ -946,6 +946,22 @@ class TestRegions:
                 module=self.__class__.__name__,
             )
 
+    def test_axis_slice(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                with horizontal(region[I[0:2], :]):
+                    field[0, 0, 0] = 0
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid interval range specification",
+        ):
+            parse_definition(
+                stencil,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
 
 class TestExternalsWithSubroutines:
     def test_all_legal_combinations(self):
