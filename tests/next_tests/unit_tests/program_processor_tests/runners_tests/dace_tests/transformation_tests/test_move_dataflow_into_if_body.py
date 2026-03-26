@@ -2095,12 +2095,29 @@ def test_if_mover_slice_input():
 
     sdfg, state, nsdfg = _make_outer_sdfg(cond_name=cond_name, iter_name=iter_name)
 
+    tlet_before = util.count_nodes(sdfg, dace_nodes.Tasklet, True)
+
+    assert iter_name in nsdfg.symbol_mapping
+    assert len(tlet_before) == 2
+    assert {"tasklet_a1", "tasklet_c1"} == {tlet.label for tlet in tlet_before}
+    assert state.in_degree(nsdfg) == 3
+    assert {"a1", "c1", "b"} == {ie.data.data for ie in state.in_edges(nsdfg)}
+    assert "b" not in nsdfg.in_connectors
+
     _perform_test(
         sdfg=sdfg,
         explected_applies=1,
     )
 
-    assert False, "Add structural checks."
-    assert False, (
-        "Add checks where `b` is copied fully inside the Map scope and then sliced into the `if_block`."
-    )
+    tlet_after = util.count_nodes(sdfg, dace_nodes.Tasklet, True)
+
+    assert len(tlet_after) == 1
+    assert tlet_after[0].label == "tasklet_c1"
+    assert "b" in nsdfg.in_connectors
+    assert state.in_degree(nsdfg) == 4
+    assert {"c1", "b", "a"} == {ie.data.data for ie in state.in_edges(nsdfg)}
+    assert sum(1 for ie in state.in_edges(nsdfg) if ie.data.data == "a") == 1
+
+    # It would be possible to have only one edge that goes into the nested SDFG.
+    #  However, we would need to perform some more modifications.
+    assert sum(1 for ie in state.in_edges(nsdfg) if ie.data.data == "b") == 2

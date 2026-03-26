@@ -308,7 +308,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         node_map: dict[tuple[dace_nodes.Node, dace.SDFGState], dace_nodes.Node] = dict()
         rename_map: dict[tuple[str, dace.SDFGState], str] = dict()
 
-        # Data that has been fully mapped into the `if_block` and its name inside it.
+        # Check what data is already fully mapped into the `if_block`. There might be
+        #  aliasing, i.e. multiple inner names refer to the same outer name.
+        # TODO(phimuell): Investigate if it would be better if we handle partially
+        #   mapped in data such by fully map it in and perform the slicing outside.
         fully_mapped_in_data: dict[str, set[str]] = collections.defaultdict(set)
         for if_iedge in state.in_edges(if_block):
             if if_iedge.data.is_empty():
