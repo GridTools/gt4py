@@ -1970,7 +1970,8 @@ def test_if_mover_symbol_aliasing():
     )
 
 
-def test_if_mover_slice_input():
+@pytest.mark.parametrize("outer_slice_variable", [True, False])
+def test_if_mover_slice_input(outer_slice_variable: bool):
     def _make_nested_sdfg(cond_name: str, iter_name: str) -> dace.SDFG:
         sdfg = dace.SDFG("If_block")
 
@@ -2009,7 +2010,9 @@ def test_if_mover_slice_input():
         return sdfg
 
     def _make_outer_sdfg(
-        cond_name: str, iter_name: str
+        cond_name: str,
+        iter_name: str,
+        outer_slice_variable: bool,
     ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.NestedSDFG]:
         sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_slicing"))
         state = sdfg.add_state(is_start_block=True)
@@ -2063,7 +2066,12 @@ def test_if_mover_slice_input():
         state.add_edge(tasklet_a1, "__out", a1, None, dace.Memlet("a1[0]"))
 
         # Second branch
-        #  There is nothing.
+        if outer_slice_variable:
+            sdfg.add_array("slice_b", shape=(10,), dtype=dace.float64, transient=True)
+            slice_b = state.add_access("slice_b")
+            state.add_edge(
+                me, "OUT_b", slice_b, None, dace.Memlet(f"b[{iter_name}, 0:10] -> [0:10]")
+            )
 
         # Condition
         tasklet_c1 = state.add_tasklet(
@@ -2083,8 +2091,13 @@ def test_if_mover_slice_input():
             symbol_mapping={iter_name: iter_name},
         )
         state.add_edge(a1, None, nsdfg, "arg1", dace.Memlet("a1[0]"))
-        state.add_edge(me, "OUT_b", nsdfg, "arg2", dace.Memlet(f"b[{iter_name}, 0:10]"))
         state.add_edge(c1, None, nsdfg, cond_name, dace.Memlet("c1[0]"))
+
+        if outer_slice_variable:
+            state.add_edge(slice_b, None, nsdfg, "arg2", dace.Memlet("slice_b[0:10]"))
+        else:
+            state.add_edge(me, "OUT_b", nsdfg, "arg2", dace.Memlet(f"b[{iter_name}, 0:10]"))
+
         state.add_edge(nsdfg, "out", mx, "IN_d", dace.Memlet(f"d[{iter_name}]"))
 
         sdfg.validate()
@@ -2093,7 +2106,9 @@ def test_if_mover_slice_input():
     iter_name = "__i"
     cond_name = "cond"
 
-    sdfg, state, nsdfg = _make_outer_sdfg(cond_name=cond_name, iter_name=iter_name)
+    sdfg, state, nsdfg = _make_outer_sdfg(
+        cond_name=cond_name, iter_name=iter_name, outer_slice_variable=outer_slice_variable
+    )
 
     tlet_before = util.count_nodes(sdfg, dace_nodes.Tasklet, True)
 
@@ -2101,7 +2116,9 @@ def test_if_mover_slice_input():
     assert len(tlet_before) == 2
     assert {"tasklet_a1", "tasklet_c1"} == {tlet.label for tlet in tlet_before}
     assert state.in_degree(nsdfg) == 3
-    assert {"a1", "c1", "b"} == {ie.data.data for ie in state.in_edges(nsdfg)}
+    assert {"a1", "c1", ("slice_b" if outer_slice_variable else "b")} == {
+        ie.data.data for ie in state.in_edges(nsdfg)
+    }
     assert "b" not in nsdfg.in_connectors
 
     _perform_test(
@@ -2110,14 +2127,37 @@ def test_if_mover_slice_input():
     )
 
     tlet_after = util.count_nodes(sdfg, dace_nodes.Tasklet, True)
+    inner_ac = util.count_nodes(nsdfg.sdfg, dace_nodes.AccessNode, True)
 
     assert len(tlet_after) == 1
     assert tlet_after[0].label == "tasklet_c1"
     assert "b" in nsdfg.in_connectors
-    assert state.in_degree(nsdfg) == 4
-    assert {"c1", "b", "a"} == {ie.data.data for ie in state.in_edges(nsdfg)}
-    assert sum(1 for ie in state.in_edges(nsdfg) if ie.data.data == "a") == 1
 
-    # It would be possible to have only one edge that goes into the nested SDFG.
-    #  However, we would need to perform some more modifications.
-    assert sum(1 for ie in state.in_edges(nsdfg) if ie.data.data == "b") == 2
+    if outer_slice_variable:
+        assert nsdfg.sdfg.arrays["arg1"].transient
+        assert nsdfg.sdfg.arrays["arg2"].transient
+        assert nsdfg.sdfg.arrays["slice_b"].transient
+        assert not nsdfg.sdfg.arrays["b"].transient
+        assert not nsdfg.sdfg.arrays["a"].transient
+
+        # In this case the slicing was done inside.
+        assert state.in_degree(nsdfg) == 3
+        assert {"c1", "b", "a"} == {ie.data.data for ie in state.in_edges(nsdfg)}
+
+        assert len([ac for ac in inner_ac if ac.data == "b"]) == 2
+        assert len([ac for ac in inner_ac if ac.data == "slice_b"]) == 1
+
+    else:
+        assert nsdfg.sdfg.arrays["arg1"].transient
+        assert not nsdfg.sdfg.arrays["arg2"].transient
+        assert not nsdfg.sdfg.arrays["b"].transient
+        assert not nsdfg.sdfg.arrays["a"].transient
+
+        assert state.in_degree(nsdfg) == 4
+        assert {"c1", "b", "a"} == {ie.data.data for ie in state.in_edges(nsdfg)}
+        assert sum(1 for ie in state.in_edges(nsdfg) if ie.data.data == "a") == 1
+
+        # It would be possible to have only one edge that goes into the nested SDFG.
+        #  However, we would need to perform some more modifications.
+        assert len([ie for ie in state.in_edges(nsdfg) if ie.data.data == "b"]) == 2
+        assert len([ac for ac in inner_ac if ac.data == "b"]) == 1
