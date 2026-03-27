@@ -115,9 +115,11 @@ class DataDimensionsChecker(IRNodeVisitor):
         self, node: FieldRef, *, field_decls: Dict[str, FieldDecl], **kwargs
     ) -> None:
         if len(field_decls[node.name].data_dims) != len(node.data_index):
+            cdims = [0] * len(field_decls[node.name].axes)
+            ddims = ["x"] * len(field_decls[node.name].data_dims)
             raise GTScriptSyntaxError(
                 f"Field {node.name} has data dimensions but no data dimensions index is specified. "
-                "Use `.A[x, y]` or `[0, 0, 0][x, y]`.",
+                f"Use `{node.name}.A{ddims}` or `{node.name}{cdims}{ddims}`.",
                 loc=node.loc,
             )
 

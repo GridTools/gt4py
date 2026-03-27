@@ -2472,7 +2472,7 @@ class GTScriptParser(ast.NodeVisitor):
         self.definition_ir = UnrollVectorAssignments.apply(
             self.definition_ir, fields_decls=fields_decls
         )
-        
+
         # We check fields with data dimensions are all fully indexed
         DataDimensionsChecker.apply(self.definition_ir, fields_decls)
 
