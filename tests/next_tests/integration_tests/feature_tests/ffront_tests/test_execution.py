@@ -1362,7 +1362,7 @@ def test_tuple_unpacking_too_few_values(cartesian_case):
             return a
 
 
-def test_constant_closure_vars(cartesian_case):
+def test_constant_closure_vars_with_frozen_namespace(cartesian_case):
     from gt4py.eve.utils import FrozenNamespace
 
     constants = FrozenNamespace(PI=np.float64(3.142), E=np.float64(2.718))
@@ -1375,6 +1375,8 @@ def test_constant_closure_vars(cartesian_case):
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
     )
 
+
+def test_constant_closure_vars_with_enums(cartesian_case):
     import enum
 
     class Constants(np.float64, enum.Enum):
