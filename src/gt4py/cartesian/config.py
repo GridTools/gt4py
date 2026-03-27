@@ -27,6 +27,8 @@ _gpu_compiler_configuration = gpu_configuration(GT4PY_COMPILE_OPT_LEVEL)
 
 GT4PY_EXTRA_COMPILE_OPT_FLAGS = os.environ.get("GT4PY_EXTRA_COMPILE_OPT_FLAGS", "")
 
+GT4PY_CART_ENABLE_DACE: bool = bool(int(os.environ.get("GT4PY_CART_ENABLE_DACE", "1")))
+
 # Settings dict
 GT4PY_EXTRA_COMPILE_ARGS = os.environ.get(
     "GT4PY_EXTRA_COMPILE_ARGS", _cxx_compiler_infos.cxx_compile_flags
