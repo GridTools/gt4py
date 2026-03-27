@@ -399,8 +399,6 @@ class SDFGManager:
         #  - we expect all non-cartesian control flow to be innermost
         stree = self.schedule_tree()
 
-        tn.validate_children_and_parents_align(stree)
-
         # Re-order cartesian loops to match loops with memory layout
         # - layout is _always_ given I-J-K
         # - layout is reversed, inner is higher numbers, e.g K-J-I is I=2, J=1, K=0
@@ -419,11 +417,9 @@ class SDFGManager:
             flipper = passes.PushVerticalMapDown()
             flipper.visit(stree)
 
-        tn.validate_children_and_parents_align(stree)
-
         # Create SDFG
         sdfg = stree.as_sdfg(
-            validate=True,
+            validate=validate,
             simplify=simplify,
             skip={"ScalarToSymbolPromotion", "ControlFlowRaising"},
         )
