@@ -906,17 +906,15 @@ class TestIntervalSyntax:
             field: gtscript.Field[float],  # type: ignore
             idx_field: gtscript.Field[gtscript.IJ, int],  # type: ignore
         ):
-            with computation(PARALLEL), interval(0, idx_field[0, 0]):
+            with computation(PARALLEL), interval(0, idx_field[0, 1]):
                 field[0, 0, 0] = 1
 
-        def_ir = parse_definition(
-            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
-        )
-        assert def_ir.computations[0].interval.start.offset == 0
-        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
-
-        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.FieldRef)
-        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
+        ):
+            def_ir = parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
 
 
 class TestRegions:
