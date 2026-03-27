@@ -808,7 +808,7 @@ class TestIntervalSyntax:
 class TestRegions:
     def test_one_interval_only(self):
         def stencil(in_f: gtscript.Field[np.float64]):
-            with computation(PARALLEL), interval(...), horizontal(region[I[0:3], :]):
+            with computation(PARALLEL), interval(...), horizontal(region[I[0] : I[0] + 3, :]):
                 in_f = 1.0
 
         def_ir = parse_definition(
@@ -841,7 +841,7 @@ class TestRegions:
             stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            externals={"i1": I[1]},
+            externals={"i1": I[0] + 1},
         )
 
         assert len(def_ir.computations) == 1
@@ -913,6 +913,54 @@ class TestRegions:
             match="Cannot nest `with` node inside a horizontal region.",
         ):
             parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_axis_offset(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                with horizontal(region[I[0] : I[2], :]):
+                    field[0, 0, 0] = 0
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid horizontal range specification",
+        ):
+            parse_definition(
+                stencil,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+    def test_axis_offset_negative(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                with horizontal(region[I[-3] : I[-1], :]):
+                    field[0, 0, 0] = 0
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid horizontal range specification",
+        ):
+            parse_definition(
+                stencil,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+    def test_axis_slice(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                with horizontal(region[I[0:2], :]):
+                    field[0, 0, 0] = 0
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid interval range specification",
+        ):
+            parse_definition(
+                stencil,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
 
 
 class TestExternalsWithSubroutines:
