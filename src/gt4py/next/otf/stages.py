@@ -14,7 +14,6 @@ from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
 
 from gt4py.eve import utils
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import code_specs, definitions
 from gt4py.next.otf.binding import interface
 
@@ -36,18 +35,13 @@ def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
 
 def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef) -> str:
     """
-    Generates a unique hash string for a stencil source program representing
-    the program, sorted offset_provider, and column_axis.
+    Generates a unique hash string for a compilable program representing
+    the program IR and all compile-time arguments.
     """
-    program: itir.Program = program_def.data
-    offset_provider: common.OffsetProvider = program_def.args.offset_provider
-    column_axis: Optional[common.Dimension] = program_def.args.column_axis
-
     program_hash = utils.content_hash(
         (
-            program.fingerprint(),
-            sorted(offset_provider.items(), key=lambda el: el[0]),
-            column_axis,
+            program_def.data.fingerprint(),
+            program_def.args,
         )
     )
 
