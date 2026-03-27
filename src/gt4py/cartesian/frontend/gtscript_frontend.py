@@ -102,10 +102,12 @@ class IntervalParser(gt_meta.ASTPass):
         axis_name: str,
         fields: dict[str, nodes.FieldDecl],
         loc: Optional[nodes.Location] = None,
+        literal_precision: Optional[int] = None,
     ):
         self.axis_name = axis_name
         self.fields = fields
         self.loc = loc
+        self._literal_precision = literal_precision
 
         error_msg = "Invalid interval range specification"
 
@@ -113,6 +115,11 @@ class IntervalParser(gt_meta.ASTPass):
             error_msg = f"{error_msg} at line {loc.line} (column: {loc.column})"
 
         self.interval_error = GTScriptSyntaxError(error_msg)
+
+    def _default_int_datatype(self) -> nodes.DataType:
+        if self._literal_precision:
+            return nodes.DataType.from_dtype(np.dtype(f"i{int(self._literal_precision / 8)}"))
+        return nodes.DataType.INT64
 
     @staticmethod
     def _slice_from_value(node: ast.Expr) -> ast.Slice:
@@ -323,8 +330,9 @@ class VerticalIntervalParser(IntervalParser):
         axis_name: str,
         fields: dict[str, nodes.FieldDecl],
         loc: Optional[nodes.Location] = None,
+        literal_precision: Optional[int] = None,
     ) -> nodes.AxisInterval:
-        parser = cls(axis_name, fields, loc)
+        parser = cls(axis_name, fields, loc, literal_precision)
 
         if isinstance(node, ast.Subscript):
             raise parser.interval_error
@@ -354,7 +362,42 @@ class VerticalIntervalParser(IntervalParser):
         return nodes.AxisInterval(start=start, end=end, loc=loc)
 
     def visit_Subscript(self, node: ast.Subscript):
-        # This was previously allowed but is discontinued now.
+        # Check that this is a higher dimensional field
+        if isinstance(node.value, ast.Subscript) and isinstance(node.value.value, ast.Name):
+            field_name = node.value.value.id
+            # Ensure the indexing is correct, first we need a 0-offset in i and j
+            if isinstance(node.value.slice, ast.Tuple):
+                axis_offsets: list[ast.Constant] = node.value.slice.elts
+                if not all(offset.value == 0 for offset in axis_offsets):
+                    raise self.interval_error
+            else:
+                raise self.interval_error
+            # then we parse the actual offset in the higher dimension
+            if isinstance(node.slice, ast.Tuple):
+                higher_dim_offset = [self.visit(data_idx) for data_idx in node.slice.elts]
+            else:
+                higher_dim_offset = [self.visit(node.slice)]
+            literal_index = [
+                nodes.ScalarLiteral(value=i, data_type=self._default_int_datatype())
+                for i in higher_dim_offset
+            ]
+
+            return nodes.FieldRef.at_center(
+                name=field_name,
+                axes=self.fields[field_name].axes,
+                loc=nodes.Location.from_ast_node(node),
+                data_index=literal_index,
+            )
+        # This is a non-higher dimensional field, but a normal field accessed with an offset
+        if isinstance(node.value, ast.Name) and isinstance(node.slice, ast.Tuple):
+            # We need to check that the offset is 0 everywhere, since no horizontal dependencies are allowed
+            axis_offsets: list[ast.Constant] = node.slice.elts
+            if not all(offset.value == 0 for offset in axis_offsets):
+                raise self.interval_error
+            # If the offset is 0, we are safe to visit the field
+            return self.visit(node.value)
+
+        # Legal syntax never allows you to arrive here
         raise self.interval_error
 
 
@@ -1073,7 +1116,13 @@ class IRMaker(ast.NodeVisitor):
             interval_node = args[0]
 
         seq_name = nodes.Domain.LatLonGrid().sequential_axis.name
-        interval = VerticalIntervalParser.apply(interval_node, seq_name, self.fields, loc=loc)
+        interval = VerticalIntervalParser.apply(
+            interval_node,
+            seq_name,
+            self.fields,
+            loc=loc,
+            literal_precision=self.literal_int_precision,
+        )
 
         if (
             interval.start.level == nodes.LevelMarker.END
