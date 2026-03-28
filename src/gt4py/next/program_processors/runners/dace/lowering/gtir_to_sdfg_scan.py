@@ -265,15 +265,13 @@ def _create_scan_field_operator(
     )
 
     return gtx_utils.tree_map(
-        lambda edge, domain, sym: (
-            _create_scan_field_operator_impl(
-                ctx,
-                sdfg_builder,
-                edge,
-                domain,
-                sym.type,
-                map_exit,
-            )
+        lambda edge, domain, sym: _create_scan_field_operator_impl(
+            ctx,
+            sdfg_builder,
+            edge,
+            domain,
+            sym.type,
+            map_exit,
         )
     )(output, output_domain, dummy_output_symbol)
 

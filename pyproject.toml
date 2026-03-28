@@ -67,9 +67,9 @@ typing = [
 typing_exports = [
   # to test typing with gt4py in downstream code
   {include-group = "typing"},
-  'types-six',  # can not let mypy auto-install types as that leads to unexpected stderr output (which means test failure)
-  'pytest-mypy-plugins',  # pytest plugin for running mypy on code snippets
-  "xarray"  # one of the regression tests requires xarray
+  'types-six>=1.17.0.20251009',  # can not let mypy auto-install types as that leads to unexpected stderr output (which means test failure)
+  'pytest-mypy-plugins>=4.0.0',  # pytest plugin for running mypy on code snippets
+  "xarray>=2024.1.0"  # one of the regression tests requires xarray
 ]
 
 # -- Standard project description options (PEP 621) --
