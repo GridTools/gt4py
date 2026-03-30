@@ -34,8 +34,9 @@ def test_local_temporaries_to_scalars_basic() -> None:
         declarations=[TemporaryFactory(name="tmp")],
     )
 
-    transformed = LocalTemporariesToScalars().visit_Stencil(testee)
+    transformed = LocalTemporariesToScalars().visit(testee)
 
+    assert isinstance(transformed, oir.Stencil)
     hexec = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
     assert isinstance(hexec.body[0].left, oir.ScalarAccess)
     assert isinstance(hexec.body[1].right, oir.ScalarAccess)
@@ -54,8 +55,9 @@ def test_local_temporaries_to_scalars_multiexec() -> None:
         declarations=[TemporaryFactory(name="tmp")],
     )
 
-    transformed = LocalTemporariesToScalars().visit_Stencil(testee)
+    transformed = LocalTemporariesToScalars().visit(testee)
 
+    assert isinstance(transformed, oir.Stencil)
     assert "tmp" in {d.name for d in transformed.declarations}
     assert not transformed.walk_values().if_isinstance(oir.ScalarAccess).to_list()
 
@@ -85,8 +87,9 @@ def test_write_before_read_temporaries_to_scalars() -> None:
         ],
     )
 
-    transformed = WriteBeforeReadTemporariesToScalars().visit_Stencil(testee)
+    transformed = WriteBeforeReadTemporariesToScalars().visit(testee)
 
+    assert isinstance(transformed, oir.Stencil)
     hexec0 = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
     hexec1 = transformed.vertical_loops[0].sections[0].horizontal_executions[1]
     assert len(hexec0.declarations) == 2
@@ -145,8 +148,9 @@ def test_conditional_write_before_read() -> None:
         ],
     )
 
-    transformed = WriteBeforeReadTemporariesToScalars().visit_Stencil(testee)
+    transformed = WriteBeforeReadTemporariesToScalars().visit(testee)
 
     # Make sure we don't scalarize in case of conditional write before unconditional read
+    assert isinstance(transformed, oir.Stencil)
     assert len(transformed.declarations) == 1
     assert transformed.declarations[0].name == "tmp1"
