@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.common import BuiltInLiteral, DataType, LoopOrder
 from gt4py.cartesian.gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -15,12 +16,16 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.temporaries import (
 from ...oir_utils import (
     AssignStmtFactory,
     HorizontalExecutionFactory,
+    LiteralFactory,
+    MaskStmtFactory,
     StencilFactory,
     TemporaryFactory,
+    VerticalLoopFactory,
+    VerticalLoopSectionFactory,
 )
 
 
-def test_local_temporaries_to_scalars_basic():
+def test_local_temporaries_to_scalars_basic() -> None:
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions__0__body=[
             AssignStmtFactory(left__name="tmp"),
@@ -28,7 +33,9 @@ def test_local_temporaries_to_scalars_basic():
         ],
         declarations=[TemporaryFactory(name="tmp")],
     )
-    transformed = LocalTemporariesToScalars().visit(testee)
+
+    transformed = LocalTemporariesToScalars().visit_Stencil(testee)
+
     hexec = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
     assert isinstance(hexec.body[0].left, oir.ScalarAccess)
     assert isinstance(hexec.body[1].right, oir.ScalarAccess)
@@ -36,7 +43,7 @@ def test_local_temporaries_to_scalars_basic():
     assert len(hexec.declarations) == 1
 
 
-def test_local_temporaries_to_scalars_multiexec():
+def test_local_temporaries_to_scalars_multiexec() -> None:
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(
@@ -46,12 +53,14 @@ def test_local_temporaries_to_scalars_multiexec():
         ],
         declarations=[TemporaryFactory(name="tmp")],
     )
-    transformed = LocalTemporariesToScalars().visit(testee)
+
+    transformed = LocalTemporariesToScalars().visit_Stencil(testee)
+
     assert "tmp" in {d.name for d in transformed.declarations}
     assert not transformed.walk_values().if_isinstance(oir.ScalarAccess).to_list()
 
 
-def test_write_before_read_temporaries_to_scalars():
+def test_write_before_read_temporaries_to_scalars() -> None:
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(
@@ -75,7 +84,9 @@ def test_write_before_read_temporaries_to_scalars():
             TemporaryFactory(name="tmp3"),
         ],
     )
-    transformed = WriteBeforeReadTemporariesToScalars().visit(testee)
+
+    transformed = WriteBeforeReadTemporariesToScalars().visit_Stencil(testee)
+
     hexec0 = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
     hexec1 = transformed.vertical_loops[0].sections[0].horizontal_executions[1]
     assert len(hexec0.declarations) == 2
@@ -89,3 +100,53 @@ def test_write_before_read_temporaries_to_scalars():
     assert not isinstance(hexec1.body[0].right, oir.ScalarAccess)
     assert isinstance(hexec1.body[1].left, oir.ScalarAccess)
     assert isinstance(hexec1.body[2].right, oir.ScalarAccess)
+
+
+def test_conditional_write_before_read() -> None:
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                loop_order=LoopOrder.FORWARD,
+                sections=[
+                    VerticalLoopSectionFactory(
+                        horizontal_executions=[
+                            HorizontalExecutionFactory(
+                                body=[
+                                    AssignStmtFactory(left__name="tmp1"),
+                                ]
+                            ),
+                        ]
+                    )
+                ],
+            ),
+            VerticalLoopFactory(
+                loop_order=LoopOrder.PARALLEL,
+                sections=[
+                    VerticalLoopSectionFactory(
+                        horizontal_executions=[
+                            HorizontalExecutionFactory(
+                                body=[
+                                    MaskStmtFactory(
+                                        mask=LiteralFactory(
+                                            dtype=DataType.BOOL, value=BuiltInLiteral.FALSE
+                                        ),
+                                        body=[AssignStmtFactory(left__name="tmp1")],
+                                    ),
+                                    AssignStmtFactory(right__name="tmp1"),
+                                ]
+                            )
+                        ]
+                    )
+                ],
+            ),
+        ],
+        declarations=[
+            TemporaryFactory(name="tmp1"),
+        ],
+    )
+
+    transformed = WriteBeforeReadTemporariesToScalars().visit_Stencil(testee)
+
+    # Make sure we don't scalarize in case of conditional write before unconditional read
+    assert len(transformed.declarations) == 1
+    assert transformed.declarations[0].name == "tmp1"
