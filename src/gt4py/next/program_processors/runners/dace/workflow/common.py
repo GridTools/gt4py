@@ -126,7 +126,8 @@ def set_dace_config(
     # Instrumentation of SDFG timers
     dace.Config.set("instrumentation", "report_each_invocation", value=False)
 
-    # Do not print the progress of SDFG transformations, nor that of SDFG code generation, unless enabled through env variable.
+    # Do not print the progress of SDFG transformations, nor that of SDFG code generation,
+    #  unless enabled through env variable.
     dace.Config.set(
         "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
     )
