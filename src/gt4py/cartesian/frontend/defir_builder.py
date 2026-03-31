@@ -45,24 +45,24 @@ class DefIRBuilder:
         parameters = [
             parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
         ]
-        definition_ir = StencilDefinition(
-            name=self.stencil_name,
-            domain=domain,
-            api_signature=api_signature,
-            api_fields=api_fields,
-            parameters=parameters,
-            computations=computations,
-            externals=externals,
-            docstring=docstring,
-            loc=loc,
-        )
 
-        definition_ir = UnrollVectorAssignments.apply(
-            definition_ir,
+        stencil_definition = StencilDefinition()
+        stencil_definition.name = self.stencil_name
+        stencil_definition.domain = domain
+        stencil_definition.api_signature = api_signature
+        stencil_definition.api_fields = api_fields
+        stencil_definition.parameters = parameters
+        stencil_definition.computations = computations
+        stencil_definition.externals = externals
+        stencil_definition.docstring = docstring
+        stencil_definition.loc = loc
+
+        stencil_definition = UnrollVectorAssignments.apply(
+            stencil_definition,
             fields_decls=fields_decls,
         )
 
         # We check fields with data dimensions are all fully indexed
-        DataDimensionsChecker.apply(definition_ir, fields_decls)
+        DataDimensionsChecker.apply(stencil_definition, fields_decls)
 
-        return definition_ir
+        return stencil_definition
