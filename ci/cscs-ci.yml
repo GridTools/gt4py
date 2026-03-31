@@ -18,7 +18,7 @@ include:
 
 variables:  # Default values for base variables (can be overridden in jobs definitions)
   CUDA_VERSION: '12.6.2'
-  ROCM_VERSION: '6.2.4'
+  ROCM_VERSION: '7.1.1'
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.6.12'
 
@@ -63,7 +63,7 @@ stages:
   variables:
     # jfrog.svc.cscs.ch/dockerhub/rocm is the cached version of docker.io/rocm
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
-    EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
+    EXTRA_UV_SYNC_ARGS: "--extra rocm7_0"
     EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx942 ROCM_HOME=/opt/rocm"
     KUBERNETES_MEMORY_REQUEST: "64Gi"
     KUBERNETES_MEMORY_LIMIT: "64Gi"
@@ -87,7 +87,7 @@ build_cscs_amd_rocm:
   stage: test
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
-    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6_0) to test 
+    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6) to test 
     USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
@@ -95,17 +95,17 @@ build_cscs_amd_rocm:
     matrix:
       - SUBPACKAGE: [cartesian]
         VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'rocm6_0', 'cpu']
+        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
         VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'rocm6_0', 'cpu']
+        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
         DETAIL: ["nomesh", "atlas"]
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: [storage]
-        VARIANT: ['cuda12', 'rocm6_0', 'cpu']
+        VARIANT: ['cuda12', 'rocm7', 'cpu']
         PY_VERSION: *test_python_versions
   rules: &exclude_variants_rules
     # Extended jobs should reference this list anchor at the proper position of their
@@ -114,7 +114,7 @@ build_cscs_amd_rocm:
       when: never
     - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
       when: never
-    - if: '($SUBVARIANT == "rocm6_0" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm6_0")) && ($TEST_VARIANTS !~ /(^|\s)rocm6_0(\s|$)/)'
+    - if: '($SUBVARIANT == "rocm7" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm7")) && ($TEST_VARIANTS !~ /(^|\s)rocm7(\s|$)/)'
       when: never
 
   script:
@@ -159,7 +159,7 @@ test_cscs_amd_rocm:
   needs:
     - build_cscs_amd_rocm
   variables:
-    TEST_VARIANTS: 'cpu rocm6_0'
+    TEST_VARIANTS: 'cpu rocm7'
     SLURM_GPUS_PER_NODE: 4
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.

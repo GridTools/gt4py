@@ -82,7 +82,7 @@ REQUIRES_PYTHON = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["pro
 ]
 
 # -- Parameter sets --
-DeviceOption: TypeAlias = Literal["cpu", "cuda12", "rocm6_0"]
+DeviceOption: TypeAlias = Literal["cpu", "cuda12", "cuda13", "rocm6", "rocm7"]
 DeviceNoxParam: Final[dict[DeviceOption, nox.param]] = {
     device: nox.param(device, id=device, tags=[device]) for device in DeviceOption.__args__
 }
