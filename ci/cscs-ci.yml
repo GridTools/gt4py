@@ -20,7 +20,7 @@ variables:  # Default values for base variables (can be overridden in jobs defin
   CUDA_VERSION: '12.6.2'
   ROCM_VERSION: '7.1.1'
   UBUNTU_VERSION: '24.04'
-  UV_VERSION: '0.6.12'
+  UV_VERSION: '0.11.2'
 
 .test_python_versions: &test_python_versions ['3.10', '3.14']
 
