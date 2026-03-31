@@ -46,16 +46,17 @@ class DefIRBuilder:
             parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
         ]
 
-        stencil_definition = StencilDefinition()
-        stencil_definition.name = self.stencil_name
-        stencil_definition.domain = domain
-        stencil_definition.api_signature = api_signature
-        stencil_definition.api_fields = api_fields
-        stencil_definition.parameters = parameters
-        stencil_definition.computations = computations
-        stencil_definition.externals = externals
-        stencil_definition.docstring = docstring
-        stencil_definition.loc = loc
+        stencil_definition = StencilDefinition(
+            name=self.stencil_name,  # type: ignore[call-arg]
+            domain=domain,
+            api_signature=api_signature,
+            api_fields=api_fields,
+            parameters=parameters,
+            computations=computations,
+            externals=externals,
+            docstring=docstring,
+            loc=loc,
+        )
 
         stencil_definition = UnrollVectorAssignments.apply(
             stencil_definition,
