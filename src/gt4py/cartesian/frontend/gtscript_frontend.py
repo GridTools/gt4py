@@ -102,12 +102,10 @@ class IntervalParser(gt_meta.ASTPass):
         axis_name: str,
         fields: dict[str, nodes.FieldDecl],
         loc: Optional[nodes.Location] = None,
-        literal_precision: Optional[int] = None,
     ):
         self.axis_name = axis_name
         self.fields = fields
         self.loc = loc
-        self._literal_precision = literal_precision
 
         error_msg = "Invalid interval range specification"
 
@@ -308,6 +306,16 @@ class VerticalIntervalParser(IntervalParser):
     if an `ast.Subscript` is passed, this parses its slice attribute.
     """
 
+    def __init__(
+        self,
+        axis_name: str,
+        fields: dict[str, nodes.FieldDecl],
+        literal_precision: int,
+        loc: Optional[nodes.Location] = None,
+    ):
+        super().__init__(axis_name, fields, loc)
+        self._literal_precision = literal_precision
+
     def visit_Name(self, node: ast.Name) -> nodes.Ref:
         # Handle the field accesses
         if node.id in self.fields:
@@ -329,10 +337,10 @@ class VerticalIntervalParser(IntervalParser):
         node: Union[ast.Slice, ast.Subscript, ast.Constant],
         axis_name: str,
         fields: dict[str, nodes.FieldDecl],
+        literal_precision: int,
         loc: Optional[nodes.Location] = None,
-        literal_precision: Optional[int] = None,
     ) -> nodes.AxisInterval:
-        parser = cls(axis_name, fields, loc, literal_precision)
+        parser = cls(axis_name, fields, literal_precision, loc)
 
         if isinstance(node, ast.Subscript):
             raise parser.interval_error
