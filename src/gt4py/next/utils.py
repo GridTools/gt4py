@@ -248,9 +248,9 @@ def tree_map(
 
         >>> tree_map(
         ...     collection_type=(list, tuple),
-        ...     result_collection_constructor=lambda value, elts: tuple(elts)
-        ...     if isinstance(value, list)
-        ...     else list(elts),
+        ...     result_collection_constructor=lambda value, elts: (
+        ...         tuple(elts) if isinstance(value, list) else list(elts)
+        ...     ),
         ... )(lambda x: x + 1)([(1, 2), 3])
         ([2, 3], 4)
 
