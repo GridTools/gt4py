@@ -240,8 +240,8 @@ class HorizontalIntervalParser(IntervalParser):
         if isinstance(node, ast.Slice):
             slice_node = node
         elif isinstance(getattr(node, "slice", None), ast.Slice):
-            # This is the syntax with the inlined slice: K[3:4]
-            slice_node = node.slice
+            # This is the previously allowed syntax with the inlined slice: I[0:2]
+            raise parser.interval_error
         else:
             # It is a single value and will therefore be (value):(value+1)
             slice_node = cls._slice_from_value(node)
@@ -262,12 +262,36 @@ class HorizontalIntervalParser(IntervalParser):
 
     def visit_Subscript(self, node: ast.Subscript) -> nodes.AxisBound:
         # This allows for the syntax
-        # `region[I[0] : I[2], J[0] : J[2]]`
+        # `region[I[0] : I[0] + 2, J[0] : J[0] + 2]`
         # to exist
         if not isinstance(node.value, ast.Name):
             raise self.interval_error
         if node.value.id != self.axis_name:
-            raise self.interval_error
+            raise GTScriptSyntaxError(
+                "Invalid horizontal range specification:"
+                f"Expected axis {self.axis_name}, got {node.value.id}"
+            )
+        if isinstance(node.slice, ast.Constant):
+            if node.slice.value != 0:
+                raise GTScriptSyntaxError(
+                    "Invalid horizontal range specification:"
+                    f"Expected specification {self.axis_name}[0] or {self.axis_name}[-1]"
+                    f", got {self.axis_name}[{node.slice.value}]"
+                )
+        elif isinstance(node.slice, ast.UnaryOp):
+            if not isinstance(node.slice.operand, ast.Constant) or node.slice.operand.value not in (
+                0,
+                1,
+            ):
+                raise GTScriptSyntaxError(
+                    "Invalid horizontal range specification:"
+                    f"Expected specification {self.axis_name}[0] or {self.axis_name}[-1]."
+                )
+        else:
+            raise GTScriptSyntaxError(
+                "Invalid horizontal range specification:"
+                f"Expected axis {self.axis_name}, got {node.value.id}"
+            )
 
         index = self.visit(node.slice)
 
@@ -289,7 +313,9 @@ class VerticalIntervalParser(IntervalParser):
                     f"Using field `{node.id}` with a K-Axis as a bound for an interval is invalid."
                 )
             return nodes.FieldRef.at_center(
-                name=node.id, axes=self.fields[node.id].axes, loc=nodes.Location.from_ast_node(node)
+                name=node.id,
+                axes=self.fields[node.id].axes,
+                loc=nodes.Location.from_ast_node(node),
             )
         # Handle the scalar accesses
         return nodes.VarRef(name=node.id, loc=nodes.Location.from_ast_node(node))
@@ -1201,7 +1227,8 @@ class IRMaker(ast.NodeVisitor):
 
         if self._is_parameter(symbol):
             return nodes.VarRef(
-                name=symbol, loc=nodes.Location.from_ast_node(node, scope=self.stencil_name)
+                name=symbol,
+                loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
             )
 
         if self._is_local_symbol(symbol):
@@ -1251,7 +1278,8 @@ class IRMaker(ast.NodeVisitor):
                 )
             if axis_index < last_index:
                 raise GTScriptSyntaxError(
-                    message=f"Axis {value.name} is specified out of order", loc=index_node
+                    message=f"Axis {value.name} is specified out of order",
+                    loc=index_node,
                 )
             if axis_index == last_index:
                 raise GTScriptSyntaxError(
@@ -1383,7 +1411,9 @@ class IRMaker(ast.NodeVisitor):
             return eval("{op}{arg}".format(op=op.python_symbol, arg=arg))
 
         return nodes.UnaryOpExpr(
-            op=op, arg=arg, loc=nodes.Location.from_ast_node(node, scope=self.stencil_name)
+            op=op,
+            arg=arg,
+            loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
         )
 
     def visit_UAdd(self, node: ast.UAdd) -> nodes.UnaryOperator:
@@ -1484,7 +1514,10 @@ class IRMaker(ast.NodeVisitor):
             args.append(lhs)
 
         result = nodes.BinOpExpr(
-            op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node, scope=self.stencil_name)
+            op=op,
+            lhs=lhs,
+            rhs=rhs,
+            loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
         )
 
         return result
@@ -1778,7 +1811,8 @@ class IRMaker(ast.NodeVisitor):
                                     "and not yet implemented for the `gt:X` backends."
                                 )
                             warn_experimental_feature(
-                                feature="2D temporaries", ADR="experimental/2d-temporaries.md"
+                                feature="2D temporaries",
+                                ADR="experimental/2d-temporaries.md",
                             )
 
                             axes = self._domain_from_gtscript_axis(field_desc.axes).axes_names
