@@ -152,7 +152,7 @@ jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
 next = ['gt4py[jax,standard,testing]']
 rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
 rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
-rocm6_0 = ['cupy>=13.4.1']
+rocm6_0 = ['cupy>=13.4.1,<14.0']
 standard = [
   'clang-format>=18.1',
   # TODO(edopao): we keep 'scipy>=1.14.1' only because of wheels compatibility with python 3.10
