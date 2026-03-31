@@ -52,7 +52,7 @@ class DefIRBuilder:
             api_fields=api_fields,
             parameters=parameters,
             computations=computations,
-            externals=self.resolved_externals,
+            externals=externals,
             docstring=docstring,
             loc=loc,
         )
