@@ -240,10 +240,6 @@ disable_error_code = "call-arg"
 module = 'gt4py.cartesian.frontend.defir_to_gtir'
 
 [[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.cartesian.frontend.meta'
-
-[[tool.mypy.overrides]]
 module = 'gt4py.eve.extended_typing'
 warn_unused_ignores = false
 
