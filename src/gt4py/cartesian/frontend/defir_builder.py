@@ -54,6 +54,7 @@ class DefIRBuilder:
             parameters=parameters,
             computations=computations,
             externals=externals,
+            sources=sources,
             docstring=docstring,
             loc=loc,
         )
