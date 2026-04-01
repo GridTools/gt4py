@@ -114,11 +114,6 @@ class IntervalParser(gt_meta.ASTPass):
 
         self.interval_error = GTScriptSyntaxError(error_msg)
 
-    def _default_int_datatype(self) -> nodes.DataType:
-        if self._literal_precision:
-            return nodes.DataType.from_dtype(np.dtype(f"i{int(self._literal_precision / 8)}"))
-        return nodes.DataType.INT64
-
     @staticmethod
     def _slice_from_value(node: ast.Expr) -> ast.Slice:
         """Create an ast.Slice node from a general ast.Expr node."""
@@ -315,6 +310,9 @@ class VerticalIntervalParser(IntervalParser):
     ):
         super().__init__(axis_name, fields, loc)
         self._literal_precision = literal_precision
+
+    def _default_int_datatype(self) -> nodes.DataType:
+        return nodes.DataType.from_dtype(np.dtype(f"i{int(self._literal_precision / 8)}"))
 
     def visit_Name(self, node: ast.Name) -> nodes.Ref:
         # Handle the field accesses
