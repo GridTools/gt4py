@@ -10,6 +10,7 @@ import inspect
 import functools
 import textwrap
 import types
+import re
 from typing import Any, Callable, Dict, Optional, Type
 
 import numpy as np
@@ -1830,6 +1831,41 @@ class TestAssignmentSyntax:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
         )
+
+        # Forgetting to index data dimensions
+        def data_dims_rhs_not_fully_indexed(
+            out_field: gtscript.Field[gtscript.IJK, np.int32],
+            global_field: gtscript.Field[gtscript.IJK, (np.int32, (3))],
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = global_field[0, 0, 0]  # Expecting [0,0,0][0]
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Field global_field has data dimensions but no data dimensions index is specified. Use",
+        ):
+            parse_definition(
+                data_dims_rhs_not_fully_indexed,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+        def data_dims_rhs_absolute_not_fully_indexed(
+            out_field: gtscript.Field[gtscript.IJK, np.int32],
+            global_field: gtscript.Field[gtscript.IJK, (np.int32, (3))],
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = global_field.at(K=1)  # Expecting ddims=[]
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Field global_field has data dimensions but no data dimensions index is specified. Use*",
+        ):
+            parse_definition(
+                data_dims_rhs_absolute_not_fully_indexed,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
 
 
 class TestNestedWithSyntax:

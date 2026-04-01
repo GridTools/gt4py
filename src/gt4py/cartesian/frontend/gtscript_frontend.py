@@ -35,7 +35,8 @@ import numpy as np
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.base import Frontend, register
-from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
+from gt4py.cartesian.frontend.defir_builder import DefIRBuilder
+from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR
 from gt4py.cartesian.frontend.exceptions import (
     GTScriptAssertionError,
     GTScriptDataTypeError,
@@ -1397,7 +1398,7 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(result, nodes.VarRef):
             assert index is not None
             result.index = index[0]
-        else:
+        elif isinstance(result, nodes.FieldRef):
             if isinstance(index, nodes.AbsoluteKIndex):
                 result.offset = index
             elif isinstance(node.value, ast.Name):
@@ -1445,6 +1446,12 @@ class IRMaker(ast.NodeVisitor):
                     "Unrecognized subscript expression",
                     loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
                 )
+
+        else:
+            raise GTScriptSyntaxError(
+                f"Unrecognized node type {type(result)} is subscripted",
+                loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
+            )
 
         return result
 
@@ -2076,7 +2083,6 @@ class GTScriptParser(ast.NodeVisitor):
         self.options = options
         self.build_info = options.build_info
         self.main_name = options.name
-        self.definition_ir = None
         self.external_context = externals or {}
         self.resolved_externals = {}
         self.block = None
@@ -2519,7 +2525,6 @@ class GTScriptParser(ast.NodeVisitor):
             func_node=main_func_node,
         )
 
-        # Generate definition IR
         domain = nodes.Domain.LatLonGrid()
         computations = IRMaker(
             fields=fields_decls,
@@ -2532,26 +2537,16 @@ class GTScriptParser(ast.NodeVisitor):
             options=self.options,
         )(self.ast_root)
 
-        self.definition_ir = nodes.StencilDefinition(
-            name=self.main_name,
+        return DefIRBuilder(self.main_name).build(
             domain=domain,
             api_signature=api_signature,
-            api_fields=[
-                fields_decls[item.name] for item in api_signature if item.name in fields_decls
-            ],
-            parameters=[
-                parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
-            ],
+            fields_decls=fields_decls,
+            parameter_decls=parameter_decls,
             computations=init_computations + computations,
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),
         )
-
-        self.definition_ir = UnrollVectorAssignments.apply(
-            self.definition_ir, fields_decls=fields_decls
-        )
-        return self.definition_ir
 
 
 @register
