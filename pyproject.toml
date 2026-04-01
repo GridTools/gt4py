@@ -224,7 +224,7 @@ follow_imports = 'silent'
 module = 'gt4py.cartesian.*'
 
 [[tool.mypy.overrides]]
-ignore_errors = true
+disable_error_code = "call-arg"
 module = 'gt4py.cartesian.frontend.nodes'
 
 [[tool.mypy.overrides]]
