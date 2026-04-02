@@ -315,10 +315,12 @@ def test_mixed_field_scalar_tuple_arg(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case,
         testee,
-        ref=lambda a: np.full(
-            [cartesian_case.default_sizes[IDim]], a[0] + 2 * a[1][0] + 5 * a[1][2], dtype=int32
-        )
-        + 3 * a[1][1],
+        ref=lambda a: (
+            np.full(
+                [cartesian_case.default_sizes[IDim]], a[0] + 2 * a[1][0] + 5 * a[1][2], dtype=int32
+            )
+            + 3 * a[1][1]
+        ),
     )
 
 
@@ -942,8 +944,8 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a, b: (
-            np.sum(b[v2e_table], axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE)
+        ref=lambda a, b: np.sum(
+            b[v2e_table], axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE
         ),
     )
 
@@ -992,9 +994,11 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
         cartesian_case,
         testee,
         ref=lambda: (expected + 1.0, (expected + 2.0, expected + 3.0)),
-        comparison=lambda ref, out: np.all(out[0] == ref[0])
-        and np.all(out[1][0] == ref[1][0])
-        and np.all(out[1][1] == ref[1][1]),
+        comparison=lambda ref, out: (
+            np.all(out[0] == ref[0])
+            and np.all(out[1][0] == ref[1][0])
+            and np.all(out[1][1] == ref[1][1])
+        ),
     )
 
 
@@ -1362,7 +1366,7 @@ def test_tuple_unpacking_too_few_values(cartesian_case):
             return a
 
 
-def test_constant_closure_vars(cartesian_case):
+def test_constant_closure_vars_with_frozen_namespace(cartesian_case):
     from gt4py.eve.utils import FrozenNamespace
 
     constants = FrozenNamespace(PI=np.float64(3.142), E=np.float64(2.718))
@@ -1373,6 +1377,22 @@ def test_constant_closure_vars(cartesian_case):
 
     cases.verify_with_default_data(
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+    )
+
+
+def test_constant_closure_vars_with_enums(cartesian_case):
+    import enum
+
+    class Constants(np.float64, enum.Enum):
+        PI = 3.142
+        E = 2.718
+
+    @gtx.field_operator
+    def consume_constants(input: cases.IFloatField) -> cases.IFloatField:
+        return Constants.PI * Constants.E * input
+
+    cases.verify_with_default_data(
+        cartesian_case, consume_constants, ref=lambda input: Constants.PI * Constants.E * input
     )
 
 

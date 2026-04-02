@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import dace
 from dace import properties as dace_properties, transformation as dace_transformation
@@ -54,12 +54,48 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
     # The fusion of the two conditional blocks can happen in any order. To avoid any indeterminism distinguish which one is the fused and which one is the extended conditional block which will include the fused one.
     @staticmethod
     def _order_conditional_blocks_based_on_label(
-        nested_sdfg_0: dace_nodes.NestedSDFG, nested_sdfg_1: dace_nodes.NestedSDFG
-    ) -> tuple[dace_nodes.NestedSDFG, dace_nodes.NestedSDFG]:
-        if nested_sdfg_0.label < nested_sdfg_1.label:
-            return nested_sdfg_0, nested_sdfg_1
+        conditional_block_0: dace.sdfg.state.ConditionalBlock,
+        conditional_block_1: dace.sdfg.state.ConditionalBlock,
+    ) -> tuple[dace.sdfg.state.ConditionalBlock, dace.sdfg.state.ConditionalBlock]:
+        if conditional_block_0.label < conditional_block_1.label:
+            return conditional_block_0, conditional_block_1
         else:
-            return nested_sdfg_1, nested_sdfg_0
+            return conditional_block_1, conditional_block_0
+
+    @staticmethod
+    def _order_conditional_blocks_based_on_number_of_common_branches_and_label(
+        conditional_block_0: dace.sdfg.state.ConditionalBlock,
+        conditional_block_1: dace.sdfg.state.ConditionalBlock,
+    ) -> tuple[dace.sdfg.state.ConditionalBlock, dace.sdfg.state.ConditionalBlock] | None:
+        branches_0 = conditional_block_0.branches
+        branches_1 = conditional_block_1.branches
+
+        # We compute a set of the conditions because we don't care about their order since all the
+        # conditions should either be based in a scalar boolean (`__cond`) or be None which means
+        # the `else` condition.
+        branch_0_conditions = {branch[0].as_string if branch[0] else None for branch in branches_0}
+        branch_1_conditions = {branch[0].as_string if branch[0] else None for branch in branches_1}
+
+        intersection_of_conditions = branch_0_conditions.intersection(branch_1_conditions)
+
+        # No matching conditions found between the two `ConditionalBlock`s
+        if not intersection_of_conditions:
+            return None
+        # Matching conditions between the two `ConditionalBlock`s is the same as the number of branches in both `ConditionalBlock`s.
+        # This means that all branches have matching conditions and thus we can use the labels to distinguish which one is the fused and which one is the extended conditional block.
+        elif (
+            len(intersection_of_conditions) == len(branch_0_conditions) == len(branch_1_conditions)
+        ):
+            return FuseHorizontalConditionBlocks._order_conditional_blocks_based_on_label(
+                conditional_block_0, conditional_block_1
+            )
+        # This means that all the branches of `conditional_block_1` match some or all of the conditions of `conditional_block_0` so we can merge `conditional_block_1` into `conditional_block_0`.
+        elif len(intersection_of_conditions) == len(branch_1_conditions):
+            return conditional_block_0, conditional_block_1
+        # This means that all the branches of `conditional_block_0` match some or all of the conditions of `conditional_block_1` so we can merge `conditional_block_0`` into `conditional_block_1`.
+        elif len(intersection_of_conditions) == len(branch_0_conditions):
+            return conditional_block_1, conditional_block_0
+        return None
 
     @classmethod
     def expressions(cls) -> Any:
@@ -81,9 +117,9 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
     ) -> bool:
         conditional_access_node: dace_nodes.AccessNode = self.conditional_access_node
         conditional_access_node_desc = conditional_access_node.desc(sdfg)
-        nested_sdfg_of_extended_conditional_block, nested_sdfg_of_fused_conditional_block = (
-            self._order_conditional_blocks_based_on_label(self.nsdfg_a, self.nsdfg_b)
-        )
+        nsdfg_a = self.nsdfg_a
+        nsdfg_b = self.nsdfg_b
+
         scope_dict = graph.scope_dict()
 
         # Check that the common access node is a boolean scalar
@@ -94,58 +130,62 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
             return False
 
         # Check that both conditional blocks are in the same parent SDFG
-        if (
-            nested_sdfg_of_extended_conditional_block.sdfg.parent
-            != nested_sdfg_of_fused_conditional_block.sdfg.parent
-        ):
+        if nsdfg_a.sdfg.parent is not nsdfg_b.sdfg.parent:
             return False
 
         # Check that the nested SDFGs' names starts with "if_stmt"
         if not (
-            nested_sdfg_of_extended_conditional_block.sdfg.name.startswith("if_stmt")
-            and nested_sdfg_of_fused_conditional_block.sdfg.name.startswith("if_stmt")
+            nsdfg_a.sdfg.name.startswith("if_stmt") and nsdfg_b.sdfg.name.startswith("if_stmt")
         ):
             return False
 
-        # Make sure that the conditional blocks contain only one conditional block each
-        if (
-            nested_sdfg_of_extended_conditional_block.sdfg.number_of_nodes() != 1
-            or nested_sdfg_of_fused_conditional_block.sdfg.number_of_nodes() != 1
+        # Make sure that the nested SDFGs contain only one conditional block each
+        if nsdfg_a.sdfg.number_of_nodes() != 1 or nsdfg_b.sdfg.number_of_nodes() != 1:
+            return False
+
+        if not (
+            isinstance(nsdfg_a.sdfg.nodes()[0], dace.sdfg.state.ConditionalBlock)
+            and isinstance(nsdfg_b.sdfg.nodes()[0], dace.sdfg.state.ConditionalBlock)
         ):
             return False
+
+        conditional_block_a = nsdfg_a.sdfg.nodes()[0]
+        conditional_block_b = nsdfg_b.sdfg.nodes()[0]
+
+        # This transformation accepts only a boolean condition. This means that the conditions of
+        # the branches can only be 2 or 1. Either `__cond` and `(not __cond)` or `__cond` and `None`
+        # or just `__cond` or `(not __cond)`.
+        if len(conditional_block_a.branches) > 2 or len(conditional_block_b.branches) > 2:
+            return False
+
+        # Make sure that the branches of both `ConditionalBlock`s have only one state
+        # TODO(iomaganaris): In case there are more states we can find a way to add one after the other
+        for conditional_block in [conditional_block_a, conditional_block_b]:
+            for control_flow_region in conditional_block.sub_regions():
+                if len(control_flow_region.nodes()) != 1 or not isinstance(
+                    control_flow_region.nodes()[0], dace.sdfg.state.SDFGState
+                ):
+                    return False
+
+        conditional_block_tuple = (
+            self._order_conditional_blocks_based_on_number_of_common_branches_and_label(
+                conditional_block_a, conditional_block_b
+            )
+        )
+        if not conditional_block_tuple:
+            return False
+        extended_conditional_block, fused_conditional_block = conditional_block_tuple
+
+        nested_sdfg_of_extended_conditional_block = (
+            extended_conditional_block.sdfg.parent_nsdfg_node
+        )
+        nested_sdfg_of_fused_conditional_block = fused_conditional_block.sdfg.parent_nsdfg_node
 
         # Check that the symbol mappings are compatible. If there's a symbol that is in both mappings but mapped to different definitions then we skip fusing the conditional blocks.
         # TODO(iomaganaris): One could also rename the symbols instead of skipping the fusion but for now we keep it simple
         sym_map1 = nested_sdfg_of_extended_conditional_block.symbol_mapping
         sym_map2 = nested_sdfg_of_fused_conditional_block.symbol_mapping
         if any(str(sym_map1[sym]) != str(sym_map2[sym]) for sym in sym_map2 if sym in sym_map1):
-            return False
-
-        # Get the actual conditional blocks
-        extended_conditional_block = next(
-            iter(nested_sdfg_of_extended_conditional_block.sdfg.nodes())
-        )
-        fused_conditional_block = next(iter(nested_sdfg_of_fused_conditional_block.sdfg.nodes()))
-        # TODO(iomaganaris): For now the branches of the conditional blocks should have only one state. If there's a change in the future and they have more than one state the below checks need to be modified
-        if not (
-            isinstance(extended_conditional_block, dace.sdfg.state.ConditionalBlock)
-            and len(extended_conditional_block.sub_regions()) == 2
-            and isinstance(fused_conditional_block, dace.sdfg.state.ConditionalBlock)
-            and len(fused_conditional_block.sub_regions()) == 2
-        ):
-            return False
-        extended_conditional_block_state_names = [
-            state.name for state in extended_conditional_block.all_states()
-        ]
-        fused_conditional_block_state_names = [
-            state.name for state in fused_conditional_block.all_states()
-        ]
-        if not (
-            any("true_branch" in name for name in extended_conditional_block_state_names)
-            and any("false_branch" in name for name in extended_conditional_block_state_names)
-            and any("true_branch" in name for name in fused_conditional_block_state_names)
-            and any("false_branch" in name for name in fused_conditional_block_state_names)
-        ):
             return False
 
         # Make sure that both conditional blocks are in the same scope
@@ -206,14 +246,23 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         sdfg: dace.SDFG,
     ) -> None:
         conditional_access_node: dace_nodes.AccessNode = self.conditional_access_node
-        nested_sdfg_of_extended_conditional_block, nested_sdfg_of_fused_conditional_block = (
-            self._order_conditional_blocks_based_on_label(self.nsdfg_a, self.nsdfg_b)
+        nsdfg_a = self.nsdfg_a
+        nsdfg_b = self.nsdfg_b
+        assert nsdfg_a.sdfg.number_of_nodes() == 1 and nsdfg_b.sdfg.number_of_nodes() == 1
+        conditional_block_a = nsdfg_a.sdfg.nodes()[0]
+        conditional_block_b = nsdfg_b.sdfg.nodes()[0]
+        conditional_block_tuple = (
+            self._order_conditional_blocks_based_on_number_of_common_branches_and_label(
+                conditional_block_a, conditional_block_b
+            )
         )
+        assert conditional_block_tuple is not None
+        extended_conditional_block, fused_conditional_block = conditional_block_tuple
 
-        extended_conditional_block = next(
-            iter(nested_sdfg_of_extended_conditional_block.sdfg.nodes())
+        nested_sdfg_of_extended_conditional_block = (
+            extended_conditional_block.sdfg.parent_nsdfg_node
         )
-        fused_conditional_block = next(iter(nested_sdfg_of_fused_conditional_block.sdfg.nodes()))
+        nested_sdfg_of_fused_conditional_block = fused_conditional_block.sdfg.parent_nsdfg_node
 
         # Copy missing symbols from second conditional block to the first one.
         #  For the symbols that are already in `nested_sdfg_of_extended_conditional_block.symbol_mapping` we know
@@ -252,8 +301,6 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                 )
             )
 
-        second_conditional_states = list(fused_conditional_block.all_states())
-
         # Move the connectors from the second conditional block to the first
         # TODO(iomaganaris): Here we copy empty memlets used for scheduling as well. This means that the first conditional blocks inherits the scheduling of the second one as well. Maybe that's not good in some cases to hide latency but for now we keep it as it is
         for edge in graph.in_edges(nested_sdfg_of_fused_conditional_block):
@@ -279,19 +326,31 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                 new_src=nested_sdfg_of_extended_conditional_block,
             )
 
-        def _find_corresponding_state_in_second(
-            inner_state: dace.SDFGState,
-        ) -> dace.SDFGState:
-            is_true_branch = "true_branch" in inner_state.name
-            branch_type = "true_branch" if is_true_branch else "false_branch"
-            return next(state for state in second_conditional_states if branch_type in state.name)
+        def _find_corresponding_branch_in_fused(
+            extended_branch: tuple[
+                Optional[dace.sdfg.state.CodeBlock], dace.sdfg.state.ControlFlowRegion
+            ],
+            fused_conditional_block: dace.sdfg.state.ConditionalBlock,
+        ) -> dace.sdfg.state.ControlFlowRegion | None:
+            extended_branch_condition = extended_branch[0].as_string if extended_branch[0] else None
+            for branch in fused_conditional_block.branches:
+                branch_condition = branch[0].as_string if branch[0] else None
+                if branch_condition == extended_branch_condition:
+                    return branch
+            return None
 
         # Copy first the nodes from the second conditional block to the first
         # Create a dictionary that maps the original nodes in the second conditional
         # block to the new nodes in the first conditional block to be able to properly connect the edges later
         nodes_renamed_map: dict[dace_nodes.Node, dace_nodes.Node] = {}
-        for first_inner_state in extended_conditional_block.all_states():
-            corresponding_state_in_second = _find_corresponding_state_in_second(first_inner_state)
+        for branch in extended_conditional_block.branches:
+            corresponding_branch_in_second = _find_corresponding_branch_in_fused(
+                branch, fused_conditional_block
+            )
+            if not corresponding_branch_in_second:
+                continue
+            corresponding_state_in_second = corresponding_branch_in_second[1].nodes()[0]
+            first_inner_state = branch[1].nodes()[0]
             # Save edges of second conditional block to a state to be able to delete the nodes from the second conditional block
             edges_to_copy = list(corresponding_state_in_second.edges())
             nodes_to_move = list(corresponding_state_in_second.nodes())
