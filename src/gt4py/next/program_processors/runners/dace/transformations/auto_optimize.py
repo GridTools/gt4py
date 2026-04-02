@@ -235,9 +235,6 @@ def gt_auto_optimize(
     optimization_hooks = optimization_hooks or {}
 
     with dace.config.temporary_config():
-        # Enable deterministic SDFG sorting for reproducible code generation.
-        dace.Config.set("compiler", "sdfg_alphabetical_sorting", value=True)
-
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
 

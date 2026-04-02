@@ -1078,7 +1078,7 @@ def _replace_single_read(
     )
     concat_where_tasklet = state.add_tasklet(
         tasklet_name,
-        inputs=set(tlet_inputs),
+        inputs={k: None for k in tlet_inputs},
         outputs={tlet_output},
         code=tlet_code,
     )

@@ -66,6 +66,9 @@ def set_dace_config(
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
     dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
 
+    # Enable deterministic SDFG sorting for reproducible code generation.
+    dace.Config.set("compiler", "sdfg_alphabetical_sorting", value=True)
+
     if cmake_build_type is not None:
         dace.Config.set("compiler.build_type", value=cmake_build_type.value)
 

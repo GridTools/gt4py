@@ -290,7 +290,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         # to the first conditional block SDFG. We don't have to add `__cond` because we know it's the same for both conditional blocks.
         # TODO(iomaganaris): Remove inputs to the conditional block that come from the same AccessNodes (same data)
         second_arrays_rename_map: dict[str, str] = {}
-        for data_name, data_desc in fused_conditional_block.sdfg.arrays.items():
+        for data_name, data_desc in sorted(fused_conditional_block.sdfg.arrays.items()):
             if data_name == "__cond":
                 continue
             new_data_name = gtx_transformations.utils.unique_name(data_name) + "_from_cb_fusion"
@@ -303,7 +303,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
 
         # Move the connectors from the second conditional block to the first
         # TODO(iomaganaris): Here we copy empty memlets used for scheduling as well. This means that the first conditional blocks inherits the scheduling of the second one as well. Maybe that's not good in some cases to hide latency but for now we keep it as it is
-        for edge in graph.in_edges(nested_sdfg_of_fused_conditional_block):
+        for edge in sorted(graph.in_edges(nested_sdfg_of_fused_conditional_block), key=lambda e: str(e.dst_conn)):
             if edge.dst_conn == "__cond":
                 continue
             nested_sdfg_of_extended_conditional_block.add_in_connector(
@@ -315,7 +315,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
                 new_dst_conn=second_arrays_rename_map[edge.dst_conn],
                 new_dst=nested_sdfg_of_extended_conditional_block,
             )
-        for edge in graph.out_edges(nested_sdfg_of_fused_conditional_block):
+        for edge in sorted(graph.out_edges(nested_sdfg_of_fused_conditional_block), key=lambda e: str(e.src_conn)):
             nested_sdfg_of_extended_conditional_block.add_out_connector(
                 second_arrays_rename_map[edge.src_conn]
             )
