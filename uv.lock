@@ -1245,7 +1245,7 @@ dependencies = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/philip-paul-mueller/dace.git?branch=different_dace_folder#f8ce7c31146974cdbfaa0db4cf6662d6a0d5ae98" }
+source = { git = "https://github.com/philip-paul-mueller/dace.git?branch=different_dace_folder#2b3bf47b350bcb5178a52cb6de87189db7b67a4c" }
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
@@ -1789,7 +1789,7 @@ dace-cartesian = [
     { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-v2#0d9f3b4ede7a87aa3c86913481740390431e2b21" } },
 ]
 dace-next = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/philip-paul-mueller/dace.git?branch=different_dace_folder#f8ce7c31146974cdbfaa0db4cf6662d6a0d5ae98" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/philip-paul-mueller/dace.git?branch=different_dace_folder#2b3bf47b350bcb5178a52cb6de87189db7b67a4c" } },
 ]
 dev = [
     { name = "atlas4py" },
