@@ -140,7 +140,7 @@ import enum
 import operator
 import sys
 from abc import ABC
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 
@@ -384,7 +384,7 @@ class FieldRef(Ref):
 
     @classmethod
     def at_center(
-        cls, name: str, axes: Sequence[str], data_index: Optional[List[int]] = None, loc=None
+        cls, name: str, axes: Sequence[str], data_index: Optional[Sequence[Expr]] = None, loc=None
     ):
         return cls(
             name=name, offset={axis: 0 for axis in axes}, data_index=data_index or [], loc=loc
