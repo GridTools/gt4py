@@ -91,10 +91,18 @@ def _name_from_named_range(named_range_call: itir.FunCall) -> str:
     return named_range_call.args[0].value
 
 
+class FlipStaggeredDims(eve.NodeTranslator):
+    def visit_AxisLiteral(self, node: itir.AxisLiteral) -> itir.AxisLiteral:
+        dim = ir_utils_misc.dim_from_axis_literal(node)
+        if common.is_staggered(dim):
+            return im.axis_literal(common.flip_staggered(dim))
+        return node
+
+
 def _collect_dimensions_from_domain(
     body: Iterable[itir.Stmt],
 ) -> dict[str, TagDefinition]:
-    domains = _get_domains(body)
+    domains = FlipStaggeredDims().visit(_get_domains(body))
     offset_definitions = {}
     for domain in domains:
         if domain.fun == itir.SymRef(id="cartesian_domain"):
@@ -131,22 +139,27 @@ def _collect_offset_definitions(
     grid_type: common.GridType,
     offset_provider_type: common.OffsetProviderType,
 ) -> dict[str, TagDefinition]:
-    used_offset_tags: set[str] = (
-        node.walk_values()
-        .if_isinstance(itir.OffsetLiteral)
-        .filter(lambda offset_literal: isinstance(offset_literal.value, str))
-        .getattr("value")
-    ).to_set()
-    # implicit offsets don't occur in the `offset_provider_type`, get them from the used offset tags
-    offset_provider_type = {
-        offset_name: common.get_offset_type(offset_provider_type, offset_name)
-        for offset_name in used_offset_tags
-    } | {**offset_provider_type}
     offset_definitions = {}
+    offset_provider_type = {**offset_provider_type}
 
-    for offset_name, dim_or_connectivity_type in offset_provider_type.items():
-        if isinstance(dim_or_connectivity_type, common.Dimension):
-            dim: common.Dimension = dim_or_connectivity_type
+    cartesian_offsets: set[itir.CartesianOffset] = (
+        node.walk_values().if_isinstance(itir.CartesianOffset)
+    ).to_set()
+    for cart_offset in cartesian_offsets:
+        dims = [
+            common.Dimension(value=v.value, kind=v.kind)
+            for v in (cart_offset.domain, cart_offset.codomain)
+        ]
+        for dim in dims:
+            if common.is_staggered(dim):
+                dim = common.flip_staggered(dim)
+            offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+
+    for offset_name, connectivity_type in offset_provider_type.items():
+        if isinstance(connectivity_type, common.CartesianConnectivityType):
+            if connectivity_type.domain[0] != connectivity_type.codomain:
+                raise NotImplementedError()
+            dim, *_ = connectivity_type.domain
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
                 offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
@@ -166,9 +179,7 @@ def _collect_offset_definitions(
                 offset_definitions[offset_name] = TagDefinition(
                     name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )
-        elif isinstance(
-            connectivity_type := dim_or_connectivity_type, common.NeighborConnectivityType
-        ):
+        elif isinstance(connectivity_type := connectivity_type, common.NeighborConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
             if offset_name != connectivity_type.neighbor_dim.value:
@@ -372,8 +383,15 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
 
+    def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> Literal:
+        return self.visit(node.codomain, **kwargs)
+
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
-        return Literal(value=node.value, type="axis_literal")
+        assert isinstance(node.type, ts.DimensionType)
+        dim = node.type.dim
+        if common.is_staggered(dim):
+            dim = common.flip_staggered(dim)
+        return Literal(value=dim.value, type="axis_literal")
 
     def _make_domain(self, node: itir.FunCall) -> tuple[TaggedValues, TaggedValues]:
         tags = []
