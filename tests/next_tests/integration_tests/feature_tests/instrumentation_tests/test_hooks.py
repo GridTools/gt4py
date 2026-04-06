@@ -151,7 +151,8 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
     hooks.program_call_context.register(custom_program_callback)
     hooks.embedded_program_call_context.register(custom_embedded_program_callback)
     hooks.compiled_program_call_context.register(custom_compiled_program_callback)
-    import gt4py.next.instrumentation.gpu_profiler 
+    import gt4py.next.instrumentation.gpu_profiler
+
     with gpu_profiler.profile_calls():
         test_program(True, a_field, b_field, out=out_field)
 

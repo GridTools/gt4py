@@ -10,13 +10,15 @@
 from __future__ import annotations
 
 import contextlib
+import types
 import warnings
-from collections.abc import Callable
+from collections.abc import Generator
 from typing import Any, ClassVar
 
 from gt4py._core import definitions as core_definitions, types as core_types
 from gt4py.next import common, typing as gtx_typing
 from gt4py.next.instrumentation import hooks
+from gt4py.next.otf import compiled_program
 
 
 if core_definitions.CUPY_DEVICE_TYPE is not None:
@@ -26,13 +28,13 @@ if core_definitions.CUPY_DEVICE_TYPE is not None:
 
 else:
 
-    class time_range(contextlib.AbstractContextManager):
+    class time_range(contextlib.AbstractContextManager):  # type: ignore[no-redef]
         def __init__(
             self,
             message: str | None = None,
             color_id: int | None = None,
             argb_color: core_types.int32 | None = None,
-            sync=False,
+            sync: bool = False,
         ) -> None:
             warnings.warn(
                 "GT4Py profiling is only supported when using a GPU.",
@@ -42,7 +44,7 @@ else:
 
 
 @contextlib.contextmanager
-def profile_calls():
+def profile_calls() -> Generator[None, None, None]:
     start_profiling_calls()
     yield
     stop_profiling_calls()
@@ -70,8 +72,13 @@ class ProgramProfiler(contextlib.AbstractContextManager):
         print(f"\n\n\n\nProfiling {self.name}...")
         self.time_range = time_range(self.name, color_id=self.COLOR_ID).__enter__()
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self.time_range.__exit__(exc_type, exc_val, exc_tb)
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        self.time_range.__exit__(exc_type, exc_value, traceback)
         print(f"Finished profiling {self.name}.\n\n\n\n")
 
 
@@ -94,11 +101,10 @@ class CompiledProgramCallProfiler(ProgramProfiler):
 
     def __init__(
         self,
-        compiled_program: Callable,
+        program_pool: compiled_program.CompiledProgramsPool,
+        key: gtx_typing.CompiledProgramsKey,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
         offset_provider: common.OffsetProvider,
-        root: tuple[str, str],
-        key: gtx_typing.CompiledProgramsKey,
     ) -> None:
-        self.name = f"{root[0]}<{root[1]}>"
+        self.name = compiled_program.metrics_source_key(program_pool, key)

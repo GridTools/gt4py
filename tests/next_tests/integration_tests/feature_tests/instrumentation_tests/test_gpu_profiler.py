@@ -13,7 +13,5 @@ from gt4py.next.instrumentation import gpu_profiler
 from ...multi_feature_tests.ffront_tests.test_ffront_fvm_nabla import pnabla
 
 
-
 with gpu_profiler.profile():
     pass
-    
