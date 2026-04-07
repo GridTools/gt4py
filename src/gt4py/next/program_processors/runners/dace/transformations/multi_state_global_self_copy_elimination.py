@@ -37,6 +37,9 @@ def gt_multi_state_global_self_copy_elimination(
         The function will also run `MultiStateGlobalSelfCopyElimination2`, but the
         results are merged together.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
+
     transforms = [
         gtx_transformations.MultiStateGlobalSelfCopyElimination(),
         gtx_transformations.MultiStateGlobalSelfCopyElimination2(),

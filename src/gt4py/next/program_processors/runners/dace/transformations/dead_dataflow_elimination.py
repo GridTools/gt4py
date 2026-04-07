@@ -39,6 +39,9 @@ def gt_eliminate_dead_dataflow(
     Todo:
         Implement a better way of applying the `DeadMemletElimination` transformation.
     """
+    # Sort SDFG for deterministic pattern matching.
+    sdfg.sort_sdfg_alphabetically()
+
     find_single_use_data = dace_analysis.FindSingleUseData()
     single_use_data = find_single_use_data.apply_pass(sdfg, None)
 

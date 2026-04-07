@@ -52,7 +52,8 @@ def copy_map_graph(
     new_data_descriptors = {}
 
     subgraph = graph.scope_subgraph(map_entry, include_entry=True, include_exit=True)
-    map_nodes = subgraph.nodes()
+    map_nodes = sorted(subgraph.nodes(),
+                        key=lambda n: (type(n).__name__, str(getattr(n, 'data', getattr(n, 'label', '')))))
     map_edges = subgraph.edges()
 
     new_map_entry = None
@@ -78,8 +79,8 @@ def copy_map_graph(
         elif isinstance(node, dace_nodes.NestedSDFG):
             node_ = graph.add_nested_sdfg(
                 sdfg=copy.deepcopy(node.sdfg),
-                inputs=set(node.in_connectors.keys()),
-                outputs=set(node.out_connectors.keys()),
+                inputs=dict(node.in_connectors),
+                outputs=dict(node.out_connectors),
                 symbol_mapping=node.symbol_mapping.copy(),
                 debuginfo=copy.copy(node.debuginfo),
             )
