@@ -10,10 +10,11 @@
 from __future__ import annotations
 
 import contextlib
+import threading
 import types
 import warnings
 from collections.abc import Generator
-from typing import Any, ClassVar
+from typing import Any, ClassVar, ContextManager
 
 from gt4py._core import definitions as core_definitions, types as core_types
 from gt4py.next import common, typing as gtx_typing
@@ -22,9 +23,9 @@ from gt4py.next.otf import compiled_program
 
 
 if core_definitions.CUPY_DEVICE_TYPE is not None:
-    import cupyx.profiler as cupy_profiler
+    import cupyx.profiler as cupyx_profiler
 
-    time_range = cupy_profiler.time_range
+    time_range = cupyx_profiler.time_range
 
 else:
 
@@ -43,6 +44,10 @@ else:
             )
 
 
+_profile_ctx_manager: ContextManager | None = None
+_profile_ctx_manager_lock: threading.Lock = threading.Lock()
+
+
 @contextlib.contextmanager
 def profile_calls() -> Generator[None, None, None]:
     start_profiling_calls()
@@ -51,25 +56,34 @@ def profile_calls() -> Generator[None, None, None]:
 
 
 def start_profiling_calls() -> None:
+    global _profile_ctx_manager
     hooks.program_call_context.register(ProgramCallProfiler, index=0)
     hooks.compiled_program_call_context.register(CompiledProgramCallProfiler, index=0)
+    with _profile_ctx_manager_lock:
+        if _profile_ctx_manager is None:
+            _profile_ctx_manager = cupyx_profiler.profile()
+            _profile_ctx_manager.__enter__()
 
 
 def stop_profiling_calls() -> None:
+    global _profile_ctx_manager
+    with _profile_ctx_manager_lock:
+        if _profile_ctx_manager is not None:
+            _profile_ctx_manager.__exit__(None, None, None)
+            _profile_ctx_manager = None
     hooks.program_call_context.remove(ProgramCallProfiler)
     hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
 
 
 class ProgramProfiler(contextlib.AbstractContextManager):
     name: str
-    time_range: cupy_profiler.time_range
+    time_range: cupyx_profiler.time_range
 
     COLOR_ID: ClassVar[int]
 
     __slots__ = ("name", "time_range")
 
     def __enter__(self) -> None:
-        print(f"\n\n\n\nProfiling {self.name}...")
         self.time_range = time_range(self.name, color_id=self.COLOR_ID).__enter__()
 
     def __exit__(
@@ -79,7 +93,6 @@ class ProgramProfiler(contextlib.AbstractContextManager):
         traceback: types.TracebackType | None,
     ) -> None:
         self.time_range.__exit__(exc_type, exc_value, traceback)
-        print(f"Finished profiling {self.name}.\n\n\n\n")
 
 
 class ProgramCallProfiler(ProgramProfiler):
