@@ -140,11 +140,11 @@ import enum
 import operator
 import sys
 from abc import ABC
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 
-from gt4py.cartesian.definitions import CartesianSpace
+from gt4py.cartesian.gtc.definitions import CartesianSpace
 from gt4py.cartesian.utils.attrib import (
     Any as Any,
     Dict as DictOf,
@@ -309,7 +309,7 @@ def frontend_type_to_native_type(
     }
 
 
-DataType.NATIVE_TYPE_TO_NUMPY = {
+DataType.NATIVE_TYPE_TO_NUMPY = {  # type: ignore[attr-defined]
     DataType.DEFAULT: "float_",
     DataType.BOOL: "bool",
     DataType.INT8: "int8",
@@ -320,7 +320,7 @@ DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.FLOAT64: "float64",
 }
 
-DataType.NUMPY_TO_NATIVE_TYPE = {value: key for key, value in DataType.NATIVE_TYPE_TO_NUMPY.items()}
+DataType.NUMPY_TO_NATIVE_TYPE = {value: key for key, value in DataType.NATIVE_TYPE_TO_NUMPY.items()}  # type: ignore[attr-defined]
 
 
 # ---- IR: expressions ----
@@ -384,7 +384,7 @@ class FieldRef(Ref):
 
     @classmethod
     def at_center(
-        cls, name: str, axes: Sequence[str], data_index: Optional[List[int]] = None, loc=None
+        cls, name: str, axes: Sequence[str], data_index: Optional[Sequence[Expr]] = None, loc=None
     ):
         return cls(
             name=name, offset={axis: 0 for axis in axes}, data_index=data_index or [], loc=loc
@@ -466,7 +466,7 @@ class NativeFunction(enum.Enum):
         return type(self).IR_OP_TO_NUM_ARGS[self]
 
 
-NativeFunction.IR_OP_TO_NUM_ARGS = {
+NativeFunction.IR_OP_TO_NUM_ARGS = {  # type: ignore[attr-defined]
     NativeFunction.ABS: 1,
     NativeFunction.MIN: 2,
     NativeFunction.MAX: 2,
@@ -536,13 +536,13 @@ class UnaryOperator(enum.Enum):
         return type(self).IR_OP_TO_PYTHON_SYMBOL[self]
 
 
-UnaryOperator.IR_OP_TO_PYTHON_OP = {
+UnaryOperator.IR_OP_TO_PYTHON_OP = {  # type: ignore[attr-defined]
     UnaryOperator.POS: operator.pos,
     UnaryOperator.NEG: operator.neg,
     UnaryOperator.NOT: operator.not_,
 }
 
-UnaryOperator.IR_OP_TO_PYTHON_SYMBOL = {
+UnaryOperator.IR_OP_TO_PYTHON_SYMBOL = {  # type: ignore[attr-defined]
     UnaryOperator.POS: "+",
     UnaryOperator.NEG: "-",
     UnaryOperator.NOT: "not",
@@ -586,7 +586,7 @@ class BinaryOperator(enum.Enum):
         return type(self).IR_OP_TO_PYTHON_SYMBOL[self]
 
 
-BinaryOperator.IR_OP_TO_PYTHON_OP = {
+BinaryOperator.IR_OP_TO_PYTHON_OP = {  # type: ignore[attr-defined]
     BinaryOperator.ADD: operator.add,
     BinaryOperator.SUB: operator.sub,
     BinaryOperator.MUL: operator.mul,
@@ -603,7 +603,7 @@ BinaryOperator.IR_OP_TO_PYTHON_OP = {
     BinaryOperator.NE: operator.ne,
 }
 
-BinaryOperator.IR_OP_TO_PYTHON_SYMBOL = {
+BinaryOperator.IR_OP_TO_PYTHON_SYMBOL = {  # type: ignore[attr-defined]
     BinaryOperator.ADD: "+",
     BinaryOperator.SUB: "-",
     BinaryOperator.MUL: "*",
@@ -721,12 +721,6 @@ class IterationOrder(enum.Enum):
 
     def __str__(self) -> str:
         return self.name
-
-    def __lshift__(self, steps: int):
-        return self.cycle(steps=-steps)
-
-    def __rshift__(self, steps: int):
-        return self.cycle(steps=steps)
 
 
 class BaseAxisBound(Node, ABC):
