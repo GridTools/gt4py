@@ -13,7 +13,7 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
-from gt4py.next.otf import languages, stages
+from gt4py.next.otf import code_specs, stages
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.type_system import type_specifications as ts
 
@@ -223,9 +223,9 @@ def _parse_gt_connectivities(
 
 
 def _create_sdfg_bindings(
-    program_source: stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
+    program_source: stages.ProgramSource[code_specs.SDFGCodeSpec],
     bind_func_name: str,
-) -> stages.BindingSource[languages.SDFG, languages.Python]:
+) -> stages.BindingSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec]:
     """
     Creates a Python translation function to convert the GT4Py arguments list
     to the SDFG calling convention.
@@ -248,6 +248,7 @@ def _create_sdfg_bindings(
     code = codegen.TextBlock()
 
     code.append("import ctypes")
+    code.empty_line()
     code.append("from gt4py.next import common as gtx_common, field_utils")
     code.empty_line()
     code.append(
@@ -281,20 +282,19 @@ def _create_sdfg_bindings(
         # arrays as well in SDFG fastcall.
         _parse_gt_connectivities(code, sdfg_arglist)
 
-    src = codegen.format_python_source(code.text)
-    return stages.BindingSource(src, library_deps=tuple())
+    return stages.BindingSource(code.text, library_deps=tuple())
 
 
 def bind_sdfg(
-    inp: stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
+    inp: stages.ProgramSource[code_specs.SDFGCodeSpec],
     bind_func_name: str,
-) -> stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python]:
+) -> stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec]:
     """
     Method to be used as workflow stage for generation of SDFG bindings.
 
     Refer to `_create_sdfg_bindings` documentation.
     """
-    return stages.CompilableSource(
+    return stages.CompilableProject(
         program_source=inp,
         binding_source=_create_sdfg_bindings(inp, bind_func_name),
     )

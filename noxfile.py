@@ -82,7 +82,7 @@ REQUIRES_PYTHON = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["pro
 ]
 
 # -- Parameter sets --
-DeviceOption: TypeAlias = Literal["cpu", "cuda12", "rocm6_0"]
+DeviceOption: TypeAlias = Literal["cpu", "cuda12", "cuda13", "rocm6", "rocm7"]
 DeviceNoxParam: Final[dict[DeviceOption, nox.param]] = {
     device: nox.param(device, id=device, tags=[device]) for device in DeviceOption.__args__
 }
@@ -100,7 +100,7 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": [], "markers": ["not requires_dace"]}
+    "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
 }
 # Use dace-cartesian group to select the appropriate dace version
 CodeGenCartesianTestSettings = CodeGenTestSettings | {
@@ -327,6 +327,21 @@ def test_storage(
         *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+    )
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["next"])
+def test_typing_exports(session: nox.Session) -> None:
+    """Test GT4Py usability in a typed client context."""
+    install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
+
+    session.run(
+        "pytest",
+        "-sv",
+        "--mypy-testing-base",
+        "typing_tests",
+        "typing_tests",
+        *session.posargs,
     )
 
 

@@ -37,7 +37,7 @@ def _make_distributed_split_sdfg() -> tuple[
     dace.SDFGState,
     dace_nodes.AccessNode,
 ]:
-    sdfg = dace.SDFG(util.unique_name("distributed_split_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("distributed_split_sdfg"))
     state = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state)
 
@@ -115,7 +115,7 @@ def test_distributed_split():
 def _make_split_node_simple_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapExit, dace_nodes.MapExit
 ]:
-    sdfg = dace.SDFG(util.unique_name("single_state_split"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("single_state_split"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abt":
@@ -201,7 +201,7 @@ def test_simple_node_split():
 def _make_split_edge_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode
 ]:
-    sdfg = dace.SDFG(util.unique_name("split_edge"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("split_edge"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abt":
@@ -281,7 +281,7 @@ def test_split_edge():
 
 
 def test_split_edge_2d():
-    sdfg = dace.SDFG(util.unique_name("split_edge_2d"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("split_edge_2d"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "ab":
@@ -422,7 +422,7 @@ def test_subset_merging_stability():
 def _make_sdfg_for_deterministic_splitting() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode
 ]:
-    sdfg = dace.SDFG(util.unique_name("deterministic_splitter"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("deterministic_splitter"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abtcd":

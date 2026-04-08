@@ -25,12 +25,17 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from gt4py.next.ffront.stages import AOT_DSL_PRG, AOT_PRG, DSL_PRG, PAST_PRG
+from gt4py.next.ffront.stages import (
+    ConcreteDSLProgramDef,
+    ConcretePASTProgramDef,
+    DSLProgramDef,
+    PASTProgramDef,
+)
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-def func_to_past(inp: DSL_PRG) -> PAST_PRG:
+def func_to_past(inp: DSLProgramDef) -> PASTProgramDef:
     """
     Turn a DSL program definition into a PAST Program definition, adding metadata.
 
@@ -46,7 +51,7 @@ def func_to_past(inp: DSL_PRG) -> PAST_PRG:
         >>> def dsl_program(a: gtx.Field[[IDim], gtx.float32], out: gtx.Field[[IDim], gtx.float32]):
         ...     copy(a, out=out)
 
-        >>> dsl_definition = gtx.ffront.stages.ProgramDefinition(definition=dsl_program)
+        >>> dsl_definition = gtx.ffront.stages.DSLProgramDef(definition=dsl_program)
         >>> past_definition = func_to_past(dsl_definition)
 
         >>> print(past_definition.past_node.id)
@@ -57,7 +62,7 @@ def func_to_past(inp: DSL_PRG) -> PAST_PRG:
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
     annotations = typing.get_type_hints(inp.definition)
-    return ffront_stages.PastProgramDefinition(
+    return ffront_stages.PASTProgramDef(
         past_node=ProgramParser.apply(source_def, closure_vars, annotations),
         closure_vars=closure_vars,
         grid_type=inp.grid_type,
@@ -65,7 +70,7 @@ def func_to_past(inp: DSL_PRG) -> PAST_PRG:
     )
 
 
-def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSL_PRG, PAST_PRG]:
+def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSLProgramDef, PASTProgramDef]:
     """
     Wrap `func_to_past` in a chainable and optionally cached workflow step.
 
@@ -79,7 +84,9 @@ def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSL_PRG, PAST
     return wf
 
 
-def adapted_func_to_past_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_PRG, AOT_PRG]:
+def adapted_func_to_past_factory(
+    **kwargs: Any,
+) -> workflow.Workflow[ConcreteDSLProgramDef, ConcretePASTProgramDef]:
     """
     Wrap an adapter around the DSL definition -> PAST definition step to fit into transform toolchains.
     """

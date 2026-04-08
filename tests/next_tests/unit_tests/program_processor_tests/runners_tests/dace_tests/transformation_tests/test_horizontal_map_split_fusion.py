@@ -34,7 +34,7 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
     - Outputs: out1[i, j], out2[i, j], out3[i, j], out4[i, j]
     """
     shape = (N, N)
-    sdfg = dace.SDFG(util.unique_name("multiple_maps"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("multiple_maps"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in ["a", "b", "c", "d", "out1", "out2", "out3", "out4"]:

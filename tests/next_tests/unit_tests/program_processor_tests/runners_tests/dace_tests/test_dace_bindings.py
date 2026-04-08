@@ -11,12 +11,13 @@
 import functools
 import numpy as np
 import pytest
+from gt4py.eve import codegen
 
 dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py.next import common as gtx_common, int32
-from gt4py.next.otf import languages, stages
+from gt4py.next.otf import code_specs, stages
 from gt4py.next.program_processors.runners import dace as dace_runner
 from gt4py.next.program_processors.runners.dace import workflow as dace_workflow
 from gt4py.next import neighbor_sum
@@ -32,6 +33,7 @@ _bind_func_name = "update_sdfg_args"
 
 _bind_header = """\
 import ctypes
+
 from gt4py.next import common as gtx_common, field_utils
 
 
@@ -95,7 +97,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     sdfg_call_args[{idx[20]}] = ctypes.c_int(args_5.domain.ranges[2].start)
     sdfg_call_args[{idx[21]}] = ctypes.c_int(args_5.__gt_buffer_info__.elem_strides[0])
     sdfg_call_args[{idx[22]}] = ctypes.c_int(args_5.__gt_buffer_info__.elem_strides[1])
-    sdfg_call_args[{idx[23]}] = ctypes.c_int(args_5.__gt_buffer_info__.elem_strides[2])\
+    sdfg_call_args[{idx[23]}] = ctypes.c_int(args_5.__gt_buffer_info__.elem_strides[2])
 """
     )
 
@@ -148,7 +150,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     sdfg_call_args[{idx[11]}].value = args_5.__gt_buffer_info__.data_ptr
     sdfg_call_args[{idx[12]}] = ctypes.c_int(args_5.__gt_buffer_info__.elem_strides[0])
     sdfg_call_args[{idx[13]}] = ctypes.c_int(args_5.__gt_buffer_info__.elem_strides[1])
-    sdfg_call_args[{idx[14]}] = ctypes.c_int(args_5.__gt_buffer_info__.elem_strides[2])\
+    sdfg_call_args[{idx[14]}] = ctypes.c_int(args_5.__gt_buffer_info__.elem_strides[2])
 """
     )
 
@@ -179,7 +181,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     table_V2E = offset_provider["V2E"]
     sdfg_call_args[{idx[9]}].value = table_V2E.__gt_buffer_info__.data_ptr
     sdfg_call_args[{idx[10]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[0])
-    sdfg_call_args[{idx[11]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[1])\
+    sdfg_call_args[{idx[11]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[1])
 """
     )
 
@@ -209,7 +211,7 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     table_V2E = offset_provider["V2E"]
     sdfg_call_args[{idx[8]}].value = table_V2E.__gt_buffer_info__.data_ptr
     sdfg_call_args[{idx[9]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[0])
-    sdfg_call_args[{idx[10]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[1])\
+    sdfg_call_args[{idx[10]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[1])
 """
     )
 
@@ -225,7 +227,7 @@ _dace_compile_call = dace_workflow.compilation.DaCeCompiler.__call__
 
 def mocked_compile_call(
     self,
-    inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+    inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     binding_source_ref: str,
 ):
     assert len(inp.library_deps) == 0
@@ -236,13 +238,13 @@ def mocked_compile_call(
         for line in inp.binding_source.source_code.splitlines()
         if not line.lstrip().startswith("assert")
     )
-    assert binding_source_pruned == binding_source_ref
+    assert codegen.format_python_source(binding_source_pruned) == binding_source_ref
     return _dace_compile_call(self, inp)
 
 
 def mocked_compile_call_cartesian(
     self,
-    inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+    inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     use_metrics: bool,
     use_zero_origin: bool,
 ):
@@ -254,7 +256,7 @@ def mocked_compile_call_cartesian(
 
 def mocked_compile_call_unstructured(
     self,
-    inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
+    inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     use_metrics: bool,
     use_zero_origin: bool,
 ):
@@ -281,7 +283,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
             a[0] + 2 * a[1][0] + 3 * a[1][1] + 4 * b[0][0] + 5 * b[1]
         )  # skip 'a[1][2]' on purpose to cover unused scalar args
 
-    @gtx.program
+    @gtx.program(enable_jit=False)
     def testee(
         a: tuple[int32, tuple[int32, cases.IJKField, int32]],
         b: tuple[tuple[cases.IJKField], int32],  # use 'b_0' to test tuple with single element
@@ -327,7 +329,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     program = (
         testee.with_grid_type(gtx_common.GridType.CARTESIAN)
         .with_backend(backend)
-        .compile(enable_jit=False, offset_provider={}, **static_args)
+        .compile(offset_provider={}, **static_args)
     )
     program(a, b, out=c, M=M, N=N, K=K)
     assert np.all(c.asnumpy() == ref)
@@ -344,7 +346,7 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         tmp_2 = neighbor_sum(tmp(V2E), axis=V2EDim)
         return tmp_2
 
-    @gtx.program
+    @gtx.program(enable_jit=False)
     def testee(a: cases.VField, b: cases.VField):
         testee_op(a, out=b)
 
@@ -384,7 +386,7 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     program = (
         testee.with_grid_type(gtx_common.GridType.UNSTRUCTURED)
         .with_backend(backend)
-        .compile(enable_jit=False, offset_provider=offset_provider, **static_args)
+        .compile(offset_provider=offset_provider, **static_args)
     )
     program(a, b, offset_provider=offset_provider)
     assert np.all(b.asnumpy() == ref)

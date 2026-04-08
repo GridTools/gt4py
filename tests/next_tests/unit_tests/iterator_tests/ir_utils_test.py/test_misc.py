@@ -41,9 +41,9 @@ from gt4py.next.type_system import type_specifications as ts
             gtx.float64("1.0"),
         ),
     ],
-    ids=lambda param: f"Literal[{param.value}, {param.type}]"
-    if isinstance(param, itir.Literal)
-    else str(param),
+    ids=lambda param: (
+        f"Literal[{param.value}, {param.type}]" if isinstance(param, itir.Literal) else str(param)
+    ),
 )
 def test_value_from_literal(value, expected):
     result = misc.value_from_literal(value)
