@@ -476,11 +476,12 @@ explicit = true
 name = 'gridtools'
 url = 'https://gridtools.github.io/pypi/'
 
+# -- Example: {index = "gridtools", group = "dace-next"}
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-v2", group = "dace-cartesian"},
-  {index = "gridtools", group = "dace-next"}
+  {git = "https://github.com/philip-paul-mueller/dace.git", branch = "different_dace_folder", group = "dace-next"}
 ]
 
 # -- versioningit --
