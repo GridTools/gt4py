@@ -382,10 +382,12 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(
+            ir = itir_transforms.apply_common_transforms(
                 ir,
-                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
                 offset_provider=offset_provider,
+                fuse_maps=False,
+                transform_concat_where_to_as_fieldop=False,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
             )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
