@@ -134,7 +134,7 @@ def _get_chained_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], n
     dace_propagation.propagate_states(sdfg)
     sdfg.validate()
 
-    return sdfg, lambda a, b: (a + (2 * b.reshape((-1, 1)) + 3))
+    return sdfg, lambda a, b: a + (2 * b.reshape((-1, 1)) + 3)
 
 
 def _get_sdfg_with_empty_memlet(
