@@ -24,9 +24,9 @@ from dace.sdfg import (
     type_inference as dace_type_inference,
     utils as dace_sutils,
 )
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-
 
 @dace_properties.make_properties
 class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
@@ -494,8 +494,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         The function will also remove data containers that are no longer in use.
         """
-        all_relocatable_dataflow: set[dace_nodes.Node] = functools.reduce(
-            lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), set()
+        all_relocatable_dataflow: OrderedSet[dace_nodes.Node] = functools.reduce(
+            lambda s1, s2: s1.union(s2), relocatable_dataflow.values(), OrderedSet()
         )
 
         # Before we can clean the original nodes, we must clean the dataflow. If a
@@ -525,7 +525,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         are available in the parent SDFG.
         """
         symbol_mapping = if_block.symbol_mapping
-        missing_symbols = [ms for ms in if_block.sdfg.free_symbols if ms not in symbol_mapping]
+        missing_symbols = sorted([ms for ms in if_block.sdfg.free_symbols if ms not in symbol_mapping])
         symbol_mapping.update({s: s for s in missing_symbols})
         if_block.symbol_mapping = symbol_mapping  # Performs conversion.
 
@@ -706,10 +706,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         if_block: dace_nodes.NestedSDFG,
-        raw_relocatable_dataflow: dict[str, set[dace_nodes.Node]],
-        non_relocatable_dataflow: dict[str, set[dace_nodes.Node]],
+        raw_relocatable_dataflow: dict[str, OrderedSet[dace_nodes.Node]],
+        non_relocatable_dataflow: dict[str, OrderedSet[dace_nodes.Node]],
         enclosing_map: dace_nodes.MapEntry,
-    ) -> dict[str, set[dace_nodes.Node]]:
+    ) -> dict[str, OrderedSet[dace_nodes.Node]]:
         """Partition the dependencies.
 
         The function expects the dataflow that is upstream of every connector
@@ -734,8 +734,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         """
 
         # Remove the parts of the dataflow that is unrelocatable.
-        all_non_relocatable_dataflow: set[dace_nodes.Node] = functools.reduce(
-            lambda s1, s2: s1.union(s2), non_relocatable_dataflow.values(), set()
+        all_non_relocatable_dataflow: OrderedSet[dace_nodes.Node] = functools.reduce(
+            lambda s1, s2: s1.union(s2), non_relocatable_dataflow.values(), OrderedSet()
         )
         relocatable_dataflow = {
             conn_name: rel_df.difference(all_non_relocatable_dataflow)
@@ -743,14 +743,14 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         }
 
         # Find the known_nodes for each branch
-        known_nodes: dict[dace.SDFGState, set[dace_nodes.Node]] = dict()
+        known_nodes: dict[dace.SDFGState, OrderedSet[dace_nodes.Node]] = dict()
         for conn_name, rel_df in relocatable_dataflow.items():
             branch_state, _ = self._find_branch_for(if_block=if_block, connector=conn_name)
             if branch_state not in known_nodes:
-                known_nodes[branch_state] = set()
+                known_nodes[branch_state] = OrderedSet()
             known_nodes[branch_state].update(rel_df)
 
-        multiple_df_nodes: set[dace_nodes.Node] = set()
+        multiple_df_nodes: OrderedSet[dace_nodes.Node] = OrderedSet()
         # Find intersect of all known_nodes sets which are the nodes that are in the dataflow
         # of multiple branches and thus doesn't make sense to relocate
         for branch_state, known_nodes_set in known_nodes.items():
@@ -770,8 +770,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #   the data is single use data, is not an AccessNode that refers to global
         #   memory nor is a source AccessNode.
         def filter_nodes(
-            nodes_proposed_for_reloc: set[dace_nodes.Node],
-        ) -> set[dace_nodes.Node]:
+            nodes_proposed_for_reloc: OrderedSet[dace_nodes.Node],
+        ) -> OrderedSet[dace_nodes.Node]:
             has_been_updated = True
             while has_been_updated:
                 has_been_updated = False
@@ -793,7 +793,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         for oedge in state.out_edges(reloc_node)
                         if oedge.dst is not if_block
                     ):
-                        nodes_proposed_for_reloc.remove(reloc_node)
+                        nodes_proposed_for_reloc.remove(reloc_node) # TODO(tehrengruber): this is O(N)
                         has_been_updated = True
                         continue
 
@@ -804,14 +804,14 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     #  the `if` body or be mapped (remain outside but made accessible
                     #  inside), thus their relocation state is of no concern for
                     #  `reloc_node`.
-                    non_mappable_incoming_nodes: set[dace_nodes.Node] = {
+                    non_mappable_incoming_nodes: OrderedSet[dace_nodes.Node] = OrderedSet(
                         iedge.src
                         for iedge in state.in_edges(reloc_node)
                         if not (
                             (iedge.src is enclosing_map)
                             or isinstance(iedge.src, dace_nodes.AccessNode)
                         )
-                    }
+                    )
                     if non_mappable_incoming_nodes.issubset(nodes_proposed_for_reloc):
                         # All nodes that can not be mapped into the `if` body are
                         #  currently scheduled to be relocated, thus there is not
@@ -826,7 +826,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         #  that none of its input can. Thus we remove them from
                         #  `nodes_proposed_for_reloc`.
                         nodes_proposed_for_reloc.difference_update(non_mappable_incoming_nodes)
-                        nodes_proposed_for_reloc.remove(reloc_node)
+                        nodes_proposed_for_reloc.remove(reloc_node) # TODO(tehrengruber): this is O(N)
                         has_been_updated = True
 
             return nodes_proposed_for_reloc
@@ -838,7 +838,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     def _partition_if_block(
         self,
         if_block: dace_nodes.NestedSDFG,
-    ) -> Optional[tuple[set[str], set[str]]]:
+    ) -> Optional[tuple[OrderedSet[str], OrderedSet[str]]]:
         """Check if `if_block` can be processed and partition the input connectors.
 
         The function will check if `if_block` has the right structure, i.e. if it is
@@ -858,7 +858,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             return None
 
         # These are all the output names.
-        output_names: set[str] = set(if_block.out_connectors.keys())
+        output_names: OrderedSet[str] = OrderedSet(if_block.out_connectors.keys())
 
         # We require that the nested SDFG contains a single node, which is a
         #  `ConditionalBlock` containing two branches.
@@ -899,14 +899,14 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #  So the ones that can be relocated were found exactly once. Zero would
         #  mean they can not be relocated and more than one means that we do not
         #  support it yet.
-        relocatable_connectors = {
+        relocatable_connectors = OrderedSet(
             conn_name for conn_name, conn_count in reference_count.items() if conn_count == 1
-        }
-        non_relocatable_connectors = {
+        )
+        non_relocatable_connectors = OrderedSet(
             conn_name
             for conn_name in reference_count.keys()
             if conn_name not in relocatable_connectors
-        }
+        )
 
         if len(non_relocatable_connectors) == 0:
             return None

@@ -551,11 +551,11 @@ class DistributedBufferRelocator(dace_transformation.Pass):
     def should_reapply(self, modified: dace_ppl.Modifies) -> bool:
         return modified & (dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes)
 
-    def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {
+    def depends_on(self) -> list[type[dace_transformation.Pass]]:
+        return [
             dace_transformation.passes.StateReachability,
             dace_transformation.passes.FindAccessStates,
-        }
+        ]
 
     def apply_pass(
         self, sdfg: dace.SDFG, pipeline_results: dict[str, Any]
@@ -1008,7 +1008,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         # This is the tasklet that we will put inside the map, note we have to do it
         #  this way to avoid some name clash stuff.
         inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
-            name=f"{tasklet.label}__clone_{str(uuid.uuid1()).replace('-', '_')}",
+            name=f"{tasklet.label}__clone_{dace_nodes._get_next_node_id()}",  # TODO: use another global counter
             outputs=tasklet.out_connectors.keys(),
             inputs=set(),
             code=tasklet.code,
@@ -1033,7 +1033,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
 
         # Now we will reroute the edges went through the inner map, through the
         #  inner access node instead.
-        for old_inner_edge in list(
+        for old_inner_edge in list(  # TODO(tehrengruber): Why all these list comprehensions everywhere?
             graph.out_edges_by_connector(map_entry, "OUT_" + connector_name)
         ):
             # We now modify the downstream data. This is because we no longer refer
@@ -1157,8 +1157,8 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
     def expressions(cls) -> Any:
         return [dace.sdfg.utils.node_path_graph(cls.map_exit, cls.tmp_ac, cls.glob_ac)]
 
-    def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {dace_transformation.passes.ConsolidateEdges}
+    def depends_on(self) -> list[type[dace_transformation.Pass]]:
+        return [dace_transformation.passes.ConsolidateEdges]
 
     def can_be_applied(
         self,

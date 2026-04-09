@@ -48,6 +48,7 @@ def set_dace_config(
     # NOTE: Each thread maintains its own set of configuration, i.e. `dace.Config` is
     #   a thread local variable. This means it is safe to set values that are different
     #   for each thread.
+    dace.Config.set("progress", value=True)
 
     # We rely on dace cache to avoid recompiling the SDFG.
     #   Note that the workflow step with the persistent `FileCache` store
