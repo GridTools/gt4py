@@ -17,6 +17,7 @@ from dace import (
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
@@ -148,7 +149,7 @@ def _apply_split_access_node_non_recursive(
 class SplitAccessNode(dace_transformation.SingleStateTransformation):
     """The transformation will split an AccessNode into multiple ones.
 
-    If there is no interesection between a write and different reads,
+    If there is no intersection between a write and different reads,
     i.e. if every read to the AccessNode can be satisfied by a single
     write to the AccessNode and the AccessNode is only used at one
     location, then the node is split.
@@ -307,7 +308,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
     def _find_edge_reassignment(
         self,
         state: dace.SDFGState,
-    ) -> dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]] | None:
+    ) -> dict[dace_graph.MultiConnectorEdge, OrderedSet[dace_graph.MultiConnectorEdge]] | None:
         """Determine how the edges should be distributed to the fragments.
 
         The current implementation defines the fragments, i.e. the pieces into
@@ -335,14 +336,14 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         #  generate the data for a consumer). This is hard to handle, but should
         #  be implemented at some point.
         edge_reassignments: dict[
-            dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]
+            dace_graph.MultiConnectorEdge, OrderedSet[dace_graph.MultiConnectorEdge]
         ] = {}
         for iedge in state.in_edges(access_node):
             if iedge.data.dst_subset is None:
                 return None  # TODO(phimuell): Lift this.
             if iedge.data.wcr is not None:
                 return None
-            edge_reassignments[iedge] = set()
+            edge_reassignments[iedge] = OrderedSet()
 
         # Now match the outgoing edges to their incoming producers.
         for oedge in state.out_edges(access_node):
@@ -426,7 +427,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-        edge_reassignments: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]],
+        edge_reassignments: dict[dace_graph.MultiConnectorEdge, OrderedSet[dace_graph.MultiConnectorEdge]],
     ) -> bool:
         """Checks if the decomposition results in a valid SDFG.
 

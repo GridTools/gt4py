@@ -29,6 +29,38 @@ from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wf
 from gt4py.next.type_system import type_specifications as ts
 
 
+def remove_guid(data):
+    """
+    Recursively traverse a dict and remove all keys named 'guid'.
+
+    Args:
+        data: A dictionary, list, or other data structure to traverse
+
+    Returns:
+        The data structure with all 'guid' keys removed
+    """
+    if isinstance(data, dict):
+        return {
+            key: remove_guid(value)
+            for key, value in data.items()
+            if key != 'guid'
+        }
+    elif isinstance(data, list):
+        return [remove_guid(item) for item in data]
+    elif isinstance(data, tuple):
+        return tuple(remove_guid(item) for item in data)
+    elif isinstance(data, (str, int, float, bool)) or data is None:
+        return data
+    else:
+        raise RuntimeError("Unsupported data type")
+
+import json
+def remove_guid_and_save_to_file(sdfg, filename):
+    cleaned_data = remove_guid(sdfg.to_json())
+
+    with open(filename, 'w') as f:
+        json.dump(cleaned_data, f, indent=2)
+
 def find_constant_symbols(
     ir: itir.Program,
     sdfg: dace.SDFG,

@@ -13,6 +13,7 @@ from typing import Any, Iterable, Optional, Sequence, Union
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -263,6 +264,7 @@ def split_node(
     # NOTE: Turning them into a string is the best solution is probably the only way
     #   to achieve some stability. The only downside is that the order now depends
     #   on the specialization level that is used, i.e. if we have numbers or symbols.
+    # TODO(tehrengruber): Is this still needed?
     split_description = sorted(split_description, key=lambda split: str(split))
 
     desc_to_split = node_to_split.desc(sdfg)
@@ -1049,14 +1051,14 @@ def _generate_data_descriptors_for_split(
 def _compute_assignement_for_split(
     edge_descriptions: Sequence[EdgeConnectionSpec],
     split_description: Sequence[dace_sbs.Subset],
-) -> dict[dace_sbs.Subset, set[EdgeConnectionSpec]]:
+) -> dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]]:
     """For every subset, that defines a split find the set of edges that belongs into it.
 
     Note that it might happens that some splits have zero assigned edges.
     """
     assert all(split is not None for split in split_description)
-    assignment: dict[dace_sbs.Subset, set[EdgeConnectionSpec]] = {
-        split: set() for split in split_description
+    assignment: dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]] = {
+        split: OrderedSet() for split in split_description
     }
 
     for edge_description in edge_descriptions:

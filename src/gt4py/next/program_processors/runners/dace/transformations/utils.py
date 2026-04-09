@@ -16,7 +16,7 @@ from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, 
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
-
+from ordered_set import OrderedSet
 
 _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
 
@@ -582,7 +582,7 @@ def find_upstream_nodes(
     state: dace.SDFGState,
     start_connector: Optional[str] = None,
     limit_node: Optional[dace_nodes.Node] = None,
-) -> set[dace_nodes.Node]:
+) -> OrderedSet[dace_nodes.Node]:
     """Finds all upstream nodes, i.e. all producers, of `start`.
 
     Note that `start` and `limit_node` are not part of the returned set.
@@ -595,7 +595,7 @@ def find_upstream_nodes(
         limit_node: Consider this node as "limiting wall", i.e. do not explore
             beyond it.
     """
-    seen: set[dace_nodes.Node] = set()
+    seen: OrderedSet[dace_nodes.Node] = OrderedSet()
 
     to_visit = [
         iedge.src
