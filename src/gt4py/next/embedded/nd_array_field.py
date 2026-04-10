@@ -919,26 +919,28 @@ def _size0_field(
 
 
 def _concat_where(
-    mask: common.Domain,
+    domain: common.Domain,
     true_field: common.Field,
     false_field: common.Field,
 ) -> common.Field:
-    if mask.ndim != 1:
+    if domain.ndim != 1:
         raise NotImplementedError(
-            "'concat_where': Can only concatenate fields with a 1-dimensional mask."
+            "'concat_where': Can only concatenate fields with a 1-dimensional domain."
         )
-    mask_dim = mask.dims[0]
+    domain_dim = domain.dims[0]
 
-    # intersect the field in dimensions orthogonal to the mask, then all slices in the mask field have same domain
-    t_broadcasted, f_broadcasted = _intersect_fields(true_field, false_field, ignore_dims=mask_dim)
+    # intersect the field in dimensions orthogonal to the domain, then all slices in the domain field have same domain
+    t_broadcasted, f_broadcasted = _intersect_fields(
+        true_field, false_field, ignore_dims=domain_dim
+    )
 
-    true_domain = embedded_common.domain_intersection(t_broadcasted.domain, mask)
+    true_domain = embedded_common.domain_intersection(t_broadcasted.domain, domain)
     t_slices = () if true_domain.is_empty() else (t_broadcasted[true_domain],)
 
-    inverted_masks = _invert_domain(mask)
+    inverted_domains = _invert_domain(domain)
     false_domains = tuple(
         intersection
-        for d in inverted_masks
+        for d in inverted_domains
         if not (
             intersection := embedded_common.domain_intersection(f_broadcasted.domain, d)
         ).is_empty()
@@ -949,7 +951,7 @@ def _concat_where(
         # no data to concatenate, return an empty field
         nd_array_class = _get_nd_array_class(true_field, false_field)
         return _size0_field(nd_array_class, dims=t_broadcasted.domain.dims, dtype=true_field.dtype)
-    return _concat(*f_slices, *t_slices, dim=mask_dim)
+    return _concat(*f_slices, *t_slices, dim=domain_dim)
 
 
 NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type]
