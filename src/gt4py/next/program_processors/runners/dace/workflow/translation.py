@@ -409,7 +409,7 @@ class DaCeTranslator(
         *args: Any,
         **kwargs: Any,
     ) -> dace.SDFG:
-        with gtx_wfdcommon.dace_context(device_type=self.device_type):
+        with gtx_wfdcommon.dace_context(device_type=self.device_type), dace.sdfg.nodes.reset_node_id_counter():
             return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
     def _generate_sdfg_without_configuring_dace(

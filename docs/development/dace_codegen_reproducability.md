@@ -6,14 +6,17 @@
   ```
   TODO: introduce new config var that prints the hash instead of hard-coding it.
 - Execute the program in question twice and compare the output.
-- Set a conditonal breakpoint in beginning of the `apply` method of the first pass where the SDFG hash changes with condition `sdfg.hash_sdfg() == <last equal hash>`.
-  Note: In case running the previous passes takes a long time it makes sense to serialize the SDFG to
-  json (`sdfg.to_json("sdfg(1|2).json")`) and loading it again (see debug script below).
-  In rare cases the serializing and deserializing the sdfg changes the hash. In such cases this
-  trick doesn't work and the first location where the hash changes might not be the exact location where the indeterministic behavior is. It helps to use a different hash, e.g. `content_hash`, but this should be solved in general.
+- Set a conditonal breakpoint in beginning of the `apply` method of the first pass where the SDFG
+  hash changes with condition `sdfg.hash_sdfg() == <last equal hash>`.
+  Note: In case running the previous passes takes a long time it makes sense to serialize the SDFG
+  to json (`sdfg.to_json("sdfg(1|2).json")`) and loading it again (see debug script below) to
+  ease debugging. In rare cases the serializing and deserializing the sdfg changes the hash. In such
+  cases this trick doesn't work and the first location where the hash changes might not be the exact
+  location where the indeterministic behavior is. It helps to use a different hash, e.g.
+  `content_hash`, but this should be solved in general.
   Note: It makes sense to also place a breakpoint after `DaceTranslator.generate_sdfg` to recognize
   when all executions finished.
-- When the location is found it is usually easy to spot the origin of the indeterminism. Often 
+- When the location is found it is usually easy to spot the origin of the indeterminism. Often
   there is a set operation or a symbol is named in an indeterministic way. Use ordered sets and
   deterministic symbol names.
 
