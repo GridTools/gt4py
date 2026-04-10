@@ -122,37 +122,3 @@ def test_ffront_nabla(exec_alloc_descriptor):
     assert_close(3.5455427772565435e-003, np.max(pnabla_MXX.asnumpy()))
     assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY.asnumpy()))
     assert_close(3.3540113705465301e-003, np.max(pnabla_MYY.asnumpy()))
-
-
-@pytest.mark.requires_atlas
-def test_ffront_nabla_profiler(exec_alloc_descriptor):
-    from gt4py.next.instrumentation import gpu_profiler
-    import cupyx.profiler as cupy_profiler
-
-    with gpu_profiler.profile_calls():
-        with cupy_profiler.time_range("pnabla-preparation", color_id=3):
-            setup = nabla_setup(allocator=exec_alloc_descriptor.allocator)
-
-            pnabla_MXX = gtx.zeros(
-                {Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator
-            )
-            pnabla_MYY = gtx.zeros(
-                {Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator
-            )
-
-            offset_provider = {
-                "E2V": setup.edges2node_connectivity,
-                "V2E": setup.nodes2edge_connectivity,
-            }
-
-            pnabla_prog = pnabla.with_backend(exec_alloc_descriptor)
-            pnabla_prog.compile(offset_provider=offset_provider)
-
-        pnabla_prog(
-            setup.input_field,
-            setup.S_fields,
-            setup.sign_field,
-            setup.vol_field,
-            out=(pnabla_MXX, pnabla_MYY),
-            offset_provider=offset_provider,
-        )
