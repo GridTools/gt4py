@@ -145,14 +145,16 @@ class TestProfilingCallsLifecycle:
         fake_profile = mock.MagicMock()
         fake_profile.__enter__ = mock.MagicMock(return_value=fake_profile)
 
-        with mock.patch.object(
-            hooks.program_call_context, "register", wraps=hooks.program_call_context.register
-        ) as mock_program_register, mock.patch.object(
-            hooks.compiled_program_call_context,
-            "register",
-            wraps=hooks.compiled_program_call_context.register,
-        ) as mock_compiled_register, mock.patch.object(
-            gpu_profiler, "profile", return_value=fake_profile
+        with (
+            mock.patch.object(
+                hooks.program_call_context, "register", wraps=hooks.program_call_context.register
+            ) as mock_program_register,
+            mock.patch.object(
+                hooks.compiled_program_call_context,
+                "register",
+                wraps=hooks.compiled_program_call_context.register,
+            ) as mock_compiled_register,
+            mock.patch.object(gpu_profiler, "profile", return_value=fake_profile),
         ):
             gpu_profiler.start_profiling_calls()
             gpu_profiler.start_profiling_calls()

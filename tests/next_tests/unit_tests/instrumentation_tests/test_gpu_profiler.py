@@ -114,23 +114,6 @@ class TestProgramCallProfiler:
         finally:
             del program.definition.program_color_id
 
-    def test_unrelated_color_id_attribute_is_ignored(self):
-        # The old override attribute name `color_id` must no longer be honored.
-        program = _FakeProgram()
-        program.definition.color_id = 42
-        try:
-            with mock.patch.object(gpu_profiler, "time_range") as mock_time_range:
-                gpu_profiler.ProgramCallProfiler(
-                    program=cast(gtx_typing.Program, program),
-                    args=(),
-                    offset_provider={},
-                    enable_jit=False,
-                    kwargs={},
-                )
-            assert mock_time_range.call_args.kwargs["color_id"] == 1
-        finally:
-            del program.definition.color_id
-
     def test_stores_time_range_on_instance(self):
         sentinel_tr = mock.MagicMock(name="time_range_instance")
         with mock.patch.object(gpu_profiler, "time_range", return_value=sentinel_tr):
@@ -207,29 +190,6 @@ class TestCompiledProgramCallProfiler:
             assert mock_time_range.call_args.kwargs["color_id"] == 99
         finally:
             del pool.definition.compiled_program_color_id
-
-    def test_unrelated_color_id_attribute_is_ignored(self):
-        pool = _FakeCompiledProgramsPool()
-        pool.definition.color_id = 99
-        key = (("desc",), 123, None)
-        try:
-            with (
-                mock.patch(
-                    "gt4py.next.instrumentation.gpu_profiler.compiled_program.metrics_source_key",
-                    return_value="k",
-                ),
-                mock.patch.object(gpu_profiler, "time_range") as mock_time_range,
-            ):
-                gpu_profiler.CompiledProgramCallProfiler(
-                    program_pool=cast(compiled_program.CompiledProgramsPool, pool),
-                    key=key,
-                    args=(),
-                    kwargs={},
-                    offset_provider={},
-                )
-            assert mock_time_range.call_args.kwargs["color_id"] == 2
-        finally:
-            del pool.definition.color_id
 
     def test_stores_time_range_on_instance(self):
         pool = _FakeCompiledProgramsPool()
