@@ -248,6 +248,7 @@ def _create_sdfg_bindings(
     code = codegen.TextBlock()
 
     code.append("import ctypes")
+    code.empty_line()
     code.append("from gt4py.next import common as gtx_common, field_utils")
     code.empty_line()
     code.append(
@@ -281,8 +282,7 @@ def _create_sdfg_bindings(
         # arrays as well in SDFG fastcall.
         _parse_gt_connectivities(code, sdfg_arglist)
 
-    src = codegen.format_python_source(code.text)
-    return stages.BindingSource(src, library_deps=tuple())
+    return stages.BindingSource(code.text, library_deps=tuple())
 
 
 def bind_sdfg(

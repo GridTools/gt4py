@@ -36,7 +36,7 @@ __version_info__: pkg_version.Version
 #: whatever reason, the current value defined here would be used as fallback.
 #: Therefore, for consistency, the version hard-coded here should be kept in
 #: sync with the `tool.versioningit.default-version` field in `pyproject.toml`.
-on_build_version: Final = "1.1.7+unknown.version.details"
+on_build_version: Final = "1.1.9+unknown.version.details"
 
 _cached_version_data: tuple[str, pkg_version.Version] | None = None
 _dir: list[str] | None = None

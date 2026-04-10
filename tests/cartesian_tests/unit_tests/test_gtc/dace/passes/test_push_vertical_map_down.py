@@ -9,6 +9,8 @@
 import pytest
 
 from dace import nodes, subsets
+from dace.properties import CodeBlock
+from dace.sdfg.state import LoopRegion
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 
 from gt4py.cartesian.gtc.dace.passes import PushVerticalMapDown
@@ -47,6 +49,43 @@ def test_push_vertical_map_down():
     assert len(root.children[0].children) == 1
     assert isinstance(root.children[0].children[0], tn.MapScope)
     assert root.children[0].children[0].node.map.params == ["__k"]
+
+
+def test_push_vertical_map_down_for_scope():
+    root = tn.ScheduleTreeRoot(name="tester", children=[])
+    k_loop = tn.ForScope(
+        loop=LoopRegion(
+            "vertical map",
+            loop_var="__k",
+            initialize_expr=CodeBlock("__k = 0"),
+            condition_expr=CodeBlock("__k < 10"),
+            update_expr=CodeBlock("__k += 1"),
+        ),
+        children=[],
+    )
+    k_loop.parent = root
+    ij_loop = tn.MapScope(
+        node=nodes.MapEntry(
+            map=nodes.Map("horizontal maps", ["__i", "__j"], subsets.Range.from_string("0:5,0:8"))
+        ),
+        children=[],
+    )
+    ij_loop.parent = k_loop
+    k_loop.children.append(ij_loop)
+    root.children.append(k_loop)
+
+    flipper = PushVerticalMapDown()
+    flipper.visit(root)
+
+    tn.validate_children_and_parents_align(root)
+
+    assert len(root.children) == 1
+    assert isinstance(root.children[0], tn.MapScope)
+    assert root.children[0].node.map.params == ["__i", "__j"]
+
+    assert len(root.children[0].children) == 1
+    assert isinstance(root.children[0].children[0], tn.ForScope)
+    assert root.children[0].children[0].loop.loop_variable == "__k"
 
 
 def test_push_vertical_map_down_multiple_horizontal_maps():

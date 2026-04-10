@@ -67,9 +67,9 @@ typing = [
 typing_exports = [
   # to test typing with gt4py in downstream code
   {include-group = "typing"},
-  'types-six',  # can not let mypy auto-install types as that leads to unexpected stderr output (which means test failure)
-  'pytest-mypy-plugins',  # pytest plugin for running mypy on code snippets
-  "xarray"  # one of the regression tests requires xarray
+  'types-six>=1.17.0.20251009',  # can not let mypy auto-install types as that leads to unexpected stderr output (which means test failure)
+  'pytest-mypy-plugins>=4.0.0',  # pytest plugin for running mypy on code snippets
+  "xarray>=2024.1.0"  # one of the regression tests requires xarray
 ]
 
 # -- Standard project description options (PEP 621) --
@@ -145,14 +145,14 @@ requires-python = '>=3.10, <3.15, !=3.13.10, !=3.14.1'
 
 [project.optional-dependencies]
 cartesian = ['gt4py[jax,standard,testing]']
-cuda11 = ['cupy-cuda11x>=12.0']
 cuda12 = ['cupy-cuda12x>=12.0']
+cuda13 = ['cupy-cuda13x>=14.0']
 jax = ['jax>=0.4.26']
-jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
+jax-cuda12 = ['jax[cuda12-local]>=0.6.0', 'gt4py[cuda12]']
+jax-cuda13 = ['jax[cuda13-local]>=0.7.0; python_version >= "3.11"', 'gt4py[cuda13]']  # jax 0.7 not supported with Python 3.10
 next = ['gt4py[jax,standard,testing]']
-rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
-rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
-rocm6_0 = ['cupy>=13.4.1']
+rocm6 = ['cupy>=13.4.1,<14.0']
+rocm7 = ['cupy-rocm-7-0>=14.0']
 standard = [
   'clang-format>=18.1',
   # TODO(edopao): we keep 'scipy>=1.14.1' only because of wheels compatibility with python 3.10
@@ -284,6 +284,7 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
+  'requires_jax: tests that require `jax` package',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_can_deref: tests that require backend support for can_deref builtin function',
   'uses_composite_shifts: tests that use composite shifts in unstructured domain',
@@ -454,11 +455,10 @@ find = {namespaces = false, where = ['src']}
 [tool.uv]
 conflicts = [
   [
-    {extra = 'cuda11'},
-    {extra = 'jax-cuda12'},
-    {extra = 'rocm4_3'},
-    {extra = 'rocm5_0'},
-    {extra = 'rocm6_0'}
+    {extra = 'cuda12'},
+    {extra = 'jax-cuda13'},
+    {extra = 'rocm6'},
+    {extra = 'rocm7'}
   ],
   [
     {group = 'dace-cartesian'},
@@ -487,7 +487,7 @@ dace = [
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "1.1.7+unknown.version.details"
+default-version = "1.1.9+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
