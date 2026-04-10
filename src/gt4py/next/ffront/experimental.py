@@ -20,30 +20,30 @@ def as_offset(offset_: FieldOffset, field: common.Field, /) -> common.Connectivi
 
 @WhereBuiltinFunction
 def concat_where(
-    cond: common.Domain,
+    domain: common.Domain,
     true_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     false_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     /,
 ) -> common.Field | Tuple:
-    """
-    Concatenates two field fields based on a 1D mask.
+    """Assemble a field by selecting from ``true_field`` where ``domain`` applies and from ``false_field`` elsewhere.
 
-    The resulting domain is the concatenation of the mask subdomains with the domains of the respective true or false fields.
-    Empty domains at the beginning or end are ignored, but the interior must result in a consecutive domain.
+    Unlike ``where`` (element-wise selection via a boolean mask field), ``concat_where``
+    works on **domain regions**: the condition is a ``Domain`` (not a ``Field``), and the
+    result is the concatenation of slices from the two fields along one dimension.
+    Each field only needs to cover its own region — they may be non-overlapping.
 
-    TODO(havogt): I can't get this doctest to run, even after copying the __doc__ in the decorator
-    Example:
-        >>> I = common.Dimension("I")
-        >>> mask = common._field([True, False, True], domain={I: (0, 3)})
-        >>> true_field = common._field([1, 2], domain={I: (0, 2)})
-        >>> false_field = common._field([3, 4, 5], domain={I: (1, 4)})
-        >>> assert concat_where(mask, true_field, false_field) == _field([1, 3], domain={I: (0, 2)})
+    The condition must be a 1D ``Domain`` (e.g. ``I < 5``).
 
-        >>> mask = common._field([True, False, True], domain={I: (0, 3)})
-        >>> true_field = common._field([1, 2, 3], domain={I: (0, 3)})
-        >>> false_field = common._field(
-        ...     [4], domain={I: (2, 3)}
-        ... )  # error because of non-consecutive domain: missing I(1), but has I(0) and I(2) values
+    Args:
+        domain: 1D Domain specifying the "true" region.
+        true_field: Field (or scalar) providing values inside the domain region.
+        false_field: Field (or scalar) providing values outside the domain region.
+
+    Returns:
+        A new field whose domain is the concatenation of the contributed regions.
+
+    Raises:
+        NonContiguousDomain: If the resulting domain has interior gaps.
     """
     raise NotImplementedError()
 
