@@ -76,7 +76,7 @@ class TestProfileFallback:
 
 # --- ProgramCallProfiler ---
 class TestProgramCallProfiler:
-    def test_creates_time_range_with_program_name(self):
+    def test_creates_time_range_ctx_with_program_name(self):
         with mock.patch.object(gpu_profiler, "time_range") as mock_time_range:
             gpu_profiler.ProgramCallProfiler(
                 program=_fake_program(),
@@ -124,7 +124,7 @@ class TestProgramCallProfiler:
                 enable_jit=False,
                 kwargs={},
             )
-        assert profiler.time_range is sentinel_tr
+        assert profiler.time_range_ctx is sentinel_tr
 
 
 # --- CompiledProgramCallProfiler ---
@@ -209,7 +209,7 @@ class TestCompiledProgramCallProfiler:
                 kwargs={},
                 offset_provider={},
             )
-        assert profiler.time_range is sentinel_tr
+        assert profiler.time_range_ctx is sentinel_tr
 
 
 # --- ProgramProfiler enter/exit ---
@@ -217,7 +217,7 @@ class TestProgramProfilerContextManager:
     def test_enter_exit_delegates_to_time_range(self):
         profiler = gpu_profiler.ProgramCallProfiler.__new__(gpu_profiler.ProgramCallProfiler)
         fake_tr = mock.MagicMock()
-        profiler.time_range = fake_tr
+        profiler.time_range_ctx = fake_tr
 
         profiler.__enter__()
         fake_tr.__enter__.assert_called_once_with()
@@ -230,7 +230,7 @@ class TestProgramProfilerContextManager:
             gpu_profiler.CompiledProgramCallProfiler
         )
         fake_tr = mock.MagicMock()
-        profiler.time_range = fake_tr
+        profiler.time_range_ctx = fake_tr
 
         exc_type = ValueError
         exc = ValueError("boom")
