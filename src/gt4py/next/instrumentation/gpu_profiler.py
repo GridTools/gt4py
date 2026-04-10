@@ -117,9 +117,9 @@ def start_profiling_calls() -> None:
     global _profile_ctx_manager
     with _profile_ctx_manager_lock:
         if _profile_ctx_manager is None:
+            _profile_ctx_manager = profile()
             hooks.program_call_context.register(ProgramCallProfiler, index=0)
             hooks.compiled_program_call_context.register(CompiledProgramCallProfiler, index=0)
-            _profile_ctx_manager = profile()
             _profile_ctx_manager.__enter__()
 
 
@@ -128,21 +128,21 @@ def stop_profiling_calls() -> None:
     global _profile_ctx_manager
     with _profile_ctx_manager_lock:
         if _profile_ctx_manager is not None:
-            hooks.program_call_context.remove(ProgramCallProfiler)
-            hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
             _profile_ctx_manager.__exit__(None, None, None)
+            hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
+            hooks.program_call_context.remove(ProgramCallProfiler)
             _profile_ctx_manager = None
 
 
 class ProgramProfiler(contextlib.AbstractContextManager):
     """Base context manager that wraps a program execution in a time range."""
 
-    time_range: cupyx_profiler.time_range
+    time_range_ctx: cupyx_profiler.time_range
 
-    __slots__ = ("time_range",)
+    __slots__ = ("time_range_ctx",)
 
     def __enter__(self) -> None:
-        self.time_range.__enter__()
+        self.time_range_ctx.__enter__()
 
     def __exit__(
         self,
@@ -150,7 +150,7 @@ class ProgramProfiler(contextlib.AbstractContextManager):
         exc_value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
-        self.time_range.__exit__(exc_type, exc_value, traceback)
+        self.time_range_ctx.__exit__(exc_type, exc_value, traceback)
 
 
 class ProgramCallProfiler(ProgramProfiler):
@@ -166,7 +166,7 @@ class ProgramCallProfiler(ProgramProfiler):
         enable_jit: bool,
         kwargs: dict[str, Any],
     ) -> None:
-        self.time_range = time_range(
+        self.time_range_ctx = time_range(
             program.__name__,
             color_id=getattr(program.definition, "program_color_id", self.color_id),
         )
@@ -185,7 +185,7 @@ class CompiledProgramCallProfiler(ProgramProfiler):
         kwargs: dict[str, Any],
         offset_provider: common.OffsetProvider,
     ) -> None:
-        self.time_range = time_range(
+        self.time_range_ctx = time_range(
             compiled_program.metrics_source_key(program_pool, key),
             color_id=getattr(program_pool.definition, "compiled_program_color_id", self.color_id),
         )
