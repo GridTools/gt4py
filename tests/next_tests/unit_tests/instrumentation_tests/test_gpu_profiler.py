@@ -8,13 +8,15 @@
 
 from __future__ import annotations
 
-import contextlib
 import unittest.mock as mock
+from typing import Any, cast
 
 import pytest
 
 from gt4py._core import definitions as core_definitions
-from gt4py.next.instrumentation import gpu_profiler, hooks
+from gt4py.next import typing as gtx_typing
+from gt4py.next.instrumentation import gpu_profiler
+from gt4py.next.otf import compiled_program
 
 
 HAS_CUPY = core_definitions.CUPY_DEVICE_TYPE is not None
@@ -22,17 +24,25 @@ HAS_CUPY = core_definitions.CUPY_DEVICE_TYPE is not None
 
 # --- Helpers ---
 class _FakeDefinition:
-    pass
+    # Declared so assigning/deleting these attributes does not trip the type checker.
+    # They are intentionally left unset by default so `getattr(..., default)` is exercised.
+    program_color_id: int
+    compiled_program_color_id: int
+    color_id: int
 
 
 class _FakeProgram:
     __name__ = "my_program"
-    definition = _FakeDefinition()
+    definition: Any = _FakeDefinition()
 
 
 class _FakeCompiledProgramsPool:
     root = ("my_program", "my_backend")
-    definition = _FakeDefinition()
+    definition: Any = _FakeDefinition()
+
+
+def _fake_program() -> gtx_typing.Program:
+    return cast(gtx_typing.Program, _FakeProgram())
 
 
 # --- Fallback context managers (no CuPy) ---
@@ -66,107 +76,203 @@ class TestProfileFallback:
 
 # --- ProgramCallProfiler ---
 class TestProgramCallProfiler:
-    def test_stores_program_name(self):
-        profiler = gpu_profiler.ProgramCallProfiler(
-            program=_FakeProgram(),
-            args=(),
-            offset_provider={},
-            enable_jit=False,
-            kwargs={},
-        )
-        assert profiler.name == "my_program"
+    def test_creates_time_range_with_program_name(self):
+        with mock.patch.object(gpu_profiler, "time_range") as mock_time_range:
+            gpu_profiler.ProgramCallProfiler(
+                program=_fake_program(),
+                args=(),
+                offset_provider={},
+                enable_jit=False,
+                kwargs={},
+            )
+        mock_time_range.assert_called_once_with("my_program", color_id=1)
 
     def test_default_color_id(self):
-        profiler = gpu_profiler.ProgramCallProfiler(
-            program=_FakeProgram(),
-            args=(),
-            offset_provider={},
-            enable_jit=False,
-            kwargs={},
-        )
-        assert profiler.color_id == 1
+        with mock.patch.object(gpu_profiler, "time_range") as mock_time_range:
+            gpu_profiler.ProgramCallProfiler(
+                program=_fake_program(),
+                args=(),
+                offset_provider={},
+                enable_jit=False,
+                kwargs={},
+            )
+        assert mock_time_range.call_args.kwargs["color_id"] == 1
 
     def test_custom_color_id_from_definition(self):
         program = _FakeProgram()
+        program.definition.program_color_id = 42
+        try:
+            with mock.patch.object(gpu_profiler, "time_range") as mock_time_range:
+                gpu_profiler.ProgramCallProfiler(
+                    program=cast(gtx_typing.Program, program),
+                    args=(),
+                    offset_provider={},
+                    enable_jit=False,
+                    kwargs={},
+                )
+            assert mock_time_range.call_args.kwargs["color_id"] == 42
+        finally:
+            del program.definition.program_color_id
+
+    def test_unrelated_color_id_attribute_is_ignored(self):
+        # The old override attribute name `color_id` must no longer be honored.
+        program = _FakeProgram()
         program.definition.color_id = 42
-        profiler = gpu_profiler.ProgramCallProfiler(
-            program=program,
-            args=(),
-            offset_provider={},
-            enable_jit=False,
-            kwargs={},
-        )
-        assert profiler.color_id == 42
+        try:
+            with mock.patch.object(gpu_profiler, "time_range") as mock_time_range:
+                gpu_profiler.ProgramCallProfiler(
+                    program=cast(gtx_typing.Program, program),
+                    args=(),
+                    offset_provider={},
+                    enable_jit=False,
+                    kwargs={},
+                )
+            assert mock_time_range.call_args.kwargs["color_id"] == 1
+        finally:
+            del program.definition.color_id
+
+    def test_stores_time_range_on_instance(self):
+        sentinel_tr = mock.MagicMock(name="time_range_instance")
+        with mock.patch.object(gpu_profiler, "time_range", return_value=sentinel_tr):
+            profiler = gpu_profiler.ProgramCallProfiler(
+                program=_fake_program(),
+                args=(),
+                offset_provider={},
+                enable_jit=False,
+                kwargs={},
+            )
+        assert profiler.time_range is sentinel_tr
 
 
 # --- CompiledProgramCallProfiler ---
 class TestCompiledProgramCallProfiler:
-    def test_stores_metrics_source_key(self):
+    def test_creates_time_range_with_metrics_source_key(self):
         pool = _FakeCompiledProgramsPool()
         key = (("desc",), 123, None)
-        with mock.patch(
-            "gt4py.next.instrumentation.gpu_profiler.compiled_program.metrics_source_key",
-            return_value="mocked_key",
-        ) as mock_key:
-            profiler = gpu_profiler.CompiledProgramCallProfiler(
-                program_pool=pool,
+        with (
+            mock.patch(
+                "gt4py.next.instrumentation.gpu_profiler.compiled_program.metrics_source_key",
+                return_value="mocked_key",
+            ) as mock_key,
+            mock.patch.object(gpu_profiler, "time_range") as mock_time_range,
+        ):
+            gpu_profiler.CompiledProgramCallProfiler(
+                program_pool=cast(compiled_program.CompiledProgramsPool, pool),
                 key=key,
                 args=(),
                 kwargs={},
                 offset_provider={},
             )
             mock_key.assert_called_once_with(pool, key)
-        assert profiler.name == "mocked_key"
+        mock_time_range.assert_called_once_with("mocked_key", color_id=2)
 
     def test_default_color_id(self):
         pool = _FakeCompiledProgramsPool()
         key = (("desc",), 123, None)
-        with mock.patch(
-            "gt4py.next.instrumentation.gpu_profiler.compiled_program.metrics_source_key",
-            return_value="k",
+        with (
+            mock.patch(
+                "gt4py.next.instrumentation.gpu_profiler.compiled_program.metrics_source_key",
+                return_value="k",
+            ),
+            mock.patch.object(gpu_profiler, "time_range") as mock_time_range,
         ):
-            profiler = gpu_profiler.CompiledProgramCallProfiler(
-                program_pool=pool,
+            gpu_profiler.CompiledProgramCallProfiler(
+                program_pool=cast(compiled_program.CompiledProgramsPool, pool),
                 key=key,
                 args=(),
                 kwargs={},
                 offset_provider={},
             )
-        assert profiler.color_id == 2
+        assert mock_time_range.call_args.kwargs["color_id"] == 2
 
     def test_custom_color_id_from_definition(self):
         pool = _FakeCompiledProgramsPool()
+        pool.definition.compiled_program_color_id = 99
+        key = (("desc",), 123, None)
+        try:
+            with (
+                mock.patch(
+                    "gt4py.next.instrumentation.gpu_profiler.compiled_program.metrics_source_key",
+                    return_value="k",
+                ),
+                mock.patch.object(gpu_profiler, "time_range") as mock_time_range,
+            ):
+                gpu_profiler.CompiledProgramCallProfiler(
+                    program_pool=cast(compiled_program.CompiledProgramsPool, pool),
+                    key=key,
+                    args=(),
+                    kwargs={},
+                    offset_provider={},
+                )
+            assert mock_time_range.call_args.kwargs["color_id"] == 99
+        finally:
+            del pool.definition.compiled_program_color_id
+
+    def test_unrelated_color_id_attribute_is_ignored(self):
+        pool = _FakeCompiledProgramsPool()
         pool.definition.color_id = 99
         key = (("desc",), 123, None)
-        with mock.patch(
-            "gt4py.next.instrumentation.gpu_profiler.compiled_program.metrics_source_key",
-            return_value="k",
+        try:
+            with (
+                mock.patch(
+                    "gt4py.next.instrumentation.gpu_profiler.compiled_program.metrics_source_key",
+                    return_value="k",
+                ),
+                mock.patch.object(gpu_profiler, "time_range") as mock_time_range,
+            ):
+                gpu_profiler.CompiledProgramCallProfiler(
+                    program_pool=cast(compiled_program.CompiledProgramsPool, pool),
+                    key=key,
+                    args=(),
+                    kwargs={},
+                    offset_provider={},
+                )
+            assert mock_time_range.call_args.kwargs["color_id"] == 2
+        finally:
+            del pool.definition.color_id
+
+    def test_stores_time_range_on_instance(self):
+        pool = _FakeCompiledProgramsPool()
+        key = (("desc",), 123, None)
+        sentinel_tr = mock.MagicMock(name="time_range_instance")
+        with (
+            mock.patch(
+                "gt4py.next.instrumentation.gpu_profiler.compiled_program.metrics_source_key",
+                return_value="k",
+            ),
+            mock.patch.object(gpu_profiler, "time_range", return_value=sentinel_tr),
         ):
             profiler = gpu_profiler.CompiledProgramCallProfiler(
-                program_pool=pool,
+                program_pool=cast(compiled_program.CompiledProgramsPool, pool),
                 key=key,
                 args=(),
                 kwargs={},
                 offset_provider={},
             )
-        assert profiler.color_id == 99
+        assert profiler.time_range is sentinel_tr
 
 
 # --- ProgramProfiler enter/exit ---
 class TestProgramProfilerContextManager:
     def test_enter_exit_delegates_to_time_range(self):
         profiler = gpu_profiler.ProgramCallProfiler.__new__(gpu_profiler.ProgramCallProfiler)
-        profiler.name = "test_op"
-        profiler.color_id = 5
-
         fake_tr = mock.MagicMock()
-        fake_tr.__enter__ = mock.MagicMock(return_value=fake_tr)
-        fake_tr.__exit__ = mock.MagicMock(return_value=None)
+        profiler.time_range = fake_tr
 
-        with mock.patch.object(gpu_profiler, "time_range", return_value=fake_tr) as mock_time_range:
-            profiler.__enter__()
-            mock_time_range.assert_called_once_with("test_op", color_id=5)
-            fake_tr.__enter__.assert_called_once()
+        profiler.__enter__()
+        fake_tr.__enter__.assert_called_once_with()
 
-            profiler.__exit__(None, None, None)
-            fake_tr.__exit__.assert_called_once_with(None, None, None)
+        profiler.__exit__(None, None, None)
+        fake_tr.__exit__.assert_called_once_with(None, None, None)
+
+    def test_exit_forwards_exception_info(self):
+        profiler = gpu_profiler.CompiledProgramCallProfiler.__new__(
+            gpu_profiler.CompiledProgramCallProfiler
+        )
+        fake_tr = mock.MagicMock()
+        profiler.time_range = fake_tr
+
+        exc_type = ValueError
+        exc = ValueError("boom")
+        profiler.__exit__(exc_type, exc, None)
+        fake_tr.__exit__.assert_called_once_with(exc_type, exc, None)

@@ -102,8 +102,10 @@ _profile_ctx_manager_lock: threading.Lock = threading.Lock()
 def profile_calls() -> Generator[None, None, None]:
     """Context manager that enables GPU profiling of GT4Py program calls within its scope."""
     start_profiling_calls()
-    yield
-    stop_profiling_calls()
+    try:
+        yield
+    finally:
+        stop_profiling_calls()
 
 
 def start_profiling_calls() -> None:
@@ -113,10 +115,10 @@ def start_profiling_calls() -> None:
     Repeated calls will not start a second session. Pairs with :func:`stop_profiling_calls`.
     """
     global _profile_ctx_manager
-    hooks.program_call_context.register(ProgramCallProfiler, index=0)
-    hooks.compiled_program_call_context.register(CompiledProgramCallProfiler, index=0)
     with _profile_ctx_manager_lock:
         if _profile_ctx_manager is None:
+            hooks.program_call_context.register(ProgramCallProfiler, index=0)
+            hooks.compiled_program_call_context.register(CompiledProgramCallProfiler, index=0)
             _profile_ctx_manager = profile()
             _profile_ctx_manager.__enter__()
 
@@ -126,23 +128,21 @@ def stop_profiling_calls() -> None:
     global _profile_ctx_manager
     with _profile_ctx_manager_lock:
         if _profile_ctx_manager is not None:
+            hooks.program_call_context.remove(ProgramCallProfiler)
+            hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
             _profile_ctx_manager.__exit__(None, None, None)
             _profile_ctx_manager = None
-    hooks.program_call_context.remove(ProgramCallProfiler)
-    hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
 
 
 class ProgramProfiler(contextlib.AbstractContextManager):
     """Base context manager that wraps a program execution in a time range."""
 
-    name: str
     time_range: cupyx_profiler.time_range
-    color_id: int
 
-    __slots__ = ("color_id", "name", "time_range")
+    __slots__ = ("time_range",)
 
     def __enter__(self) -> None:
-        self.time_range = time_range(self.name, color_id=self.color_id).__enter__()
+        self.time_range.__enter__()
 
     def __exit__(
         self,
@@ -156,9 +156,7 @@ class ProgramProfiler(contextlib.AbstractContextManager):
 class ProgramCallProfiler(ProgramProfiler):
     """Hook-compatible profiler that emits a time range around each program call."""
 
-    color_id: int = (
-        1  # default color ID for program calls, can be overridden by program definitions
-    )
+    color_id: int = 1  # default for program calls, program definitions can override it
 
     def __init__(
         self,
@@ -168,17 +166,16 @@ class ProgramCallProfiler(ProgramProfiler):
         enable_jit: bool,
         kwargs: dict[str, Any],
     ) -> None:
-        self.name = program.__name__
-        if (color_id := getattr(program.definition, "color_id", None)) is not None:
-            self.color_id = color_id
+        self.time_range = time_range(
+            program.__name__,
+            color_id=getattr(program.definition, "program_color_id", self.color_id),
+        )
 
 
 class CompiledProgramCallProfiler(ProgramProfiler):
     """Hook-compatible profiler that emits a time range around each compiled program dispatch."""
 
-    color_id: int = (
-        2  # default color ID for program calls, can be overridden by program definitions
-    )
+    color_id: int = 2  # default for compiled program calls, program definitions can override it
 
     def __init__(
         self,
@@ -188,6 +185,7 @@ class CompiledProgramCallProfiler(ProgramProfiler):
         kwargs: dict[str, Any],
         offset_provider: common.OffsetProvider,
     ) -> None:
-        self.name = compiled_program.metrics_source_key(program_pool, key)
-        if (color_id := getattr(program_pool.definition, "color_id", None)) is not None:
-            self.color_id = color_id
+        self.time_range = time_range(
+            compiled_program.metrics_source_key(program_pool, key),
+            color_id=getattr(program_pool.definition, "compiled_program_color_id", self.color_id),
+        )
