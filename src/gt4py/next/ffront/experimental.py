@@ -20,12 +20,12 @@ def as_offset(offset_: FieldOffset, field: common.Field, /) -> common.Connectivi
 
 @WhereBuiltinFunction
 def concat_where(
-    cond: common.Domain,
+    domain: common.Domain,
     true_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     false_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     /,
 ) -> common.Field | Tuple:
-    """Assemble a field by selecting from ``true_field`` where ``cond`` applies and from ``false_field`` elsewhere.
+    """Assemble a field by selecting from ``true_field`` where ``domain`` applies and from ``false_field`` elsewhere.
 
     Unlike ``where`` (element-wise selection via a boolean mask field), ``concat_where``
     works on **domain regions**: the condition is a ``Domain`` (not a ``Field``), and the
@@ -35,7 +35,7 @@ def concat_where(
     The condition must be a 1D ``Domain`` (e.g. ``I < 5``).
 
     Args:
-        cond: 1D Domain specifying the "true" region.
+        domain: 1D Domain specifying the "true" region.
         true_field: Field (or scalar) providing values inside the domain region.
         false_field: Field (or scalar) providing values outside the domain region.
 
