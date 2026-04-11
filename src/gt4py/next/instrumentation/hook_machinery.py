@@ -165,7 +165,7 @@ def event_hook(definition: Callable[P, None]) -> EventHook[P]:
 
 @dataclasses.dataclass(slots=True)
 class ContextHook(
-    contextlib.AbstractContextManager, _BaseHook[contextlib.AbstractContextManager, P]
+    _BaseHook[contextlib.AbstractContextManager, P], contextlib.AbstractContextManager
 ):
     """
     Context hook specification.
