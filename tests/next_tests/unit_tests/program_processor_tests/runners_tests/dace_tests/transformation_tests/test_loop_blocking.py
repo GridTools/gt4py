@@ -1613,7 +1613,7 @@ def test_loop_blocking_direct_access_node_scalar():
 def _make_loop_blocking_sdfg_with_everything() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry
 ]:
-    sdfg = dace.SDFG(util.unique_name("sdfg_with_inner_semi_independent_map"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("sdfg_with_inner_semi_independent_map"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array("A", shape=(40, 8), dtype=dace.float64, transient=False)
