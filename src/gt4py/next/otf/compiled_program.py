@@ -8,12 +8,16 @@
 
 from __future__ import annotations
 
+import collections
 import concurrent.futures
 import contextlib
+import contextvars
 import dataclasses
 import functools
 import itertools
+import threading
 import warnings
+import weakref
 from collections.abc import Callable, Hashable, Sequence
 from typing import Any, Generic, TypeAlias, TypeVar
 
@@ -28,7 +32,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.otf import arguments, stages
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.utils import tree_map
 
 
@@ -43,40 +47,65 @@ ArgStaticDescriptorsByType: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
 ]
 
+#: Counter that uniquely identifies every compiled program pool created from the same root.
+#: It is only used to give a meaningful name to the metrics source key.
+_pools_per_root: collections.Counter = collections.Counter()
+_pools_per_root_lock: threading.Lock = threading.Lock()
 
-def _make_pool_root(
-    program_definition: ffront_stages.DSLDefinition, backend: gtx_backend.Backend
-) -> tuple[str, str]:
-    return (program_definition.definition.__name__, backend.name)
+# Cache metrics source keys for each compiled program pool id and key.
+# Note: we use a weakref finalizer to remove entries from this cache when a
+# compiled program pool is deleted, to avoid creating false cache entries
+# since the id of the program pool could be reused by another pool once the
+# original one has been deleted.
+_metrics_source_key_cache: contextvars.ContextVar[dict[tuple[int, CompiledProgramsKey], str]] = (
+    contextvars.ContextVar("_metrics_source_key_cache")
+)
 
 
-@functools.cache
-def _metrics_prefix_from_pool_root(root: tuple[str, str]) -> str:
-    """Generate a metrics prefix from a compiled programs pool root."""
-    return f"{root[0]}<{root[1]}>"
+def metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> str:
+    """Generate a metrics source key from a concrete item of a compiled programs pool."""
+    _metrics_key_cache = _metrics_source_key_cache.get(None)
+    if _metrics_key_cache is None:
+        _metrics_key_cache = {}
+        _metrics_source_key_cache.set(_metrics_key_cache)
+    try:
+        return _metrics_key_cache[(id(pool), key)]
+    except KeyError:
+        source_key = f"{pool.root[0]}<{pool.root[1]}>#{_pools_per_root[pool.root]}[{hash(key)}]"
+        source_key_cache_entry = (id(pool), key)
+        _metrics_key_cache[source_key_cache_entry] = source_key
+        # Use a finalizer to remove the entry from the cache once the pool is deleted
+        weakref.finalize(
+            pool,
+            lambda entry, cache: cache.pop(entry, None),
+            source_key_cache_entry,
+            _metrics_key_cache,
+        )
+        return source_key
 
 
 @hook_machinery.event_hook
 def compile_variant_hook(
-    program_definition: ffront_stages.DSLDefinition,
-    backend: gtx_backend.Backend,
-    offset_provider: common.OffsetProviderType | common.OffsetProvider,
-    argument_descriptors: ArgStaticDescriptorsByType,
+    program_pool: CompiledProgramsPool,
     key: CompiledProgramsKey,
+    backend: gtx_backend.Backend,
+    argument_descriptors: ArgStaticDescriptorsByType,
+    offset_provider: common.OffsetProviderType | common.OffsetProvider,
 ) -> None:
     """Callback hook invoked before compiling a program variant."""
 
     if metrics.is_any_level_enabled():
         # Create a new metrics entity for this compiled program variant and
         # attach relevant metadata to it.
-        source_key = f"{_metrics_prefix_from_pool_root(_make_pool_root(program_definition, backend))}[{hash(key)}]"
+        source_key = metrics_source_key(program_pool, key)
         assert source_key not in metrics.sources, (
             "The key for the program variant being compiled is already set!!"
         )
 
         metrics.sources[source_key].metadata |= dict(
-            name=program_definition.definition.__name__,
+            name=program_pool.definition_stage.definition.__name__,
             backend=backend.name,
+            compiled_program_pool_id=id(program_pool),
             compiled_program_pool_key=hash(key),
             **{
                 f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
@@ -84,15 +113,24 @@ def compile_variant_hook(
             },
         )
 
+    if __debug__:
+        # Note: We set the stack level to point to something internally as we don't want to show this warning for every program call.
+        # It's an ad-hoc pragmatic choice that could be revisited in the future.
+        warnings.warn(
+            "Python is not running in optimized mode, which may impact performance."
+            " Consider running with `python -O` or setting the environment"
+            " variable `PYTHONOPTIMIZE=1`.",
+            stacklevel=3,
+        )
+
 
 @hook_machinery.context_hook
 def compiled_program_call_context(
-    compiled_program: stages.ExecutableProgram,
+    program_pool: CompiledProgramsPool,
+    key: CompiledProgramsKey,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     offset_provider: common.OffsetProvider,
-    root: tuple[str, str],
-    key: CompiledProgramsKey,
 ) -> contextlib.AbstractContextManager:
     """
     Hook called at the beginning and end of a compiled program call.
@@ -112,7 +150,7 @@ def compiled_program_call_context(
     # which will take care of unsetting it. This is because the compiled program call
     # is part of a program call, but we want the metrics to be associated with a
     # specific compiled program variant, not just the generic outer program.
-    return metrics.metrics_setter_at_enter(f"{_metrics_prefix_from_pool_root(root)}[{hash(key)}]")
+    return metrics.metrics_source_key_setter(metrics_source_key(program_pool, key))
 
 
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
@@ -170,9 +208,12 @@ def _make_param_context_from_func_type(
     """
     params = func_type.pos_or_kw_args | func_type.kw_only_args
     return {
-        param: type_info.apply_to_primitive_constituents(
-            type_map, type_, tuple_constructor=lambda *els: tuple(els)
-        )
+        param: ffront_type_info.tree_map_type(
+            # note(tehrengruber): Mapping all collections to tuples is and must be the same as in
+            #  :ref:`arguments.extract`.
+            type_map,
+            result_collection_constructor=lambda _, els: tuple(els),
+        )(type_)
         for param, type_ in params.items()
     }
 
@@ -311,7 +352,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
     @functools.cached_property
     def root(self) -> tuple[str, str]:
-        return _make_pool_root(self.definition_stage, self.backend)
+        result = (self.definition_stage.definition.__name__, self.backend.name)
+        with _pools_per_root_lock:
+            _pools_per_root[result] += 1
+        return result
 
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
@@ -345,11 +389,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             # type, add the argument types to the cache key as the argument types are used during
             # compilation. In case the program is not generic we can avoid the potentially
             # expensive type deduction for all arguments and not include it in the key.
-            warnings.warn(
-                "Calling generic programs / direct calls to scan operators are not optimized. "
-                "Consider calling a specialized version instead.",
-                stacklevel=2,
-            )
+            if enable_jit:
+                warnings.warn(
+                    "Calling generic programs / direct calls to scan operators are not optimized. "
+                    "Consider calling a specialized version instead.",
+                    stacklevel=3,
+                )
             arg_specialization_key = eve_utils.content_hash(
                 (
                     tuple(type_translation.from_value(arg) for arg in canonical_args),
@@ -396,9 +441,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             else:
                 raise RuntimeError("No program compiled for this set of static arguments.") from e
 
-        with compiled_program_call_context(
-            compiled_program, args, kwargs, offset_provider, self.root, key
-        ):
+        with compiled_program_call_context(self, key, args, kwargs, offset_provider):
             compiled_program(*args, **kwargs, offset_provider=offset_provider)
 
     @functools.cached_property
@@ -488,7 +531,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             self._validate_argument_descriptor_mapping()
         else:
             for descr_cls, descriptor_expr_mapping in argument_descriptors.items():
-                if (expected := set(self.argument_descriptor_mapping[descr_cls])) != (
+                if (expected := set(self.argument_descriptor_mapping.get(descr_cls, {}))) != (
                     got := set(descriptor_expr_mapping.keys())
                 ):
                     raise ValueError(
@@ -502,8 +545,6 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         for descr_cls, exprs in self.argument_descriptor_mapping.items():
             for expr in exprs:
                 try:
-                    # TODO(tehrengruber): Re-evaluate the way we validate here when we add support
-                    #  for containers.
                     if any(
                         v is not None for v in gtx_utils.flatten_nested_tuple(eval(expr, context))
                     ):
@@ -587,11 +628,11 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
         )
         compile_variant_hook(
-            self.definition_stage,
-            self.backend,
-            offset_provider=offset_provider,
-            argument_descriptors=argument_descriptors,
+            self,
             key=key,
+            backend=self.backend,
+            argument_descriptors=argument_descriptors,
+            offset_provider=offset_provider,
         )
 
         if _async_compilation_pool is None:

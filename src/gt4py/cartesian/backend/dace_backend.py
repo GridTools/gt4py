@@ -14,11 +14,10 @@ import pathlib
 import re
 from typing import TYPE_CHECKING, ClassVar
 
-from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
+from dace import SDFG, DebugInfo, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
-from dace.transformation.passes import SimplifyPass
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config, definitions
@@ -146,7 +145,10 @@ def _sdfg_add_arrays_and_edges(
 
             if name in inputs:
                 state.add_edge(
-                    state.add_read(name),
+                    state.add_read(
+                        name,
+                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
+                    ),
                     None,
                     nsdfg,
                     name,
@@ -156,7 +158,10 @@ def _sdfg_add_arrays_and_edges(
                 state.add_edge(
                     nsdfg,
                     name,
-                    state.add_write(name),
+                    state.add_write(
+                        name,
+                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
+                    ),
                     None,
                     Memlet(name, subset=subsets.Range(ranges)),
                 )
@@ -169,7 +174,10 @@ def _sdfg_add_arrays_and_edges(
             )
             if name in inputs:
                 state.add_edge(
-                    state.add_read(name),
+                    state.add_read(
+                        name,
+                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
+                    ),
                     None,
                     nsdfg,
                     name,
@@ -179,7 +187,10 @@ def _sdfg_add_arrays_and_edges(
                 state.add_edge(
                     nsdfg,
                     name,
-                    state.add_write(name),
+                    state.add_write(
+                        name,
+                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
+                    ),
                     None,
                     Memlet(name),
                 )
@@ -256,18 +267,13 @@ def freeze_origin_domain_sdfg(
     wrapper_sdfg = SDFG("frozen_" + inner_sdfg.name)
     state = wrapper_sdfg.add_state("frozen_" + inner_sdfg.name + "_state")
 
-    inputs = set()
-    outputs = set()
-    for inner_state in inner_sdfg.nodes():
-        for node in inner_state.nodes():
-            if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
-                continue
-            if node.has_reads(inner_state):
-                inputs.add(node.data)
-            if node.has_writes(inner_state):
-                outputs.add(node.data)
+    # gather inputs & outputs (i.e. reads/writes without transients)
+    inputs, outputs = inner_sdfg.read_and_write_sets()
+    inputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, inputs))
+    outputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, outputs))
 
-    nsdfg = state.add_nested_sdfg(inner_sdfg, None, inputs, outputs)
+    # fake DebugInfo to avoid calls to `inspect`
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs, debuginfo=DebugInfo(123456))
 
     _sdfg_add_arrays_and_edges(
         field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
@@ -361,9 +367,9 @@ class SDFGManager:
         if validate:
             sdfg.validate()
         SDFGManager._strip_history(sdfg)
-        sdfg.save(str(path))
+        sdfg.save(str(path), compress=True)
 
-    def sdfg_via_schedule_tree(self, *, validate: bool = True, simplify: bool = True) -> SDFG:
+    def sdfg_via_schedule_tree(self, *, validate: bool = False, simplify: bool = True) -> SDFG:
         """Lower OIR into an SDFG via Schedule Tree transpile first.
 
         Cache the SDFG into the manager for re-use, unless the builder has a no-caching policy.
@@ -372,7 +378,7 @@ class SDFGManager:
             validate: Validate resulting SDFG
             simplify: Simplify resulting SDFG
         """
-        filename = f"{self.builder.module_name}.sdfg"
+        filename = f"{self.builder.module_name}.sdfgz"
         path = (
             pathlib.Path(os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd()))
             / filename
@@ -415,7 +421,7 @@ class SDFGManager:
         sdfg = stree.as_sdfg(
             validate=validate,
             simplify=simplify,
-            skip={"ScalarToSymbolPromotion"},
+            skip={"ScalarToSymbolPromotion", "ControlFlowRaising"},
         )
 
         if do_cache:
@@ -431,7 +437,7 @@ class SDFGManager:
 
     def _frozen_sdfg(self, *, origin: dict[str, tuple[int, ...]], domain: tuple[int, ...]) -> SDFG:
         basename = self.builder.module_path.with_suffix("")
-        path = pathlib.Path(f"{basename}_{shash(origin, domain)}.sdfg")
+        path = pathlib.Path(f"{basename}_{shash(origin, domain)}.sdfgz")
 
         # check if the same sdfg is already loaded
         do_cache = self.builder.caching.name != "nocache"
@@ -478,7 +484,7 @@ class DaCeExtGenerator(BackendCodegen):
             sdfg,
             self.backend.storage_info,
         )
-        SimplifyPass(validate=True, skip={"ScalarToSymbolPromotion"}).apply_pass(sdfg, {})
+        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion"})
 
         # NOTE
         # The glue code in DaCeComputationCodegen.apply() (just below) will define all the
@@ -608,10 +614,19 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
-        computations = cls._postprocess_dace_code(code_objects, is_gpu)
-        if not is_gpu and any(
-            array.transient and array.lifetime == dtypes.AllocationLifetime.Persistent
-            for *_, array in sdfg.arrays_recursive()
+        has_all_sequential_compute = all(
+            me.schedule == dtypes.ScheduleType.Sequential
+            for me, state in sdfg.all_nodes_recursive()
+            if isinstance(me, nodes.MapEntry)
+        )
+
+        if (
+            not is_gpu
+            and not has_all_sequential_compute
+            and any(
+                array.transient and array.lifetime == dtypes.AllocationLifetime.Persistent
+                for *_, array in sdfg.arrays_recursive()
+            )
         ):
             omp_threads = "int omp_max_threads = omp_get_max_threads();"
             omp_header = "#include <omp.h>"
@@ -628,6 +643,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
             state_suffix=config.Config.get("compiler.codegen_state_struct_suffix"),
         )
+        computations = cls._postprocess_dace_code(code_objects, is_gpu)
         generated_code = f"""\
 #include <gridtools/sid/sid_shift_origin.hpp>
 #include <gridtools/sid/allocator.hpp>
@@ -850,7 +866,7 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
         res = super().generate_class_members()
         filepath = self.builder.module_path.joinpath(
             os.path.dirname(self.builder.module_path),
-            self.builder.module_name + ".sdfg",
+            self.builder.module_name + ".sdfgz",
         )
         res += f'\nSDFG_PATH = "{filepath}"\n'
         return res

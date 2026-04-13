@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import atexit
 import collections
 import contextlib
 import contextvars
@@ -23,7 +24,7 @@ import time
 import types
 import typing
 from collections.abc import Callable, Mapping
-from typing import ClassVar
+from typing import ClassVar, TypeAlias
 
 import numpy as np
 
@@ -179,14 +180,16 @@ def add_sample_to_current_source(metric_name: str, sample: float) -> None:
 
 
 @dataclasses.dataclass(slots=True)
-class SourceKeyContextManager(contextlib.AbstractContextManager):  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
+class SourceKeySetterAtEnter(contextlib.AbstractContextManager):  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
     """
     A context manager to handle metrics collection source keys.
 
     When entering this context manager it saves the current source key
     for metrics collection and sets the new source key if provided, or
     a default marker indicating no key is set. Upon exiting the context,
-    it resets the source key to its previous state.
+    it does not reset the source key itself, but instead relies on another
+    component (usually an outer `program_call_context`) to reset the
+    source key later.
     """
 
     key: str | None = None
@@ -207,22 +210,30 @@ class SourceKeyContextManager(contextlib.AbstractContextManager):  # type: ignor
         exc_value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
-        if self.previous_cvar_token is not None:
-            _source_key_cvar.reset(self.previous_cvar_token)
+        pass
 
 
-class SourceKeySetterAtEnter(SourceKeyContextManager):
+@dataclasses.dataclass(slots=True)
+class SourceKeyContextManager(SourceKeySetterAtEnter):  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
+    """
+    Another context manager to handle metrics collection source keys.
+
+    It works like `SourceKeySetterAtEnter` at enter, but it additionally
+    resets the source key to its previous state upon exiting the context.
+    """
+
     def __exit__(
         self,
         exc_type_: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
-        pass
+        if self.previous_cvar_token is not None:
+            _source_key_cvar.reset(self.previous_cvar_token)
 
 
-metrics_context = SourceKeyContextManager
-metrics_setter_at_enter = SourceKeySetterAtEnter
+metrics_source_key_setter: TypeAlias = SourceKeySetterAtEnter
+metrics_source_key_context: TypeAlias = SourceKeyContextManager
 
 
 @dataclasses.dataclass(slots=True)
@@ -438,3 +449,26 @@ def dump_json(
     filename: str | pathlib.Path, metric_sources: Mapping[str, Source] | None = None
 ) -> None:
     pathlib.Path(filename).write_text(dumps_json(metric_sources))
+
+
+# Handler registration to automatically dump metrics at program exit if
+# the corresponding configuration flag is set.
+def _dump_metrics_at_exit() -> None:
+    """Dump collected metrics to a file at program exit if required."""
+
+    # It is assumed that 'gt4py.next.config' is still alive at this point
+    if config.DUMP_METRICS_AT_EXIT and (is_any_level_enabled() or sources):
+        try:
+            pathlib.Path(config.DUMP_METRICS_AT_EXIT).write_text(dumps_json())
+            print(
+                f"--- atexit: GT4Py performance metrics saved at {config.DUMP_METRICS_AT_EXIT} ---",
+                file=sys.stderr,
+            )
+        except Exception as e:
+            print(
+                f"--- atexit: ERROR: Failed to automatically save GT4Py performance metrics: ---\n{e}",
+                file=sys.stderr,
+            )
+
+
+atexit.register(_dump_metrics_at_exit)
