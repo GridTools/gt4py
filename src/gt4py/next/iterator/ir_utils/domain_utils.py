@@ -217,8 +217,8 @@ class SymbolicDomain:
                     trace_shifts.Sentinel.ALL_NEIGHBORS,
                     trace_shifts.Sentinel.VALUE,
                 ]
-                old_dim = connectivity_type.source_dim
-                new_dim = connectivity_type.codomain
+                old_dim = connectivity.source_dim
+                new_dim = connectivity.codomain
                 assert new_dim not in new_ranges or old_dim == new_dim
                 if symbolic_domain_sizes is not None and new_dim.value in symbolic_domain_sizes:
                     new_range = SymbolicRange(
