@@ -36,7 +36,7 @@ def get_array_shape_symbols(
     for array_size, size in zip(array_desc.shape, ndarray.shape, strict=True):
         if str(array_size).isdigit():
             if int(array_size) != size:
-                raise RuntimeError(f"Array shape mismatch: expected {array_size}, got {size}")
+                raise RuntimeError(f"Array shape mismatch: expected {array_size}, got {size}.")
         else:
             assert isinstance(array_size, dace.symbol)
             array_symbols[array_size.name] = size
@@ -52,7 +52,7 @@ def get_array_stride_symbols(
         stride = value // ndarray.itemsize
         if str(array_stride).isdigit():
             if int(array_stride) != stride:
-                raise RuntimeError(f"Array stride mismatch: expected {array_stride}, got {stride}")
+                raise RuntimeError(f"Array stride mismatch: expected {array_stride}, got {stride}.")
         else:
             assert isinstance(array_stride, dace.symbol)
             array_symbols[array_stride.name] = stride
