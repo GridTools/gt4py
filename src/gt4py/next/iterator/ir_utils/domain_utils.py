@@ -197,7 +197,7 @@ class SymbolicDomain:
                 assert len(connectivity.domain.dims) == 1
                 # cartesian offset
 
-                old_dim = connectivity.domain.dims[0]
+                old_dim = connectivity.domain_dim
                 new_dim = connectivity.codomain
 
                 assert new_dim not in new_ranges or old_dim == new_dim
