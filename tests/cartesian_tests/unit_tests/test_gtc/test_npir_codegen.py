@@ -197,10 +197,19 @@ def test_field_definition() -> None:
 
 def test_temp_definition() -> None:
     result = NpirCodegen().visit(
-        TemporaryDeclFactory(name="a", offset=(1, 2), padding=(3, 4), dtype=common.DataType.FLOAT32)
+        TemporaryDeclFactory(
+            name="a",
+            offset=(1, 2),
+            padding=(3, 4),
+            dtype=common.DataType.FLOAT32,
+            dimensions=(True, True, True),
+        )
     )
     print(result)
-    assert result == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), np.float32, (1, 2, 0))"
+    assert (
+        result
+        == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), np.float32, (1, 2, 0), (True, True, True))"
+    )
 
 
 def test_vector_arithmetic() -> None:

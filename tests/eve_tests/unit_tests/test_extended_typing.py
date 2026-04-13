@@ -208,78 +208,27 @@ def test_get_actual_type(instance, expected):
     assert xtyping.get_actual_type(instance) == expected
 
 
-class TestHashableTypings:
-    @pytest.mark.parametrize(
-        "x",
-        [
-            int,
-            float,
-            complex,
-            str,
-            tuple,
-            frozenset,
-            1,
-            -2.0,
-            "foo",
-            (),
-            (1, 3.0),
-            frozenset([1, 2, 3]),
-        ],
-    )
-    def test_is_value_hashable(self, x):
-        assert xtyping.is_value_hashable(x)
+def test_has_custom_hash_abc():
+    assert isinstance(4, xtyping.HasCustomHash)
+    assert isinstance(True, xtyping.HasCustomHash)
+    assert isinstance((), xtyping.HasCustomHash)
 
-    @pytest.mark.parametrize("x", [list(), {1, 2, 3}, dict()])
-    def test_is_not_value_hashable(self, x):
-        assert not xtyping.is_value_hashable(x)
+    class A:
+        def __hash__(self):
+            return 3
 
-    @pytest.mark.parametrize(
-        "t",
-        [
-            int,
-            str,
-            float,
-            tuple,
-            Tuple,
-            Tuple[int],
-            Tuple[int, ...],
-            Tuple[Tuple[int, ...], ...],
-            FrozenSet,
-            Type,
-            type(None),
-            None,
-        ],
-    )
-    def test_is_value_hashable_typing(self, t):
-        assert xtyping.is_value_hashable_typing(t)
+    assert isinstance(A(), xtyping.HasCustomHash)
 
-    @pytest.mark.parametrize(
-        "t", [dict, Dict, Dict[str, int], Sequence[int], List[str], Any, TypeVar("T")]
-    )
-    def test_is_not_value_hashable_type(self, t):
-        assert not xtyping.is_value_hashable_typing(t)
+    # PEP-683 Immortal objects have custom hash
+    assert isinstance(None, xtyping.HasCustomHash) == (sys.version_info >= (3, 12))
 
-    def test_has_custom_hash_abc(self):
-        assert isinstance(4, xtyping.HasCustomHash)
-        assert isinstance(True, xtyping.HasCustomHash)
-        assert isinstance((), xtyping.HasCustomHash)
+    class B:
+        __hash__ = None
 
-        class A:
-            def __hash__(self):
-                return 3
+    assert not isinstance(B(), xtyping.HasCustomHash)
 
-        assert isinstance(A(), xtyping.HasCustomHash)
-
-        # PEP-683 Immortal objects have custom hash
-        assert isinstance(None, xtyping.HasCustomHash) == (sys.version_info >= (3, 12))
-
-        class B:
-            __hash__ = None
-
-        assert not isinstance(B(), xtyping.HasCustomHash)
-
-        assert not isinstance(object(), xtyping.HasCustomHash)
-        assert not isinstance(type, xtyping.HasCustomHash)
+    assert not isinstance(object(), xtyping.HasCustomHash)
+    assert not isinstance(type, xtyping.HasCustomHash)
 
 
 def test_is_protocol():

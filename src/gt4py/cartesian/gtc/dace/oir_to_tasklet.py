@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import operator
+import warnings
 from dataclasses import dataclass
 from functools import reduce
 from typing import Any, Final
@@ -101,9 +102,26 @@ class OIRToTasklet(eve.NodeVisitor):
         # Gather all parts of the variable name in this list
         name_parts = [tasklet_name]
 
+        # Domain sizes of data dimensions
+        data_domains: list[int] = (
+            ctx.tree.containers[node.name].shape[-len(node.data_index) :] if node.data_index else []
+        )
+
         # Data dimension subscript
         data_indices: list[str] = []
-        for index in node.data_index:
+        for dimension, index in enumerate(node.data_index):
+            # special case: domain size of this data dimension is one
+            if data_domains[dimension] == 1:
+                if not isinstance(index, oir.Literal):
+                    warnings.warn(
+                        f"Data dimension {dimension} of field {node.name} has static size one. Accessing without a Literal is suspicious.",
+                        stacklevel=2,
+                    )
+
+                # no need for data dimension subscript because that access
+                # is entirely captured in the memlet.
+                continue
+
             data_indices.append(self.visit(index, ctx=ctx, is_target=False))
 
         if isinstance(node.offset, oir.AbsoluteKIndex):
@@ -139,9 +157,6 @@ class OIRToTasklet(eve.NodeVisitor):
             return "".join(filter(None, name_parts))
 
         # Build Memlet and add it to inputs/outputs
-        data_domains: list[int] = (
-            ctx.tree.containers[node.name].shape[-len(node.data_index) :] if node.data_index else []
-        )
         memlet = Memlet(
             data=node.name,
             subset=_memlet_subset(node, data_domains, ctx),
@@ -253,9 +268,27 @@ class OIRToTasklet(eve.NodeVisitor):
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> str:
         function_name = self.visit(node.func, **kwargs)
+
+        # special case for integer powers of non-integer base
+        base = node.args[0]
+        if node.func == common.NativeFunction.POW and not base.dtype.isinteger():
+            exponent = node.args[1]
+            if isinstance(exponent, oir.Literal) and exponent.dtype.isinteger():
+                exp_value = int(exponent.value)
+                if exp_value == 0:
+                    return self.visit(oir.Literal(value="1", dtype=base.dtype), **kwargs)
+                if exp_value >= 1 and exp_value < 4:
+                    function_name = "dace.math.ipow"
+
         arguments = ",".join([self.visit(a, **kwargs) for a in node.args])
 
         return f"{function_name}({arguments})"
+
+    def visit_IteratorAccess(self, node: oir.IteratorAccess, ctx: Context, **kwargs: Any) -> str:
+        if node.name == tir.Axis.K:
+            return tir.k_symbol(ctx.scope)
+
+        return tir.Axis(node.name).iteration_symbol()
 
     # Not (yet) supported section
     def visit_CacheDesc(self, node: oir.CacheDesc, **kwargs: Any) -> None:

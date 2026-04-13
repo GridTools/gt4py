@@ -14,7 +14,7 @@ from typing import Callable, ClassVar, List
 from gt4py._core import definitions as core_defs
 from gt4py.eve import Node, utils as eve_utils
 from gt4py.next import common, iterator
-from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator import builtins, ir as itir, runtime as iterator_runtime
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -32,7 +32,7 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 TRACING = "tracing"
 
-_tmp_id_generator = eve_utils.UIDGenerator(prefix="tmp")
+_tmp_id_generator = eve_utils.SequentialIDGenerator(prefix="tmp")
 
 
 def monkeypatch_method(cls):
@@ -100,7 +100,7 @@ def _s(id_):
 
 
 def trace_function_argument(arg):
-    if isinstance(arg, iterator.runtime.FundefDispatcher):
+    if isinstance(arg, iterator_runtime.FundefDispatcher):
         make_function_definition(arg.fun)
         return _s(arg.fun.__name__)
     return arg
@@ -148,7 +148,7 @@ def make_node(o):
             return lambdadef(o)
         if hasattr(o, "__code__") and o.__code__.co_flags & inspect.CO_NESTED:
             return lambdadef(o)
-    if isinstance(o, iterator.runtime.Offset):
+    if isinstance(o, iterator_runtime.Offset):
         return OffsetLiteral(value=o.value)
     if isinstance(o, core_defs.Scalar):
         return im.literal_from_value(o)
@@ -187,7 +187,7 @@ def make_function_definition(fun):
 
 
 class FundefTracer:
-    def __call__(self, fundef_dispatcher: iterator.runtime.FundefDispatcher):
+    def __call__(self, fundef_dispatcher: iterator_runtime.FundefDispatcher):
         def fun(*args):
             res = make_function_definition(fundef_dispatcher.fun)
             return res(*args)
@@ -198,7 +198,7 @@ class FundefTracer:
         return iterator.builtins.builtin_dispatch.key == TRACING
 
 
-iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
+iterator_runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
 class TracerContext:
@@ -229,12 +229,12 @@ class TracerContext:
         iterator.builtins.builtin_dispatch.pop_key()
 
 
-@iterator.runtime.set_at.register(TRACING)
+@iterator_runtime.set_at.register(TRACING)
 def set_at(expr: itir.Expr, domain: itir.Expr, target: itir.Expr) -> None:
     TracerContext.add_stmt(itir.SetAt(expr=expr, domain=domain, target=target))
 
 
-@iterator.runtime.if_stmt.register(TRACING)
+@iterator_runtime.if_stmt.register(TRACING)
 def if_stmt(
     cond: itir.Expr, true_branch_f: typing.Callable, false_branch_f: typing.Callable
 ) -> None:
@@ -255,17 +255,17 @@ def if_stmt(
     )
 
 
-@iterator.runtime.temporary.register(TRACING)
+@iterator_runtime.temporary.register(TRACING)
 def temporary(
     domain: itir.Expr,
     dtype: Callable,  # the gt4py type builtin
 ) -> itir.SymRef:
-    id_ = _tmp_id_generator.sequential_id()
+    id_ = next(_tmp_id_generator)
     TracerContext.add_declaration(
         itir.Temporary(
             id=id_,
             domain=domain,
-            dtype=iterator.runtime._dtypebuiltin_to_ts(dtype),
+            dtype=iterator_runtime._dtypebuiltin_to_ts(dtype),
         )
     )
     return itir.SymRef(id=id_)

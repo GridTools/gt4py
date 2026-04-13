@@ -14,13 +14,14 @@ import dataclasses
 import enum
 import functools
 import math
+import sys
 import types
 from collections.abc import Iterable, Mapping, Sequence
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils
+from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -31,6 +32,7 @@ from gt4py.eve.extended_typing import (
     Literal,
     NamedTuple,
     Never,
+    NoReturn,
     Optional,
     ParamSpec,
     Protocol,
@@ -48,6 +50,7 @@ from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
+DimT_co = TypeVar("DimT_co", bound="Dimension", covariant=True)
 ShapeTs = TypeVarTuple("ShapeTs")
 
 
@@ -71,6 +74,8 @@ class DimensionKind(StrEnum):
 
 _DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
+_IMPLICIT_OFFSET_PREFIX: Final[str] = "_Off"
+
 
 def dimension_to_implicit_offset(dim: str) -> str:
     """
@@ -83,7 +88,7 @@ def dimension_to_implicit_offset(dim: str) -> str:
     without having to explicitly define an offset for ``TDim``. This function defines the respective
     naming convention.
     """
-    return f"_{dim}Off"
+    return f"{_IMPLICIT_OFFSET_PREFIX}{dim}"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -98,16 +103,73 @@ class Dimension:
         return NamedIndex(self, val)
 
     def __add__(self, offset: int) -> Connectivity:
-        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
-        from gt4py.next.ffront import fbuiltins
-
-        assert isinstance(self.value, str)
-        return fbuiltins.FieldOffset(
-            dimension_to_implicit_offset(self.value), source=self, target=(self,)
-        )[offset]
+        return CartesianConnectivity(self, offset)
 
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
+
+    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+
+    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+
+    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+
+    def __le__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__eq__` which returns `bool`.
+    def __eq__(self, value: Dimension) -> bool: ...
+    @overload
+    def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value == value.value
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            int_value = cast(core_defs.IntegralScalar, value)
+            return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
+        # This will fallback to default identity comparison if reflection also returns `NotImplemented`,
+        # which does identity comparison, see https://docs.python.org/3/reference/datamodel.html#object.__eq__.
+        return NotImplemented
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__ne__` which returns `bool`.
+    def __ne__(self, value: Dimension) -> bool: ...
+    @overload
+    def __ne__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value != value.value
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            raise NotImplementedError(
+                "'Dimension.__ne__' with an integer value produces two disjoint domains, "
+                "which is not supported. Use 'concat_where(dim < value, ...) "
+                "concat_where(dim > value, ...)' to express the condition, see ADR 22."
+            )
+        return NotImplemented
+
+
+if TYPE_CHECKING:
+    # These exist as on-the fly replacements for Dimension instances
+    # (which are not types) during typechecking (with mypy). We can
+    # track up to four distinct dimensions at a time, everything beyond
+    # becomes AnyDim
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimA(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimB(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimC(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimD(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _AnyDim(Dimension): ...
 
 
 class Infinity(enum.Enum):
@@ -500,6 +562,36 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
+    def __or__(self, other: Domain) -> Domain:
+        """
+        Union of `Domain`s, currently limited to 1D overlapping or adjacent domains.
+
+        Raises `NotImplementedError` for multidimensional domains or disjoint 1D domains.
+        See ADR 22.
+        """
+        if self.ndim > 1 or other.ndim > 1:
+            raise NotImplementedError(
+                "Union of multidimensional domains is not supported, see ADR 22."
+            )
+        if self.ndim == 0:
+            return other
+        if other.ndim == 0:
+            return self
+        if self.dims[0] != other.dims[0]:
+            raise NotImplementedError(
+                f"Union of 1D domains with different dimensions '{self.dims[0]}' and '{other.dims[0]}' is not supported."
+            )
+        first, second = sorted((self, other), key=lambda x: x.ranges[0].start)
+        if first.ranges[0].stop >= second.ranges[0].start:
+            return Domain(
+                dims=(self.dims[0],),
+                ranges=(UnitRange(first.ranges[0].start, second.ranges[0].stop),),
+            )
+        raise NotImplementedError(
+            f"Union of disjoint domains '{first}' and '{second}' is not supported. "
+            f"Use nested 'concat_where' to express non-contiguous conditions, see ADR 22."
+        )
+
     @functools.cached_property
     def slice_at(self) -> utils.IndexerCallable[slice, Domain]:
         """
@@ -695,18 +787,22 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __str__(self) -> str:
         return f"⟨{self.domain!s} → {self.dtype}⟩"
 
+    def __bool__(self) -> NoReturn:
+        raise TypeError(
+            "The truth value of a Field is ambiguous. For one element Fields use '.as_scalar()'."
+        )
+
     @abc.abstractmethod
     def asnumpy(self) -> np.ndarray: ...
+
+    @abc.abstractmethod
+    def as_scalar(self) -> core_defs.ScalarT: ...
 
     @abc.abstractmethod
     def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
-
-    @abc.abstractmethod
-    def as_scalar(self) -> core_defs.ScalarT: ...
-
     # Operators
     @abc.abstractmethod
     def __call__(
@@ -770,6 +866,18 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
+    def __lt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __le__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __gt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __ge__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
     def __and__(self, other: Field | core_defs.ScalarT) -> Field:
         """Only defined for `Field` of value type `bool`."""
 
@@ -788,6 +896,87 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
+#: Type alias for primitive numeric values (i.e. scalars or fields).
+NumericValue: TypeAlias = core_defs.Scalar | Field
+NumericValueT = TypeVar("NumericValueT", bound=NumericValue)
+NUMERIC_VALUE_TYPES: Final[tuple[type[NumericValue], ...]] = xtyping.get_represented_types(
+    NumericValue
+)
+
+#: Type alias for any kind primitive value understood by GT4Py DSL.
+PrimitiveValue: TypeAlias = NumericValue  # For now, only numeric values, in the future it could include functions, enums, ...
+PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_represented_types(
+    PrimitiveValue
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class BufferInfo:
+    """Holds information about a buffer in memory."""
+
+    data_ptr: int
+    ndim: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    byte_strides: tuple[int, ...]
+    device: core_defs.Device
+
+    @classmethod
+    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
+        # TODO(egparedes): Implement this function using __dlpack__ and ctypes.
+        #   The current implementation is messy and only works for numpy and cupy.
+        try:
+            array_ns = ndarray.__array_namespace__()  # type: ignore[attr-defined]
+        except AttributeError:
+            array_ns = sys.modules[ndarray.__class__.__module__]
+
+        array_byte_bounds_func = (
+            getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
+        )
+
+        data_ptr = array_byte_bounds_func(ndarray)[0]
+        ndim = ndarray.ndim
+        shape = ndarray.shape
+        byte_strides = ndarray.strides
+        elem_strides = tuple(s // ndarray.dtype.itemsize for s in byte_strides)
+
+        try:
+            device = core_defs.from_dlpack_device(ndarray.__dlpack_device__())  # type: ignore[attr-defined]
+        except AttributeError as err:
+            ns = ndarray.__class__.__module__
+            if ns.startswith("numpy"):
+                device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+            elif ns.startswith("cupy"):
+                device = core_defs.Device(core_defs.CUPY_DEVICE_TYPE, ndarray.device.id)  # type: ignore[attr-defined]
+            else:
+                raise RuntimeError(f"Unsupported ndarray type '{type(ndarray)}'") from err
+
+        return BufferInfo(
+            data_ptr=data_ptr,
+            ndim=ndim,
+            shape=shape,
+            elem_strides=elem_strides,
+            byte_strides=byte_strides,
+            device=device,
+        )
+
+    @functools.cached_property
+    def hash_key(self) -> int:
+        return hash(
+            (
+                self.data_ptr,
+                self.ndim,
+                self.shape,
+                self.elem_strides,
+                self.byte_strides,
+                self.device,
+            )
+        )
+
+    def __hash__(self) -> int:
+        return self.hash_key
+
+
 class ConnectivityKind(enum.Flag):
     """
     Describes the kind of connectivity field.
@@ -795,10 +984,10 @@ class ConnectivityKind(enum.Flag):
     - `ALTER_DIMS`: change the dimensions of the data field domain.
     - `ALTER_STRUCT`: transform structured of the data inside the field (non-compact transformation).
 
-    | Dims \ Struct |    No                    |    Yes                   |
-    | ------------- | ------------------------ | ------------------------ |
-    |   No          | Translation (I -> I)     | Reshuffling (I x K -> K) |
-    |   Yes         | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
+    | Dims \\ Struct |    No                    |    Yes                   |
+    | -------------- | ------------------------ | ------------------------ |
+    |   No           | Translation (I -> I)     | Reshuffling (I x K -> K) |
+    |   Yes          | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
 
     """
 
@@ -849,10 +1038,10 @@ class NeighborConnectivityType(ConnectivityType):
 
 
 @runtime_checkable
-class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
+class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_co]):
     @property
     @abc.abstractmethod
-    def codomain(self) -> DimT:
+    def codomain(self) -> DimT_co:
         """
         The `codomain` is the set of all indices in a certain `Dimension`.
 
@@ -910,34 +1099,46 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __lt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __le__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __gt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __ge__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __and__(self, other: Field | core_defs.IntegralScalar) -> Never:
@@ -1010,6 +1211,8 @@ def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
 
 OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
 OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
+# Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
+# use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
 
@@ -1034,12 +1237,47 @@ def offset_provider_to_type(
     }
 
 
-def hash_offset_provider_unsafe(offset_provider: OffsetProvider) -> int:
-    """Compute hash of an offset provider on the tuples of key and value id.
+def _get_dimension_name_from_implicit_offset(offset: str) -> str:
+    assert offset.startswith(_IMPLICIT_OFFSET_PREFIX)
+    return offset[len(_IMPLICIT_OFFSET_PREFIX) :]
 
-    Directly using the `id` of the offset provider is not possible as the decorator adds
-    the implicitly defined ones (i.e. to allow the `TDim + 1` syntax) resulting in a
-    different `id` every time. Instead use the `id` of each individual offset provider.
+
+def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
+    """
+    Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
+
+    Note: This function handles implicit offsets. All accesses of `OffsetProvider` or
+    `OffsetProviderType` should go through this function.
+    """
+    # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
+    if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
+        return Dimension(value=_get_dimension_name_from_implicit_offset(offset_tag))
+    if offset_tag not in offset_provider:
+        raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
+    return offset_provider[offset_tag]  # TODO return a valid dimension
+
+
+get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
+
+
+def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
+    """Determine if offset provider has an element for the given offset tag."""
+    try:
+        get_offset(offset_provider, offset_tag)  # type: ignore[arg-type]  # implementation is shared with `get_offset_type`, no need to duplicate the function
+    except KeyError:
+        return False
+    return True
+
+
+def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
+    """
+    Compute hash of an offset provider on the tuples of key and value id.
+
+    This function is unsafe since it uses the `id` of the values in the
+    offset provider, which could generate different hashes for two
+    offset providers that are semantically equal. It additionally relies
+    on the ordering of the items in the mapping, which could also lead to
+    different hashes for semantically equal offset providers.
     """
     return hash(tuple((k, id(v)) for k, v in offset_provider.items()))
 
@@ -1084,7 +1322,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
-        return core_defs.Int32DType()  # type: ignore[return-value]
+        return core_defs.Int32DType()
 
     # This is a workaround to make this class concrete, since `codomain` is an
     # abstract property of the `Connectivity` Protocol.

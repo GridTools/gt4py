@@ -177,7 +177,7 @@ class GTGpuBackend(GTBaseBackend):
         **BaseGTBackend.GT_BACKEND_OPTS,
         "device_sync": {"versioning": True, "type": bool},
     }
-    storage_info = gt_storage.layout.CUDALayout
+    storage_info = gt_storage.layout.GPULayout
 
     def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=True)

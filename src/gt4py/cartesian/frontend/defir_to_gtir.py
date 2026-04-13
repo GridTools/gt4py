@@ -10,10 +10,12 @@ import copy
 import functools
 import itertools
 import numbers
-from typing import Any, Dict, Final, List, Optional, Tuple, Union, cast
+from typing import Any, Final, List, Optional, Tuple, Union, cast
 
 import numpy as np
 
+from gt4py.cartesian import utils
+from gt4py.cartesian.frontend.exceptions import GTScriptSyntaxError
 from gt4py.cartesian.frontend.node_util import (
     IRNodeMapper,
     IRNodeVisitor,
@@ -40,10 +42,12 @@ from gt4py.cartesian.frontend.nodes import (
     HorizontalIf,
     If,
     IterationOrder,
+    IteratorAccess,
     LevelMarker,
     NativeFuncCall,
     NativeFunction,
     Node,
+    RuntimeAxisBound,
     ScalarLiteral,
     StencilDefinition,
     TernaryOpExpr,
@@ -97,12 +101,33 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
     return gtir.Literal(dtype=dtype, value=value)
 
 
+class DataDimensionsChecker(IRNodeVisitor):
+    """Check data dimensions are fully indexed.
+
+    Call on a fully visited Definition IR.
+    """
+
+    @classmethod
+    def apply(cls, def_ir: StencilDefinition, field_decls: dict[str, FieldDecl]) -> None:
+        return cls().visit(def_ir, field_decls=field_decls)
+
+    def visit_FieldRef(self, node: FieldRef, *, field_decls: dict[str, FieldDecl]) -> None:
+        if len(field_decls[node.name].data_dims) != len(node.data_index):
+            cdims = [0] * len(field_decls[node.name].axes)
+            ddims = ["x"] * len(field_decls[node.name].data_dims)
+            raise GTScriptSyntaxError(
+                f"Field {node.name} has data dimensions but no data dimensions index is specified. "
+                f"Use `{node.name}.A{ddims}` or `{node.name}{cdims}{ddims}`.",
+                loc=node.loc,
+            )
+
+
 class UnrollVectorAssignments(IRNodeMapper):
     @classmethod
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
 
-    def _is_vector_assignment(self, stmt: Node, fields_decls: Dict[str, FieldDecl]) -> bool:
+    def _is_vector_assignment(self, stmt: Node, fields_decls: dict[str, FieldDecl]) -> bool:
         if not isinstance(stmt, Assign):
             return False
 
@@ -110,7 +135,7 @@ class UnrollVectorAssignments(IRNodeMapper):
         return fields_decls[stmt.target.name].data_dims and not stmt.target.data_index
 
     def visit_StencilDefinition(
-        self, node: StencilDefinition, *, fields_decls: Dict[str, FieldDecl], **kwargs
+        self, node: StencilDefinition, *, fields_decls: dict[str, FieldDecl], **kwargs
     ) -> StencilDefinition:
         node = copy.deepcopy(node)
 
@@ -135,7 +160,7 @@ class UnrollVectorAssignments(IRNodeMapper):
         return [len(a), *self._nested_list_dim(a[0])]
 
     def visit_Assign(
-        self, node: Assign, *, fields_decls: Dict[str, FieldDecl], **kwargs
+        self, node: Assign, *, fields_decls: dict[str, FieldDecl], **kwargs
     ) -> Union[gtir.ParAssignStmt, List[gtir.ParAssignStmt]]:
         if self._is_vector_assignment(node, fields_decls):
             assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
@@ -171,7 +196,7 @@ class UnrollVectorAssignments(IRNodeMapper):
 
 class UnrollVectorExpressions(IRNodeMapper):
     @classmethod
-    def apply(cls, root, *, expected_dim: Tuple[int, ...], fields_decls: Dict[str, FieldDecl]):
+    def apply(cls, root, *, expected_dim: Tuple[int, ...], fields_decls: dict[str, FieldDecl]):
         result = cls().visit(root, fields_decls=fields_decls)
         # if the expression is just a scalar broadcast to the expected dimensions
         if not isinstance(result, list):
@@ -180,7 +205,7 @@ class UnrollVectorExpressions(IRNodeMapper):
             )
         return result
 
-    def visit_FieldRef(self, node: FieldRef, *, fields_decls: Dict[str, FieldDecl], **kwargs):
+    def visit_FieldRef(self, node: FieldRef, *, fields_decls: dict[str, FieldDecl], **kwargs):
         name = node.name
         if fields_decls[name].data_dims:
             field_list: List[Union[FieldRef, List[FieldRef]]] = []
@@ -222,7 +247,7 @@ class UnrollVectorExpressions(IRNodeMapper):
 
         return node
 
-    def visit_UnaryOpExpr(self, node: UnaryOpExpr, *, fields_decls: Dict[str, FieldDecl], **kwargs):
+    def visit_UnaryOpExpr(self, node: UnaryOpExpr, *, fields_decls: dict[str, FieldDecl], **kwargs):
         if node.op == UnaryOperator.TRANSPOSED:
             node = self.visit(node.arg, fields_decls=fields_decls, **kwargs)
             assert isinstance(node, list) and all(
@@ -234,7 +259,7 @@ class UnrollVectorExpressions(IRNodeMapper):
 
         return self.generic_visit(node, **kwargs)
 
-    def visit_BinOpExpr(self, node: BinOpExpr, *, fields_decls: Dict[str, FieldDecl], **kwargs):
+    def visit_BinOpExpr(self, node: BinOpExpr, *, fields_decls: dict[str, FieldDecl], **kwargs):
         lhs = self.visit(node.lhs, fields_decls=fields_decls, **kwargs)
         rhs = self.visit(node.rhs, fields_decls=fields_decls, **kwargs)
         result: Union[List[BinOpExpr], BinOpExpr] = []
@@ -356,6 +381,19 @@ class DefIRToGTIR(IRNodeVisitor):
         Builtin.FALSE: common.BuiltInLiteral.FALSE,
     }
 
+    GT4PY_DTYPE_TO_GTIR_DTYPE: Final[dict[DataType, common.DataType]] = {
+        DataType.INVALID: common.DataType.INVALID,
+        DataType.AUTO: common.DataType.AUTO,
+        DataType.DEFAULT: common.DataType.DEFAULT,
+        DataType.BOOL: common.DataType.BOOL,
+        DataType.INT8: common.DataType.INT8,
+        DataType.INT16: common.DataType.INT16,
+        DataType.INT32: common.DataType.INT32,
+        DataType.INT64: common.DataType.INT64,
+        DataType.FLOAT32: common.DataType.FLOAT32,
+        DataType.FLOAT64: common.DataType.FLOAT64,
+    }
+
     @classmethod
     def apply(cls, root, **kwargs):
         return cls().visit(root)
@@ -391,7 +429,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_ArgumentInfo(self, node: ArgumentInfo, all_params: Dict[str, gtir.Decl]) -> gtir.Decl:
+    def visit_ArgumentInfo(self, node: ArgumentInfo, all_params: dict[str, gtir.Decl]) -> gtir.Decl:
         return all_params[node.name]
 
     def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.VerticalLoop:
@@ -413,6 +451,12 @@ class DefIRToGTIR(IRNodeVisitor):
             body=stmts,
             temporaries=temporaries,
             loc=location_to_source_location(node.loc),
+        )
+
+    def visit_IteratorAccess(self, iterator_access: IteratorAccess) -> gtir.IteratorAccess:
+        return gtir.IteratorAccess(
+            name=gtir.IteratorAccess.AxisName(iterator_access.name),
+            dtype=self.GT4PY_DTYPE_TO_GTIR_DTYPE[iterator_access.data_type],
         )
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
@@ -509,7 +553,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.FieldIfStmt:
+    def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.HorizontalRestriction:
         def make_bound_or_level(bound: AxisBound, level) -> Optional[common.AxisBound]:
             if (level == LevelMarker.START and bound.offset <= -10000) or (
                 level == LevelMarker.END and bound.offset >= 10000
@@ -550,6 +594,15 @@ class DefIRToGTIR(IRNodeVisitor):
         # TODO(havogt) add support VarRef
         return gtir.AxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
+        )
+
+    def visit_RuntimeAxisBound(self, node: RuntimeAxisBound) -> gtir.RuntimeAxisBound:
+        utils.warn_experimental_feature(
+            feature="Runtime Interval Bounds", ADR="experimental/runtime-intervals.md"
+        )
+        return gtir.RuntimeAxisBound(
+            level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level],
+            offset=self.visit(node.offset),
         )
 
     def visit_FieldDecl(self, node: FieldDecl) -> gtir.FieldDecl:

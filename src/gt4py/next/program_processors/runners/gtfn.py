@@ -13,10 +13,11 @@ import factory
 import numpy as np
 
 import gt4py._core.definitions as core_defs
-import gt4py.next.allocators as next_allocators
+import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import filecache
-from gt4py.next import backend, common, config, field_utils, metrics
+from gt4py.next import backend, common, config, field_utils
 from gt4py.next.embedded import nd_array_field
+from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -43,8 +44,8 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
-) -> stages.CompiledProgram:
+    inp: stages.ExecutableProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+) -> stages.ExecutableProgram:
     def decorated_program(
         *args: Any,
         offset_provider: dict[str, common.Connectivity | common.Dimension],
@@ -56,17 +57,12 @@ def convert_args(
         converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
 
-        opt_kwargs: dict[str, Any]
-        metric_collection = metrics.get_active_metric_collection()
-        if collect_metrics := (
-            metric_collection is not None and (config.COLLECT_METRICS_LEVEL >= metrics.PERFORMANCE)
-        ):
+        opt_kwargs: dict[str, Any] = {}
+        if collect_metrics := metrics.is_level_enabled(metrics.PERFORMANCE):
             # If we are collecting metrics, we need to add the `exec_info` argument
             # to the `inp` call, which will be used to collect performance metrics.
             exec_info: dict[str, float] = {}
-            opt_kwargs = {"exec_info": exec_info}
-        else:
-            opt_kwargs = {}
+            opt_kwargs["exec_info"] = exec_info
 
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
         inp(
@@ -76,9 +72,9 @@ def convert_args(
         )
 
         if collect_metrics:
-            assert metric_collection is not None
-            value = exec_info["run_cpp_end_time"] - exec_info["run_cpp_start_time"]
-            metric_collection.add_sample(metrics.COMPUTE_METRIC, value)
+            metrics.add_sample_to_current_source(
+                metrics.COMPUTE_METRIC, exec_info["run_cpp_duration"]
+            )
 
     return decorated_program
 
@@ -87,15 +83,26 @@ def extract_connectivity_args(
     offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
     # Note: this function is on the hot path and needs to have minimal overhead.
-    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = []
-    # Note: the order here needs to agree with the order of the generated bindings
-    for conn in offset_provider.values():
-        if (ndarray := getattr(conn, "ndarray", None)) is not None:
-            assert common.is_neighbor_table(conn)
-            assert field_utils.verify_device_field_type(conn, device)
-            args.append((ndarray, (0, 0)))
-            continue
-        assert isinstance(conn, common.Dimension)
+    zero_origin = (0, 0)
+    assert all(
+        hasattr(conn, "ndarray") or isinstance(conn, common.Dimension)
+        for conn in offset_provider.values()
+    )
+    # Note: the order here needs to agree with the order of the generated bindings.
+    # This is currently true only because when hashing offset provider dicts,
+    # the keys' order is taken into account. Any modification to the hashing
+    # of offset providers may break this assumption here.
+    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
+        (ndarray, zero_origin)
+        for conn in offset_provider.values()
+        if (ndarray := getattr(conn, "ndarray", None)) is not None
+    ]
+    assert all(
+        common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
+        for conn in offset_provider.values()
+        if hasattr(conn, "ndarray")
+    )
+
     return args
 
 
@@ -129,7 +136,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
 
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
         nanobind.bind_source
     )
     compilation = factory.SubFactory(

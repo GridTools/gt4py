@@ -343,6 +343,9 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         if node.loop_order != common.LoopOrder.PARALLEL:
             return node
+        for section in node.sections:
+            if section.interval.has_runtime_access():
+                return node
         sections = self.visit(node.sections, **kwargs)
         accessed = AccessCollector.apply(sections).fields()
         return oir.VerticalLoop(

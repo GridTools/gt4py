@@ -13,7 +13,6 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any
 
 import numpy as np
 from numpy import typing as npt
@@ -29,7 +28,7 @@ from gt4py.eve.extended_typing import (
     TypeVar,
     cast,
 )
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.embedded import (
     common as embedded_common,
     context as embedded_context,
@@ -44,8 +43,10 @@ except ImportError:
     cp: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 try:
+    import jax
     from jax import numpy as jnp
 except ImportError:
+    jax: Optional[ModuleType] = None  # type: ignore[no-redef]
     jnp: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 try:
@@ -103,7 +104,9 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 @dataclasses.dataclass(frozen=True)
 class NdArrayField(
-    common.MutableField[common.DimsT, core_defs.ScalarT], common.FieldBuiltinFuncRegistry
+    common.MutableField[common.DimsT, core_defs.ScalarT],
+    common.FieldBuiltinFuncRegistry,
+    utils.MetadataBasedPickling,
 ):
     """
     Shared field implementation for NumPy-like fields.
@@ -117,46 +120,7 @@ class NdArrayField(
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
 
-    array_ns: ClassVar[ModuleType]  # TODO(havogt) introduce a NDArrayNamespace protocol
-
-    @property
-    def domain(self) -> common.Domain:
-        return self._domain
-
-    @property
-    def shape(self) -> tuple[int, ...]:
-        return self._ndarray.shape
-
-    @property
-    def __gt_origin__(self) -> tuple[int, ...]:
-        assert common.Domain.is_finite(self._domain)
-        return tuple(-r.start for r in self._domain.ranges)
-
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        return self._ndarray
-
-    def asnumpy(self) -> np.ndarray:
-        if self.array_ns == cp:
-            return cp.asnumpy(self._ndarray)
-        else:
-            return np.asarray(self._ndarray)
-
-    def as_scalar(self) -> core_defs.ScalarT:
-        if self.domain.ndim != 0:
-            raise ValueError(
-                f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
-            )
-        # note: `.item()` will return a Python type, therefore we use indexing with an empty tuple
-        return self.asnumpy()[()]  # type: ignore[return-value] # should be ensured by the 0-d check
-
-    @property
-    def codomain(self) -> type[core_defs.ScalarT]:
-        return self.dtype.scalar_type
-
-    @property
-    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        return core_defs.dtype(self._ndarray.dtype.type)
+    array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
 
     @classmethod
     def from_array(
@@ -185,6 +149,59 @@ class NdArrayField(
         assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
+
+    @functools.cached_property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        assert common.Domain.is_finite(self.domain)
+        return tuple(-r.start for r in self.domain.ranges)
+
+    @functools.cached_property
+    def __gt_buffer_info__(self) -> common.BufferInfo:
+        """
+        Interface to retrieve the low-level description of a Field buffer.
+
+        Since by default NdArrayFields are implemented as frozen dataclasses,
+        and therefore the backing ndarray cannot be replaced after creation,
+        this is implemented as a cached property for performance reasons.
+
+        NDArrayField subclasses where the backing ndarray can be replaced
+        should override this and make it a regular property.
+        """
+        return common.BufferInfo.from_ndarray(self.ndarray)
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self._ndarray.shape
+
+    @property
+    def domain(self) -> common.Domain:
+        return self._domain
+
+    @property
+    def codomain(self) -> type[core_defs.ScalarT]:
+        return self.dtype.scalar_type
+
+    @functools.cached_property
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
+        return core_defs.dtype(self._ndarray.dtype.type)
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        return self._ndarray
+
+    def asnumpy(self) -> np.ndarray:
+        if self.array_ns == cp:
+            return cp.asnumpy(self._ndarray)
+        else:
+            return np.asarray(self._ndarray)
+
+    def as_scalar(self) -> core_defs.ScalarT:
+        if self.domain.ndim != 0:
+            raise ValueError(
+                f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        # note: `.item()` will return a Python type, therefore we use indexing with an empty tuple
+        return self.asnumpy()[()]  # type: ignore[return-value] # should be ensured by the 0-d check
 
     def premap(
         self: NdArrayField,
@@ -429,18 +446,13 @@ class NdArrayField(
         return new_domain, slice_
 
     if dace:
-        # Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs
+
         def _dace_data_ptr(self) -> int:
-            array_ns = self.array_ns
-            array_byte_bounds = (  # TODO(egparedes): make this part of some Array namespace protocol
-                array_ns.byte_bounds
-                if hasattr(array_ns, "byte_bounds")
-                else array_ns.lib.array_utils.byte_bounds
-            )
-            return array_byte_bounds(self.ndarray)[0]
+            return self.__gt_buffer_info__.data_ptr
 
         def _dace_descriptor(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.ndarray)
+
     else:
 
         def _dace_data_ptr(self) -> int:
@@ -448,13 +460,24 @@ class NdArrayField(
                 "data_ptr is only supported when the 'dace' module is available."
             )
 
-        def _dace_descriptor(self) -> Any:
+        def _dace_descriptor(self) -> dace.data.Data:
             raise NotImplementedError(
                 "__descriptor__ is only supported when the 'dace' module is available."
             )
 
     data_ptr = _dace_data_ptr
+    """
+    Returns the pointer of the underlying data buffer.
+
+    Fully equivalent to `self.__gt_buffer_info__.data_ptr`. It is only defined to emulate the
+    PyTorch API for DaCe interoperability.
+
+    Note:
+        This method is experimental and will be likely removed in future versions.
+    """
+
     __descriptor__ = _dace_descriptor
+    """Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -464,45 +487,6 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    _kind: Optional[common.ConnectivityKind] = None
-
-    def __post_init__(self) -> None:
-        assert self._kind is None or bool(self._kind & common.ConnectivityKind.ALTER_DIMS) == (
-            self.domain.dim_index(self.codomain) is not None
-        )
-
-    @functools.cached_property
-    def _cache(self) -> dict:
-        return {}
-
-    @classmethod
-    def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
-        raise NotImplementedError()
-
-    @property
-    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
-        return self._codomain
-
-    @property
-    def skip_value(self) -> Optional[core_defs.IntegralScalar]:
-        return self._skip_value
-
-    @property
-    def kind(self) -> common.ConnectivityKind:
-        if self._kind is None:
-            object.__setattr__(
-                self,
-                "_kind",
-                common.ConnectivityKind.ALTER_STRUCT
-                | (
-                    common.ConnectivityKind.ALTER_DIMS
-                    if self.domain.dim_index(self.codomain) is None
-                    else common.ConnectivityKind(0)
-                ),
-            )
-            assert self._kind is not None
-
-        return self._kind
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -533,6 +517,33 @@ class NdArrayConnectivityField(
         assert isinstance(codomain, common.Dimension)
 
         return cls(domain, array, codomain, _skip_value=skip_value)
+
+    @classmethod
+    def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
+        raise NotImplementedError()
+
+    @property
+    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
+        return self._codomain
+
+    @property
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]:
+        return self._skip_value
+
+    @functools.cached_property
+    def kind(self) -> common.ConnectivityKind:
+        return common.ConnectivityKind.ALTER_STRUCT | (
+            common.ConnectivityKind.ALTER_DIMS
+            if self.domain.dim_index(self.codomain) is None
+            else common.ConnectivityKind(0)
+        )
+
+    # This embedded run-time cache is only used to speed up repeated calls to
+    # `inverse_image` and `restrict`, and it should not be considered part of
+    # the connectivity field definition, and therefore it should not be serialized.
+    @functools.cached_property
+    def _cache(self) -> dict:
+        return {}
 
     def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
@@ -776,11 +787,11 @@ def _hyperslice(
 # -- Specialized implementations for builtin operations on array fields --
 
 NdArrayField.register_builtin_func(
-    fbuiltins.abs,  # type: ignore[attr-defined]
+    fbuiltins.abs,
     NdArrayField.__abs__,
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.power,  # type: ignore[attr-defined]
+    fbuiltins.power,
     NdArrayField.__pow__,
 )
 # TODO gamma
@@ -795,15 +806,15 @@ for name in (
     NdArrayField.register_builtin_func(getattr(fbuiltins, name), _make_builtin(name, name))
 
 NdArrayField.register_builtin_func(
-    fbuiltins.minimum,  # type: ignore[attr-defined]
+    fbuiltins.minimum,
     _make_builtin("minimum", "minimum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.maximum,  # type: ignore[attr-defined]
+    fbuiltins.maximum,
     _make_builtin("maximum", "maximum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.fmod,  # type: ignore[attr-defined]
+    fbuiltins.fmod,
     _make_builtin("fmod", "fmod"),
 )
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
@@ -995,9 +1006,9 @@ def _make_reduction(
         reduce_dim_index = field.domain.dims.index(axis)
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
-        offset_definition = current_offset_provider[
-            axis.value
-        ]  # assumes offset and local dimension have same name
+        offset_definition = common.get_offset(
+            current_offset_provider, axis.value
+        )  # assumes offset and local dimension have same name
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
@@ -1068,21 +1079,42 @@ if cp:
 
 # JAX
 if jnp:
+    assert jax is not None
+
     _nd_array_implementations.append(jnp)
+    # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
+    jax.config.update("jax_enable_x64", True)
 
     @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
+
+        @property
+        def __gt_buffer_info__(self) -> common.BufferInfo:
+            raise NotImplementedError("'__gt_buffer_info__' for JaxArrayField not yet implemented.")
 
         def __setitem__(
             self,
             index: common.AnyIndexSpec,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
-            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
-            raise NotImplementedError("'__setitem__' for JaxArrayField not yet implemented.")
+            target_domain, target_slice = self._slice(index)
+
+            if isinstance(value, common.Field):
+                if not value.domain == target_domain:
+                    raise ValueError(
+                        f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
+                    )
+                value = value.ndarray
+
+            object.__setattr__(self, "_ndarray", self._ndarray.at[target_slice].set(value))  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+
+    @dataclasses.dataclass(frozen=True, eq=False)
+    class JaxArrayConnectivityField(NdArrayConnectivityField):
+        array_ns: ClassVar[ModuleType] = jnp
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
+    common._connectivity.register(jnp.ndarray, JaxArrayConnectivityField.from_array)
 
 
 def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) -> common.Field:
@@ -1117,7 +1149,7 @@ def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdA
     raise AssertionError("This is the NdArrayField implementation of 'fbuiltins.astype'.")
 
 
-NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
+NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type]  # because fbuiltins.astype is overloaded
 
 
 def _get_slices_from_domain_slice(

@@ -16,11 +16,16 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes, propagation as dace_propagation
+from dace.sdfg import (
+    graph as dace_graph,
+    nodes as dace_nodes,
+    propagation as dace_propagation,
+    utils as dace_sdutils,
+)
 from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import gtir_to_sdfg_utils
+from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowering
 
 
 @dace_properties.make_properties
@@ -84,7 +89,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     ) -> None:
         super().__init__()
         if isinstance(blocking_parameter, gtx_common.Dimension):
-            blocking_parameter = gtir_to_sdfg_utils.get_map_variable(blocking_parameter)
+            blocking_parameter = gtx_dace_lowering.get_map_variable(blocking_parameter)
         if blocking_parameter is not None:
             self.blocking_parameter = blocking_parameter
         if blocking_size is not None:
@@ -250,12 +255,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """Computes the partition the of the nodes of the Map.
 
         The function divides the nodes into two sets, defined as:
-        - The independent nodes `\mathcal{I}`:
+        - The independent nodes `\\mathcal{I}`:
             These are the nodes, whose output does not depend on the blocked
             dimension. These nodes can be relocated between the outer and inner map.
             Nodes in these set does not necessarily have a direct edge to map entry.
             However, the exists a path from `outer_entry` to any node in this set.
-        - The dependent nodes `\mathcal{D}`:
+        - The dependent nodes `\\mathcal{D}`:
             These are the nodes, whose output depend on the blocked dimension.
             Thus they can not be relocated between the two maps, but will remain
             inside the inner scope. All these nodes have at least one edge to map entry.
@@ -837,6 +842,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         #  propagation fail, to clear the cache we call the hash function.
         #  See: https://github.com/spcl/dace/issues/1703
         _ = sdfg.reset_cfg_list()
+        dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=outer_entry)
         dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_entry)
 
     def _check_if_blocking_is_favourable(

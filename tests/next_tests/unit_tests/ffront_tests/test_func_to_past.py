@@ -18,7 +18,7 @@ from gt4py.next.ffront import program_ast as past
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.type_system import type_specifications as ts
 
-from next_tests.past_common_fixtures import (
+from next_tests.fixtures.past_common import (
     IDim,
     copy_program_def,
     copy_restrict_program_def,
@@ -154,7 +154,7 @@ def test_domain_exception_1(identity_def):
     assert exc_info.match("Invalid call to 'domain_format_1'")
 
     assert (
-        re.search("Only Dictionaries allowed in 'domain'", exc_info.value.__cause__.args[0])
+        re.search("Tuple domain requires tuple output", exc_info.value.__cause__.args[0])
         is not None
     )
 

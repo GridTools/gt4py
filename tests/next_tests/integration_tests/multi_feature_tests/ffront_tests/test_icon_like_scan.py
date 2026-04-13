@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
+from typing import NamedTuple
 
 import numpy as np
 import pytest
@@ -30,15 +31,22 @@ KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 Koff = gtx.FieldOffset("Koff", KDim, (KDim,))
 
 
-@gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, True))
-def _scan(
-    state: tuple[float, float, bool], w: float, z_q: float, z_a: float, z_b: float, z_c: float
-) -> tuple[float, float, bool]:
-    z_q_m1, w_m1, first = state
-    z_g = z_b + z_a * z_q_m1
+class State(NamedTuple):
+    z_q_new: float
+    w_new: float
+    first_level: bool
+
+
+@gtx.scan_operator(axis=KDim, forward=True, init=State(z_q_new=0.0, w_new=0.0, first_level=True))
+def _scan(state: State, w: float, z_q: float, z_a: float, z_b: float, z_c: float) -> State:
+    z_g = z_b + z_a * state.z_q_new
     z_q_new = (0.0 - z_c) * z_g
-    w_new = z_a * w_m1 * z_g
-    return (z_q, w, False) if first else (z_q_new, w_new, False)
+    w_new = z_a * state.w_new * z_g
+    return (
+        State(z_q_new=z_q, w_new=w, first_level=False)
+        if state.first_level
+        else State(z_q_new=z_q_new, w_new=w_new, first_level=False)
+    )
 
 
 @gtx.field_operator
@@ -206,6 +214,7 @@ def test_setup(exec_alloc_descriptor):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
     cases.verify(
         test_setup.case,
@@ -224,6 +233,7 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
     if test_setup.case.backend == test_definitions.ProgramBackendId.ROUNDTRIP.load():
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
@@ -243,6 +253,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like(test_setup):
     cases.run(
         test_setup.case,
@@ -259,6 +270,7 @@ def test_solve_nonhydro_stencil_52_like(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup):
     if test_setup.case.backend == test_definitions.ProgramBackendId.ROUNDTRIP.load():
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")

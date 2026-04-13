@@ -139,6 +139,7 @@ from __future__ import annotations
 import enum
 import operator
 import sys
+from abc import ABC
 from typing import List, Optional, Sequence
 
 import numpy as np
@@ -170,9 +171,12 @@ class Location(Node):
     scope = attribute(of=str, default="<source>")
 
     @classmethod
-    def from_ast_node(cls, ast_node, scope="<source>"):
+    def from_ast_node(cls, ast_node, scope: str | None = None):
         lineno = getattr(ast_node, "lineno", 0)
         col_offset = getattr(ast_node, "col_offset", 0)
+        scope = (
+            "<source>" if scope is None else scope
+        )  # scope is sometimes explicitly passed down as `None`
         return cls(line=lineno, column=col_offset + 1, scope=scope)
 
 
@@ -361,6 +365,14 @@ class AbsoluteKIndex(Expr):
     """See gtc.common.AbsoluteKIndex"""
 
     k = attribute(of=Any)
+
+
+@attribclass
+class IteratorAccess(Ref):
+    """Iterator query"""
+
+    name = attribute(of=str)
+    data_type = attribute(of=DataType)
 
 
 @attribclass
@@ -717,17 +729,29 @@ class IterationOrder(enum.Enum):
         return self.cycle(steps=steps)
 
 
+class BaseAxisBound(Node, ABC):
+    level = attribute(of=LevelMarker)
+    loc = attribute(of=Location, optional=True)
+
+
 @attribclass
-class AxisBound(Node):
+class AxisBound(BaseAxisBound):
     level = attribute(of=LevelMarker)
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
 
 
 @attribclass
+class RuntimeAxisBound(BaseAxisBound):
+    level = attribute(of=LevelMarker)
+    offset = attribute(of=Ref, default=0)
+    loc = attribute(of=Location, optional=True)
+
+
+@attribclass
 class AxisInterval(Node):
-    start = attribute(of=AxisBound)
-    end = attribute(of=AxisBound)
+    start = attribute(of=BaseAxisBound)
+    end = attribute(of=BaseAxisBound)
     loc = attribute(of=Location, optional=True)
 
     @classmethod

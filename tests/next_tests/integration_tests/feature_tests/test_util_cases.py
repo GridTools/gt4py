@@ -37,7 +37,7 @@ def test_allocate_default_unique(cartesian_case):
     a = cases.allocate(cartesian_case, mixed_args, "a")()
 
     assert np.min(a.asnumpy()) == 1
-    assert np.max(a.asnumpy()) == np.prod(tuple(cartesian_case.default_sizes.values()))
+    assert np.max(a.asnumpy()) == np.prod(tuple(list(cartesian_case.default_sizes.values())[:3]))
 
     b = cases.allocate(cartesian_case, mixed_args, "b")()
 
@@ -46,7 +46,7 @@ def test_allocate_default_unique(cartesian_case):
     c = cases.allocate(cartesian_case, mixed_args, "c")()
 
     assert np.min(c.asnumpy()) == b + 1
-    assert np.max(c.asnumpy()) == np.prod(tuple(cartesian_case.default_sizes.values())) * 2 + 1
+    assert np.max(c.asnumpy()) == np.prod(tuple(cartesian_case.default_sizes.values())[:3]) * 2 + 1
 
 
 def test_allocate_return_default_zeros(cartesian_case):

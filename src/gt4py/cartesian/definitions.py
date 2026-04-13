@@ -154,16 +154,16 @@ class GTError(Exception):
 
 
 class GTSyntaxError(GTError):
-    def __init__(self, message, *, frontend):
+    def __init__(self, message: str, *, frontend: str) -> None:
         super().__init__(message)
         self.frontend = frontend
 
 
 class GTSpecificationError(GTError):
-    def __init__(self, message):
+    def __init__(self, message: str) -> None:
         super().__init__(message)
 
 
 class GTSemanticError(GTError):
-    def __init__(self, message):
+    def __init__(self, message: str) -> None:
         super().__init__(message)

@@ -170,6 +170,7 @@ class TemporaryFactory(factory.Factory):
         model = gtcpp.Temporary
 
     name = identifier(gtcpp.Temporary)
+    dimensions = (True, True, True)
     dtype = common.DataType.FLOAT32
 
 

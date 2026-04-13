@@ -21,7 +21,7 @@ import numpy as np
 import numpy.typing as npt
 
 from gt4py import eve
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, types as core_types
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
     Any,
@@ -45,7 +45,7 @@ from gt4py.eve.extended_typing import (
     overload,
     runtime_checkable,
 )
-from gt4py.next import common, field_utils
+from gt4py.next import common, field_utils, utils
 from gt4py.next.embedded import (
     context as embedded_context,
     exceptions as embedded_exceptions,
@@ -145,7 +145,7 @@ class StridedConnectivityField(common.Connectivity):
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
-        return core_defs.Int32DType()  # type: ignore[return-value]
+        return core_defs.Int32DType()
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -163,7 +163,7 @@ class StridedConnectivityField(common.Connectivity):
     ) -> common.Field:
         if not isinstance(item, tuple) or (isinstance(item, tuple) and not len(item) == 2):
             raise NotImplementedError()  # TODO(havogt): add proper slicing
-        index = item[0] * self._max_neighbors + item[1]  # type: ignore[operator, call-overload]
+        index = item[0] * self._max_neighbors + item[1]  # type: ignore[operator]
         return ConstantField(index)
 
     def as_scalar(self) -> xtyping.Never:
@@ -562,7 +562,7 @@ def execute_shift(
                 if tag == _CONST_DIM.value:
                     new_entry[i] = 0
                 else:
-                    offset_implementation = offset_provider[tag]
+                    offset_implementation = common.get_offset(offset_provider, tag)
                     assert common.is_neighbor_connectivity(offset_implementation)
                     source_dim = offset_implementation.__gt_type__().source_dim
                     cur_index = pos[source_dim.value]
@@ -578,8 +578,7 @@ def execute_shift(
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
         return cast(IncompletePosition, pos) | {tag: new_entry}
 
-    assert tag in offset_provider
-    offset_implementation = offset_provider[tag]
+    offset_implementation = common.get_offset(offset_provider, tag)
     if isinstance(offset_implementation, common.Dimension):
         new_pos = copy.copy(pos)
         if common.is_int_index(value := new_pos[offset_implementation.value]):
@@ -1118,8 +1117,8 @@ class IndexField(common.Field):
             return common.Domain()
 
     @property
-    def codomain(self) -> type[core_defs.int32]:
-        return core_defs.int32
+    def codomain(self) -> type[core_types.int32]:
+        return core_types.int32
 
     @property
     def dtype(self) -> core_defs.Int32DType:
@@ -1209,6 +1208,18 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __lt__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __le__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __gt__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __ge__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
         raise NotImplementedError()
 
     def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
@@ -1333,6 +1344,18 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
+    def __lt__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __le__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __gt__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
+    def __ge__(self, other: common.Field | core_defs.ScalarT) -> common.Field[common.Dims, bool]:
+        raise NotImplementedError()
+
     def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
@@ -1376,7 +1399,7 @@ class _List(Generic[DT]):
         assert isinstance(element_type, ts.DataType)
         offset_provider = embedded_context.get_offset_provider()
         assert offset_provider is not None
-        connectivity = offset_provider[offset_tag]
+        connectivity = common.get_offset(offset_provider, offset_tag)
         assert common.is_neighbor_connectivity(connectivity)
         local_dim = connectivity.__gt_type__().neighbor_dim
         return ts.ListType(element_type=element_type, offset_type=local_dim)
@@ -1404,7 +1427,7 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     assert isinstance(offset_str, str)
     offset_provider = embedded_context.get_offset_provider()
     assert offset_provider is not None
-    connectivity = offset_provider[offset_str]
+    connectivity = common.get_offset(offset_provider, offset_str)
     assert common.is_neighbor_connectivity(connectivity)
     return _List(
         values=tuple(
@@ -1417,8 +1440,10 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
 
 
 @builtins.list_get.register(EMBEDDED)
-def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
-    return lst[i]
+def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT] | Undefined:
+    if i < len(lst.values):
+        return lst[i]
+    return _UNDEFINED  # might happen for lists originating from neighbors with skip values
 
 
 def _get_offset(*lists: _List | _ConstList) -> Optional[runtime.Offset]:
@@ -1480,7 +1505,7 @@ class SparseListIterator:
             )
         offset_provider = embedded_context.get_offset_provider()
         assert offset_provider is not None
-        connectivity = offset_provider[self.list_offset]
+        connectivity = common.get_offset(offset_provider, self.list_offset)
         assert common.is_neighbor_connectivity(connectivity)
         return _List(
             values=tuple(
@@ -1630,8 +1655,13 @@ def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProvider
 
 
 @runtime.set_at.register(EMBEDDED)
-def set_at(expr: common.Field, domain: common.DomainLike, target: common.MutableField) -> None:
-    operators._tuple_assign_field(target, expr, common.domain(domain))
+def set_at(
+    expr: common.Field,
+    domain_like: xtyping.MaybeNestedInTuple[common.DomainLike],
+    target: common.MutableField,
+) -> None:
+    domain = utils.tree_map(common.domain)(domain_like)
+    operators._tuple_assign_field(target, expr, domain)
 
 
 @runtime.get_domain_range.register(EMBEDDED)
@@ -1732,7 +1762,7 @@ def _fieldspec_list_to_value(
             offset_provider = embedded_context.get_offset_provider()
             offset_type = type_.offset_type
             assert isinstance(offset_type, common.Dimension)
-            connectivity = offset_provider[offset_type.value]
+            connectivity = common.get_offset(offset_provider, offset_type.value)
             assert common.is_neighbor_connectivity(connectivity)
             return domain.insert(
                 len(domain),

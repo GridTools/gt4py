@@ -14,7 +14,12 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend as next_backend, common, allocators as next_allocators, constructors
+from gt4py.next import (
+    backend as next_backend,
+    common,
+    constructors,
+    custom_layout_allocators as next_allocators,
+)
 from gt4py.next.ffront import decorator
 
 import next_tests
@@ -83,6 +88,10 @@ no_backend = NoBackend(
             next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
         ),
         pytest.param(
+            next_tests.definitions.EmbeddedIds.JAX_NUMPY_EXECUTION,
+            marks=pytest.mark.requires_jax,
+        ),
+        pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
             marks=pytest.mark.requires_dace,
         ),
@@ -135,6 +144,7 @@ DType = TypeVar("DType")
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
 Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
 Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
@@ -170,15 +180,18 @@ class CartesianGridDescriptor(Protocol):
     def offset_provider_type(self) -> common.OffsetProviderType: ...
 
 
-def simple_cartesian_grid(sizes: int | tuple[int, int, int] = 10) -> CartesianGridDescriptor:
+def simple_cartesian_grid(
+    sizes: int | tuple[int, int, int, int] = (5, 7, 9, 11),
+) -> CartesianGridDescriptor:
     if isinstance(sizes, int):
-        sizes = (sizes,) * 3
-    assert len(sizes) == 3, "sizes must be a tuple of three integers"
+        sizes = (sizes,) * 4
+    assert len(sizes) == 4, "sizes must be a tuple of four integers"
 
     offset_provider = {
         "Ioff": IDim,
         "Joff": JDim,
         "Koff": KDim,
+        "KHalfoff": KHalfDim,
     }
 
     return types.SimpleNamespace(
@@ -206,9 +219,6 @@ class MeshDescriptor(Protocol):
 
     @property
     def num_edges(self) -> int: ...
-
-    @property
-    def num_levels(self) -> int: ...
 
     @property
     def offset_provider(self) -> common.OffsetProvider: ...
@@ -414,7 +424,7 @@ def skip_value_mesh(allocator) -> MeshDescriptor:
         simple_mesh,
         pytest.param(skip_value_mesh, marks=pytest.mark.uses_mesh_with_skip_values),
     ],
-    ids=lambda p: p(None).name,
+    ids=lambda p: p.__name__,
 )
 def mesh_descriptor(request, exec_alloc_descriptor) -> MeshDescriptor:
     yield request.param(exec_alloc_descriptor.allocator)

@@ -55,7 +55,7 @@ AccessedDomains: TypeAlias = dict[str, DomainAccess]
 
 class InferenceOptions(typing.TypedDict):
     offset_provider: common.OffsetProvider | common.OffsetProviderType
-    symbolic_domain_sizes: Optional[dict[str, str]]
+    symbolic_domain_sizes: dict[str, itir.Expr] | None
     allow_uninferred: bool
     keep_existing_domains: bool
 
@@ -126,7 +126,7 @@ def _extract_accessed_domains(
     input_ids: list[str],
     target_domain: NonTupleDomainAccess,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    symbolic_domain_sizes: Optional[dict[str, str]],
+    symbolic_domain_sizes: Optional[dict[str, itir.Expr]],
 ) -> dict[str, NonTupleDomainAccess]:
     accessed_domains: dict[str, NonTupleDomainAccess] = {}
 
@@ -182,7 +182,7 @@ def _infer_as_fieldop(
     target_domain: DomainAccess,
     *,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    symbolic_domain_sizes: Optional[dict[str, str]],
+    symbolic_domain_sizes: Optional[dict[str, itir.Expr]],
     allow_uninferred: bool,
     keep_existing_domains: bool,
 ) -> tuple[itir.FunCall, AccessedDomains]:
@@ -209,10 +209,10 @@ def _infer_as_fieldop(
 
     # Assign ids for all inputs to `as_fieldop`. `SymRef`s stay as is, nested `as_fieldop` get a
     # temporary id.
-    tmp_uid_gen = eve_utils.UIDGenerator(prefix="__dom_inf")
+    tmp_uid_gen = eve_utils.SequentialIDGenerator(prefix="__dom_inf")
     for in_field in inputs:
         if isinstance(in_field, itir.FunCall) or isinstance(in_field, itir.Literal):
-            id_ = tmp_uid_gen.sequential_id()
+            id_ = next(tmp_uid_gen)
         elif isinstance(in_field, itir.SymRef):
             id_ = in_field.id
         else:
@@ -246,9 +246,7 @@ def _infer_as_fieldop(
     transformed_call = im.as_fieldop(stencil, target_domain_expr)(*transformed_inputs)
 
     accessed_domains_without_tmp = {
-        k: v
-        for k, v in accessed_domains.items()
-        if not k.startswith(tmp_uid_gen.prefix)  # type: ignore[arg-type] # prefix is always str
+        k: v for k, v in accessed_domains.items() if not k.startswith(tmp_uid_gen.prefix)
     }
 
     return transformed_call, accessed_domains_without_tmp
@@ -441,7 +439,7 @@ def infer_expr(
     domain: DomainAccess,
     *,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
 ) -> tuple[itir.Expr, AccessedDomains]:
@@ -457,7 +455,7 @@ def infer_expr(
 
     Keyword Arguments:
     - symbolic_domain_sizes: A dictionary mapping axes names, e.g., `I`, `Vertex`, to a symbol
-      name that evaluates to the length of that axis.
+      name or expression that evaluates to the length of that axis.
     - allow_uninferred: Allow `as_fieldop` expressions whose domain is either unknown (e.g.
       because of a dynamic shift) or never accessed.
     - keep_existing_domains: If `True`, keep existing domains in `as_fieldop` expressions and
@@ -477,32 +475,34 @@ def infer_expr(
         expr, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )
     el_types, domain = gtx_utils.equalize_tuple_structure(
-        gtx_utils.tree_map(collection_type=ts.TupleType, result_collection_constructor=tuple)(
-            lambda x: x
-        )(expr.type),
+        gtx_utils.tree_map(
+            collection_type=ts.TupleType, result_collection_constructor=lambda _, elts: tuple(elts)
+        )(lambda x: x)(expr.type),
         domain,
         fill_value=DomainAccessDescriptor.NEVER,
         # el_types already has the right structure, we only want to change domain
-        bidirectional=False,
+        bidirectional=False if not isinstance(expr.type, ts.DeferredType) else True,
     )
 
     if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
         additional_dims = gtx_utils.tree_map(
-            lambda d: _extract_vertical_dims(d)
-            if isinstance(d, domain_utils.SymbolicDomain)
-            else {}
+            lambda d: (
+                _extract_vertical_dims(d) if isinstance(d, domain_utils.SymbolicDomain) else {}
+            )
         )(domain)
     else:
         additional_dims = gtx_utils.tree_map(lambda d: {})(domain)
 
     domain = gtx_utils.tree_map(
-        lambda d, t, a: _filter_domain_dimensions(
-            d,
-            type_info.extract_dims(t),
-            additional_dims=a,
+        lambda d, t, a: (
+            _filter_domain_dimensions(
+                d,
+                type_info.extract_dims(t),
+                additional_dims=a,
+            )
+            if not isinstance(t, ts.DeferredType) and isinstance(d, domain_utils.SymbolicDomain)
+            else d
         )
-        if not isinstance(t, ts.DeferredType) and isinstance(d, domain_utils.SymbolicDomain)
-        else d
     )(domain, el_types, additional_dims)
 
     expr, accessed_domains = _infer_expr(
@@ -519,6 +519,13 @@ def infer_expr(
     return expr, accessed_domains
 
 
+def _make_symbolic_domain_tuple(domains: itir.Node) -> DomainAccess:
+    if cpm.is_call_to(domains, "make_tuple"):
+        return tuple(_make_symbolic_domain_tuple(arg) for arg in domains.args)
+    else:
+        return SymbolicDomain.from_expr(domains)
+
+
 def _infer_stmt(
     stmt: itir.Stmt,
     **kwargs: Unpack[InferenceOptions],
@@ -528,9 +535,9 @@ def _infer_stmt(
         # between the domain stored in IR and in the annex
         domain = constant_folding.ConstantFolding.apply(stmt.domain)
 
-        transformed_call, _ = infer_expr(
-            stmt.expr, domain_utils.SymbolicDomain.from_expr(domain), **kwargs
-        )
+        symbolic_domain = _make_symbolic_domain_tuple(domain)
+
+        transformed_call, _ = infer_expr(stmt.expr, symbolic_domain, **kwargs)
 
         return itir.SetAt(
             expr=transformed_call,
@@ -550,7 +557,7 @@ def infer_program(
     program: itir.Program,
     *,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
-    symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
 ) -> itir.Program:

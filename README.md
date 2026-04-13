@@ -1,7 +1,7 @@
 [![logo](https://raw.githubusercontent.com/GridTools/gt4py/gh-pages/v1.0/_static/logo.svg)](https://GridTools.github.io/gt4py)
 
 ![license](https://img.shields.io/github/license/GridTools/gt4py)
-[![slack](https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a)](https://join.slack.com/t/gridtools/shared_invite/zt-1mceuj747-59swuowC3MKAuCFyNAnc1g)
+[![slack](https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a)](https://join.slack.com/t/gridtools/shared_invite/zt-3pg63o8a8-huyrLZgLgC4RS42S9FGDZA)
 
 [![Daily CI](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml/badge.svg)](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml)
 ![test-components](https://github.com/GridTools/gt4py/actions/workflows/test-components.yml/badge.svg?branch=main)
@@ -26,13 +26,14 @@ In addition, GT4Py provides functions to allocate arrays with memory layout suit
 
 The following backends are supported:
 
-- `numpy`: Pure-Python backend
+- `numpy`: A vectorized python backend
 - `gt:cpu_ifirst`: GridTools C++ CPU backend using `I`-first data ordering
 - `gt:cpu_kfirst`: GridTools C++ CPU backend using `K`-first data ordering
 - `gt:gpu`: GridTools backend for CUDA
-- `cuda`: CUDA backend minimally using utilities from GridTools
 - `dace:cpu`: Dace code-generated CPU backend
+- `dace:cpu_kfirst`: Dace code-generated CPU backend using `K`-first data ordering
 - `dace:gpu`: Dace code-generated GPU backend
+- `debug`: A pure python backend used for prototyping new features
 
 ## 🚜 Installation
 

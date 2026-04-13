@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import collections.abc
 import copy
 import dataclasses
 import functools
@@ -34,7 +33,7 @@ def _is_representable_as_int(s: int | str) -> bool:
 
 
 def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
-    if node.type:
+    if node.type and not isinstance(type_, ts.DeferredType):
         assert type_info.is_compatible_type(node.type, type_), (
             f"Node {node!s} already has a type {node.type} which differs from {type_}."
         )
@@ -207,39 +206,6 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         on_inferred(self._infer_type_listener, return_type_or_synthesizer, *args)  # type: ignore[arg-type] # ensured by assert above
 
         return return_type_or_synthesizer
-
-
-def _get_dimensions_from_offset_provider(
-    offset_provider_type: common.OffsetProviderType,
-) -> dict[str, common.Dimension]:
-    dimensions: dict[str, common.Dimension] = {}
-    for offset_name, provider in offset_provider_type.items():
-        dimensions[offset_name] = common.Dimension(
-            value=offset_name, kind=common.DimensionKind.LOCAL
-        )
-        if isinstance(provider, common.Dimension):
-            dimensions[provider.value] = provider
-        elif isinstance(provider, common.NeighborConnectivityType):
-            dimensions[provider.source_dim.value] = provider.source_dim
-            dimensions[provider.codomain.value] = provider.codomain
-    return dimensions
-
-
-def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
-    def _get_dimensions(obj: Any):
-        if isinstance(obj, common.Dimension):
-            yield obj
-        elif isinstance(obj, ts.TypeSpec):
-            for field in obj.__datamodel_fields__.keys():
-                yield from _get_dimensions(getattr(obj, field))
-        elif isinstance(obj, collections.abc.Mapping):
-            for el in obj.values():
-                yield from _get_dimensions(el)
-        elif isinstance(obj, collections.abc.Iterable) and not isinstance(obj, str):
-            for el in obj:
-                yield from _get_dimensions(el)
-
-    return {dim.value: dim for dim in _get_dimensions(types)}
 
 
 def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
@@ -478,10 +444,12 @@ class ITIRTypeInference(eve.NodeTranslator):
             # the target can have fewer elements than the expr in which case the output from the
             # expression is simply discarded.
             expr_type = functools.reduce(
-                lambda tuple_type, i: tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
-                # `ts.DeferredType` only occurs for scans returning a tuple
-                if not isinstance(tuple_type, ts.DeferredType)
-                else ts.DeferredType(constraint=None),
+                lambda tuple_type, i: (
+                    tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
+                    # `ts.DeferredType` only occurs for scans returning a tuple
+                    if not isinstance(tuple_type, ts.DeferredType)
+                    else ts.DeferredType(constraint=None)
+                ),
                 path,
                 node.expr.type,
             )

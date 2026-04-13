@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 
+import datetime
 import enum
 import os
 import pathlib
+import warnings
 from typing import Final
 
 
@@ -89,14 +91,20 @@ BUILD_CACHE_LIFETIME: BuildCacheLifetime = BuildCacheLifetime[
 
 #: Build type to be used when CMake is used to compile generated code.
 #: Might have no effect when CMake is not used as part of the toolchain.
+# FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
 CMAKE_BUILD_TYPE: CMakeBuildType = CMakeBuildType[
     os.environ.get("GT4PY_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper()
 ]
 
 #: Experimental, use at your own risk: assume horizontal dimension has stride 1
+# FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
 UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
     "GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", default=False
 )
+
+#: Add GPU trace markers (NVTX, ROC-TX) to the generated code, at compile time.
+# FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
+ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", default=False)
 
 #: Number of threads to use to use for compilation (0 = synchronous compilation).
 #: Default:
@@ -109,6 +117,41 @@ BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1
 #: Enabling metrics collection will do extra synchronization and will have
 #: impact on runtime performance.
 COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", default=0)
+
+
+#: File path to dump collected metrics at exit, if COLLECT_METRICS_LEVEL is enabled.
+#: If set to a True value, it defaults to "gt4py_metrics_YYYYMMDD_HHMMSS.json" in
+#: the current folder.
+DUMP_METRICS_AT_EXIT: str | None = None
+
+
+#: Filter out DaCe related warnings. If not set warnings will be suppressed if the
+#: code runs in no debug mode.
+SKIP_DACE_WARNINGS: bool = env_flag_to_bool("GT4PY_SKIP_DACE_WARNINGS", default=not __debug__)
+
+
+if SKIP_DACE_WARNINGS:
+    # NOTE: Ideally we would suppress the warnings using context managers directly in
+    #   the backend. However, because this is not thread safe in Python versions before
+    #   3.14, we have to do it here.
+    warnings.filterwarnings(action="ignore", module="^dace(\..+)?")
+    warnings.filterwarnings(
+        action="ignore", module="^gt4py.next.program_processors.runners.dace.transformations(\..+)?"
+    )
+
+
+def _init_dump_metrics_filename() -> str:
+    return f"gt4py_metrics_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+
+_dump_metrics_at_exit_env = os.environ.get("GT4PY_DUMP_METRICS_AT_EXIT", None)
+if _dump_metrics_at_exit_env is not None:
+    try:
+        if env_flag_to_bool("GT4PY_DUMP_METRICS_AT_EXIT", default=False):
+            DUMP_METRICS_AT_EXIT = _init_dump_metrics_filename()
+    except ValueError:
+        DUMP_METRICS_AT_EXIT = _dump_metrics_at_exit_env
+
 
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.

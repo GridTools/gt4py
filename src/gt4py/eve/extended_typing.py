@@ -17,6 +17,7 @@ from __future__ import annotations
 # ruff: noqa: F401, F405
 import abc as _abc
 import array as _array
+import collections.abc as _collections_abc
 import dataclasses as _dataclasses
 import functools as _functools
 import inspect as _inspect
@@ -140,13 +141,30 @@ MaybeNestedInSequence = Union[_T_co, NestedSequence[_T_co]]
 MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
 MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
 
+
+def is_nested_tuple_of(value: object, type_: type[_T_co]) -> TypeIs[NestedTuple[_T_co]]:
+    """Check if `value` is a nested tuple of elements of type `type_`."""
+    return isinstance(value, tuple) and all(
+        isinstance(v, type_) or (isinstance(v, tuple) and is_nested_tuple_of(v, type_))
+        for v in value
+    )
+
+
+def is_maybe_nested_in_tuple_of(
+    value: object, type_: type[_T_co]
+) -> TypeIs[MaybeNestedInTuple[_T_co]]:
+    """Check if `value` is either of type `type_` or a nested tuple of elements of type `type_`."""
+    return isinstance(value, type_) or is_nested_tuple_of(value, type_)
+
+
 # -- Typing annotations --
-SolvedTypeAnnotation = Union[
+SingleTypeAnnotation = Union[
     Type,
-    _typing._SpecialForm,
     _types.GenericAlias,
     _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
 ]
+
+SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
@@ -201,6 +219,42 @@ WriteableBuffer: TypeAlias = Union[
     bytearray, memoryview, _array.array, _mmap.mmap, _pickle.PickleBuffer
 ]
 ReadableBuffer: TypeAlias = Union[ReadOnlyBuffer, WriteableBuffer]
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+class SingleDispatchCallable(Protocol[_P, _T]):
+    registry: Mapping[Any, Callable[_P, _T]]
+
+    def dispatch(self, cls: Any) -> Callable[_P, _T]: ...
+
+    @overload
+    def register(
+        self, cls: Any, func: Literal[None] = None
+    ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
+
+    @overload
+    def register(self, cls: Any, func: Callable[_P, _T]) -> Callable[_P, _T]: ...
+
+    def register(
+        self, cls: Any, func: Callable[_P, _T] | None = None
+    ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]] | Callable[_P, _T]: ...
+
+    def _clear_cache(self) -> None: ...
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+
+
+def is_single_dispatch_callable(
+    func: Callable[_P, _T],
+) -> TypeGuard[SingleDispatchCallable[_P, _T]]:
+    return (
+        callable(func)
+        and callable(getattr(func, "dispatch", None))
+        and callable(getattr(func, "register", None))
+    )
 
 
 class HashlibAlgorithm(Protocol):
@@ -364,12 +418,52 @@ def has_type_parameters(cls: Type) -> bool:
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
 
 
-_T = TypeVar("_T")
-
-
 def get_actual_type(obj: _T) -> Type[_T]:
     """Return type of an object (also working for GenericAlias instances which pretend to be an actual type)."""
     return StdGenericAliasType if isinstance(obj, StdGenericAliasType) else type(obj)
+
+
+def get_represented_types(
+    type_annotation: TypeAnnotation,
+    *,
+    globalns: Optional[Dict[str, Any]] = None,
+    localns: Optional[Dict[str, Any]] = None,
+) -> tuple[type, ...]:
+    """Return a tuple with all the actual types contained in a type annotation."""
+
+    def recurse_all(annotations: Iterable[TypeAnnotation]) -> tuple[type, ...]:
+        return _functools.reduce(lambda acc, c: acc + get_represented_types(c), annotations, ())
+
+    if type_annotation is Ellipsis:
+        return ()
+
+    if is_actual_type(type_annotation):
+        return (type_annotation,)
+
+    if isinstance(type_annotation, TypeVar):
+        if type_annotation.__bound__:
+            return get_represented_types(type_annotation.__bound__)
+        if type_annotation.__constraints__:
+            return recurse_all(type_annotation.__constraints__)
+        if typevar_default := getattr(type_annotation, "__default__", None):
+            return get_represented_types(typevar_default)
+
+    if isinstance(type_annotation, ForwardRef):
+        return get_represented_types(
+            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
+        )
+
+    # Generic types
+    origin_type = get_origin(type_annotation)
+    type_args = get_args(type_annotation)
+
+    if origin_type in [Literal, Union, _types.UnionType]:
+        return recurse_all(t for t in type_args)
+
+    if origin_type is not None:
+        return (origin_type,)
+
+    return ()
 
 
 def is_type_with_custom_hash(type_: Type) -> bool:
@@ -382,56 +476,6 @@ class HasCustomHash(Hashable):
     @classmethod
     def __subclasshook__(cls, candidate_cls: type) -> bool:
         return is_type_with_custom_hash(candidate_cls)
-
-
-def is_value_hashable(obj: Any) -> TypeGuard[HasCustomHash]:
-    return isinstance(obj, type) or obj is None or is_type_with_custom_hash(type(obj))
-
-
-def is_value_hashable_typing(
-    type_annotation: TypeAnnotation,
-    *,
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
-) -> bool:
-    """Check if a type annotation describes a type hashable by value."""
-    if is_actual_type(type_annotation):
-        assert not get_args(type_annotation)
-        return (
-            True
-            if type_annotation in (type, type(None))
-            else is_type_with_custom_hash(type_annotation)
-        )
-
-    if isinstance(type_annotation, TypeVar):
-        if type_annotation.__bound__:
-            return is_value_hashable_typing(type_annotation.__bound__)
-        if type_annotation.__constraints__:
-            return all(is_value_hashable_typing(c) for c in type_annotation.__constraints__)
-        return False
-
-    if isinstance(type_annotation, ForwardRef):
-        return is_value_hashable_typing(
-            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
-        )
-
-    if type_annotation is Any:
-        return False
-
-    # Generic types
-    origin_type = get_origin(type_annotation)
-    type_args = get_args(type_annotation)
-
-    if origin_type is Literal:
-        return True
-
-    if origin_type is Union:
-        return all(is_value_hashable_typing(t) for t in type_args)
-
-    if isinstance(origin_type, type) and is_value_hashable_typing(origin_type):
-        return all(is_value_hashable_typing(t) for t in type_args if t != Ellipsis)
-
-    return type_annotation is None
 
 
 class TypedNamedTupleABC(_abc.ABC, Generic[_T_co]):
@@ -532,7 +576,7 @@ class FrozenDataclass(DataclassABC):
     def __subclasshook__(cls, subclass: type) -> bool:
         try:
             return _dataclasses.is_dataclass(subclass) and (
-                subclass.__dataclass_params__.frozen is not None  # type: ignore[attr-defined]  # subclass.__dataclass_params__ is ok after check
+                subclass.__dataclass_params__.frozen is True  # type: ignore[attr-defined]  # subclass.__dataclass_params__ is ok after check
             )
         except AttributeError:
             return False
@@ -708,7 +752,7 @@ def infer_type(
         Result: ...Callable[..., int]
 
         >>> print("Result:", infer_type(Dict[int, Union[int, float]]))
-        Result: ...ict[int, typing.Union[int, float]]
+        Result: ...ict[int, ...int...float...]
 
     For advanced cases, using :func:`functools.singledispatch` with custom hooks
     is a simple way to extend and customize this base implementation.
@@ -738,7 +782,10 @@ def infer_type(
     if isinstance(value, type):
         return Type[value]
 
-    if isinstance(value, tuple):
+    if isinstance(value, tuple) and not isinstance(value, TypedNamedTupleABC):
+        # Special case for tuples, which can have multiple types.
+        # We should not confuse them with namedtuples, which are
+        # treated as normal classes.
         _, args = _collapse_type_args(*(_infer(item) for item in value))
         if args:
             return StdGenericAliasType(tuple, args)

@@ -13,6 +13,7 @@ import pytest
 import re
 
 from gt4py import next as gtx
+from gt4py._core import definitions as core_defs
 import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
@@ -609,6 +610,52 @@ def test_dimension_promotion(
         assert exc_info.match(re.escape(expected_error_msg))
 
 
+class TestBufferInfo:
+    def test_from_numpy_ndarray(self):
+        import numpy as np
+
+        a = np.asarray([1, 2, 3, 4, 5])
+        buffer_info = common.BufferInfo.from_ndarray(a)
+
+        assert buffer_info.data_ptr == a.ctypes.data
+        assert buffer_info.ndim == a.ndim
+        assert buffer_info.shape == a.shape
+        assert buffer_info.byte_strides == a.strides
+        assert all(b >= e for b, e in zip(buffer_info.byte_strides, buffer_info.elem_strides))
+        assert buffer_info.device.device_type == core_defs.DeviceType.CPU
+        assert buffer_info.device.device_id == 0
+
+    def test_from_cupy_ndarray(self):
+        try:
+            import cp as cp
+        except ImportError:
+            pytest.skip("CuPy is not installed")
+
+        a = cp.asarray([1, 2, 3, 4, 5])
+        buffer_info = common.BufferInfo.from_ndarray(a)
+
+        assert buffer_info.data_ptr == a.data.ptr
+        assert buffer_info.ndim == a.ndim
+        assert buffer_info.shape == a.shape
+        assert buffer_info.byte_strides == a.strides
+        assert all(b >= e for b, e in zip(buffer_info.byte_strides, buffer_info.elem_strides))
+        assert buffer_info.device.device_type == core_defs.CUPY_DEVICE_TYPE
+        assert buffer_info.device.device_id == a.device.id
+
+    def test_hashes(self):
+        import numpy as np
+
+        a = np.asarray([1, 2, 3, 4, 5])
+        buffer_info = common.BufferInfo.from_ndarray(a)
+        assert hash(buffer_info) == buffer_info.hash_key
+
+        # Create a view with the same data pointer and shape
+        b = a[0:None]
+        assert np.allclose(a, b)
+        assert a is not b
+        assert hash(common.BufferInfo.from_ndarray(b)) == buffer_info.hash_key
+
+
 class TestCartesianConnectivity:
     def test_for_translation(self):
         offset = 5
@@ -629,3 +676,94 @@ class TestCartesianConnectivity:
         assert result.domain_dim == I_half
         assert result.codomain == I
         assert result.offset == 0
+
+
+class TestDimensionComparisonOperators:
+    """Test Dimension comparison operators return correct Domain objects."""
+
+    def test_gt(self):
+        result = IDim > 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(4, Infinity.POSITIVE),))
+
+    def test_ge(self):
+        result = IDim >= 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(3, Infinity.POSITIVE),))
+
+    def test_lt(self):
+        result = IDim < 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(Infinity.NEGATIVE, 3),))
+
+    def test_le(self):
+        result = IDim <= 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(Infinity.NEGATIVE, 4),))
+
+    def test_eq_int(self):
+        result = IDim == 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(3, 4),))
+
+    def test_ne_int(self):
+        """Dimension.__ne__ with int raises NotImplementedError."""
+        with pytest.raises(NotImplementedError):
+            IDim != 3
+
+    def test_reverse_gt(self):
+        assert (5 > IDim) == (IDim < 5)
+
+    def test_reverse_ge(self):
+        assert (5 >= IDim) == (IDim <= 5)
+
+    def test_reverse_lt(self):
+        assert (5 < IDim) == (IDim > 5)
+
+    def test_reverse_le(self):
+        assert (5 <= IDim) == (IDim >= 5)
+
+    def test_reverse_eq(self):
+        assert (3 == IDim) == (IDim == 3)
+
+    def test_reverse_ne(self):
+        with pytest.raises(NotImplementedError):
+            3 != IDim
+
+
+class TestDomainAndOperator:
+    """Test Domain.__and__ (intersection)."""
+
+    def test_same_dim(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        d2 = Domain(dims=(IDim,), ranges=(UnitRange(3, 8),))
+        assert (d1 & d2) == Domain(dims=(IDim,), ranges=(UnitRange(3, 5),))
+
+    def test_different_dims(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        d2 = Domain(dims=(JDim,), ranges=(UnitRange(2, 4),))
+        result = d1 & d2
+        assert result == Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(2, 4)))
+
+
+class TestDomainOrOperator:
+    """Test Domain.__or__ (union) — 1D only."""
+
+    def test_same_dim_overlapping(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        d2 = Domain(dims=(IDim,), ranges=(UnitRange(3, 8),))
+        result = d1 | d2
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(0, 8),))
+
+    def test_same_dim_disjoint_raises(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 3),))
+        d2 = Domain(dims=(IDim,), ranges=(UnitRange(5, 8),))
+        with pytest.raises(NotImplementedError):
+            d1 | d2
+
+    def test_multidim_raises(self):
+        d1 = Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 3), UnitRange(0, 3)))
+        d2 = Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 8), UnitRange(5, 8)))
+        with pytest.raises(NotImplementedError):
+            d1 | d2
+
+    def test_different_dims_raises(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        d2 = Domain(dims=(JDim,), ranges=(UnitRange(3, 10),))
+        with pytest.raises(NotImplementedError, match="different dimensions"):
+            d1 | d2

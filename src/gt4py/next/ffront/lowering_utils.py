@@ -9,7 +9,6 @@
 from collections.abc import Iterable
 from typing import Callable, Optional, TypeVar
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts
@@ -23,7 +22,8 @@ def process_elements(
     arg_types: Optional[Iterable[ts.TypeSpec]] = None,
 ) -> itir.FunCall:
     """
-    Recursively applies a processing function to all primitive constituents of a tuple.
+    Recursively applies a processing function to all primitive constituents of a tuple or
+    named collection.
 
     Arguments:
         process_func: A callable that takes an itir.Expr representing a leaf-element of `objs`.
@@ -38,15 +38,18 @@ def process_elements(
     if isinstance(objs, itir.Expr):
         objs = (objs,)
 
-    let_ids = tuple(f"__val_{eve_utils.content_hash(obj)}" for obj in objs)
+    var_names = tuple(f"__val_{obj.fingerprint()}" for obj in objs)
+    # Note: The same `var_name` might appear multiple times if the same object appears multiple
+    # times. Since we use a dict to collect the bound variables, this is fine.
+    bound_vars = {var_name: obj for var_name, obj in zip(var_names, objs)}
     body = _process_elements_impl(
         process_func,
-        tuple(im.ref(let_id) for let_id in let_ids),
+        tuple(im.ref(var_name) for var_name in var_names),
         current_el_type,
         arg_types=arg_types,
     )
 
-    return im.let(*(zip(let_ids, objs, strict=True)))(body)
+    return im.let(*bound_vars.items())(body)
 
 
 T = TypeVar("T", bound=itir.Expr, covariant=True)
@@ -58,7 +61,7 @@ def _process_elements_impl(
     current_el_type: ts.TypeSpec,
     arg_types: Optional[Iterable[ts.TypeSpec]],
 ) -> itir.Expr:
-    if isinstance(current_el_type, ts.TupleType):
+    if isinstance(current_el_type, (ts.TupleType, ts.NamedCollectionType)):
         result = im.make_tuple(
             *(
                 _process_elements_impl(

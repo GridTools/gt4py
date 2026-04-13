@@ -159,13 +159,10 @@ CPUKFirstLayout: Final[LayoutInfo] = {
 register("cpu_kfirst", CPUKFirstLayout)
 
 
-CUDALayout: Final[LayoutInfo] = {
+GPULayout: Final[LayoutInfo] = {
     "alignment": 32,
     "device": "gpu",
     "layout_map": make_cuda_layout_map,
     "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
 }
-register("cuda", CUDALayout)
-
-GPULayout: Final[LayoutInfo] = CUDALayout
 register("gpu", GPULayout)

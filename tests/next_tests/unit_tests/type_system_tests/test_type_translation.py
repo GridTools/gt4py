@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import enum
 import typing
 
 import numpy as np
@@ -14,9 +15,12 @@ import pytest
 import gt4py.next as gtx
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next import constructors
+
+from next_tests.artifacts import custom_named_collections as cnc
 
 
 class CustomInt32DType:
@@ -46,6 +50,10 @@ def test_valid_scalar_kind(value, expected):
 def test_invalid_scalar_kind():
     with pytest.raises(ValueError, match="Non-trivial dtypes"):
         type_translation.get_scalar_kind(np.dtype("i4, (2,3)f8, f4"))
+
+
+def _make_type_string_for_container(cls: type) -> str:
+    return f"{cls.__module__}:{cls.__qualname__}"
 
 
 @pytest.mark.parametrize(
@@ -109,6 +117,85 @@ def test_invalid_scalar_kind():
         (
             typing.Annotated[typing.ForwardRef("float"), "foo"],
             ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+        ),
+        # Python container types
+        (
+            cnc.NamedTupleNamedCollection,
+            NamedTupleNamedCollectionTypeSpec := ts.NamedCollectionType(
+                types=[
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                ],
+                keys=["x", "y"],
+                original_python_type=_make_type_string_for_container(cnc.NamedTupleNamedCollection),
+            ),
+        ),
+        (
+            cnc.DataclassNamedCollection,
+            DataclassNamedCollectionTypeSpec := ts.NamedCollectionType(
+                types=[
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                ],
+                keys=["x", "y"],
+                original_python_type=_make_type_string_for_container(cnc.DataclassNamedCollection),
+            ),
+        ),
+        (
+            cnc.NestedDataclassNamedCollection,
+            ts.NamedCollectionType(
+                types=[
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedDataclassNamedCollection
+                ),
+            ),
+        ),
+        (
+            cnc.NestedNamedTupleDataclassNamedCollection,
+            ts.NamedCollectionType(
+                types=[
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedNamedTupleDataclassNamedCollection
+                ),
+            ),
+        ),
+        (
+            cnc.NestedDataclassNamedTupleNamedCollection,
+            ts.NamedCollectionType(
+                types=[
+                    NamedTupleNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedDataclassNamedTupleNamedCollection
+                ),
+            ),
+        ),
+        (
+            cnc.NestedMixedTupleNamedCollection,
+            ts.NamedCollectionType(
+                types=[
+                    NamedTupleNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedMixedTupleNamedCollection
+                ),
+            ),
         ),
     ],
 )
@@ -187,7 +274,123 @@ def test_as_from_dtype(dtype):
     assert type_translation.as_dtype(type_translation.from_dtype(dtype)) == dtype
 
 
-def test_from_value_module():
+_FIELD = constructors.empty({cnc.TDim: 1}, gtx.float32)
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        # Python container types
+        (
+            cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+            NamedTupleNamedCollectionTypeSpec := ts.NamedCollectionType(
+                types=[
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                ],
+                keys=["x", "y"],
+                original_python_type=_make_type_string_for_container(cnc.NamedTupleNamedCollection),
+            ),
+        ),
+        (
+            cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+            DataclassNamedCollectionTypeSpec := ts.NamedCollectionType(
+                types=[
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                    ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+                ],
+                keys=["x", "y"],
+                original_python_type=_make_type_string_for_container(cnc.DataclassNamedCollection),
+            ),
+        ),
+        (
+            cnc.NestedDataclassNamedCollection(
+                a=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                b=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                c=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+            ),
+            ts.NamedCollectionType(
+                types=[
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedDataclassNamedCollection
+                ),
+            ),
+        ),
+        (
+            cnc.NestedNamedTupleDataclassNamedCollection(
+                a=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                b=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                c=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+            ),
+            ts.NamedCollectionType(
+                types=[
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedNamedTupleDataclassNamedCollection
+                ),
+            ),
+        ),
+        (
+            cnc.NestedDataclassNamedTupleNamedCollection(
+                a=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+                b=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+                c=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+            ),
+            ts.NamedCollectionType(
+                types=[
+                    NamedTupleNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedDataclassNamedTupleNamedCollection
+                ),
+            ),
+        ),
+        (
+            cnc.NestedMixedTupleNamedCollection(
+                a=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+                b=cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+                c=cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+            ),
+            ts.NamedCollectionType(
+                types=[
+                    NamedTupleNamedCollectionTypeSpec,
+                    DataclassNamedCollectionTypeSpec,
+                    NamedTupleNamedCollectionTypeSpec,
+                ],
+                keys=["a", "b", "c"],
+                original_python_type=_make_type_string_for_container(
+                    cnc.NestedMixedTupleNamedCollection
+                ),
+            ),
+        ),
+        (
+            (
+                cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+                cnc.DataclassNamedCollection(x=_FIELD, y=_FIELD),
+            ),
+            ts.TupleType(
+                types=[NamedTupleNamedCollectionTypeSpec, DataclassNamedCollectionTypeSpec]
+            ),
+        ),
+    ],
+)
+def test_from_value(value, expected):
+    assert type_translation.from_value(value) == expected
+
+
+def test_from_value_namespace_proxy():
     import next_tests.artifacts.dummy_package as dummy_package
 
     # TODO(egparedes): the following import should not be necessary
@@ -195,15 +398,35 @@ def test_from_value_module():
     #  investigated.
     import next_tests.artifacts.dummy_package.dummy_module
 
-    assert isinstance(
-        type_translation.from_value(dummy_package), type_translation.UnknownPythonObject
-    )
+    assert isinstance(type_translation.from_value(dummy_package), type_translation.NamespaceProxy)
     assert type_translation.from_value(dummy_package).dummy_module.dummy_int == ts.ScalarType(
         kind=ts.ScalarKind.INT32
     )
     assert type_translation.from_value(dummy_package.dummy_module.dummy_int) == ts.ScalarType(
         kind=ts.ScalarKind.INT32
     )
+
+    frozen_namespace = eve_utils.FrozenNamespace(A=10)
+    assert isinstance(
+        type_translation.from_value(frozen_namespace), type_translation.NamespaceProxy
+    )
+    assert type_translation.from_value(frozen_namespace).A == ts.ScalarType(
+        kind=ts.ScalarKind.INT32
+    )
+
+    nested_frozen_namespace = eve_utils.FrozenNamespace(nested=frozen_namespace)
+    assert isinstance(
+        type_translation.from_value(nested_frozen_namespace), type_translation.NamespaceProxy
+    )
+    assert type_translation.from_value(nested_frozen_namespace).nested.A == ts.ScalarType(
+        kind=ts.ScalarKind.INT32
+    )
+
+    class FooEnum(gtx.int64, enum.Enum):
+        FOO = 10
+
+    assert isinstance(type_translation.from_value(FooEnum), type_translation.NamespaceProxy)
+    assert type_translation.from_value(FooEnum).FOO == ts.ScalarType(kind=ts.ScalarKind.INT64)
 
 
 class SomeEnum(eve.IntEnum):
