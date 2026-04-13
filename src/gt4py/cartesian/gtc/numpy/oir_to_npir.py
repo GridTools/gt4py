@@ -78,6 +78,9 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> Tuple[int, int, eve.Node]:
         return 0, 0, npir.VarKOffset(k=self.visit(node.k, **kwargs))
 
+    def visit_ForIndex(self, node: oir.ForIndex, **kwargs: Any) -> npir.ForIndex:
+        return npir.ForIndex(name=node.name, dtype=node.dtype)
+
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
         i_offset, j_offset, k_offset = self.visit(node.offset, **kwargs)
         data_index = [self.visit(index, **kwargs) for index in node.data_index]
@@ -97,7 +100,9 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: oir.BinaryOp, **kwargs: Any
     ) -> Union[npir.VectorArithmetic, npir.VectorLogic]:
         args = dict(
-            op=node.op, left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
+            op=node.op,
+            left=self.visit(node.left, **kwargs),
+            right=self.visit(node.right, **kwargs),
         )
         if isinstance(node.op, common.LogicalOperator):
             return npir.VectorLogic(**args)
@@ -162,7 +167,17 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             cond_expr = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond_expr)
 
         return npir.While(
-            cond=cond_expr, body=utils.flatten_list(self.visit(node.body, mask=cond_expr, **kwargs))
+            cond=cond_expr,
+            body=utils.flatten_list(self.visit(node.body, mask=cond_expr, **kwargs)),
+        )
+
+    def visit_For(self, node: oir.For, **kwargs: Any) -> npir.For:
+        return npir.For(
+            index_name=node.index_name,
+            iter_start=node.iter_start,
+            iter_stop=node.iter_stop,
+            iter_step=node.iter_step,
+            body=utils.flatten_list(self.visit(node.body, **kwargs)),
         )
 
     def visit_HorizontalRestriction(
@@ -191,11 +206,17 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         stmts = utils.flatten_list(self.visit(node.body, extent=extent, **kwargs))
         return npir.HorizontalBlock(
-            body=stmts, extent=extent, declarations=self.visit(node.declarations, **kwargs)
+            body=stmts,
+            extent=extent,
+            declarations=self.visit(node.declarations, **kwargs),
         )
 
     def visit_VerticalLoopSection(
-        self, node: oir.VerticalLoopSection, *, loop_order: common.LoopOrder, **kwargs: Any
+        self,
+        node: oir.VerticalLoopSection,
+        *,
+        loop_order: common.LoopOrder,
+        **kwargs: Any,
     ) -> npir.VerticalPass:
         return npir.VerticalPass(
             body=self.visit(node.horizontal_executions, **kwargs),

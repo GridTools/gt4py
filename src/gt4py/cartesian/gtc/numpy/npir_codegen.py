@@ -179,6 +179,8 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     VarKOffset = as_fmt("lk + {k}")
 
+    ForIndex = as_fmt("{name}")
+
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
         k_offset = (
             self.visit(node.k_offset, **kwargs)
@@ -328,6 +330,28 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         for stmt in self.visit(node.body, **kwargs):
             body.extend(stmt.split("\n"))
         return self.While.render(cond=cond, body=body)
+
+    For = as_jinja(
+        textwrap.dedent(
+            """\
+            for {{ index_name }} in range({{ iter_start }}, {{ iter_stop }}, {{ iter_step }}):
+                {% for stmt in body %}{{ stmt }}
+                {% endfor %}
+            """
+        )
+    )
+
+    def visit_For(self, node: npir.For, **kwargs: Any) -> str:
+        body = []
+        for stmt in self.visit(node.body, **kwargs):
+            body.extend(stmt.split("\n"))
+        return self.For.render(
+            index_name=self.visit(node.index_name, **kwargs),
+            iter_start=self.visit(node.iter_start, **kwargs),
+            iter_stop=self.visit(node.iter_stop, **kwargs),
+            iter_step=self.visit(node.iter_step, **kwargs),
+            body=body,
+        )
 
     def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
         is_serial = node.direction != common.LoopOrder.PARALLEL

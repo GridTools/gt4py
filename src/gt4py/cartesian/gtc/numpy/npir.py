@@ -118,6 +118,10 @@ class VarKOffset(common.VariableKOffset[Expr]):
     pass
 
 
+class ForIndex(common.ForIndex, Expr):
+    pass
+
+
 class FieldSlice(VectorLValue):
     name: eve.Coerced[eve.SymbolRef]
     i_offset: int
@@ -178,6 +182,10 @@ class VectorAssign(common.AssignStmt[VectorLValue, Expr], Stmt):
 
 
 class While(common.While[Stmt, Expr], Stmt):
+    pass
+
+
+class For(common.For[Stmt], Stmt):
     pass
 
 
