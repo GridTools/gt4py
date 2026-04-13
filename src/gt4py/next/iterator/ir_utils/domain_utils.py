@@ -197,7 +197,7 @@ class SymbolicDomain:
                 assert len(connectivity.domain.dims) == 1
                 # cartesian offset
 
-                old_dim = connectivity.domain_dim
+                old_dim = connectivity.domain.dims[0]
                 new_dim = connectivity.codomain
 
                 assert new_dim not in new_ranges or old_dim == new_dim
@@ -217,7 +217,7 @@ class SymbolicDomain:
                     trace_shifts.Sentinel.ALL_NEIGHBORS,
                     trace_shifts.Sentinel.VALUE,
                 ]
-                old_dim = connectivity.source_dim
+                old_dim = connectivity.domain.dims[0]
                 new_dim = connectivity.codomain
                 assert new_dim not in new_ranges or old_dim == new_dim
                 if symbolic_domain_sizes is not None and new_dim.value in symbolic_domain_sizes:
