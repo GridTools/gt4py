@@ -15,24 +15,11 @@ import numbers
 import textwrap
 import time
 import types
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Final,
-    List,
-    Literal,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Type, Union
 
 import numpy as np
 
-from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
+from gt4py.cartesian import definitions as gt_definitions, gtscript, type_hints, utils as gt_utils
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.base import Frontend, register
 from gt4py.cartesian.frontend.defir_builder import DefIRBuilder
@@ -770,11 +757,12 @@ class CompiledIfInliner(ast.NodeTransformer):
     def __init__(self, context: Dict[str, Any]):
         self.context = context
 
-    def visit_If(self, node: ast.If):
+    def visit_If(self, ast_node: ast.If):
         # Compile-time evaluation of "if" conditions
-        node = self.generic_visit(node)
+        node = self.generic_visit(ast_node)
         if (
-            isinstance(node.test, ast.Call)
+            isinstance(node, ast.If)
+            and isinstance(node.test, ast.Call)
             and isinstance(node.test.func, ast.Name)
             and node.test.func.id == "__INLINED"
             and len(node.test.args) == 1
@@ -782,11 +770,11 @@ class CompiledIfInliner(ast.NodeTransformer):
             eval_node = node.test.args[0]
             condition_value = gt_meta.ast_eval(eval_node, self.context, default=gt_utils.NOTHING)
             if condition_value is not gt_utils.NOTHING:
-                node = node.body if condition_value else node.orelse
-            else:
-                raise GTScriptSyntaxError(
-                    "Evaluation of compile-time 'if' condition failed at the preprocessing step"
-                )
+                return node.body if condition_value else node.orelse
+
+            raise GTScriptSyntaxError(
+                "Evaluation of compile-time 'if' condition failed at the preprocessing step"
+            )
 
         return node if node else None
 
@@ -1335,28 +1323,31 @@ class IRMaker(ast.NodeVisitor):
                 value = gt_meta.ast_eval(index_node, axis_context)
             except Exception as ex:
                 raise GTScriptSyntaxError(
-                    message="Could not evaluate axis shift expression.", loc=index_node
+                    message="Could not evaluate axis shift expression.",
+                    loc=nodes.Location.from_ast_node(index_node),
                 ) from ex
 
             if not isinstance(value, (gtscript.ShiftedAxis, gtscript.Axis)):
                 raise GTScriptSyntaxError(
                     message=f"Axis shift expression evaluated to unrecognized type {type(value)}.",
-                    loc=index_node,
+                    loc=nodes.Location.from_ast_node(index_node),
                 )
 
             axis_index = all_spatial_axes.index(value.name)
             if axis_index < 0:
                 raise GTScriptSyntaxError(
-                    message=f"Unrecognized axis: {value.name}", loc=index_node
+                    message=f"Unrecognized axis: {value.name}",
+                    loc=nodes.Location.from_ast_node(index_node),
                 )
             if axis_index < last_index:
                 raise GTScriptSyntaxError(
                     message=f"Axis {value.name} is specified out of order",
-                    loc=index_node,
+                    loc=nodes.Location.from_ast_node(index_node),
                 )
             if axis_index == last_index:
                 raise GTScriptSyntaxError(
-                    message=f"Duplicate axis found: {value.name}", loc=index_node
+                    message=f"Duplicate axis found: {value.name}",
+                    loc=nodes.Location.from_ast_node(index_node),
                 )
             last_index = axis_index
 
@@ -1376,7 +1367,9 @@ class IRMaker(ast.NodeVisitor):
         )
 
         if any(isinstance(cn, ast.Slice) for cn in index_nodes):
-            raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
+            raise GTScriptSyntaxError(
+                message="Invalid target in assignment.", loc=nodes.Location.from_ast_node(node)
+            )
         if any(isinstance(cn, ELLIPSIS_TYPE) for cn in index_nodes):
             return None
 
@@ -1760,9 +1753,11 @@ class IRMaker(ast.NodeVisitor):
     # -- Statement nodes --
     def _parse_assign_target(
         self, target_node: Union[ast.Subscript, ast.Name]
-    ) -> Tuple[str, Optional[List[int]], Optional[List[int]]]:
+    ) -> tuple[
+        str, list[int] | nodes.AbsoluteKIndex | None, list[int] | nodes.AbsoluteKIndex | None
+    ]:
         invalid_target = GTScriptSyntaxError(
-            message="Invalid target in assignment.", loc=target_node
+            message="Invalid target in assignment.", loc=nodes.Location.from_ast_node(target_node)
         )
         spatial_offset = None
         data_index = None
@@ -1826,6 +1821,11 @@ class IRMaker(ast.NodeVisitor):
         for t in targets[0].elts if isinstance(targets[0], ast.Tuple) else targets:
             name, spatial_offset, data_index = self._parse_assign_target(t)
             if spatial_offset:
+                if isinstance(spatial_offset, nodes.AbsoluteKIndex):
+                    raise GTScriptSyntaxError(
+                        message="Assignment with absolute K index is not allowed.",
+                        loc=nodes.Location.from_ast_node(t),
+                    )
                 if spatial_offset[0] != 0 or spatial_offset[1] != 0:
                     raise GTScriptSyntaxError(
                         message="Assignment to non-zero offsets is not supported in IJ.",
@@ -1858,10 +1858,15 @@ class IRMaker(ast.NodeVisitor):
                     if target_annotation is not None:
                         source = ast.unparse(target_annotation)
                         try:
+                            just_string_types = {
+                                k: v
+                                for k, v in self.temporary_field_type.items()
+                                if isinstance(k, str)
+                            }
                             dtype_or_field_desc = eval(
                                 source,
                                 self.temporary_type_as_str_to_native_type
-                                | self.temporary_field_type
+                                | just_string_types
                                 | gtscript.__dict__,
                             )
                         except NameError:
@@ -2013,7 +2018,7 @@ class IRMaker(ast.NodeVisitor):
                 # Splice `withItems` of current/primary with statement into nested with
                 with_node.items.extend(node.items)
 
-                compute_blocks.append(self._visit_computation_node(with_node))
+                compute_blocks.append(self._visit_computation_node(with_node))  # type: ignore[arg-type]  # we check above
 
             # Validate block specification order
             #  the nested computation blocks must be specified in their order of execution. The order of execution is
@@ -2056,7 +2061,7 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
         return cls()(node)
 
     def __call__(self, node: ast.FunctionDef):
-        self.local_symbols = set()
+        self.local_symbols: set[str] = set()
         self.visit(node)
         result = self.local_symbols
         del self.local_symbols
@@ -2090,7 +2095,7 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
 
 class GTScriptParser(ast.NodeVisitor):
     CONST_VALUE_TYPES = (
-        *gtscript._VALID_DATA_TYPES,
+        *gtscript._VALID_DATA_TYPES,  # type: ignore[has-type]
         types.FunctionType,
         type(None),
         gtscript.AxisIndex,
@@ -2119,10 +2124,10 @@ class GTScriptParser(ast.NodeVisitor):
 
     @staticmethod
     def annotate_definition(
-        definition: Callable,
+        definition: type_hints.StencilFunc,
         options: gt_definitions.BuildOptions | None = None,
         externals=None,
-    ) -> Callable:
+    ) -> type_hints.AnnotatedStencilFunc:
         """Annotate the function definition with dtypes, resolve externals and add default values.
 
         Args:
@@ -2171,6 +2176,7 @@ class GTScriptParser(ast.NodeVisitor):
                     )
                 default = param.default
 
+            dtype_annotation: str | gtscript._FieldDescriptor | np.dtype | None
             if isinstance(param.annotation, (str, gtscript._FieldDescriptor)):
                 dtype_annotation = param.annotation
             elif (
@@ -2255,7 +2261,8 @@ class GTScriptParser(ast.NodeVisitor):
                 assert isinstance(ann_assign.value, ast.Constant)
                 temp_init_values[name] = ann_assign.value.value
 
-        definition._gtscript_ = dict(
+        annotated: type_hints.AnnotatedStencilFunc = definition  # type: ignore[assignment]
+        annotated._gtscript_ = dict(
             qualified_name=qualified_name,
             api_signature=api_signature,
             api_annotations=api_annotations,
@@ -2267,7 +2274,7 @@ class GTScriptParser(ast.NodeVisitor):
             externals=resolved_externals if externals is not None else {},
         )
 
-        return definition
+        return annotated
 
     @staticmethod
     def collect_external_symbols(definition):
@@ -2379,9 +2386,9 @@ class GTScriptParser(ast.NodeVisitor):
                 resolved_imports[imported_name] = imported_value
 
         # Collect all imported and inlined values recursively through all the external symbols
-        last_resolved_values = set()
+        last_resolved_values: Any = set()
         while resolved_imports or resolved_values_list:
-            new_imports = {}
+            new_imports: dict = {}
             for name, accesses in resolved_imports.items():
                 if accesses:
                     for attr_name, attr_nodes in accesses.items():
@@ -2598,10 +2605,10 @@ class GTScriptFrontend(Frontend):
     @classmethod
     def prepare_stencil_definition(
         cls,
-        definition: Callable,
-        externals,
+        definition: type_hints.AnyStencilFunc,
+        externals: dict[str, Any],
         options: gt_definitions.BuildOptions | None = None,
-    ) -> Callable:
+    ) -> type_hints.AnnotatedStencilFunc:
         """Return an annotated version of the stencil definition.
 
         Args:

@@ -81,7 +81,10 @@ class Frontend(abc.ABC):
     @classmethod
     @abc.abstractmethod
     def prepare_stencil_definition(
-        cls, definition: AnyStencilFunc, externals: dict[str, Any]
+        cls,
+        definition: AnyStencilFunc,
+        externals: dict[str, Any],
+        options: BuildOptions | None = None,
     ) -> AnnotatedStencilFunc:
         """
         Annotate the stencil function if not already done so.
