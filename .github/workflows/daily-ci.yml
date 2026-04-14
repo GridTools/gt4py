@@ -105,20 +105,15 @@ jobs:
         if: ${{ (env.DAY_OF_WEEK == 1) && (github.event_name == 'schedule') }}
         env:
           DAY_OF_WEEK: ${{ steps.get_day_of_the_week.outputs.day_of_week }}
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v3.0.1
         with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
           channel-id: ${{ vars.SLACK_BOT_CHANNEL }} # Use SLACK_BOT_CHANNEL_TEST for testing
           payload: |
-            {
-              "text": "Weekly reminder to check the latest runs of the GT4Py Daily CI workflow at the GitHub Actions dashboard [https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml].",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Weekly reminder to check the latest runs of the <https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml|GT4Py Daily CI> workflow at the GitHub Actions dashboard."
-                  }
-                }
-              ]
-            }
+            text: "Weekly reminder to check the latest runs of the GT4Py Daily CI workflow at the GitHub Actions dashboard [https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml].",
+            blocks:
+              - type: "section",
+                text:
+                  type: "mrkdwn",
+                  text: "Weekly reminder to check the latest runs of the <https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml|GT4Py Daily CI> workflow at the GitHub Actions dashboard."
