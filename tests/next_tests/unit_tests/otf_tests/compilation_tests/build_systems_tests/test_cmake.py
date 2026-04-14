@@ -36,14 +36,14 @@ def test_get_cmake_device_arch_option_rocm():
     with (
         mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.ROCM),
         mock.patch(
-            "gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "gfx942"
+            "gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "gfx940"
         ),
     ):
         # Test ROCM device without user-provided environment variable
         with mock.patch.dict(os.environ, {}):
-            assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx942"
+            assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx940"
         with mock.patch.dict(os.environ, {"HIPARCHS": ""}):
-            assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx942"
+            assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx940"
 
         # Test ROCM device with HIPARCHS environment variable
         with mock.patch.dict(os.environ, {"CUDAARCHS": "80", "HIPARCHS": "gfx90a"}):
