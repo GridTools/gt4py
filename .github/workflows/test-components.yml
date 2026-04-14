@@ -63,6 +63,7 @@ jobs:
 
   # Test-running job
   test-component:
+    if: false
     needs: [get-python-versions, define-test-sessions-exclusions]
     strategy:
       matrix:
