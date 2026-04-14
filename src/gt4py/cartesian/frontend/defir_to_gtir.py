@@ -10,7 +10,7 @@ import copy
 import functools
 import itertools
 import numbers
-from typing import Any, Final, List, Optional, Tuple, Union, cast
+from typing import Any, Final, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -66,9 +66,7 @@ def _convert_dtype(data_type) -> common.DataType:
     if dtype == common.DataType.DEFAULT:
         # TODO: this will be a frontend choice later
         # in non-GTC parts, this is set in the backend
-        dtype = cast(
-            common.DataType, common.DataType.FLOAT64
-        )  # see https://github.com/GridTools/gtc/issues/100
+        dtype = common.DataType.FLOAT64
     return dtype
 
 
@@ -161,7 +159,7 @@ class UnrollVectorAssignments(IRNodeMapper):
 
     def visit_Assign(
         self, node: Assign, *, fields_decls: dict[str, FieldDecl], **kwargs
-    ) -> Union[gtir.ParAssignStmt, List[gtir.ParAssignStmt]]:
+    ) -> Assign | list[Assign]:
         if self._is_vector_assignment(node, fields_decls):
             assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
             target_dims = fields_decls[node.target.name].data_dims
@@ -249,20 +247,20 @@ class UnrollVectorExpressions(IRNodeMapper):
 
     def visit_UnaryOpExpr(self, node: UnaryOpExpr, *, fields_decls: dict[str, FieldDecl], **kwargs):
         if node.op == UnaryOperator.TRANSPOSED:
-            node = self.visit(node.arg, fields_decls=fields_decls, **kwargs)
-            assert isinstance(node, list) and all(
-                isinstance(row, list) and len(row) == len(node[0]) for row in node
+            argument = self.visit(node.arg, fields_decls=fields_decls, **kwargs)
+            assert isinstance(argument, list) and all(
+                isinstance(row, list) and len(row) == len(argument[0]) for row in argument
             )
             # transpose list
-            node = [list(x) for x in zip(*node)]
-            return node
+            argument = [list(x) for x in zip(*argument)]
+            return argument
 
         return self.generic_visit(node, **kwargs)
 
     def visit_BinOpExpr(self, node: BinOpExpr, *, fields_decls: dict[str, FieldDecl], **kwargs):
         lhs = self.visit(node.lhs, fields_decls=fields_decls, **kwargs)
         rhs = self.visit(node.rhs, fields_decls=fields_decls, **kwargs)
-        result: Union[List[BinOpExpr], BinOpExpr] = []
+        result: list[BinOpExpr] = []
 
         if node.op == BinaryOperator.MATMULT:
             for j in range(len(lhs)):
@@ -587,20 +585,20 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_VarRef(self, node: VarRef, **kwargs) -> gtir.ScalarAccess:
         return gtir.ScalarAccess(name=node.name, loc=location_to_source_location(node.loc))
 
-    def visit_AxisInterval(self, node: AxisInterval) -> Tuple[gtir.AxisBound, gtir.AxisBound]:
+    def visit_AxisInterval(self, node: AxisInterval) -> tuple[common.AxisBound, common.AxisBound]:
         return self.visit(node.start), self.visit(node.end)
 
-    def visit_AxisBound(self, node: AxisBound) -> gtir.AxisBound:
+    def visit_AxisBound(self, node: AxisBound) -> common.AxisBound:
         # TODO(havogt) add support VarRef
-        return gtir.AxisBound(
+        return common.AxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )
 
-    def visit_RuntimeAxisBound(self, node: RuntimeAxisBound) -> gtir.RuntimeAxisBound:
+    def visit_RuntimeAxisBound(self, node: RuntimeAxisBound) -> common.RuntimeAxisBound:
         utils.warn_experimental_feature(
             feature="Runtime Interval Bounds", ADR="experimental/runtime-intervals.md"
         )
-        return gtir.RuntimeAxisBound(
+        return common.RuntimeAxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level],
             offset=self.visit(node.offset),
         )
