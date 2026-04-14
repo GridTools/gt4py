@@ -69,18 +69,26 @@ def layout_maker_factory(
     base_layout: Tuple[int, ...],
 ) -> Callable[[Tuple[str, ...]], Tuple[int, ...]]:
     def layout_maker(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
+        """Create layout from a given list of dimensions. Cartesian dimensions
+        are given precedence so they follow the requested layout, other dimensions
+        will be appended to it."""
+
+        # Sort cartesian layout
         mask = [dim in dimensions for dim in "IJK"]
-        mask += [True] * (len(dimensions) - sum(mask))
         ranks = []
         for m, bl in zip(mask, base_layout):
             if m:
                 ranks.append(bl)
-        if len(mask) > 3:
-            if base_layout[2] == 2:
-                ranks.extend(3 + c for c in range(len(mask) - 3))
-            else:
-                ranks.extend(-c for c in range(len(mask) - 3))
 
+        # Sort data dimensions
+        # - shift all cartesian layout
+        data_dimensions_size = len(dimensions) - sum(mask)
+        ranks = [data_dimensions_size + r for r in ranks]
+        # - extend ranks with the required amount of data dimensions
+        for ddim in range(data_dimensions_size):
+            ranks.append(ddim)
+
+        # Turn ranks into memory layout
         res_layout = [0] * len(ranks)
         for i, idx in enumerate(np.argsort(ranks)):
             res_layout[idx] = i
