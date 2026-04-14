@@ -626,10 +626,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             eve.walk_values(expr)
             .filter(lambda node: cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain")))
             .map(
-                lambda domain: eve.walk_values(domain)
-                .if_isinstance(gtir.SymRef)
-                .filter(lambda sym: str(sym.id) in lambda_symbols)
-                .to_set()
+                lambda domain: (
+                    eve.walk_values(domain)
+                    .if_isinstance(gtir.SymRef)
+                    .filter(lambda sym: str(sym.id) in lambda_symbols)
+                    .to_set()
+                )
             )
             .reduce(lambda x, y: x | y, init=set())
         )
@@ -922,9 +924,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         if use_temp:  # copy the full shape of global data to temporary storage
             return gtx_utils.tree_map(
-                lambda x: x
-                if x is None or x.dc_node.desc(ctx.sdfg).transient
-                else ctx.copy_data(self, x, domain=None)
+                lambda x: (
+                    x
+                    if x is None or x.dc_node.desc(ctx.sdfg).transient
+                    else ctx.copy_data(self, x, domain=None)
+                )
             )(result)
         else:
             return result

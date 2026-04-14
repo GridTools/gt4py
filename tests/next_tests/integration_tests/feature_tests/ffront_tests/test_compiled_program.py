@@ -5,7 +5,9 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+import inspect
+import warnings
+from typing import Optional, NamedTuple
 from unittest import mock
 
 import numpy as np
@@ -35,9 +37,15 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     skip_value_mesh,
 )
 
+from gt4py.next.otf import arguments
 
 _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
+
+
+class NamedTupleNamedCollection(NamedTuple):
+    u: cases.IField
+    v: cases.IField
 
 
 @pytest.fixture(
@@ -936,3 +944,88 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
         gtx.wait_for_compilation()
         # ... and afterwards compilation still works
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+
+
+def test_compile_variants_decorator_static_domains(cartesian_case):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    captured_cargs: Optional[arguments.CompileTimeArgs] = None
+
+    class CaptureCompileTimeArgsBackend:
+        def __getattr__(self, name):
+            return getattr(cartesian_case.backend, name)
+
+        def compile(self, program, compile_time_args):
+            nonlocal captured_cargs
+            captured_cargs = compile_time_args
+
+            return cartesian_case.backend.compile(program, compile_time_args)
+
+    @gtx.field_operator
+    def identity_like(inp: tuple[cases.IField, cases.IField, float]):
+        return NamedTupleNamedCollection(u=inp[0], v=inp[1])
+
+    # the float argument here is merely to test that static domains work for tuple arguments
+    # of inhomogeneous types
+    @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
+    def testee(inp: tuple[cases.IField, cases.IField, float], out: NamedTupleNamedCollection):
+        identity_like(inp, out=out)
+
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    out = cases.allocate(cartesian_case, testee, "out")()
+
+    testee(inp, out, offset_provider={})
+    assert np.allclose(inp[0].ndarray, out[0].ndarray)
+    assert np.allclose(inp[1].ndarray, out[1].ndarray)
+
+    assert testee._compiled_programs.argument_descriptor_mapping[
+        arguments.FieldDomainDescriptor
+    ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
+    assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
+        "inp": (
+            arguments.FieldDomainDescriptor(inp[0].domain),
+            arguments.FieldDomainDescriptor(inp[1].domain),
+            None,
+        ),
+        "out": (
+            arguments.FieldDomainDescriptor(out[0].domain),
+            arguments.FieldDomainDescriptor(out[1].domain),
+        ),
+    }
+
+
+@pytest.fixture
+def scan_operator_testee(cartesian_case):
+    """A scan operator called directly as a FieldOperator — the only case where _is_generic=True."""
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    @gtx.scan_operator(axis=KDim, forward=True, init=0, backend=cartesian_case.backend)
+    def testee(carry: gtx.int32, inp: gtx.int32) -> gtx.int32:
+        return carry + inp
+
+    return testee
+
+
+@pytest.mark.uses_scan
+def test_warn_on_direct_scan_operator_call(cartesian_case, scan_operator_testee):
+    """A warning is emitted when a scan operator is called directly as a FieldOperator.
+
+    Scan operators called directly (not wrapped in a @program) are the only case where
+    _is_generic is True, triggering the 'not optimized' generic-program warning.
+    """
+    k_size = cartesian_case.default_sizes[KDim]
+    inp = cartesian_case.as_field([KDim], np.arange(k_size, dtype=np.int32))
+    out = cartesian_case.as_field([KDim], np.zeros(k_size, dtype=np.int32))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        call_lineno = inspect.currentframe().f_lineno + 1
+        scan_operator_testee(inp, out=out, offset_provider=cartesian_case.offset_provider)
+
+    generic_warnings = [w for w in caught if "generic" in str(w.message)]
+    assert len(generic_warnings) == 1
+    w = generic_warnings[0]
+    assert w.filename == __file__
+    assert w.lineno == call_lineno
