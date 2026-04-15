@@ -298,7 +298,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         for data_name, data_desc in fused_conditional_block.sdfg.arrays.items():
             if data_name == "__cond":
                 continue
-            new_data_name = self.uids[f"{data_name}_cb_fusion"]
+            new_data_name = next(self.uids[f"{data_name}_cb_fusion"])
             data_desc_renamed = copy.deepcopy(data_desc)
             second_arrays_rename_map[data_name] = (
                 nested_sdfg_of_extended_conditional_block.sdfg.add_datadesc(
