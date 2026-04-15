@@ -104,6 +104,10 @@ _profile_ctx_manager_lock: threading.Lock = threading.Lock()
 @contextlib.contextmanager
 def profile_calls() -> Generator[None, None, None]:
     """Context manager that enables GPU profiling of GT4Py program calls within its scope."""
+    if _profile_ctx_manager is not None:
+        raise RuntimeError(
+            "A GPU profiling session is already active. Nested calls to profile_calls() are not allowed."
+        )
     start_profiling_calls()
     try:
         yield
