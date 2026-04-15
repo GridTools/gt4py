@@ -18,6 +18,7 @@ from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, util
 from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
+from dace.utils import print_sdfg_hash
 
 from gt4py.next import common as gtx_common, config as gtx_config, utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
@@ -256,12 +257,14 @@ def gt_auto_optimize(
         # Initial Cleanup
         # NOTE: The initial simplification stage must be synchronized with the one that
         #   `gt_substitute_compiletime_symbols()` performs!
+        print_sdfg_hash(sdfg)
         gtx_transformations.gt_simplify(
             sdfg=sdfg,
             validate=False,
             skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
             validate_all=validate_all,
         )
+        print_sdfg_hash(sdfg)
 
         if constant_symbols:
             gtx_transformations.gt_substitute_compiletime_symbols(
@@ -273,6 +276,7 @@ def gt_auto_optimize(
                 validate=False,
                 validate_all=validate_all,
             )
+        print_sdfg_hash(sdfg)
 
         # Demote the fields.
         #  Actually they should probably be at the very start of this function, however,
@@ -306,10 +310,12 @@ def gt_auto_optimize(
                     skip=gtx_transformations.constants._GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST,
                     validate_all=validate_all,
                 )
+        print_sdfg_hash(sdfg)
 
         gtx_transformations.gt_reduce_distributed_buffering(
             sdfg, validate=False, validate_all=validate_all
         )
+        print_sdfg_hash(sdfg)
 
         # Process top level Maps
         sdfg = _gt_auto_process_top_level_maps(
@@ -319,12 +325,14 @@ def gt_auto_optimize(
             optimization_hooks=optimization_hooks,
             validate_all=validate_all,
         )
+        print_sdfg_hash(sdfg)
 
         # We now ensure that point wise computations are properly double buffered,
         #  this ensures that rule 3 of ADR-18 is maintained.
         # TODO(phimuell): Figuring out if it is important to do it before the inner
         #   Map optimization. I think it is, especially when we apply `LoopBlocking`.
         gtx_transformations.gt_create_local_double_buffering(sdfg)
+        print_sdfg_hash(sdfg)
 
         # Optimize the interior of the Maps:
         sdfg = _gt_auto_process_dataflow_inside_maps(
@@ -338,6 +346,7 @@ def gt_auto_optimize(
             validate_all=validate_all,
             uids=uids,
         )
+        print_sdfg_hash(sdfg)
 
         # Configure the Maps:
         #  Will also perform the GPU transformation.
@@ -388,6 +397,7 @@ def gt_auto_optimize(
             gpu_block_size_spec=gpu_block_size_spec if gpu_block_size_spec else None,
             validate_all=validate_all,
         )
+        print_sdfg_hash(sdfg)
 
         # Transients
         sdfg = _gt_auto_post_processing(
@@ -402,6 +412,7 @@ def gt_auto_optimize(
             gpu_memory_pool=gpu_memory_pool,
             validate_all=validate_all,
         )
+        print_sdfg_hash(sdfg)
 
         # Canonicalize the SDFG. This ensures that the code generator will see SDFGs
         #  that conform to the historical expected version.
@@ -757,6 +768,7 @@ def _gt_auto_process_dataflow_inside_maps(
 
     # Make sure that this runs before MoveDataflowIntoIfBody because atm it doesn't handle
     # NestedSDFGs inside the ConditionalBlocks it fuses.
+    sdfg.save("/home/tille/Development/icon4py/graupel_before_fuse_horizontal_condblocks.json")
     sdfg.apply_transformations_repeated(
         gtx_transformations.FuseHorizontalConditionBlocks(uids=uids),
         validate=True,

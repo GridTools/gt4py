@@ -53,6 +53,9 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
     nsdfg_b = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
     uids = dace_properties.Property(dtype=gtx_utils.IDGeneratorPool)
 
+    def __init__(self, *args, uids: gtx_utils.IDGeneratorPool, **kwargs):
+        super().__init__(*args, **kwargs)
+
     # The fusion of the two conditional blocks can happen in any order. To avoid any indeterminism distinguish which one is the fused and which one is the extended conditional block which will include the fused one.
     @staticmethod
     def _order_conditional_blocks_based_on_label(
