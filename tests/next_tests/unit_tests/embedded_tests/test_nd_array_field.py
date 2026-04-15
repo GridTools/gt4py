@@ -1271,6 +1271,17 @@ def test_invert_domain(domain, expected):
             None,
             ValueError,
         ),
+        # three fields: first two overlap, third is disjoint from both
+        (
+            [
+                ([1, 2], {D0: (0, 2)}),
+                ([3, 4], {D0: (1, 3)}),
+                ([5, 6], {D0: (10, 12)}),
+            ],
+            D0,
+            None,
+            ValueError,
+        ),
         # negative domain indices
         (
             [([1, 2], {D0: (-3, -1)}), ([3], {D0: (-1, 0)})],

@@ -11,6 +11,7 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
+import itertools
 from collections.abc import Callable, Sequence
 from types import ModuleType
 
@@ -867,11 +868,9 @@ def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
     # currently only concatenate along the given dimension
     sorted_fields = sorted(fields, key=lambda f: f.domain[dim].unit_range.start)
 
-    if (
-        len(sorted_fields) > 1
-        and not embedded_common.domain_intersection(*[f.domain for f in sorted_fields]).is_empty()
-    ):
-        raise ValueError("Fields to concatenate must not overlap.")
+    for prev, curr in itertools.pairwise(sorted_fields):
+        if curr.domain[dim].unit_range.start < prev.domain[dim].unit_range.stop:
+            raise ValueError("Fields to concatenate must not overlap.")
     new_domain = _stack_domains(*[f.domain for f in sorted_fields], dim=dim)
     if new_domain is None:
         raise embedded_exceptions.NonContiguousDomain(f"Cannot concatenate fields along {dim}.")
