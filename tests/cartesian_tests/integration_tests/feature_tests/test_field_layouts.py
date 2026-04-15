@@ -91,7 +91,7 @@ def test_data_dimensions_stride_is_always_higher_than_cartesian(backend):
     # Test a 5D array
     shape = (2, 2, 2, 2, 2)
     allocated_array = gt_storage.zeros(
-        backend=backend, shape=shape, dtype=xp.float64, aligned_index=(0, 0, 0, 0)
+        backend=backend, shape=shape, dtype=xp.float64, aligned_index=(0, 0, 0, 0, 0)
     )
 
     assert allocated_array.strides[3] > max(
