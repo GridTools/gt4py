@@ -37,10 +37,13 @@ try:
     assert core_definitions.CUPY_DEVICE_TYPE is not None
 
     time_range: Final = cupyx_profiler.time_range
+    """Context manager for marking a time range in GPU profiling sessions, with optional message and color."""
+
     profile: Final = cupyx_profiler.profile
+    """Context manager for signaling the GPU profiler tool the beginning and end of a profiling session."""
 
 except ImportError:
-    cupy = None
+    cupyx_profiler = None
 
     class ProfilingContextManager(contextlib.AbstractContextManager):
         """Fallback profiling context manager that does nothing but emit a warning."""
@@ -120,7 +123,13 @@ def start_profiling_calls() -> None:
             _profile_ctx_manager = profile()
             hooks.program_call_context.register(ProgramCallProfiler, index=0)
             hooks.compiled_program_call_context.register(CompiledProgramCallProfiler, index=0)
-            _profile_ctx_manager.__enter__()
+            try:
+                _profile_ctx_manager.__enter__()
+            except Exception as e:
+                hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
+                hooks.program_call_context.remove(ProgramCallProfiler)
+                _profile_ctx_manager = None
+                raise e
 
 
 def stop_profiling_calls() -> None:
@@ -128,10 +137,12 @@ def stop_profiling_calls() -> None:
     global _profile_ctx_manager
     with _profile_ctx_manager_lock:
         if _profile_ctx_manager is not None:
-            _profile_ctx_manager.__exit__(None, None, None)
-            hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
-            hooks.program_call_context.remove(ProgramCallProfiler)
-            _profile_ctx_manager = None
+            try:
+                _profile_ctx_manager.__exit__(None, None, None)
+            finally:
+                hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
+                hooks.program_call_context.remove(ProgramCallProfiler)
+                _profile_ctx_manager = None
 
 
 class ProgramProfiler(contextlib.AbstractContextManager):
@@ -154,7 +165,13 @@ class ProgramProfiler(contextlib.AbstractContextManager):
 
 
 class ProgramCallProfiler(ProgramProfiler):
-    """Hook-compatible profiler that emits a time range around each program call."""
+    """
+    Hook-compatible profiler that emits a time range around each program call.
+
+    By default it uses a hardcoded color ID for the time ranges. GT4Py
+    programs can override this by explicitly setting a `program_color_id`
+    attribute on their python definition function.
+    """
 
     color_id: int = 1  # default for program calls, program definitions can override it
 
@@ -173,7 +190,13 @@ class ProgramCallProfiler(ProgramProfiler):
 
 
 class CompiledProgramCallProfiler(ProgramProfiler):
-    """Hook-compatible profiler that emits a time range around each compiled program dispatch."""
+    """
+    Hook-compatible profiler that emits a time range around each compiled program dispatch.
+
+    By default it uses a hardcoded color ID for the time ranges. GT4Py
+    programs can override this by explicitly setting a `compiled_program_color_id`
+    attribute on their python definition function.
+    """
 
     color_id: int = 2  # default for compiled program calls, program definitions can override it
 
