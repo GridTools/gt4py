@@ -14,6 +14,7 @@ from dace import properties as dace_properties, transformation as dace_transform
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import helpers as dace_helpers
 
+from gt4py.next import utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
@@ -50,6 +51,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
     conditional_access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     nsdfg_a = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
     nsdfg_b = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
+    uids = dace_properties.Property(dtype=gtx_utils.IDGeneratorPool)
 
     # The fusion of the two conditional blocks can happen in any order. To avoid any indeterminism distinguish which one is the fused and which one is the extended conditional block which will include the fused one.
     @staticmethod
@@ -293,7 +295,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         for data_name, data_desc in fused_conditional_block.sdfg.arrays.items():
             if data_name == "__cond":
                 continue
-            new_data_name = gtx_transformations.utils.unique_name(data_name) + "_from_cb_fusion"
+            new_data_name = self.uids[f"{data_name}_cb_fusion"]
             data_desc_renamed = copy.deepcopy(data_desc)
             second_arrays_rename_map[data_name] = (
                 nested_sdfg_of_extended_conditional_block.sdfg.add_datadesc(
