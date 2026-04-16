@@ -32,7 +32,7 @@ class _FakeDefinition:
 
 
 class _FakeProgram:
-    __name__ = "my_program"
+    __name__: str = "my_program"
     definition: Any = _FakeDefinition()
 
 

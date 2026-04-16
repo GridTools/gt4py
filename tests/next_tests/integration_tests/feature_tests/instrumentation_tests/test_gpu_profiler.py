@@ -140,6 +140,21 @@ class TestProfilingCallsLifecycle:
             not in hooks.compiled_program_call_context.callbacks
         )
 
+    def test_nested_profile_calls_warns(self):
+        """Entering `profile_calls` while a session is active must warn and not start a second session."""
+        fake_profile = mock.MagicMock()
+        fake_profile.__enter__ = mock.MagicMock(return_value=fake_profile)
+        fake_profile.__exit__ = mock.MagicMock(return_value=None)
+
+        with mock.patch.object(gpu_profiler, "profile", return_value=fake_profile):
+            with gpu_profiler.profile_calls():
+                with pytest.warns(UserWarning, match="already active"):
+                    with gpu_profiler.profile_calls():
+                        # Inner profile_calls warns but still yields.
+                        assert gpu_profiler._profile_ctx_manager is fake_profile
+
+        assert gpu_profiler._profile_ctx_manager is None
+
     def test_double_start_registers_hooks_once(self):
         """Repeated `start_profiling_calls` must not re-register the hooks."""
         fake_profile = mock.MagicMock()

@@ -75,6 +75,7 @@ except ImportError:
             color_id: int | None = None,
             argb_color: core_types.int32 | None = None,
             sync: bool = False,
+            **kwargs: Any,
         ) -> None:
             warnings.warn(
                 "GT4Py profiling is only supported when using a GPU and CuPy is installed.",
@@ -104,22 +105,27 @@ _profile_ctx_manager_lock: threading.Lock = threading.Lock()
 @contextlib.contextmanager
 def profile_calls() -> Generator[None, None, None]:
     """Context manager that enables GPU profiling of GT4Py program calls within its scope."""
-    if _profile_ctx_manager is not None:
-        raise RuntimeError(
-            "A GPU profiling session is already active. Nested calls to profile_calls() are not allowed."
+    if not start_profiling_calls():
+        warnings.warn(
+            "GPU profiling of GT4Py program calls is already active."
+            "Nested 'profile_calls' should not be used.",
+            UserWarning,
+            stacklevel=2,
         )
-    start_profiling_calls()
     try:
         yield
     finally:
         stop_profiling_calls()
 
 
-def start_profiling_calls() -> None:
+def start_profiling_calls() -> bool:
     """
     Start a GPU profiling session and register hooks that annotate each program call.
 
     Repeated calls will not start a second session. Pairs with :func:`stop_profiling_calls`.
+
+    Returns:
+        True if a new profiling session was started, False if a session was already active.
     """
     global _profile_ctx_manager
     with _profile_ctx_manager_lock:
@@ -129,15 +135,24 @@ def start_profiling_calls() -> None:
             hooks.compiled_program_call_context.register(CompiledProgramCallProfiler, index=0)
             try:
                 _profile_ctx_manager.__enter__()
-            except Exception as e:
+            except Exception:
                 hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
                 hooks.program_call_context.remove(ProgramCallProfiler)
                 _profile_ctx_manager = None
-                raise e
+                raise
+
+            return True
+
+    return False
 
 
-def stop_profiling_calls() -> None:
-    """Stop the active GPU profiling session and unregister the program call hooks."""
+def stop_profiling_calls() -> bool:
+    """
+    Stop the active GPU profiling session and unregister the program call hooks.
+
+    Returns:
+        True if a profiling session was stopped, False if no session was active.
+    """
     global _profile_ctx_manager
     with _profile_ctx_manager_lock:
         if _profile_ctx_manager is not None:
@@ -148,11 +163,15 @@ def stop_profiling_calls() -> None:
                 hooks.program_call_context.remove(ProgramCallProfiler)
                 _profile_ctx_manager = None
 
+            return True
+
+    return False
+
 
 class ProgramProfiler(contextlib.AbstractContextManager):
     """Base context manager that wraps a program execution in a time range."""
 
-    time_range_ctx: cupyx_profiler.time_range
+    time_range_ctx: ContextManager[None]
 
     __slots__ = ("time_range_ctx",)
 
