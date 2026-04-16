@@ -141,6 +141,7 @@ def test_unstructured_shift(unstructured_case):
 
 
 @pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_unstructured_shift_with_non_zero_origin(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
@@ -743,6 +744,7 @@ def test_nested_tuple_return(cartesian_case):
 
 
 @pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_neighbor_sum_with_non_zero_origin(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
