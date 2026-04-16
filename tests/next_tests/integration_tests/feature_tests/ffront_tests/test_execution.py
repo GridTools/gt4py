@@ -140,6 +140,24 @@ def test_unstructured_shift(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
+def test_unstructured_shift_with_non_zero_origin(unstructured_case):
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.EField:
+        return a(E2V[0])
+
+    a = cases.allocate(unstructured_case, testee, "a")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    ORIGIN = 2
+    neighbor_0_iter = iter(enumerate(unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]))
+    edge_start = next(i for i, v in neighbor_0_iter if v >= ORIGIN)
+    edge_stop = next(i for i, v in neighbor_0_iter if v < ORIGIN)
+
+    ref = a.ndarray[unstructured_case.offset_provider["E2V"].asnumpy()[edge_start:edge_stop, 0]]
+    cases.verify(unstructured_case, testee, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
+
+
 def test_horizontal_only_with_3d_mesh(unstructured_case_3d):
     # test field operator operating only on horizontal fields while using an offset provider
     # including a vertical dimension.
@@ -722,6 +740,28 @@ def test_nested_tuple_return(cartesian_case):
         return packed[0] + packed[1][0] + packed[1][1]
 
     cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + a + b)
+
+
+@pytest.mark.uses_unstructured_shift
+def test_neighbor_sum_with_non_zero_origin(unstructured_case):
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.EField:
+        return neighbor_sum(a(E2V), axis=E2VDim)
+
+    a = cases.allocate(unstructured_case, testee, "a")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    ORIGIN = 2
+    neighbor_iter = iter(enumerate(unstructured_case.offset_provider["E2V"].asnumpy()))
+    edge_start = next(i for i, v in neighbor_iter if all(v >= ORIGIN))
+    edge_stop = next(i for i, v in neighbor_iter if any(v < ORIGIN))
+
+    ref = np.sum(
+        a.ndarray[unstructured_case.offset_provider["E2V"].asnumpy()[edge_start:edge_stop,]],
+        axis=1,
+        initial=0.0,
+    )
+    cases.verify(unstructured_case, testee, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
 
 
 @pytest.mark.uses_unstructured_shift
