@@ -121,7 +121,7 @@ def _process_symbolic_domains_option(
                 "'use_max_domain_range_on_unstructured_shift'. This is "
                 "likely not what you wanted.",
                 stacklevel=2,
-            )  # noqa: ERA001, RUF100
+            )
     if use_max_domain_range_on_unstructured_shift:
         assert not symbolic_domain_sizes, "Options are mutually exclusive."
         symbolic_domain_sizes = _max_domain_range_sizes(offset_provider)  # type: ignore[assignment]
