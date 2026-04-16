@@ -147,8 +147,8 @@ requires-python = '>=3.10, <3.15, !=3.13.10, !=3.14.1'
 cartesian = ['gt4py[jax,standard,testing]']
 cuda12 = ['cupy-cuda12x>=12.0']
 cuda13 = ['cupy-cuda13x>=14.0']
-jax = ['jax>=0.4.26']
-jax-cuda12 = ['jax[cuda12-local]>=0.6.0; python_version < "3.14"', 'gt4py[cuda12]']
+jax = ['jax>=0.4.26 ; python_version < "3.14"', 'jax>=0.7.0 ; python_version >= "3.14"']
+jax-cuda12 = ['jax[cuda12-local]>=0.6.0', 'gt4py[cuda12]']  # jax 0.6 not supported with Python 3.14
 jax-cuda13 = ['jax[cuda13-local]>=0.7.0; python_version >= "3.11"', 'gt4py[cuda13]']  # jax 0.7 not supported with Python 3.10
 next = ['gt4py[jax,standard,testing]']
 rocm6 = ['cupy>=13.4.1,<14.0']
