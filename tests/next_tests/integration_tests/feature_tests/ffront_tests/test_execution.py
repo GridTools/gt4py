@@ -151,11 +151,12 @@ def test_unstructured_shift_with_non_zero_origin(unstructured_case):
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     ORIGIN = 2
-    neighbor_0_iter = iter(enumerate(unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]))
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    neighbor_0_iter = iter(enumerate(e2v_table[:, 0]))
     edge_start = next(i for i, v in neighbor_0_iter if v >= ORIGIN)
     edge_stop = next(i for i, v in neighbor_0_iter if v < ORIGIN)
 
-    ref = a.ndarray[unstructured_case.offset_provider["E2V"].asnumpy()[edge_start:edge_stop, 0]]
+    ref = a.ndarray[e2v_table[edge_start:edge_stop, 0]]
     cases.verify(unstructured_case, testee, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
 
 
@@ -754,15 +755,12 @@ def test_neighbor_sum_with_non_zero_origin(unstructured_case):
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     ORIGIN = 2
-    neighbor_iter = iter(enumerate(unstructured_case.offset_provider["E2V"].asnumpy()))
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    neighbor_iter = iter(enumerate(e2v_table))
     edge_start = next(i for i, v in neighbor_iter if all(v >= ORIGIN))
     edge_stop = next(i for i, v in neighbor_iter if any(v < ORIGIN))
 
-    ref = np.sum(
-        a.ndarray[unstructured_case.offset_provider["E2V"].asnumpy()[edge_start:edge_stop,]],
-        axis=1,
-        initial=0.0,
-    )
+    ref = np.sum(a.ndarray[e2v_table[edge_start:edge_stop,]], axis=1)
     cases.verify(unstructured_case, testee, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
 
 
