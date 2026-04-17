@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q --script --python 3.11
+#! /usr/bin/env -S uv run -q --script --python 3.12
 #
 # GT4Py - GridTools Framework
 #
