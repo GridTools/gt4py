@@ -99,6 +99,7 @@ except ImportError:
 
 
 _profile_ctx_manager: ContextManager | None = None
+_profile_ctx_manager_count: int = 0
 _profile_ctx_manager_lock: threading.Lock = threading.Lock()
 
 
@@ -127,15 +128,18 @@ def start_profiling_calls() -> bool:
     Returns:
         True if a new profiling session was started, False if a session was already active.
     """
-    global _profile_ctx_manager
+    global _profile_ctx_manager, _profile_ctx_manager_count
     with _profile_ctx_manager_lock:
+        _profile_ctx_manager_count += 1
         if _profile_ctx_manager is None:
+            assert _profile_ctx_manager_count == 1
             _profile_ctx_manager = profile()
             hooks.program_call_context.register(ProgramCallProfiler, index=0)
             hooks.compiled_program_call_context.register(CompiledProgramCallProfiler, index=0)
             try:
                 _profile_ctx_manager.__enter__()
             except Exception:
+                _profile_ctx_manager_count = 0
                 hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
                 hooks.program_call_context.remove(ProgramCallProfiler)
                 _profile_ctx_manager = None
@@ -153,17 +157,22 @@ def stop_profiling_calls() -> bool:
     Returns:
         True if a profiling session was stopped, False if no session was active.
     """
-    global _profile_ctx_manager
+    global _profile_ctx_manager, _profile_ctx_manager_count
     with _profile_ctx_manager_lock:
-        if _profile_ctx_manager is not None:
-            try:
-                _profile_ctx_manager.__exit__(None, None, None)
-            finally:
-                hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
-                hooks.program_call_context.remove(ProgramCallProfiler)
-                _profile_ctx_manager = None
+        # Only stop the profiling session when the outermost context manager is exited,
+        # so nesting start/stop calls still works (although is heavily discouraged).
+        if _profile_ctx_manager_count > 0:
+            _profile_ctx_manager_count -= 1
+            if _profile_ctx_manager_count == 0:
+                assert _profile_ctx_manager is not None
+                try:
+                    _profile_ctx_manager.__exit__(None, None, None)
+                finally:
+                    hooks.compiled_program_call_context.remove(CompiledProgramCallProfiler)
+                    hooks.program_call_context.remove(ProgramCallProfiler)
+                    _profile_ctx_manager = None
 
-            return True
+                return True
 
     return False
 
