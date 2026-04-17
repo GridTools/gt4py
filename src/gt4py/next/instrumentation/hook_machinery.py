@@ -165,7 +165,7 @@ def event_hook(definition: Callable[P, None]) -> EventHook[P]:
 
 @dataclasses.dataclass(slots=True)
 class ContextHook(
-    contextlib.AbstractContextManager, _BaseHook[contextlib.AbstractContextManager, P]
+    _BaseHook[contextlib.AbstractContextManager, P], contextlib.AbstractContextManager
 ):
     """
     Context hook specification.
@@ -187,12 +187,12 @@ class ContextHook(
 
     def __exit__(
         self,
-        type_: type[BaseException] | None,
+        exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: types.TracebackType | None,
     ) -> None:
         for ctx_manager in reversed(self.ctx_managers):
-            ctx_manager.__exit__(type_, exc_value, traceback)
+            ctx_manager.__exit__(exc_type, exc_value, traceback)
         self.ctx_managers = ()
 
 
