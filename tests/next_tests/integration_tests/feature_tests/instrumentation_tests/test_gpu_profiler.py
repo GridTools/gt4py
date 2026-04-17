@@ -26,8 +26,10 @@ class TestProfilingCallsLifecycle:
     def _clean_profiling_state(self):
         """Ensure clean state before and after each test."""
         gpu_profiler._profile_ctx_manager = None
+        gpu_profiler._profile_ctx_manager_count = 0
         yield
         gpu_profiler._profile_ctx_manager = None
+        gpu_profiler._profile_ctx_manager_count = 0
         for cls in (gpu_profiler.ProgramCallProfiler, gpu_profiler.CompiledProgramCallProfiler):
             try:
                 hooks.program_call_context.remove(cls)
