@@ -8,8 +8,8 @@ on:
   ## COMMENTED OUT: only for testing CI action changes.
   ## It only works for PRs to `main` branch from branches in the upstream gt4py repo.
   # pull_request:
-  #  branches:
-  #    - main
+  #   branches:
+  #     - main
   ## END
 
 jobs:
