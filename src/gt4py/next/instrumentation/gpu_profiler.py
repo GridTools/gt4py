@@ -103,6 +103,15 @@ _profile_ctx_manager_count: int = 0
 _profile_ctx_manager_lock: threading.Lock = threading.Lock()
 
 
+def is_profiling_calls() -> bool:
+    """
+    Returns True if a GPU profiling session for GT4Py program calls is currently active.
+
+    Note: This function is not thread-safe.
+    """
+    return _profile_ctx_manager is not None
+
+
 @contextlib.contextmanager
 def profile_calls() -> Generator[None, None, None]:
     """Context manager that enables GPU profiling of GT4Py program calls within its scope."""
@@ -155,7 +164,7 @@ def stop_profiling_calls() -> bool:
     Stop the active GPU profiling session and unregister the program call hooks.
 
     Returns:
-        True if a profiling session was stopped, False if no session was active.
+        True if a profiling session was stopped, False otherwise.
     """
     global _profile_ctx_manager, _profile_ctx_manager_count
     with _profile_ctx_manager_lock:
