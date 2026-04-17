@@ -75,12 +75,12 @@ jobs:
           # Uncomment to only collect tests without running them (used for debugging CI issues)
           # PYTEST_ADDOPTS: "--collect-only"
         run: |
-          # We run the upgrade commands here explicitly to update the lock
+          # We run explicitly here the commands needed to update the lock
           uv lock --upgrade
           uv python upgrade ${{ matrix.python-version }}
           # nox will create venvs using uv, which will grab the right options in the env vars
           echo "Running '${{ matrix.gt4py-module }}' CPU tests for python ${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' resolution strategy"
-          # Add '-l' to debug which session are collected and run by nox
+          # Add '-l' to debug which sessions are collected and run by nox
           ./noxfile.py -p ${{ matrix.python-version }} -k 'test_${{ matrix.gt4py-module }} and cpu' 
 
       - name: Notify slack
