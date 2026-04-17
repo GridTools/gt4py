@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import os
 import pathlib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
@@ -113,6 +114,8 @@ CodeGenNextTestSettings = CodeGenTestSettings | {
 
 
 # -- Utilities --
+os.environ["UV_VENV_CLEAR"] = "1"  # See: https://github.com/astral-sh/uv/issues/17899
+
 def install_session_venv(
     session: nox.Session,
     *args: str | Sequence[str],
