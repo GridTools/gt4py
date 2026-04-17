@@ -211,14 +211,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             sdfg=sdfg,
         )
         inner_entry.map.unroll = True
-        inner_entry.map.unroll_factor = 1
+        inner_entry.map.unroll_factor = (
+            1  # TODO(iomaganaris): By default disable unrolling. See if it's actually necessary
+        )
         self._independent_nodes = None
         self._dependent_nodes = None
         self._memlet_to_promote = None
-        outer_entry.map.gpu_block_size = tuple(
-            [64, 1, 1]
-        )  # TODO(iomaganaris): emprical value, needs tuning
-        outer_entry.map.gpu_maxnreg = 64  # TODO(iomaganaris): emprical value, needs tuning
 
     def _prepare_inner_outer_maps(
         self,
