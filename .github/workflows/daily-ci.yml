@@ -79,8 +79,7 @@ jobs:
           uv lock --upgrade
           uv python upgrade ${{ matrix.python-version }}
           # nox will create venvs using uv, which will grab the right options in the env vars
-          echo "Running '${{ matrix.gt4py-module }}'' CPU tests for python ${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' resolution strategy"
-          echo "./noxfile.py -t 'cpu' -p ${{ matrix.python-version }} -s 'test_${{ matrix.gt4py-module }}'"
+          echo "Running '${{ matrix.gt4py-module }}' CPU tests for python ${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' resolution strategy"
           ./noxfile.py -p ${{ matrix.python-version }} -k 'test_${{ matrix.gt4py-module }} and cpu' 
 
       - name: Notify slack

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts
+#!/usr/bin/env -S uv run -q --script --python 3.12
 #
 # GT4Py - GridTools Framework
 #
@@ -8,6 +8,14 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 #
+# Note:
+#   The explicit '--python 3.11' in the shebang is only needed due
+#   to the existence of the .python-versions file, which overrides
+#   the PEP 723 'requires-python' metadata.
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
+# ///
 
 from __future__ import annotations
 
