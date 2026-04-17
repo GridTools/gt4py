@@ -117,7 +117,7 @@ def profile_calls() -> Generator[None, None, None]:
     """Context manager that enables GPU profiling of GT4Py program calls within its scope."""
     if not start_profiling_calls():
         warnings.warn(
-            "GPU profiling of GT4Py program calls is already active."
+            "GPU profiling of GT4Py program calls is already active. "
             "Nested 'profile_calls' should not be used.",
             UserWarning,
             stacklevel=2,
