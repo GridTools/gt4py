@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q --script --python 3.12
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts
 #
 # GT4Py - GridTools Framework
 #
@@ -8,14 +8,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# Note:
-#   The explicit '--python 3.11' in the shebang is only needed due
-#   to the existence of the .python-versions file, which overrides
-#   the PEP 723 'requires-python' metadata.
-# /// script
-# requires-python = ">=3.11"
-# dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
-# ///
 
 from __future__ import annotations
 
@@ -27,6 +19,10 @@ from typing import Final, Literal, TypeAlias
 import nox
 import tomllib
 
+
+# This is needed because uv now fails to create an env when it already exists.
+# See: https://github.com/astral-sh/uv/issues/17899
+os.environ["UV_VENV_CLEAR"] = "1"
 
 # This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
 # is not guaranteed to be available in the venv where `nox` is running.
@@ -114,9 +110,6 @@ CodeGenNextTestSettings = CodeGenTestSettings | {
 
 
 # -- Utilities --
-os.environ["UV_VENV_CLEAR"] = "1"  # See: https://github.com/astral-sh/uv/issues/17899
-
-
 def install_session_venv(
     session: nox.Session,
     *args: str | Sequence[str],
