@@ -72,6 +72,8 @@ jobs:
           # Set uv options through env vars to ensure all commands (including nox) use the same settings
           UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
           UV_PYTHON_PREFERENCE: only-managed
+          # Uncomment to only collect tests without running them (used for debugging CI issues)
+          # PYTEST_ADDOPTS="--collect-only"
         run: |
           # We run the upgrade commands here explicitly to update the lock
           uv lock --upgrade

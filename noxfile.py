@@ -181,13 +181,13 @@ def test_cartesian(
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
     session.run(
-        *"pytest --collect-only --cache-clear -sv -n auto --dist loadgroup".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
     )
     session.run(
-        *"pytest --collect-only --doctest-modules --doctest-ignore-import-errors -sv".split(),
+        *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "cartesian"),
     )
 
@@ -199,12 +199,12 @@ def test_eve(session: nox.Session) -> None:
     install_session_venv(session, groups=["test"])
 
     session.run(
-        *"pytest --collect-only --cache-clear -sv -n auto --dist loadgroup".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         str(pathlib.Path("tests") / "eve_tests"),
         *session.posargs,
     )
     session.run(
-        *"pytest --collect-only --doctest-modules -sv".split(),
+        *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "eve"),
     )
 
@@ -226,7 +226,7 @@ def test_examples(session: nox.Session) -> None:
         ("examples", (None)),
     ]:
         session.run(
-            *f"pytest --collect-only --nbmake {notebook} -sv -n 1 --benchmark-disable".split(),
+            *f"pytest --nbmake {notebook} -sv -n 1 --benchmark-disable".split(),
             *(extra_args or []),
         )
 
@@ -272,14 +272,14 @@ def test_next(
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
 
     session.run(
-        *"pytest --collect-only --cache-clear -sv -n auto --dist loadgroup".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
     session.run(
-        *"pytest --collect-only --doctest-modules --doctest-ignore-import-errors -sv".split(),
+        *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "next"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
@@ -292,14 +292,14 @@ def test_package(session: nox.Session) -> None:
     install_session_venv(session, groups=["test"])
 
     session.run(
-        *"pytest --collect-only --cache-clear -sv".split(),
+        *"pytest --cache-clear -sv".split(),
         str(pathlib.Path("tests") / "package_tests"),
         *session.posargs,
     )
 
     modules = [str(path) for path in (pathlib.Path("src") / "gt4py").glob("*.py")]
     session.run(
-        *"pytest --collect-only --doctest-modules --doctest-ignore-import-errors -sv".split(),
+        *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         *modules,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
@@ -322,13 +322,13 @@ def test_storage(
     markers = " and ".join(device_settings["markers"])
 
     session.run(
-        *"pytest --collect-only --cache-clear -sv -n auto --dist loadgroup".split(),
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
     )
     session.run(
-        *"pytest --collect-only --doctest-modules -sv".split(),
+        *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
