@@ -87,7 +87,7 @@ jobs:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
-            channel: ${{ vars.SLACK_BOT_CHANNEL_TEST }} # Use SLACK_BOT_CHANNEL_TEST for testing
+            channel: ${{ vars.SLACK_BOT_CHANNEL }} # Use SLACK_BOT_CHANNEL_TEST for testing
             text: "Failed tests for ${{ github.workflow }} (dependencies-strategy=${{ matrix.dependencies-strategy }}, python=${{ matrix.python-version }}, component=${{ matrix.gt4py-module }}) [https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}]."
             blocks:
               - type: "section"
@@ -111,7 +111,7 @@ jobs:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
-            channel: ${{ vars.SLACK_BOT_CHANNEL_TEST }} # Use SLACK_BOT_CHANNEL_TEST for testing
+            channel: ${{ vars.SLACK_BOT_CHANNEL }} # Use SLACK_BOT_CHANNEL_TEST for testing
             text: "Weekly reminder to check the latest runs of the GT4Py Daily CI workflow at the GitHub Actions dashboard [https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml]."
             blocks:
               - type: "section"
