@@ -131,7 +131,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         relocatable_connectors, non_relocatable_connectors, connector_usage_location = if_block_spec
 
         # Compute the dataflow that is relocated.
-        # NOTE: That the nodes sets are not sorted in any way, however, the
+        # NOTE: That the nodes sets are not sorted in any way, instead we will sort
+        #   them before we iterate over them.
         raw_relocatable_dataflow, non_relocatable_dataflow = (
             {
                 conn_name: gtx_transformations.utils.find_upstream_nodes(
@@ -211,7 +212,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             }
             for conn_names in [relocatable_connectors, non_relocatable_connectors]
         )
-        relocatable_dataflow: set[dace_nodes.Node] = self._filter_relocatable_dataflow(
+        relocatable_dataflow = self._filter_relocatable_dataflow(
             sdfg=sdfg,
             state=graph,
             if_block=if_block,
@@ -239,7 +240,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     target_state = connector_usage_location[conn][0]
                     break
             else:
-                raise ValueError("Could not find node '{node_to_move}'")
+                raise ValueError(f"Could not find node '{node_to_move}'")
             assert target_state is not None
             relocation_destination[node_to_move] = target_state
 
@@ -254,10 +255,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         )
 
         # Must be performed after relocation.
-        self._update_symbol_mapping(
-            sdfg=sdfg,
-            if_block=if_block,
-        )
+        self._update_symbol_mapping(sdfg, if_block)
 
         self._remove_outside_dataflow(
             sdfg=sdfg,
@@ -296,7 +294,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             state: The state we operate on, the one that contains `if_block`.
             if_block: The `if_block` into which we inline.
             enclosing_map: The enclosing map.
-            nodes_to_move: The list of nodes that should be moved.
+            relocation_destination: Maps nodes to the states where they should be relocated.
             connector_usage_location: Maps connector names to the state and AccessNode
                 where they appear inside the nested SDFG.
         """
@@ -335,7 +333,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             #  `_check_for_data_and_symbol_conflicts()`.
             if isinstance(origin_node, dace_nodes.AccessNode):
                 assert sdfg.arrays[origin_node.data].transient
-                # TODO(phimuell): Handle the case we need to rename something.
                 new_data_name = inner_sdfg.add_datadesc(
                     origin_node.data,
                     sdfg.arrays[origin_node.data].clone(),
@@ -601,10 +598,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # This will give us the "internal symbols" that need to be mapped into `if_block`.
         #  It does not include all symbols, see bellow.
-        requiered_symbols: set[str] = dace.sdfg.state.StateSubgraphView(
+        required_symbols: set[str] = dace.sdfg.state.StateSubgraphView(
             state, relocatable_dataflow
         ).free_symbols
-        assert all(isinstance(sym, str) for sym in requiered_symbols)
+        assert all(isinstance(sym, str) for sym in required_symbols)
 
         # The internal symbols missing the symbols that are needed by the nodes that
         #  are just mapped into the `if_block` as well as the connections that connects
@@ -626,8 +623,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     #  edge thus in addition to the symbols of the data, we need the
                     #  symbols needed by the edge.
                     node_to_map = iedge.src
-                    requiered_symbols |= {
-                        str(sym) for sym in iedge.data.used_symbols(True, edge=iedge)
+                    required_symbols |= {
+                        str(sym) for sym in iedge.data.used_symbols(all_symbols=True, edge=iedge)
                     }
 
                 # Only AccessNodes can be mapped into `if_block`.
@@ -635,8 +632,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     return False
 
                 # Add the symbols of the data.
-                requiered_symbols |= {
-                    str(sym) for sym in sdfg.arrays[node_to_map.data].used_symbols(True)
+                required_symbols |= {
+                    str(sym) for sym in sdfg.arrays[node_to_map.data].used_symbols(all_symbols=True)
                 }
 
         # A conflicting symbol is a free symbol of the relocatable dataflow, that is not a
@@ -644,7 +641,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #  then everything is okay if the symbol mapping is `{n: n}` i.e. the symbol has the
         #  same meaning inside and outside. Everything else is not okay.
         symbol_mapping = if_block.symbol_mapping
-        conflicting_symbols = requiered_symbols.intersection((str(k) for k in symbol_mapping))
+        conflicting_symbols = required_symbols.intersection((str(k) for k in symbol_mapping))
         for conflicting_symbol in conflicting_symbols:
             if conflicting_symbol != str(symbol_mapping[conflicting_symbol]):
                 return False

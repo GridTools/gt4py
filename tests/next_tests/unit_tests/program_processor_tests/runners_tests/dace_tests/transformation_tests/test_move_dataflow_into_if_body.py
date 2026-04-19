@@ -217,13 +217,13 @@ def _make_if_block_with_two_args(
 
 def _perform_test(
     sdfg: dace.SDFG,
-    explected_applies: int,
+    expected_applies: int,
     if_block: Optional[dace_nodes.NestedSDFG] = None,
 ) -> dace.SDFG:
     if if_block is not None:
         # The test should be applied in a specific location.
-        assert 0 <= explected_applies <= 1
-        can_be_applied_ref = explected_applies != 0
+        assert 0 <= expected_applies <= 1
+        can_be_applied_ref = expected_applies != 0
         can_be_applied_res = gtx_transformations.MoveDataflowIntoIfBody.can_be_applied_to(
             sdfg=sdfg,
             if_block=if_block,
@@ -232,7 +232,7 @@ def _perform_test(
         return sdfg
 
     # General case, run the SDFG first and then compare the result.
-    if explected_applies != 0:
+    if expected_applies != 0:
         ref, res = util.make_sdfg_args(sdfg)
         util.compile_and_run_sdfg(sdfg, **ref)
 
@@ -241,9 +241,9 @@ def _perform_test(
         validate=True,
         validate_all=True,
     )
-    assert nb_apply == explected_applies
+    assert nb_apply == expected_applies
 
-    if explected_applies == 0:
+    if expected_applies == 0:
         return sdfg
 
     util.compile_and_run_sdfg(sdfg, **res)
@@ -345,7 +345,7 @@ def test_if_mover_independent_branches():
     mx.add_out_connector("OUT_d")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -467,7 +467,7 @@ def test_if_mover_invalid_if_block():
     mx.add_out_connector("OUT_d")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=0)
+    _perform_test(sdfg, expected_applies=0)
 
 
 def test_if_mover_dependent_branch_1():
@@ -582,7 +582,7 @@ def test_if_mover_dependent_branch_1():
     mx.add_out_connector("OUT_d")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -695,7 +695,7 @@ def test_if_mover_dependent_branch_2():
     mx.add_in_connector("IN_d")
     mx.add_out_connector("OUT_d")
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -801,7 +801,7 @@ def test_if_mover_dependent_branch_3():
     assert util.count_nodes(state, dace_nodes.MapEntry) == 2
     assert util.count_nodes(state, dace_nodes.AccessNode) == 7
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # It is unspecific if `IN_b1` or `IN_b2` remains, but `b` should have only one connector.
     assert any(iconn in me.in_connectors for iconn in ["IN_b1", "IN_b2"])
@@ -951,7 +951,7 @@ def test_if_mover_dependent_branch_4():
     mx.add_out_connector("OUT_f")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -1136,7 +1136,7 @@ def test_if_mover_dependent_branch_5():
     mx.add_out_connector("OUT_f")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -1294,7 +1294,7 @@ def test_if_mover_dependent_branch_6():
     assert util.count_nodes(state, dace_nodes.MapEntry) == 2
     assert util.count_nodes(state, dace_nodes.AccessNode) == 9
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
     # Simplify the SDFG to remove double `b` AccessNode in the false branch.
     sdfg.simplify()
 
@@ -1400,7 +1400,7 @@ def test_if_mover_no_ops():
     sdfg.validate()
 
     # This might change if we will move the read fully inside the branches.
-    _perform_test(sdfg, explected_applies=0)
+    _perform_test(sdfg, expected_applies=0)
 
 
 def test_if_mover_one_branch_is_nothing():
@@ -1483,7 +1483,7 @@ def test_if_mover_one_branch_is_nothing():
     mx.add_out_connector("OUT_d")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert {ac.data for ac in top_ac} == set(input_names).union(["c1"])
@@ -1605,14 +1605,14 @@ def test_if_mover_chain():
     #  because it is limited by the top one.
     _perform_test(
         sdfg,
-        explected_applies=0,
+        expected_applies=0,
         if_block=bot_if_block,
     )
 
     # But we are able to inline both.
     _perform_test(
         sdfg,
-        explected_applies=2,
+        expected_applies=2,
     )
 
 
@@ -1708,7 +1708,7 @@ def test_if_mover_symbolic_tasklet():
 
     sdfg = _perform_test(
         sdfg,
-        explected_applies=1,
+        expected_applies=1,
     )
 
     expected_symb = {"symbol_1", "symbol_2"}
@@ -1823,14 +1823,14 @@ def test_if_mover_access_node_between():
     #  block that in turn has dataflow that could be relocated.
     _perform_test(
         sdfg,
-        explected_applies=0,
+        expected_applies=0,
         if_block=bot_if_block,
     )
 
     # But we are able to process them that way, starting from the bottom.
     _perform_test(
         sdfg,
-        explected_applies=2,
+        expected_applies=2,
     )
 
     expected_top_level_data: set[str] = {"a", "b", "c", "d", "e", "f", "c2"}
@@ -1966,7 +1966,7 @@ def test_if_mover_symbol_aliasing():
     #  to account for the access on the Memlets of the `{true, false}_tlet`.
     _perform_test(
         sdfg=sdfg,
-        explected_applies=0,
+        expected_applies=0,
     )
 
 
@@ -2123,7 +2123,7 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
 
     _perform_test(
         sdfg=sdfg,
-        explected_applies=1,
+        expected_applies=1,
     )
 
     tlet_after = util.count_nodes(sdfg, dace_nodes.Tasklet, True)
