@@ -672,8 +672,6 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             return False
         if self.map_entry.map.gpu_block_size is not None:
             return False
-        if self.map_entry.map.gpu_maxnreg > 0:
-            return False
         return True
 
     def apply(
@@ -764,7 +762,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                 block_size[i] = map_size[map_dim_idx_to_inspect]
 
         gpu_map.gpu_block_size = tuple(block_size)
-        if self.maxnreg is not None:
+        if self.maxnreg is not None and gpu_map.gpu_maxnreg == 0:
             gpu_map.gpu_maxnreg = self.maxnreg
         elif launch_bounds is not None:  # Note: empty string has a meaning in DaCe
             gpu_map.gpu_launch_bounds = launch_bounds
