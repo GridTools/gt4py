@@ -113,6 +113,7 @@ def _sdfg_add_arrays_and_edges(
                 strides=array.strides,
                 shape=shape,
                 storage=array.storage,
+                lifetime=array.lifetime,
             )
 
             # Calculate memlet ranges taking the origin into account
@@ -296,10 +297,6 @@ def freeze_origin_domain_sdfg(
 
     _sdfg_specialize_symbols(wrapper_sdfg, domain)
     _specialize_transient_strides(wrapper_sdfg, layout_info)
-
-    for _, _, array in wrapper_sdfg.arrays_recursive():
-        if array.transient:
-            array.lifetime = dtypes.AllocationLifetime.SDFG
 
     wrapper_sdfg.arg_names = arg_names
 
