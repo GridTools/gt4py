@@ -34,6 +34,7 @@ def gt_gpu_transformation(
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
     gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]] = None,
+    gpu_min_warps_per_eu: Optional[int] = None,
     gpu_maxnreg: Optional[int] = None,
     validate: bool = True,
     validate_all: bool = False,
@@ -124,6 +125,7 @@ def gt_gpu_transformation(
             launch_bounds=gpu_launch_bounds,
             launch_factor=gpu_launch_factor,
             **gpu_block_size_spec,
+            gpu_min_warps_per_eu=gpu_min_warps_per_eu,
             gpu_maxnreg=gpu_maxnreg,
             validate=False,
             validate_all=validate_all,
@@ -365,6 +367,7 @@ def gt_set_gpu_blocksize(
     block_size: Optional[Sequence[int | str] | str],
     launch_bounds: Optional[int | str] = None,
     launch_factor: Optional[int] = None,
+    gpu_min_warps_per_eu: Optional[int] = None,
     gpu_maxnreg: Optional[int] = None,
     validate: bool = True,
     validate_all: bool = False,
@@ -397,6 +400,7 @@ def gt_set_gpu_blocksize(
         }.items():
             if f"{arg}_{dim}d" not in kwargs:
                 kwargs[f"{arg}_{dim}d"] = val
+    kwargs["gpu_min_warps_per_eu"] = gpu_min_warps_per_eu
     kwargs["maxnreg"] = gpu_maxnreg
 
     setter = GPUSetBlockSize(**kwargs)
@@ -595,6 +599,12 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         default=None,
         desc="Set the launch bound property for 3 dimensional map.",
     )
+    min_warps_per_eu = dace_properties.Property(
+        dtype=int,
+        allow_none=True,
+        default=None,
+        desc="Set the minimum number of warps per EU for the GPU maps.",
+    )
     maxnreg = dace_properties.Property(
         dtype=int,
         allow_none=True,
@@ -616,6 +626,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         launch_factor_1d: int | None = None,
         launch_factor_2d: int | None = None,
         launch_factor_3d: int | None = None,
+        gpu_min_warps_per_eu: int | None = None,
         maxnreg: int | None = None,
     ) -> None:
         super().__init__()
@@ -644,6 +655,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         self.launch_bounds_3d = _gpu_launch_bound_parser(
             self.block_size_3d, launch_bounds_3d, launch_factor_3d
         )
+        if gpu_min_warps_per_eu is not None:
+            self.min_warps_per_eu = gpu_min_warps_per_eu
         if maxnreg is not None:
             self.maxnreg = maxnreg
 
@@ -767,6 +780,8 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         elif launch_bounds is not None:  # Note: empty string has a meaning in DaCe
             gpu_map.gpu_launch_bounds = launch_bounds
 
+        if self.min_warps_per_eu:
+            gpu_map.gpu_min_warps_per_eu = self.min_warps_per_eu
 
 def gt_remove_trivial_gpu_maps(
     sdfg: dace.SDFG,

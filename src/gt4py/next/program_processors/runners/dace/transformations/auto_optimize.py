@@ -117,6 +117,7 @@ def gt_auto_optimize(
     gpu_block_size_1d: Optional[Sequence[int | str] | str] = (64, 1, 1),
     gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
     gpu_block_size_3d: Optional[Sequence[int | str] | str] = None,
+    gpu_min_warps_per_eu: Optional[int] = None,
     gpu_maxnreg: Optional[int] = None,
     blocking_dim: Optional[gtx_common.Dimension] = None,
     blocking_size: int = 10,
@@ -379,6 +380,7 @@ def gt_auto_optimize(
             gpu_maxnreg=gpu_maxnreg,
             optimization_hooks=optimization_hooks,
             gpu_block_size_spec=gpu_block_size_spec if gpu_block_size_spec else None,
+            gpu_min_warps_per_eu=gpu_min_warps_per_eu,
             validate_all=validate_all,
         )
 
@@ -815,6 +817,7 @@ def _gt_auto_configure_maps_and_strides(
     gpu_maxnreg: Optional[int],
     optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
     gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]],
+    gpu_min_warps_per_eu: Optional[int],
     validate_all: bool,
 ) -> dace.SDFG:
     """Configure the Maps and the strides of the SDFG inplace.
@@ -889,6 +892,7 @@ def _gt_auto_configure_maps_and_strides(
             gpu_launch_bounds=gpu_launch_bounds,
             gpu_launch_factor=gpu_launch_factor,
             gpu_block_size_spec=gpu_block_size_spec,
+            gpu_min_warps_per_eu=gpu_min_warps_per_eu,
             gpu_maxnreg=gpu_maxnreg,
             validate=False,
             validate_all=validate_all,
