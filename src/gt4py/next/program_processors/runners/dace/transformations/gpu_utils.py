@@ -780,7 +780,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         elif launch_bounds is not None:  # Note: empty string has a meaning in DaCe
             gpu_map.gpu_launch_bounds = launch_bounds
 
-        if launch_bounds is not None and self.min_warps_per_eu:
+        if self.min_warps_per_eu:
             gpu_map.gpu_min_warps_per_eu = self.min_warps_per_eu
 
 def gt_remove_trivial_gpu_maps(
