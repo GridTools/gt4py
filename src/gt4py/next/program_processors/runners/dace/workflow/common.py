@@ -132,9 +132,9 @@ def set_dace_config(
         "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
     )
 
-    # In debug mode we generate the full folder version otherwise we use the production version.
+    # In debug mode we generate all files otherwise we use the production folder mode.
     dace.Config.set(
-        "compiler", "build_folder_version", value=("full" if gtx_config.DEBUG else "production")
+        "compiler", "build_folder_mode", value=("development" if gtx_config.DEBUG else "production")
     )
 
     # We are not interested in storing the history of SDFG transformations.
