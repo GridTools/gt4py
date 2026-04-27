@@ -34,12 +34,12 @@ def test_backend_factory_trait_device():
     assert cpu_version.name == "run_gtfn_cpu"
     assert gpu_version.name == "run_gtfn_gpu"
 
-    assert cpu_version.executor.build.translation.device_type is core_defs.DeviceType.CPU
-    assert gpu_version.executor.build.translation.device_type is core_defs.DeviceType.CUDA
+    assert cpu_version.executor.translation.device_type is core_defs.DeviceType.CPU
+    assert gpu_version.executor.translation.device_type is core_defs.DeviceType.CUDA
 
     # The compilation step now also carries device_type so it can stamp the artifact.
-    assert cpu_version.executor.build.compilation.device_type is core_defs.DeviceType.CPU
-    assert gpu_version.executor.build.compilation.device_type is core_defs.DeviceType.CUDA
+    assert cpu_version.executor.compilation.device_type is core_defs.DeviceType.CPU
+    assert gpu_version.executor.compilation.device_type is core_defs.DeviceType.CUDA
 
     assert custom_layout_allocators.is_field_allocator_for(
         cpu_version.allocator, core_defs.DeviceType.CPU
@@ -51,7 +51,7 @@ def test_backend_factory_trait_device():
 
 def test_backend_factory_trait_cached():
     cached_version = gtfn.GTFNBackendFactory(gpu=False, cached=True)
-    assert isinstance(cached_version.executor.build, workflow.CachedStep)
+    assert isinstance(cached_version.executor, workflow.CachedStep)
     assert cached_version.name == "run_gtfn_cpu_cached"
 
 
@@ -62,11 +62,11 @@ def test_backend_factory_build_cache_config(monkeypatch):
     persistent_version = gtfn.GTFNBackendFactory()
 
     assert (
-        session_version.executor.build.compilation.cache_lifetime
+        session_version.executor.compilation.cache_lifetime
         is config.BuildCacheLifetime.SESSION
     )
     assert (
-        persistent_version.executor.build.compilation.cache_lifetime
+        persistent_version.executor.compilation.cache_lifetime
         is config.BuildCacheLifetime.PERSISTENT
     )
 
@@ -78,10 +78,10 @@ def test_backend_factory_build_type_config(monkeypatch):
     min_size_version = gtfn.GTFNBackendFactory()
 
     assert (
-        release_version.executor.build.compilation.builder_factory.cmake_build_type
+        release_version.executor.compilation.builder_factory.cmake_build_type
         is config.CMakeBuildType.RELEASE
     )
     assert (
-        min_size_version.executor.build.compilation.builder_factory.cmake_build_type
+        min_size_version.executor.compilation.builder_factory.cmake_build_type
         is config.CMakeBuildType.MIN_SIZE_REL
     )

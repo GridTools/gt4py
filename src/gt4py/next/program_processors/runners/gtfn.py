@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import dataclasses
 from typing import Any
 
 import factory
@@ -147,22 +146,6 @@ class GTFNBuildWorkflowFactory(factory.Factory):
     )
 
 
-class GTFNCompileWorkflowFactory(factory.Factory):
-    class Meta:
-        model = recipes.OTFCompileWorkflow
-
-    class Params:
-        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cached_translation = factory.Trait(build__cached_translation=True)
-
-    build = factory.SubFactory(
-        GTFNBuildWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
-    )
-    # ``finalize`` is left at its OTFCompileWorkflow default
-    # (``stages.materialize_artifact``), which dispatches via the artifact's
-    # own :meth:`stages.BuildArtifact.materialize` method.
-
-
 class GTFNBackendFactory(factory.Factory):
     class Meta:
         model = backend.Backend
@@ -179,19 +162,14 @@ class GTFNBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: dataclasses.replace(
-                    o.otf_workflow,
-                    build=workflow.CachedStep(
-                        o.otf_workflow.build, hash_function=o.hash_function
-                    ),
-                )
+                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
             ),
             name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
         hash_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
-            GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
+            GTFNBuildWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
         )
 
     name = factory.LazyAttribute(
@@ -207,17 +185,17 @@ run_gtfn = GTFNBackendFactory()
 
 run_gtfn_imperative = GTFNBackendFactory(
     name_postfix="_imperative",
-    otf_workflow__build__translation__use_imperative_backend=True,
+    otf_workflow__translation__use_imperative_backend=True,
 )
 
-run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__build__cached_translation=True)
+run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
 run_gtfn_gpu_cached = GTFNBackendFactory(
-    gpu=True, cached=True, otf_workflow__build__cached_translation=True
+    gpu=True, cached=True, otf_workflow__cached_translation=True
 )
 
 run_gtfn_no_transforms = GTFNBackendFactory(
-    otf_workflow__build__bare_translation__enable_itir_transforms=False
+    otf_workflow__bare_translation__enable_itir_transforms=False
 )

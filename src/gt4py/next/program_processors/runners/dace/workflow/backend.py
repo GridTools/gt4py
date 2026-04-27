@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import warnings
 from typing import Any, Final
 
@@ -45,12 +44,7 @@ class DaCeBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: dataclasses.replace(
-                    o.otf_workflow,
-                    build=workflow.CachedStep(
-                        o.otf_workflow.build, hash_function=o.hash_function
-                    ),
-                )
+                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
             ),
             name_cached="_cached",
         )
@@ -133,13 +127,13 @@ def make_dace_backend(
         gpu=gpu,
         cached=cached,
         auto_optimize=auto_optimize,
-        otf_workflow__build__cached_translation=cached,
-        otf_workflow__build__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
-        otf_workflow__build__bare_translation__auto_optimize_args=optimization_args,
-        otf_workflow__build__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
-        otf_workflow__build__bare_translation__use_metrics=use_metrics,
-        otf_workflow__build__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
-        otf_workflow__build__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+        otf_workflow__cached_translation=cached,
+        otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
+        otf_workflow__bare_translation__auto_optimize_args=optimization_args,
+        otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
+        otf_workflow__bare_translation__use_metrics=use_metrics,
+        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
+        otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
     )
 
 

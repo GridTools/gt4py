@@ -34,14 +34,12 @@ def exec_alloc_descriptor():
         name="run_gtfn_with_temporaries_and_sizes",
         transforms=backend.DEFAULT_TRANSFORMS,
         executor=run_gtfn.executor.replace(
-            build=run_gtfn.executor.build.replace(
-                translation=run_gtfn.executor.build.translation.replace(
-                    symbolic_domain_sizes={
-                        "Cell": "num_cells",
-                        "Edge": "num_edges",
-                        "Vertex": "num_vertices",
-                    }
-                )
+            translation=run_gtfn.executor.translation.replace(
+                symbolic_domain_sizes={
+                    "Cell": "num_cells",
+                    "Edge": "num_edges",
+                    "Vertex": "num_vertices",
+                }
             )
         ),
         allocator=run_gtfn.allocator,

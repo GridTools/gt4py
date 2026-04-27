@@ -132,10 +132,10 @@ ExecutableProgram: TypeAlias = Callable
 class BuildArtifact(Protocol):
     """A picklable, self-contained, compiled gt4py program in transit.
 
-    A *build artifact* is the output of the ``build`` phase of
-    :class:`recipes.OTFCompileWorkflow` — the explicit boundary between the
-    build phase (heavy, idempotent, parallelizable, picklable output) and the
-    live-callable phase (cheap, process-bound).
+    A *build artifact* is the output of an :class:`recipes.OTFBuildWorkflow`
+    (the value of :attr:`gt4py.next.backend.Backend.executor`) — the explicit
+    boundary between the build phase (heavy, idempotent, parallelizable,
+    picklable output) and the live-callable phase (cheap, process-bound).
 
     Each backend defines its own concrete artifact dataclass, carrying
     whatever fields it needs to bring up a runnable callable in any process
