@@ -61,10 +61,7 @@ def test_backend_factory_build_cache_config(monkeypatch):
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.PERSISTENT)
     persistent_version = gtfn.GTFNBackendFactory()
 
-    assert (
-        session_version.executor.compilation.cache_lifetime
-        is config.BuildCacheLifetime.SESSION
-    )
+    assert session_version.executor.compilation.cache_lifetime is config.BuildCacheLifetime.SESSION
     assert (
         persistent_version.executor.compilation.cache_lifetime
         is config.BuildCacheLifetime.PERSISTENT

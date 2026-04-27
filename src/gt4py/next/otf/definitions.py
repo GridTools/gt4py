@@ -56,9 +56,7 @@ class BindingStep(Protocol[CodeSpecT, TargetCodeSpecT]):
 
 
 class CompilationStep(
-    workflow.Workflow[
-        stages.CompilableProject[CodeSpecT, TargetCodeSpecT], stages.BuildArtifact
-    ],
+    workflow.Workflow[stages.CompilableProject[CodeSpecT, TargetCodeSpecT], stages.BuildArtifact],
     Protocol[CodeSpecT, TargetCodeSpecT],
 ):
     """Run the build system and produce a :class:`stages.BuildArtifact`.

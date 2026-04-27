@@ -19,9 +19,7 @@ from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
-from gt4py.next.program_processors.runners.dace.workflow.compiled_program import (
-    CompiledDaceProgram,
-)
+from gt4py.next.program_processors.runners.dace.workflow.compiled_program import CompiledDaceProgram
 
 
 def convert_args(

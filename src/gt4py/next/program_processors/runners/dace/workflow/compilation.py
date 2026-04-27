@@ -22,9 +22,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
 )
-from gt4py.next.program_processors.runners.dace.workflow.compiled_program import (
-    CompiledDaceProgram,
-)
+from gt4py.next.program_processors.runners.dace.workflow.compiled_program import CompiledDaceProgram
 
 
 @dataclasses.dataclass(frozen=True)
@@ -57,9 +55,7 @@ class DaCeBuildArtifact:
             with dace.config.set_temporary("compiler", "use_cache", value=True):
                 sdfg_program = sdfg.compile(validate=False)
 
-        program = CompiledDaceProgram(
-            sdfg_program, self.bind_func_name, self.binding_source_code
-        )
+        program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
         return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
 
