@@ -113,6 +113,15 @@ ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", de
 #: - if the number is huge (e.g. HPC system) we limit to a smaller number
 BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1, 32)))
 
+#: Executor backing the async compilation pool.
+#: - "thread": use a :class:`concurrent.futures.ThreadPoolExecutor` (default).
+#: - "process": use a :class:`concurrent.futures.ProcessPoolExecutor` with ``spawn`` start
+#:   method. Requires the backend to be cloudpickle-serializable (standard runners and
+#:   factory-constructed variants are) and its ``executor`` to be a
+#:   :class:`~gt4py.next.otf.recipes.OTFBuildWorkflow` returning a picklable
+#:   :class:`~gt4py.next.otf.stages.BuildArtifact`. Experimental.
+BUILD_JOBS_MODE: str = os.environ.get("GT4PY_BUILD_JOBS_MODE", "thread").lower()
+
 #: User-defined level to enable metrics at lower or equal level.
 #: Enabling metrics collection will do extra synchronization and will have
 #: impact on runtime performance.

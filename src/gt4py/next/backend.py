@@ -164,3 +164,33 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         self,
     ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
         return self.allocator
+
+
+def serialize_backend_for_worker(backend: Backend) -> bytes:
+    """Serialize ``backend`` into bytes for a :class:`concurrent.futures.ProcessPoolExecutor`.
+
+    Uses :mod:`cloudpickle` rather than stdlib :mod:`pickle`: a ``Backend`` transitively
+    holds lambdas, nested name-mangled classes (e.g.
+    :class:`gt4py.next.otf.workflow.StepSequence.__Steps`), :mod:`factory` closures, and
+    ``module`` references that stdlib pickle refuses but cloudpickle serializes by value.
+    This also accommodates factory-constructed backends kept as plain locals (no module-
+    global home). Payload is ~8 KB per backend for the standard runners — negligible
+    next to typical compile times.
+    """
+    try:
+        import cloudpickle  # type: ignore[import-not-found]
+    except ImportError as err:
+        raise RuntimeError(
+            "Process-pool compilation requires 'cloudpickle' to be installed "
+            "(Backend objects are not picklable with the stdlib pickle module). "
+            "Install it (e.g. `pip install cloudpickle`) or fall back to "
+            "GT4PY_BUILD_JOBS_MODE=thread."
+        ) from err
+    return cloudpickle.dumps(backend)
+
+
+def deserialize_backend_from_worker(blob: bytes) -> Backend:
+    """Counterpart of :func:`serialize_backend_for_worker`: runs in a worker process."""
+    import cloudpickle  # type: ignore[import-not-found]
+
+    return cloudpickle.loads(blob)
