@@ -416,7 +416,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         false_ = self.visit(node.args[2])
         cond_symref_name = f"__cond_{cond_.fingerprint()}"
 
-        # tree_map(lambda a, b: as_fieldop(if_)(cond_ref, a, b))(true_tup, false_tup)
         result = im.tree_map(
             im.lambda_("__a", "__b")(
                 im.op_as_fieldop("if_")(im.ref(cond_symref_name), im.ref("__a"), im.ref("__b"))

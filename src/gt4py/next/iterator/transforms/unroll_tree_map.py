@@ -29,7 +29,8 @@ def _unroll(
         child_exprs = [im.tuple_get(i, e) for e in tup_exprs]
 
         if all(isinstance(ct, ts.TupleType) for ct in child_types):
-            elements.append(_unroll(f, child_types, child_exprs))  # type: ignore[arg-type]
+            nested_types = [ct for ct in child_types if isinstance(ct, ts.TupleType)]
+            elements.append(_unroll(f, nested_types, child_exprs))
         else:
             elements.append(im.call(f)(*child_exprs))
 
@@ -46,7 +47,7 @@ class UnrollTreeMap(eve.NodeTranslator):
     def apply(cls, program: itir.Program, *, uids: utils.IDGeneratorPool):
         return cls(uids=uids).visit(program)
 
-    def visit_FunCall(self, node: itir.Expr):
+    def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)
 
         if not cpm.is_call_to(node.fun, "tree_map"):
@@ -54,12 +55,14 @@ class UnrollTreeMap(eve.NodeTranslator):
 
         f = node.fun.args[0]
         tup_args = node.args
+        tup_types: list[ts.TupleType] = []
         for tup in tup_args:
             itir_inference.reinfer(tup)
             assert isinstance(tup.type, ts.TupleType)
+            tup_types.append(tup.type)
 
         tup_refs = [next(self.uids["_utm"]) for _ in tup_args]
-        body = _unroll(f, [tup.type for tup in tup_args], [im.ref(r) for r in tup_refs])
+        body = _unroll(f, tup_types, [im.ref(r) for r in tup_refs])
 
         result = body
         for ref_name, tup in reversed(list(zip(tup_refs, tup_args))):

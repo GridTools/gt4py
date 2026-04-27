@@ -58,6 +58,11 @@ def map_(*args):
 
 
 @builtin_dispatch
+def tree_map(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def make_const_list(*args):
     raise BackendNotSelectedError()
 
