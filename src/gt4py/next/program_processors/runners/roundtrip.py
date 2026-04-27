@@ -213,13 +213,28 @@ def fencil_generator(
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[definitions.CompilableProgramDef, stages.ExecutableProgram]):
+class RoundtripArtifact:
+    """In-memory artifact for the roundtrip backend.
+
+    Roundtrip generates and ``exec``\\ s a Python module per program, so its
+    output is a live callable rather than something on disk. Not picklable —
+    roundtrip is in-process only.
+    """
+
+    program: stages.ExecutableProgram
+
+    def materialize(self) -> stages.ExecutableProgram:
+        return self.program
+
+
+@dataclasses.dataclass(frozen=True)
+class Roundtrip(workflow.Workflow[definitions.CompilableProgramDef, RoundtripArtifact]):
     debug: Optional[bool] = None
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
     transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
 
-    def __call__(self, inp: definitions.CompilableProgramDef) -> stages.ExecutableProgram:
+    def __call__(self, inp: definitions.CompilableProgramDef) -> RoundtripArtifact:
         debug = config.DEBUG if self.debug is None else self.debug
 
         fencil = fencil_generator(
@@ -249,7 +264,7 @@ class Roundtrip(workflow.Workflow[definitions.CompilableProgramDef, stages.Execu
                 **kwargs,
             )
 
-        return decorated_fencil
+        return RoundtripArtifact(program=decorated_fencil)
 
 
 # TODO(tehrengruber): introduce factory
