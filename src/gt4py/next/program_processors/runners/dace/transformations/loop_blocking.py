@@ -128,7 +128,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     ) -> None:
         self._memlet_to_promote = []
         for out_edge_outer_entry in graph.out_edges(outer_entry):
-            if self._check_if_edge_can_be_promoted(out_edge_outer_entry):
+            if self._check_if_edge_can_be_promoted(out_edge_outer_entry, outer_entry):
                 self._memlet_to_promote.append(out_edge_outer_entry)
 
     def can_be_applied(
@@ -182,7 +182,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             self._populate_memlet_to_promote(graph, outer_entry)
 
         if (
-            not self.partition_map_output(graph, sdfg)
+            not self.partition_map_output(graph, sdfg, outer_entry)
             and self.require_independent_nodes
             and (
                 not self.promote_independent_memlets
@@ -210,14 +210,17 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         Performs the operation described in the doc string.
         """
+        outer_entry: dace_nodes.MapEntry = self.outer_entry
         # Now compute the partitions of the nodes.
-        self.partition_map_output(graph, sdfg)
+        self.partition_map_output(graph, sdfg, outer_entry)
 
         if self.promote_independent_memlets:
-            self._prepare_independent_memlets(graph, sdfg)
+            self._prepare_independent_memlets(graph, sdfg, outer_entry)
 
         # Modify the outer map and create the inner map.
-        (outer_entry, outer_exit), (inner_entry, inner_exit) = self._prepare_inner_outer_maps(graph)
+        (outer_entry, outer_exit), (inner_entry, inner_exit) = self._prepare_inner_outer_maps(
+            graph, outer_entry
+        )
 
         # Reconnect the edges
         self._rewire_map_scope(
@@ -239,13 +242,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     def _prepare_inner_outer_maps(
         self,
         state: dace.SDFGState,
+        outer_entry: dace_nodes.MapEntry,
     ) -> tuple[
         tuple[dace_nodes.MapEntry, dace_nodes.MapExit],
         tuple[dace_nodes.MapEntry, dace_nodes.MapExit],
     ]:
         """Prepare the maps for the blocking.
 
-        The function modifies the outer map, `self.outer_entry`, by replacing the
+        The function modifies the `outer_map` by replacing the
         blocking parameter, `self.blocking_parameter`, with a coarsened version
         of it. In addition the function will then create the inner map, that
         iterates over the blocking parameter, and these bounds are determined
@@ -260,7 +264,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             inner map. Each element consist of a pair containing the map entry
             and map exit nodes of the corresponding maps.
         """
-        outer_entry: dace_nodes.MapEntry = self.outer_entry
         outer_exit: dace_nodes.MapExit = state.exit_node(outer_entry)
         outer_map: dace_nodes.Map = outer_entry.map
         outer_range: dace_subsets.Range = outer_entry.map.range
@@ -307,6 +310,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
+        outer_entry: dace_nodes.MapEntry,
     ) -> bool:
         """Computes the partition the of the nodes of the Map.
 
@@ -364,7 +368,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             #       independent by definition).
             #  - All nodes adjacent to independent nodes.
             nodes_to_classify: set[dace_nodes.Node] = {
-                edge.dst for edge in state.out_edges(self.outer_entry)
+                edge.dst for edge in state.out_edges(outer_entry)
             }
             for independent_node in self._independent_nodes:
                 nodes_to_classify.update({edge.dst for edge in state.out_edges(independent_node)})
@@ -377,6 +381,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     node_to_classify=node_to_classify,
                     state=state,
                     sdfg=sdfg,
+                    outer_entry=outer_entry,
                 )
 
                 # Check if the partition exists.
@@ -395,7 +400,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         assert all(
             all(
-                iedge.src in self._independent_nodes or iedge.src is self.outer_entry
+                iedge.src in self._independent_nodes or iedge.src is outer_entry
                 for iedge in state.in_edges(inode)
             )
             for inode in self._independent_nodes
@@ -405,7 +410,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         #  as the set of all nodes adjacent to `outer_entry` that are not independent.
         self._dependent_nodes = {
             edge.dst
-            for edge in state.out_edges(self.outer_entry)
+            for edge in state.out_edges(outer_entry)
             if edge.dst not in self._independent_nodes
         }
 
@@ -416,6 +421,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         node_to_classify: dace_nodes.Node,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
+        outer_entry: dace_nodes.MapEntry,
     ) -> bool | None:
         """Internal function for classifying a single node.
 
@@ -426,7 +432,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         - All incoming _empty_ edges must be connected to the map entry.
         - A node either has only empty Memlets or none of them.
         - Incoming Memlets does not depend on the blocking parameter.
-        - All incoming edges must start either at `self.outer_entry` or at dependent nodes.
+        - All incoming edges must start either at `outer_entry` or at dependent nodes.
         - All output Memlets are non empty.
 
         It is important that to realize that the function will add the node to
@@ -445,7 +451,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             sdfg: The SDFG that is processed.
         """
         assert self._independent_nodes is not None  # silence MyPy
-        outer_entry: dace_nodes.MapEntry = self.outer_entry  # for caching.
         outer_exit: dace_nodes.MapExit = state.exit_node(outer_entry)
 
         # The node needs to have an input and output.
@@ -655,6 +660,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     def _check_if_edge_can_be_promoted(
         self,
         edge: dace_graph.MultiConnectorEdge[dace.Memlet],
+        outer_entry: dace_nodes.MapEntry,
     ) -> bool:
         """Check if a memlet can be promoted to the outer map.
 
@@ -666,7 +672,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         Returns:
             The function returns `True` if the memlet can be promoted.
         """
-        assert edge.src == self.outer_entry
+        assert edge.src == outer_entry
 
         memlet: dace.Memlet = edge.data
         src_subset: dace_subsets.Subset | None = memlet.src_subset
@@ -708,10 +714,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
+        outer_map_entry: dace_nodes.MapEntry,
     ) -> None:
         assert self._independent_nodes is not None  # silence MyPy
         assert self._memlet_to_promote is None  # silence MyPy
-        outer_map_entry: dace_nodes.MapEntry = self.outer_entry
 
         _ = sdfg.reset_cfg_list()
         dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=outer_map_entry)
