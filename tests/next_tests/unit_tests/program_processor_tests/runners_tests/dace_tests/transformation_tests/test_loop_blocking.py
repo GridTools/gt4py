@@ -1620,6 +1620,7 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
     for name in "BC":
         sdfg.add_array(name, shape=(40, 8), dtype=dace.float64, transient=False)
     sdfg.add_array("inc", shape=(40, 3), dtype=dace.float64, transient=False)
+    sdfg.add_array("inc2", shape=(40, 3), dtype=dace.float64, transient=False)
     sdfg.add_array("gt_conn_dummy", shape=(40, 2), dtype=dace.int32, transient=False)
     sdfg.add_array("ikoffset", shape=(40,), dtype=dace.int32, transient=False)
     sdfg.add_array("S", shape=(40,), dtype=dace.float64, transient=False)
@@ -1628,15 +1629,18 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
     sdfg.add_scalar("ttt", dtype=dace.float64, transient=True)
     sdfg.add_scalar("tttt", dtype=dace.float64, transient=True)
     sdfg.add_scalar("ttttt", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("inc2_tmp", dtype=dace.float64, transient=True)
 
     A, B, C, T, t, S = (state.add_access(name) for name in "ABCTtS")
     inc = state.add_access("inc")
+    inc2 = state.add_access("inc2")
     gt_conn_dummy = state.add_access("gt_conn_dummy")
     ikoffset = state.add_access("ikoffset")
     tt = state.add_access("tt")
     ttt = state.add_access("ttt")
     tttt = state.add_access("tttt")
     ttttt = state.add_access("ttttt")
+    inc2_tmp = state.add_access("inc2_tmp")
 
     # Note that creating `T` as an array is not useful at all, a scalar would be
     #  enough. The only reason for doing it is, that the Memlets inside and outside
@@ -1650,9 +1654,9 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
     ime, imx = state.add_map("inner_comp", ndrange={"__inner": "0:3"})
     itlet = state.add_tasklet(
         "inner_tasklet",
-        inputs={"__in", "__inc"},
+        inputs={"__in", "__inc", "__inc2"},
         outputs={"__out"},
-        code="__out = __in + __inc",
+        code="__out = __in + __inc + __inc2",
     )
 
     indirectaccesstlet = state.add_tasklet(
@@ -1699,10 +1703,17 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
     state.add_edge(me, "OUT_inc", ime, "IN_inc", dace.Memlet("inc[__i0, 0:3]"))
     me.add_scope_connectors("inc")
 
+    state.add_edge(inc2, None, me, "IN_inc2", dace.Memlet("inc2[0:40, 0:3]"))
+    state.add_edge(me, "OUT_inc2", ime, "IN_inc2", dace.Memlet("inc2[__i0, 0:3]"))
+    me.add_scope_connectors("inc2")
+
     state.add_edge(ime, "OUT_A", itlet, "__in", dace.Memlet("A[__i0, __i1] -> __in"))
     ime.add_scope_connectors("A")
     state.add_edge(ime, "OUT_inc", itlet, "__inc", dace.Memlet("inc[__i0, __inner] -> __inc"))
     ime.add_scope_connectors("inc")
+    state.add_edge(ime, "OUT_inc2", inc2_tmp, None, dace.Memlet("[__i0, __inner] -> inc2_tmp[0]"))
+    state.add_edge(inc2_tmp, None, itlet, "__inc2", dace.Memlet("inc2_tmp[0] -> __inc2"))
+    ime.add_scope_connectors("inc2")
 
     # Here is the interesting part, on the inside of the inner Map scope, the output
     #  Memlet refers to `t` the scalar, but on the outside the Memlet refers to
@@ -1780,8 +1791,8 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
         (True, False, 0),
         (False, True, 0),
         (False, False, 0),
-        (True, True, 5),
-        (False, True, 5),
+        (True, True, 6),
+        (False, True, 6),
     ],
 )
 def test_loop_blocking_sdfg_with_everything(
@@ -1805,9 +1816,9 @@ def test_loop_blocking_sdfg_with_everything(
         validate=True,
         validate_all=True,
     )
-    assert count == (1 if (independent_node_threshold <= 4 or not require_independent_nodes) else 0)
+    assert count == (1 if (independent_node_threshold <= 5 or not require_independent_nodes) else 0)
 
-    assert state.out_degree(me) == 9
+    assert state.out_degree(me) == 10
 
     me_tasklet_out_edges = [
         edge for edge in state.out_edges(me) if isinstance(edge.dst, dace_nodes.Tasklet)
@@ -1819,9 +1830,12 @@ def test_loop_blocking_sdfg_with_everything(
     if count == 1 and promote_independent_memlets:
         assert len(me_tasklet_out_edges) == 1
         assert next(iter(me_tasklet_out_edges)).data.data == "S"
-        assert len(me_access_node_out_edges) == 3
+        assert len(me_access_node_out_edges) == 4
         assert all(
-            [edge.data.data in {"inc", "gt_conn_dummy"} for edge in me_access_node_out_edges]
+            [
+                edge.data.data in {"inc", "inc2", "gt_conn_dummy"}
+                for edge in me_access_node_out_edges
+            ]
         )
     elif count == 1 and not promote_independent_memlets:
         # Tasklet that reads 'S' is independent

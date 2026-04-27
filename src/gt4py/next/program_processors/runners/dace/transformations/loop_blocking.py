@@ -731,7 +731,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         }
 
         for in_edge in self._memlet_to_promote:
-            assert not isinstance(in_edge.dst, dace_nodes.AccessNode)
+            if isinstance(in_edge.dst, dace_nodes.AccessNode):
+                raise NotImplementedError(
+                    "Promotion of memlets to AccessNodes is not implemented because "
+                    "this case should already be handled since the destination AccesesNode "
+                    "should already be in the set of independent nodes."
+                )
             # Create a temporary AccessNode that will be used to promote the memlet
             independent_outer_map_as_range = dace_subsets.Range(
                 ranges=[
@@ -745,6 +750,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     new_subset.append(subset_range)
             assert len(new_subset) > 0, (
                 "After removing the independent dimensions there should be at least one dimension left to promote."
+            )
+            assert len(new_subset) == len(in_edge.data.subset.ranges) - 1, (
+                "After removing the independent dimensions there should be exactly one dimension less."
             )
             new_subset_as_range = dace_subsets.Range(ranges=new_subset)
             promoted_name, promoted_desc = sdfg.add_temp_transient(
@@ -789,7 +797,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                             "Independent memlets should only be inputs to maps that have a single parameter. "
                             "Those should always be neighbor reductions."
                         )
-                        edge.data.subset = next(iter(original_dst_of_in_edge.params))
+                        edge.data.subset = dace_subsets.Range.from_indices(
+                            original_dst_of_in_edge.params
+                        )
             elif isinstance(original_dst_of_in_edge, dace_nodes.NestedSDFG):
                 raise NotImplementedError("Promotion of memlets to NestedSDFG not implemented yet.")
             elif isinstance(original_dst_of_in_edge, dace_nodes.LibraryNode):
