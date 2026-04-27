@@ -76,19 +76,17 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             gt4py_program_args=[p.type for p in program.params],
         )
 
-        # The executor and the translation stage may each be wrapped in a `CachedStep`
-        # depending on backend configuration; unwrap when so.
-        build_workflow = typing.cast(
+        compile_workflow = typing.cast(
             recipes.OTFBuildWorkflow,
-            self.backend.executor.step
-            if hasattr(self.backend.executor, "step")
-            else self.backend.executor,
-        )
+            self.backend.executor
+            if not hasattr(self.backend.executor, "step")
+            else self.backend.executor.step,
+        )  # We know which backend we are using, but we don't know if the compile workflow is cached.
         compile_workflow_translation = (
-            build_workflow.translation.step
-            if hasattr(build_workflow.translation, "step")
-            else build_workflow.translation
-        )
+            compile_workflow.translation
+            if not hasattr(compile_workflow.translation, "step")
+            else compile_workflow.translation.step
+        )  # Same for the translation stage, which could be a `CachedStep` depending on backend configuration.
         # TODO(ricoh): switch 'disable_itir_transforms=True' because we ran them separately previously
         # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
         # the other parts of the workaround when possible.
