@@ -14,10 +14,10 @@ from typing import Protocol, TypeVar
 
 import factory
 
-from gt4py._core import locking
+from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config
 from gt4py.next.otf import code_specs, definitions, stages, workflow
-from gt4py.next.otf.compilation import build_data, cache, importer
+from gt4py.next.otf.compilation import build_data, cache
 
 
 T = TypeVar("T")
@@ -45,27 +45,43 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
 
 
 @dataclasses.dataclass(frozen=True)
+class GTFNBuildArtifact:
+    """On-disk result of a GTFN compilation: a Python extension module.
+
+    Bindings are baked into the .so via nanobind, so the load step is just an
+    ``importlib`` import + entry-point symbol lookup. ``device_type`` is
+    intrinsic to the artifact: a CPU-built .so cannot be loaded as GPU.
+    """
+
+    src_dir: pathlib.Path
+    module: pathlib.Path
+    entry_point_name: str
+    device_type: core_defs.DeviceType
+
+
+@dataclasses.dataclass(frozen=True)
 class Compiler(
     workflow.ChainableWorkflowMixin[
         stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        stages.BuildArtifact,
+        GTFNBuildArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        stages.BuildArtifact,
+        GTFNBuildArtifact,
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
 ):
-    """Use any build system (via configured factory) to compile a GT4Py program into an on-disk ``BuildArtifact``."""
+    """Use any build system (via configured factory) to compile a GT4Py program into a :class:`GTFNBuildArtifact`."""
 
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
+    device_type: core_defs.DeviceType
     force_recompile: bool = False
 
     def __call__(
         self,
         inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-    ) -> stages.BuildArtifact:
+    ) -> GTFNBuildArtifact:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
@@ -83,25 +99,12 @@ class Compiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
-        return stages.BuildArtifact(
+        return GTFNBuildArtifact(
             src_dir=src_dir,
             module=new_data.module,
             entry_point_name=new_data.entry_point_name,
+            device_type=self.device_type,
         )
-
-
-def load_artifact(artifact: stages.BuildArtifact) -> stages.ExecutableProgram:
-    """Dynamically import a previously-built module and return its entry point.
-
-    Must run in the process that will ultimately call the returned program, since
-    the module is registered in that process's ``sys.modules`` under the
-    ``gt4py.__compiled_programs__.`` prefix.
-    """
-    m = importer.import_from_path(
-        artifact.src_dir / artifact.module,
-        sys_modules_prefix="gt4py.__compiled_programs__.",
-    )
-    return getattr(m, artifact.entry_point_name)
 
 
 class CompilerFactory(factory.Factory):

@@ -18,11 +18,10 @@ from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow import (
     bindings as bindings_step,
-    decoration as decoration_step,
+    compilation as compilation_step,
 )
 from gt4py.next.program_processors.runners.dace.workflow.compilation import (
     DaCeCompilationStepFactory,
-    DaCeLoaderFactory,
 )
 from gt4py.next.program_processors.runners.dace.workflow.translation import (
     DaCeTranslationStepFactory,
@@ -75,29 +74,6 @@ class DaCeBuildWorkflowFactory(factory.Factory):
     )
 
 
-class DaCeFinalizeWorkflowFactory(factory.Factory):
-    class Meta:
-        model = recipes.OTFFinalizeWorkflow
-
-    class Params:
-        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
-            lambda: config.CMAKE_BUILD_TYPE
-        )
-
-    load = factory.SubFactory(
-        DaCeLoaderFactory,
-        device_type=factory.SelfAttribute("..device_type"),
-        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
-    )
-    decoration = factory.LazyAttribute(
-        lambda o: functools.partial(
-            decoration_step.convert_args,
-            device=o.device_type,
-        )
-    )
-
-
 class DaCeWorkflowFactory(factory.Factory):
     class Meta:
         model = recipes.OTFCompileWorkflow
@@ -116,8 +92,4 @@ class DaCeWorkflowFactory(factory.Factory):
         auto_optimize=factory.SelfAttribute("..auto_optimize"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )
-    finalize = factory.SubFactory(
-        DaCeFinalizeWorkflowFactory,
-        device_type=factory.SelfAttribute("..device_type"),
-        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
-    )
+    finalize = factory.LazyFunction(lambda: compilation_step.dace_finalize)

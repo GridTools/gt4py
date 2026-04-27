@@ -11,7 +11,6 @@ from __future__ import annotations
 import dataclasses
 import os
 import pathlib
-import types
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
 from typing import Any
@@ -57,7 +56,7 @@ class CompiledDaceProgram:
         self,
         program: dace.CompiledSDFG,
         bind_func_name: str,
-        binding_source: stages.BindingSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        binding_source_code: str,
     ):
         self.sdfg_program = program
 
@@ -66,9 +65,10 @@ class CompiledDaceProgram:
         # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
         self.sdfg_argtypes = list(program.sdfg.arglist().values())
 
-        # Note that `binding_source` contains Python code tailored to this specific SDFG.
-        # Here we dinamically compile this function and add it to the compiled program.
-        exec(binding_source.source_code, global_namespace := {})  # type: ignore[var-annotated]
+        # The binding source code is Python tailored to this specific SDFG.
+        # We dynamically compile that function and add it to the compiled program.
+        global_namespace: dict[str, Any] = {}
+        exec(binding_source_code, global_namespace)
         self.update_sdfg_ctype_arglist = global_namespace[bind_func_name]
         # For debug purpose, we set a unique module name on the compiled function.
         self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
@@ -118,11 +118,18 @@ class CompiledDaceProgram:
 
 @dataclasses.dataclass(frozen=True)
 class DaCeBuildArtifact:
-    """On-disk result of a DaCe compilation."""
+    """On-disk result of a DaCe compilation.
+
+    Carries the ``device_type`` the artifact was built for; a CPU-built .so
+    cannot be loaded as GPU. Also carries the bindings (Python source code
+    that the loader ``exec``\\ s to materialize the SDFG argument-marshalling
+    function).
+    """
 
     build_folder: pathlib.Path
     binding_source_code: str
     bind_func_name: str
+    device_type: core_defs.DeviceType
 
 
 @dataclasses.dataclass(frozen=True)
@@ -165,49 +172,49 @@ class DaCeCompiler(
             build_folder=pathlib.Path(sdfg_build_folder),
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
+            device_type=self.device_type,
         )
 
 
-@dataclasses.dataclass(frozen=True)
-class DaCeLoader(
-    workflow.ChainableWorkflowMixin[DaCeBuildArtifact, CompiledDaceProgram],
-    workflow.ReplaceEnabledWorkflowMixin[DaCeBuildArtifact, CompiledDaceProgram],
-):
-    """Rehydrate a :class:`DaCeBuildArtifact` into a live :class:`CompiledDaceProgram`."""
+def dace_finalize(artifact: DaCeBuildArtifact) -> stages.ExecutableProgram:
+    """Turn a :class:`DaCeBuildArtifact` into a directly-callable program.
 
-    device_type: core_defs.DeviceType
-    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+    Re-deserializes the SDFG dump from the build folder, links against the
+    pre-built .so via ``compiler.use_cache=True`` (no re-codegen), wraps it
+    in a :class:`CompiledDaceProgram`, and applies gt4py's calling convention
+    via :func:`decoration.convert_args`. Reads the target device from the
+    artifact.
 
-    def __call__(self, artifact: DaCeBuildArtifact) -> CompiledDaceProgram:
-        for dump_name in ("program.sdfgz", "program.sdfg"):
-            sdfg_dump = artifact.build_folder / dump_name
-            if sdfg_dump.exists():
-                break
-        else:
-            raise RuntimeError(
-                f"No SDFG dump (program.sdfgz / program.sdfg) found in '{artifact.build_folder}'."
-            )
+    Must run in the process that will ultimately call the returned program.
+    """
+    # Local import to avoid a circular reference (decoration imports compilation).
+    from gt4py.next.program_processors.runners.dace.workflow import (
+        decoration as gtx_wfddecoration,
+    )
 
-        sdfg = dace.SDFG.from_file(str(sdfg_dump))
-        sdfg.build_folder = str(artifact.build_folder)
+    for dump_name in ("program.sdfgz", "program.sdfg"):
+        sdfg_dump = artifact.build_folder / dump_name
+        if sdfg_dump.exists():
+            break
+    else:
+        raise RuntimeError(
+            f"No SDFG dump (program.sdfgz / program.sdfg) found in '{artifact.build_folder}'."
+        )
 
-        with gtx_wfdcommon.dace_context(
-            device_type=self.device_type,
-            cmake_build_type=self.cmake_build_type,
-        ):
-            # use_cache=True forces DaCe to load the existing .so without re-codegen.
-            with dace.config.set_temporary("compiler", "use_cache", value=True):
-                sdfg_program = sdfg.compile(validate=False)
+    sdfg = dace.SDFG.from_file(str(sdfg_dump))
+    sdfg.build_folder = str(artifact.build_folder)
 
-        binding_source_shim = types.SimpleNamespace(source_code=artifact.binding_source_code)
-        return CompiledDaceProgram(sdfg_program, artifact.bind_func_name, binding_source_shim)  # type: ignore[arg-type]
+    with gtx_wfdcommon.dace_context(device_type=artifact.device_type):
+        # use_cache=True forces DaCe to load the existing .so without re-codegen.
+        with dace.config.set_temporary("compiler", "use_cache", value=True):
+            sdfg_program = sdfg.compile(validate=False)
+
+    program = CompiledDaceProgram(
+        sdfg_program, artifact.bind_func_name, artifact.binding_source_code
+    )
+    return gtx_wfddecoration.convert_args(program, device=artifact.device_type)
 
 
 class DaCeCompilationStepFactory(factory.Factory):
     class Meta:
         model = DaCeCompiler
-
-
-class DaCeLoaderFactory(factory.Factory):
-    class Meta:
-        model = DaCeLoader

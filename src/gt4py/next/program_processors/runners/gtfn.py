@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-import functools
 from typing import Any
 
 import factory
@@ -21,7 +20,7 @@ from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import compiler
+from gt4py.next.otf.compilation import compiler, importer
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
@@ -107,6 +106,24 @@ def extract_connectivity_args(
     return args
 
 
+def gtfn_finalize(artifact: compiler.GTFNBuildArtifact) -> stages.ExecutableProgram:
+    """Turn a :class:`compiler.GTFNBuildArtifact` into a directly-callable program.
+
+    Imports the .so as a Python extension module and wraps the entry point in
+    gt4py's calling convention (argument conversion, device-aware connectivity
+    handling, metric collection). Reads the target device from the artifact.
+
+    Must run in the process that will ultimately call the returned program;
+    the module is registered in that process's ``sys.modules`` under the
+    ``gt4py.__compiled_programs__.`` prefix.
+    """
+    m = importer.import_from_path(
+        artifact.src_dir / artifact.module,
+        sys_modules_prefix="gt4py.__compiled_programs__.",
+    )
+    return convert_args(getattr(m, artifact.entry_point_name), device=artifact.device_type)
+
+
 class GTFNBuildWorkflowFactory(factory.Factory):
     class Meta:
         model = recipes.OTFBuildWorkflow
@@ -144,19 +161,7 @@ class GTFNBuildWorkflowFactory(factory.Factory):
         compiler.CompilerFactory,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         builder_factory=factory.SelfAttribute("..builder_factory"),
-    )
-
-
-class GTFNFinalizeWorkflowFactory(factory.Factory):
-    class Meta:
-        model = recipes.OTFFinalizeWorkflow
-
-    class Params:
-        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-
-    load = factory.LazyFunction(lambda: compiler.load_artifact)
-    decoration = factory.LazyAttribute(
-        lambda o: functools.partial(convert_args, device=o.device_type)
+        device_type=factory.SelfAttribute("..device_type"),
     )
 
 
@@ -171,9 +176,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     build = factory.SubFactory(
         GTFNBuildWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
     )
-    finalize = factory.SubFactory(
-        GTFNFinalizeWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
-    )
+    finalize = factory.LazyFunction(lambda: gtfn_finalize)
 
 
 class GTFNBackendFactory(factory.Factory):
