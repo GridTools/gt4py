@@ -115,3 +115,91 @@ def test_broadcast():
     util.compile_and_run_sdfg(sdfg, **res)
 
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_indirect_access() -> dace.SDFG:
+    sdfg = dace.SDFG(util.unique_name("broadcast_indirect_access"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for aname in "abc":
+        sdfg.add_array(
+            aname,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(aname == "b"),
+        )
+    sdfg.add_array(
+        "idx",
+        shape=(10,),
+        dtype=dace.int32,
+        transient=False,
+    )
+
+    for sname in "dts":
+        sdfg.add_scalar(
+            sname,
+            dtype=dace.float64,
+            transient=(sname != "d"),
+        )
+
+    # TODO: Ask Edoardo how to properly use; Maybe also modify it.
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast")
+    a, b, c, d, t, s = (state.add_access(name) for name in "abcdts")
+    idx = state.add_access("idx")
+    me, mx = state.add_map("map", ndrange={"__i": "0:10"})
+
+    tlet1, tlet2 = [
+        state.add_tasklet(
+            f"tlet{i + 1}",
+            inputs={"__in1", "__in2"},
+            outputs={"__out"},
+            code=f"__out = {op}",
+        )
+        for i, op in enumerate(["__in1 + __in2", "2.0 * __in1 + __in2"])
+    ]
+    tlet_idx = state.add_tasklet(
+        "tlet_indirect",
+        inputs={"__field", "__idx"},
+        outputs={"__out"},
+        code="__out = __field[__idx]",
+    )
+
+    state.add_edge(d, None, bcast_lib, "_inp", dace.Memlet("d[0]"))
+    state.add_edge(bcast_lib, "_outp", b, None, dace.Memlet("b[0:10]"))
+
+    state.add_edge(b, None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(idx, None, me, "IN_idx", dace.Memlet("idx[0:10]"))
+    state.add_edge(a, None, me, "IN_a", dace.Memlet("a[0:10]"))
+    me.add_scope_connectors("a")
+    me.add_scope_connectors("idx")
+    me.add_scope_connectors("b")
+
+    state.add_edge(me, "OUT_b", tlet_idx, "__field", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_idx", tlet_idx, "__idx", dace.Memlet("idx[__i]"))
+    state.add_edge(tlet_idx, "__out", t, None, dace.Memlet("t[0]"))
+
+    state.add_edge(me, "OUT_a", tlet1, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(t, None, tlet1, "__in2", dace.Memlet("t[0]"))
+    state.add_edge(tlet1, "__out", s, None, dace.Memlet("s[0]"))
+
+    state.add_edge(s, None, tlet2, "__in1", dace.Memlet("s[0]"))
+    state.add_edge(me, "OUT_b", tlet2, "__in2", dace.Memlet("b[__i]"))
+    state.add_edge(tlet2, "__out", mx, "IN_c", dace.Memlet("c[__i]"))
+    state.add_edge(mx, "OUT_c", c, None, dace.Memlet("c[0:10]"))
+    mx.add_scope_connectors("c")
+
+    sdfg.validate()
+
+    return sdfg
+
+
+def test_indirect_access_broadcast():
+    sdfg = _make_indirect_access()
+
+    # NOTE: This pattern could be processed, however, we would need to inspect the
+    #   Tasklet to make sure that it is indeed an indirect access. The safest way
+    #   to do it would be to add another Library node for it.
+    nb_applied = sdfg.apply_transformations_repeated(
+        gtx_transformations.InlineBroadcastAccess, validate_all=True
+    )
+    assert nb_applied == 0
