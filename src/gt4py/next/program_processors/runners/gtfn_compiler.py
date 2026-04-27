@@ -10,39 +10,18 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Protocol, TypeVar
+from typing import TypeVar
 
 import factory
 
-from gt4py._core import definitions as core_defs, locking
+from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import code_specs, definitions, stages, workflow
-from gt4py.next.otf.compilation import build_data, cache, importer
+from gt4py.next.otf.compilation import build_orchestrator, build_system, importer
 from gt4py.next.program_processors.runners import gtfn_decoration
 
 
-T = TypeVar("T")
-
-
-def is_compiled(data: build_data.BuildData) -> bool:
-    return data.status >= build_data.BuildStatus.COMPILED
-
-
-def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
-    return (src_dir / data.module).exists()
-
-
-CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
-TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
 CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
-
-
-class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
-    def __call__(
-        self,
-        source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT],
-        cache_lifetime: config.BuildCacheLifetime,
-    ) -> stages.BuildSystemProject[CodeSpecT, TargetCodeSpecT]: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -87,10 +66,12 @@ class Compiler(
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
 ):
-    """Use any build system (via configured factory) to compile a GT4Py program into a :class:`GTFNBuildArtifact`."""
+    """Drive a build system and wrap the result in a :class:`GTFNBuildArtifact`."""
 
     cache_lifetime: config.BuildCacheLifetime
-    builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
+    builder_factory: build_system.BuildSystemProjectGenerator[
+        CPPLikeCodeSpecT, code_specs.PythonCodeSpec
+    ]
     device_type: core_defs.DeviceType
     force_recompile: bool = False
 
@@ -98,27 +79,13 @@ class Compiler(
         self,
         inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
     ) -> GTFNBuildArtifact:
-        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
-
-        # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
-        # we need to make sure that only one of them accesses the same build directory for compilation.
-        with locking.lock(src_dir):
-            data = build_data.read_data(src_dir)
-
-            if not data or not is_compiled(data) or self.force_recompile:
-                self.builder_factory(inp, self.cache_lifetime).build()
-
-            new_data = build_data.read_data(src_dir)
-
-            if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
-                raise CompilationError(
-                    f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
-                )
-
+        result = build_orchestrator.run_build(
+            inp, self.cache_lifetime, self.builder_factory, self.force_recompile
+        )
         return GTFNBuildArtifact(
-            src_dir=src_dir,
-            module=new_data.module,
-            entry_point_name=new_data.entry_point_name,
+            src_dir=result.src_dir,
+            module=result.module,
+            entry_point_name=result.entry_point_name,
             device_type=self.device_type,
         )
 
@@ -126,6 +93,3 @@ class Compiler(
 class CompilerFactory(factory.Factory):
     class Meta:
         model = Compiler
-
-
-class CompilationError(RuntimeError): ...
