@@ -48,15 +48,15 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
 class Compiler(
     workflow.ChainableWorkflowMixin[
         stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        stages.ExecutableProgram,
+        stages.BuildArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        stages.ExecutableProgram,
+        stages.BuildArtifact,
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
 ):
-    """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
+    """Use any build system (via configured factory) to compile a GT4Py program into an on-disk ``BuildArtifact``."""
 
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
@@ -65,7 +65,7 @@ class Compiler(
     def __call__(
         self,
         inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-    ) -> stages.ExecutableProgram:
+    ) -> stages.BuildArtifact:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
@@ -83,12 +83,25 @@ class Compiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
-        m = importer.import_from_path(
-            src_dir / new_data.module, sys_modules_prefix="gt4py.__compiled_programs__."
+        return stages.BuildArtifact(
+            src_dir=src_dir,
+            module=new_data.module,
+            entry_point_name=new_data.entry_point_name,
         )
-        func = getattr(m, new_data.entry_point_name)
 
-        return func
+
+def load_artifact(artifact: stages.BuildArtifact) -> stages.ExecutableProgram:
+    """Dynamically import a previously-built module and return its entry point.
+
+    Must run in the process that will ultimately call the returned program, since
+    the module is registered in that process's ``sys.modules`` under the
+    ``gt4py.__compiled_programs__.`` prefix.
+    """
+    m = importer.import_from_path(
+        artifact.src_dir / artifact.module,
+        sys_modules_prefix="gt4py.__compiled_programs__.",
+    )
+    return getattr(m, artifact.entry_point_name)
 
 
 class CompilerFactory(factory.Factory):

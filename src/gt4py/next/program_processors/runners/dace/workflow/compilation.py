@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import pathlib
+import types
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
 from typing import Any
@@ -115,18 +117,27 @@ class CompiledDaceProgram:
 
 
 @dataclasses.dataclass(frozen=True)
+class DaCeBuildArtifact:
+    """On-disk result of a DaCe compilation."""
+
+    build_folder: pathlib.Path
+    binding_source_code: str
+    bind_func_name: str
+
+
+@dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
         stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-        CompiledDaceProgram,
+        DaCeBuildArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-        CompiledDaceProgram,
+        DaCeBuildArtifact,
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
-    """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
+    """Run the DaCe build system and produce an on-disk :class:`DaCeBuildArtifact`."""
 
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
@@ -136,7 +147,7 @@ class DaCeCompiler(
     def __call__(
         self,
         inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-    ) -> CompiledDaceProgram:
+    ) -> DaCeBuildArtifact:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
@@ -147,16 +158,56 @@ class DaCeCompiler(
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
             sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
-                sdfg_program = sdfg.compile(validate=False)
+                sdfg.compile(validate=False, return_program_handle=False)
 
         assert inp.binding_source is not None
-        return CompiledDaceProgram(
-            sdfg_program,
-            self.bind_func_name,
-            inp.binding_source,
+        return DaCeBuildArtifact(
+            build_folder=pathlib.Path(sdfg_build_folder),
+            binding_source_code=inp.binding_source.source_code,
+            bind_func_name=self.bind_func_name,
         )
+
+
+@dataclasses.dataclass(frozen=True)
+class DaCeLoader(
+    workflow.ChainableWorkflowMixin[DaCeBuildArtifact, CompiledDaceProgram],
+    workflow.ReplaceEnabledWorkflowMixin[DaCeBuildArtifact, CompiledDaceProgram],
+):
+    """Rehydrate a :class:`DaCeBuildArtifact` into a live :class:`CompiledDaceProgram`."""
+
+    device_type: core_defs.DeviceType
+    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+
+    def __call__(self, artifact: DaCeBuildArtifact) -> CompiledDaceProgram:
+        for dump_name in ("program.sdfgz", "program.sdfg"):
+            sdfg_dump = artifact.build_folder / dump_name
+            if sdfg_dump.exists():
+                break
+        else:
+            raise RuntimeError(
+                f"No SDFG dump (program.sdfgz / program.sdfg) found in '{artifact.build_folder}'."
+            )
+
+        sdfg = dace.SDFG.from_file(str(sdfg_dump))
+        sdfg.build_folder = str(artifact.build_folder)
+
+        with gtx_wfdcommon.dace_context(
+            device_type=self.device_type,
+            cmake_build_type=self.cmake_build_type,
+        ):
+            # use_cache=True forces DaCe to load the existing .so without re-codegen.
+            with dace.config.set_temporary("compiler", "use_cache", value=True):
+                sdfg_program = sdfg.compile(validate=False)
+
+        binding_source_shim = types.SimpleNamespace(source_code=artifact.binding_source_code)
+        return CompiledDaceProgram(sdfg_program, artifact.bind_func_name, binding_source_shim)  # type: ignore[arg-type]
 
 
 class DaCeCompilationStepFactory(factory.Factory):
     class Meta:
         model = DaCeCompiler
+
+
+class DaCeLoaderFactory(factory.Factory):
+    class Meta:
+        model = DaCeLoader

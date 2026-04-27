@@ -135,11 +135,11 @@ def test_gtfn_file_cache(program_example):
     )
     cached_gtfn_translation_step = gtfn.GTFNBackendFactory(
         gpu=False, cached=True, otf_workflow__cached_translation=True
-    ).executor.step.translation
+    ).executor.build.step.translation
 
     bare_gtfn_translation_step = gtfn.GTFNBackendFactory(
         gpu=False, cached=True, otf_workflow__cached_translation=False
-    ).executor.step.translation
+    ).executor.build.step.translation
 
     cache_key = stages.fingerprint_compilable_program(compilable_program)
 

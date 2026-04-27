@@ -22,6 +22,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 )
 from gt4py.next.program_processors.runners.dace.workflow.compilation import (
     DaCeCompilationStepFactory,
+    DaCeLoaderFactory,
 )
 from gt4py.next.program_processors.runners.dace.workflow.translation import (
     DaCeTranslationStepFactory,
@@ -31,9 +32,9 @@ from gt4py.next.program_processors.runners.dace.workflow.translation import (
 _GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
 
 
-class DaCeWorkflowFactory(factory.Factory):
+class DaCeBuildWorkflowFactory(factory.Factory):
     class Meta:
-        model = recipes.OTFCompileWorkflow
+        model = recipes.OTFBuildWorkflow
 
     class Params:
         auto_optimize: bool = False
@@ -72,9 +73,51 @@ class DaCeWorkflowFactory(factory.Factory):
         device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )
+
+
+class DaCeFinalizeWorkflowFactory(factory.Factory):
+    class Meta:
+        model = recipes.OTFFinalizeWorkflow
+
+    class Params:
+        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda: config.CMAKE_BUILD_TYPE
+        )
+
+    load = factory.SubFactory(
+        DaCeLoaderFactory,
+        device_type=factory.SelfAttribute("..device_type"),
+        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
+    )
     decoration = factory.LazyAttribute(
         lambda o: functools.partial(
             decoration_step.convert_args,
             device=o.device_type,
         )
+    )
+
+
+class DaCeWorkflowFactory(factory.Factory):
+    class Meta:
+        model = recipes.OTFCompileWorkflow
+
+    class Params:
+        auto_optimize: bool = False
+        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda: config.CMAKE_BUILD_TYPE
+        )
+        cached_translation = factory.Trait(build__cached_translation=True)
+
+    build = factory.SubFactory(
+        DaCeBuildWorkflowFactory,
+        device_type=factory.SelfAttribute("..device_type"),
+        auto_optimize=factory.SelfAttribute("..auto_optimize"),
+        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
+    )
+    finalize = factory.SubFactory(
+        DaCeFinalizeWorkflowFactory,
+        device_type=factory.SelfAttribute("..device_type"),
+        cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )

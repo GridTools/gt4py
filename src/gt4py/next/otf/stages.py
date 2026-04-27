@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 from collections.abc import Callable
 from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
 
@@ -127,6 +128,15 @@ class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
 
 
 ExecutableProgram: TypeAlias = Callable
+
+
+@dataclasses.dataclass(frozen=True)
+class BuildArtifact:
+    """On-disk result of a compilation: everything a later step needs to import it."""
+
+    src_dir: pathlib.Path
+    module: pathlib.Path
+    entry_point_name: str
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

@@ -192,7 +192,11 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     gtfn_without_transforms = dataclasses.replace(
         run_gtfn,
         executor=run_gtfn.executor.replace(
-            translation=run_gtfn.executor.translation.replace(enable_itir_transforms=False),
+            build=run_gtfn.executor.build.replace(
+                translation=run_gtfn.executor.build.translation.replace(
+                    enable_itir_transforms=False
+                ),
+            ),
         ),  # avoid inlining the function
     )
 
