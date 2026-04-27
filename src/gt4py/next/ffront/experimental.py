@@ -25,7 +25,8 @@ def concat_where(
     false_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     /,
 ) -> common.Field | Tuple:
-    """Assemble a field by selecting from ``true_field`` where ``domain`` applies and from ``false_field`` elsewhere.
+    """
+    Assemble a field by selecting from ``true_field`` where ``domain`` applies and from ``false_field`` elsewhere.
 
     Unlike ``where`` (element-wise selection via a boolean mask field), ``concat_where``
     works on **domain regions**: the condition is a ``Domain`` (not a ``Field``), and the
