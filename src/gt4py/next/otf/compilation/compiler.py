@@ -42,14 +42,14 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class CPPBuildArtifact(gtx_utils.MetadataBasedPickling):
+class CPPCompilationArtifact(gtx_utils.MetadataBasedPickling):
     """On-disk result of a CPP-style compilation: a Python extension module.
 
     Bindings are baked into the .so (e.g. via nanobind), so the default
-    :meth:`materialize` is just an ``importlib`` import + entry-point lookup,
+    :meth:`load` is just an ``importlib`` import + entry-point lookup,
     returning the raw imported callable. Backends that need to wrap the
     callable in a calling convention (e.g. GTFN's gt4py-shaped argument
-    conversion) subclass and override :meth:`materialize`.
+    conversion) subclass and override :meth:`load`.
     """
 
     src_dir: pathlib.Path
@@ -57,7 +57,7 @@ class CPPBuildArtifact(gtx_utils.MetadataBasedPickling):
     entry_point_name: str
     device_type: core_defs.DeviceType
 
-    def materialize(self) -> stages.ExecutableProgram:
+    def load(self) -> stages.ExecutableProgram:
         """Import the .so and return the raw entry point.
 
         Must run in the process that will call the returned program: the
@@ -75,18 +75,18 @@ class CPPBuildArtifact(gtx_utils.MetadataBasedPickling):
 class CPPCompiler(
     workflow.ChainableWorkflowMixin[
         stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        CPPBuildArtifact,
+        CPPCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        CPPBuildArtifact,
+        CPPCompilationArtifact,
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
 ):
-    """Drive a CPP-style build system and wrap the result in a :class:`CPPBuildArtifact`.
+    """Drive a CPP-style build system and wrap the result in a :class:`CPPCompilationArtifact`.
 
     Backends that need a different artifact subclass (e.g. with a wrapped
-    ``materialize``) subclass and override :meth:`_make_artifact`.
+    ``load``) subclass and override :meth:`_make_artifact`.
     """
 
     cache_lifetime: config.BuildCacheLifetime
@@ -97,7 +97,7 @@ class CPPCompiler(
     def __call__(
         self,
         inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-    ) -> CPPBuildArtifact:
+    ) -> CPPCompilationArtifact:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
@@ -119,8 +119,8 @@ class CPPCompiler(
 
     def _make_artifact(
         self, src_dir: pathlib.Path, module: pathlib.Path, entry_point_name: str
-    ) -> CPPBuildArtifact:
-        return CPPBuildArtifact(
+    ) -> CPPCompilationArtifact:
+        return CPPCompilationArtifact(
             src_dir=src_dir,
             module=module,
             entry_point_name=entry_point_name,

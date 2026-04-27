@@ -77,7 +77,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
 
         compile_workflow = typing.cast(
-            recipes.OTFBuildWorkflow,
+            recipes.OTFCompileWorkflow,
             self.backend.executor
             if not hasattr(self.backend.executor, "step")
             else self.backend.executor.step,

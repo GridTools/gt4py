@@ -56,16 +56,18 @@ class BindingStep(Protocol[CodeSpecT, TargetCodeSpecT]):
 
 
 class CompilationStep(
-    workflow.Workflow[stages.CompilableProject[CodeSpecT, TargetCodeSpecT], stages.BuildArtifact],
+    workflow.Workflow[
+        stages.CompilableProject[CodeSpecT, TargetCodeSpecT], stages.CompilationArtifact
+    ],
     Protocol[CodeSpecT, TargetCodeSpecT],
 ):
-    """Run the build system and produce a :class:`stages.BuildArtifact`.
+    """Run the build system and produce a :class:`stages.CompilationArtifact`.
 
     Each backend defines its own concrete artifact dataclass (frozen,
-    picklable, self-materializing); they all satisfy the
-    :class:`stages.BuildArtifact` Protocol structurally.
+    picklable, with a :meth:`stages.CompilationArtifact.load` method); they all
+    satisfy the :class:`stages.CompilationArtifact` Protocol structurally.
     """
 
     def __call__(
         self, source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT]
-    ) -> stages.BuildArtifact: ...
+    ) -> stages.CompilationArtifact: ...

@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Minimal contract tests for :class:`compilation.DaCeBuildArtifact`."""
+"""Minimal contract tests for :class:`compilation.DaCeCompilationArtifact`."""
 
 import pathlib
 import pickle
@@ -20,7 +20,7 @@ from gt4py.next.program_processors.runners.dace.workflow import compilation  # n
 
 
 def test_dace_build_artifact_pickle_round_trip_drops_live_program():
-    artifact = compilation.DaCeBuildArtifact(
+    artifact = compilation.DaCeCompilationArtifact(
         build_folder=pathlib.Path("/tmp/build"),
         sdfg_dump=pathlib.Path("/tmp/build/program.sdfgz"),
         binding_source_code="def update_sdfg_args(*a, **k): ...",

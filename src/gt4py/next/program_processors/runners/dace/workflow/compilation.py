@@ -120,7 +120,7 @@ class CompiledDaceProgram:
 
 
 @dataclasses.dataclass(frozen=True)
-class DaCeBuildArtifact(gtx_utils.MetadataBasedPickling):
+class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
     """On-disk result of a DaCe compilation: a build folder + the SDFG bindings."""
 
     build_folder: pathlib.Path
@@ -130,8 +130,8 @@ class DaCeBuildArtifact(gtx_utils.MetadataBasedPickling):
     device_type: core_defs.DeviceType
 
     # Process-local cache of the live :class:`CompiledDaceProgram`. Populated by
-    # ``DaCeCompiler`` after a fresh compile so :meth:`materialize` can skip the
-    # SDFG re-deserialize + .so re-link round-trip in the same process. Marked
+    # ``DaCeCompiler`` after a fresh compile so :meth:`load` can skip the SDFG
+    # re-deserialize + .so re-link round-trip in the same process. Marked
     # ``pickle=False`` via :func:`gtx_utils.gt4py_metadata` so a receiver of the
     # artifact in a different process sees ``None`` and falls back to the
     # disk-based path.
@@ -143,7 +143,7 @@ class DaCeBuildArtifact(gtx_utils.MetadataBasedPickling):
         metadata=gtx_utils.gt4py_metadata(pickle=False),
     )
 
-    def materialize(self) -> stages.ExecutableProgram:
+    def load(self) -> stages.ExecutableProgram:
         """Wrap the compiled program in gt4py's calling convention.
 
         Uses the live program cached on the artifact when available; otherwise
@@ -172,15 +172,15 @@ class DaCeBuildArtifact(gtx_utils.MetadataBasedPickling):
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
         stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-        DaCeBuildArtifact,
+        DaCeCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-        DaCeBuildArtifact,
+        DaCeCompilationArtifact,
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
-    """Run the DaCe build system and produce an on-disk :class:`DaCeBuildArtifact`."""
+    """Run the DaCe build system and produce an on-disk :class:`DaCeCompilationArtifact`."""
 
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
@@ -190,7 +190,7 @@ class DaCeCompiler(
     def __call__(
         self,
         inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-    ) -> DaCeBuildArtifact:
+    ) -> DaCeCompilationArtifact:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
@@ -201,7 +201,7 @@ class DaCeCompiler(
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
             sdfg.build_folder = str(sdfg_build_folder)
             with locking.lock(sdfg_build_folder):
-                # Keep the program handle so the artifact's materialize() can
+                # Keep the program handle so the artifact's load() can
                 # skip the SDFG re-deserialize + .so re-link round-trip when
                 # used in this same process.
                 sdfg_program = sdfg.compile(validate=False)
@@ -216,7 +216,7 @@ class DaCeCompiler(
             )
 
         assert inp.binding_source is not None
-        artifact = DaCeBuildArtifact(
+        artifact = DaCeCompilationArtifact(
             build_folder=sdfg_build_folder,
             sdfg_dump=sdfg_dump,
             binding_source_code=inp.binding_source.source_code,

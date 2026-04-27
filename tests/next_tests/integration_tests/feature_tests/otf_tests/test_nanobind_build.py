@@ -31,7 +31,7 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
             device_type=core_defs.DeviceType.CPU,
         )
     )
-    compiled_program = build_the_program(example_program_source).materialize()
+    compiled_program = build_the_program(example_program_source).load()
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
     tup = [
         (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),
@@ -51,7 +51,7 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
             device_type=core_defs.DeviceType.CPU,
         )
     )
-    compiled_program = build_the_program(example_program_source).materialize()
+    compiled_program = build_the_program(example_program_source).load()
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
     tup = [
         (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),

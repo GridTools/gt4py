@@ -108,17 +108,17 @@ def extract_connectivity_args(
 
 
 @dataclasses.dataclass(frozen=True)
-class GTFNBuildArtifact(compiler.CPPBuildArtifact):
-    def materialize(self) -> stages.ExecutableProgram:
-        return convert_args(super().materialize(), device=self.device_type)
+class GTFNCompilationArtifact(compiler.CPPCompilationArtifact):
+    def load(self) -> stages.ExecutableProgram:
+        return convert_args(super().load(), device=self.device_type)
 
 
 @dataclasses.dataclass(frozen=True)
 class GTFNCompiler(compiler.CPPCompiler):
     def _make_artifact(
         self, src_dir: pathlib.Path, module: pathlib.Path, entry_point_name: str
-    ) -> GTFNBuildArtifact:
-        return GTFNBuildArtifact(
+    ) -> GTFNCompilationArtifact:
+        return GTFNCompilationArtifact(
             src_dir=src_dir,
             module=module,
             entry_point_name=entry_point_name,
@@ -131,9 +131,9 @@ class GTFNCompilerFactory(factory.Factory):
         model = GTFNCompiler
 
 
-class GTFNBuildWorkflowFactory(factory.Factory):
+class GTFNCompileWorkflowFactory(factory.Factory):
     class Meta:
-        model = recipes.OTFBuildWorkflow
+        model = recipes.OTFCompileWorkflow
 
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
@@ -195,7 +195,7 @@ class GTFNBackendFactory(factory.Factory):
         device_type = core_defs.DeviceType.CPU
         hash_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
-            GTFNBuildWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
+            GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
         )
 
     name = factory.LazyAttribute(

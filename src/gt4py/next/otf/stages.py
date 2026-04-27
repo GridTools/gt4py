@@ -129,17 +129,17 @@ class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
 ExecutableProgram: TypeAlias = Callable
 
 
-class BuildArtifact(Protocol):
-    """The output of an :class:`recipes.OTFBuildWorkflow`.
+class CompilationArtifact(Protocol):
+    """The output of an :class:`recipes.OTFCompileWorkflow`.
 
     Each backend defines its own concrete artifact dataclass; all share this
     Protocol. Implementations are frozen dataclasses, picklable, and have no
-    live process-bound state — that is reconstructed by :meth:`materialize`,
+    live process-bound state — that is reconstructed by :meth:`load`,
     which returns a directly-callable :class:`ExecutableProgram` taking
     gt4py-shaped arguments.
     """
 
-    def materialize(self) -> ExecutableProgram: ...
+    def load(self) -> ExecutableProgram: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

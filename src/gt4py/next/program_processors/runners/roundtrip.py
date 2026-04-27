@@ -223,7 +223,7 @@ class RoundtripArtifact:
 
     program: stages.ExecutableProgram
 
-    def materialize(self) -> stages.ExecutableProgram:
+    def load(self) -> stages.ExecutableProgram:
         return self.program
 
 
