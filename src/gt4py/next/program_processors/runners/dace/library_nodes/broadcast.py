@@ -40,6 +40,8 @@ class Broadcast(dace_nodes.LibraryNode):
         value: dace.symbolic.SymbolicType | None = None,
         debuginfo: dace.dtypes.DebugInfo | None = None,
     ):
+        # TODO(philip, edopao): I would propose to drop `value` then. This makes it
+        #   simpler to handle in the transformations.
         inputs = {_INPUT_NAME} if value is None else None
         super().__init__(name, inputs=inputs, outputs={_OUTPUT_NAME})
 
@@ -96,10 +98,15 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
 
     @staticmethod
     def expansion(node: Broadcast, state: dace.SDFGState, sdfg: dace.SDFG) -> dace.SDFG:
+        # TODO(phimuell, edopao): I would say a broadcast node should have exactly
+        #   one output edge and if we drop `value` exactly one input edge.
+        #   This must then also be done in `validate()`.
+        assert state.out_degree(node) == 1
+        assert isinstance(node, Broadcast)
+
         nsdfg = dace.SDFG(node.label)
         bcast_st = nsdfg.add_state(f"{node.label}_impl")
 
-        assert len(list(state.out_edges_by_connector(node, _OUTPUT_NAME))) == 1
         outedge = next(state.out_edges_by_connector(node, _OUTPUT_NAME))
         out_desc = sdfg.arrays[outedge.data.data]
         inner_out_desc = out_desc.clone()
@@ -121,7 +128,7 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
             if node.axes:
                 index_map = dict(enumerate(map_params))
                 inp_subset = ",".join(
-                    f"{index_map[i]} + {node.dst_origin[i]} - {src_origin}"
+                    f"{index_map[i]} + {node.dst_origin[i]} - ({src_origin})"
                     for i, src_origin in zip(node.axes, node.src_origin, strict=True)
                 )
             else:
