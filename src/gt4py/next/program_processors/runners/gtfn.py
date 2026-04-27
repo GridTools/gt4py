@@ -14,10 +14,10 @@ from gt4py._core import filecache
 from gt4py.next import backend, config
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import build_system
+from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
-from gt4py.next.program_processors.runners import gtfn_compiler
+from gt4py.next.program_processors.runners import gtfn_decoration
 
 
 class GTFNBuildWorkflowFactory(factory.Factory):
@@ -29,7 +29,7 @@ class GTFNBuildWorkflowFactory(factory.Factory):
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
-        builder_factory: build_system.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
+        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 
@@ -54,10 +54,11 @@ class GTFNBuildWorkflowFactory(factory.Factory):
         nanobind.bind_source
     )
     compilation = factory.SubFactory(
-        gtfn_compiler.CompilerFactory,
+        compiler.CompilerFactory,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         builder_factory=factory.SelfAttribute("..builder_factory"),
         device_type=factory.SelfAttribute("..device_type"),
+        decorator=gtfn_decoration.convert_args,
     )
 
 

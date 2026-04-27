@@ -20,7 +20,7 @@ from gt4py._core import locking
 from gt4py.next import config, errors
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
-from gt4py.next.otf.compilation import build_data, build_system, cache
+from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake
 
 
@@ -29,7 +29,7 @@ CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
 
 @dataclasses.dataclass
 class CompiledbFactory(
-    build_system.BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
+    compiler.BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
 ):
     """
     Create a CompiledbProject from a ``CompilableSource`` stage object with given CMake settings.

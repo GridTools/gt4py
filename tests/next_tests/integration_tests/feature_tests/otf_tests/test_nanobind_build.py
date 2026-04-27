@@ -14,19 +14,18 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import importer
+from gt4py.next.otf.compilation import compiler, importer
 from gt4py.next.otf.compilation.build_systems import cmake, compiledb
-from gt4py.next.program_processors.runners import gtfn_compiler
 
 from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conftest import (
     program_source_with_name,
 )
 
 
-def _import_artifact_entry_point(artifact: gtfn_compiler.GTFNBuildArtifact):
+def _import_artifact_entry_point(artifact: compiler.CPPBuildArtifact):
     """Import the .so directly and return the raw entry point.
 
-    Bypasses :meth:`GTFNBuildArtifact.materialize` so the test can call the
+    Bypasses :meth:`CPPBuildArtifact.materialize` so the test can call the
     nanobind-bound function with raw arguments rather than gt4py-shaped ones —
     this is a build-system / binding integration test, not an end-to-end
     program test.
@@ -38,13 +37,18 @@ def _import_artifact_entry_point(artifact: gtfn_compiler.GTFNBuildArtifact):
     return getattr(m, artifact.entry_point_name)
 
 
+def _identity(raw, _device):
+    return raw
+
+
 def test_gtfn_cpp_with_cmake(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
-        gtfn_compiler.Compiler(
+        compiler.CPPCompiler(
             cache_lifetime=config.BuildCacheLifetime.SESSION,
             builder_factory=cmake.CMakeFactory(),
             device_type=core_defs.DeviceType.CPU,
+            decorator=_identity,
         )
     )
     artifact = build_the_program(example_program_source)
@@ -62,10 +66,11 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
 def test_gtfn_cpp_with_compiledb(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_compiledb")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
-        gtfn_compiler.Compiler(
+        compiler.CPPCompiler(
             cache_lifetime=config.BuildCacheLifetime.SESSION,
             builder_factory=compiledb.CompiledbFactory(),
             device_type=core_defs.DeviceType.CPU,
+            decorator=_identity,
         )
     )
     artifact = build_the_program(example_program_source)
