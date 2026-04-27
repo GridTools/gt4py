@@ -31,6 +31,7 @@ class DaCeBuildArtifact(gtx_utils.MetadataBasedPickling):
     """On-disk result of a DaCe compilation: a build folder + the SDFG bindings."""
 
     build_folder: pathlib.Path
+    sdfg_dump: pathlib.Path
     binding_source_code: str
     bind_func_name: str
     device_type: core_defs.DeviceType
@@ -64,16 +65,7 @@ class DaCeBuildArtifact(gtx_utils.MetadataBasedPickling):
         return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
     def _load_compiled_program(self) -> CompiledDaceProgram:
-        for dump_name in ("program.sdfgz", "program.sdfg"):
-            sdfg_dump = self.build_folder / dump_name
-            if sdfg_dump.exists():
-                break
-        else:
-            raise RuntimeError(
-                f"No SDFG dump (program.sdfgz / program.sdfg) found in '{self.build_folder}'."
-            )
-
-        sdfg = dace.SDFG.from_file(str(sdfg_dump))
+        sdfg = dace.SDFG.from_file(str(self.sdfg_dump))
         sdfg.build_folder = str(self.build_folder)
 
         with gtx_wfdcommon.dace_context(device_type=self.device_type):
@@ -110,20 +102,30 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
+            sdfg_build_folder = pathlib.Path(gtx_cache.get_cache_folder(inp, self.cache_lifetime))
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-            sdfg.build_folder = sdfg_build_folder
+            sdfg.build_folder = str(sdfg_build_folder)
             with locking.lock(sdfg_build_folder):
                 # Keep the program handle so the artifact's materialize() can
                 # skip the SDFG re-deserialize + .so re-link round-trip when
                 # used in this same process.
                 sdfg_program = sdfg.compile(validate=False)
 
+        for dump_name in ("program.sdfgz", "program.sdfg"):
+            sdfg_dump = sdfg_build_folder / dump_name
+            if sdfg_dump.exists():
+                break
+        else:
+            raise RuntimeError(
+                f"No SDFG dump (program.sdfgz / program.sdfg) found in '{sdfg_build_folder}'."
+            )
+
         assert inp.binding_source is not None
         artifact = DaCeBuildArtifact(
-            build_folder=pathlib.Path(sdfg_build_folder),
+            build_folder=sdfg_build_folder,
+            sdfg_dump=sdfg_dump,
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
