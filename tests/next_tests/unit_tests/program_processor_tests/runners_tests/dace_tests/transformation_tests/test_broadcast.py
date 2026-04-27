@@ -38,7 +38,7 @@ def _make_broadcast_inline_sdfg() -> tuple[
             aname,
             shape=(10,),
             dtype=dace.float64,
-            transient=(aname != "b"),
+            transient=(aname == "b"),
         )
     for sname in "dts":
         sdfg.add_scalar(
@@ -56,7 +56,7 @@ def _make_broadcast_inline_sdfg() -> tuple[
 
     tlet1, tlet2, tlet3 = [
         state.add_tasklet(
-            f"tlet{i}",
+            f"tlet{i + 1}",
             inputs={"__in1", "__in2"},
             outputs={"__out"},
             code=f"__out = {op}",
@@ -110,7 +110,7 @@ def test_broadcast():
     assert util.count_nodes(sdfg, gtx_lib_nodes.Broadcast) == 0
     assert bcast_result not in util.count_nodes(sdfg, dace_nodes.AccessNode, True)
     assert bcast_result.data not in sdfg.arrays
-    assert len([ie.src is bcast_value for ie in state.in_edges(map_entry)]) == 1
+    assert sum([ie.src is bcast_value for ie in state.in_edges(map_entry)]) == 1
 
     util.compile_and_run_sdfg(sdfg, **res)
 
