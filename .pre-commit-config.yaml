@@ -99,3 +99,9 @@ repos:
         entry: uv run --group dev --frozen --isolated validate-pyproject pyproject.toml
         files: ^pyproject\.toml$
         pass_filenames: false
+
+      - <<: *uv-managed-hook
+        id: check-dace-pattern-node-usage
+        name: check DaCe PatternNode attribute usage
+        entry: uv run --frozen --isolated python tools/check_dace_pattern_node_usage.py
+        types: [python]
