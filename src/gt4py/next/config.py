@@ -118,8 +118,8 @@ BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1
 #: - "process": use a :class:`concurrent.futures.ProcessPoolExecutor` with ``spawn`` start
 #:   method. Requires the backend to be cloudpickle-serializable (standard runners and
 #:   factory-constructed variants are) and its ``executor`` to be a
-#:   :class:`~gt4py.next.otf.recipes.OTFBuildWorkflow` returning a picklable
-#:   :class:`~gt4py.next.otf.stages.BuildArtifact`. Experimental.
+#:   :class:`~gt4py.next.otf.recipes.OTFCompileWorkflow` returning a picklable
+#:   :class:`~gt4py.next.otf.stages.CompilationArtifact`. Experimental.
 BUILD_JOBS_MODE: str = os.environ.get("GT4PY_BUILD_JOBS_MODE", "thread").lower()
 
 #: User-defined level to enable metrics at lower or equal level.

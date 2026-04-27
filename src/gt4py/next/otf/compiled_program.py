@@ -158,11 +158,11 @@ def compiled_program_call_context(
 #: :attr:`config.BUILD_JOBS_MODE`:
 #:   * ``"thread"``: :class:`concurrent.futures.ThreadPoolExecutor`. The submitted callable
 #:     is the full backend compile; the future yields an :class:`stages.ExecutableProgram`
-#:     directly (calling :meth:`Backend.compile` does build + materialize in one step).
+#:     directly (calling :meth:`Backend.compile` does build + load in one step).
 #:   * ``"process"``: :class:`concurrent.futures.ProcessPoolExecutor` with ``spawn`` start
 #:     method. Workers run only ``backend.executor`` and return the picklable
-#:     :class:`stages.BuildArtifact` it produces; the main process calls
-#:     ``artifact.materialize()`` in :meth:`CompiledProgramsPool._finish_compilation_job`
+#:     :class:`stages.CompilationArtifact` it produces; the main process calls
+#:     ``artifact.load()`` in :meth:`CompiledProgramsPool._finish_compilation_job`
 #:     to import the compiled module / reload the SDFG and apply backend decoration.
 _async_compilation_pool: concurrent.futures.Executor | None = None
 
@@ -261,8 +261,8 @@ def _process_pool_compile_job(
     backend_blob: bytes,
     compilable: Any,  # actually definitions.CompilableProgramDef; typed Any to avoid import churn
     config_overrides: dict[str, Any],
-) -> stages.BuildArtifact:
-    """Worker entry point: deserialize the backend and run its build phase.
+) -> stages.CompilationArtifact:
+    """Worker entry point: deserialize the backend and run its compile phase.
 
     * ``backend_blob`` is a :mod:`cloudpickle`-serialized :class:`~gt4py.next.backend
       .Backend`. cloudpickle is required because :class:`Backend.executor` transitively
@@ -280,11 +280,11 @@ def _process_pool_compile_job(
       ``config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE`` /
       ``config.ADD_GPU_TRACE_MARKERS`` match the main.
 
-    Returns the :class:`~gt4py.next.otf.stages.BuildArtifact` produced by
+    Returns the :class:`~gt4py.next.otf.stages.CompilationArtifact` produced by
     ``backend.executor`` — a backend-specific picklable descriptor (GTFN:
-    ``GTFNBuildArtifact`` with ``src_dir`` + entry point; DaCe: ``DaCeBuildArtifact``
+    ``CPPCompilationArtifact`` with ``src_dir`` + entry point; DaCe: ``DaCeBuildArtifact``
     with build folder + binding source). The main process rehydrates it via
-    ``artifact.materialize()``.
+    ``artifact.load()``.
     """
     from gt4py.next import backend as gtx_backend_mod
 
@@ -481,9 +481,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #   - thread / inline submit: ``needs_finalize = False``, future yields an
     #     already-ready :class:`~gt4py.next.otf.stages.ExecutableProgram`.
     #   - process-pool submit: ``needs_finalize = True``, future yields the
-    #     :class:`~gt4py.next.otf.stages.BuildArtifact` produced by
+    #     :class:`~gt4py.next.otf.stages.CompilationArtifact` produced by
     #     ``backend.executor``, which :meth:`_finish_compilation_job` rehydrates
-    #     via ``artifact.materialize()`` in the calling process.
+    #     via ``artifact.load()`` in the calling process.
     _compilation_jobs: dict[
         CompiledProgramsKey, tuple[bool, concurrent.futures.Future[Any]]
     ] = dataclasses.field(default_factory=dict, init=False)
@@ -710,12 +710,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         assert key not in self.compiled_programs
         result = compiled_program_future.result()
         if needs_finalize:
-            # Worker produced a :class:`~gt4py.next.otf.stages.BuildArtifact` from
-            # the ``backend.executor`` build phase. The artifact's ``materialize()``
+            # Worker produced a :class:`~gt4py.next.otf.stages.CompilationArtifact`
+            # from the ``backend.executor`` compile phase. The artifact's ``load()``
             # (dynamic import of the freshly built module / SDFG reload + decoration)
             # must run in the calling process — it ends up holding a live Python
             # callable that doesn't cross process boundaries.
-            result = result.materialize()
+            result = result.load()
         self.compiled_programs[key] = result
         return True
 
@@ -783,7 +783,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         )
 
         if _async_compilation_pool is None:
-            # Synchronous: full compile (build + materialize) inline.
+            # Synchronous: full compile (executor + load) inline.
             self.compiled_programs[key] = self.backend.compile(
                 self.definition_stage, compile_time_args=compile_time_args
             )
