@@ -14,7 +14,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import compiler, importer
+from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import cmake, compiledb
 
 from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conftest import (
@@ -22,22 +22,8 @@ from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conft
 )
 
 
-def _import_artifact_entry_point(artifact: compiler.CPPBuildArtifact):
-    """Import the .so directly and return the raw entry point.
-
-    Bypasses :meth:`CPPBuildArtifact.materialize` so the test can call the
-    nanobind-bound function with raw arguments rather than gt4py-shaped ones —
-    this is a build-system / binding integration test, not an end-to-end
-    program test.
-    """
-    m = importer.import_from_path(
-        artifact.src_dir / artifact.module,
-        sys_modules_prefix="gt4py.__compiled_programs__.",
-    )
-    return getattr(m, artifact.entry_point_name)
-
-
 def _identity(raw, _device):
+    """Pass-through decorator: this test calls the nanobind-bound function with raw args."""
     return raw
 
 
@@ -51,8 +37,7 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
             decorator=_identity,
         )
     )
-    artifact = build_the_program(example_program_source)
-    compiled_program = _import_artifact_entry_point(artifact)
+    compiled_program = build_the_program(example_program_source).materialize()
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
     tup = [
         (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),
@@ -73,8 +58,7 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
             decorator=_identity,
         )
     )
-    artifact = build_the_program(example_program_source)
-    compiled_program = _import_artifact_entry_point(artifact)
+    compiled_program = build_the_program(example_program_source).materialize()
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
     tup = [
         (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),

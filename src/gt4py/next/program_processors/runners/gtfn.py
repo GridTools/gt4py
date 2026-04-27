@@ -100,8 +100,7 @@ class GTFNBackendFactory(factory.Factory):
 run_gtfn = GTFNBackendFactory()
 
 run_gtfn_imperative = GTFNBackendFactory(
-    name_postfix="_imperative",
-    otf_workflow__translation__use_imperative_backend=True,
+    name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
 )
 
 run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)

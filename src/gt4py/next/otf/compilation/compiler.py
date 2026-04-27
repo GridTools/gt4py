@@ -20,6 +20,14 @@ from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
 
 
+def is_compiled(data: build_data.BuildData) -> bool:
+    return data.status >= build_data.BuildStatus.COMPILED
+
+
+def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
+    return (src_dir / data.module).exists()
+
+
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
 TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
 CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
@@ -31,17 +39,6 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
         source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[CodeSpecT, TargetCodeSpecT]: ...
-
-
-def is_compiled(data: build_data.BuildData) -> bool:
-    return data.status >= build_data.BuildStatus.COMPILED
-
-
-def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
-    return (src_dir / data.module).exists()
-
-
-class CompilationError(RuntimeError): ...
 
 
 # Signature of the per-backend wrapping applied to a freshly imported entry point.
@@ -133,3 +130,6 @@ class CPPCompiler(
 class CompilerFactory(factory.Factory):
     class Meta:
         model = CPPCompiler
+
+
+class CompilationError(RuntimeError): ...
