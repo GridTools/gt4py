@@ -20,7 +20,7 @@ from dace import (
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
-from gt4py.next.program_processors.runners.dace.library_nodes import broadcast as gtx_dace_broadcast
+from gt4py.next.program_processors.runners.dace import library_nodes as gtx_lib_nodes
 
 
 @dace_properties.make_properties
@@ -41,7 +41,7 @@ class InlineBroadcastAccess(dace_transformation.SingleStateTransformation):
     """
 
     bcast_value = dace_transformation.PatternNode(dace_nodes.AccessNode)
-    bcast_lib_node = dace_transformation.PatternNode(gtx_dace_broadcast.Broadcast)
+    bcast_lib_node = dace_transformation.PatternNode(gtx_lib_nodes.Broadcast)
     bcast_result = dace_transformation.PatternNode(dace_nodes.AccessNode)
     map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
 
