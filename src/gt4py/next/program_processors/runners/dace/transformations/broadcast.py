@@ -49,7 +49,7 @@ class InlineBroadcastAccess(dace_transformation.SingleStateTransformation):
         dtype=bool,
         allow_none=False,
         default=True,
-        help="Clean dead dataflow.",
+        desc="Clean dead dataflow.",
     )
 
     # Name of all data that is used at only one place. Is computed by the
