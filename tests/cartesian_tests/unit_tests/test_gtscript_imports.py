@@ -56,7 +56,8 @@ def make_single_file(tmp_path, extension, reset_importsys):
                 "\n"
                 "\n"
                 "SENTINEL = 5\n"
-            )
+            ),
+            encoding="utf-8",
         )
         return gts_file
 
@@ -101,7 +102,8 @@ def make_two_files(tmp_path, extension, reset_importsys):
                 "def a_square_b(a: FT, b: FT):\n"
                 "    with computation(PARALLEL), interval(...):\n"
                 "        a = square(b)\n"
-            )
+            ),
+            encoding="utf-8",
         )
 
         module_two.write_text(
@@ -122,7 +124,8 @@ def make_two_files(tmp_path, extension, reset_importsys):
                 "@function\n"
                 "def square(field):\n"
                 "    return field * field\n"
-            )
+            ),
+            encoding="utf-8",
         )
         return module_one, module_two
 
@@ -177,14 +180,16 @@ def make_package(tmp_path, extension, reset_importsys):
                 "    with computation(PARALLEL), interval(...):\n"
                 "        b = mf(a, const=C)\n"
                 "        a = sf1(b)\n"
-            )
+            ),
+            encoding="utf-8",
         )
         lib_init.write_text(
             (
                 f"from . import {prefix}_sub2\n"
                 f"from .{prefix}_sub1 import sf1\n"
                 f"from .{prefix}_sub2 import CONST, sss\n"
-            )
+            ),
+            encoding="utf-8",
         )
         sub_1_path.write_text(
             (
@@ -194,7 +199,8 @@ def make_package(tmp_path, extension, reset_importsys):
                 "def sf1(b):\n"
                 "    return b + SS_SENT\n\n\n"
                 "SENTINEL = 2\n"
-            )
+            ),
+            encoding="utf-8",
         )
         sub_2_init.write_text(
             (
@@ -203,7 +209,8 @@ def make_package(tmp_path, extension, reset_importsys):
                 f"from . import {prefix}_sub_sub\n"
                 f"from .{prefix}_sub_sub import sss\n\n\n"
                 "CONST = 3.14\n"
-            )
+            ),
+            encoding="utf-8",
         )
         sub_sub_path.write_text(
             (
@@ -213,7 +220,8 @@ def make_package(tmp_path, extension, reset_importsys):
                 "    with computation(PARALLEL), interval(...):\n"
                 "        a = 0\n\n\n"
                 "SENTINEL = 3\n"
-            )
+            ),
+            encoding="utf-8",
         )
         return module_file
 
