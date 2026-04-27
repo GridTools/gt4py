@@ -11,7 +11,7 @@ dace-cartesian = [
   'dace>=1.0.2'  # refined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace==43!2026.04.20'  # uses custom index at 'https://github.com/GridTools/pypi'
+  'dace==43!2026.04.27'  # uses custom index at 'https://github.com/GridTools/pypi'
 ]
 dev = [
   {include-group = 'build'},
@@ -486,7 +486,7 @@ url = 'https://gridtools.github.io/pypi/'
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-v2", group = "dace-cartesian"},
-  {index = "gridtools", group = "dace-next"}
+  {git = "https://github.com/GridTools/dace", tag = "__gt4py-next-integration_2026_04_27", group = "dace-next"}
 ]
 
 # -- versioningit --
