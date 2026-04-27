@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 import numpy as np
 
@@ -19,7 +19,14 @@ from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
-from gt4py.next.program_processors.runners.dace.workflow.compiled_program import CompiledDaceProgram
+
+
+if TYPE_CHECKING:
+    # Type-only: evaluating ``compilation`` at module load would create a cycle
+    # (compilation imports this module for the materialize body).
+    from gt4py.next.program_processors.runners.dace.workflow.compilation import (
+        CompiledDaceProgram,
+    )
 
 
 def convert_args(

@@ -82,7 +82,7 @@ def make_mocks(monkeypatch):
     # Wrap `compiled_sdfg.CompiledSDFG.fast_call` with mock object
     mock_fast_call = unittest.mock.MagicMock()
     gt4py_fast_call = (
-        gtx.program_processors.runners.dace.workflow.compiled_program.CompiledDaceProgram.fast_call
+        gtx.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram.fast_call
     )
 
     def mocked_fast_call(self):
@@ -99,21 +99,21 @@ def make_mocks(monkeypatch):
         return fast_call_result
 
     monkeypatch.setattr(
-        gtx.program_processors.runners.dace.workflow.compiled_program.CompiledDaceProgram,
+        gtx.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram,
         "fast_call",
         mocked_fast_call,
     )
 
     # Wrap `compiled_sdfg.CompiledSDFG.construct_arguments` with mock object
     mock_construct_arguments = unittest.mock.MagicMock()
-    gt4py_construct_arguments = gtx.program_processors.runners.dace.workflow.compiled_program.CompiledDaceProgram.construct_arguments
+    gt4py_construct_arguments = gtx.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram.construct_arguments
 
     def mocked_construct_arguments(self, *args, **kwargs):
         mock_construct_arguments.__call__(*args, **kwargs)
         return gt4py_construct_arguments(self, *args, **kwargs)
 
     monkeypatch.setattr(
-        gtx.program_processors.runners.dace.workflow.compiled_program.CompiledDaceProgram,
+        gtx.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram,
         "construct_arguments",
         mocked_construct_arguments,
     )
