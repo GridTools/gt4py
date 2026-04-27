@@ -76,7 +76,7 @@ class InlineBroadcastAccess(dace_transformation.SingleStateTransformation):
         **kwargs: Any,
     ) -> None:
         self._single_use_data = single_use_data
-        if clean_dead_dataflow is None:
+        if clean_dead_dataflow is not None:
             self.clean_dead_dataflow = clean_dead_dataflow
 
         super().__init__(*args, **kwargs)
@@ -94,8 +94,8 @@ class InlineBroadcastAccess(dace_transformation.SingleStateTransformation):
         map_entry = self.map_entry
         bcast_result_desc = bcast_result.desc(sdfg)
         bcast_value_desc = bcast_value.desc(sdfg)
-        assert graph.in_edges(bcast_lib_node) == 1
-        assert graph.out_edges(bcast_lib_node) == 1
+        assert graph.in_degree(bcast_lib_node) == 1
+        assert graph.out_degree(bcast_lib_node) == 1
 
         # NOTE: There is no need to check if the broadcast result is a single use data
         #   or so. We only require that it has only one producer, the data type is the
