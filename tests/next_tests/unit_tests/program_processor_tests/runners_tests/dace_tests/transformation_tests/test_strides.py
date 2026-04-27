@@ -20,8 +20,6 @@ from gt4py.next.program_processors.runners.dace import (
 
 from . import util
 
-import dace
-
 
 def _make_strides_propagation_level3_sdfg() -> dace.SDFG:
     """Generates the level 3 SDFG (nested-nested) SDFG for `test_strides_propagation()`."""

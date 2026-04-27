@@ -2,6 +2,65 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.9] - 2026-04-01
+
+### Cartesian
+
+- Fix loop re-ordering in schedule tree.
+- Fix scalarization of temporaries
+- Redundant region syntax removed.
+
+### Next
+
+See commit history.
+
+## [1.1.8] - 2026-03-25
+
+### Cartesian
+
+- Fix default compile flags for for various compilers.
+- Generate numpy >= 2.0 compatible code in the debug backend.
+- Support for data dims of size one in dace backends.
+
+### Next
+
+See commit history.
+
+## [1.1.7] - 2026-03-11
+
+### Cartesian
+
+- Leverage unrolling of integer power calls, in dace backends, for exponents 1, 2, and 3.
+- Faster SDFG construction in dace backends.
+- Introduce default compiler flags.
+
+### Next
+
+See commit history.
+
+## [1.1.6] - 2026-02-27
+
+### Cartesian
+
+- Added a `GT4PY_CARTESIAN_ENABLE_OPENMP` environment variable to disable OpenMP, which allows to support compilers (e.g. `apple-clang`) not shipping with OpenMP by default.
+- Fixed issue in the `numpy` backend related to `K`-query expressions, where an internal variable was shadowing any user-provided `k_mask` variable.
+
+### Next
+
+See commit history.
+
+## [1.1.5] - 2026-02-24
+
+### Cartesian
+
+- Switch to DaCe main development branch, which is going to be released as DaCe v2.x.
+- Changes in `dace:X` backends to reduce the size of SDFGs saved to disk.
+- Fix casting of arguments of power function.
+
+### Next
+
+See commit history.
+
 ## [1.1.4] - 2026-02-12
 
 ### Cartesian
