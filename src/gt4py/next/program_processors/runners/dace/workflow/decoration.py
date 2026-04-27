@@ -18,14 +18,14 @@ from gt4py.next import common as gtx_common, config, utils as gtx_utils
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable
-from gt4py.next.program_processors.runners.dace.workflow import (
-    common as gtx_wfdcommon,
-    compilation as gtx_wfdcompilation,
+from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
+from gt4py.next.program_processors.runners.dace.workflow.compiled_program import (
+    CompiledDaceProgram,
 )
 
 
 def convert_args(
-    fun: gtx_wfdcompilation.CompiledDaceProgram,
+    fun: CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> stages.ExecutableProgram:
     # Retieve metrics level from GT4Py environment variable.

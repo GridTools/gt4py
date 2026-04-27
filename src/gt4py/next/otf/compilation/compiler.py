@@ -18,6 +18,7 @@ from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
+from gt4py.next.program_processors.runners import gtfn_decoration
 
 
 T = TypeVar("T")
@@ -65,14 +66,13 @@ class GTFNBuildArtifact:
         module is registered in that process's ``sys.modules`` under the
         ``gt4py.__compiled_programs__.`` prefix.
         """
-        # Lazy import: ``runners.gtfn`` imports this module to construct the workflow.
-        from gt4py.next.program_processors.runners.gtfn import convert_args
-
         m = importer.import_from_path(
             self.src_dir / self.module,
             sys_modules_prefix="gt4py.__compiled_programs__.",
         )
-        return convert_args(getattr(m, self.entry_point_name), device=self.device_type)
+        return gtfn_decoration.convert_args(
+            getattr(m, self.entry_point_name), device=self.device_type
+        )
 
 
 @dataclasses.dataclass(frozen=True)
