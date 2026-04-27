@@ -22,11 +22,6 @@ from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conft
 )
 
 
-def _identity(raw, _device):
-    """Pass-through decorator: this test calls the nanobind-bound function with raw args."""
-    return raw
-
-
 def test_gtfn_cpp_with_cmake(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
@@ -34,7 +29,6 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
             cache_lifetime=config.BuildCacheLifetime.SESSION,
             builder_factory=cmake.CMakeFactory(),
             device_type=core_defs.DeviceType.CPU,
-            decorator=_identity,
         )
     )
     compiled_program = build_the_program(example_program_source).materialize()
@@ -55,7 +49,6 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
             cache_lifetime=config.BuildCacheLifetime.SESSION,
             builder_factory=compiledb.CompiledbFactory(),
             device_type=core_defs.DeviceType.CPU,
-            decorator=_identity,
         )
     )
     compiled_program = build_the_program(example_program_source).materialize()

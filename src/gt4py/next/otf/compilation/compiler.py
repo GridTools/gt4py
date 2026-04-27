@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Callable, Protocol, TypeVar
+from typing import Protocol, TypeVar
 
 import factory
 
@@ -41,30 +41,24 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
     ) -> stages.BuildSystemProject[CodeSpecT, TargetCodeSpecT]: ...
 
 
-# Signature of the per-backend wrapping applied to a freshly imported entry point.
-ProgramDecorator = Callable[
-    [stages.ExecutableProgram, core_defs.DeviceType], stages.ExecutableProgram
-]
-
-
 @dataclasses.dataclass(frozen=True)
 class CPPBuildArtifact(gtx_utils.MetadataBasedPickling):
     """On-disk result of a CPP-style compilation: a Python extension module.
 
-    Bindings are baked into the .so (e.g. via nanobind), so :meth:`materialize`
-    is just an ``importlib`` import + entry-point lookup, plus a per-backend
-    :attr:`decorator` that adapts the raw callable to the backend's calling
-    convention.
+    Bindings are baked into the .so (e.g. via nanobind), so the default
+    :meth:`materialize` is just an ``importlib`` import + entry-point lookup,
+    returning the raw imported callable. Backends that need to wrap the
+    callable in a calling convention (e.g. GTFN's gt4py-shaped argument
+    conversion) subclass and override :meth:`materialize`.
     """
 
     src_dir: pathlib.Path
     module: pathlib.Path
     entry_point_name: str
     device_type: core_defs.DeviceType
-    decorator: ProgramDecorator
 
     def materialize(self) -> stages.ExecutableProgram:
-        """Import the module and apply the configured per-backend decorator.
+        """Import the .so and return the raw entry point.
 
         Must run in the process that will call the returned program: the
         module is registered in that process's ``sys.modules`` under the
@@ -74,7 +68,7 @@ class CPPBuildArtifact(gtx_utils.MetadataBasedPickling):
             self.src_dir / self.module,
             sys_modules_prefix="gt4py.__compiled_programs__.",
         )
-        return self.decorator(getattr(m, self.entry_point_name), self.device_type)
+        return getattr(m, self.entry_point_name)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -89,12 +83,15 @@ class CPPCompiler(
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
 ):
-    """Drive a CPP-style build system and wrap the result in a :class:`CPPBuildArtifact`."""
+    """Drive a CPP-style build system and wrap the result in a :class:`CPPBuildArtifact`.
+
+    Backends that need a different artifact subclass (e.g. with a wrapped
+    ``materialize``) subclass and override :meth:`_make_artifact`.
+    """
 
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
     device_type: core_defs.DeviceType
-    decorator: ProgramDecorator
     force_recompile: bool = False
 
     def __call__(
@@ -118,12 +115,16 @@ class CPPCompiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
+        return self._make_artifact(src_dir, new_data.module, new_data.entry_point_name)
+
+    def _make_artifact(
+        self, src_dir: pathlib.Path, module: pathlib.Path, entry_point_name: str
+    ) -> CPPBuildArtifact:
         return CPPBuildArtifact(
             src_dir=src_dir,
-            module=new_data.module,
-            entry_point_name=new_data.entry_point_name,
+            module=module,
+            entry_point_name=entry_point_name,
             device_type=self.device_type,
-            decorator=self.decorator,
         )
 
 
