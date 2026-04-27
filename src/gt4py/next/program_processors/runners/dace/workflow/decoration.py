@@ -22,8 +22,7 @@ from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wf
 
 
 if TYPE_CHECKING:
-    # Type-only: evaluating ``compilation`` at module load would create a cycle
-    # (compilation imports this module for the load body).
+    # Type-only: a top-level import would cycle with ``compilation``.
     from gt4py.next.program_processors.runners.dace.workflow.compilation import (
         CompiledDaceProgram,
     )

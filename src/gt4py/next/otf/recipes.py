@@ -17,12 +17,7 @@ from gt4py.next.otf import definitions, stages, workflow
 class OTFCompileWorkflow(
     workflow.NamedStepSequence[definitions.CompilableProgramDef, stages.CompilationArtifact]
 ):
-    """Translation + bindings + build system; ends at a :class:`stages.CompilationArtifact`.
-
-    Used as :attr:`gt4py.next.backend.Backend.executor`. The ``cached=True``
-    backend trait wraps it in a :class:`workflow.CachedStep` keyed on
-    :class:`definitions.CompilableProgramDef`.
-    """
+    """The typical compiled backend steps composed into a workflow."""
 
     translation: definitions.TranslationStep
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject]

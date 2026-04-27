@@ -13,7 +13,7 @@ import os
 import pathlib
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any, Optional
+from typing import Any
 
 import dace
 import factory
@@ -130,12 +130,11 @@ class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
     device_type: core_defs.DeviceType
 
     # Process-local cache of the live :class:`CompiledDaceProgram`. Populated by
-    # ``DaCeCompiler`` after a fresh compile so :meth:`load` can skip the SDFG
-    # re-deserialize + .so re-link round-trip in the same process. Marked
-    # ``pickle=False`` via :func:`gtx_utils.gt4py_metadata` so a receiver of the
-    # artifact in a different process sees ``None`` and falls back to the
-    # disk-based path.
-    _live_program: Optional[CompiledDaceProgram] = dataclasses.field(
+    # ``DaCeCompiler`` to skip the disk round-trip when the artifact stays in
+    # the same process. Excluded from pickle (``pickle=False`` metadata) so
+    # receivers in other processes see ``None`` and fall through to the
+    # disk-based load.
+    _live_program: CompiledDaceProgram | None = dataclasses.field(
         init=False,
         default=None,
         compare=False,
@@ -146,10 +145,9 @@ class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
     def load(self) -> stages.ExecutableProgram:
         """Wrap the compiled program in gt4py's calling convention.
 
-        Uses the live program cached on the artifact when available; otherwise
-        re-deserializes the SDFG, re-links the .so via ``compiler.use_cache``,
-        and caches the result for subsequent calls. Must run in the process
-        that will call the returned program.
+        On a miss, re-deserializes the SDFG and re-links the .so via
+        ``compiler.use_cache``. Must run in the process that will call the
+        returned program.
         """
         program = self._live_program
         if program is None:
@@ -201,9 +199,8 @@ class DaCeCompiler(
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
             sdfg.build_folder = str(sdfg_build_folder)
             with locking.lock(sdfg_build_folder):
-                # Keep the program handle so the artifact's load() can
-                # skip the SDFG re-deserialize + .so re-link round-trip when
-                # used in this same process.
+                # Keep the handle so the artifact's load() can skip the disk
+                # round-trip in the same process.
                 sdfg_program = sdfg.compile(validate=False)
 
         for dump_name in ("program.sdfgz", "program.sdfg"):

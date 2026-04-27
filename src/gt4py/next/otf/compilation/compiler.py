@@ -45,11 +45,8 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
 class CPPCompilationArtifact(gtx_utils.MetadataBasedPickling):
     """On-disk result of a CPP-style compilation: a Python extension module.
 
-    Bindings are baked into the .so (e.g. via nanobind), so the default
-    :meth:`load` is just an ``importlib`` import + entry-point lookup,
-    returning the raw imported callable. Backends that need to wrap the
-    callable in a calling convention (e.g. GTFN's gt4py-shaped argument
-    conversion) subclass and override :meth:`load`.
+    The default :meth:`load` is an ``importlib`` import + entry-point lookup;
+    backends override to apply their own calling convention.
     """
 
     src_dir: pathlib.Path
@@ -83,10 +80,9 @@ class CPPCompiler(
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
 ):
-    """Drive a CPP-style build system and wrap the result in a :class:`CPPCompilationArtifact`.
+    """Drive a CPP-style build system into a :class:`CPPCompilationArtifact`.
 
-    Backends that need a different artifact subclass (e.g. with a wrapped
-    ``load``) subclass and override :meth:`_make_artifact`.
+    Backends override :meth:`_make_artifact` to use their own artifact subclass.
     """
 
     cache_lifetime: config.BuildCacheLifetime
