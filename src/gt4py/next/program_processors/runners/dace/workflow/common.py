@@ -95,10 +95,13 @@ def set_dace_config(
             "compiler.cuda.args",
             value=f"{cuda_dbginfo} -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
         )
-    dace.Config.set(
-        "compiler.cuda.hip_args",
-        value=f"-fPIC {dbginfo} -O3 -march=native -Wno-unused-parameter",
-    )
+    if gt_hipargs := os.environ.get("HIPFLAGS", None):
+        dace.Config.set("compiler.cuda.hip_args", value=gt_hipargs)
+    else:
+        dace.Config.set(
+            "compiler.cuda.hip_args",
+            value=f"-fPIC {dbginfo} -O3 -march=native -Wno-unused-parameter",
+        )
 
     # By design, we do not allow converting Memlets to Maps during code generation.
     #  If needed, Memles are converted to Maps explicitly by gt4py in the `gt_auto_optimize`

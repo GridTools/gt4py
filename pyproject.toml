@@ -11,13 +11,14 @@ dace-cartesian = [
   'dace>=1.0.2'  # refined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace==43!2026.02.12'  # uses custom index at 'https://github.com/GridTools/pypi'
+  'dace==43!2026.04.20'  # uses custom index at 'https://github.com/GridTools/pypi'
 ]
 dev = [
   {include-group = 'build'},
   {include-group = 'docs'},
   {include-group = 'frameworks'},
   {include-group = 'lint'},
+  {include-group = 'profiling'},
   {include-group = 'scripts'},
   {include-group = 'test'},
   {include-group = 'typing'}
@@ -41,6 +42,10 @@ lint = [
   'ruff>=0.8.0',
   'tach>=0.23.0',
   'validate-pyproject-schema-store[all]>=2025.06.13'
+]
+profiling = [
+  'nvtx>=0.2.14',
+  'viztracer>=1.1.1'
 ]
 scripts = ["pyyaml>=6.0.1", "typer>=0.12.3", "packaging"]
 test = [
@@ -148,7 +153,10 @@ requires-python = '>=3.10, <3.15, !=3.13.10, !=3.14.1'
 cartesian = ['gt4py[jax,standard,testing]']
 cuda12 = ['cupy-cuda12x>=12.0']
 cuda13 = ['cupy-cuda13x>=14.0']
-jax = ['jax>=0.4.26']
+jax = [
+  'jax>=0.4.26 ; python_version < "3.14"',
+  'jax>=0.9.1 ; python_version >= "3.14"'  # first version with pre-built wheel for Python 3.14
+]
 jax-cuda12 = ['jax[cuda12-local]>=0.6.0', 'gt4py[cuda12]']
 jax-cuda13 = ['jax[cuda13-local]>=0.7.0; python_version >= "3.11"', 'gt4py[cuda13]']  # jax 0.7 not supported with Python 3.10
 next = ['gt4py[jax,standard,testing]']
