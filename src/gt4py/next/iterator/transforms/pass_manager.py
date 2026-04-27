@@ -23,7 +23,7 @@ from gt4py.next.iterator.transforms import (
     prune_empty_concat_where,
     remove_broadcast,
     symbol_ref_utils,
-    unroll_map_tuple,
+    unroll_tree_map,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -177,7 +177,7 @@ def apply_common_transforms(
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
-    ir = unroll_map_tuple.UnrollMapTuple.apply(ir, uids=uids)
+    ir = unroll_tree_map.UnrollTreeMap.apply(ir, uids=uids)
 
     ir = infer_domain.infer_program(
         ir,
@@ -292,7 +292,7 @@ def apply_fieldview_transforms(
 
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
-    ir = unroll_map_tuple.UnrollMapTuple.apply(ir, uids=uids)
+    ir = unroll_tree_map.UnrollTreeMap.apply(ir, uids=uids)
     ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
 
     ir = infer_domain.infer_program(

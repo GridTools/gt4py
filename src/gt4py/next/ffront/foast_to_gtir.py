@@ -257,15 +257,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> itir.Expr:
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
 
-    def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> itir.Expr:
-        return im.call(
-            im.call("map_tuple")(
-                im.lambda_(self.visit(node.target, **kwargs))(
-                    self.visit(node.element_expr, **kwargs)
-                )
-            )
-        )(self.visit(node.iterable, **kwargs))
-
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         dtype = type_info.extract_dtype(node.type)
@@ -421,23 +412,16 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return self._lower_and_map("if_", *node.args)
 
         cond_ = self.visit(node.args[0])
+        true_ = self.visit(node.args[1])
+        false_ = self.visit(node.args[2])
         cond_symref_name = f"__cond_{cond_.fingerprint()}"
 
-        def create_if(
-            true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
-        ) -> itir.FunCall:
-            return _map(
-                "if_",
-                (im.ref(cond_symref_name), true_, false_),
-                (node.args[0].type, *arg_types),
+        # tree_map(lambda a, b: as_fieldop(if_)(cond_ref, a, b))(true_tup, false_tup)
+        result = im.tree_map(
+            im.lambda_("__a", "__b")(
+                im.op_as_fieldop("if_")(im.ref(cond_symref_name), im.ref("__a"), im.ref("__b"))
             )
-
-        result = lowering_utils.process_elements(
-            create_if,
-            (self.visit(node.args[1]), self.visit(node.args[2])),
-            node.type,
-            arg_types=(node.args[1].type, node.args[2].type),
-        )
+        )(true_, false_)
 
         return im.let(cond_symref_name, cond_)(result)
 

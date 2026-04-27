@@ -634,14 +634,22 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
 
 
 @_register_builtin_type_synthesizer
-def map_tuple(op: TypeSynthesizer) -> TypeSynthesizer:
+def tree_map(op: TypeSynthesizer) -> TypeSynthesizer:
     @type_synthesizer
     def applied_map(
-        arg: ts.TupleType, offset_provider_type: common.OffsetProviderType
+        *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
     ) -> ts.TupleType:
-        return ts.TupleType(
-            types=[op(arg_, offset_provider_type=offset_provider_type) for arg_ in arg.types]
-        )
+        def _recurse(*arg_types: ts.TypeSpec) -> ts.TypeSpec:
+            if isinstance(arg_types[0], ts.TupleType):
+                return ts.TupleType(
+                    types=[
+                        _recurse(*(a.types[i] for a in arg_types))  # type: ignore[union-attr]
+                        for i in range(len(arg_types[0].types))  # type: ignore[union-attr]
+                    ]
+                )
+            return op(*arg_types, offset_provider_type=offset_provider_type)
+
+        return _recurse(*args)
 
     return applied_map
 

@@ -498,7 +498,7 @@ BUILTINS = {
     "lift",
     "make_const_list",
     "make_tuple",
-    "map_tuple",
+    "tree_map",
     "map_",  # TODO: rename to map_list
     "named_range",
     "neighbors",
