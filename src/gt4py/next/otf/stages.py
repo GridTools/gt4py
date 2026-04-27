@@ -130,35 +130,13 @@ ExecutableProgram: TypeAlias = Callable
 
 
 class BuildArtifact(Protocol):
-    """A picklable, self-contained, compiled gt4py program in transit.
+    """The output of an :class:`recipes.OTFBuildWorkflow`.
 
-    A *build artifact* is the output of an :class:`recipes.OTFBuildWorkflow`
-    (the value of :attr:`gt4py.next.backend.Backend.executor`) — the explicit
-    boundary between the build phase (heavy, idempotent, parallelizable,
-    picklable output) and the live-callable phase (cheap, process-bound).
-
-    Each backend defines its own concrete artifact dataclass, carrying
-    whatever fields it needs to bring up a runnable callable in any process
-    that has the backend module on the import path. Conventions:
-
-    1. **Frozen dataclass.** Implementations are
-       ``@dataclasses.dataclass(frozen=True)`` so they have value semantics
-       (hashable, structurally equatable) for use as cache keys.
-
-    2. **Picklable.** Implementations round-trip safely through :mod:`pickle`
-       so they can cross process boundaries: process-pool / distributed
-       compilation, AOT pipelines that build now and run later from a
-       different process, persistent caches keyed on the artifact. Live,
-       process-bound state (open files, ``ctypes`` handles, imported Python
-       modules) is therefore not allowed in the artifact — that is what
-       :meth:`materialize` rehydrates.
-
-    3. **Self-materializing.** Calling :meth:`materialize` returns a
-       directly-callable :class:`ExecutableProgram` taking gt4py-shaped
-       arguments. The method body is the backend's full post-build
-       sequence (load the .so, wrap with the calling convention, attach
-       metric hooks, etc.). Receivers don't need to know which backend
-       produced the artifact — they just call ``artifact.materialize()``.
+    Each backend defines its own concrete artifact dataclass; all share this
+    Protocol. Implementations are frozen dataclasses, picklable, and have no
+    live process-bound state — that is reconstructed by :meth:`materialize`,
+    which returns a directly-callable :class:`ExecutableProgram` taking
+    gt4py-shaped arguments.
     """
 
     def materialize(self) -> ExecutableProgram: ...

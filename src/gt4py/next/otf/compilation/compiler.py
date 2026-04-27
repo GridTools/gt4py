@@ -48,10 +48,9 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
 class GTFNBuildArtifact:
     """On-disk result of a GTFN compilation: a Python extension module.
 
-    Bindings are baked into the .so via nanobind, so materialization is just
-    an ``importlib`` import + entry-point symbol lookup, plus a wrapping in
-    gt4py's calling convention. ``device_type`` is intrinsic to the artifact:
-    a CPU-built .so cannot be loaded as GPU.
+    Bindings are baked into the .so via nanobind, so :meth:`materialize` is
+    just an ``importlib`` import + entry-point symbol lookup, plus a wrap in
+    gt4py's calling convention.
     """
 
     src_dir: pathlib.Path
@@ -60,15 +59,13 @@ class GTFNBuildArtifact:
     device_type: core_defs.DeviceType
 
     def materialize(self) -> stages.ExecutableProgram:
-        """Bring the artifact up as a directly-callable program.
+        """Import the module and wrap its entry point in gt4py's calling convention.
 
-        Must run in the process that will ultimately call the returned
-        program; the imported module is registered in that process's
-        ``sys.modules`` under the ``gt4py.__compiled_programs__.`` prefix.
+        Must run in the process that will call the returned program: the
+        module is registered in that process's ``sys.modules`` under the
+        ``gt4py.__compiled_programs__.`` prefix.
         """
-        # Imported lazily to avoid a circular module dependency: ``runners.gtfn``
-        # imports this module to construct the workflow, while the
-        # gt4py-shaped argument-conversion lives there.
+        # Lazy import: ``runners.gtfn`` imports this module to construct the workflow.
         from gt4py.next.program_processors.runners.gtfn import convert_args
 
         m = importer.import_from_path(

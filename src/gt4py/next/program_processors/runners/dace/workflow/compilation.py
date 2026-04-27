@@ -118,13 +118,7 @@ class CompiledDaceProgram:
 
 @dataclasses.dataclass(frozen=True)
 class DaCeBuildArtifact:
-    """On-disk result of a DaCe compilation.
-
-    Carries the ``device_type`` the artifact was built for; a CPU-built .so
-    cannot be loaded as GPU. Also carries the bindings (Python source code
-    that materialization ``exec``\\ s to bring the SDFG argument-marshalling
-    function into existence).
-    """
+    """On-disk result of a DaCe compilation: a build folder + the SDFG bindings."""
 
     build_folder: pathlib.Path
     binding_source_code: str
@@ -132,19 +126,11 @@ class DaCeBuildArtifact:
     device_type: core_defs.DeviceType
 
     def materialize(self) -> stages.ExecutableProgram:
-        """Bring the artifact up as a directly-callable program.
+        """Re-deserialize the SDFG, link the .so, and wrap in gt4py's calling convention.
 
-        Re-deserializes the SDFG dump from the build folder, links against
-        the pre-built .so via ``compiler.use_cache=True`` (no re-codegen),
-        wraps it in a :class:`CompiledDaceProgram`, and applies gt4py's
-        calling convention via :func:`decoration.convert_args`.
-
-        Must run in the process that will ultimately call the returned
-        program; the imported binding code is bound into a per-call namespace
-        within the produced :class:`CompiledDaceProgram`.
+        Must run in the process that will call the returned program.
         """
-        # Imported lazily to avoid a circular module dependency:
-        # ``decoration`` imports this module.
+        # Lazy import: ``decoration`` imports this module.
         from gt4py.next.program_processors.runners.dace.workflow import (
             decoration as gtx_wfddecoration,
         )
@@ -162,7 +148,6 @@ class DaCeBuildArtifact:
         sdfg.build_folder = str(self.build_folder)
 
         with gtx_wfdcommon.dace_context(device_type=self.device_type):
-            # use_cache=True forces DaCe to load the existing .so without re-codegen.
             with dace.config.set_temporary("compiler", "use_cache", value=True):
                 sdfg_program = sdfg.compile(validate=False)
 
