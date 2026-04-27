@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, TypeAlias, TypeVar
+from typing import Protocol, TypeAlias, TypeVar
 
 from gt4py.next.ffront import stages as ffront_stages
 from gt4py.next.iterator import ir as itir
@@ -56,17 +56,18 @@ class BindingStep(Protocol[CodeSpecT, TargetCodeSpecT]):
 
 
 class CompilationStep(
-    workflow.Workflow[stages.CompilableProject[CodeSpecT, TargetCodeSpecT], Any],
+    workflow.Workflow[
+        stages.CompilableProject[CodeSpecT, TargetCodeSpecT], stages.BuildArtifact
+    ],
     Protocol[CodeSpecT, TargetCodeSpecT],
 ):
-    """Run the build system and produce an on-disk, backend-specific build artifact.
+    """Run the build system and produce a :class:`stages.BuildArtifact`.
 
-    The artifact type is intentionally :class:`Any` here — each backend defines
-    its own concrete dataclass (frozen, picklable). The build/finalize boundary
-    in :class:`recipes.OTFCompileWorkflow` only requires that whatever
-    ``CompilationStep`` produces is what the backend's ``finalize`` consumes.
+    Each backend defines its own concrete artifact dataclass (frozen,
+    picklable, self-materializing); they all satisfy the
+    :class:`stages.BuildArtifact` Protocol structurally.
     """
 
     def __call__(
         self, source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT]
-    ) -> Any: ...
+    ) -> stages.BuildArtifact: ...

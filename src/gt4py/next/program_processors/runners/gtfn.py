@@ -20,7 +20,7 @@ from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import compiler, importer
+from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
@@ -106,24 +106,6 @@ def extract_connectivity_args(
     return args
 
 
-def gtfn_finalize(artifact: compiler.GTFNBuildArtifact) -> stages.ExecutableProgram:
-    """Turn a :class:`compiler.GTFNBuildArtifact` into a directly-callable program.
-
-    Imports the .so as a Python extension module and wraps the entry point in
-    gt4py's calling convention (argument conversion, device-aware connectivity
-    handling, metric collection). Reads the target device from the artifact.
-
-    Must run in the process that will ultimately call the returned program;
-    the module is registered in that process's ``sys.modules`` under the
-    ``gt4py.__compiled_programs__.`` prefix.
-    """
-    m = importer.import_from_path(
-        artifact.src_dir / artifact.module,
-        sys_modules_prefix="gt4py.__compiled_programs__.",
-    )
-    return convert_args(getattr(m, artifact.entry_point_name), device=artifact.device_type)
-
-
 class GTFNBuildWorkflowFactory(factory.Factory):
     class Meta:
         model = recipes.OTFBuildWorkflow
@@ -176,7 +158,9 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     build = factory.SubFactory(
         GTFNBuildWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
     )
-    finalize = factory.LazyFunction(lambda: gtfn_finalize)
+    # ``finalize`` is left at its OTFCompileWorkflow default
+    # (``stages.materialize_artifact``), which dispatches via the artifact's
+    # own :meth:`stages.BuildArtifact.materialize` method.
 
 
 class GTFNBackendFactory(factory.Factory):

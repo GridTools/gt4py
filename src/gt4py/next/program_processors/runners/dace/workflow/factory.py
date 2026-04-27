@@ -18,7 +18,6 @@ from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow import (
     bindings as bindings_step,
-    compilation as compilation_step,
 )
 from gt4py.next.program_processors.runners.dace.workflow.compilation import (
     DaCeCompilationStepFactory,
@@ -92,4 +91,6 @@ class DaCeWorkflowFactory(factory.Factory):
         auto_optimize=factory.SelfAttribute("..auto_optimize"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )
-    finalize = factory.LazyFunction(lambda: compilation_step.dace_finalize)
+    # ``finalize`` is left at its OTFCompileWorkflow default
+    # (``stages.materialize_artifact``), which dispatches via the artifact's
+    # own :meth:`stages.BuildArtifact.materialize` method.

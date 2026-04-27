@@ -17,7 +17,7 @@ import factory
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config
 from gt4py.next.otf import code_specs, definitions, stages, workflow
-from gt4py.next.otf.compilation import build_data, cache
+from gt4py.next.otf.compilation import build_data, cache, importer
 
 
 T = TypeVar("T")
@@ -48,15 +48,34 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
 class GTFNBuildArtifact:
     """On-disk result of a GTFN compilation: a Python extension module.
 
-    Bindings are baked into the .so via nanobind, so the load step is just an
-    ``importlib`` import + entry-point symbol lookup. ``device_type`` is
-    intrinsic to the artifact: a CPU-built .so cannot be loaded as GPU.
+    Bindings are baked into the .so via nanobind, so materialization is just
+    an ``importlib`` import + entry-point symbol lookup, plus a wrapping in
+    gt4py's calling convention. ``device_type`` is intrinsic to the artifact:
+    a CPU-built .so cannot be loaded as GPU.
     """
 
     src_dir: pathlib.Path
     module: pathlib.Path
     entry_point_name: str
     device_type: core_defs.DeviceType
+
+    def materialize(self) -> stages.ExecutableProgram:
+        """Bring the artifact up as a directly-callable program.
+
+        Must run in the process that will ultimately call the returned
+        program; the imported module is registered in that process's
+        ``sys.modules`` under the ``gt4py.__compiled_programs__.`` prefix.
+        """
+        # Imported lazily to avoid a circular module dependency: ``runners.gtfn``
+        # imports this module to construct the workflow, while the
+        # gt4py-shaped argument-conversion lives there.
+        from gt4py.next.program_processors.runners.gtfn import convert_args
+
+        m = importer.import_from_path(
+            self.src_dir / self.module,
+            sys_modules_prefix="gt4py.__compiled_programs__.",
+        )
+        return convert_args(getattr(m, self.entry_point_name), device=self.device_type)
 
 
 @dataclasses.dataclass(frozen=True)

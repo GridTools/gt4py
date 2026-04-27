@@ -122,14 +122,54 @@ class DaCeBuildArtifact:
 
     Carries the ``device_type`` the artifact was built for; a CPU-built .so
     cannot be loaded as GPU. Also carries the bindings (Python source code
-    that the loader ``exec``\\ s to materialize the SDFG argument-marshalling
-    function).
+    that materialization ``exec``\\ s to bring the SDFG argument-marshalling
+    function into existence).
     """
 
     build_folder: pathlib.Path
     binding_source_code: str
     bind_func_name: str
     device_type: core_defs.DeviceType
+
+    def materialize(self) -> stages.ExecutableProgram:
+        """Bring the artifact up as a directly-callable program.
+
+        Re-deserializes the SDFG dump from the build folder, links against
+        the pre-built .so via ``compiler.use_cache=True`` (no re-codegen),
+        wraps it in a :class:`CompiledDaceProgram`, and applies gt4py's
+        calling convention via :func:`decoration.convert_args`.
+
+        Must run in the process that will ultimately call the returned
+        program; the imported binding code is bound into a per-call namespace
+        within the produced :class:`CompiledDaceProgram`.
+        """
+        # Imported lazily to avoid a circular module dependency:
+        # ``decoration`` imports this module.
+        from gt4py.next.program_processors.runners.dace.workflow import (
+            decoration as gtx_wfddecoration,
+        )
+
+        for dump_name in ("program.sdfgz", "program.sdfg"):
+            sdfg_dump = self.build_folder / dump_name
+            if sdfg_dump.exists():
+                break
+        else:
+            raise RuntimeError(
+                f"No SDFG dump (program.sdfgz / program.sdfg) found in '{self.build_folder}'."
+            )
+
+        sdfg = dace.SDFG.from_file(str(sdfg_dump))
+        sdfg.build_folder = str(self.build_folder)
+
+        with gtx_wfdcommon.dace_context(device_type=self.device_type):
+            # use_cache=True forces DaCe to load the existing .so without re-codegen.
+            with dace.config.set_temporary("compiler", "use_cache", value=True):
+                sdfg_program = sdfg.compile(validate=False)
+
+        program = CompiledDaceProgram(
+            sdfg_program, self.bind_func_name, self.binding_source_code
+        )
+        return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -174,45 +214,6 @@ class DaCeCompiler(
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
         )
-
-
-def dace_finalize(artifact: DaCeBuildArtifact) -> stages.ExecutableProgram:
-    """Turn a :class:`DaCeBuildArtifact` into a directly-callable program.
-
-    Re-deserializes the SDFG dump from the build folder, links against the
-    pre-built .so via ``compiler.use_cache=True`` (no re-codegen), wraps it
-    in a :class:`CompiledDaceProgram`, and applies gt4py's calling convention
-    via :func:`decoration.convert_args`. Reads the target device from the
-    artifact.
-
-    Must run in the process that will ultimately call the returned program.
-    """
-    # Local import to avoid a circular reference (decoration imports compilation).
-    from gt4py.next.program_processors.runners.dace.workflow import (
-        decoration as gtx_wfddecoration,
-    )
-
-    for dump_name in ("program.sdfgz", "program.sdfg"):
-        sdfg_dump = artifact.build_folder / dump_name
-        if sdfg_dump.exists():
-            break
-    else:
-        raise RuntimeError(
-            f"No SDFG dump (program.sdfgz / program.sdfg) found in '{artifact.build_folder}'."
-        )
-
-    sdfg = dace.SDFG.from_file(str(sdfg_dump))
-    sdfg.build_folder = str(artifact.build_folder)
-
-    with gtx_wfdcommon.dace_context(device_type=artifact.device_type):
-        # use_cache=True forces DaCe to load the existing .so without re-codegen.
-        with dace.config.set_temporary("compiler", "use_cache", value=True):
-            sdfg_program = sdfg.compile(validate=False)
-
-    program = CompiledDaceProgram(
-        sdfg_program, artifact.bind_func_name, artifact.binding_source_code
-    )
-    return gtx_wfddecoration.convert_args(program, device=artifact.device_type)
 
 
 class DaCeCompilationStepFactory(factory.Factory):
