@@ -30,7 +30,7 @@ _GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
 
 class DaCeWorkflowFactory(factory.Factory):
     class Meta:
-        model = recipes.OTFBuildWorkflow
+        model = recipes.OTFCompileWorkflow
 
     class Params:
         auto_optimize: bool = False

@@ -116,9 +116,9 @@ def test_inlining_of_scalar_works_integration(testee_prog):
 
     @dataclasses.dataclass(frozen=True)
     class _NoOpArtifact:
-        """A trivial BuildArtifact that materializes to a no-op callable."""
+        """A trivial CompilationArtifact that loads to a no-op callable."""
 
-        def materialize(self):
+        def load(self):
             return lambda *args, **kwargs: None
 
     def pirate(program: toolchain.ConcreteArtifact):

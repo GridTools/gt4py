@@ -10,7 +10,7 @@
 
 The main module is `backend`, that exports the backends for CPU and GPU devices.
 The `backend` module uses `factory` to define a workflow that implements the
-`OTFBuildWorkflow` recipe. The different stages are implemeted in separate modules:
+`OTFCompileWorkflow` recipe. The different stages are implemeted in separate modules:
 - `translation` for lowering of GTIR to SDFG and applying SDFG transformations
 - `compilation` for compiling the SDFG into a program
 - `decoration` to parse the program arguments and pass them to the program call

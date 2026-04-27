@@ -15,13 +15,9 @@ from typing import Protocol, TypeVar
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import config
+from gt4py.next import config, utils as gtx_utils
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
-from gt4py.next.program_processors.runners import gtfn_decoration
-
-
-T = TypeVar("T")
 
 
 def is_compiled(data: build_data.BuildData) -> bool:
@@ -46,12 +42,11 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class GTFNBuildArtifact:
-    """On-disk result of a GTFN compilation: a Python extension module.
+class CPPCompilationArtifact(gtx_utils.MetadataBasedPickling):
+    """On-disk result of a CPP-style compilation: a Python extension module.
 
-    Bindings are baked into the .so via nanobind, so :meth:`materialize` is
-    just an ``importlib`` import + entry-point symbol lookup, plus a wrap in
-    gt4py's calling convention.
+    The default :meth:`load` is an ``importlib`` import + entry-point lookup;
+    backends override to apply their own calling convention.
     """
 
     src_dir: pathlib.Path
@@ -59,8 +54,8 @@ class GTFNBuildArtifact:
     entry_point_name: str
     device_type: core_defs.DeviceType
 
-    def materialize(self) -> stages.ExecutableProgram:
-        """Import the module and wrap its entry point in gt4py's calling convention.
+    def load(self) -> stages.ExecutableProgram:
+        """Import the .so and return the raw entry point.
 
         Must run in the process that will call the returned program: the
         module is registered in that process's ``sys.modules`` under the
@@ -70,24 +65,25 @@ class GTFNBuildArtifact:
             self.src_dir / self.module,
             sys_modules_prefix="gt4py.__compiled_programs__.",
         )
-        return gtfn_decoration.convert_args(
-            getattr(m, self.entry_point_name), device=self.device_type
-        )
+        return getattr(m, self.entry_point_name)
 
 
 @dataclasses.dataclass(frozen=True)
-class Compiler(
+class CPPCompiler(
     workflow.ChainableWorkflowMixin[
         stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        GTFNBuildArtifact,
+        CPPCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        GTFNBuildArtifact,
+        CPPCompilationArtifact,
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
 ):
-    """Use any build system (via configured factory) to compile a GT4Py program into a :class:`GTFNBuildArtifact`."""
+    """Drive a CPP-style build system into a :class:`CPPCompilationArtifact`.
+
+    Backends override :meth:`_make_artifact` to use their own artifact subclass.
+    """
 
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
@@ -97,7 +93,7 @@ class Compiler(
     def __call__(
         self,
         inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-    ) -> GTFNBuildArtifact:
+    ) -> CPPCompilationArtifact:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
@@ -115,17 +111,22 @@ class Compiler(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
 
-        return GTFNBuildArtifact(
+        return self._make_artifact(src_dir, new_data.module, new_data.entry_point_name)
+
+    def _make_artifact(
+        self, src_dir: pathlib.Path, module: pathlib.Path, entry_point_name: str
+    ) -> CPPCompilationArtifact:
+        return CPPCompilationArtifact(
             src_dir=src_dir,
-            module=new_data.module,
-            entry_point_name=new_data.entry_point_name,
+            module=module,
+            entry_point_name=entry_point_name,
             device_type=self.device_type,
         )
 
 
 class CompilerFactory(factory.Factory):
     class Meta:
-        model = Compiler
+        model = CPPCompiler
 
 
 class CompilationError(RuntimeError): ...

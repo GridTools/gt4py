@@ -147,7 +147,7 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
-    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.BuildArtifact]
+    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     transforms: workflow.Workflow[definitions.ConcreteProgramDef, definitions.CompilableProgramDef]
 
@@ -157,7 +157,7 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         artifact = self.executor(
             self.transforms(definitions.ConcreteProgramDef(data=program, args=compile_time_args))
         )
-        return artifact.materialize()
+        return artifact.load()
 
     @property
     def __gt_allocator__(

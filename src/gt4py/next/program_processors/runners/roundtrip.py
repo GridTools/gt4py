@@ -216,14 +216,14 @@ def fencil_generator(
 class RoundtripArtifact:
     """In-memory artifact for the roundtrip backend.
 
-    Roundtrip generates and ``exec``\\ s a Python module per program, so its
-    output is a live callable rather than something on disk. Not picklable —
-    roundtrip is in-process only.
+    Roundtrip generates a Python module per program and executes it directly,
+    so its output is a live callable rather than something on disk. Not
+    picklable — roundtrip is in-process only.
     """
 
     program: stages.ExecutableProgram
 
-    def materialize(self) -> stages.ExecutableProgram:
+    def load(self) -> stages.ExecutableProgram:
         return self.program
 
 
