@@ -22,7 +22,7 @@ from gt4py.next.program_processors.runners.dace.workflow import compilation  # n
 def test_dace_compilation_artifact_pickle_round_trip_drops_live_program(tmp_path: pathlib.Path):
     artifact = compilation.DaCeCompilationArtifact(
         build_folder=tmp_path,
-        sdfg_dump=tmp_path / "program.sdfgz",
+        sdfg_json="{}",
         binding_source_code="def update_sdfg_args(*a, **k): ...",
         bind_func_name="update_sdfg_args",
         device_type=core_defs.DeviceType.CPU,
