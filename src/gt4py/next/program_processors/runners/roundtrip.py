@@ -11,11 +11,10 @@ from __future__ import annotations
 import dataclasses
 import functools
 import importlib.util
-import pathlib
 import tempfile
 import textwrap
-import typing
-from collections.abc import Callable, Iterable
+import types
+from collections.abc import Iterable
 from typing import Any, Optional
 
 from gt4py.eve import codegen
@@ -106,28 +105,20 @@ def ${id}(${','.join(params)}):
         return f"{node.id} = {_create_tmp(axes, origin, shape, node.dtype)}"
 
 
-_FENCIL_CACHE: dict[int, Callable] = {}
+# Caches the generated source by IR hash so re-codegen is skipped within a process.
+_SOURCE_CACHE: dict[int, tuple[str, str]] = {}
+# Caches the loaded module by source string so re-exec is skipped within a process.
+_MODULE_CACHE: dict[str, types.ModuleType] = {}
 
 
-def fencil_generator(
+def _generate_source(
     ir: itir.Program,
     debug: bool,
     use_embedded: bool,
     offset_provider: common.OffsetProvider,
     transforms: itir_transforms.GTIRTransform,
-) -> stages.ExecutableProgram:
-    """
-    Generate a directly executable fencil from an ITIR node.
-
-    Arguments:
-        ir: The iterator IR (ITIR) node.
-        debug: Keep module source containing fencil implementation.
-        extract_temporaries: Extract intermediate field values into temporaries.
-        use_embedded: Directly use builtins from embedded backend instead of
-                      generic dispatcher. Gives faster performance and is easier
-                      to debug.
-        offset_provider: A mapping from offset names to offset providers.
-    """
+) -> tuple[str, str]:
+    """Generate the Python source for an ITIR program. Returns ``(source_code, entry_point_name)``."""
     # TODO(tehrengruber): just a temporary solution until we have a proper generic
     #  caching mechanism
     cache_key = hash(
@@ -139,10 +130,10 @@ def fencil_generator(
             tuple(common.offset_provider_to_type(offset_provider).items()),
         )
     )
-    if cache_key in _FENCIL_CACHE:
+    if cache_key in _SOURCE_CACHE:
         if debug:
-            print(f"Using cached fencil for key {cache_key}")
-        return _FENCIL_CACHE[cache_key]  # A CompiledProgram is just a Callable
+            print(f"Using cached source for key {cache_key}")
+        return _SOURCE_CACHE[cache_key]
 
     ir = transforms(ir, offset_provider=offset_provider)
 
@@ -178,53 +169,84 @@ def fencil_generator(
         """
     )
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", encoding="utf-8", delete=False
-    ) as source_file:
-        source_file_name = source_file.name
-        if debug:
-            print(source_file_name)
-        offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
-        axis_literals = [
-            f'{o.value} = gtx.Dimension("{o.value}", kind=gtx.DimensionKind("{o.kind}"))'
-            for o in axis_literals_set
-        ]
-        source_file.write(header)
-        source_file.write("\n".join(offset_literals))
-        source_file.write("\n")
-        source_file.write("\n".join(axis_literals))
-        source_file.write("\n")
-        source_file.write(program)
-    try:
-        spec = importlib.util.spec_from_file_location("module.name", source_file_name)
-        mod = importlib.util.module_from_spec(spec)  # type: ignore
-        spec.loader.exec_module(mod)  # type: ignore
-    finally:
-        if not debug:
-            pathlib.Path(source_file_name).unlink(missing_ok=True)
+    offset_literals_src = "\n".join(f'{o} = offset("{o}")' for o in offset_literals)
+    axis_literals_src = "\n".join(
+        f'{o.value} = gtx.Dimension("{o.value}", kind=gtx.DimensionKind("{o.kind}"))'
+        for o in axis_literals_set
+    )
+    source_code = f"{header}{offset_literals_src}\n{axis_literals_src}\n{program}"
 
     assert isinstance(ir, itir.Program)
-    fencil_name = ir.id
-    fencil = getattr(mod, fencil_name)
+    entry_point_name = ir.id
 
-    _FENCIL_CACHE[cache_key] = fencil
+    _SOURCE_CACHE[cache_key] = (source_code, entry_point_name)
+    return source_code, entry_point_name
 
-    return typing.cast(stages.ExecutableProgram, fencil)
+
+def _load_module(source_code: str, debug: bool) -> types.ModuleType:
+    if source_code in _MODULE_CACHE:
+        return _MODULE_CACHE[source_code]
+
+    if debug:
+        # Write to a real .py so debuggers/tracebacks have file/line info.
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", encoding="utf-8", delete=False
+        ) as source_file:
+            source_file.write(source_code)
+            source_file_name = source_file.name
+        print(source_file_name)
+        spec = importlib.util.spec_from_file_location("module.name", source_file_name)
+        mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    else:
+        mod = types.ModuleType("roundtrip_module")
+        exec(compile(source_code, "<roundtrip>", "exec"), mod.__dict__)
+
+    _MODULE_CACHE[source_code] = mod
+    return mod
 
 
 @dataclasses.dataclass(frozen=True)
 class RoundtripArtifact:
-    """In-memory artifact for the roundtrip backend.
+    """Source-string artifact for the roundtrip backend.
 
-    Roundtrip generates a Python module per program and executes it directly,
-    so its output is a live callable rather than something on disk. Not
-    picklable — roundtrip is in-process only.
+    The generated Python source is the artifact: picklable, re-execed on
+    :meth:`load`. When ``debug`` is true, ``load`` writes a temporary ``.py``
+    so debuggers/tracebacks resolve to source lines.
     """
 
-    program: stages.ExecutableProgram
+    source_code: str
+    entry_point_name: str
+    column_axis: common.Dimension | None
+    dispatch_backend: next_backend.Backend | None
+    debug: bool
 
     def load(self) -> stages.ExecutableProgram:
-        return self.program
+        mod = _load_module(self.source_code, self.debug)
+        fencil = getattr(mod, self.entry_point_name)
+        captured_column_axis = self.column_axis
+        dispatch_backend = self.dispatch_backend
+
+        def decorated_fencil(
+            *args: Any,
+            offset_provider: dict[str, common.Connectivity | common.Dimension],
+            out: Any = None,
+            column_axis: Optional[
+                common.Dimension
+            ] = None,  # TODO(tehrengruber): unused, kept for signature compat
+            **kwargs: Any,
+        ) -> None:
+            if out is not None:
+                args = (*args, out)
+            fencil(
+                *args,
+                offset_provider=offset_provider,
+                backend=dispatch_backend,
+                column_axis=captured_column_axis,
+                **kwargs,
+            )
+
+        return decorated_fencil
 
 
 @dataclasses.dataclass(frozen=True)
@@ -237,7 +259,7 @@ class Roundtrip(workflow.Workflow[definitions.CompilableProgramDef, RoundtripArt
     def __call__(self, inp: definitions.CompilableProgramDef) -> RoundtripArtifact:
         debug = config.DEBUG if self.debug is None else self.debug
 
-        fencil = fencil_generator(
+        source_code, entry_point_name = _generate_source(
             inp.data,
             offset_provider=inp.args.offset_provider,
             debug=debug,
@@ -245,26 +267,13 @@ class Roundtrip(workflow.Workflow[definitions.CompilableProgramDef, RoundtripArt
             transforms=self.transforms,
         )
 
-        def decorated_fencil(
-            *args: Any,
-            offset_provider: dict[str, common.Connectivity | common.Dimension],
-            out: Any = None,
-            column_axis: Optional[common.Dimension] = None,
-            **kwargs: Any,
-        ) -> None:
-            if out is not None:
-                args = (*args, out)
-            if not column_axis:  # TODO(tehrengruber): This variable is never used. Bug?
-                column_axis = inp.args.column_axis
-            fencil(
-                *args,
-                offset_provider=offset_provider,
-                backend=self.dispatch_backend,
-                column_axis=inp.args.column_axis,
-                **kwargs,
-            )
-
-        return RoundtripArtifact(program=decorated_fencil)
+        return RoundtripArtifact(
+            source_code=source_code,
+            entry_point_name=entry_point_name,
+            column_axis=inp.args.column_axis,
+            dispatch_backend=self.dispatch_backend,
+            debug=debug,
+        )
 
 
 # TODO(tehrengruber): introduce factory
