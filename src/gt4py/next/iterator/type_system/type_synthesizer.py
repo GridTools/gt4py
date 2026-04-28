@@ -641,6 +641,11 @@ def _tree_map(op: TypeSynthesizer) -> TypeSynthesizer:
     ) -> ts.TupleType:
         if not args:
             raise TypeError("tree_map requires at least one argument.")
+        if not all(isinstance(a, ts.TupleType) for a in args):
+            raise TypeError(
+                "tree_map requires all top-level arguments to be TupleType, "
+                f"got {[type(a).__name__ for a in args]}."
+            )
 
         def _recurse(*arg_types: ts.TypeSpec) -> ts.TypeSpec:
             all_tuples = all(isinstance(a, ts.TupleType) for a in arg_types)

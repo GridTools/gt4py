@@ -21,17 +21,19 @@ i_nested_tuple_field = ts.TupleType(types=[i_tuple_field, i_field])
 i_domain = im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value="IDim"), 0, 1))
 
 
-def _make_program(params: list[itir.Sym], expr: itir.Expr) -> itir.Program:
+def _make_program(
+    params: list[itir.Sym], expr: itir.Expr, out_type: ts.TypeSpec = i_field
+) -> itir.Program:
     return itir.Program(
         id="testee",
         function_definitions=[],
-        params=[*params, im.sym("out", i_field)],
+        params=[*params, im.sym("out", out_type)],
         declarations=[],
         body=[
             itir.SetAt(
                 expr=expr,
                 domain=i_domain,
-                target=im.ref("out"),
+                target=im.ref("out", out_type),
             )
         ],
     )
@@ -52,6 +54,7 @@ def test_multi_arg():
         im.call(im.call("tree_map")(_plus()))(
             im.ref("a", i_tuple_field), im.ref("b", i_tuple_field)
         ),
+        out_type=i_tuple_field,
     )
     result = UnrollTreeMap.apply(program, uids=uids)
 
@@ -65,6 +68,7 @@ def test_multi_arg():
                 )
             )
         ),
+        out_type=i_tuple_field,
     )
     assert result == expected
 
@@ -74,6 +78,7 @@ def test_nested():
     program = _make_program(
         [im.sym("t", i_nested_tuple_field)],
         im.call(im.call("tree_map")(_neg()))(im.ref("t", i_nested_tuple_field)),
+        out_type=i_nested_tuple_field,
     )
     result = UnrollTreeMap.apply(program, uids=uids)
 
@@ -88,5 +93,6 @@ def test_nested():
                 im.call(_neg())(im.tuple_get(1, "_utm_0")),
             )
         ),
+        out_type=i_nested_tuple_field,
     )
     assert result == expected
