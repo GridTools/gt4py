@@ -13,7 +13,7 @@ import copy
 import inspect
 import operator
 import textwrap
-from typing import Callable, Dict, Final, List, Tuple, Type
+from typing import Callable, Final
 
 
 def get_closure(func, *, include_globals=True, included_nonlocals=True, include_builtins=True):
@@ -52,7 +52,7 @@ def get_source(func):
     return source
 
 
-def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
+def get_ast(func_or_source_or_ast, *, feature_version: tuple[int, int]):
     if callable(func_or_source_or_ast):
         func_or_source_or_ast = get_source(func_or_source_or_ast)
     if isinstance(func_or_source_or_ast, str):
@@ -216,7 +216,7 @@ class ASTTransformPass(ASTPass):
 
 
 class ASTEvaluator(ASTPass):
-    AST_OP_TO_OP: Final[Dict[Type, Callable]] = {
+    AST_OP_TO_OP: Final[dict[type, Callable]] = {
         # Arithmetic operations
         ast.UAdd: operator.pos,
         ast.USub: operator.neg,
@@ -387,7 +387,7 @@ class QualifiedNameCollector(ASTPass):
             self.name_nodes[node.id].append(node)
 
     def _get_name_components(self, node: ast.AST):
-        components: List
+        components: list
         if isinstance(node, ast.Name):
             components = [node.id]
             valid = self.prefixes is None or node.id in self.prefixes
