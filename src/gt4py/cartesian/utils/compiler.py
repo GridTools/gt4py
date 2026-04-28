@@ -10,8 +10,11 @@ import dataclasses
 import enum
 import os
 import subprocess
-from distutils.ccompiler import new_compiler
-from distutils.sysconfig import customize_compiler
+
+# We rely on setuptools internal distutils - which is on
+# a long term support track per the setuptools team
+from setuptools._distutils.ccompiler import new_compiler
+from setuptools._distutils.sysconfig import customize_compiler
 
 from gt4py._core import definitions as core_defs
 
@@ -55,14 +58,14 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
 
     # Query the compiler version string
     try:
-        compiler_exe_fullpath = ccompiler.compiler_cxx[0]  # type:ignore[attr-defined]
+        compiler_exe_fullpath = ccompiler.compiler_cxx[0]
         r = subprocess.run([compiler_exe_fullpath, "--version"], capture_output=True, text=True)
         version_name_on_cli = r.stdout.split("\n")[0]
     except AttributeError:
         version_name_on_cli = "default"
     if "gcc" in version_name_on_cli.lower():
         name = CxxCompilerName.GNU
-    elif "icx" in version_name_on_cli.lower():
+    elif "icx" in version_name_on_cli.lower() or "icpx" in version_name_on_cli.lower():
         name = CxxCompilerName.INTEL
         open_mp_flags = "-qopenmp"
     elif "apple clang" in version_name_on_cli.lower():

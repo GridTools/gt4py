@@ -2,6 +2,30 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.9] - 2026-04-01
+
+### Cartesian
+
+- Fix loop re-ordering in schedule tree.
+- Fix scalarization of temporaries
+- Redundant region syntax removed.
+
+### Next
+
+See commit history.
+
+## [1.1.8] - 2026-03-25
+
+### Cartesian
+
+- Fix default compile flags for for various compilers.
+- Generate numpy >= 2.0 compatible code in the debug backend.
+- Support for data dims of size one in dace backends.
+
+### Next
+
+See commit history.
+
 ## [1.1.7] - 2026-03-11
 
 ### Cartesian

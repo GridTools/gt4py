@@ -16,6 +16,7 @@ import dataclasses
 import functools
 import itertools
 import threading
+import types
 import warnings
 import weakref
 from collections.abc import Callable, Hashable, Sequence
@@ -111,6 +112,16 @@ def compile_variant_hook(
                 f"{eve_utils.CaseStyleConverter.convert(key.__name__, 'pascal', 'snake')}s": value
                 for key, value in argument_descriptors.items()
             },
+        )
+
+    if __debug__:
+        # Note: We set the stack level to point to something internally as we don't want to show this warning for every program call.
+        # It's an ad-hoc pragmatic choice that could be revisited in the future.
+        warnings.warn(
+            "Python is not running in optimized mode, which may impact performance."
+            " Consider running with `python -O` or setting the environment"
+            " variable `PYTHONOPTIMIZE=1`.",
+            stacklevel=3,
         )
 
 
@@ -347,6 +358,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             _pools_per_root[result] += 1
         return result
 
+    @property
+    def definition(self) -> types.FunctionType:
+        return self.definition_stage.definition
+
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
@@ -379,11 +394,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             # type, add the argument types to the cache key as the argument types are used during
             # compilation. In case the program is not generic we can avoid the potentially
             # expensive type deduction for all arguments and not include it in the key.
-            warnings.warn(
-                "Calling generic programs / direct calls to scan operators are not optimized. "
-                "Consider calling a specialized version instead.",
-                stacklevel=2,
-            )
+            if enable_jit:
+                warnings.warn(
+                    "Calling generic programs / direct calls to scan operators are not optimized. "
+                    "Consider calling a specialized version instead.",
+                    stacklevel=3,
+                )
             arg_specialization_key = eve_utils.content_hash(
                 (
                     tuple(type_translation.from_value(arg) for arg in canonical_args),

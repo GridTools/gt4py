@@ -14,7 +14,7 @@ import pathlib
 import re
 from typing import TYPE_CHECKING, ClassVar
 
-from dace import SDFG, DebugInfo, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
+from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
@@ -113,6 +113,7 @@ def _sdfg_add_arrays_and_edges(
                 strides=array.strides,
                 shape=shape,
                 storage=array.storage,
+                lifetime=array.lifetime,
             )
 
             # Calculate memlet ranges taking the origin into account
@@ -145,10 +146,7 @@ def _sdfg_add_arrays_and_edges(
 
             if name in inputs:
                 state.add_edge(
-                    state.add_read(
-                        name,
-                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
-                    ),
+                    state.add_read(name),
                     None,
                     nsdfg,
                     name,
@@ -158,10 +156,7 @@ def _sdfg_add_arrays_and_edges(
                 state.add_edge(
                     nsdfg,
                     name,
-                    state.add_write(
-                        name,
-                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
-                    ),
+                    state.add_write(name),
                     None,
                     Memlet(name, subset=subsets.Range(ranges)),
                 )
@@ -174,10 +169,7 @@ def _sdfg_add_arrays_and_edges(
             )
             if name in inputs:
                 state.add_edge(
-                    state.add_read(
-                        name,
-                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
-                    ),
+                    state.add_read(name),
                     None,
                     nsdfg,
                     name,
@@ -187,10 +179,7 @@ def _sdfg_add_arrays_and_edges(
                 state.add_edge(
                     nsdfg,
                     name,
-                    state.add_write(
-                        name,
-                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
-                    ),
+                    state.add_write(name),
                     None,
                     Memlet(name),
                 )
@@ -267,19 +256,12 @@ def freeze_origin_domain_sdfg(
     wrapper_sdfg = SDFG("frozen_" + inner_sdfg.name)
     state = wrapper_sdfg.add_state("frozen_" + inner_sdfg.name + "_state")
 
-    inputs = set()
-    outputs = set()
-    for node, parent in inner_sdfg.all_nodes_recursive():
-        if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
-            continue
+    # gather inputs & outputs (i.e. reads/writes without transients)
+    inputs, outputs = inner_sdfg.read_and_write_sets()
+    inputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, inputs))
+    outputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, outputs))
 
-        if node.has_reads(parent):
-            inputs.add(node.data)
-        if node.has_writes(parent):
-            outputs.add(node.data)
-
-    # fake DebugInfo to avoid calls to `inspect`
-    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs, debuginfo=DebugInfo(123456))
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
         field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
@@ -302,10 +284,6 @@ def freeze_origin_domain_sdfg(
 
     _sdfg_specialize_symbols(wrapper_sdfg, domain)
     _specialize_transient_strides(wrapper_sdfg, layout_info)
-
-    for _, _, array in wrapper_sdfg.arrays_recursive():
-        if array.transient:
-            array.lifetime = dtypes.AllocationLifetime.SDFG
 
     wrapper_sdfg.arg_names = arg_names
 
@@ -617,6 +595,11 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
                 value=gt_config.DACE_DEFAULT_BLOCK_SIZE,
             )
             config.Config.set("compiler", "cpu", "openmp_sections", value=False)
+            # The default, "inspect", will inspect the python stack for every object that's added
+            # to the SDFG, which doesn't provide a DebugInfo object. Those calls add up over time
+            # and - in our case - end up with line information pointing to the GT4Py-DaCe bridge.
+            # We thus decided to turn off lineinfo in the DaCe config.
+            config.Config.set("compiler", "lineinfo", value="none")
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 

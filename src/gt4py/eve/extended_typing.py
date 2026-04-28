@@ -221,6 +221,42 @@ WriteableBuffer: TypeAlias = Union[
 ReadableBuffer: TypeAlias = Union[ReadOnlyBuffer, WriteableBuffer]
 
 
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+class SingleDispatchCallable(Protocol[_P, _T]):
+    registry: Mapping[Any, Callable[_P, _T]]
+
+    def dispatch(self, cls: Any) -> Callable[_P, _T]: ...
+
+    @overload
+    def register(
+        self, cls: Any, func: Literal[None] = None
+    ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
+
+    @overload
+    def register(self, cls: Any, func: Callable[_P, _T]) -> Callable[_P, _T]: ...
+
+    def register(
+        self, cls: Any, func: Callable[_P, _T] | None = None
+    ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]] | Callable[_P, _T]: ...
+
+    def _clear_cache(self) -> None: ...
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+
+
+def is_single_dispatch_callable(
+    func: Callable[_P, _T],
+) -> TypeGuard[SingleDispatchCallable[_P, _T]]:
+    return (
+        callable(func)
+        and callable(getattr(func, "dispatch", None))
+        and callable(getattr(func, "register", None))
+    )
+
+
 class HashlibAlgorithm(Protocol):
     """Used in the hashlib module of the standard library."""
 
@@ -380,9 +416,6 @@ else:
 def has_type_parameters(cls: Type) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
-
-
-_T = TypeVar("_T")
 
 
 def get_actual_type(obj: _T) -> Type[_T]:
