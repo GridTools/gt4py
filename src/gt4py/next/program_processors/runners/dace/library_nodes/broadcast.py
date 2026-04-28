@@ -26,6 +26,12 @@ class Broadcast(dace_nodes.LibraryNode):
     implementations: Final[dict[str, dace_transform.ExpandTransformation]] = {}
     default_implementation: Final[str | None] = "pure"
 
+    # TODO(phimuell, edopao): This information is probably redundant and to simplify
+    #   implementation, everything should be encoded in the destination subset of
+    #   the edge that connects the library node with its output. This makes it
+    #   simpler to generate/copy the library node.
+    #   Also `value` maybe only allow one style which makes handling certain things
+    #   simpler.
     axes = dace_properties.ListProperty(element_type=int)
     src_origin = dace_properties.ListProperty(element_type=str)
     dst_origin = dace_properties.ListProperty(element_type=str)
@@ -92,7 +98,14 @@ class Broadcast(dace_nodes.LibraryNode):
 
 @dace_library.register_expansion(Broadcast, "pure")
 class BroadcastExpandInlined(dace_transform.ExpandTransformation):
-    """Implements pure expansion of the Broadcast library node."""
+    """Implements pure expansion of the Broadcast library node.
+
+    Todo:
+        - In DaCe the expansion must happen in a NestedSDFG. However, this is a bit
+            bad, and we actually would need to run simplification again to get rid
+            of them and proper process them. There should be a function which
+            essentially inlines it inside the SDFG.
+    """
 
     environments: Final[list[Any]] = []
 
