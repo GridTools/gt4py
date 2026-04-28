@@ -322,7 +322,7 @@ class JITCachingStrategy(CachingStrategy):
         if self.builder.backend.name == "dace:gpu":
             fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
 
-        # typeignore because attrclass StencilID has generated constructor
+        # ignore type because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
             self.builder.options.qualified_name,
             gt_utils.shashed_id(fingerprint, self.options_id),

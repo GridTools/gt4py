@@ -15,8 +15,6 @@ import operator
 import textwrap
 from typing import Callable, Dict, Final, List, Tuple, Type
 
-from gt4py.cartesian.utils.base import shashed_id
-
 
 def get_closure(func, *, include_globals=True, included_nonlocals=True, include_builtins=True):
     closure_vars = inspect.getclosurevars(func)
@@ -71,7 +69,6 @@ def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
 def ast_dump(
     definition,
     *,
-    skip_annotations: bool = True,
     skip_decorators: bool = True,
     feature_version: Tuple[int, int],
 ) -> str:
@@ -108,16 +105,10 @@ def ast_dump(
     skip_node_names = set()
     if skip_decorators:
         skip_node_names.add("decorator_list")
-    if skip_annotations:
-        skip_node_names.add("annotation")
 
     dumped_ast = _dump(get_ast(definition, feature_version=feature_version), skip_node_names)
 
     return dumped_ast
-
-
-def ast_shash(ast_node, *, skip_decorators=True):
-    return shashed_id(ast_dump(ast_node, skip_decorators=skip_decorators))
 
 
 def collect_decorators(func_or_source_or_ast):
