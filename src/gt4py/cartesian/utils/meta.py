@@ -66,25 +66,10 @@ def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
     return ast_root
 
 
-def ast_dump(
-    definition,
-    *,
-    skip_decorators: bool = True,
-    feature_version: Tuple[int, int],
-) -> str:
-    def _dump(node: ast.AST, excluded_names):
+def ast_dump(definition, *, feature_version: tuple[int, int]) -> str:
+    def _dump(node: ast.AST) -> str:
         if isinstance(node, ast.AST):
-            if excluded_names:
-                fields = [
-                    (name, _dump(value, excluded_names))
-                    for name, value in sorted(ast.iter_fields(node))
-                    if name not in excluded_names
-                ]
-            else:
-                fields = [
-                    (name, _dump(value, excluded_names))
-                    for name, value in sorted(ast.iter_fields(node))
-                ]
+            fields = [(name, _dump(value)) for name, value in sorted(ast.iter_fields(node))]
 
             return "".join(
                 [
@@ -95,18 +80,13 @@ def ast_dump(
                 ]
             )
 
-        elif isinstance(node, list):
-            lines = ["[", *[_dump(i, excluded_names) + "," for i in node], "]"]
+        if isinstance(node, list):
+            lines = ["[", *[_dump(i) + "," for i in node], "]"]
             return "\n".join(lines)
 
-        else:
-            return repr(node)
+        return repr(node)
 
-    skip_node_names = set()
-    if skip_decorators:
-        skip_node_names.add("decorator_list")
-
-    dumped_ast = _dump(get_ast(definition, feature_version=feature_version), skip_node_names)
+    dumped_ast = _dump(get_ast(definition, feature_version=feature_version))
 
     return dumped_ast
 
