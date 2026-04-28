@@ -697,6 +697,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if any(self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect):
             return False
 
+        # If the memlet is connected to a MapEntry and the MapEnty parameters contain the blocking parameter,
+        # we could promote the memlet to the outer map but at the time there's no case where this can happen
+        # so we leave it as future work.
+        # TODO(iomaganaris): Implement this case if it turns out to be relevant.
+        if isinstance(edge.dst, dace_nodes.MapEntry):
+            if self.blocking_parameter in edge.dst.params:
+                return False
+
         if isinstance(edge.dst, dace_nodes.Tasklet) and not edge.data.data.startswith("gt_conn_"):
             # TODO(iomaganaris): This check is done for tesklets that have as input a field
             # (connection name: `__tlet_field`) and one or two offsets
