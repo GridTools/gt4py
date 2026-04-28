@@ -804,16 +804,20 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             )
 
             if isinstance(original_dst_of_in_edge, dace_nodes.MapEntry):
-                for edge in state.out_edges(original_dst_of_in_edge):
-                    if edge.data.data == in_edge.data.data:
-                        edge.data.data = promoted_name
-                        assert len(original_dst_of_in_edge.params) == 1, (
-                            "Independent memlets should only be inputs to maps that have a single parameter. "
-                            "Those should always be neighbor reductions."
-                        )
-                        edge.data.subset = dace_subsets.Range.from_indices(
-                            original_dst_of_in_edge.params
-                        )
+                for inner_map_out_edge in state.out_edges(original_dst_of_in_edge):
+                    for memlet_tree in state.memlet_tree(inner_map_out_edge).traverse_children(
+                        include_self=True
+                    ):
+                        edge_to_adjust = memlet_tree.edge
+                        if edge_to_adjust.data.data == in_edge.data.data:
+                            edge_to_adjust.data.data = promoted_name
+                            assert len(original_dst_of_in_edge.params) == 1, (
+                                "Independent memlets should only be inputs to maps that have a single parameter. "
+                                "Those should always be neighbor reductions."
+                            )
+                            edge_to_adjust.data.subset = dace_subsets.Range.from_indices(
+                                original_dst_of_in_edge.params
+                            )
             elif isinstance(original_dst_of_in_edge, dace_nodes.NestedSDFG):
                 raise NotImplementedError("Promotion of memlets to NestedSDFG not implemented yet.")
             elif isinstance(original_dst_of_in_edge, dace_nodes.LibraryNode):
