@@ -639,16 +639,30 @@ def _tree_map(op: TypeSynthesizer) -> TypeSynthesizer:
     def applied_map(
         *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
     ) -> ts.TupleType:
+        if not args:
+            raise TypeError("tree_map requires at least one argument.")
+
         def _recurse(*arg_types: ts.TypeSpec) -> ts.TypeSpec:
-            if isinstance(arg_types[0], ts.TupleType):
+            all_tuples = all(isinstance(a, ts.TupleType) for a in arg_types)
+            all_leaves = all(not isinstance(a, ts.TupleType) for a in arg_types)
+            if all_tuples:
                 tup_types = [a for a in arg_types if isinstance(a, ts.TupleType)]
+                n = len(tup_types[0].types)
+                if any(len(t.types) != n for t in tup_types[1:]):
+                    raise TypeError(
+                        f"All tree_map arguments must have the same tuple structure at each level, "
+                        f"got {[len(t.types) for t in tup_types]}."
+                    )
                 return ts.TupleType(
-                    types=[
-                        _recurse(*(a.types[i] for a in tup_types))
-                        for i in range(len(arg_types[0].types))
-                    ]
+                    types=[_recurse(*(a.types[i] for a in tup_types)) for i in range(n)]
                 )
-            return op(*arg_types, offset_provider_type=offset_provider_type)  # type: ignore[return-value]
+            elif all_leaves:
+                return op(*arg_types, offset_provider_type=offset_provider_type)  # type: ignore[return-value]
+            else:
+                raise TypeError(
+                    "All tree_map arguments must have the same tree structure "
+                    "(all leaves must be reached simultaneously)."
+                )
 
         return _recurse(*args)  # type: ignore[return-value]
 

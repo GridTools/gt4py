@@ -155,6 +155,23 @@ def expression_test_cases():
             ),
             ts.ListType(element_type=int_type, offset_type=V2EDim),
         ),
+        # tree_map
+        (
+            im.tree_map(im.ref("plus"))(
+                im.ref("t1", ts.TupleType(types=[int_type, int_type])),
+                im.ref("t2", ts.TupleType(types=[int_type, int_type])),
+            ),
+            ts.TupleType(types=[int_type, int_type]),
+        ),
+        (
+            im.tree_map(im.ref("not_"))(
+                im.ref(
+                    "t",
+                    ts.TupleType(types=[bool_type, ts.TupleType(types=[bool_type, bool_type])]),
+                ),
+            ),
+            ts.TupleType(types=[bool_type, ts.TupleType(types=[bool_type, bool_type])]),
+        ),
         # reduce
         (im.reduce("plus", 0)(im.ref("l", int_list_type)), int_type),
         (

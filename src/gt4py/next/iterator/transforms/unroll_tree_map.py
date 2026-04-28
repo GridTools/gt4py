@@ -21,18 +21,31 @@ def _unroll(
     tup_exprs: list[itir.Expr],
 ) -> itir.Expr:
     """Recursively expand ``tree_map(f)(tup0, tup1, ...)`` into ``make_tuple`` / ``tuple_get``."""
+    assert tup_types, "tree_map requires at least one tuple argument."
     n = len(tup_types[0].types)
+    if any(len(t.types) != n for t in tup_types[1:]):
+        raise ValueError(
+            f"All tree_map arguments must have the same tuple structure at each level, "
+            f"got {[len(t.types) for t in tup_types]}."
+        )
 
     elements: list[itir.Expr] = []
     for i in range(n):
         child_types = [t.types[i] for t in tup_types]
         child_exprs = [im.tuple_get(i, e) for e in tup_exprs]
 
-        if all(isinstance(ct, ts.TupleType) for ct in child_types):
+        all_tuples = all(isinstance(ct, ts.TupleType) for ct in child_types)
+        all_leaves = all(not isinstance(ct, ts.TupleType) for ct in child_types)
+        if all_tuples:
             nested_types = [ct for ct in child_types if isinstance(ct, ts.TupleType)]
             elements.append(_unroll(f, nested_types, child_exprs))
-        else:
+        elif all_leaves:
             elements.append(im.call(f)(*child_exprs))
+        else:
+            raise ValueError(
+                "All tree_map arguments must have the same tree structure "
+                "(all leaves must be reached simultaneously)."
+            )
 
     return im.make_tuple(*elements)
 

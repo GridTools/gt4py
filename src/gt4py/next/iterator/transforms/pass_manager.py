@@ -195,6 +195,8 @@ def apply_common_transforms(
         )  # type: ignore[assignment]  # always an itir.Program
         if ir == collapsed:
             break
+    else:
+        raise RuntimeError("'CollapseTuple' did not converge after `UnrollTreeMap`.")
 
     ir = infer_domain.infer_program(
         ir,
@@ -323,6 +325,9 @@ def apply_fieldview_transforms(
         )  # type: ignore[assignment]  # always an itir.Program
         if ir == prev:
             break
+    else:
+        raise RuntimeError("'CollapseTuple' did not converge after `UnrollTreeMap`.")
+
     ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
 
     ir = infer_domain.infer_program(
