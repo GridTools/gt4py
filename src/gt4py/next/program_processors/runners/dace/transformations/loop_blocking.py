@@ -754,13 +754,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             return
         assert self._memlet_to_promote is not None
 
-        independent_outer_map_indexes = [
-            index for index in outer_map_entry.map.params if index != self.blocking_parameter
-        ]
-        independent_outer_map_param_indexes = {
-            idx: outer_map_entry.map.params.index(idx) for idx in independent_outer_map_indexes
-        }
-
         for in_edge in self._memlet_to_promote:
             if isinstance(in_edge.dst, dace_nodes.AccessNode):
                 raise NotImplementedError(
@@ -769,25 +762,63 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     "should already be in the set of independent nodes."
                 )
             # Create a temporary AccessNode that will be used to promote the memlet
-            independent_outer_map_as_range = dace_subsets.Range(
-                ranges=[
-                    in_edge.data.subset.ranges[independent_outer_map_param_indexes[idx]]
-                    for idx in independent_outer_map_indexes
-                ]
+            promoted_accessnode_shape = []
+            # We have to adjust the subsets of the inner map out edges that are connected to the memlet we want to promote in case the destination of the in_edge is a MapEntry.
+            corresponding_inner_map_out_edges = list(
+                state.out_edges_by_connector(in_edge.dst, "OUT_" + in_edge.dst_conn[3:])
             )
-            new_subset = []
-            for subset_range in in_edge.data.subset.ranges:
-                if subset_range not in independent_outer_map_as_range.ranges:
-                    new_subset.append(subset_range)
-            assert len(new_subset) > 0, (
+            assert (
+                len(corresponding_inner_map_out_edges) > 0
+                if isinstance(in_edge.dst, dace_nodes.MapEntry)
+                else True
+            ), (
+                "If the destination of the memlet we want to promote is a MapEntry, there should be at least one corresponding inner map out edge."
+            )
+            # Store old subsets of the inner map out edges to be able to adjust them later.
+            inner_map_out_edges_and_old_subsets = dict()
+            for inner_map_out_edge in corresponding_inner_map_out_edges:
+                inner_map_out_edges_and_old_subsets[inner_map_out_edge] = (
+                    inner_map_out_edge.data.subset
+                )
+            # Dict of new subsets for the inner map out edges after removing the independent dimensions.
+            inner_map_out_edges_and_new_subsets = dict()
+            for inner_map_out_edge in corresponding_inner_map_out_edges:
+                inner_map_out_edges_and_new_subsets[inner_map_out_edge] = []
+            # Make sure that the subsets of the inner map out edges have the same number of dimensions as the memlet we want to promote.
+            assert all(
+                len(corresponding_inner_map_out_edge.data.subset) == len(in_edge.data.subset)
+                for corresponding_inner_map_out_edge in corresponding_inner_map_out_edges
+            )
+            # Go through the subsets of the independent memlet to find out what should be the size of the temporary access node.
+            # If the in_edge.dst is a MapEntry, we have to adjust the subsets of the inner map out edges that are connected to the memlet we want to promote by removing the independent dimensions.
+            for i, subset_range in enumerate(in_edge.data.subset.ranges):
+                start, end, step = subset_range
+                subset_free_symbols = start.free_symbols.union(end.free_symbols).union(
+                    step.free_symbols
+                )
+                subset_free_symbols = set(str(s) for s in subset_free_symbols)
+                if not subset_free_symbols.intersection(set(outer_map_entry.map.params)):
+                    for inner_map_out_edge in corresponding_inner_map_out_edges:
+                        inner_map_out_edges_and_new_subsets[inner_map_out_edge].append(
+                            inner_map_out_edges_and_old_subsets[inner_map_out_edge][i]
+                        )
+                    promoted_accessnode_shape.append(dace_subsets.Range([subset_range]).size()[0])
+            # The subsets of the inner map out edges should have at least one dimension left after removing the independent dimensions.
+            assert all(
+                len(inner_map_out_edges_and_new_subset) > 0
+                for inner_map_out_edges_and_new_subset in inner_map_out_edges_and_new_subsets.values()
+            ), (
                 "After removing the independent dimensions there should be at least one dimension left to promote."
             )
-            assert len(new_subset) == len(in_edge.data.subset.ranges) - 1, (
-                "After removing the independent dimensions there should be exactly one dimension less."
+            # The subset of the memlet from inner MapEntry.
+            assert all(
+                len(inner_map_out_edges_and_new_subset) <= len(in_edge.data.subset.ranges) - 1
+                for inner_map_out_edges_and_new_subset in inner_map_out_edges_and_new_subsets.values()
+            ), (
+                "After removing the independent dimensions there should be at least one dimension smaller than the outer map."
             )
-            new_subset_as_range = dace_subsets.Range(ranges=new_subset)
             promoted_name, promoted_desc = sdfg.add_temp_transient(
-                shape=new_subset_as_range.size(),
+                shape=promoted_accessnode_shape,
                 dtype=sdfg.arrays[in_edge.data.data].dtype,
             )
             promoted_anode = state.add_access(promoted_name)
@@ -838,8 +869,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                                 "Independent memlets should only be inputs to maps that have a single parameter. "
                                 "Those should always be neighbor reductions."
                             )
-                            edge_to_adjust.data.subset = dace_subsets.Range.from_indices(
-                                original_dst_of_in_edge.params
+                            edge_to_adjust.data.subset = dace_subsets.Range(
+                                inner_map_out_edges_and_new_subsets[inner_map_out_edge]
                             )
 
             self._independent_nodes.add(promoted_anode)
