@@ -102,7 +102,6 @@ class ScalarBrodcastInliner(dace_transformation.SingleStateTransformation):
                 cls.bcast_value,
                 cls.bcast_node,
                 cls.bcast_result,
-                cls.map_entry,
             )
         ]
 
