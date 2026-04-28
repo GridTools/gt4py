@@ -1122,6 +1122,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
     def _check_if_blocking_can_promote_anything(
         self,
+        state: dace.SDFGState,
     ) -> bool:
         """Test if there can be any memory access promoted outside the inner loop.
 
@@ -1129,10 +1130,28 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         assume that blocking is favourable.
         """
         assert self._independent_nodes is not None
+
+        # Currently we only filter out Tasklets that do not read any data, which
+        #  is the example above, Because of how DaCe works we also subtract all
+        #  of its output nodes, that are classified independent.
+        # TODO(phimuell): Think if we should expand on that.
+        nb_independent_nodes = len(self._independent_nodes)
+
+        for node in self._independent_nodes:
+            if isinstance(node, dace_nodes.Tasklet):
+                if not all(iedge.data.is_empty() for iedge in state.in_edges(node)):
+                    continue
+                nb_independent_nodes -= 1
+                for oedge in state.out_edges(node):
+                    assert isinstance(oedge.dst, dace_nodes.AccessNode)
+                    assert oedge.dst in self._independent_nodes
+                    nb_independent_nodes -= 1
+            assert nb_independent_nodes >= 0
+
         # TODO(iomaganaris): Figure out how many memlets and nodes minimum there need to be
         #  to make blocking worthwhile.
         return not self.require_independent_nodes or (
-            len(self._independent_nodes)
+            nb_independent_nodes
             + (len(self._memlet_to_promote) if self._memlet_to_promote is not None else 0)
             > self.independent_node_threshold
         )
