@@ -23,9 +23,7 @@ from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wf
 
 if TYPE_CHECKING:
     # Type-only: a top-level import would cycle with ``compilation``.
-    from gt4py.next.program_processors.runners.dace.workflow.compilation import (
-        CompiledDaceProgram,
-    )
+    from gt4py.next.program_processors.runners.dace.workflow.compilation import CompiledDaceProgram
 
 
 def convert_args(

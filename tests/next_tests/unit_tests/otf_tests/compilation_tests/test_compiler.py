@@ -15,9 +15,9 @@ from gt4py._core import definitions as core_defs
 from gt4py.next.otf.compilation import compiler
 
 
-def test_cpp_build_artifact_pickle_round_trip():
+def test_cpp_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
     artifact = compiler.CPPCompilationArtifact(
-        src_dir=pathlib.Path("/tmp/build"),
+        src_dir=tmp_path,
         module=pathlib.Path("entry.so"),
         entry_point_name="entry",
         device_type=core_defs.DeviceType.CPU,
