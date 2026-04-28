@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+import warnings
 from typing import Any, Optional, Union
 
 import dace
@@ -716,6 +717,22 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             # if they are connectivities.
             return False
 
+        if isinstance(edge.dst, dace_nodes.LibraryNode):
+            # We currently do not handle promotion of memlets to library nodes, since it is not clear if this can actually happen in the cases we care about and it would require some work to handle the different cases.
+            warnings.warn(
+                "LoopBlocking: Memlet promotion to LibraryNode is not supported and will be skipped.",
+                stacklevel=2,
+            )
+            return False
+
+        if isinstance(edge.dst, dace_nodes.NestedSDFG):
+            # We currently do not handle promotion of memlets to nested SDFGs, since it is not clear if this can actually happen in the cases we care about and it would require some work to handle the different cases.
+            warnings.warn(
+                "LoopBlocking: Memlet promotion to NestedSDFG is not supported and will be skipped.",
+                stacklevel=2,
+            )
+            return False
+
         return True
 
     def _prepare_independent_memlets(
@@ -804,12 +821,18 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             )
 
             if isinstance(original_dst_of_in_edge, dace_nodes.MapEntry):
+                # The following logic works only if the level of Map nesting is up to 2.
+                # This should the usual case in our applications but it is not guaranteed in general.
+                # In case we have more than 2 levels of Maps we have to apply the same logic recursively
+                # for each memlet with the `in_edge.data.data` that is connecting MapEntry to MapEntry
+                # and creates the nesting.
                 for inner_map_out_edge in state.out_edges(original_dst_of_in_edge):
-                    for memlet_tree in state.memlet_tree(inner_map_out_edge).traverse_children(
-                        include_self=True
-                    ):
-                        edge_to_adjust = memlet_tree.edge
-                        if edge_to_adjust.data.data == in_edge.data.data:
+                    if inner_map_out_edge.data.data == in_edge.data.data:
+                        for memlet_tree in state.memlet_tree(inner_map_out_edge).traverse_children(
+                            include_self=True
+                        ):
+                            edge_to_adjust = memlet_tree.edge
+                            assert edge_to_adjust.data.data == in_edge.data.data
                             edge_to_adjust.data.data = promoted_name
                             assert len(original_dst_of_in_edge.params) == 1, (
                                 "Independent memlets should only be inputs to maps that have a single parameter. "
@@ -818,12 +841,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                             edge_to_adjust.data.subset = dace_subsets.Range.from_indices(
                                 original_dst_of_in_edge.params
                             )
-            elif isinstance(original_dst_of_in_edge, dace_nodes.NestedSDFG):
-                raise NotImplementedError("Promotion of memlets to NestedSDFG not implemented yet.")
-            elif isinstance(original_dst_of_in_edge, dace_nodes.LibraryNode):
-                raise NotImplementedError(
-                    "Promotion of memlets to LibraryNode not implemented yet."
-                )
 
             self._independent_nodes.add(promoted_anode)
 
