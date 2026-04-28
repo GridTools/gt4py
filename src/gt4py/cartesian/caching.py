@@ -266,9 +266,7 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def cache_info(self) -> Dict[str, Any]:
-        if not self.cache_info_path:
-            return {}
-        if not self.cache_info_path.exists():
+        if not self.cache_info_path or not self.cache_info_path.exists():
             return {}
         return self._unpickle_cache_info_file(self.cache_info_path)
 
