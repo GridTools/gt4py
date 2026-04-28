@@ -19,7 +19,7 @@ from .auto_optimize import (
     GT4PyAutoOptHookStage,
     gt_auto_optimize,
 )
-from .broadcast import InlineBroadcastAccess
+from .broadcast import ScalarBrodcastInliner
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
 from .gpu_utils import (
     GPUSetBlockSize,
@@ -93,7 +93,6 @@ __all__ = [
     "GT4PyStateFusion",
     "HorizontalMapFusionCallback",
     "HorizontalMapSplitCallback",
-    "InlineBroadcastAccess",
     "LoopBlocking",
     "MapFusionHorizontal",
     "MapFusionVertical",
@@ -107,6 +106,7 @@ __all__ = [
     "MultiStateGlobalSelfCopyElimination2",
     "RemoveAccessNodeCopies",
     "RemovePointwiseViews",
+    "ScalarBrodcastInliner",
     "ScanLoopUnrolling",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",

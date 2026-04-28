@@ -104,7 +104,7 @@ def test_broadcast():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_applied = sdfg.apply_transformations_repeated(
-        gtx_transformations.InlineBroadcastAccess, validate_all=True
+        gtx_transformations.ScalarBrodcastInliner, validate_all=True
     )
     assert nb_applied == 1
     assert util.count_nodes(sdfg, gtx_lib_nodes.Broadcast) == 0
@@ -200,6 +200,6 @@ def test_indirect_access_broadcast():
     #   Tasklet to make sure that it is indeed an indirect access. The safest way
     #   to do it would be to add another Library node for it.
     nb_applied = sdfg.apply_transformations_repeated(
-        gtx_transformations.InlineBroadcastAccess, validate_all=True
+        gtx_transformations.ScalarBrodcastInliner, validate_all=True
     )
     assert nb_applied == 0
