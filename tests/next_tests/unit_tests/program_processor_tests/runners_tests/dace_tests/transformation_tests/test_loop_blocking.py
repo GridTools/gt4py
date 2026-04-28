@@ -231,7 +231,7 @@ def test_only_dependent():
 
     # By default there must be dependent nodes, so by default it will not apply.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameter="j"),
+        gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameters=["j"]),
         validate=True,
         validate_all=True,
     )
@@ -241,7 +241,7 @@ def test_only_dependent():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=10,
-            blocking_parameter="j",
+            blocking_parameters=["j"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -308,7 +308,7 @@ def test_intermediate_access_node():
 
     # Apply the transformation.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameter="j"),
+        gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameters=["j"]),
         validate=True,
         validate_all=True,
     )
@@ -347,7 +347,7 @@ def test_chained_access() -> None:
 
     # Apply the transformation.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameter="j"),
+        gtx_transformations.LoopBlocking(blocking_size=10, blocking_parameters=["j"]),
         validate=True,
         validate_all=True,
     )
@@ -423,7 +423,7 @@ def test_direct_map_exit_connection() -> dace.SDFG:
     # Because there are no independent nodes, the transformation will not apply
     #  and we have to explicitly enable it.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameters=["j"]),
         validate=True,
         validate_all=True,
     )
@@ -432,7 +432,7 @@ def test_direct_map_exit_connection() -> dace.SDFG:
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=5,
-            blocking_parameter="j",
+            blocking_parameters=["j"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -455,7 +455,7 @@ def test_empty_memlet_1():
     #  thus filtered out, together with the output. Thus we have to disable this
     #  filtering.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameters=["j"]),
         validate=True,
         validate_all=True,
     )
@@ -464,7 +464,7 @@ def test_empty_memlet_1():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=5,
-            blocking_parameter="j",
+            blocking_parameters=["j"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -494,7 +494,7 @@ def test_empty_memlet_2():
     # Because there are no independent node so by default the transformation should
     #  not apply.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameters=["j"]),
         validate=True,
         validate_all=True,
     )
@@ -503,7 +503,7 @@ def test_empty_memlet_2():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=5,
-            blocking_parameter="j",
+            blocking_parameters=["j"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -535,7 +535,7 @@ def test_empty_memlet_3():
 
     # There are no independent nodes so we must force the blocking.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="j"),
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameters=["j"]),
         validate=True,
         validate_all=True,
     )
@@ -544,7 +544,7 @@ def test_empty_memlet_3():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=5,
-            blocking_parameter="j",
+            blocking_parameters=["j"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -678,7 +678,7 @@ def test_loop_blocking_inner_map():
     # Because there is no independent part, we have to force the application of the
     #  transformation.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="__i0"),
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameters=["__i0"]),
         validate=True,
         validate_all=True,
     )
@@ -687,7 +687,7 @@ def test_loop_blocking_inner_map():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=5,
-            blocking_parameter="__i0",
+            blocking_parameters=["__i0"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -731,7 +731,7 @@ def test_loop_blocking_inner_map_with_independent_part(independent_part):
     assert all(oedge.dst is outer_map_exit for oedge in state.out_edges(i_access_node))
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameter="__i0"),
+        gtx_transformations.LoopBlocking(blocking_size=5, blocking_parameters=["__i0"]),
         validate=True,
         validate_all=True,
     )
@@ -811,7 +811,7 @@ def test_loop_blocking_sdfg_with_independent_inner_map():
     sdfg, state, outer_me, inner_me = _make_loop_blocking_sdfg_with_independent_inner_map()
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="__i1"),
+        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameters=["__i1"]),
         validate=True,
         validate_all=True,
     )
@@ -887,7 +887,7 @@ def test_loop_blocking_dependent_reduction():
     # Because there is no independent part, we have to force the application of the
     #  transformation.
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="__i1"),
+        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameters=["__i1"]),
         validate=True,
         validate_all=True,
     )
@@ -896,7 +896,7 @@ def test_loop_blocking_dependent_reduction():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="__i1",
+            blocking_parameters=["__i1"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -915,7 +915,7 @@ def test_loop_blocking_dependent_reduction():
 def test_loop_blocking_independent_reduction():
     sdfg, state, me, red = _make_loop_blocking_with_reduction(reduction_is_dependent=False)
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="__i1"),
+        gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameters=["__i1"]),
         validate=True,
         validate_all=True,
     )
@@ -1034,7 +1034,7 @@ def _apply_and_run_mixed_memlet_sdfg(
     require_independent_nodes = True
     if not tskl1_independent:
         count = sdfg.apply_transformations_repeated(
-            gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameter="j"),
+            gtx_transformations.LoopBlocking(blocking_size=2, blocking_parameters=["j"]),
             validate=True,
             validate_all=True,
         )
@@ -1044,7 +1044,7 @@ def _apply_and_run_mixed_memlet_sdfg(
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="j",
+            blocking_parameters=["j"],
             require_independent_nodes=require_independent_nodes,
         ),
         validate=True,
@@ -1188,7 +1188,7 @@ def test_loop_blocking_no_independent_nodes():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="__i1",
+            blocking_parameters=["__i1"],
             require_independent_nodes=True,
         ),
         validate=True,
@@ -1200,7 +1200,7 @@ def test_loop_blocking_no_independent_nodes():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="__i1",
+            blocking_parameters=["__i1"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -1250,7 +1250,7 @@ def test_only_last_two_elements_sdfg():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=1,
-            blocking_parameter="k",
+            blocking_parameters=["k"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -1301,7 +1301,7 @@ def test_blocking_size_too_big():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=30,
-            blocking_parameter="j",
+            blocking_parameters=["j"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -1313,7 +1313,7 @@ def test_blocking_size_too_big():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=5,
-            blocking_parameter="j",
+            blocking_parameters=["j"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -1399,7 +1399,7 @@ def test_loop_blocking_sdfg_with_semi_independent_map():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="__i1",
+            blocking_parameters=["__i1"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -1461,7 +1461,7 @@ def test_loop_blocking_only_independent_inner_map():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="__i1",
+            blocking_parameters=["__i1"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -1535,7 +1535,7 @@ def test_loop_blocking_direct_access_node_array():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="__i1",
+            blocking_parameters=["__i1"],
             require_independent_nodes=True,
         ),
         validate=True,
@@ -1546,7 +1546,7 @@ def test_loop_blocking_direct_access_node_array():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="__i1",
+            blocking_parameters=["__i1"],
             require_independent_nodes=False,
         ),
         validate=True,
@@ -1586,7 +1586,7 @@ def test_loop_blocking_direct_access_node_scalar():
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="__i1",
+            blocking_parameters=["__i1"],
             require_independent_nodes=True,
         ),
         validate=True,
@@ -1808,7 +1808,7 @@ def test_loop_blocking_sdfg_with_everything(
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.LoopBlocking(
             blocking_size=2,
-            blocking_parameter="__i1",
+            blocking_parameters=["__i1"],
             require_independent_nodes=require_independent_nodes,
             promote_independent_memlets=promote_independent_memlets,
             independent_node_threshold=independent_node_threshold,

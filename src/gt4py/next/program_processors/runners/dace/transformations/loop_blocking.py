@@ -8,6 +8,7 @@
 
 import copy
 import warnings
+from collections.abc import Sequence
 from typing import Any, Optional, Union
 
 import dace
@@ -66,11 +67,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         allow_none=True,
         desc="Size of the inner blocks; 'B' in the above description.",
     )
-    blocking_parameter = dace_properties.Property(
-        dtype=str,
+    blocking_parameters = dace_properties.Property(
+        dtype=list,
         allow_none=True,
-        desc="Name of the iteration variable on which to block (must be an exact match);"
-        " 'I' in the above description.",
+        desc="Names of the iteration variables on which to block. The first one that is found in the map parameters is used",
     )
     require_independent_nodes = dace_properties.Property(
         dtype=bool,
@@ -98,16 +98,19 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     def __init__(
         self,
         blocking_size: Optional[int] = None,
-        blocking_parameter: Optional[Union[gtx_common.Dimension, str]] = None,
+        blocking_parameters: Optional[Sequence[Union[gtx_common.Dimension, str]]] = None,
         require_independent_nodes: Optional[bool] = None,
         promote_independent_memlets: Optional[bool] = None,
         independent_node_threshold: Optional[int] = None,
     ) -> None:
         super().__init__()
-        if isinstance(blocking_parameter, gtx_common.Dimension):
-            blocking_parameter = gtx_dace_lowering.get_map_variable(blocking_parameter)
-        if blocking_parameter is not None:
-            self.blocking_parameter = blocking_parameter
+        if blocking_parameters is not None:
+            self.blocking_parameters = [
+                gtx_dace_lowering.get_map_variable(p) if isinstance(p, gtx_common.Dimension) else p
+                for p in blocking_parameters
+            ]
+        else:
+            self.blocking_parameters = None
         if blocking_size is not None:
             self.blocking_size = blocking_size
         if require_independent_nodes is not None:
@@ -125,12 +128,25 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         return [dace.sdfg.utils.node_path_graph(cls.outer_entry)]
 
     def _populate_memlet_to_promote(
-        self, graph: Union[dace.SDFGState, dace.SDFG], outer_entry: dace_nodes.MapEntry
+        self,
+        matched_blocking_var: str,
+        graph: Union[dace.SDFGState, dace.SDFG],
+        outer_entry: dace_nodes.MapEntry,
     ) -> None:
         self._memlet_to_promote = []
         for out_edge_outer_entry in graph.out_edges(outer_entry):
-            if self._check_if_edge_can_be_promoted(out_edge_outer_entry, outer_entry):
+            if self._check_if_edge_can_be_promoted(
+                matched_blocking_var, out_edge_outer_entry, outer_entry
+            ):
                 self._memlet_to_promote.append(out_edge_outer_entry)
+
+    def _get_blocking_parameter(self, map_params: list[str]) -> Optional[str]:
+        if self.blocking_parameters is None:
+            return None
+        for p in self.blocking_parameters:
+            if p in map_params:
+                return p
+        return None
 
     def can_be_applied(
         self,
@@ -147,7 +163,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         - The map range must have step size of 1.
         - The partition must exists (see `partition_map_output()`).
         """
-        if self.blocking_parameter is None:
+        if self.blocking_parameters is None:
             raise ValueError("The blocking dimension was not specified.")
         elif self.blocking_size is None:
             raise ValueError("The blocking size was not specified.")
@@ -155,16 +171,16 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         outer_entry: dace_nodes.MapEntry = self.outer_entry
         map_params: list[str] = outer_entry.map.params
         map_range: dace_subsets.Range = outer_entry.map.range
-        block_var: str = self.blocking_parameter
+
+        matched_blocking_var: str | None = self._get_blocking_parameter(map_params)
+        if matched_blocking_var is None:
+            return False
 
         scope = graph.scope_dict()
         if scope[outer_entry] is not None:
             return False
 
-        if block_var not in map_params:
-            return False
-
-        block_var_idx = map_params.index(block_var)
+        block_var_idx = map_params.index(matched_blocking_var)
         map_range_size = map_range.size()
 
         if all((map_range_size_i == 1) == True for map_range_size_i in map_range_size):  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
@@ -180,10 +196,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             return False
 
         if self.promote_independent_memlets:
-            self._populate_memlet_to_promote(graph, outer_entry)
+            self._populate_memlet_to_promote(matched_blocking_var, graph, outer_entry)
 
         if (
-            not self.partition_map_output(graph, sdfg, outer_entry)
+            not self.partition_map_output(matched_blocking_var, graph, sdfg, outer_entry)
             and self.require_independent_nodes
             and (
                 not self.promote_independent_memlets
@@ -193,7 +209,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             return False
 
         # Check if the blocking is a good idea.
-        if not self._check_if_blocking_can_promote_anything():
+        if not self._check_if_blocking_can_promote_anything(state=graph):
             return False
 
         self._independent_nodes = None
@@ -212,15 +228,19 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         Performs the operation described in the doc string.
         """
         outer_entry: dace_nodes.MapEntry = self.outer_entry
+        map_params: list[str] = outer_entry.map.params
+        matched_blocking_var: str | None = self._get_blocking_parameter(map_params)
+        assert matched_blocking_var is not None
+
         # Now compute the partitions of the nodes.
-        self.partition_map_output(graph, sdfg, outer_entry)
+        self.partition_map_output(matched_blocking_var, graph, sdfg, outer_entry)
 
         if self.promote_independent_memlets:
-            self._prepare_independent_memlets(graph, sdfg, outer_entry)
+            self._prepare_independent_memlets(matched_blocking_var, graph, sdfg, outer_entry)
 
         # Modify the outer map and create the inner map.
         (outer_entry, outer_exit), (inner_entry, inner_exit) = self._prepare_inner_outer_maps(
-            graph, outer_entry
+            matched_blocking_var, graph, outer_entry
         )
 
         # Reconnect the edges
@@ -242,6 +262,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
     def _prepare_inner_outer_maps(
         self,
+        matched_blocking_var: str,
         state: dace.SDFGState,
         outer_entry: dace_nodes.MapEntry,
     ) -> tuple[
@@ -251,7 +272,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """Prepare the maps for the blocking.
 
         The function modifies the `outer_map` by replacing the
-        blocking parameter, `self.blocking_parameter`, with a coarsened version
+        blocking parameter, `matched_blocking_var`, with a coarsened version
         of it. In addition the function will then create the inner map, that
         iterates over the blocking parameter, and these bounds are determined
         by the coarsened blocking parameter of the outer map.
@@ -269,7 +290,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         outer_map: dace_nodes.Map = outer_entry.map
         outer_range: dace_subsets.Range = outer_entry.map.range
         outer_params: list[str] = outer_entry.map.params
-        blocking_parameter_dim = outer_params.index(self.blocking_parameter)
+        blocking_parameter_dim = outer_params.index(matched_blocking_var)
 
         # This is the name of the iterator that we use in the outer map for the
         #  blocked dimension
@@ -277,14 +298,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         #   could be matched through the `unit_strides_kind` argument, which is
         #   the case with this approach. But it makes the `unit_strides_dim`
         #   argument `gt_set_iteration_order()` inapplicable.
-        coarse_block_var = "__gtx_coarse_" + self.blocking_parameter
+        coarse_block_var = "__gtx_coarse_" + matched_blocking_var
 
         # Generate the sequential inner map
         rng_start = outer_range[blocking_parameter_dim][0]
         rng_stop = outer_range[blocking_parameter_dim][1]
         inner_label = f"inner_{outer_map.label}"
         inner_range = {
-            self.blocking_parameter: dace_subsets.Range.from_string(
+            matched_blocking_var: dace_subsets.Range.from_string(
                 f"(({rng_start}) + ({coarse_block_var}) * ({self.blocking_size})):"
                 f"min(({rng_start}) + ({coarse_block_var} + 1) * ({self.blocking_size}), ({rng_stop}) + 1)"
             )
@@ -309,6 +330,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
     def partition_map_output(
         self,
+        matched_blocking_var: str,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
         outer_entry: dace_nodes.MapEntry,
@@ -379,6 +401,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             found_new_independent_node = False
             for node_to_classify in nodes_to_classify:
                 class_res = self._classify_node(
+                    matched_blocking_var=matched_blocking_var,
                     node_to_classify=node_to_classify,
                     state=state,
                     sdfg=sdfg,
@@ -419,6 +442,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
     def _classify_node(
         self,
+        matched_blocking_var: str,
         node_to_classify: dace_nodes.Node,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
@@ -474,7 +498,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # Despite its type the node's free symbols can not contain the blocking
         #  parameter. In case of a Tasklet this would be the body of the Tasklet.
-        if self.blocking_parameter in node_to_classify.free_symbols:
+        if matched_blocking_var in node_to_classify.free_symbols:
             return False
 
         # If the test succeed then these are the nodes we additionally consider
@@ -509,7 +533,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
             # Additionally, test if the symbol mapping depends on the block variable.
             for v in node_to_classify.symbol_mapping.values():
-                if self.blocking_parameter in v.free_symbols:
+                if matched_blocking_var in v.free_symbols:
                     return False
 
         elif isinstance(node_to_classify, dace_nodes.AccessNode):
@@ -535,7 +559,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
             # The blocking parameter can not be used inside the Map scope.
             map_scope = state.scope_subgraph(node_to_classify)
-            if self.blocking_parameter in map_scope.free_symbols:
+            if matched_blocking_var in map_scope.free_symbols:
                 return False
 
             # There is an obscure case, where the Memlet on the inside of a Map scope
@@ -543,7 +567,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             #  check that here. Note that we only have to do it here in this case
             #  because normally it would be spotted above where we checked the input.
             out_edges = list(state.out_edges(map_exit))
-            if any(self.blocking_parameter in out_edge.data.free_symbols for out_edge in out_edges):
+            if any(matched_blocking_var in out_edge.data.free_symbols for out_edge in out_edges):
                 return False
 
             # Add all nodes of the Map scope, including entry and exit node to the
@@ -602,7 +626,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
             # If a subset needs the block variable then the node is not independent
             #  but dependent.
-            if any(self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect):
+            if any(matched_blocking_var in subset.free_symbols for subset in subsets_to_inspect):
                 return False
 
             # The edge must either originate from `outer_entry` or from an independent
@@ -660,6 +684,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
     def _check_if_edge_can_be_promoted(
         self,
+        matched_blocking_var: str,
         edge: dace_graph.MultiConnectorEdge[dace.Memlet],
         outer_entry: dace_nodes.MapEntry,
     ) -> bool:
@@ -695,7 +720,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if src_subset is not None:
             subsets_to_inspect.append(src_subset)
 
-        if any(self.blocking_parameter in subset.free_symbols for subset in subsets_to_inspect):
+        if any(matched_blocking_var in subset.free_symbols for subset in subsets_to_inspect):
             return False
 
         # If the memlet is connected to a MapEntry and the MapEnty parameters contain the blocking parameter,
@@ -703,7 +728,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # so we leave it as future work.
         # TODO(iomaganaris): Implement this case if it turns out to be relevant.
         if isinstance(edge.dst, dace_nodes.MapEntry):
-            if self.blocking_parameter in edge.dst.params:
+            if matched_blocking_var in edge.dst.params:
                 return False
 
         if isinstance(edge.dst, dace_nodes.Tasklet) and not edge.data.data.startswith("gt_conn_"):
@@ -737,6 +762,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
     def _prepare_independent_memlets(
         self,
+        matched_blocking_var: str,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
         outer_map_entry: dace_nodes.MapEntry,
@@ -748,7 +774,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=outer_map_entry)
         dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_map_entry)
 
-        self._populate_memlet_to_promote(state, outer_map_entry)
+        self._populate_memlet_to_promote(matched_blocking_var, state, outer_map_entry)
         # Below checks are necessary for MyPy
         if self._memlet_to_promote and len(self._memlet_to_promote) == 0:
             return
