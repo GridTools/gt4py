@@ -14,6 +14,7 @@ import numpy as np
 
 dace = pytest.importorskip("dace")
 
+from dace import data as dace_data, subsets as dace_sbs
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
@@ -203,3 +204,73 @@ def test_indirect_access_broadcast():
         gtx_transformations.ScalarBrodcastInliner, validate_all=True
     )
     assert nb_applied == 0
+
+
+def _make_access_node_chain() -> tuple[
+    dace.SDFG, dace.SDFGState, gtx_lib_nodes.Broadcast, dace_nodes.AccessNode
+]:
+    sdfg = dace.SDFG(util.unique_name("_broadcast_access_node_chain"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for aname in "abc":
+        sdfg.add_array(
+            aname,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(aname != "c"),
+        )
+
+    sdfg.add_scalar(
+        "s",
+        dtype=dace.float64,
+        transient=False,
+    )
+
+    a, b, c, s = (state.add_access(name) for name in "abcs")
+
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast")
+
+    state.add_edge(s, None, bcast_lib, "_inp", dace.Memlet("s[0]"))
+    state.add_edge(bcast_lib, "_outp", a, None, dace.Memlet("a[1:10]"))
+    state.add_nedge(a, b, dace.Memlet("a[2:9] -> [0:7]"))
+    state.add_nedge(b, c, dace.Memlet("c[1:5] -> [2:6]"))
+
+    sdfg.validate()
+
+    return sdfg, state, bcast_lib, c
+
+
+def test_access_node_chain():
+    sdfg, state, bcast_lib, c = _make_access_node_chain()
+
+    ac_before = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(ac_before) == 4
+    assert c in ac_before
+    assert isinstance(sdfg.arrays["s"], dace_data.Scalar)
+    assert c.data in sdfg.arrays
+    assert list(util.count_nodes(sdfg, gtx_lib_nodes.Broadcast, True)) == [bcast_lib]
+    assert state.in_degree(c) == 1
+    assert all(e.src is not bcast_lib for e in state.in_edges(c))
+
+    nb_applied = sdfg.apply_transformations_repeated(
+        gtx_transformations.ScalarBrodcastInliner, validate_all=True
+    )
+    assert nb_applied == 2
+
+    ac_before = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(ac_before) == 2
+    assert c in ac_before
+    assert isinstance(sdfg.arrays["s"], dace_data.Scalar)
+    assert c.data in sdfg.arrays
+
+    # In the AccessNode mode the broadcast node is copied. In this case it is not
+    #  needed, but it is needed in more general cases.
+    # TODO(phimuell): Once the node is finalized, check if it is copied correctly.
+    bcast_libs_after = list(util.count_nodes(sdfg, gtx_lib_nodes.Broadcast, True))
+    assert len(bcast_libs_after) == 1
+    assert bcast_libs_after[0] is not bcast_lib
+
+    bcast_edge = next(iter(state.in_edges(c)))
+    assert state.in_degree(c) == 1
+    assert bcast_edge.src is bcast_libs_after[0]
+    assert bcast_edge.data.dst_subset == dace_sbs.Range.from_string("1:5")
