@@ -342,3 +342,63 @@ def test_access_node_fan_out():
             assert edge.src in bcast_libs_after
             assert edge.data.dst_subset == dace_sbs.Range.from_string(res_names[res_ac.data])
             bcast_libs_after.remove(edge.src)
+
+
+def _make_access_node_multi_connection():
+    sdfg = dace.SDFG(util.unique_name("_broadcast_access_node_multi_connection"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for aname in "ab":
+        sdfg.add_array(
+            aname,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(aname == "a"),
+        )
+
+    sdfg.add_scalar(
+        "s",
+        dtype=dace.float64,
+        transient=False,
+    )
+
+    a, b, s = (state.add_access(name) for name in "abs")
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast")
+
+    state.add_edge(s, None, bcast_lib, "_inp", dace.Memlet("s[0]"))
+    state.add_edge(bcast_lib, "_outp", a, None, dace.Memlet("a[1:10]"))
+
+    state.add_nedge(a, b, dace.Memlet("a[2:5] -> [1:4]"))
+    state.add_nedge(a, b, dace.Memlet("b[6:9] -> [4:7]"))
+
+    return sdfg, state, b
+
+
+def test_access_node_multi_connection():
+    sdfg, state, b = _make_access_node_multi_connection()
+
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 3
+    assert state.in_degree(b) == 2
+    bcast_libs_before = list(util.count_nodes(sdfg, gtx_lib_nodes.Broadcast, True))
+    assert len(bcast_libs_before) == 1
+
+    nb_applied = sdfg.apply_transformations_repeated(
+        gtx_transformations.ScalarBrodcastInliner, validate_all=True
+    )
+    assert nb_applied == 1
+
+    bcast_libs_after = set(util.count_nodes(sdfg, gtx_lib_nodes.Broadcast, True))
+    assert len(bcast_libs_after) == 2
+    assert bcast_libs_before[0] not in bcast_libs_after
+
+    ac_after = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(ac_after) == 2
+    assert b in ac_after
+    assert state.in_degree(b) == 2
+    assert bcast_libs_after == {e.src for e in state.in_edges(b)}
+
+    expected_sbs = {
+        dace_sbs.Range.from_string("1:4"),
+        dace_sbs.Range.from_string("6:9"),
+    }
+    assert expected_sbs == {e.data.dst_subset for e in state.in_edges(b)}
