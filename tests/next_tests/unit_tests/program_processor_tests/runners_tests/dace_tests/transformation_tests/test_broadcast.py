@@ -274,3 +274,71 @@ def test_access_node_chain():
     assert state.in_degree(c) == 1
     assert bcast_edge.src is bcast_libs_after[0]
     assert bcast_edge.data.dst_subset == dace_sbs.Range.from_string("1:5")
+
+
+def _make_access_node_fan_out() -> tuple[dace.SDFG, dace.SDFGState, dict[str, str]]:
+    sdfg = dace.SDFG(util.unique_name("_broadcast_access_node_fan_out"))
+    state = sdfg.add_state(is_start_block=True)
+
+    bcast_result_name = "bcast_result"
+    res_names = {
+        "res1": "1:10",
+        "res2": "2:8",
+    }
+    for aname in [bcast_result_name] + list(res_names.keys()):
+        sdfg.add_array(
+            aname,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=(not aname.startswith("res")),
+        )
+
+    sdfg.add_scalar(
+        "s",
+        dtype=dace.float64,
+        transient=False,
+    )
+
+    bcast_result = state.add_access(bcast_result_name)
+    s = state.add_access("s")
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast")
+
+    state.add_edge(s, None, bcast_lib, "_inp", dace.Memlet("s[0]"))
+    state.add_edge(bcast_lib, "_outp", bcast_result, None, dace.Memlet(f"{bcast_result}[0:10]"))
+
+    for dname, sbs in res_names.items():
+        state.add_nedge(bcast_result, state.add_access(dname), dace.Memlet(f"{dname}[{sbs}]"))
+
+    return sdfg, state, res_names
+
+
+def test_access_node_fan_out():
+    sdfg, state, res_names = _make_access_node_fan_out()
+
+    assert util.count_nodes(sdfg, gtx_lib_nodes.Broadcast) == 1
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == (len(res_names) + 2)
+    assert all(res_name in sdfg.arrays for res_name in res_names)
+
+    nb_applied = sdfg.apply_transformations_repeated(
+        gtx_transformations.ScalarBrodcastInliner, validate_all=True
+    )
+    assert nb_applied == 1
+
+    # The broadcast nodes are replicated in the AccessNode mode, one for each output.
+    bcast_libs_after = set(util.count_nodes(sdfg, gtx_lib_nodes.Broadcast, True))
+    assert len(bcast_libs_after) == len(res_names)
+
+    ac_after = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(ac_after) == (1 + len(res_names))
+
+    for res_ac in ac_after:
+        if res_ac.data == "s":
+            assert res_ac.data in sdfg.arrays
+            assert isinstance(sdfg.arrays[res_ac.data], dace_data.Scalar)
+        else:
+            assert res_ac.data in res_names
+            state.in_degree(res_ac) == 1
+            edge = next(iter(state.in_edges(res_ac)))
+            assert edge.src in bcast_libs_after
+            assert edge.data.dst_subset == dace_sbs.Range.from_string(res_names[res_ac.data])
+            bcast_libs_after.remove(edge.src)
