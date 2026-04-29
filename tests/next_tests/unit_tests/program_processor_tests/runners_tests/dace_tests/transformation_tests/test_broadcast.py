@@ -28,9 +28,9 @@ from . import util
 import dace
 
 
-def _make_broadcast_inline_sdfg() -> tuple[
-    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry
-]:
+def _make_broadcast_map_substititution(
+    multi_edge: bool,
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry]:
     sdfg = dace.SDFG(util.unique_name("broadcast_inliner"))
     state = sdfg.add_state(is_start_block=True)
 
@@ -67,18 +67,27 @@ def _make_broadcast_inline_sdfg() -> tuple[
 
     state.add_edge(d, None, bcast_lib, "_inp", dace.Memlet("d[0]"))
     state.add_edge(bcast_lib, "_outp", b, None, dace.Memlet("b[0:10]"))
-    state.add_edge(b, None, me, "IN_b", dace.Memlet("b[1:10]"))
-    me.add_scope_connectors("b")
+
+    if multi_edge:
+        bcast_res_conn1 = "b1"
+        bcast_res_conn2 = "b2"
+    else:
+        bcast_res_conn1 = "b"
+        bcast_res_conn2 = bcast_res_conn1
+
+    for conn in {bcast_res_conn1, bcast_res_conn2}:
+        state.add_edge(b, None, me, "IN_" + conn, dace.Memlet("b[1:10]"))
+        me.add_scope_connectors(conn)
 
     state.add_edge(a, None, me, "IN_a", dace.Memlet("a[1:10]"))
     me.add_scope_connectors("a")
 
     state.add_edge(me, "OUT_a", tlet1, "__in1", dace.Memlet("a[__i]"))
-    state.add_edge(me, "OUT_b", tlet1, "__in2", dace.Memlet("b[__i - 1]"))
+    state.add_edge(me, "OUT_" + bcast_res_conn1, tlet1, "__in2", dace.Memlet("b[__i - 1]"))
     state.add_edge(tlet1, "__out", t, None, dace.Memlet("t[0]"))
 
     state.add_edge(me, "OUT_a", tlet2, "__in1", dace.Memlet("a[__i - 1]"))
-    state.add_edge(me, "OUT_b", tlet2, "__in2", dace.Memlet("b[__i]"))
+    state.add_edge(me, "OUT_" + bcast_res_conn2, tlet2, "__in2", dace.Memlet("b[__i]"))
     state.add_edge(tlet2, "__out", s, None, dace.Memlet("s[0]"))
 
     state.add_edge(s, None, tlet3, "__in1", dace.Memlet("s[0]"))
@@ -92,13 +101,24 @@ def _make_broadcast_inline_sdfg() -> tuple[
     return sdfg, state, d, b, me
 
 
-def test_broadcast():
-    sdfg, state, bcast_value, bcast_result, map_entry = _make_broadcast_inline_sdfg()
+@pytest.mark.parametrize("multi_edge", [True, False])
+def test_map_replacement(
+    multi_edge: bool,
+):
+    sdfg, state, bcast_value, bcast_result, map_entry = _make_broadcast_map_substititution(
+        multi_edge=multi_edge
+    )
 
     assert util.count_nodes(sdfg, gtx_lib_nodes.Broadcast) == 1
     assert bcast_result in util.count_nodes(sdfg, dace_nodes.AccessNode, True)
     assert bcast_result.data in sdfg.arrays
     assert state.out_degree(map_entry) == 4
+
+    if multi_edge:
+        assert len(map_entry.out_connectors) == 3
+    else:
+        assert len(map_entry.out_connectors) == 2
+
     assert not any(iedge.src is bcast_value for iedge in state.in_edges(map_entry))
 
     ref, res = util.make_sdfg_args(sdfg)
@@ -111,10 +131,12 @@ def test_broadcast():
     assert util.count_nodes(sdfg, gtx_lib_nodes.Broadcast) == 0
     assert bcast_result not in util.count_nodes(sdfg, dace_nodes.AccessNode, True)
     assert bcast_result.data not in sdfg.arrays
+
+    # We only have one connection between the `bcast_value` node and the MapEntry
+    #  because the transformation performs duplication.
     assert sum([ie.src is bcast_value for ie in state.in_edges(map_entry)]) == 1
 
     util.compile_and_run_sdfg(sdfg, **res)
-
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
@@ -387,6 +409,7 @@ def test_access_node_multi_connection():
     )
     assert nb_applied == 1
 
+    # The broadcast library nodes are replicated and the original one is then removed.
     bcast_libs_after = set(util.count_nodes(sdfg, gtx_lib_nodes.Broadcast, True))
     assert len(bcast_libs_after) == 2
     assert bcast_libs_before[0] not in bcast_libs_after
