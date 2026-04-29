@@ -22,6 +22,7 @@ from dace.sdfg import (
     graph as dace_graph,
     nodes as dace_nodes,
     propagation as dace_propagation,
+    state as dace_state,
     utils as dace_sdutils,
 )
 from dace.transformation import helpers as dace_helpers
@@ -211,6 +212,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # Check if the blocking is a good idea.
         if not self._check_if_blocking_can_promote_anything(state=graph):
             return False
+
+        # Disable by default scans because there is `ScanLoopUnrolling` for them (if the blocking is done in the same dimension as the scan).
+        # Otherwise blocking the loop in the other dimension shouldn't be beneficial.
+        for node in graph.scope_subgraph(outer_entry).nodes():
+            if isinstance(node, dace_state.LoopRegion) and node.label.startswith("scan"):
+                return False
 
         self._independent_nodes = None
         self._dependent_nodes = None
