@@ -253,9 +253,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             sdfg=sdfg,
         )
         inner_entry.map.unroll = True
-        inner_entry.map.unroll_factor = (
-            1  # TODO(iomaganaris): By default disable unrolling. See if it's actually necessary
-        )
+        # TODO(iomaganaris): By default unroll the inner loop with the blocking size, but it might be interesting to have this as a separate parameter.
+        inner_entry.map.unroll_factor = self.blocking_size
         self._independent_nodes = None
         self._dependent_nodes = None
         self._memlet_to_promote = None
