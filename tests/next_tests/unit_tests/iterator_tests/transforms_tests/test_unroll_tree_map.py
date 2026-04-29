@@ -60,12 +60,10 @@ def test_multi_arg():
 
     expected = _make_program(
         [im.sym("a", i_tuple_field), im.sym("b", i_tuple_field)],
-        im.let("_utm_0", "a")(
-            im.let("_utm_1", "b")(
-                im.make_tuple(
-                    im.call(_plus())(im.tuple_get(0, "_utm_0"), im.tuple_get(0, "_utm_1")),
-                    im.call(_plus())(im.tuple_get(1, "_utm_0"), im.tuple_get(1, "_utm_1")),
-                )
+        im.let(("_utm_0", "a"), ("_utm_1", "b"))(
+            im.make_tuple(
+                im.call(_plus())(im.tuple_get(0, "_utm_0"), im.tuple_get(0, "_utm_1")),
+                im.call(_plus())(im.tuple_get(1, "_utm_0"), im.tuple_get(1, "_utm_1")),
             )
         ),
         out_type=i_tuple_field,

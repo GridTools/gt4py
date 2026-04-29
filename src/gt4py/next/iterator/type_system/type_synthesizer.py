@@ -20,7 +20,6 @@ from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
-from gt4py.next.utils import tree_map
 
 
 def _type_synth_arg_cache_key(type_or_synth: TypeOrTypeSynthesizer) -> int:
@@ -203,7 +202,7 @@ def if_(
     pred: ts.ScalarType | ts.DeferredType, true_branch: ts.DataType, false_branch: ts.DataType
 ) -> ts.DataType:
     if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
-        return tree_map(
+        return utils.tree_map(
             collection_type=ts.TupleType,
             result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
         )(functools.partial(if_, pred))(true_branch, false_branch)
@@ -633,8 +632,8 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
     return applied_map
 
 
-@_register_builtin_type_synthesizer(fun_names=["tree_map"])
-def _tree_map(op: TypeSynthesizer) -> TypeSynthesizer:
+@_register_builtin_type_synthesizer
+def tree_map(op: TypeSynthesizer) -> TypeSynthesizer:
     @type_synthesizer
     def applied_map(
         *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
@@ -647,29 +646,14 @@ def _tree_map(op: TypeSynthesizer) -> TypeSynthesizer:
                 f"got {[type(a).__name__ for a in args]}."
             )
 
-        def _recurse(*arg_types: ts.TypeSpec) -> ts.TypeSpec:
-            all_tuples = all(isinstance(a, ts.TupleType) for a in arg_types)
-            all_leaves = all(not isinstance(a, ts.TupleType) for a in arg_types)
-            if all_tuples:
-                tup_types = [a for a in arg_types if isinstance(a, ts.TupleType)]
-                n = len(tup_types[0].types)
-                if any(len(t.types) != n for t in tup_types[1:]):
-                    raise TypeError(
-                        f"All tree_map arguments must have the same tuple structure at each level, "
-                        f"got {[len(t.types) for t in tup_types]}."
-                    )
-                return ts.TupleType(
-                    types=[_recurse(*(a.types[i] for a in tup_types)) for i in range(n)]
-                )
-            elif all_leaves:
-                return op(*arg_types, offset_provider_type=offset_provider_type)  # type: ignore[return-value]
-            else:
-                raise TypeError(
-                    "All tree_map arguments must have the same tree structure "
-                    "(all leaves must be reached simultaneously)."
-                )
+        def leaf_op(*leaf_types: ts.TypeSpec) -> ts.TypeSpec:
+            return op(*leaf_types, offset_provider_type=offset_provider_type)  # type: ignore[return-value]
 
-        return _recurse(*args)  # type: ignore[return-value]
+        return utils.tree_map(  # type: ignore[return-value]
+            leaf_op,
+            collection_type=ts.TupleType,
+            result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
+        )(*args)
 
     return applied_map
 
