@@ -8,6 +8,7 @@
 
 
 import dataclasses
+import functools
 from typing import Any, Callable, Optional
 
 from gt4py import eve
@@ -258,10 +259,19 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
 
     def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> itir.Expr:
+        sym = next(self.uid_generator["__tuple_compr"])
+        targets = [
+            self.visit(target, **kwargs) for target in utils.flatten_nested_tuple(node.target)
+        ]
+        target_vals = utils.tree_map(
+            lambda _, path: functools.reduce(lambda el, i: im.tuple_get(i, el), path, sym),
+            with_path_arg=True,
+        )(node.target)
+
         return im.call(
             im.call("map_tuple")(
-                im.lambda_(self.visit(node.target, **kwargs))(
-                    self.visit(node.element_expr, **kwargs)
+                im.lambda_(sym)(
+                    im.let(*zip(targets, target_vals))(self.visit(node.element_expr, **kwargs))
                 )
             )
         )(self.visit(node.iterable, **kwargs))

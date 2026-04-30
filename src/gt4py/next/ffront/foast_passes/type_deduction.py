@@ -9,7 +9,6 @@ import collections
 import textwrap
 from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 
-
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
@@ -25,6 +24,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.iterator import builtins
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.utils import tree_map
 
 
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
@@ -685,18 +685,59 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         symtable: collections.ChainMap = kwargs["symtable"]  # todo annotation
         iterable = self.visit(node.iterable, **kwargs)
         target = self.visit(node.target, **kwargs)
-        assert isinstance(iterable.type, ts.VarArgType)
-        target.type = iterable.type.element_type
+        if isinstance(iterable.type, ts.TupleType):
+            if len(iterable.type.types) > 0 and not all(
+                t == iterable.type.types[0] for t in iterable.type.types
+            ):
+                raise errors.DSLError(
+                    iterable.location,
+                    "Not implemented. All elements of the iterable in a tuple comprehensions must have the same type.",
+                )
+            element_type = iterable.type.types[0]
+        elif isinstance(iterable.type, ts.VarArgType):
+            element_type = iterable.type.element_type
+        else:
+            raise errors.DSLError(
+                iterable.location,
+                f"Iterable in generator expression must be a tuple, got '{iterable.type}'.",
+            )
+
+        new_syms = {}
+
+        @tree_map(with_path_arg=True)
+        def process_target(target_el: foast.Symbol, path: tuple[int, ...]):
+            try:
+                new_syms[target_el.id] = target_el
+                type_ = element_type
+                for i in path:
+                    if not isinstance(type_, ts.TupleType) or len(type_.types) <= i:
+                        raise IndexError()
+                    type_ = type_.types[i]
+                target_el.type = type_
+            except IndexError:
+                raise errors.DSLError(
+                    target_el.location, f"Cannot unpack non-iterable '{type_}' object."
+                )
+
+        process_target(target)
+
         element_expr = self.visit(
             node.element_expr,
-            **{**kwargs, "symtable": symtable.new_child({node.target.id: target})},
+            **{**kwargs, "symtable": symtable.new_child(new_syms)},
         )
+
+        if isinstance(iterable.type, ts.TupleType):
+            return_type = ts.TupleType(types=[element_expr.type] * len(iterable.type.types))
+        else:
+            assert isinstance(iterable.type, ts.VarArgType)
+            return_type = ts.VarArgType(element_type=element_expr.type)
+
         return foast.TupleComprehension(
             element_expr=element_expr,
             target=target,
             iterable=iterable,
             location=node.location,
-            type=ts.VarArgType(element_type=element_expr.type),
+            type=return_type,
         )
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> foast.Call:

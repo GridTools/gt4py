@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
 from gt4py.eve import (
@@ -22,6 +21,7 @@ from gt4py.eve import (
     datamodels,
     utils as eve_utils,
 )
+from gt4py.eve.extended_typing import Any, Generic, TypeAlias, TypeVar, Union
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
@@ -131,7 +131,7 @@ class TupleComprehension(Expr):
     """
 
     element_expr: Expr
-    target: DataSymbol  # TODO: how about `tuple(el1+el2 for el1, el2 in var_arg)`?
+    target: Any  # should be: MaybeNestedInTuple[DataSymbol] but this has a problem in eve
     iterable: Expr
 
 

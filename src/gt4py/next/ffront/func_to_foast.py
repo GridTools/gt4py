@@ -502,9 +502,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 assert (
                     gen_expr.generators[0].ifs == []
                 )  # we don't support if conditions in comprehensions
+
+                def parse_target(target: ast.Tuple | ast.Name) -> tuple[foast.Name]:
+                    if isinstance(target, ast.Tuple):
+                        return tuple(parse_target(el) for el in target.elts)
+                    assert isinstance(target, ast.Name)
+                    return self.visit(target, **kwargs)
+
                 return foast.TupleComprehension(
                     element_expr=self.visit(gen_expr.elt, **kwargs),
-                    target=self.visit(gen_expr.generators[0].target, **kwargs),
+                    target=parse_target(gen_expr.generators[0].target),
                     iterable=self.visit(gen_expr.generators[0].iter, **kwargs),
                     location=self.get_location(node),
                 )
