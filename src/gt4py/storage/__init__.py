@@ -11,7 +11,7 @@
 from . import cartesian
 from .cartesian import layout
 from .cartesian.interface import empty, from_array, full, ones, zeros
-from .cartesian.layout import from_name, register
+from .cartesian.layout_registry import from_name, register
 
 
 __all__ = [

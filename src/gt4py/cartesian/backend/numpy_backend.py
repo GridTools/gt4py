@@ -18,6 +18,7 @@ from gt4py.cartesian.gtc.numpy import npir
 from gt4py.cartesian.gtc.passes import oir_optimizations as oir_opt
 from gt4py.eve import codegen
 from gt4py.storage import layout
+from gt4py.storage.cartesian import layout_registry
 
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ class NumpyBackend(backend.BaseBackend):
         # TODO: Implement this option in source code
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
-    storage_info = layout.NaiveCPULayout
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     languages: ClassVar[dict] = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = py_common.PythonModuleGenerator
 
