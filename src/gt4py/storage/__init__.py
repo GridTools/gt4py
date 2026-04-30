@@ -9,7 +9,7 @@
 """GridTools storages utilities."""
 
 from . import cartesian
-from .cartesian import layout
+from .cartesian import layout, layout_registry
 from .cartesian.interface import empty, from_array, full, ones, zeros
 from .cartesian.layout_registry import from_name, register
 
@@ -21,6 +21,7 @@ __all__ = [
     "from_name",
     "full",
     "layout",
+    "layout_registry",
     "ones",
     "register",
     "zeros",
