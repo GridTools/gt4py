@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
 from gt4py.eve import (
@@ -22,6 +21,7 @@ from gt4py.eve import (
     datamodels,
     utils as eve_utils,
 )
+from gt4py.eve.extended_typing import Any, Generic, TypeAlias, TypeVar, Union
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
@@ -121,6 +121,18 @@ class Attribute(Expr):
 
 class TupleExpr(Expr):
     elts: list[Expr]
+
+
+# TODO: give a good error for tuple(... for el in iter if ...) so that users understand that and why we don't support conditionals
+# TODO: should this have SymbolTableTrait since target declares a new symbol. Write test that has two comprehensions using the same target name.
+class TupleComprehension(Expr):
+    """
+    tuple(element_expr for target in iterable)
+    """
+
+    element_expr: Expr
+    target: Any  # should be: MaybeNestedInTuple[DataSymbol] but this has a problem in eve
+    iterable: Expr
 
 
 class UnaryOp(Expr):
