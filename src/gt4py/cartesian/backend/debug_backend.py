@@ -35,6 +35,7 @@ class DebugBackend(backend.BaseBackend):
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
     storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
+    languages: ClassVar[dict] = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = py_common.PythonModuleGenerator
 
     def _generate_computation(self) -> dict[str, str | dict]:
