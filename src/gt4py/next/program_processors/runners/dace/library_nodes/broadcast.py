@@ -72,6 +72,7 @@ class Broadcast(dace_nodes.LibraryNode):
         if len(self.brodcast_in_dims) == len(set(self.brodcast_in_dims)):
             raise ValueError("`FCan not broadcast to multiple dimensions at the same time.")
 
+        # TODO(phimuell): Handle empty Memlets in the input.
         if state.in_degree(self) != 1 and next(iter(state.in_edges(self))).dst_conn == _INPUT_NAME:
             raise ValueError("GT4Py Broadcast node needs exactly one input.")
         if (
@@ -120,7 +121,9 @@ class Broadcast(dace_nodes.LibraryNode):
 
 
 def inplace_broadcast_expander(
-    sdfg: dace.SDFG, state: dace.SDFGState, bcast_node: Broadcast
+    bcast_node: Broadcast,
+    state: dace.SDFGState,
+    sdfg: dace.SDFG,
 ) -> None:
     """Perform expansion of `bcast_node` inside `state`.
 
@@ -193,71 +196,59 @@ def inplace_broadcast_expander(
 
 @dace_library.register_expansion(Broadcast, "pure")
 class BroadcastExpandInlined(dace_transform.ExpandTransformation):
-    """Implements pure expansion of the Broadcast library node.
-
-    Todo:
-        - In DaCe the expansion must happen in a NestedSDFG. However, this is a bit
-            bad, and we actually would need to run simplification again to get rid
-            of them and proper process them. There should be a function which
-            essentially inlines it inside the SDFG.
-    """
+    """Implements pure expansion of the Broadcast library node."""
 
     environments: Final[list[Any]] = []
 
     @staticmethod
     def expansion(node: Broadcast, state: dace.SDFGState, sdfg: dace.SDFG) -> dace.SDFG:
-        # TODO(phimuell, edopao): I would say a broadcast node should have exactly
-        #   one output edge and if we drop `value` exactly one input edge.
-        #   This must then also be done in `validate()`.
-        assert state.out_degree(node) == 1
+        # TODO:
+        #   - Modify the edges on the outside.
+        #   - Handle the missing symbols.
+
+        # NOTE: We have to cheat a here a bit. Actually only parts of the output
+        #   would be mapped into the nested SDFG.
         assert isinstance(node, Broadcast)
+        assert state.out_degree(node) == 1 and state.in_degree(node) == 1
 
-        nsdfg = dace.SDFG(node.label)
-        bcast_st = nsdfg.add_state(f"{node.label}_impl")
+        nsdfg = dace.SDFG(f"__gt4py_broadcast_expansion_{node.label}")
+        bcast_st = nsdfg.add_state(f"__gt4py_broadcast_expansion_{node.label}_state")
 
-        outedge = next(state.out_edges_by_connector(node, _OUTPUT_NAME))
-        out_desc = sdfg.arrays[outedge.data.data]
-        inner_out_desc = out_desc.clone()
-        inner_out_desc.transient = False
-        outp = nsdfg.add_datadesc(_OUTPUT_NAME, inner_out_desc)
+        input_edge = next(state.in_edges_by_connector(node, _INPUT_NAME))
+        output_edge = next(state.out_edges_by_connector(node, _OUTPUT_NAME))
+        bcast_value = input_edge.src
+        bcast_result = output_edge.dst
 
-        dst_subset = outedge.data.get_dst_subset(outedge, state)
-        map_params = [f"_i{i}" for i in range(len(dst_subset))]
-        out_mem = dace.Memlet(data=outp, subset=",".join(map_params))
+        # Creating the input and output data inside the nested SDFG, such that we can
+        #  map them _fully_ (see later) into the nested SDFG.
+        nsdfg.add_datadesc(bcast_value.data, bcast_value.desc(sdfg).clone())
+        nsdfg.add_datadesc(bcast_result.data, bcast_result.desc(sdfg).clone())
 
-        if node.value is None:
-            assert len(list(state.in_edges_by_connector(node, _INPUT_NAME))) == 1
-            inedge = next(state.in_edges_by_connector(node, _INPUT_NAME))
-            inp_desc = sdfg.arrays[inedge.data.data]
-            inner_inp_desc = inp_desc.clone()
-            inner_inp_desc.transient = False
-            inp = nsdfg.add_datadesc(_INPUT_NAME, inner_inp_desc)
+        inner_bcast_node = copy.deepcopy(node)
+        bcast_st.add_edge(
+            bcast_st.add_access(bcast_value.data),
+            input_edge.src_conn,
+            inner_bcast_node,
+            "_inp",
+            copy.deepcopy(input_edge.data),
+        )
+        bcast_st.add_edge(
+            inner_bcast_node,
+            "_outp",
+            bcast_st.add_access(bcast_result.data),
+            output_edge.dst_conn,
+            copy.deepcopy(output_edge.data),
+        )
 
-            if node.axes:
-                index_map = dict(enumerate(map_params))
-                inp_subset = ",".join(
-                    f"{index_map[i]} + {node.dst_origin[i]} - ({src_origin})"
-                    for i, src_origin in zip(node.axes, node.src_origin, strict=True)
-                )
-            else:
-                inp_subset = "0"
+        # Now we run the inplace expansion.
+        inplace_broadcast_expander(node, state, sdfg)
 
-            bcast_st.add_mapped_tasklet(
-                name=node.label,
-                map_ranges=dict(zip(map_params, dst_subset, strict=True)),
-                inputs={"__tlet_inp": dace.Memlet(data=inp, subset=inp_subset)},
-                code="__tlet_out = __tlet_inp",
-                outputs={"__tlet_out": out_mem},
-                external_edges=True,
-            )
-        else:
-            bcast_st.add_mapped_tasklet(
-                name="broadcast",
-                map_ranges=dict(zip(map_params, dst_subset)),
-                inputs={},
-                code=f"outp = {node.value}",
-                outputs={"outp": out_mem},
-                external_edges=True,
-            )
+        # To ensure that the full data is passed into the nested SDFG, which we
+        #  assumed because of how we want that everything is mapped into.
+        input_edge.data.subset = dace_sbs.Range.from_array(bcast_value.desc(sdfg))
+        output_edge.data.subset = dace_sbs.Range.from_array(bcast_result.desc(sdfg))
+
+        # NOTE: We will not update `nsdfg.symbols`, instead we will rely on
+        #   `add_nested_sdfg()` that is called implicitly by the expansion driver.
 
         return nsdfg
