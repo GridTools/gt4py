@@ -10,6 +10,7 @@ import math
 
 import numpy as np
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import workflow
 from gt4py.next.otf.binding import nanobind
@@ -24,11 +25,13 @@ from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conft
 def test_gtfn_cpp_with_cmake(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
-        compiler.Compiler(
-            cache_lifetime=config.BuildCacheLifetime.SESSION, builder_factory=cmake.CMakeFactory()
+        compiler.CPPCompiler(
+            cache_lifetime=config.BuildCacheLifetime.SESSION,
+            builder_factory=cmake.CMakeFactory(),
+            device_type=core_defs.DeviceType.CPU,
         )
     )
-    compiled_program = build_the_program(example_program_source)
+    compiled_program = build_the_program(example_program_source).load()
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
     tup = [
         (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),
@@ -42,12 +45,13 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
 def test_gtfn_cpp_with_compiledb(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_compiledb")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
-        compiler.Compiler(
+        compiler.CPPCompiler(
             cache_lifetime=config.BuildCacheLifetime.SESSION,
             builder_factory=compiledb.CompiledbFactory(),
+            device_type=core_defs.DeviceType.CPU,
         )
     )
-    compiled_program = build_the_program(example_program_source)
+    compiled_program = build_the_program(example_program_source).load()
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
     tup = [
         (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),
