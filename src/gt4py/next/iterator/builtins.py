@@ -58,6 +58,11 @@ def map_(*args):
 
 
 @builtin_dispatch
+def tree_map(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def make_const_list(*args):
     raise BackendNotSelectedError()
 
@@ -498,7 +503,8 @@ BUILTINS = {
     "lift",
     "make_const_list",
     "make_tuple",
-    "map_",
+    "tree_map",
+    "map_",  # TODO: rename to map_list
     "named_range",
     "neighbors",
     "reduce",
