@@ -195,9 +195,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
     ) -> None:
         if_block: dace_nodes.NestedSDFG = self.if_block
         enclosing_map = graph.scope_dict()[if_block]
-        relocatable_connectors, non_relocatable_connectors, connector_usage_location = (
-            self._partition_if_block(sdfg, if_block)  # type: ignore[misc]  # Guaranteed to be not None.
-        )
+        partition_res = self._partition_if_block(sdfg, if_block)
+        assert partition_res is not None
+        relocatable_connectors, non_relocatable_connectors, connector_usage_location = partition_res
 
         # Find the dataflow that should be relocated.
         raw_relocatable_dataflow, non_relocatable_dataflow = (
