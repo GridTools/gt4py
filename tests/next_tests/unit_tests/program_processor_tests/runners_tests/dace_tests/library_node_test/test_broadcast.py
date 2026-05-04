@@ -26,6 +26,7 @@ from ..transformation_tests import util
 
 
 import dace
+import numpy as np
 
 
 def _make_2d_broadcast() -> tuple[dace.SDFG, dace.SDFGState]:
@@ -107,6 +108,64 @@ def test_broadcast_expansion_inplace(use_inplace_expansion: bool):
     else:
         assert state.number_of_nodes() == 4
         assert util.count_nodes(sdfg, dace_nodes.NestedSDFG) == 2
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_broadcast_vector(
+    broadcast_in_dim: int,
+) -> dace.SDFG:
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("broadcast_2d"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        "bcast_value",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "bcast_result",
+        shape=(10, 10, 10),
+        dtype=dace.float64,
+        transient=False,
+    )
+
+    bcast_node = gtx_lib_nodes.Broadcast("bcast", broadcast_in_dims=[broadcast_in_dim])
+    state.add_node(bcast_node)
+
+    state.add_edge(
+        state.add_access("bcast_value"),
+        None,
+        bcast_node,
+        "_inp",
+        sdfg.make_array_memlet("bcast_value"),
+    )
+    state.add_edge(
+        bcast_node,
+        "_outp",
+        state.add_access("bcast_result"),
+        None,
+        sdfg.make_array_memlet("bcast_result"),
+    )
+
+    sdfg.validate()
+
+    return sdfg
+
+
+@pytest.mark.parametrize("broadcast_in_dim", [0, 1, 2])
+def test_vector_broadcast(broadcast_in_dim: int):
+    sdfg = _make_broadcast_vector(broadcast_in_dim)
+
+    ref, res = util.make_sdfg_args(sdfg)
+
+    expand_dims = list(range(3))
+    expand_dims.pop(broadcast_in_dim)
+    bcast_result_ref = np.expand_dims(ref["bcast_value"].copy(), expand_dims)
+    bcast_result_ref = np.broadcast_to(bcast_result_ref, ref["bcast_result"].shape)
+    ref["bcast_result"] = bcast_result_ref.copy()
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
