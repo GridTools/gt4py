@@ -115,6 +115,8 @@ class Broadcast(dace_nodes.LibraryNode):
                 if bcast_dst_dim >= len(bcast_result_desc.shape):
                     raise ValueError("Out of range broadcast dim found.")
 
+                # TODO: This is probably too strict.
+
                 # Only do the size matching test if the sizes are known, as different
                 #  symbols can have the same value.
                 src_size = bcast_value_desc.shape[src_dim]

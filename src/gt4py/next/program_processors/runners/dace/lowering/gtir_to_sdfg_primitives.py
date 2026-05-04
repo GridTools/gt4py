@@ -12,7 +12,7 @@ import abc
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
-from dace import nodes as dace_nodes, subsets as dace_subsets
+from dace import data as dace_data, nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
@@ -313,6 +313,11 @@ def translate_broadcast(
     fieldop_expr, fieldop_domain_expr = fun_node.args
     assert cpm.is_ref_to(fieldop_expr, "deref")
 
+    # TODO:
+    #   - Include the dimensions of the output, such that we can generate the Map correctly
+    #       this is needed for expansion of the broadcast node such that we can order them correctly.
+    #       This information is stored in `field_dims`.
+
     # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
     field_domain = gtir_domain.get_field_domain(
@@ -329,6 +334,8 @@ def translate_broadcast(
     # result of a scalar expression.
     # TODO: The name should not be derived from a tasklet
     bcast_node_name = sdfg_builder.unique_lib_node_name("broadcast")
+
+    bcast_value_subset: dace_subsets.Subset | None = None
     if isinstance(bcast_arg, gtir.Literal):
         assert isinstance(bcast_arg.type, ts.ScalarType)
         bcast_value_tlet, connector_mapping = sdfg_builder.add_tasklet(
@@ -356,26 +363,26 @@ def translate_broadcast(
         arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
         gtir_dataflow.MemletExpr,
     ):
-        # Lowering dereference, access a value in the global grid, can be scalar or list.
-        assert isinstance(arg.dc_node, dace_nodes.AccessNode)
-        # TODO(phimuell, edopao): How do I perform the same check on `arg` directly?
-        if isinstance(arg.gt_dtype, ts.ListType):
+        if isinstance(arg.gt_dtype, ts.ScalarType):
+            # Broadcasting a scalar that is not a literal.
+            assert isinstance(arg.dc_node.desc(ctx.sdfg), dace_data.Scalar)
+            bcast_value = arg.dc_node
+            broadcast_in_dims = []
+        else:
+            assert isinstance(arg.gt_dtype, ts.ListType)
             raise NotImplementedError("Broadcast of lists is not supported.")
-        # The source must be a field in an array.
-
-        # a: np.ndarrray[kdims] = ...
-        # b: np.ndarray[cell, kdim] = broadcast(a)
-
-        bcast_value = arg.dc_node
-        broadcast_in_dims = []  # Possible because a scalar.
 
     else:
-        #
+        # Broadcasting a "vector", i.e. adding missing non local dimensions.
+        assert isinstance(arg.field.desc(ctx.sdfg), dace_data.Array)
         bcast_value = arg.field
         bcast_value_dims = arg.get_field_type().dims
         bcast_result_dim_map = {dim: i for i, dim in enumerate(field_dims)}
-        # TODO(phimuell, edopao): Check if this is correct.
+
+        # Use the dimensions to find out how we have to broadcast.
         broadcast_in_dims = [bcast_result_dim_map[dim] for dim in bcast_value_dims]
+
+        # The big question is if we need to modify the subset where we read?
 
     bcast_node = gtir_library_nodes.Broadcast(
         name=bcast_node_name,
@@ -384,12 +391,15 @@ def translate_broadcast(
     )
     ctx.state.add_node(bcast_node)
 
+    if bcast_value_subset is None:
+        bcast_value_subset = ctx.sdfg.make_array_memlet(bcast_value.data)
+
     ctx.state.add_edge(
         bcast_value,
         None,
         bcast_node,
         "_inp",
-        ctx.sdfg.make_array_memlet(bcast_value.data),
+        bcast_value_subset,
     )
 
     # TODO(phimuell, edopao): We now write to the _entire_ output data. Is this always
