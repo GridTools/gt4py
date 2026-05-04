@@ -5,12 +5,20 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import dataclasses
+import collections
+import contextvars
+import gc
+import weakref
 
 import pytest
 
 from gt4py import eve, next as gtx
-from gt4py.next import errors, backend
-from gt4py.next.otf import compiled_program, toolchain, arguments
+from gt4py.next import utils
+from gt4py.next import errors, backend, broadcast, common
+from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
+from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import toolchain, arguments, compiled_program
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
@@ -58,17 +66,15 @@ TDim = gtx.Dimension("TDim")
 @pytest.fixture
 def testee_prog():
     @gtx.field_operator
-    def fop(cond: bool, a: gtx.Field[gtx.Dims[TDim], float], b: gtx.Field[gtx.Dims[TDim], float]):
-        return a if cond else b
+    def fop(cond: bool):
+        return broadcast(cond, (TDim,))
 
     @gtx.program(backend=gtfn.run_gtfn)
     def prog(
         cond: bool,
-        a: gtx.Field[gtx.Dims[TDim], gtx.float64],
-        b: gtx.Field[gtx.Dims[TDim], gtx.float64],
-        out: gtx.Field[gtx.Dims[TDim], gtx.float64],
+        out: gtx.Field[gtx.Dims[TDim], bool],
     ):
-        fop(cond, a, b, out=out)
+        fop(cond, out=out)
 
     return prog
 
@@ -115,14 +121,12 @@ def test_inlining_of_scalar_works_integration(testee_prog):
         hijacked_program = program
         return lambda *args, **kwargs: None
 
-    hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", otf_workflow=pirate)
+    hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", executor=pirate)
 
     testee = testee_prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
     testee(
         cond=True,
-        a=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
-        b=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
-        out=gtx.zeros(domain={TDim: 1}, dtype=gtx.float64),
+        out=gtx.zeros(domain={TDim: 1}, dtype=bool),
         offset_provider={},
     )
 
@@ -162,3 +166,144 @@ def test_different_static_args_break_same_prg_after_static_params_change(testee_
         match="Argument descriptor StaticArg must be the same for all compiled programs",
     ):
         prg.compile(cond=[True], offset_provider={})
+
+
+def _verify_program_has_expected_domain(
+    program: itir.Program, expected_domain: gtx.Domain, uids: utils.IDGeneratorPool
+):
+    assert isinstance(program.body[0], itir.SetAt)
+    assert isinstance(program.body[0].expr, itir.FunCall)
+    assert program.body[0].expr.fun == itir.SymRef(id="fop")
+    domain = CollapseTuple.apply(program.body[0].domain, within_stencil=False, uids=uids)
+    assert domain == im.domain(common.GridType.CARTESIAN, expected_domain)
+
+
+def test_inlining_of_static_domain_works(testee_prog, uids: utils.IDGeneratorPool):
+    domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
+    input_pair = toolchain.ConcreteArtifact(
+        data=testee_prog.definition_stage,
+        args=arguments.CompileTimeArgs(
+            args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            kwargs={},
+            offset_provider={},
+            column_axis=None,
+            argument_descriptor_contexts={
+                arguments.FieldDomainDescriptor: {"out": arguments.FieldDomainDescriptor(domain)}
+            },
+        ),
+    )
+
+    transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
+    _verify_program_has_expected_domain(transformed, domain, uids)
+
+
+def test_make_param_context_from_func_type_for_named_collections():
+    int32_t, int64_t = (
+        ts.ScalarType(kind=ts.ScalarKind.INT32),
+        ts.ScalarType(kind=ts.ScalarKind.INT64),
+    )
+
+    @dataclasses.dataclass
+    class DataclassNamedCollection:
+        u: gtx.Field[gtx.Dims[TDim], int32_t]
+        v: gtx.Field[gtx.Dims[TDim], int64_t]
+
+    nc_type = ts.NamedCollectionType(
+        types=[int32_t, int64_t], keys=["a", "b"], original_python_type="DUMMY"
+    )
+    func_type = ts.FunctionType(
+        pos_only_args=[],
+        pos_or_kw_args={"inp": nc_type},
+        kw_only_args={},
+        returns=nc_type,
+    )
+    context = compiled_program._make_param_context_from_func_type(func_type)
+    # both `extract` and `_make_param_context_from_func_type` need to use the same structure
+    assert arguments.extract(DataclassNamedCollection(int32_t, int64_t)) == context["inp"]
+
+
+class _DummyPool:
+    def __init__(self, root):
+        self.root = root
+
+
+def test_metrics_source_key_caches_per_pool_and_key():
+    def test_f():
+        compiled_program._metrics_source_key_cache.set({})
+        pool = _DummyPool(("prog", "backend"))
+        key = (("static",), 11, None)
+
+        with compiled_program._pools_per_root_lock:
+            _pools_per_root = compiled_program._pools_per_root
+            compiled_program._pools_per_root = collections.Counter({("prog", "backend"): 3})
+            first = compiled_program.metrics_source_key(pool, key)
+
+            # Change counter after first call; second call must come from cache.
+            compiled_program._pools_per_root[pool.root] = 99
+            second = compiled_program.metrics_source_key(pool, key)
+            _pools_per_root = compiled_program._pools_per_root
+
+        assert first == second
+        assert first == f"prog<backend>#3[{hash(key)}]"
+        assert compiled_program._metrics_source_key_cache.get()[(id(pool), key)] == first
+
+    contextvars.copy_context().run(test_f)
+
+
+def test_metrics_source_key_uses_contextvars_isolation():
+    ctx = contextvars.copy_context()
+
+    def test_f():
+        pool = _DummyPool(("prog", "backend"))
+        key = (("static",), 12, None)
+
+        compiled_program._metrics_source_key_cache.set({})
+        with compiled_program._pools_per_root_lock:
+            _pools_per_root = compiled_program._pools_per_root
+            compiled_program._pools_per_root = collections.Counter({pool.root: 1})
+            key_in_base = compiled_program.metrics_source_key(pool, key)
+            compiled_program._pools_per_root = _pools_per_root
+
+        def _run_in_new_context():
+            compiled_program._metrics_source_key_cache.set({})
+            with compiled_program._pools_per_root_lock:
+                compiled_program._pools_per_root = collections.Counter({pool.root: 7})
+                result = compiled_program.metrics_source_key(pool, key)
+                compiled_program._pools_per_root = _pools_per_root
+                return result
+
+        key_in_other_ctx = contextvars.Context().run(_run_in_new_context)
+
+        assert key_in_base != key_in_other_ctx
+        assert key_in_base == f"prog<backend>#1[{hash(key)}]"
+        assert key_in_other_ctx == f"prog<backend>#7[{hash(key)}]"
+        # Base context cache remains its own value.
+        assert compiled_program._metrics_source_key_cache.get()[(id(pool), key)] == key_in_base
+
+    ctx.run(test_f)
+
+
+def test_metrics_source_key_finalizer_removes_cache_entry_when_pool_is_deleted():
+    ctx = contextvars.copy_context()
+
+    def test_f():
+        compiled_program._metrics_source_key_cache.set({})
+        with compiled_program._pools_per_root_lock:
+            _pools_per_root = compiled_program._pools_per_root
+            compiled_program._pools_per_root = collections.Counter({("prog", "backend"): 2})
+            pool = _DummyPool(("prog", "backend"))
+            key = (("static",), 13, None)
+
+            compiled_program.metrics_source_key(pool, key)
+            entry = (id(pool), key)
+            assert entry in compiled_program._metrics_source_key_cache.get()
+
+            pool_ref = weakref.ref(pool)
+            del pool
+            gc.collect()
+
+            assert pool_ref() is None
+            assert entry not in compiled_program._metrics_source_key_cache.get()
+            compiled_program._pools_per_root = _pools_per_root
+
+    ctx.run(test_f)

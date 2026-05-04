@@ -19,5 +19,5 @@ class OTFCompileWorkflow(workflow.NamedStepSequence):
 
     translation: definitions.TranslationStep
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject]
-    compilation: workflow.Workflow[stages.CompilableProject, stages.CompiledProgram]
-    decoration: workflow.Workflow[stages.CompiledProgram, stages.CompiledProgram]
+    compilation: workflow.Workflow[stages.CompilableProject, stages.ExecutableProgram]
+    decoration: workflow.Workflow[stages.ExecutableProgram, stages.ExecutableProgram]

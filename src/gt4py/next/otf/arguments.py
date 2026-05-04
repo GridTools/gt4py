@@ -113,6 +113,15 @@ class StaticArg(ArgStaticDescriptor, Generic[core_defs.ScalarT]):
 
 
 @dataclasses.dataclass(frozen=True)
+class FieldDomainDescriptor(ArgStaticDescriptor):
+    domain: common.Domain
+
+    @classmethod
+    def attribute_extractor_exprs(cls, arg_expr: str) -> dict[str, str]:
+        return {"domain": f"({arg_expr}).domain"}
+
+
+@dataclasses.dataclass(frozen=True)
 class JITArgs:
     """Concrete (runtime) arguments to a GTX program in a format that can be passed into the toolchain."""
 
@@ -122,6 +131,12 @@ class JITArgs:
     @classmethod
     def from_signature(cls, *args: Any, **kwargs: Any) -> Self:
         return cls(args=args, kwargs=kwargs)
+
+
+ArgStaticDescriptorsContext: TypeAlias = dict[str, MaybeNestedInTuple[ArgStaticDescriptor | None]]
+ArgStaticDescriptorsContextsByType: TypeAlias = Mapping[
+    type[ArgStaticDescriptor], ArgStaticDescriptorsContext
+]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -136,10 +151,7 @@ class CompileTimeArgs:
     #: If an argument or element of an argument has no descriptor, the respective value is `None`.
     #: E.g., for a tuple argument `a` with type `ts.TupleTupe(types=[field_t, int32_t])` a possible
     #  context would be `{"a": (FieldDomainDescriptor(...), None)}`.
-    argument_descriptor_contexts: Mapping[
-        type[ArgStaticDescriptor],
-        dict[str, MaybeNestedInTuple[ArgStaticDescriptor | None]],
-    ]
+    argument_descriptor_contexts: ArgStaticDescriptorsContextsByType
 
     @property
     def offset_provider_type(self) -> common.OffsetProviderType:

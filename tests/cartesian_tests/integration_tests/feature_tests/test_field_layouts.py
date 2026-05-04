@@ -74,3 +74,26 @@ def test_bad_layout_warns(backend):
         "provided allocators in `gt4py.storage`.",
     ):
         stencil(field_a=inp, field_b=outp)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_data_dimensions_stride_is_always_higher_than_cartesian(backend):
+    xp = get_array_library(backend)
+
+    # Test a 4D array
+    shape = (2, 2, 2, 2)
+    allocated_array = gt_storage.zeros(
+        backend=backend, shape=shape, dtype=xp.float64, aligned_index=(0, 0, 0, 0)
+    )
+
+    assert allocated_array.strides[3] > max(allocated_array.strides[0:3])
+
+    # Test a 5D array
+    shape = (2, 2, 2, 2, 2)
+    allocated_array = gt_storage.zeros(
+        backend=backend, shape=shape, dtype=xp.float64, aligned_index=(0, 0, 0, 0, 0)
+    )
+
+    assert allocated_array.strides[3] > max(
+        allocated_array.strides[0:3]
+    ) and allocated_array.strides[4] > max(allocated_array.strides[0:3])

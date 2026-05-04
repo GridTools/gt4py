@@ -315,7 +315,7 @@ def create_global_tmps(
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
-    symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     *,
     uids: next_utils.IDGeneratorPool,
 ) -> itir.Program:
