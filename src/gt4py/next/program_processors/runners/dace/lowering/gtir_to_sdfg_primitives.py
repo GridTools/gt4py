@@ -358,6 +358,9 @@ def translate_broadcast(
     ):
         assert isinstance(arg.dc_node, dace_nodes.AccessNode)
         # TODO(phimuell, edopao): How do I perform the same check on `arg` directly?
+        if arg.subset.num_elements() != 1:
+            assert isinstance(arg.gt_dtype, ts.ListType)
+            raise NotImplementedError("Broadcast of lists is not supported.")
         assert isinstance(arg.dc_node.desc(ctx.sdfg), dace_data.Scalar)
 
         bcast_value = arg.dc_node
