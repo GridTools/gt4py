@@ -223,6 +223,8 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
         #  map them _fully_ (see later) into the nested SDFG.
         nsdfg.add_datadesc(bcast_value.data, bcast_value.desc(sdfg).clone())
         nsdfg.add_datadesc(bcast_result.data, bcast_result.desc(sdfg).clone())
+        nsdfg.arrays[bcast_value.data].transient = False
+        nsdfg.arrays[bcast_result.data].transient = False
 
         inner_bcast_node = copy.deepcopy(node)
         bcast_st.add_edge(
