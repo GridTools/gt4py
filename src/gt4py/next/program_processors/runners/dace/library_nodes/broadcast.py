@@ -31,7 +31,6 @@ _OUTPUT_NAME: Final[str] = "_outp"
 class Broadcast(dace_nodes.LibraryNode):
     """Implements write of a scalar value over an array subset.
 
-    ndims(output) == ndims(value_to_broadcast) + len(broadcast_in_dim)
     Same as XLA.
     broadcast_in_dim[i] describes where dimension `i` of the `value_to_broadcast`
     goes. In case of a scalar it is empty.
@@ -99,11 +98,15 @@ class Broadcast(dace_nodes.LibraryNode):
             if len(self.brodcast_in_dims) != 0:
                 raise ValueError("For a scalar `broadcast_in_dims` must be empty.")
         else:
-            expected_output_dims = len(self.brodcast_in_dims) + len(bcast_value_desc.shape)
-            got_output_dims = len(bcast_result_desc.shape)
-            if expected_output_dims != got_output_dims:
+            if len(self.brodcast_in_dims) != len(bcast_value_desc.shape):
                 raise ValueError(
-                    f"Expected output to have {expected_output_dims}, but it only had {got_output_dims}"
+                    f"`broadcast_in_dims` has {len(self.brodcast_in_dims)} entries,"
+                    f" but the value to broadcast had {len(bcast_value_desc.shape)} dimensions."
+                )
+            if len(bcast_result_desc.shape) < len(bcast_value_desc.shape):
+                raise ValueError(
+                    f"The value to broadcast has more dimensions ({len(bcast_value_desc.shape)})"
+                    f" than the result ({len(bcast_result_desc.shape)})."
                 )
 
             for src_dim, bcast_dst_dim in enumerate(self.brodcast_in_dims):
