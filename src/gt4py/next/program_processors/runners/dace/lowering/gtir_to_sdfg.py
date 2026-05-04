@@ -121,7 +121,7 @@ class DataflowBuilder(Protocol):
         code: str,
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
-    ) -> dace_nodes.Tasklet:
+    ) -> tuple[dace_nodes.Tasklet, dict[str, str]]:
         """Wrapper of `dace.SDFGState.add_tasklet` that assigns a unique name.
 
         It also modifies the tasklet connectors by adding a prefix string (see
