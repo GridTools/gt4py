@@ -127,10 +127,13 @@ def _make_broadcast_vector(
     )
     sdfg.add_array(
         "bcast_result",
-        shape=(10, 10, 10),
+        shape=tuple((10 if broadcast_in_dim == dim else 15) for dim in range(3)),
         dtype=dace.float64,
         transient=False,
     )
+
+    dest_subset = ["1:8", "2:9", "3:11"]
+    dest_subset[broadcast_in_dim] = "0:10"
 
     bcast_node = gtx_lib_nodes.Broadcast("bcast", broadcast_in_dims=[broadcast_in_dim])
     state.add_node(bcast_node)
@@ -147,7 +150,7 @@ def _make_broadcast_vector(
         "_outp",
         state.add_access("bcast_result"),
         None,
-        sdfg.make_array_memlet("bcast_result"),
+        dace.Memlet(data="bcast_result", subset=",".join(dest_subset)),
     )
 
     sdfg.validate()
@@ -163,8 +166,15 @@ def test_vector_broadcast(broadcast_in_dim: int):
 
     expand_dims = list(range(3))
     expand_dims.pop(broadcast_in_dim)
-    bcast_result_ref = np.expand_dims(ref["bcast_value"].copy(), expand_dims)
-    bcast_result_ref = np.broadcast_to(bcast_result_ref, ref["bcast_result"].shape)
+    bcast_result_extended = np.expand_dims(ref["bcast_value"].copy(), expand_dims)
+    bcast_result_ref = ref["bcast_result"].copy()
+
+    if broadcast_in_dim == 0:
+        bcast_result_ref[:, 2:9, 3:11] = bcast_result_extended
+    elif broadcast_in_dim == 1:
+        bcast_result_ref[1:8, :, 3:11] = bcast_result_extended
+    elif broadcast_in_dim == 2:
+        bcast_result_ref[1:8, 2:9, :] = bcast_result_extended
     ref["bcast_result"] = bcast_result_ref.copy()
 
     util.compile_and_run_sdfg(sdfg, **res)
