@@ -13,7 +13,7 @@ from typing import Any, Final, Generator, Optional
 import dace
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config
+from gt4py.next import config as gtx_config
 
 
 SDFG_ARG_METRIC_LEVEL: Final[str] = "gt_metrics_level"
@@ -26,7 +26,7 @@ SDFG_ARG_METRIC_COMPUTE_TIME: Final[str] = "gt_compute_time"
 
 def set_dace_config(
     device_type: core_defs.DeviceType,
-    cmake_build_type: Optional[config.CMakeBuildType] = None,
+    cmake_build_type: Optional[gtx_config.CMakeBuildType] = None,
 ) -> None:
     """Set the DaCe configuration as required by GT4Py.
 
@@ -69,6 +69,16 @@ def set_dace_config(
     if cmake_build_type is not None:
         dace.Config.set("compiler.build_type", value=cmake_build_type.value)
 
+    if cmake_build_type == gtx_config.CMakeBuildType.DEBUG:
+        dbginfo = "-g"
+        cuda_dbginfo = "--device-debug -Xcompiler -g"
+    elif cmake_build_type == gtx_config.CMakeBuildType.REL_WITH_DEB_INFO:
+        dbginfo = "-g"
+        cuda_dbginfo = "--generate-line-info -Xcompiler -g"
+    else:
+        dbginfo = ""
+        cuda_dbginfo = ""
+
     # The dace dafault settings use fast-math in both cpu and gpu compilation,
     # we don't use it here.
     if gt_cxxargs := os.environ.get("CXXFLAGS", None):
@@ -76,19 +86,22 @@ def set_dace_config(
     else:
         dace.Config.set(
             "compiler.cpu.args",
-            value="-fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
+            value=f"-fPIC {dbginfo} -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
         )
     if gt_cudaargs := os.environ.get("CUDAFLAGS", None):
         dace.Config.set("compiler.cuda.args", value=gt_cudaargs)
     else:
         dace.Config.set(
             "compiler.cuda.args",
-            value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
+            value=f"{cuda_dbginfo} -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
         )
-    dace.Config.set(
-        "compiler.cuda.hip_args",
-        value="-fPIC -O3 -march=native -Wno-unused-parameter",
-    )
+    if gt_hipargs := os.environ.get("HIPFLAGS", None):
+        dace.Config.set("compiler.cuda.hip_args", value=gt_hipargs)
+    else:
+        dace.Config.set(
+            "compiler.cuda.hip_args",
+            value=f"-fPIC {dbginfo} -O3 -march=native -Wno-unused-parameter",
+        )
 
     # By design, we do not allow converting Memlets to Maps during code generation.
     #  If needed, Memles are converted to Maps explicitly by gt4py in the `gt_auto_optimize`
@@ -116,7 +129,21 @@ def set_dace_config(
     # Instrumentation of SDFG timers
     dace.Config.set("instrumentation", "report_each_invocation", value=False)
 
-    # we are not interested in storing the history of SDFG transformations.
+    # Do not print the progress of SDFG transformations, nor that of SDFG code generation,
+    #  unless enabled through env variable.
+    dace.Config.set(
+        "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
+    )
+
+    # In debug mode use `development` otherwise use `production`.
+    # NOTE: In case you want to run with optimizations, but would like to have the full
+    #   DaCe folder, i.e. `development` mode, then export `DACE_compiler_build_folder_mode`
+    #   set to `development` (small case matters).
+    dace.Config.set(
+        "compiler", "build_folder_mode", value=("development" if gtx_config.DEBUG else "production")
+    )
+
+    # We are not interested in storing the history of SDFG transformations.
     dace.Config.set("store_history", value=False)
 
 

@@ -1,26 +1,19 @@
 # DaCe backends: DaCe version
 
-In the context of the [DaCe backend](./dace.md) and the [schedule tree](./dace-schedule-tree.md), facing time pressure, we decided to stay at the `v1.x` branch of DaCe to minimize up-front cost and deliver CPU performance as fast as possible. We considered updating to the mainline version of DaCe and accept follow-up cost of partial rewrites once DaCe `v2` releases.
+In the context of the [DaCe backend](./dace.md) and the [schedule tree](./dace-schedule-tree.md), facing time pressure, decided to implement the first version of schedule trees on top of `v1/maintenance` branch to minimize up-front cost and deliver CPU performance as fast as possible. Ever since, we are slowly moving back to mainline DaCe.
 
 ## Context
 
-The currently released version of DaCe is on the `v1.x` branch. However, the mainline branch moved on (with breaking changes) to what is supposed to be DaCe `v2`. All feature development is supposed to be merged against mainline. Only bug fixes are allowed on the `v1.x` branch.
-
-The [schedule tree](./dace-schedule-tree.md) feature will need changes in DaCe, in particular to translate schedule trees into SDFG. We are unfamiliar with the breaking changes in DaCe.
+Originally, the schedule tree features was implemented on a branch based the maintenance branch of DaCe v1. DaCe v1 and what will be known as DaCe v2 have breaking chances, most notably the complete transition to control flow graphs (CFGs). Since GT4Py v1.1.5, we are on a branch that is based mainline DaCe with the goal to eventually merge the schedule tree feature into DaCe mainline. Until this happens, we stay on a branch that lives on the [GridTools fork](https://github.com/GridTools/dace) of DaCe.
 
 ## Decision
 
-We decided to build a first version of the schedule tree feature against the `v1.x` version of DaCe. The temporary branch will live on the [GridTools fork of DaCe](https://github.com/GridTools/dace) until the Schedule Tree feature is available in DaCe `v2` and we can update back to mainline again.
+We decided to merge the schedule tree feature into mainline DaCe. A first step was to rebase our prototype on current mainline DaCe, which happened with GT4Py v1.1.5. The next step is to fully merge down to `main`.
 
 ## Consequences
 
-- We'll be able to code against familiar API (e.g. same as the previous GT4Py-DaCe bridge).
-- In DaCe, we won't be able to merge changes into `v1.x`. We'll work on a branch and later refactor the schedule tree -> SDFG transformation to code flow regions in DaCe `v2`.
+Once the schedule tree feature is merge into mainline DaCe, we'll be able to simplify the dependencies again and use the same version of DaCe for `gt4py.cartesian` and `gt4py.next`.
 
 ## Alternatives considered
 
-### Update to DaCe mainline first
-
-- Good because mainline DaCe is accepting new features while `v1.x` is closed for new feature development.
-- Bad because it incurs an up-front cost, which we are trying to minimize to get results fast.
-- Bad because we aren't trained to use the new control flow regions.
+No need for alternatives - we can't stay on a branch of DaCe forever.

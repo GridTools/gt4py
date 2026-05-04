@@ -773,15 +773,15 @@ class LambdaToDataflow(eve.NodeVisitor):
                 psymbol_tree = gtir_to_sdfg_utils.make_symbol_tree(pname, ptype)
                 deref_on_input_memlet = pname in direct_deref_iterators
                 inner_arg = gtx_utils.tree_map(
-                    lambda tsym,
-                    targ,
-                    deref_on_input_memlet=deref_on_input_memlet: self._visit_if_branch_arg(
-                        if_sdfg,
-                        if_branch_state,
-                        str(tsym.id),
-                        targ,
-                        deref_on_input_memlet,
-                        if_sdfg_input_memlets,
+                    lambda tsym, targ, deref_on_input_memlet=deref_on_input_memlet: (
+                        self._visit_if_branch_arg(
+                            if_sdfg,
+                            if_branch_state,
+                            str(tsym.id),
+                            targ,
+                            deref_on_input_memlet,
+                            if_sdfg_input_memlets,
+                        )
                     )
                 )(psymbol_tree, arg)
             else:

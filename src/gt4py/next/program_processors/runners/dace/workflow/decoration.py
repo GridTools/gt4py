@@ -27,7 +27,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 def convert_args(
     fun: gtx_wfdcompilation.CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
-) -> stages.CompiledProgram:
+) -> stages.ExecutableProgram:
     # Retieve metrics level from GT4Py environment variable.
     collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
     collect_time_arg = np.array([1], dtype=np.float64)

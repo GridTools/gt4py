@@ -22,7 +22,7 @@ import dace
 
 
 def _make_sdfg_simple() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("simple_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abc":

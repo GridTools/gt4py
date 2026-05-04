@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import json
 import pathlib
 import unittest.mock
@@ -15,6 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from gt4py.next import config as gt_config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import arguments
 
@@ -26,11 +29,9 @@ class TestSetCurrentSourceKey:
         metrics._source_key_cvar.set(metrics._NO_KEY_SET_MARKER_)
 
         key = "test_source"
-        source = metrics.set_current_source_key(key)
+        metrics.set_current_source_key(key)
 
         assert metrics.get_current_source_key() == key
-        assert metrics.sources[key] == source
-        assert isinstance(source, metrics.Source)
 
     def test_set_current_source_key_same_key_twice(self):
         """Test setting the same source key twice."""
@@ -67,7 +68,7 @@ class TestSourceKeyContextManager:
             assert metrics.is_current_source_key_set() is False
 
             key = "context_test_key"
-            with metrics.metrics_context(key):
+            with metrics.metrics_source_key_context(key):
                 assert metrics.is_current_source_key_set() is True
                 assert metrics._source_key_cvar.get() == key
                 assert metrics.get_current_source_key() == key
@@ -428,3 +429,40 @@ def test_dump_json(sample_source_metrics: Mapping[str, metrics.Source], tmp_path
         assert list(data[source_id]["metrics"].values()) == [
             metric.samples for metric in sample_source_metrics[source_id].metrics.values()
         ]
+
+
+class TestDumpMetricsAtExit:
+    @pytest.mark.parametrize("mode", ["explicit", "auto", None])
+    def test_dump_metrics_at_exit_enabled(
+        self,
+        sample_source_metrics: Mapping[str, metrics.Source],
+        tmp_path: pathlib.Path,
+        mode: str | None,
+    ):
+        """Test _dump_metrics_at_exit writes to a file when enabled."""
+        explicit_output_filename = str(tmp_path / "explicit_metrics.json")
+        auto_output_filename = str(tmp_path / gt_config._init_dump_metrics_filename())
+
+        if mode == "explicit":
+            output_filename = explicit_output_filename
+        elif mode == "auto":
+            output_filename = auto_output_filename
+        else:
+            output_filename = None
+
+        with unittest.mock.patch("gt4py.next.config.DUMP_METRICS_AT_EXIT", output_filename):
+            with unittest.mock.patch(
+                "gt4py.next.instrumentation.metrics.sources", sample_source_metrics
+            ):
+                metrics._dump_metrics_at_exit()
+
+        assert (output_filename is None) == (mode is None)
+        if output_filename:
+            assert pathlib.Path(output_filename).exists()
+            data = json.loads(pathlib.Path(output_filename).read_text())
+            assert "program1" in data
+            assert "program2" in data
+            pathlib.Path(output_filename).unlink()  # Clean up after test
+        else:
+            assert not pathlib.Path(explicit_output_filename).exists()
+            assert not pathlib.Path(auto_output_filename).exists()

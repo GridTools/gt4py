@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Callable, Optional, Union
 
 import devtools
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, types as core_types
 from gt4py.next import common, config
 from gt4py.next.iterator import builtins, dispatcher
 from gt4py.next.iterator.builtins import BackendNotSelectedError, builtin_dispatch
@@ -237,5 +237,5 @@ def temporary(*args):
 def _dtypebuiltin_to_ts(dtype: callable) -> ts.ScalarType:
     assert isinstance(dtype, dispatcher._fun_dispatcher)
     dtype_name = dtype.fun.__name__
-    np_dtype = getattr(core_defs, dtype_name)
+    np_dtype = getattr(core_types, dtype_name)
     return tt.from_dtype(core_defs.dtype(np_dtype))
