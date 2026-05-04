@@ -95,6 +95,7 @@ WORKDIR_NAME = "_dace_deterministic_codegen"
 # icon4py noxfile introspection
 # ---------------------------------------------------------------------------
 
+
 class NoxfileIntrospectionError(RuntimeError):
     """Raised when we can't extract sessions/components from the noxfile."""
 
@@ -128,9 +129,7 @@ def introspect_icon4py_noxfile(
     try:
         tree = ast.parse(noxfile.read_text())
     except SyntaxError as e:
-        raise NoxfileIntrospectionError(
-            f"could not parse {noxfile} as Python: {e}"
-        ) from e
+        raise NoxfileIntrospectionError(f"could not parse {noxfile} as Python: {e}") from e
 
     selections = _extract_literal_strings(tree, "ModelTestsSubset")
     subpackages = _extract_literal_strings(tree, "ModelSubpackagePath")
@@ -159,7 +158,9 @@ def _extract_literal_strings(tree: ast.AST, alias_name: str) -> list[str]:
             continue
         if node.target.id != alias_name:
             continue
-        # Expect: value = Subscript(value=Name('Literal'), slice=Tuple(elts=[Constant, ...]))
+        # Match the AST pattern for Literal["a", "b", ...]:
+        # a Subscript whose value is the Name "Literal" and whose slice is
+        # either a Tuple of string Constants or a single string Constant.
         v = node.value
         if not isinstance(v, ast.Subscript):
             continue
@@ -180,6 +181,7 @@ def _extract_literal_strings(tree: ast.AST, alias_name: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # Snapshot
 # ---------------------------------------------------------------------------
+
 
 @dataclasses.dataclass(frozen=True)
 class FileEntry:
@@ -275,6 +277,7 @@ def _sha256(path: Path) -> str:
 # Compare
 # ---------------------------------------------------------------------------
 
+
 @dataclasses.dataclass
 class ProgramResult:
     name: str
@@ -294,33 +297,39 @@ def compare(
         s2 = snap2.get(name)
 
         if s1 is None or s2 is None:
-            results.append(ProgramResult(
-                name=name, match=False, differing_files=[],
-                only_in_run1=sorted((s1.files if s1 else {}).keys()),
-                only_in_run2=sorted((s2.files if s2 else {}).keys()),
-            ))
+            results.append(
+                ProgramResult(
+                    name=name,
+                    match=False,
+                    differing_files=[],
+                    only_in_run1=sorted((s1.files if s1 else {}).keys()),
+                    only_in_run2=sorted((s2.files if s2 else {}).keys()),
+                )
+            )
             continue
 
         keys1, keys2 = set(s1.files), set(s2.files)
         only1 = sorted(keys1 - keys2)
         only2 = sorted(keys2 - keys1)
         differing = sorted(
-            rel for rel in keys1 & keys2
-            if s1.files[rel].sha256 != s2.files[rel].sha256
+            rel for rel in keys1 & keys2 if s1.files[rel].sha256 != s2.files[rel].sha256
         )
-        results.append(ProgramResult(
-            name=name,
-            match=not (differing or only1 or only2),
-            differing_files=differing,
-            only_in_run1=only1,
-            only_in_run2=only2,
-        ))
+        results.append(
+            ProgramResult(
+                name=name,
+                match=not (differing or only1 or only2),
+                differing_files=differing,
+                only_in_run1=only1,
+                only_in_run2=only2,
+            )
+        )
     return results
 
 
 # ---------------------------------------------------------------------------
 # Diff + report
 # ---------------------------------------------------------------------------
+
 
 def write_diffs(
     results: list[ProgramResult],
@@ -347,9 +356,15 @@ def write_diffs(
                     f"binary content differs:\n  run1: {f1}\n  run2: {f2}\n"
                 )
                 continue
-            udiff = "".join(difflib.unified_diff(
-                t1, t2, fromfile=f"run1/{rel}", tofile=f"run2/{rel}", n=3,
-            ))
+            udiff = "".join(
+                difflib.unified_diff(
+                    t1,
+                    t2,
+                    fromfile=f"run1/{rel}",
+                    tofile=f"run2/{rel}",
+                    n=3,
+                )
+            )
             prog_dir.mkdir(parents=True, exist_ok=True)
             (prog_dir / f"{rel.replace('/', '__')}.diff").write_text(udiff)
 
@@ -384,9 +399,16 @@ def render_report(results: list[ProgramResult]) -> str:
 # Nox runner
 # ---------------------------------------------------------------------------
 
+
 def run_nox(
-    icon4py: Path, run_dir: Path, log_path: Path,
-    session: str, selection: str, component: str, python: str, posargs: list[str],
+    icon4py: Path,
+    run_dir: Path,
+    log_path: Path,
+    session: str,
+    selection: str,
+    component: str,
+    python: str,
+    posargs: list[str],
 ) -> int:
     """Run nox once with `GT4PY_BUILD_CACHE_DIR=run_dir`. Returns the exit code.
 
@@ -418,14 +440,16 @@ def run_nox(
             "# ---\n"
         )
         logf.flush()
-        proc = subprocess.run(argv, cwd=str(icon4py), env=env,
-                              stdout=logf, stderr=subprocess.STDOUT)
+        proc = subprocess.run(
+            argv, cwd=str(icon4py), env=env, stdout=logf, stderr=subprocess.STDOUT
+        )
     return proc.returncode
 
 
 # ---------------------------------------------------------------------------
 # Workdir
 # ---------------------------------------------------------------------------
+
 
 @dataclasses.dataclass
 class Workdir:
@@ -434,21 +458,36 @@ class Workdir:
     root: Path
 
     @property
-    def run1_dir(self) -> Path: return self.root / "run1"
+    def run1_dir(self) -> Path:
+        return self.root / "run1"
+
     @property
-    def run2_dir(self) -> Path: return self.root / "run2"
+    def run2_dir(self) -> Path:
+        return self.root / "run2"
+
     @property
-    def cache1(self) -> Path:   return self.run1_dir / ".gt4py_cache"
+    def cache1(self) -> Path:
+        return self.run1_dir / ".gt4py_cache"
+
     @property
-    def cache2(self) -> Path:   return self.run2_dir / ".gt4py_cache"
+    def cache2(self) -> Path:
+        return self.run2_dir / ".gt4py_cache"
+
     @property
-    def log1(self) -> Path:     return self.run1_dir / "test.log"
+    def log1(self) -> Path:
+        return self.run1_dir / "test.log"
+
     @property
-    def log2(self) -> Path:     return self.run2_dir / "test.log"
+    def log2(self) -> Path:
+        return self.run2_dir / "test.log"
+
     @property
-    def diffs(self) -> Path:    return self.root / "diffs"
+    def diffs(self) -> Path:
+        return self.root / "diffs"
+
     @property
-    def report(self) -> Path:   return self.root / "report.txt"
+    def report(self) -> Path:
+        return self.root / "report.txt"
 
     def prepare(self) -> None:
         """Wipe stale state from previous invocations."""
@@ -465,6 +504,7 @@ class Workdir:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="dace_deterministic_codegen",
@@ -475,7 +515,10 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument(
-        "--icon4py", required=True, type=Path, metavar="PATH",
+        "--icon4py",
+        required=True,
+        type=Path,
+        metavar="PATH",
         help=(
             "Path to icon4py checkout. Accepts BOTH absolute and relative "
             "paths. Relative paths are resolved against the current working "
@@ -483,7 +526,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
-        "--session", default="test_model", metavar="NAME",
+        "--session",
+        default="test_model",
+        metavar="NAME",
         help=(
             "Nox session name. Composed with --python/--selection/--component "
             "into the final session ID `<session>-<python>(<selection>, "
@@ -491,25 +536,34 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
-        "--selection", required=True, metavar="NAME",
+        "--selection",
+        required=True,
+        metavar="NAME",
         help=(
             "icon4py noxfile selection (e.g. stencils, datatest, basic). "
             "Validated at runtime against icon4py's actual noxfile."
         ),
     )
     p.add_argument(
-        "--component", required=True, metavar="NAME",
+        "--component",
+        required=True,
+        metavar="NAME",
         help=(
             "icon4py noxfile subpackage leaf name (e.g. muphys, dycore). "
             "Validated at runtime against icon4py's actual noxfile."
         ),
     )
     p.add_argument(
-        "--python", default="3.10", metavar="X.Y",
+        "--python",
+        default="3.10",
+        metavar="X.Y",
         help="Python version for the nox session.",
     )
     p.add_argument(
-        "--workdir", type=Path, default=None, metavar="PATH",
+        "--workdir",
+        type=Path,
+        default=None,
+        metavar="PATH",
         help=(
             "Where run1/, run2/, diffs/, and report.txt are written. "
             "Accepts absolute or relative paths (resolved against cwd). "
@@ -519,7 +573,11 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
-        "--posarg", action="append", default=[], dest="posargs", metavar="ARG",
+        "--posarg",
+        action="append",
+        default=[],
+        dest="posargs",
+        metavar="ARG",
         help=(
             "Forwarded to pytest via `nox -- ARG`. Repeatable. "
             "Example: --posarg=--backend=dace_cpu --posarg=--grid=icon_regional"
@@ -542,8 +600,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
     noxfile_path = icon4py / "noxfile.py"
     if not noxfile_path.is_file():
-        print(f"error: no noxfile.py at {noxfile_path} — is --icon4py "
-              f"the icon4py repo root?", file=sys.stderr)
+        print(
+            f"error: no noxfile.py at {noxfile_path} — is --icon4py the icon4py repo root?",
+            file=sys.stderr,
+        )
         return 2
 
     # Introspect icon4py's noxfile to discover the legal selection /
@@ -571,9 +631,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     workdir_root = (
-        args.workdir.expanduser().resolve()
-        if args.workdir is not None
-        else icon4py / WORKDIR_NAME
+        args.workdir.expanduser().resolve() if args.workdir is not None else icon4py / WORKDIR_NAME
     )
     if args.workdir is not None and not args.workdir.is_absolute():
         print(f"--workdir resolved to: {workdir_root}")
@@ -584,20 +642,34 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     # ----- Run 1
     print(f"[1/2] nox -s '{session_id}' (cache: {workdir.run1_dir})", flush=True)
-    rc1 = run_nox(icon4py, workdir.run1_dir, workdir.log1,
-                  args.session, args.selection, args.component, args.python, args.posargs)
+    rc1 = run_nox(
+        icon4py,
+        workdir.run1_dir,
+        workdir.log1,
+        args.session,
+        args.selection,
+        args.component,
+        args.python,
+        args.posargs,
+    )
     if rc1 != 0:
-        print(f"error: run 1 failed (exit {rc1}). See log: {workdir.log1}",
-              file=sys.stderr)
+        print(f"error: run 1 failed (exit {rc1}). See log: {workdir.log1}", file=sys.stderr)
         return 4
 
     # ----- Run 2
     print(f"[2/2] nox -s '{session_id}' (cache: {workdir.run2_dir})", flush=True)
-    rc2 = run_nox(icon4py, workdir.run2_dir, workdir.log2,
-                  args.session, args.selection, args.component, args.python, args.posargs)
+    rc2 = run_nox(
+        icon4py,
+        workdir.run2_dir,
+        workdir.log2,
+        args.session,
+        args.selection,
+        args.component,
+        args.python,
+        args.posargs,
+    )
     if rc2 != 0:
-        print(f"error: run 2 failed (exit {rc2}). See log: {workdir.log2}",
-              file=sys.stderr)
+        print(f"error: run 2 failed (exit {rc2}). See log: {workdir.log2}", file=sys.stderr)
         return 4
 
     # ----- Snapshot + compare + report
@@ -615,8 +687,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"workdir: {workdir.root}")
 
     if not results:
-        print(f"error: no programs observed in either run — check the logs:\n"
-              f"  {workdir.log1}\n  {workdir.log2}", file=sys.stderr)
+        print(
+            f"error: no programs observed in either run — check the logs:\n"
+            f"  {workdir.log1}\n  {workdir.log2}",
+            file=sys.stderr,
+        )
         return 3
 
     return 1 if any(not r.match for r in results) else 0

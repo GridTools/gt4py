@@ -38,8 +38,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 try:
-    import tomllib       # Python 3.11+
+    import tomllib  # Python 3.11+
 except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[import-not-found]
 
@@ -65,11 +66,7 @@ def patch_sources(pyproject: Path, overrides: dict[str, Path]) -> None:
     with pyproject.open("rb") as f:
         doc = tomllib.load(f)
 
-    sources = (
-        doc.setdefault("tool", {})
-           .setdefault("uv", {})
-           .setdefault("sources", {})
-    )
+    sources = doc.setdefault("tool", {}).setdefault("uv", {}).setdefault("sources", {})
     for pkg, path in overrides.items():
         sources[pkg] = {"path": str(path), "editable": True}
 
@@ -94,7 +91,10 @@ def run(cmd: list[str], cwd: Path) -> None:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     p.add_argument(
-        "--icon4py", required=True, type=Path, metavar="PATH",
+        "--icon4py",
+        required=True,
+        type=Path,
+        metavar="PATH",
         help=(
             "Path to icon4py checkout. Accepts BOTH absolute and relative "
             "paths. Relative paths are resolved against the current working "
@@ -102,29 +102,39 @@ def main() -> int:
         ),
     )
     p.add_argument(
-        "--gt4py", required=True, type=Path, metavar="PATH",
+        "--gt4py",
+        required=True,
+        type=Path,
+        metavar="PATH",
         help=(
             "Path to gt4py checkout to install editable. Accepts BOTH "
             "absolute and relative paths (resolved against cwd)."
         ),
     )
     p.add_argument(
-        "--dace", type=Path, default=None, metavar="PATH",
+        "--dace",
+        type=Path,
+        default=None,
+        metavar="PATH",
         help=(
             "Optional path to dace checkout (absolute or relative). If "
             "omitted, dace resolves through icon4py's existing source pin."
         ),
     )
-    p.add_argument("--no-lock", action="store_true",
-                   help="Skip `uv lock`. Useful if you already locked.")
-    p.add_argument("--no-sync", action="store_true",
-                   help="Skip `uv sync`. Useful for CI steps that sync later.")
+    p.add_argument(
+        "--no-lock", action="store_true", help="Skip `uv lock`. Useful if you already locked."
+    )
+    p.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Skip `uv sync`. Useful for CI steps that sync later.",
+    )
     args = p.parse_args()
 
     # Resolve every path NOW. The script can be run from any cwd.
     icon4py = args.icon4py.expanduser().resolve()
-    gt4py   = args.gt4py.expanduser().resolve()
-    dace    = args.dace.expanduser().resolve() if args.dace else None
+    gt4py = args.gt4py.expanduser().resolve()
+    dace = args.dace.expanduser().resolve() if args.dace else None
 
     pyproject = icon4py / "pyproject.toml"
     if not pyproject.is_file():
@@ -171,10 +181,10 @@ def main() -> int:
     print()
     print("done. quick sanity check:")
     print('    python -c "import gt4py.next; print(gt4py.next.__file__)"')
-    print(f'        # should print a path inside {gt4py}')
+    print(f"        # should print a path inside {gt4py}")
     if dace:
         print('    python -c "import dace; print(dace.__file__)"')
-        print(f'        # should print a path inside {dace}')
+        print(f"        # should print a path inside {dace}")
     return 0
 
 

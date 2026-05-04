@@ -11,6 +11,7 @@
 include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
   - local: 'ci/cscs-ci-ext-config.yml'
+  - local: 'ci/cscs-ci-dace-determinism.yml'
 
 # Note:
 #   block-name-with-dashes      -> defined in remote cscs-ci ext include

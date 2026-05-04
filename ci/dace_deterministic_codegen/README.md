@@ -170,3 +170,41 @@ across invocations, copy the directory before re-running.
                                         Wiped before each run.
 --posarg ARG                            forwarded to pytest. Repeatable.
 ```
+
+## CI integration
+
+The harness runs in CSCS CI as a separate `dace-determinism` stage,
+defined in `ci/cscs-ci-dace-determinism.yml` and wired into the
+pipeline via `ci/cscs-ci.yml`. A small driver script,
+`ci/dace_deterministic_codegen/run_in_ci.sh`, encapsulates the
+clone + bootstrap + harness invocation so the YAML stays minimal and
+the same flow can be reproduced locally.
+
+### Reproducing a CI run locally
+
+The driver script reads only env vars, so a green or red CI run can
+be reproduced one-to-one by exporting the same variables and invoking
+`run_in_ci.sh`:
+
+```bash
+# gt4py CI venv with editable gt4py already there
+source /path/to/gt4py-venv/bin/activate
+
+export GT4PY_PATH=/path/to/gt4py
+export ICON4PY_REPO=https://github.com/C2SM/icon4py.git
+export ICON4PY_REF=main          # or the SHA from the failing run
+export ICON4PY_PATH=/tmp/icon4py
+
+# Optional: custom dace branch
+export DACE_REPO=https://github.com/GridTools/dace.git
+export DACE_REF=dace_toolchain_deterministic
+export DACE_PATH=/tmp/dace
+
+export DACE_DETERMINISM_SELECTION=stencils
+export DACE_DETERMINISM_COMPONENT=muphys
+export DACE_DETERMINISM_PYTHON=3.10
+export DACE_DETERMINISM_BACKEND=dace_cpu
+export DACE_DETERMINISM_GRID=icon_regional
+
+bash $GT4PY_PATH/ci/dace_deterministic_codegen/run_in_ci.sh
+```
