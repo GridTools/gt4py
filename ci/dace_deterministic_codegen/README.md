@@ -147,12 +147,12 @@ across invocations, copy the directory before re-running.
 
 ## Exit codes
 
-| Code | Meaning |
-|------|---------|
-| 0    | Codegen is deterministic. |
-| 1    | Codegen differs (see `report.txt` and `diffs/`). |
-| 2    | Bad arguments (path doesn't exist, missing noxfile, …). |
-| 3    | No programs observed in either run (test selection collected nothing). |
+| Code | Meaning                                                                   |
+| ---- | ------------------------------------------------------------------------- |
+| 0    | Codegen is deterministic.                                                 |
+| 1    | Codegen differs (see `report.txt` and `diffs/`).                          |
+| 2    | Bad arguments (path doesn't exist, missing noxfile, …).                   |
+| 3    | No programs observed in either run (test selection collected nothing).    |
 | 4    | A `nox` invocation itself failed (see `run1/test.log` / `run2/test.log`). |
 
 ## Flags

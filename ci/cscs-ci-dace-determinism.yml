@@ -52,7 +52,7 @@ variables:
   #   DACE_REPO: 'https://github.com/GridTools/dace.git'
   #   DACE_REF:  'dace_toolchain_deterministic'
   DACE_REPO: ''
-  DACE_REF:  ''
+  DACE_REF: ''
 
 # Shared template for all dace-determinism jobs
 .dace_determinism_common:
