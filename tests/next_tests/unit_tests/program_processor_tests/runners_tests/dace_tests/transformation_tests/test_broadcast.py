@@ -25,13 +25,10 @@ from gt4py.next.program_processors.runners.dace import (
 from . import util
 
 
-import dace
-
-
 def _make_broadcast_map_substititution(
     multi_edge: bool,
 ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapEntry]:
-    sdfg = dace.SDFG(util.unique_name("broadcast_inliner"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("broadcast_inliner"))
     state = sdfg.add_state(is_start_block=True)
 
     for aname in "abc":
@@ -49,7 +46,7 @@ def _make_broadcast_map_substititution(
         )
 
     # TODO: Ask Edoardo how to properly use; Maybe also modify it.
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast")
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
 
     a, b, c, d, t, s = (state.add_access(name) for name in "abcdts")
 
@@ -141,7 +138,7 @@ def test_map_replacement(
 
 
 def _make_indirect_access() -> dace.SDFG:
-    sdfg = dace.SDFG(util.unique_name("broadcast_indirect_access"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("broadcast_indirect_access"))
     state = sdfg.add_state(is_start_block=True)
 
     for aname in "abc":
@@ -166,7 +163,7 @@ def _make_indirect_access() -> dace.SDFG:
         )
 
     # TODO: Ask Edoardo how to properly use; Maybe also modify it.
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast")
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
     a, b, c, d, t, s = (state.add_access(name) for name in "abcdts")
     idx = state.add_access("idx")
     me, mx = state.add_map("map", ndrange={"__i": "0:10"})
@@ -231,7 +228,7 @@ def test_indirect_access_broadcast():
 def _make_access_node_chain() -> tuple[
     dace.SDFG, dace.SDFGState, gtx_lib_nodes.Broadcast, dace_nodes.AccessNode
 ]:
-    sdfg = dace.SDFG(util.unique_name("_broadcast_access_node_chain"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("_broadcast_access_node_chain"))
     state = sdfg.add_state(is_start_block=True)
 
     for aname in "abc":
@@ -250,7 +247,7 @@ def _make_access_node_chain() -> tuple[
 
     a, b, c, s = (state.add_access(name) for name in "abcs")
 
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast")
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
 
     state.add_edge(s, None, bcast_lib, "_inp", dace.Memlet("s[0]"))
     state.add_edge(bcast_lib, "_outp", a, None, dace.Memlet("a[1:10]"))
@@ -299,7 +296,7 @@ def test_access_node_chain():
 
 
 def _make_access_node_fan_out() -> tuple[dace.SDFG, dace.SDFGState, dict[str, str]]:
-    sdfg = dace.SDFG(util.unique_name("_broadcast_access_node_fan_out"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("_broadcast_access_node_fan_out"))
     state = sdfg.add_state(is_start_block=True)
 
     bcast_result_name = "bcast_result"
@@ -323,7 +320,7 @@ def _make_access_node_fan_out() -> tuple[dace.SDFG, dace.SDFGState, dict[str, st
 
     bcast_result = state.add_access(bcast_result_name)
     s = state.add_access("s")
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast")
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
 
     state.add_edge(s, None, bcast_lib, "_inp", dace.Memlet("s[0]"))
     state.add_edge(bcast_lib, "_outp", bcast_result, None, dace.Memlet(f"{bcast_result}[0:10]"))
@@ -367,7 +364,9 @@ def test_access_node_fan_out():
 
 
 def _make_access_node_multi_connection():
-    sdfg = dace.SDFG(util.unique_name("_broadcast_access_node_multi_connection"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("_broadcast_access_node_multi_connection")
+    )
     state = sdfg.add_state(is_start_block=True)
 
     for aname in "ab":
@@ -385,7 +384,7 @@ def _make_access_node_multi_connection():
     )
 
     a, b, s = (state.add_access(name) for name in "abs")
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast")
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
 
     state.add_edge(s, None, bcast_lib, "_inp", dace.Memlet("s[0]"))
     state.add_edge(bcast_lib, "_outp", a, None, dace.Memlet("a[1:10]"))
