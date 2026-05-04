@@ -331,7 +331,7 @@ def translate_broadcast(
     bcast_node_name = sdfg_builder.unique_lib_node_name("broadcast")
     if isinstance(bcast_arg, gtir.Literal):
         assert isinstance(bcast_arg.type, ts.ScalarType)
-        bcast_value_tlet = sdfg_builder.add_tasklet(
+        bcast_value_tlet, connector_mapping = sdfg_builder.add_tasklet(
             sdfg_builder.unique_tasklet_name(bcast_node_name),
             sdfg=ctx.sdfg,
             state=ctx.state,
@@ -345,7 +345,7 @@ def translate_broadcast(
         bcast_value = ctx.state.add_access(bcast_value_name)
         ctx.state.add_edge(
             bcast_value_tlet,
-            "__out",
+            connector_mapping["__out"],
             bcast_value,
             None,
             dace.Memlet.from_array(bcast_value_name, bcast_value_desc),
