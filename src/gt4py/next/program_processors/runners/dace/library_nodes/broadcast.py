@@ -124,7 +124,6 @@ def inplace_broadcast_expander(
     bcast_node: Broadcast,
     state: dace.SDFGState,
     sdfg: dace.SDFG,
-    delete_bcast_node: bool = True,
 ) -> None:
     """Perform expansion of `bcast_node` inside `state`.
 
@@ -192,8 +191,8 @@ def inplace_broadcast_expander(
     )
     mx.add_scope_connectors(output_edge.data.data)
 
-    if delete_bcast_node:
-        state.remove_node(bcast_node)
+    # Now delete the node.
+    state.remove_node(bcast_node)
 
 
 @dace_library.register_expansion(Broadcast, "pure")
@@ -223,30 +222,32 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
 
         # Creating the input and output data inside the nested SDFG, such that we can
         #  map them _fully_ (see later) into the nested SDFG.
-        nsdfg.add_datadesc(bcast_value.data, bcast_value.desc(sdfg).clone())
-        nsdfg.add_datadesc(bcast_result.data, bcast_result.desc(sdfg).clone())
-        nsdfg.arrays[bcast_value.data].transient = False
-        nsdfg.arrays[bcast_result.data].transient = False
+        bcast_value_inner_data = nsdfg.add_datadesc(_INPUT_NAME, bcast_value.desc(sdfg).clone())
+        bcast_result_inner_data = nsdfg.add_datadesc(_OUTPUT_NAME, bcast_result.desc(sdfg).clone())
+        nsdfg.arrays[bcast_value_inner_data].transient = False
+        nsdfg.arrays[bcast_result_inner_data].transient = False
 
         inner_bcast_node = copy.deepcopy(node)
-        bcast_st.add_edge(
-            bcast_st.add_access(bcast_value.data),
+        inner_bcast_value_edge = bcast_st.add_edge(
+            bcast_st.add_access(bcast_value_inner_data),
             input_edge.src_conn,
             inner_bcast_node,
             "_inp",
             copy.deepcopy(input_edge.data),
         )
-        bcast_st.add_edge(
+        inner_bcast_value_edge.data.data = bcast_value_inner_data
+
+        inner_bcast_result_edge = bcast_st.add_edge(
             inner_bcast_node,
             "_outp",
-            bcast_st.add_access(bcast_result.data),
+            bcast_st.add_access(bcast_result_inner_data),
             output_edge.dst_conn,
             copy.deepcopy(output_edge.data),
         )
+        inner_bcast_result_edge.data.data = bcast_result_inner_data
 
-        # Now we run the inplace expansion.
-        #  The node will be removed afterwards
-        inplace_broadcast_expander(node, state, sdfg, delete_bcast_node=False)
+        # Now we run the inplace expansion on the node inside the nested SDFG.
+        inplace_broadcast_expander(inner_bcast_node, bcast_st, nsdfg)
 
         # To ensure that the full data is passed into the nested SDFG, which we
         #  assumed because of how we want that everything is mapped into.
