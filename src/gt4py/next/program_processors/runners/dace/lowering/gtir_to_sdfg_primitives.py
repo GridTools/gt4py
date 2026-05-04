@@ -12,7 +12,7 @@ import abc
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
-from dace import data as dace_data, nodes as dace_nodes, subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
@@ -356,17 +356,21 @@ def translate_broadcast(
         arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
         gtir_dataflow.MemletExpr,
     ):
+        # Lowering dereference, access a value in the global grid, can be scalar or list.
         assert isinstance(arg.dc_node, dace_nodes.AccessNode)
         # TODO(phimuell, edopao): How do I perform the same check on `arg` directly?
-        if arg.subset.num_elements() != 1:
-            assert isinstance(arg.gt_dtype, ts.ListType)
+        if isinstance(arg.gt_dtype, ts.ListType):
             raise NotImplementedError("Broadcast of lists is not supported.")
-        assert isinstance(arg.dc_node.desc(ctx.sdfg), dace_data.Scalar)
+        # The source must be a field in an array.
+
+        # a: np.ndarrray[kdims] = ...
+        # b: np.ndarray[cell, kdim] = broadcast(a)
 
         bcast_value = arg.dc_node
         broadcast_in_dims = []  # Possible because a scalar.
 
     else:
+        #
         bcast_value = arg.field
         bcast_value_dims = arg.get_field_type().dims
         bcast_result_dim_map = {dim: i for i, dim in enumerate(field_dims)}
@@ -391,6 +395,12 @@ def translate_broadcast(
     # TODO(phimuell, edopao): We now write to the _entire_ output data. Is this always
     #   correct? Probably not because we also need to take into account origin and
     #   things, I guess?
+    # It is correct to wriote everything because the output is shaped based on the domain.
+    #   So we do not need to take the origins into account because they are also encode.
+    #   ==> Dimensions in the broadcast nodes such that the map parameter have the correct name.
+    #           To correct order them.
+    #   concat where tests should be okay to see what happens.
+    # ORIGIN OF SOURCE FIELD
     ctx.state.add_edge(
         bcast_node,
         "_outp",
