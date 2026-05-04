@@ -73,6 +73,9 @@ class DataflowBuilder(Protocol):
     @abc.abstractmethod
     def unique_temp_name(self) -> str: ...
 
+    @abc.abstractmethod
+    def unique_lib_node_name(self, lib_node_type: str) -> str: ...
+
     def add_temp_array(
         self, sdfg: dace.SDFG, shape: Sequence[Any], dtype: dace.dtypes.typeclass
     ) -> tuple[str, dace.data.Scalar]:
@@ -758,6 +761,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def unique_temp_name(self) -> str:
         return f"{next(self.uids['gtir_tmp'])}"
+
+    def unique_lib_node_name(self, lib_node_type: str) -> str:
+        return f"{next(self.uids[lib_node_type])}"
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]

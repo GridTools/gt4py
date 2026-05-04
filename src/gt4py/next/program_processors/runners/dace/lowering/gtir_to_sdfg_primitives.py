@@ -12,7 +12,7 @@ import abc
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
-from dace import nodes as dace_nodes, subsets as dace_subsets
+from dace import data as dace_data, nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
@@ -327,38 +327,67 @@ def translate_broadcast(
 
     # Retrieve the scalar argument, which could be either a literal value or the
     # result of a scalar expression.
-    name = sdfg_builder.unique_tasklet_name("broadcast")
+    # TODO: The name should not be derived from a tasklet
+    bcast_node_name = sdfg_builder.unique_lib_node_name("broadcast")
     if isinstance(bcast_arg, gtir.Literal):
-        # Use a 'Broadcast' library node to fill the result field with the given value.
-        bcast_node = gtir_library_nodes.Broadcast(
-            name, value=bcast_arg.value, debuginfo=gtir_to_sdfg_utils.debug_info(node)
+        assert isinstance(bcast_arg.type, ts.ScalarType)
+        bcast_value_tlet = sdfg_builder.add_tasklet(
+            sdfg_builder.unique_tasklet_name(bcast_node_name),
+            sdfg=ctx.sdfg,
+            state=ctx.state,
+            inputs=set(),
+            outputs={"__out"},
+            code=f"__out = {bcast_arg.value}",
         )
-        ctx.state.add_node(bcast_node)
-    else:
-        if isinstance(
-            arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
-            gtir_dataflow.MemletExpr,
-        ):
-            inp_node = arg.dc_node
-            inp_axes = None
-            inp_origin = None
-        else:
-            inp_node = arg.field
-            inp_axes = [field_dims.index(dim) for dim in arg.get_field_type().dims]
-            inp_origin = [o for _, o in arg.field_domain]
-
-        # Use a 'Broadcast' library node to write the scalar value to the result field.
-        bcast_node = gtir_library_nodes.Broadcast(
-            name, inp_axes, inp_origin, field_origin, debuginfo=gtir_to_sdfg_utils.debug_info(node)
+        bcast_value_name, bcast_value_desc = sdfg_builder.add_temp_scalar(
+            ctx.sdfg, gtx_dace_args.as_dace_type(bcast_arg.type)
         )
-        ctx.state.add_node(bcast_node)
+        bcast_value = ctx.state.add_access(bcast_value_name)
         ctx.state.add_edge(
-            inp_node,
+            bcast_value_tlet,
+            "__out",
+            bcast_value,
             None,
-            bcast_node,
-            "_inp",
-            ctx.sdfg.make_array_memlet(inp_node.data),
+            dace.Memlet.from_array(bcast_value_name, bcast_value_desc),
         )
+        broadcast_in_dims: list[int] = []
+
+    elif isinstance(
+        arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
+        gtir_dataflow.MemletExpr,
+    ):
+        assert isinstance(arg.dc_node, dace_nodes.AccessNode)
+        # TODO(phimuell, edopao): How do I perform the same check on `arg` directly?
+        assert isinstance(arg.dc_node.desc(ctx.sdfg), dace_data.Scalar)
+
+        bcast_value = arg.dc_node
+        broadcast_in_dims = []  # Possible because a scalar.
+
+    else:
+        bcast_value = arg.field
+        bcast_value_dims = arg.get_field_type().dims
+        bcast_result_dim_map = {dim: i for i, dim in enumerate(field_dims)}
+        # TODO(phimuell, edopao): Check if this is correct.
+        broadcast_in_dims = [bcast_result_dim_map[dim] for dim in bcast_value_dims]
+
+    bcast_node = gtir_library_nodes.Broadcast(
+        name=bcast_node_name,
+        broadcast_in_dims=broadcast_in_dims,
+        debuginfo=gtir_to_sdfg_utils.debug_info(node),
+    )
+    ctx.state.add_node(bcast_node)
+
+    ctx.state.add_edge(
+        bcast_value,
+        None,
+        bcast_node,
+        "_inp",
+        ctx.sdfg.make_array_memlet(bcast_value.data),
+    )
+
+    # TODO(phimuell, edopao): We now write to the _entire_ output data. Is this always
+    #   correct? Probably not because we also need to take into account origin and
+    #   things, I guess?
     ctx.state.add_edge(
         bcast_node,
         "_outp",
