@@ -69,8 +69,8 @@ class Broadcast(dace_nodes.LibraryNode):
         self.debuginfo = debuginfo
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
-        if len(self.brodcast_in_dims) == len(set(self.brodcast_in_dims)):
-            raise ValueError("`FCan not broadcast to multiple dimensions at the same time.")
+        if len(self.brodcast_in_dims) != len(set(self.brodcast_in_dims)):
+            raise ValueError("`Can not broadcast to multiple dimensions at the same time.")
 
         # TODO(phimuell): Handle empty Memlets in the input.
         if state.in_degree(self) != 1 and next(iter(state.in_edges(self))).dst_conn == _INPUT_NAME:
@@ -96,7 +96,7 @@ class Broadcast(dace_nodes.LibraryNode):
             raise ValueError("Broadcast result can not be a view.")
 
         if isinstance(bcast_value_desc, dace_data.Scalar):
-            if len(self.brodcast_in_dims) == 0:
+            if len(self.brodcast_in_dims) != 0:
                 raise ValueError("For a scalar `broadcast_in_dims` must be empty.")
         else:
             expected_output_dims = len(self.brodcast_in_dims) + len(bcast_value_desc.shape)
@@ -124,6 +124,7 @@ def inplace_broadcast_expander(
     bcast_node: Broadcast,
     state: dace.SDFGState,
     sdfg: dace.SDFG,
+    delete_bcast_node: bool = True,
 ) -> None:
     """Perform expansion of `bcast_node` inside `state`.
 
@@ -142,7 +143,7 @@ def inplace_broadcast_expander(
     for dst_dim, sbs in enumerate(output_edge.data.subset):
         assert isinstance(sbs, tuple) and len(sbs) == 3
         output_subset.append(f"__bcast{dst_dim}")
-        map_ranges[output_subset[-1]] = dace_sbs.Range(sbs)
+        map_ranges[output_subset[-1]] = dace_sbs.Range([sbs])
 
     if len(bcast_node.brodcast_in_dims) == 0:
         input_subset = ["0"]
@@ -191,7 +192,8 @@ def inplace_broadcast_expander(
     )
     mx.add_scope_connectors(output_edge.data.data)
 
-    state.remove_node(bcast_node)
+    if delete_bcast_node:
+        state.remove_node(bcast_node)
 
 
 @dace_library.register_expansion(Broadcast, "pure")
@@ -243,7 +245,8 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
         )
 
         # Now we run the inplace expansion.
-        inplace_broadcast_expander(node, state, sdfg)
+        #  The node will be removed afterwards
+        inplace_broadcast_expander(node, state, sdfg, delete_bcast_node=False)
 
         # To ensure that the full data is passed into the nested SDFG, which we
         #  assumed because of how we want that everything is mapped into.
