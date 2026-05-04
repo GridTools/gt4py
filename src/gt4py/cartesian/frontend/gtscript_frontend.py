@@ -2554,25 +2554,6 @@ class GTScriptFrontend(Frontend):
     name = "gtscript"
 
     @classmethod
-    def get_stencil_id(cls, qualified_name, definition, externals, options_id):
-        cls.prepare_stencil_definition(definition, externals or {})
-        fingerprint = {
-            "__main__": definition._gtscript_["canonical_ast"],
-            "docstring": inspect.getdoc(definition),
-            "api_annotations": f"[{', '.join(str(item) for item in definition._gtscript_['api_annotations'])}]",
-        }
-        for name, value in definition._gtscript_["externals"].items():
-            fingerprint[name] = (
-                value._gtscript_["canonical_ast"] if hasattr(value, "_gtscript_") else value
-            )
-
-        definition_id = gt_utils.shashed_id(fingerprint)
-        version = gt_utils.shashed_id(definition_id, options_id)
-        stencil_id = gt_definitions.StencilID(qualified_name, version)
-
-        return stencil_id
-
-    @classmethod
     def prepare_stencil_definition(
         cls,
         definition: Callable,
