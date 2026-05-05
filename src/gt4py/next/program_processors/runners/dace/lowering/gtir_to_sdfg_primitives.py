@@ -85,7 +85,7 @@ def _parse_fieldop_arg(
         return arg.get_local_view(domain, ctx.sdfg)
     else:
         # handle tuples of fields
-        return gtx_utils.tree_map(lambda targ: targ.get_local_view(domain))(arg)
+        return gtx_utils.tree_map(lambda targ: targ.get_local_view(domain, ctx.sdfg))(arg)
 
 
 def _create_field_operator_impl(

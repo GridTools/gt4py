@@ -47,43 +47,23 @@ from gt4py.next.program_processors.runners.dace.lowering import (
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
-def _parse_scan_fieldop_arg(
+def _parse_fieldop_arg(
     node: gtir.Expr,
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    field_domain: gtir_domain.FieldopDomain,
-) -> MaybeNestedInTuple[gtir_dataflow.MemletExpr]:
-    """Helper method to visit an expression passed as argument to a scan field operator.
-
-    On the innermost level, a scan operator is lowered to a loop region which computes
-    column elements in the vertical dimension.
-
-    It differs from the helper method `gtir_to_sdfg_primitives` in that field arguments
-    are passed in full shape along the vertical dimension, rather than as iterator.
+    domain: gtir_domain.FieldopDomain,
+) -> MaybeNestedInTuple[gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr]:
     """
-
-    def _parse_fieldop_arg_impl(
-        arg: gtir_to_sdfg_types.FieldopData,
-    ) -> gtir_dataflow.MemletExpr:
-        arg_expr = arg.get_local_view(field_domain, ctx.sdfg)
-        if isinstance(arg_expr, gtir_dataflow.MemletExpr):
-            return arg_expr
-        # In scan field operator, the arguments to the vertical stencil are passed by value.
-        # Therefore, the full field shape is passed as `MemletExpr` rather than `IteratorExpr`.
-        field_type = ts.FieldType(
-            dims=[dim for dim, _ in arg_expr.field_domain], dtype=arg_expr.gt_dtype
-        )
-        return gtir_dataflow.MemletExpr(
-            arg_expr.field, field_type, arg_expr.get_memlet_subset(ctx.sdfg)
-        )
-
+    Helper method to visit an expression passed as argument to a field operator
+    and create the local view for the field argument.
+    """
     arg = sdfg_builder.visit(node, ctx=ctx)
 
     if isinstance(arg, gtir_to_sdfg_types.FieldopData):
-        return _parse_fieldop_arg_impl(arg)
+        return arg.get_local_view(domain, ctx.sdfg)
     else:
         # handle tuples of fields
-        return gtx_utils.tree_map(_parse_fieldop_arg_impl)(arg)
+        return gtx_utils.tree_map(lambda targ: targ.get_local_view(domain, ctx.sdfg))(arg)
 
 
 def _create_scan_field_operator_impl(
@@ -427,7 +407,7 @@ def _lower_lambda_to_nested_sdfg(
 
     # inside the 'compute' state, visit the list of arguments to be passed to the stencil
     stencil_args = [
-        _parse_scan_fieldop_arg(im.ref(p.id), compute_ctx, sdfg_builder, field_domain)
+        _parse_fieldop_arg(im.ref(p.id), compute_ctx, sdfg_builder, field_domain)
         for p in lambda_node.params
     ]
     # stil inside the 'compute' state, generate the dataflow representing the stencil

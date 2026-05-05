@@ -385,6 +385,7 @@ class DaCeTranslator(
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,
             offset_provider=offset_provider,
+            force_inline_lambda_args=True,
             transform_concat_where_to_as_fieldop=False,
             use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
         )
