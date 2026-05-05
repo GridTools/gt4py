@@ -142,19 +142,28 @@ def inplace_broadcast_expander(
         iter(state.out_edges(bcast_node))
     )
 
-    map_ranges: dict[str, dace_sbs.Range] = {}
-    output_subset: list[str] = []
-    for dst_dim, sbs in enumerate(output_edge.data.subset):
-        assert isinstance(sbs, tuple) and len(sbs) == 3
-        output_subset.append(f"__bcast{dst_dim}")
-        map_ranges[output_subset[-1]] = dace_sbs.Range([sbs])
+    # TODO(phimuell): Add warning.
+    map_params: list[str] = (
+        list(bcast_node.params)
+        if hasattr(bcast_node, "params")
+        else [f"__bcast{dst_dim}" for dst_dim in range(len(output_edge.data.subset))]
+    )
 
+    output_subset: list[str] = map_params.copy()
+    map_ranges: dict[str, dace_sbs.Range] = {
+        map_param: dace_sbs.Range([sbs])
+        for map_param, sbs in zip(map_params, output_edge.data.subset)
+    }
+
+    input_subset: list[str]
     if len(bcast_node.brodcast_in_dims) == 0:
         input_subset = ["0"]
     else:
-        # TODO(phimuell): Do we need a correction here because map range can be offsetted.
-        #   Because of our requierement it is probably irrelevant, i.e. the dimension is always full.
-        input_subset = [f"__bcast{dst_dim}" for dst_dim in bcast_node.brodcast_in_dims]
+        bcast_value_offset = input_edge.data.subset.min_element()
+        input_subset = [
+            f"{map_params[dst_dim]} + ({offset})"
+            for dst_dim, offset in zip(bcast_node.brodcast_in_dims, bcast_value_offset)
+        ]
 
     me, mx = state.add_map(f"__gt4py_broadcast_map_{bcast_node.name}", ndrange=map_ranges)
     bcast_tlet = state.add_tasklet(
