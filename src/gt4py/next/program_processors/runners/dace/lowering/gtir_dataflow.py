@@ -1064,11 +1064,18 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
+        if not all(isinstance(index, SymbolExpr) for index in it.indices.values()):
+            raise NotImplementedError("Dynamic indices in neighbors expression are not supported.")
+
+        # make sure that the field can be dereferenced with the given connectivity type
         assert any(dim == conn_type.codomain for dim, _ in it.field_domain)
+        field_codomain_origin = next(
+            origin for dim, origin in it.field_domain if dim == conn_type.codomain
+        )
+        # make sure that the iterator can access the connectivity table
         assert conn_type.source_dim in it.indices
-        origin_index = it.indices[conn_type.source_dim]
-        assert isinstance(origin_index, SymbolExpr)
-        assert all(isinstance(index, SymbolExpr) for index in it.indices.values())
+        conn_source_index = it.indices[conn_type.source_dim]
+        assert isinstance(conn_source_index, SymbolExpr)
 
         # initially, the storage for the connectivty tables is created as transient;
         # when the tables are used, the storage is changed to non-transient,
@@ -1115,7 +1122,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     ),
                 ),
                 subset=dace_subsets.Range.from_string(
-                    f"{origin_index.value}, 0:{conn_type.max_neighbors}"
+                    f"{conn_source_index.value}, 0:{conn_type.max_neighbors}"
                 ),
             )
         )
@@ -1130,7 +1137,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         index_connector = "__index"
         field_connector = "__field"
         output_connector = "__val"
-        tasklet_expression = f"{output_connector} = {field_connector}[{index_connector}]"
+        tasklet_expression = (
+            f"{output_connector} = {field_connector}[{index_connector} - {field_codomain_origin}]"
+        )
         input_memlets = {
             field_connector: self.sdfg.make_array_memlet(field_slice.dc_node.data),
             index_connector: dace.Memlet(data=conn_slice.dc_node.data, subset=neighbor_idx),
@@ -1748,27 +1757,33 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
-        neighbor_dim = conn_type.codomain
-        origin_dim = conn_type.source_dim
-        origin_index = it.indices[origin_dim]
+        # make sure that the field can be dereferenced with the given connectivity type
+        assert any(dim == conn_type.codomain for dim, _ in it.field_domain)
+        # make sure that the iterator can access the connectivity table
+        assert conn_type.source_dim in it.indices
+        conn_source_index = it.indices[conn_type.source_dim]
 
-        shifted_indices = {dim: idx for dim, idx in it.indices.items() if dim != origin_dim}
-        if isinstance(offset_expr, SymbolExpr) and isinstance(origin_index, SymbolExpr):
+        shifted_indices = {
+            dim: idx for dim, idx in it.indices.items() if dim != conn_type.source_dim
+        }
+        if isinstance(offset_expr, SymbolExpr) and isinstance(conn_source_index, SymbolExpr):
             # use memlet to retrieve the neighbor index
-            shifted_indices[neighbor_dim] = MemletExpr(
+            shifted_indices[conn_type.codomain] = MemletExpr(
                 dc_node=conn_node,
                 gt_field=ts.FieldType(
-                    dims=[origin_dim],
+                    dims=[conn_type.source_dim],
                     dtype=ts.ListType(
                         element_type=tt.from_dtype(conn_type.dtype), offset_type=_CONST_DIM
                     ),
                 ),
-                subset=dace_subsets.Range.from_string(f"{origin_index.value}, {offset_expr.value}"),
+                subset=dace_subsets.Range.from_string(
+                    f"{conn_source_index.value}, {offset_expr.value}"
+                ),
             )
         else:
             # dynamic offset: we cannot use a memlet to retrieve the offset value, use a tasklet node
-            shifted_indices[neighbor_dim] = self._make_dynamic_neighbor_offset(
-                offset_expr, conn_node, origin_index
+            shifted_indices[conn_type.codomain] = self._make_dynamic_neighbor_offset(
+                offset_expr, conn_node, conn_source_index
             )
 
         return IteratorExpr(it.field, it.gt_dtype, it.field_domain, shifted_indices)
