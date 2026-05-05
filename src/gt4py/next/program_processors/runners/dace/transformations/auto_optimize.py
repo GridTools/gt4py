@@ -237,6 +237,8 @@ def gt_auto_optimize(
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
 
+    validate_all = True
+
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
