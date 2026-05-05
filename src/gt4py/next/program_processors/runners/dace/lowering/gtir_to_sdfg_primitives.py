@@ -335,7 +335,13 @@ def translate_broadcast(
     # TODO: The name should not be derived from a tasklet
     bcast_node_name = sdfg_builder.unique_lib_node_name("broadcast")
 
+    # The destination array was allocated to fit everything.
+    bcast_result_subset = dace_subsets.Range.from_array(field_desc)
     bcast_value_subset: dace_subsets.Subset | None = None
+
+    # Which dimensions in `bcast_value` corresponds to the ones in `cast_result`.
+    broadcast_in_dims: list[int]
+
     if isinstance(bcast_arg, gtir.Literal):
         assert isinstance(bcast_arg.type, ts.ScalarType)
         bcast_value_tlet, connector_mapping = sdfg_builder.add_tasklet(
@@ -357,7 +363,7 @@ def translate_broadcast(
             None,
             dace.Memlet.from_array(bcast_value_name, bcast_value_desc),
         )
-        broadcast_in_dims: list[int] = []
+        broadcast_in_dims = []
 
     elif isinstance(
         arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
@@ -376,13 +382,33 @@ def translate_broadcast(
         # Broadcasting a "vector", i.e. adding missing non local dimensions.
         assert isinstance(arg.field.desc(ctx.sdfg), dace_data.Array)
         bcast_value = arg.field
-        bcast_value_dims = arg.get_field_type().dims
-        bcast_result_dim_map = {dim: i for i, dim in enumerate(field_dims)}
+        bcast_value_gtdims = arg.get_field_type().dims
+        bcast_result_gtdim_map = {dim: i for i, dim in enumerate(field_dims)}
+        bcast_value_origins = [o for _, o in arg.field_domain]
+        bcast_result_origins = field_origin
+        bcast_result_subset_size = bcast_result_subset.size()
 
         # Use the dimensions to find out how we have to broadcast.
-        broadcast_in_dims = [bcast_result_dim_map[dim] for dim in bcast_value_dims]
+        broadcast_in_dims = []
+        bcast_value_subset_components: list[str] = []
+        for bcast_value_dim, bcast_value_gtdim in enumerate(bcast_value_gtdims):
+            # Which dimension of the input should go to which dimension in the output.
+            bcast_result_dim = bcast_result_gtdim_map[bcast_value_gtdim]
+            broadcast_in_dims.append(bcast_result_dim)
 
-        # The big question is if we need to modify the subset where we read?
+            # Find the correction that should be applied to the input.
+            bcast_value_origin = bcast_value_origins[bcast_value_dim]
+            bcast_result_origin = bcast_result_origins[bcast_result_dim]
+            bcast_dim_size = bcast_result_subset_size[bcast_result_dim]
+            start_pos = f"({bcast_result_origin}) - ({bcast_value_origin})"
+
+            bcast_value_subset_components.append(
+                f"({start_pos}):(({start_pos}) + ({bcast_dim_size}))"
+            )
+
+        bcast_value_subset = dace_subsets.Range.from_string(
+            ", ".join(bcast_value_subset_components)
+        )
 
     bcast_node = gtir_library_nodes.Broadcast(
         name=bcast_node_name,
@@ -392,14 +418,14 @@ def translate_broadcast(
     ctx.state.add_node(bcast_node)
 
     if bcast_value_subset is None:
-        bcast_value_subset = ctx.sdfg.make_array_memlet(bcast_value.data)
+        bcast_value_subset = dace_subsets.Range.from_array(bcast_value.desc(ctx.sdfg))
 
     ctx.state.add_edge(
         bcast_value,
         None,
         bcast_node,
         "_inp",
-        bcast_value_subset,
+        dace.Memlet(data=bcast_value.data, subset=bcast_value_subset),
     )
 
     # TODO(phimuell, edopao): We now write to the _entire_ output data. Is this always
@@ -416,7 +442,7 @@ def translate_broadcast(
         "_outp",
         field_node,
         None,
-        dace.Memlet(data=field_name, subset=dace_subsets.Range.from_array(field_desc)),
+        dace.Memlet(data=field_name, subset=bcast_result_subset),
     )
 
     return gtir_to_sdfg_types.FieldopData(field_node, node.type, tuple(field_origin))
