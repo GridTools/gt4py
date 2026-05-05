@@ -119,13 +119,13 @@ def test_concat_where_single_level_broadcast(cartesian_case):
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
     a = cases.allocate(
-        cartesian_case, testee, "a", domain=gtx.domain({KDim: out.domain.shape[2]})
+        cartesian_case, testee, "a", domain=gtx.domain({KDim: (-2, out.domain.shape[2])})
     )()
     b = cases.allocate(cartesian_case, testee, "b", domain=out.domain.slice_at[:, :, 1:])()
 
     ref = np.concatenate(
         (
-            np.tile(a.asnumpy()[0], (*b.domain.shape[0:2], 1)),
+            np.tile(a.asnumpy()[2], (*b.domain.shape[0:2], 1)),
             b.asnumpy(),
         ),
         axis=2,
