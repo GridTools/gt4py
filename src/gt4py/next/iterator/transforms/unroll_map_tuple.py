@@ -25,7 +25,7 @@ class UnrollMapTuple(eve.NodeTranslator):
     def apply(cls, program: itir.Program, *, uids: utils.IDGeneratorPool):
         return cls(uids=uids).visit(program)
 
-    def visit_FunCall(self, node: itir.Expr):
+    def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)
 
         if cpm.is_call_to(node.fun, "map_tuple"):

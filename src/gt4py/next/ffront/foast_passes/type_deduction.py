@@ -705,7 +705,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_syms = {}
 
         @tree_map(with_path_arg=True)
-        def process_target(target_el: foast.Symbol, path: tuple[int, ...]):
+        def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> None:
             try:
                 new_syms[target_el.id] = target_el
                 type_ = element_type
@@ -717,7 +717,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             except IndexError:
                 raise errors.DSLError(
                     target_el.location, f"Cannot unpack non-iterable '{type_}' object."
-                )
+                ) from None
 
         process_target(target)
 
@@ -726,6 +726,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             **{**kwargs, "symtable": symtable.new_child(new_syms)},
         )
 
+        return_type: ts.TupleType | ts.VarArgType
         if isinstance(iterable.type, ts.TupleType):
             return_type = ts.TupleType(types=[element_expr.type] * len(iterable.type.types))
         else:

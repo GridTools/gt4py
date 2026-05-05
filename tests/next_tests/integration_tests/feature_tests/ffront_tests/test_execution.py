@@ -367,7 +367,7 @@ def test_var_len_tuple_comprehension(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
-def test_nested_tuple_comprehension(cartesian_case):
+def test_multi_target_tuple_comprehension(cartesian_case):
     @gtx.field_operator
     def testee(nested_tuple: tuple[tuple[int32, cases.IField], ...]) -> tuple[cases.IField, ...]:
         return tuple(factor * tracer for factor, tracer in nested_tuple)

@@ -460,6 +460,17 @@ def test_tuple_compr_non_tuple_iterable_failure():
         _ = FieldOperatorParser.apply_to_function(testee)
 
 
+def test_nested_tuple_compr_failure():
+    def testee(nested_tuple: tuple[tuple[gtx.Field[[TDim], float64], ...], ...], factor: int32):
+        return tuple(grandchild * factor for child in nested_tuple for grandchild in child)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape("Nested generator expressions are not supported."),
+    ):
+        _ = FieldOperatorParser.apply_to_function(testee)
+
+
 def test_tuple_compr_unpacking_failure():
     def testee(arg: tuple[int32, ...]):
         return tuple(a * b for a, b in arg)

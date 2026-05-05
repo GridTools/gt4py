@@ -11,9 +11,9 @@ from __future__ import annotations
 import ast
 import textwrap
 import typing
-from typing import Any, Type
 
 import gt4py.eve as eve
+from gt4py.eve.extended_typing import Any, NestedTuple, Type
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -336,7 +336,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Expr(self, node: ast.Expr) -> foast.Expr:
         return self.visit(node.value)
 
-    def visit_Name(self, node: ast.Name, **kwargs: Any) -> foast.Name:
+    def visit_Name(self, node: ast.Name, **kwargs: Any) -> foast.DataSymbol | foast.Name:
         loc = self.get_location(node)
         if isinstance(node.ctx, ast.Store):
             return foast.DataSymbol(id=node.id, location=loc, type=ts.DeferredType(constraint=None))
@@ -474,6 +474,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.CompareOperator.NOTEQ
 
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
+        assert isinstance(node.func, ast.Name)
         (arg,) = (
             node.args
         )  # note for review: the change here is unrelated to the actual pr and just a small cleanup
@@ -481,29 +482,38 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             if not (
                 isinstance(arg, ast.Constant)
                 or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
+                or isinstance(arg, ast.GeneratorExp)
             ):
                 raise errors.DSLError(
                     self.get_location(node),
-                    f"'{self._func_name(node)}()' only takes literal arguments.",
+                    f"'{self._func_name(node)}()' only takes literal arguments or a generator expression.",
                 )
 
     def _func_name(self, node: ast.Call) -> str:
         return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.
 
-    def visit_Call(self, node: ast.Call, **kwargs: Any) -> foast.Call:
+    def visit_Call(self, node: ast.Call, **kwargs: Any) -> foast.Call | foast.TupleComprehension:
         if isinstance(node.func, ast.Name):
             func_name = self._func_name(node)
 
-            if func_name == "tuple":
-                (gen_expr,) = node.args
-                assert (
-                    len(gen_expr.generators) == 1
-                )  # we don't support (... for ... in ... for ... in ...)
-                assert (
-                    gen_expr.generators[0].ifs == []
-                )  # we don't support if conditions in comprehensions
+            if (
+                func_name == "tuple"
+                and len(node.args) == 1
+                and isinstance(gen_expr := node.args[0], ast.GeneratorExp)
+            ):
+                if len(gen_expr.generators) != 1:
+                    raise errors.DSLError(
+                        self.get_location(node),
+                        "Nested generator expressions are not supported.",
+                    )
+                if gen_expr.generators[0].ifs != []:
+                    raise errors.DSLError(
+                        self.get_location(node),
+                        "Conditionals are not supported in generator expressions as they size of "
+                        "the result can only be deduced at runtime.",
+                    )
 
-                def parse_target(target: ast.Tuple | ast.Name) -> tuple[foast.Name]:
+                def parse_target(target: ast.expr) -> NestedTuple[foast.Name]:
                     if isinstance(target, ast.Tuple):
                         return tuple(parse_target(el) for el in target.elts)
                     assert isinstance(target, ast.Name)
