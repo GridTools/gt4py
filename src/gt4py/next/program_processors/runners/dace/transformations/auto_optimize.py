@@ -237,6 +237,8 @@ def gt_auto_optimize(
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
 
+    validate_all = True
+
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
@@ -252,8 +254,11 @@ def gt_auto_optimize(
 
         # We need new transformations in order to deal with GTIR library nodes.
         # For now, we simply expand these nodes before starting optimizing.
+        # TODO: Remove once transformations are ready.
         for node, state in sdfg.all_nodes_recursive():
-            if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
+            if isinstance(node, gtir_library_nodes.Broadcast):
+                gtir_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
+            elif isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
                 node.expand(state)
 
         # Initial Cleanup
@@ -760,8 +765,8 @@ def _gt_auto_process_dataflow_inside_maps(
     # NestedSDFGs inside the ConditionalBlocks it fuses.
     sdfg.apply_transformations_repeated(
         gtx_transformations.FuseHorizontalConditionBlocks(),
-        validate=True,
-        validate_all=True,
+        validate=False,
+        validate_all=validate_all,
     )
 
     # Move dataflow into the branches of the `if` such that they are only evaluated

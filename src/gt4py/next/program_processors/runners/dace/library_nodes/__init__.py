@@ -10,7 +10,10 @@ from typing import Final
 
 from dace import nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace.library_nodes.broadcast import Broadcast
+from gt4py.next.program_processors.runners.dace.library_nodes.broadcast import (
+    Broadcast,
+    inplace_broadcast_expander,
+)
 from gt4py.next.program_processors.runners.dace.library_nodes.reduce_with_skip_values import (
     ReduceWithSkipValues,
 )
@@ -23,4 +26,5 @@ GTIR_LIBRARY_NODES: Final[tuple[dace_nodes.LibraryNode, ...]] = (Broadcast, Redu
 __all__ = [
     "Broadcast",
     "ReduceWithSkipValues",
+    "inplace_broadcast_expander",
 ]

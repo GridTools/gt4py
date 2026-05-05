@@ -134,6 +134,8 @@ class MapToCopy(dace_transformation.SingleStateTransformation):
         #   `concat_where`, but I am not sure how important that case is.
         if isinstance(sdfg.arrays[src_access_node.data], dace_data.Scalar):
             return False
+        if len(src_subset) != len(dst_subset):
+            return False
         if (src_subset.num_elements() == src_edge.data.volume) != True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             return False
         if (dst_subset.num_elements() == dst_edge.data.volume) != True:  # noqa: E712 [true-false-comparison]  # SymPy comparison

@@ -12,7 +12,7 @@ import abc
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
-from dace import nodes as dace_nodes, subsets as dace_subsets
+from dace import data as dace_data, nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
@@ -313,6 +313,11 @@ def translate_broadcast(
     fieldop_expr, fieldop_domain_expr = fun_node.args
     assert cpm.is_ref_to(fieldop_expr, "deref")
 
+    # TODO:
+    #   - Include the dimensions of the output, such that we can generate the Map correctly
+    #       this is needed for expansion of the broadcast node such that we can order them correctly.
+    #       This information is stored in `field_dims`.
+
     # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
     field_domain = gtir_domain.get_field_domain(
@@ -327,44 +332,117 @@ def translate_broadcast(
 
     # Retrieve the scalar argument, which could be either a literal value or the
     # result of a scalar expression.
-    name = sdfg_builder.unique_tasklet_name("broadcast")
-    if isinstance(bcast_arg, gtir.Literal):
-        # Use a 'Broadcast' library node to fill the result field with the given value.
-        bcast_node = gtir_library_nodes.Broadcast(
-            name, value=bcast_arg.value, debuginfo=gtir_to_sdfg_utils.debug_info(node)
-        )
-        ctx.state.add_node(bcast_node)
-    else:
-        if isinstance(
-            arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
-            gtir_dataflow.MemletExpr,
-        ):
-            inp_node = arg.dc_node
-            inp_axes = None
-            inp_origin = None
-        else:
-            inp_node = arg.field
-            inp_axes = [field_dims.index(dim) for dim in arg.get_field_type().dims]
-            inp_origin = [o for _, o in arg.field_domain]
+    # TODO: The name should not be derived from a tasklet
+    bcast_node_name = sdfg_builder.unique_lib_node_name("broadcast")
 
-        # Use a 'Broadcast' library node to write the scalar value to the result field.
-        bcast_node = gtir_library_nodes.Broadcast(
-            name, inp_axes, inp_origin, field_origin, debuginfo=gtir_to_sdfg_utils.debug_info(node)
+    # The destination array was allocated to fit everything.
+    bcast_result_subset = dace_subsets.Range.from_array(field_desc)
+    bcast_value_subset: dace_subsets.Subset | None = None
+
+    # Which dimensions in `bcast_value` corresponds to the ones in `cast_result`.
+    broadcast_in_dims: list[int]
+
+    if isinstance(bcast_arg, gtir.Literal):
+        assert isinstance(bcast_arg.type, ts.ScalarType)
+        bcast_value_tlet, connector_mapping = sdfg_builder.add_tasklet(
+            sdfg_builder.unique_tasklet_name(bcast_node_name),
+            sdfg=ctx.sdfg,
+            state=ctx.state,
+            inputs=set(),
+            outputs={"__out"},
+            code=f"__out = {bcast_arg.value}",
         )
-        ctx.state.add_node(bcast_node)
+        bcast_value_name, bcast_value_desc = sdfg_builder.add_temp_scalar(
+            ctx.sdfg, gtx_dace_args.as_dace_type(bcast_arg.type)
+        )
+        bcast_value = ctx.state.add_access(bcast_value_name)
         ctx.state.add_edge(
-            inp_node,
+            bcast_value_tlet,
+            connector_mapping["__out"],
+            bcast_value,
             None,
-            bcast_node,
-            "_inp",
-            ctx.sdfg.make_array_memlet(inp_node.data),
+            dace.Memlet.from_array(bcast_value_name, bcast_value_desc),
         )
+        broadcast_in_dims = []
+
+    elif isinstance(
+        arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
+        gtir_dataflow.MemletExpr,
+    ):
+        if isinstance(arg.gt_dtype, ts.ScalarType):
+            # Broadcasting a scalar that is not a literal.
+            assert isinstance(arg.dc_node.desc(ctx.sdfg), dace_data.Scalar)
+            bcast_value = arg.dc_node
+            broadcast_in_dims = []
+        else:
+            assert isinstance(arg.gt_dtype, ts.ListType)
+            raise NotImplementedError("Broadcast of lists is not supported.")
+
+    else:
+        # Broadcasting a "vector", i.e. adding missing non local dimensions.
+        assert isinstance(arg.field.desc(ctx.sdfg), dace_data.Array)
+        bcast_value = arg.field
+        bcast_value_gtdims = arg.get_field_type().dims
+        bcast_result_gtdim_map = {dim: i for i, dim in enumerate(field_dims)}
+        bcast_value_origins = [o for _, o in arg.field_domain]
+        bcast_result_origins = field_origin
+        bcast_result_subset_size = bcast_result_subset.size()
+
+        # Use the dimensions to find out how we have to broadcast.
+        broadcast_in_dims = []
+        bcast_value_subset_components: list[str] = []
+        for bcast_value_dim, bcast_value_gtdim in enumerate(bcast_value_gtdims):
+            # Which dimension of the input should go to which dimension in the output.
+            bcast_result_dim = bcast_result_gtdim_map[bcast_value_gtdim]
+            broadcast_in_dims.append(bcast_result_dim)
+
+            # Find the correction that should be applied to the input.
+            bcast_value_origin = bcast_value_origins[bcast_value_dim]
+            bcast_result_origin = bcast_result_origins[bcast_result_dim]
+            bcast_dim_size = bcast_result_subset_size[bcast_result_dim]
+            start_pos = f"({bcast_result_origin}) - ({bcast_value_origin})"
+
+            bcast_value_subset_components.append(
+                f"({start_pos}):(({start_pos}) + ({bcast_dim_size}))"
+            )
+
+        bcast_value_subset = dace_subsets.Range.from_string(
+            ", ".join(bcast_value_subset_components)
+        )
+
+    bcast_node = gtir_library_nodes.Broadcast(
+        name=bcast_node_name,
+        broadcast_in_dims=broadcast_in_dims,
+        debuginfo=gtir_to_sdfg_utils.debug_info(node),
+    )
+    ctx.state.add_node(bcast_node)
+
+    if bcast_value_subset is None:
+        bcast_value_subset = dace_subsets.Range.from_array(bcast_value.desc(ctx.sdfg))
+
+    ctx.state.add_edge(
+        bcast_value,
+        None,
+        bcast_node,
+        "_inp",
+        dace.Memlet(data=bcast_value.data, subset=bcast_value_subset),
+    )
+
+    # TODO(phimuell, edopao): We now write to the _entire_ output data. Is this always
+    #   correct? Probably not because we also need to take into account origin and
+    #   things, I guess?
+    # It is correct to wriote everything because the output is shaped based on the domain.
+    #   So we do not need to take the origins into account because they are also encode.
+    #   ==> Dimensions in the broadcast nodes such that the map parameter have the correct name.
+    #           To correct order them.
+    #   concat where tests should be okay to see what happens.
+    # ORIGIN OF SOURCE FIELD
     ctx.state.add_edge(
         bcast_node,
         "_outp",
         field_node,
         None,
-        dace.Memlet(data=field_name, subset=dace_subsets.Range.from_array(field_desc)),
+        dace.Memlet(data=field_name, subset=bcast_result_subset),
     )
 
     return gtir_to_sdfg_types.FieldopData(field_node, node.type, tuple(field_origin))

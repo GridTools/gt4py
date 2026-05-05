@@ -19,6 +19,7 @@ from .auto_optimize import (
     GT4PyAutoOptHookStage,
     gt_auto_optimize,
 )
+from .broadcast import ScalarBrodcastInliner
 from .concat_where_mapper import (
     gt_apply_concat_where_replacement_on_sdfg,
     gt_check_if_concat_where_node_is_replaceable,
@@ -114,6 +115,7 @@ __all__ = [
     "RemoveAccessNodeCopies",
     "RemovePointwiseViews",
     "RemoveScalarCopies",
+    "ScalarBrodcastInliner",
     "ScanLoopUnrolling",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
