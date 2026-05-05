@@ -143,6 +143,9 @@ def test_unstructured_shift(unstructured_case):
 @pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_program_with_sliced_out_arguments
 def test_unstructured_shift_with_non_zero_origin(unstructured_case):
+    if unstructured_case.backend is None:
+        pytest.xfail("Embedded backend requires contiguous inverse image.")
+
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
@@ -747,6 +750,9 @@ def test_nested_tuple_return(cartesian_case):
 @pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_program_with_sliced_out_arguments
 def test_neighbor_sum_with_non_zero_origin(unstructured_case):
+    if unstructured_case.backend is None:
+        pytest.xfail("Embedded backend requires contiguous inverse image.")
+
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return neighbor_sum(a(E2V), axis=E2VDim)
