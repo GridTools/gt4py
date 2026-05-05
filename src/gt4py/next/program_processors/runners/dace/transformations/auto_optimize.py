@@ -254,7 +254,9 @@ def gt_auto_optimize(
         # For now, we simply expand these nodes before starting optimizing.
         # TODO: Remove once transformations are ready.
         for node, state in sdfg.all_nodes_recursive():
-            if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
+            if isinstance(node, gtir_library_nodes.Broadcast):
+                gtir_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
+            elif isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
                 node.expand(state)
 
         # Initial Cleanup
