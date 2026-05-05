@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q --script --python 3.11
+#!/usr/bin/env -S uv run -q --script --python 3.12
 #
 # GT4Py - GridTools Framework
 #
@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import os
 import pathlib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
@@ -26,6 +27,10 @@ from typing import Final, Literal, TypeAlias
 import nox
 import tomllib
 
+
+# This is needed because uv now fails to create an env when it already exists.
+# See: https://github.com/astral-sh/uv/issues/17899
+os.environ["UV_VENV_CLEAR"] = "1"
 
 # This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
 # is not guaranteed to be available in the venv where `nox` is running.
@@ -135,7 +140,7 @@ def install_session_venv(
         # uv does not yet combine explicit python version requests with the
         # `requires-python` range in `pyproject.toml`, so we do it manually.
         # See: https://github.com/astral-sh/uv/issues/16654
-        f"{REQUIRES_PYTHON}, >={session.python!s}.0",
+        f"{REQUIRES_PYTHON}, ~={session.python!s}.0",
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),

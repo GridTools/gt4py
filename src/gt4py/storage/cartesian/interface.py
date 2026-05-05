@@ -14,7 +14,7 @@ from typing import Optional, Sequence, Union
 import numpy as np
 
 from gt4py.storage import allocators
-from gt4py.storage.cartesian import layout, utils as storage_utils
+from gt4py.storage.cartesian import layout_registry, utils as storage_utils
 
 
 try:
@@ -32,7 +32,7 @@ from numpy.typing import ArrayLike, DTypeLike
 
 # Helper functions
 def _error_on_invalid_preset(backend):
-    if backend not in layout.REGISTRY:
+    if backend not in layout_registry.REGISTRY:
         raise RuntimeError(f"Storage preset '{backend}' is not registered.")
 
 
@@ -79,7 +79,7 @@ def empty(
             If illegal or inconsistent arguments are specified.
     """
     _error_on_invalid_preset(backend)
-    storage_info = layout.from_name(backend)
+    storage_info = layout_registry.from_name(backend)
     assert storage_info is not None
     if storage_info["device"] == "gpu":
         allocate_f = storage_utils.allocate_gpu
@@ -320,7 +320,7 @@ def from_array(
         dimensions=dimensions,
     )
 
-    layout_info = layout.from_name(backend)
+    layout_info = layout_registry.from_name(backend)
     assert layout_info is not None
     storage[...] = storage_utils.asarray(data, device=layout_info["device"])
 
