@@ -46,7 +46,7 @@ def _make_broadcast_map_substititution(
         )
 
     # TODO: Ask Edoardo how to properly use; Maybe also modify it.
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[], params=None)
 
     a, b, c, d, t, s = (state.add_access(name) for name in "abcdts")
 
@@ -163,7 +163,7 @@ def _make_indirect_access() -> dace.SDFG:
         )
 
     # TODO: Ask Edoardo how to properly use; Maybe also modify it.
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[], params=None)
     a, b, c, d, t, s = (state.add_access(name) for name in "abcdts")
     idx = state.add_access("idx")
     me, mx = state.add_map("map", ndrange={"__i": "0:10"})
@@ -247,7 +247,7 @@ def _make_access_node_chain() -> tuple[
 
     a, b, c, s = (state.add_access(name) for name in "abcs")
 
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[], params=None)
 
     state.add_edge(s, None, bcast_lib, "_inp", dace.Memlet("s[0]"))
     state.add_edge(bcast_lib, "_outp", a, None, dace.Memlet("a[1:10]"))
@@ -320,7 +320,7 @@ def _make_access_node_fan_out() -> tuple[dace.SDFG, dace.SDFGState, dict[str, st
 
     bcast_result = state.add_access(bcast_result_name)
     s = state.add_access("s")
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[], params=None)
 
     state.add_edge(s, None, bcast_lib, "_inp", dace.Memlet("s[0]"))
     state.add_edge(bcast_lib, "_outp", bcast_result, None, dace.Memlet(f"{bcast_result}[0:10]"))
@@ -384,7 +384,7 @@ def _make_access_node_multi_connection():
     )
 
     a, b, s = (state.add_access(name) for name in "abs")
-    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[])
+    bcast_lib = gtx_lib_nodes.Broadcast(name="bcast", broadcast_in_dims=[], params=None)
 
     state.add_edge(s, None, bcast_lib, "_inp", dace.Memlet("s[0]"))
     state.add_edge(bcast_lib, "_outp", a, None, dace.Memlet("a[1:10]"))

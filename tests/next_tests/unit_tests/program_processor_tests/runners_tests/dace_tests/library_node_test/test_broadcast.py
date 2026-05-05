@@ -48,8 +48,8 @@ def _make_2d_broadcast() -> tuple[dace.SDFG, dace.SDFGState]:
     bcast_value = state.add_access("bcast_value")
     bcast_result = state.add_access("bcast_result")
 
-    bcast_node1 = gtx_lib_nodes.Broadcast(name="bcast_node1", broadcast_in_dims=[])
-    bcast_node2 = gtx_lib_nodes.Broadcast(name="bcast_node2", broadcast_in_dims=[])
+    bcast_node1 = gtx_lib_nodes.Broadcast(name="bcast_node1", broadcast_in_dims=[], params=None)
+    bcast_node2 = gtx_lib_nodes.Broadcast(name="bcast_node2", broadcast_in_dims=[], params=None)
 
     state.add_edge(
         bcast_value, None, bcast_node1, "_inp", dace.Memlet(data=bcast_value.data, subset="0")
@@ -135,7 +135,7 @@ def _make_broadcast_vector(
     dest_subset = ["1:8", "2:9", "3:11"]
     dest_subset[broadcast_in_dim] = "0:10"
 
-    bcast_node = gtx_lib_nodes.Broadcast("bcast", broadcast_in_dims=[broadcast_in_dim])
+    bcast_node = gtx_lib_nodes.Broadcast("bcast", broadcast_in_dims=[broadcast_in_dim], params=None)
     state.add_node(bcast_node)
 
     state.add_edge(
