@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import copy
-from typing import Any, Final, Sequence
+from typing import Any, Final, Iterable, Optional, Sequence
 
 import dace
 from dace import (
@@ -21,6 +21,9 @@ from dace import (
 )
 from dace.sdfg import graph as dace_graph
 from dace.transformation import transformation as dace_transform
+
+from gt4py.next import common as gtx_common
+from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowering
 
 
 _INPUT_NAME: Final[str] = "_inp"
@@ -42,6 +45,8 @@ class Broadcast(dace_nodes.LibraryNode):
 
     Args:
         broadcast_in_dim: How to broadcast.
+        params: The parameters that should be used for the expansion. If given one
+            entry for each dimension of the destination is needed.
 
     Todo:
         - While for the output it is probably okay to always require an adjacent
@@ -53,11 +58,13 @@ class Broadcast(dace_nodes.LibraryNode):
     default_implementation: Final[str | None] = "pure"
 
     brodcast_in_dims = dace_properties.ListProperty(element_type=int)
+    params = dace_properties.ListProperty(element_type=str, allow_none=True)
 
     def __init__(
         self,
         name: str,
         broadcast_in_dims: Sequence[int],
+        params: Optional[Iterable[gtx_common.Dimension | str]],
         debuginfo: dace.dtypes.DebugInfo | None = None,
     ):
         # TODO(philip, edopao): I would propose to drop `value` then. This makes it
@@ -66,6 +73,16 @@ class Broadcast(dace_nodes.LibraryNode):
 
         self.brodcast_in_dims = list(broadcast_in_dims)
         self.debuginfo = debuginfo
+
+        if params is None:
+            self.params = None
+        else:
+            self.params = [
+                gtx_dace_lowering.get_map_variable(param)
+                if isinstance(param, gtx_common.Dimension)
+                else param
+                for param in params
+            ]
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         if len(self.brodcast_in_dims) != len(set(self.brodcast_in_dims)):
@@ -94,6 +111,19 @@ class Broadcast(dace_nodes.LibraryNode):
         if isinstance(bcast_result_desc, dace_data.View):
             raise ValueError("Broadcast result can not be a view.")
 
+        if not isinstance(bcast_result_desc, dace_data.Array):
+            # In fact it would also be possible to broadcast into a Scalar, but this
+            #  does not make much sense.
+            raise ValueError(
+                f"Can only broadcast into an array, but target was `{type(bcast_result_desc).__name__}`."
+            )
+
+        if len(self.params) != len(bcast_result_desc.shape):
+            raise ValueError(
+                f"Expected that {len(bcast_result_desc.shape)} parameters are"
+                f" needed but {len(self.params)} were specified."
+            )
+
         if isinstance(bcast_value_desc, dace_data.Scalar):
             if len(self.brodcast_in_dims) != 0:
                 raise ValueError("For a scalar `broadcast_in_dims` must be empty.")
@@ -114,8 +144,6 @@ class Broadcast(dace_nodes.LibraryNode):
                     raise ValueError("Negative broadcast")
                 if bcast_dst_dim >= len(bcast_result_desc.shape):
                     raise ValueError("Out of range broadcast dim found.")
-
-                # TODO: This is probably too strict.
 
                 # Only do the size matching test if the sizes are known, as different
                 #  symbols can have the same value.
@@ -144,9 +172,9 @@ def inplace_broadcast_expander(
 
     # TODO(phimuell): Add warning.
     map_params: list[str] = (
-        list(bcast_node.params)
-        if hasattr(bcast_node, "params")
-        else [f"__bcast{dst_dim}" for dst_dim in range(len(output_edge.data.subset))]
+        [f"__bcast{dst_dim}" for dst_dim in range(len(output_edge.data.subset))]
+        if bcast_node.params is None
+        else list(bcast_node.params)
     )
 
     output_subset: list[str] = map_params.copy()

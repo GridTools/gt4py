@@ -413,6 +413,7 @@ def translate_broadcast(
     bcast_node = gtir_library_nodes.Broadcast(
         name=bcast_node_name,
         broadcast_in_dims=broadcast_in_dims,
+        params=field_dims,
         debuginfo=gtir_to_sdfg_utils.debug_info(node),
     )
     ctx.state.add_node(bcast_node)
