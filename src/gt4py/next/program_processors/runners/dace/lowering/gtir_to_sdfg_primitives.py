@@ -379,36 +379,42 @@ def translate_broadcast(
             raise NotImplementedError("Broadcast of lists is not supported.")
 
     else:
-        # Broadcasting a "vector", i.e. adding missing non local dimensions.
-        assert isinstance(arg.field.desc(ctx.sdfg), dace_data.Array)
+        # TODO: What is the exact difference between this case and the one above?
+
         bcast_value = arg.field
-        bcast_value_gtdims = arg.get_field_type().dims
-        bcast_result_gtdim_map = {dim: i for i, dim in enumerate(field_dims)}
-        bcast_value_origins = [o for _, o in arg.field_domain]
-        bcast_result_origins = field_origin
-        bcast_result_subset_size = bcast_result_subset.size()
+        bcast_value_desc = bcast_value.desc(ctx.sdfg)
+        if isinstance(bcast_value_desc, dace_data.Scalar):
+            broadcast_in_dims = []
+        else:
+            # Broadcasting a "vector", i.e. adding missing non local dimensions.
+            assert isinstance(arg.field.desc(ctx.sdfg), dace_data.Array)
+            bcast_value_gtdims = arg.get_field_type().dims
+            bcast_result_gtdim_map = {dim: i for i, dim in enumerate(field_dims)}
+            bcast_value_origins = [o for _, o in arg.field_domain]
+            bcast_result_origins = field_origin
+            bcast_result_subset_size = bcast_result_subset.size()
 
-        # Use the dimensions to find out how we have to broadcast.
-        broadcast_in_dims = []
-        bcast_value_subset_components: list[str] = []
-        for bcast_value_dim, bcast_value_gtdim in enumerate(bcast_value_gtdims):
-            # Which dimension of the input should go to which dimension in the output.
-            bcast_result_dim = bcast_result_gtdim_map[bcast_value_gtdim]
-            broadcast_in_dims.append(bcast_result_dim)
+            # Use the dimensions to find out how we have to broadcast.
+            broadcast_in_dims = []
+            bcast_value_subset_components: list[str] = []
+            for bcast_value_dim, bcast_value_gtdim in enumerate(bcast_value_gtdims):
+                # Which dimension of the input should go to which dimension in the output.
+                bcast_result_dim = bcast_result_gtdim_map[bcast_value_gtdim]
+                broadcast_in_dims.append(bcast_result_dim)
 
-            # Find the correction that should be applied to the input.
-            bcast_value_origin = bcast_value_origins[bcast_value_dim]
-            bcast_result_origin = bcast_result_origins[bcast_result_dim]
-            bcast_dim_size = bcast_result_subset_size[bcast_result_dim]
-            start_pos = f"({bcast_result_origin}) - ({bcast_value_origin})"
+                # Find the correction that should be applied to the input.
+                bcast_value_origin = bcast_value_origins[bcast_value_dim]
+                bcast_result_origin = bcast_result_origins[bcast_result_dim]
+                bcast_dim_size = bcast_result_subset_size[bcast_result_dim]
+                start_pos = f"({bcast_result_origin}) - ({bcast_value_origin})"
 
-            bcast_value_subset_components.append(
-                f"({start_pos}):(({start_pos}) + ({bcast_dim_size}))"
+                bcast_value_subset_components.append(
+                    f"({start_pos}):(({start_pos}) + ({bcast_dim_size}))"
+                )
+
+            bcast_value_subset = dace_subsets.Range.from_string(
+                ", ".join(bcast_value_subset_components)
             )
-
-        bcast_value_subset = dace_subsets.Range.from_string(
-            ", ".join(bcast_value_subset_components)
-        )
 
     bcast_node = gtir_library_nodes.Broadcast(
         name=bcast_node_name,
@@ -418,6 +424,7 @@ def translate_broadcast(
     )
     ctx.state.add_node(bcast_node)
 
+    # If not specified differently use the whole `bcast_value` content.
     if bcast_value_subset is None:
         bcast_value_subset = dace_subsets.Range.from_array(bcast_value.desc(ctx.sdfg))
 
@@ -428,16 +435,6 @@ def translate_broadcast(
         "_inp",
         dace.Memlet(data=bcast_value.data, subset=bcast_value_subset),
     )
-
-    # TODO(phimuell, edopao): We now write to the _entire_ output data. Is this always
-    #   correct? Probably not because we also need to take into account origin and
-    #   things, I guess?
-    # It is correct to wriote everything because the output is shaped based on the domain.
-    #   So we do not need to take the origins into account because they are also encode.
-    #   ==> Dimensions in the broadcast nodes such that the map parameter have the correct name.
-    #           To correct order them.
-    #   concat where tests should be okay to see what happens.
-    # ORIGIN OF SOURCE FIELD
     ctx.state.add_edge(
         bcast_node,
         "_outp",
