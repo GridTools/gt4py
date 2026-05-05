@@ -65,6 +65,10 @@ program_processor = pytest.fixture(
             (next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT, True),
             marks=pytest.mark.requires_dace,
         ),
+        pytest.param(
+            (next_tests.definitions.OptionalProgramBackendId.DACE_CPU_GT_NO_OPT, True),
+            marks=pytest.mark.requires_dace,
+        ),
     ],
     ids=lambda p: p[0].short_id() if p[0] is not None else "None",
 )

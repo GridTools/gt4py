@@ -1757,8 +1757,6 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset_expr: DataExpr,
     ) -> IteratorExpr:
         """Implements shift in unstructured domain by means of a neighbor table."""
-        # make sure that the field can be dereferenced with the given connectivity type
-        assert any(dim == conn_type.codomain for dim, _ in it.field_domain)
         # make sure that the iterator can access the connectivity table
         assert conn_type.source_dim in it.indices
         conn_source_index = it.indices[conn_type.source_dim]

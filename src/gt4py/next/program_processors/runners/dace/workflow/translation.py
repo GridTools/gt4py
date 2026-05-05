@@ -359,6 +359,7 @@ class DaCeTranslator(
     definitions.TranslationStep[code_specs.SDFGCodeSpec],
 ):
     device_type: core_defs.DeviceType
+    apply_common_transform: bool
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
     async_sdfg_call: bool
@@ -409,7 +410,14 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = self._preprocess_program(ir, offset_provider)
+            if self.apply_common_transform:
+                ir = self._preprocess_program(ir, offset_provider)
+            else:
+                ir = pass_manager.apply_fieldview_transforms(
+                    ir,
+                    use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                    offset_provider=offset_provider,
+                )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
