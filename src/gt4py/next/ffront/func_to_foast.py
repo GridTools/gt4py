@@ -475,9 +475,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
         assert isinstance(node.func, ast.Name)
-        (arg,) = (
-            node.args
-        )  # note for review: the change here is unrelated to the actual pr and just a small cleanup
+        (arg,) = node.args
         if node.func.id == "tuple":
             if not (
                 isinstance(arg, ast.Constant)
