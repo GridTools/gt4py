@@ -1921,6 +1921,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         dc_dtype = gtx_dace_args.as_dace_type(node.type)
         return SymbolExpr(node.value, dc_dtype)
 
+    def visit_OffsetLiteral(self, node: gtir.OffsetLiteral) -> SymbolExpr:
+        return SymbolExpr(node.value, gtir_to_sdfg_types.INDEX_DTYPE)
+
     def visit_SymRef(self, node: gtir.SymRef) -> MaybeNestedInTuple[IteratorExpr | DataExpr]:
         param = str(node.id)
         if param in self.symbol_map:
@@ -1935,7 +1938,7 @@ def translate_lambda_to_dataflow(
     state: dace.SDFGState,
     sdfg_builder: gtir_to_sdfg.DataflowBuilder,
     node: gtir.Lambda,
-    args: Sequence[MaybeNestedInTuple[IteratorExpr | MemletExpr | ValueExpr]],
+    args: Sequence[MaybeNestedInTuple[IteratorExpr | DataExpr]],
 ) -> tuple[list[DataflowInputEdge], MaybeNestedInTuple[DataflowOutputEdge]]:
     """
     Entry point to visit a `Lambda` node and lower it to a dataflow graph,
