@@ -123,16 +123,30 @@ class TupleExpr(Expr):
     elts: list[Expr]
 
 
-# TODO: give a good error for tuple(... for el in iter if ...) so that users understand that and why we don't support conditionals
-# TODO: should this have SymbolTableTrait since target declares a new symbol. Write test that has two comprehensions using the same target name.
+# TODO(tehrengruber): extend this to supported nested tuple comprehension.
+#  e.g. `tuple(element_expr for child in nested_tuple for grand_child in child)`
+#  would be represented by:
+#  ```
+#  class TupleComprehension(Expr):                              # ruff: noqa: ERA001
+#    inner: TupleComprehensionMapper | NestedTupleCompr         # ruff: noqa: ERA001
+#  class NestedTupleCompr(Expr, SymbolTableTrait):              # ruff: noqa: ERA001
+#    params: tuple[DataSymbol]                                  # ruff: noqa: ERA001
+#    body: TupleComprehension                                   # ruff: noqa: ERA001
+#  ```
 class TupleComprehension(Expr):
     """
     tuple(element_expr for target in iterable)
     """
 
-    element_expr: Expr
-    target: Any  # should be: MaybeNestedInTuple[DataSymbol] but this has a problem in eve
+    inner: TupleComprehensionMapper
     iterable: Expr
+
+
+# this is essentially a lambda, the difference is for a lambda we might not know the type of the
+# args, therefor this is named differently at the moment.
+class TupleComprehensionMapper(LocatedNode, SymbolTableTrait):
+    target: Any  # should be: NestedInTuple[DataSymbol] but this has a problem in eve
+    element_expr: Expr
 
 
 class UnaryOp(Expr):

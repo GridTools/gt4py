@@ -367,6 +367,36 @@ def test_var_len_tuple_comprehension(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+def test_nested_tuple_comprehension(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        vals: tuple[tuple[cases.IField, ...], ...], factor: int32
+    ) -> tuple[tuple[cases.IField, ...], ...]:
+        return tuple(tuple(grand_child * factor for grand_child in child) for child in vals)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(tuple(grand_child * f for grand_child in child) for child in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_nested_tuple_comprehension_shadowing_names(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        vals: tuple[tuple[cases.IField, ...], ...], factor: int32
+    ) -> tuple[tuple[cases.IField, ...], ...]:
+        return tuple(tuple(child * factor for child in child) for child in vals)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(tuple(child * f for child in child) for child in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
 def test_multi_target_tuple_comprehension(cartesian_case):
     @gtx.field_operator
     def testee(nested_tuple: tuple[tuple[int32, cases.IField], ...]) -> tuple[cases.IField, ...]:

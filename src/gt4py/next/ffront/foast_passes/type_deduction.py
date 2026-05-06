@@ -5,7 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-import collections
 import textwrap
 from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 
@@ -682,9 +681,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_TupleComprehension(
         self, node: foast.TupleComprehension, **kwargs: Any
     ) -> foast.TupleComprehension:
-        symtable: collections.ChainMap = kwargs["symtable"]  # todo annotation
+        target = self.visit(node.inner.target, **kwargs)
         iterable = self.visit(node.iterable, **kwargs)
-        target = self.visit(node.target, **kwargs)
         if isinstance(iterable.type, ts.TupleType):
             if len(iterable.type.types) > 0 and not all(
                 t == iterable.type.types[0] for t in iterable.type.types
@@ -702,29 +700,25 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Iterable in generator expression must be a tuple, got '{iterable.type}'.",
             )
 
-        new_syms = {}
+        inner_kwargs = {"symtable": node.inner.annex.symtable, **kwargs}
 
         @tree_map(with_path_arg=True)
         def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> None:
             try:
-                new_syms[target_el.id] = target_el
                 type_ = element_type
                 for i in path:
                     if not isinstance(type_, ts.TupleType) or len(type_.types) <= i:
                         raise IndexError()
                     type_ = type_.types[i]
-                target_el.type = type_
+                return self.visit(target_el, refine_type=type_, **inner_kwargs)
             except IndexError:
                 raise errors.DSLError(
                     target_el.location, f"Cannot unpack non-iterable '{type_}' object."
                 ) from None
 
-        process_target(target)
+        new_target = process_target(target)
 
-        element_expr = self.visit(
-            node.element_expr,
-            **{**kwargs, "symtable": symtable.new_child(new_syms)},
-        )
+        element_expr = self.visit(node.inner.element_expr, **inner_kwargs)
 
         return_type: ts.TupleType | ts.VarArgType
         if isinstance(iterable.type, ts.TupleType):
@@ -734,8 +728,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return_type = ts.VarArgType(element_type=element_expr.type)
 
         return foast.TupleComprehension(
-            element_expr=element_expr,
-            target=target,
+            inner=foast.TupleComprehensionMapper(
+                target=new_target, element_expr=element_expr, location=node.location
+            ),
             iterable=iterable,
             location=node.location,
             type=return_type,
