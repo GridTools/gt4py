@@ -138,7 +138,6 @@ def apply_common_transforms(
     unroll_reduce=False,
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
-    fuse_maps=True,
     transform_concat_where_to_as_fieldop=True,
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
@@ -239,8 +238,7 @@ def apply_common_transforms(
 
     ir = NormalizeShifts().visit(ir)
 
-    if fuse_maps:
-        ir = FuseMaps(uids=uids).visit(ir)
+    ir = FuseMaps(uids=uids).visit(ir)
     ir = CollapseListGet().visit(ir)
 
     if unroll_reduce:
