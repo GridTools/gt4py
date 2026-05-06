@@ -751,7 +751,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         direct_deref_iterators: Iterable[str],
     ) -> tuple[list[DataflowInputEdge], MaybeNestedInTuple[DataflowOutputEdge]]:
         """
-        Helper method to visit an expression and lower it to a dataflow inside the given nested SDFG and state.
+        Helper method to visit each argument of an if-expression and lower it to
+        a dataflow gragh inside the given nested SDFG and state.
 
         This function is called by `_visit_if()` for the entry state (evaulation of
         if-condition) and for each if-branch.
