@@ -118,7 +118,7 @@ class Broadcast(dace_nodes.LibraryNode):
                 f"Can only broadcast into an array, but target was `{type(bcast_result_desc).__name__}`."
             )
 
-        if len(self.params) != len(bcast_result_desc.shape):
+        if (self.params is not None) and (len(self.params) != len(bcast_result_desc.shape)):
             raise ValueError(
                 f"Expected that {len(bcast_result_desc.shape)} parameters are"
                 f" needed but {len(self.params)} were specified."
