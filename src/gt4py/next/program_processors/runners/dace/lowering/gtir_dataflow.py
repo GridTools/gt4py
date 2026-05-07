@@ -709,7 +709,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             inner_desc = arg_desc.clone()
             inner_desc.transient = False
         elif isinstance(arg.gt_dtype, ts.ScalarType):
-            if len(arg_desc.shape) == 1:
+            if isinstance(arg, MemletExpr) and len(arg_expr.gt_field.dims) == 1:
                 # TODO(edopao): cannot use a scalar because of an issue in gpu codegen,
                 # wich leads to compilation error: cannot convert 'const double' to 'const double*'
                 inner_desc = dace.data.Array(dtype=arg_desc.dtype, shape=(1,))
