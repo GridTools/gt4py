@@ -17,7 +17,7 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import codegen
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
@@ -46,6 +46,7 @@ class GTFNTranslationStep(
         definitions.CompilableProgramDef,
         stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec],
     ],
+    utils.FingerprintedDataclass,
 ):
     code_spec: Optional[code_specs.HeaderAndSourceCodeSpec] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135

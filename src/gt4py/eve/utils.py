@@ -23,7 +23,6 @@ import operator
 import pickle
 import pprint
 import re
-import sys
 import types
 import typing
 

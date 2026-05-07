@@ -22,15 +22,13 @@ dialects contain `AST`.
 
 from __future__ import annotations
 
-import collections.abc
 import dataclasses
 import functools
 import types
 import typing
 from typing import Any, Optional, TypeVar
 
-
-from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.eve import utils as eve_utils
 from gt4py.next import common, utils
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.otf import arguments, toolchain
