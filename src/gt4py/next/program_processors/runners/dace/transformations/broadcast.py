@@ -27,6 +27,7 @@ from dace import (
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
+from gt4py.next import config as gtx_config
 from gt4py.next.program_processors.runners.dace import (
     library_nodes as gtx_lib_nodes,
     transformations as gtx_xtrans,
@@ -494,3 +495,150 @@ class ScalarBrodcastInliner(dace_transformation.SingleStateTransformation):
         # Now remove the connection `(bcast_result) -> map_entry`.
         map_entry.remove_in_connector(consumer_edge.dst_conn)
         state.remove_edge(consumer_edge)
+
+
+@dace_properties.make_properties
+class BrodcastChainRemover(dace_transformation.SingleStateTransformation):
+    """
+    Removes a chain of broadcasts operation.
+
+    It matches the pattern:
+    ```
+        (bcast_value) -----> [Broadcast1] ----> (bcast_tmp) ----> [Broadcast2]
+    ```
+    and turns it into:
+    ```
+        (bcast_value) ----> [Broadcast2]
+    ```
+
+    `bcast_tmp` can have multiple consumers which are also handled. If there are
+    consumers that are no broadcast nodes then `bcast_tmp` is not removed and it
+    does not need to be single use data. Otherwise `bcast_tmp` needs to be a
+    single use data.
+
+    There is currently an implementation limitation, in that `brodcast_in_dims` of
+    the first broadcast node must be an empty list. Which is roughly equivalent to
+    say that `bcast_value` is a scalar.
+
+    Todo:
+        - If `bcast_tmp` is not single use data, eliminate the chain, but keep the
+            first broadcast alive.
+        - Lift the limitation of `bcast_value`.
+
+    Note:
+        This transformation processes more than was matched.
+    """
+
+    bcast_value = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    bcast_node1 = dace_transformation.PatternNode(gtx_lib_nodes.Broadcast)
+    bcast_tmp = dace_transformation.PatternNode(dace_nodes.AccessNode)
+    bcast_node2 = dace_transformation.PatternNode(
+        gtx_lib_nodes.Broadcast
+    )  # Only for speed up matching.
+
+    # Name of all data that is used at only one place. Is computed by the
+    #  `FindSingleUseData` pass and be passed at construction time. Needed until
+    #  [issue#1911](https://github.com/spcl/dace/issues/1911) has been solved.
+    _single_use_data: Optional[dict[dace.SDFG, set[str]]]
+
+    @classmethod
+    def expressions(cls) -> Any:
+        return [
+            dace.sdfg.utils.node_path_graph(
+                cls.bcast_value,
+                cls.bcast_node1,
+                cls.bcast_tmp,
+                cls.bcast_node2,
+            )
+        ]
+
+    def __init__(
+        self,
+        *args: Any,
+        single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+        **kwargs: Any,
+    ) -> None:
+        self._single_use_data = single_use_data
+        super().__init__(*args, **kwargs)
+
+    def can_be_applied(
+        self,
+        graph: dace.SDFGState,
+        expr_index: int,
+        sdfg: dace.SDFG,
+        permissive: bool = False,
+    ) -> bool:
+        bcast_node1 = self.bcast_node1
+        bcast_tmp = self.bcast_tmp
+
+        # Check if `bcast_tmp` is single use data is done later.
+        if graph.in_degree(bcast_tmp) != 1:
+            return False
+
+        # This is a pure simplification.
+        # TODO(phimuell): Implement this case.
+        if len(bcast_node1.brodcast_in_dims) != 0:
+            return False
+
+        # All consumers of `bcast_tmp` must be broadcast nodes as well.
+        found_other_bcast_node = False
+        found_non_bcast_node_consumers = False
+        for oedge in graph.out_edges(bcast_tmp):
+            if isinstance(oedge.dst, gtx_lib_nodes.Broadcast):
+                found_other_bcast_node = True
+            else:
+                found_non_bcast_node_consumers = True
+
+        # We must found some other broadcast nodes.
+        if not found_other_bcast_node:
+            return False
+
+        # We only have to check if `bcast_tmp` is single use data if there are non
+        #  broadcast node consumers. Because in that case the node remains alive.
+        if found_non_bcast_node_consumers:
+            if self._single_use_data is None:
+                find_single_use_data = dace_analysis.FindSingleUseData()
+                single_use_data = find_single_use_data.apply_pass(sdfg, None)
+            else:
+                single_use_data = self._single_use_data
+            if bcast_tmp.data not in single_use_data[sdfg]:
+                return False
+
+        return True
+
+    def apply(
+        self,
+        graph: dace.SDFGState,
+        sdfg: dace.SDFG,
+    ) -> None:
+        bcast_node1: gtx_lib_nodes.Broadcast = self.bcast_node1
+        bcast_tmp: dace_nodes.AccessNode = self.bcast_tmp
+
+        bcast_value = self.bcast_value
+        bcast_value_edge = next(iter(graph.in_edges(bcast_node1)))
+
+        # This is possible because we have checked the `brodcast_in_dims`.
+        assert len(bcast_node1.brodcast_in_dims) == 0
+
+        # Go through all consumer and bypass the first broadcast node.
+        for oedge in list(graph.out_edges(bcast_tmp)):
+            consumer = oedge.dst
+            if not isinstance(consumer, gtx_lib_nodes.Broadcast):
+                continue
+
+            consumer.brodcast_in_dims = []  # Possible because of simplification.
+            graph.add_edge(
+                bcast_value,
+                None,
+                consumer,
+                "_inp",
+                copy.deepcopy(bcast_value_edge.data),
+            )
+            graph.remove_edge(oedge)
+
+        # If `bcast_tmp` has no consumer, we can remove it and the first broadcast node.
+        #  We checked that it is single use data, so no problems.
+        if graph.out_degree(bcast_tmp) == 0:
+            graph.remove_node(bcast_tmp)
+            graph.remove_node(bcast_node1)
+            sdfg.remove_data(bcast_tmp.data, validate=gtx_config.DEBUG)
