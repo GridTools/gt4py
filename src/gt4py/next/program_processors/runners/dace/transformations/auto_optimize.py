@@ -672,7 +672,8 @@ def _gt_auto_process_top_level_maps(
         #  expand them and give the splitting transformations a chance of handling them.
         if simplify_res:
             broadcast_related_results = sum(
-                simplify_res.get(xtrans_name, 0) for xtrans_name in ["ScalarBrodcastInliner"]
+                simplify_res.get(xtrans_name, 0)
+                for xtrans_name in ["ScalarBrodcastInliner", "BrodcastChainRemover"]
             )
         else:
             broadcast_related_results = 0

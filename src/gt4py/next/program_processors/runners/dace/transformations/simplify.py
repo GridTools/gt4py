@@ -150,16 +150,35 @@ def gt_simplify(
                     result["FuseStates"] = 0
                 result["FuseStates"] += fuse_state_res
 
-        # The `ScalarBrodcastInliner` should run on the fused and inlined SDFG. Currently
-        #  it runs before `MapToCopy` but it is not clear if it should. However, it
-        #  probably has to run before `CopyChainRemover`.
-        if "ScalarBrodcastInliner" not in skip:
+        # Handling broadcasts. We first run `BrodcastChainRemover` before
+        #  `ScalarBrodcastInliner` to prevent some specific situations that might arise.
+        #  Note because of the similarities the transformations share the result of a
+        #  single use data scan.
+        broadcast_single_use_data_cache: None | dict[dace.SDFG, set[str]] = None
+        if "BrodcastChainRemover" not in skip:
             find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
-            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+            broadcast_single_use_data_cache = find_single_use_data.apply_pass(sdfg, None)
+            removed_chains = sdfg.apply_transformations_repeated(
+                gtx_transformations.BrodcastChainRemover(
+                    single_use_data=broadcast_single_use_data_cache,
+                ),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if removed_chains:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "BrodcastChainRemover" not in result:
+                    result["BrodcastChainRemover"] = 0
+                result["BrodcastChainRemover"] += removed_chains
+        if "ScalarBrodcastInliner" not in skip:
+            if broadcast_single_use_data_cache is None:
+                find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
+                broadcast_single_use_data_cache = find_single_use_data.apply_pass(sdfg, None)
             inlined_broadcasts = sdfg.apply_transformations_repeated(
                 gtx_transformations.ScalarBrodcastInliner(
                     clean_dead_dataflow=True,
-                    single_use_data=single_use_data,
+                    single_use_data=broadcast_single_use_data_cache,
                 ),
                 validate=False,
                 validate_all=validate_all,
