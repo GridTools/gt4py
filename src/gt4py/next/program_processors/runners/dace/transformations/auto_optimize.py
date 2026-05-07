@@ -376,11 +376,10 @@ def gt_auto_optimize(
 
         # We now expand all GT4Py specific library nodes.
         #  We do this such that we have control over all the Maps that are there.
+        # NOTE: `Broadcast` nodes were already expanded in the top level dataflow phase.
         # TODO(phimuell): It is probably the right place, but maybe there is a better one.
         for node, state in list(sdfg.all_nodes_recursive()):
-            if isinstance(node, gtir_library_nodes.Broadcast):
-                gtir_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
-            elif isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
+            if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
                 node.expand(state)
 
         sdfg = _gt_auto_configure_maps_and_strides(
@@ -661,12 +660,26 @@ def _gt_auto_process_top_level_maps(
 
         # The SDFG was modified by the transformations above. The SDFG was
         #  modified. Call Simplify and try again to further optimize.
-        gtx_transformations.gt_simplify(
+        simplify_res = gtx_transformations.gt_simplify(
             sdfg,
             validate=False,
             validate_all=validate_all,
             skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
+
+        # We will now perform the expansion of the Broadcast. The main idea is that if
+        #  the broadcast specific transformations have stopped doing work we will now
+        #  expand them and give the splitting transformations a chance of handling them.
+        if simplify_res:
+            broadcast_related_results = sum(
+                simplify_res.get(xtrans_name, 0) for xtrans_name in ["ScalarBrodcastInliner"]
+            )
+        else:
+            broadcast_related_results = 0
+        if (not disable_splitting) and broadcast_related_results == 0:
+            for node, state in list(sdfg.all_nodes_recursive()):
+                if isinstance(node, gtir_library_nodes.Broadcast):
+                    gtir_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
 
     # Replace `concat_where` nodes
     # TODO(phimuell): Are there better locations for this transformation?
