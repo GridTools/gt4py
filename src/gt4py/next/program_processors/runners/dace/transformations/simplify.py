@@ -151,7 +151,8 @@ def gt_simplify(
                 result["FuseStates"] += fuse_state_res
 
         # The `ScalarBrodcastInliner` should run on the fused and inlined SDFG. Currently
-        #  it runs before `MapToCopy` but it is not clear if it should.
+        #  it runs before `MapToCopy` but it is not clear if it should. However, it
+        #  probably has to run before `CopyChainRemover`.
         if "ScalarBrodcastInliner" not in skip:
             find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
             single_use_data = find_single_use_data.apply_pass(sdfg, None)
