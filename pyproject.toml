@@ -11,7 +11,7 @@ dace-cartesian = [
   'dace>=1.0.2'  # refined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace==2.3.4'  # uses custom index at 'https://github.com/GridTools/pypi'
+  'dace==2.3.5'  # uses custom index at 'https://github.com/GridTools/pypi'
 ]
 dev = [
   {include-group = 'build'},
