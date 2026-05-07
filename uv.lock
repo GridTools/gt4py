@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.10, !=3.13.10, !=3.14.1, <3.15"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -1938,7 +1938,7 @@ requires-dist = [
     { name = "numpy", marker = "python_full_version < '3.14'", specifier = ">=2.0.0" },
     { name = "numpy", marker = "python_full_version >= '3.14'", specifier = ">=2.3.2" },
     { name = "packaging", specifier = ">=20.0" },
-    { name = "pybind11", specifier = ">=2.10.1,<3" },
+    { name = "pybind11", specifier = ">=3.0.3" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
     { name = "scipy", marker = "python_full_version >= '3.11' and extra == 'standard'", specifier = ">=1.16.1" },
     { name = "scipy", marker = "python_full_version < '3.11' and extra == 'standard'", specifier = ">=1.14.1" },
@@ -2306,11 +2306,11 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "jaxlib", version = "0.9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
-    { name = "ml-dtypes", marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
-    { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
-    { name = "opt-einsum", marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
-    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
+    { name = "jaxlib", version = "0.9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
+    { name = "ml-dtypes", marker = "python_full_version >= '3.11' or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
+    { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
+    { name = "opt-einsum", marker = "python_full_version >= '3.11' or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/92/4c/5aca25abd45fa38dd136e5ae2010376518c67950e1f9408e0c5c93fcf77d/jax-0.9.2.tar.gz", hash = "sha256:42b28017b3e6b57a44b0274cc15f5153239c4873959030399ac1afc009c22365", size = 2662784, upload-time = "2026-03-18T23:28:10.471Z" }
 wheels = [
@@ -2504,9 +2504,9 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "ml-dtypes", marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
-    { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
-    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
+    { name = "ml-dtypes", marker = "python_full_version >= '3.11' or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
+    { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b1/2c/0ba08670ab04f6094f0cda4cdc89818946007d0d1dfefa636eab6c7d5392/jaxlib-0.9.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:785f177c3eb78cb7dc797c55ed5c4b6312141845c9a686957e484bacbfce5e88", size = 58762159, upload-time = "2026-03-18T23:26:55.405Z" },
@@ -4199,11 +4199,11 @@ wheels = [
 
 [[package]]
 name = "pybind11"
-version = "2.13.6"
+version = "3.0.4"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d2/c1/72b9622fcb32ff98b054f724e213c7f70d6898baa714f4516288456ceaba/pybind11-2.13.6.tar.gz", hash = "sha256:ba6af10348c12b24e92fa086b39cfba0eff619b61ac77c406167d813b096d39a", size = 218403, upload-time = "2024-09-14T00:35:22.606Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cc/f0/35145a3c3baffeef55d4b8324caa33abaa8fa56ab345ecd4b2211d09163e/pybind11-3.0.4.tar.gz", hash = "sha256:3286b59c8a774b9ee650169302dd5a4eedc30a8617905a0560dd8ee44775130c", size = 589533, upload-time = "2026-04-19T03:08:15.925Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/2f/0f24b288e2ce56f51c920137620b4434a38fd80583dbbe24fc2a1656c388/pybind11-2.13.6-py3-none-any.whl", hash = "sha256:237c41e29157b962835d356b370ededd57594a26d5894a795960f0047cb5caf5", size = 243282, upload-time = "2024-09-14T00:35:20.361Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/06/c3a23c9a0263b136c519f033a58d4641e73065fefc7754e9667ec206d992/pybind11-3.0.4-py3-none-any.whl", hash = "sha256:961720ee652da51d531b7b2451a6bd2bc042b0106e6d9baa48ecb7d58034ce63", size = 314166, upload-time = "2026-04-19T03:08:14.091Z" },
 ]
 
 [[package]]
@@ -5073,7 +5073,7 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
+    { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-5-gt4py-dace-cartesian' and extra == 'group-5-gt4py-dace-next')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/97/5a3609c4f8d58b039179648e62dd220f89864f56f7357f5d4f45c29eb2cc/scipy-1.17.1.tar.gz", hash = "sha256:95d8e012d8cb8816c226aef832200b1d45109ed4464303e997c5b13122b297c0", size = 30573822, upload-time = "2026-02-23T00:26:24.851Z" }
 wheels = [
