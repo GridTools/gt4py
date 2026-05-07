@@ -252,15 +252,6 @@ def gt_auto_optimize(
         #  See also [issue#2095](https://github.com/spcl/dace/issues/2095)
         dace.Config.set("optimizer", "symbolic_positive", value=False)
 
-        # We need new transformations in order to deal with GTIR library nodes.
-        # For now, we simply expand these nodes before starting optimizing.
-        # TODO: Remove once transformations are ready.
-        for node, state in sdfg.all_nodes_recursive():
-            if isinstance(node, gtir_library_nodes.Broadcast):
-                gtir_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
-            elif isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
-                node.expand(state)
-
         # Initial Cleanup
         # NOTE: The initial simplification stage must be synchronized with the one that
         #   `gt_substitute_compiletime_symbols()` performs!
@@ -382,6 +373,15 @@ def gt_auto_optimize(
                     f"Could not restore the demoted field '{demoted_field}' back to a global.",
                     stacklevel=0,
                 )
+
+        # We now expand all GT4Py specific library nodes.
+        #  We do this such that we have control over all the Maps that are there.
+        # TODO(phimuell): It is probably the right place, but maybe there is a better one.
+        for node, state in list(sdfg.all_nodes_recursive()):
+            if isinstance(node, gtir_library_nodes.Broadcast):
+                gtir_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
+            elif isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
+                node.expand(state)
 
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,

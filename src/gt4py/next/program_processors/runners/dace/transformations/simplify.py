@@ -58,6 +58,7 @@ def gt_simplify(
         `SingleStateGlobalSelfCopyElimination`, with the exception that the write to
         `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
         in different states.
+    - `ScalarBrodcastInliner`: Handles the GT4Py specific broadcast nodes.
     - `CopyChainRemover`: Which removes some chains that are introduced by the
         `concat_where` built-in function.
     - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
@@ -148,6 +149,26 @@ def gt_simplify(
                 if "FuseStates" not in result:
                     result["FuseStates"] = 0
                 result["FuseStates"] += fuse_state_res
+
+        # The `ScalarBrodcastInliner` should run on the fused and inlined SDFG. Currently
+        #  it runs before `MapToCopy` but it is not clear if it should.
+        if "ScalarBrodcastInliner" not in skip:
+            find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
+            single_use_data = find_single_use_data.apply_pass(sdfg, None)
+            inlined_broadcasts = sdfg.apply_transformations_repeated(
+                gtx_transformations.ScalarBrodcastInliner(
+                    clean_dead_dataflow=True,
+                    single_use_data=single_use_data,
+                ),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if inlined_broadcasts:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "ScalarBrodcastInliner" not in result:
+                    result["ScalarBrodcastInliner"] = 0
+                result["ScalarBrodcastInliner"] += inlined_broadcasts
 
         if "MapToCopy" not in skip:
             find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
