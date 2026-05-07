@@ -673,11 +673,11 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         Args:
             sdfg: The SDFG where the if expression is lowered.
-            state: The state inside the SDFG where the argument is used.
-            param_name: The parameter name of the input argument.
-            arg: The input argument expression.
+            state: The state inside the given SDFG where the argument is used.
+            param_name: The name of the input argument.
+            arg: The expression corresponding to the input argument.
             deref_on_input_memlet: When True, the given iterator argument can be dereferenced on the input memlet.
-            input_memlets: The memlets that provide input data to the SDFG, which is updated inside this function.
+            input_memlets: The memlets that provide input data to the SDFG, will be updated inside this function.
         """
         use_full_shape = False
         if isinstance(arg, (MemletExpr, ValueExpr)):
@@ -710,8 +710,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             inner_desc.transient = False
         elif isinstance(arg.gt_dtype, ts.ScalarType):
             if isinstance(arg, MemletExpr) and len(arg.gt_field.dims) == 1:
-                # TODO(edopao): cannot use a scalar because of an issue in gpu codegen,
-                # wich leads to compilation error: cannot convert 'const double' to 'const double*'
+                # TODO(edopao): we cannot use a scalar because of an issue in gpu codegen,
+                # which leads to compilation error: cannot convert 'const double' to 'const double*'
                 inner_desc = dace.data.Array(dtype=arg_desc.dtype, shape=(1,))
             else:
                 inner_desc = dace.data.Scalar(arg_desc.dtype)
@@ -756,17 +756,17 @@ class LambdaToDataflow(eve.NodeVisitor):
         direct_deref_iterators: Iterable[str],
     ) -> tuple[list[DataflowInputEdge], MaybeNestedInTuple[DataflowOutputEdge]]:
         """
-        Helper method to visit the subexpressions of an if-expression and lower them
-        to a dataflow graph inside the given nested SDFG and state.
+        Helper method to visit a subexpression inside an if-node and lower it
+        to a dataflow graph inside the given SDFG and state.
 
         This function is called by `_visit_if()` for the entry state (evaluation of
-        if-condition) and for each if-branch.
+        if-condition) and for each if-branch state.
 
         Args:
             sdfg: The SDFG where the if expression is lowered.
-            state: The state inside the SDFG where the if subexpression is lowered.
-            expr: The if branch expression to lower.
-            input_memlets: The memlets that provide input data to the SDFG, which are update inside this function.
+            state: The state inside the given SDFG where the subexpression is lowered.
+            expr: The subexpression to lower.
+            input_memlets: The memlets that provide input data to the SDFG, will be updated inside this function.
             direct_deref_iterators: Fields that are accessed with direct iterator deref, without any shift.
 
         Returns:
@@ -942,7 +942,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             edge.connect(map_entry=None)
         assert isinstance(out_edge, DataflowOutputEdge)
         condition_node = out_edge.result.dc_node
-        # write the boolean result to the '__cond' synbol on the interstate edge
+        # write the boolean result to the '__cond' symbol on the interstate edge
         nsdfg.add_symbol("__cond", dace.dtypes.bool)
         nsdfg.out_edges(entry_state)[0].data.assignments["__cond"] = condition_node.data
 
