@@ -123,7 +123,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
-                    hash_function=stages.fingerprint_compilable_program,
+                    key_function=stages.fingerprint_compilable_program,
                     cache=filecache.FileCache(
                         str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
                     ),
@@ -167,7 +167,7 @@ class GTFNBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
+                lambda o: workflow.CachedStep(o.otf_workflow, key_function=o.hash_function)
             ),
             name_cached="_cached",
         )

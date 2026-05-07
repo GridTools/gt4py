@@ -152,7 +152,7 @@ def past_to_gtir_factory(
 ) -> workflow.Workflow[ConcretePASTProgramDef, definitions.CompilableProgramDef]:
     wf = workflow.make_step(past_to_gtir)
     if cached:
-        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprinter)
+        wf = workflow.CachedStep(wf, key_function=ffront_stages.fingerprinter)
     return wf
 
 

@@ -12,6 +12,7 @@ import dataclasses
 import typing
 from typing import Generic
 
+from gt4py.next import utils
 from gt4py.next.otf import workflow
 
 
@@ -32,6 +33,7 @@ class DataOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
     workflow.Workflow[ConcreteArtifact[S, ArgsT], ConcreteArtifact[T, ArgsT]],
+    utils.FingerprintedDataclass,
     Generic[ArgsT, S, T],
 ):
     step: workflow.Workflow[S, T]
@@ -45,6 +47,7 @@ class ArgsOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
     workflow.Workflow[ConcreteArtifact[DefT, S], ConcreteArtifact[DefT, T]],
+    utils.FingerprintedDataclass,
     Generic[DefT, S, T],
 ):
     step: workflow.Workflow[S, T]
@@ -58,6 +61,7 @@ class StripArgsAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
     workflow.Workflow[ConcreteArtifact[S, ArgsT], T],
+    utils.FingerprintedDataclass,
     Generic[ArgsT, S, T],
 ):
     step: workflow.Workflow[S, T]
