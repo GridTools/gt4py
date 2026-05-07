@@ -47,7 +47,7 @@ def foast_to_gtir_factory(
     """Wrap `foast_to_gtir` into a chainable and, optionally, cached workflow step."""
     wf = foast_to_gtir
     if cached:
-        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprinter)
     return wf
 
 

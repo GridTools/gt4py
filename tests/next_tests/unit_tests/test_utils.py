@@ -17,35 +17,35 @@ from gt4py.next import utils
 
 # Module-level classes so pickle can resolve them by qualified name.
 @dataclasses.dataclass
-class _DataclassModel(utils.MetadataBasedPickling):
+class _DataclassModel(utils.MetadataBasedPicklingMixin):
     value: int
     transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
 
 
 @dataclasses.dataclass(slots=True)
-class _SlottedDataclassModel(utils.MetadataBasedPickling):
+class _SlottedDataclassModel(utils.MetadataBasedPicklingMixin):
     value: int
     transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
 
 
 @datamodels.datamodel(slots=False)
-class _DatamodelModel(utils.MetadataBasedPickling):
+class _DatamodelModel(utils.MetadataBasedPicklingMixin):
     value: int
     transient: str = datamodels.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
 
 
 @dataclasses.dataclass
-class _EmptyDataclassModel(utils.MetadataBasedPickling):
+class _EmptyDataclassModel(utils.MetadataBasedPicklingMixin):
     pass
 
 
 @dataclasses.dataclass(slots=True)
-class _EmptySlottedDataclassModel(utils.MetadataBasedPickling):
+class _EmptySlottedDataclassModel(utils.MetadataBasedPicklingMixin):
     pass
 
 
 @datamodels.datamodel(slots=False)
-class _EmptyDatamodelModel(utils.MetadataBasedPickling):
+class _EmptyDatamodelModel(utils.MetadataBasedPicklingMixin):
     pass
 
 
