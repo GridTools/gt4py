@@ -17,6 +17,8 @@ from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
 
+from gt4py.next.program_processors.runners.dace import library_nodes as gtx_lib_nodes
+
 
 _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
 
@@ -569,6 +571,33 @@ def reconfigure_dataflow_after_rerouting(
         # The subset at the reduction node needs to be `None`, which means undefined.
         other_subset = new_edge.data.src_subset if is_producer_edge else new_edge.data.dst_subset
         assert other_subset is None
+
+    elif isinstance(other_node, gtx_lib_nodes.Broadcast):
+        # For now we only allow the case where the destination `bacst_result` is replaced
+        #  by another node (`is_producer_edge` is `True`). Furthermore, we only handle the
+        #  case where the dimensionality of data represented by `old_node` and `new_node`
+        #  is the same. This avoids the problems that we need to modify `broadcast_in_dims`
+        #  and `params`.
+        #  But beside these constraints there is nothing to do.
+        assert isinstance(new_node, dace_nodes.AccessNode)
+        assert isinstance(old_node, dace_nodes.AccessNode)
+
+        if not is_producer_edge:
+            raise ValueError("Broadcast nodes are only supported as output.")
+
+        # NOTE: It is possible because to handle this case because we do not need "more"
+        #   Map parameter, we just need to create some dummy ones. This is possible
+        #   because the ones that are "new" will be definition (a Memlet can not
+        #   broadcast) not do any work, i.e. are guaranteed to have size 1. Thus we
+        #   just have to figuring out how to redistribute `params` and `brodcast_in_dims`.
+        if (other_node.params is None) and (len(other_node.brodcast_in_dims) == 0):
+            pass  # Special case where there is nothing to do.
+        elif len(new_node.desc(sdfg).shape) != len(old_node.desc(sdfg).shape):
+            raise NotImplementedError(
+                "Broadcast reconfiguration only works if `old_node` and `new_node` relresents the same dimensionality."
+            )
+
+        # There is nothing else to do in this case.
 
     else:
         # As we encounter them we should handle them case by case.
