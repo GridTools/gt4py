@@ -11,7 +11,7 @@ dace-cartesian = [
   'dace>=1.0.2'  # refined in [tool.uv.sources]
 ]
 dace-next = [
-  'dace==43!2026.04.27'  # uses custom index at 'https://github.com/GridTools/pypi'
+  'dace==2.3.5'  # uses custom index at 'https://github.com/GridTools/pypi'
 ]
 dev = [
   {include-group = 'build'},
@@ -120,7 +120,7 @@ dependencies = [
   'numpy>=2.0.0 ; python_version < "3.14"',
   'numpy>=2.3.2 ; python_version >= "3.14"',  # first version with pre-built wheel for Python 3.14
   'packaging>=20.0',
-  'pybind11>=2.10.1,<3',  # cartesian: keeping <3 because of https://github.com/pybind/pybind11/issues/5975
+  'pybind11>=3.0.3',
   'setuptools>=77.0.3',
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
@@ -486,7 +486,7 @@ url = 'https://gridtools.github.io/pypi/'
 atlas4py = {index = "test.pypi"}
 dace = [
   {git = "https://github.com/GridTools/dace", branch = "romanc/stree-v2", group = "dace-cartesian"},
-  {index = "gridtools", group = "dace-next"}
+  {git = "https://github.com/philip-paul-mueller/dace", branch = "phimuell__new-gpu-codegen-dev", group = "dace-next"}
 ]
 
 # -- versioningit --
