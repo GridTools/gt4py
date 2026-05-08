@@ -39,6 +39,24 @@ class CxxCompilerDefaults:
     """Cxx compile flags"""
 
 
+def _intel_cxx_flags(optimization_level: str) -> list[str]:
+    flags = []
+    if optimization_level == "0":
+        flags.append("-g")
+        flags.append("-traceback")  # make sure to have a good stack
+        flags.append("-fp-model=strict")  # strict model for FP opts
+
+    return flags
+
+
+def _gnu_cxx_flags(optimization_level: str) -> list[str]:
+    flags = []
+    if optimization_level == "0":
+        flags.append("-g")
+
+    return flags
+
+
 def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
     """Return a set of defaults for the compiler flags"""
 
@@ -49,12 +67,12 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
     # Defaults
     name = CxxCompilerName.DEFAULT
     open_mp_flags = "-fopenmp"
-    cxx_flags = ""
+    cxx_flags = []
     enable_openmp = True
 
     # FMA is deactivated by default when running -O0
     if optimization_level == "0":
-        cxx_flags += "-ffp-contract=off"
+        cxx_flags.append("-ffp-contract=off")
 
     # Query the compiler version string
     try:
@@ -65,8 +83,14 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
         version_name_on_cli = "default"
     if "gcc" in version_name_on_cli.lower():
         name = CxxCompilerName.GNU
-    elif "icx" in version_name_on_cli.lower() or "icpx" in version_name_on_cli.lower():
+        cxx_flags.extend(_gnu_cxx_flags(optimization_level))
+    elif (
+        "icx" in version_name_on_cli.lower()
+        or "icpx" in version_name_on_cli.lower()
+        or "intel" in version_name_on_cli.lower()
+    ):
         name = CxxCompilerName.INTEL
+        cxx_flags.extend(_intel_cxx_flags(optimization_level))
         open_mp_flags = "-qopenmp"
     elif "apple clang" in version_name_on_cli.lower():
         # By default Apple Clang doesn't have OpenMP installed,
@@ -81,7 +105,7 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
         name,
         open_mp_flags,
         enable_openmp,
-        cxx_flags.strip(),  # be overly cautious for old GCC bad behavior
+        " ".join(cxx_flags).strip(),  # be overly cautious for old GCC bad behavior
     )
 
 
