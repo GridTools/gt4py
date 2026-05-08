@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import copy
-from typing import Any, Final, Iterable, Optional, Sequence
+from typing import Any, Final, Iterable, Sequence
 
 import dace
 from dace import (
@@ -17,7 +17,7 @@ from dace import (
     library as dace_library,
     nodes as dace_nodes,
     properties as dace_properties,
-    subsets as dace_sbs,
+    subsets as dace_subset,
 )
 from dace.sdfg import graph as dace_graph
 from dace.transformation import transformation as dace_transform
@@ -30,28 +30,29 @@ _INPUT_NAME: Final[str] = "_inp"
 _OUTPUT_NAME: Final[str] = "_outp"
 
 
+# TODO(edopao): Make sure Philip did the renaming.
 @dace_library.node
 class Broadcast(dace_nodes.LibraryNode):
-    """Implements write of a scalar value over an array subset.
+    """Implements broadcasting, i.e. replication of data.
 
-    Same as XLA.
-    broadcast_in_dim[i] describes where dimension `i` of the `value_to_broadcast`
-    goes. In case of a scalar it is empty.
-    Furthermore the following has to hold:
-    ```python
-    for i in range(len(broadcast_in_dim):
-        assert output.shape[broadcast_in_dim[i]] == value_to_broadcast.shape[i]
-    ```
+    The broadcasting is controlled by `brodcast_in_dims`, which is a list of integer.
+    Its length equals the dimensionality of the input date, i.e. there is an entry
+    for every dimension of the input. The array describes where a dimension of the
+    input ends up in the output. See [here](https://openxla.org/stablehlo/spec#broadcast_in_dim)
+    for more information.
+
+    The expansion of a broadcast node will generate a Map. The names of the parameters
+    can either specified, through the `params` argument or by passing `None` in which
+    case automatically generated names are used.
+    It is strongly recommended to specify names for the parameter, because of the
+    expansion such that they can be brought into the right order.
 
     Args:
-        broadcast_in_dim: How to broadcast.
-        params: The parameters that should be used for the expansion. If given one
-            entry for each dimension of the destination is needed.
-
-    Todo:
-        - While for the output it is probably okay to always require an adjacent
-            AccessNode for the input it might be possible to be on the other side
-            of a Map.
+        broadcast_in_dim: Description of how the dimensions of the input are
+            mapped to the dimensions of the output, see class description.
+        params: Names that should be used for the expansion. Can either be strings
+            or GT4Py `Dimension`s (recommended). If `None` then automatic names
+            are used.
     """
 
     implementations: Final[dict[str, dace_transform.ExpandTransformation]] = {}
@@ -64,11 +65,9 @@ class Broadcast(dace_nodes.LibraryNode):
         self,
         name: str,
         broadcast_in_dims: Sequence[int],
-        params: Optional[Iterable[gtx_common.Dimension | str]],
+        params: Iterable[gtx_common.Dimension | str] | None,
         debuginfo: dace.dtypes.DebugInfo | None = None,
     ):
-        # TODO(philip, edopao): I would propose to drop `value` then. This makes it
-        #   simpler to handle in the transformations.
         super().__init__(name, inputs={_INPUT_NAME}, outputs={_OUTPUT_NAME})
 
         self.brodcast_in_dims = list(broadcast_in_dims)
@@ -86,14 +85,14 @@ class Broadcast(dace_nodes.LibraryNode):
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         if len(self.brodcast_in_dims) != len(set(self.brodcast_in_dims)):
-            raise ValueError("`Can not broadcast to multiple dimensions at the same time.")
+            raise ValueError("`Broadcast dimensions must be unique")
 
         # TODO(phimuell): Handle empty Memlets in the input.
-        if state.in_degree(self) != 1 and next(iter(state.in_edges(self))).dst_conn == _INPUT_NAME:
+        if state.in_degree(self) != 1 or next(iter(state.in_edges(self))).dst_conn == _INPUT_NAME:
             raise ValueError("GT4Py Broadcast node needs exactly one input.")
         if (
             state.out_degree(self) != 1
-            and next(iter(state.out_edges(self))).src_conn == _OUTPUT_NAME
+            or next(iter(state.out_edges(self))).src_conn == _OUTPUT_NAME
         ):
             raise ValueError("GT4Py Broadcast node needs exactly one output.")
 
@@ -120,8 +119,8 @@ class Broadcast(dace_nodes.LibraryNode):
 
         if (self.params is not None) and (len(self.params) != len(bcast_result_desc.shape)):
             raise ValueError(
-                f"Expected that {len(bcast_result_desc.shape)} parameters are"
-                f" needed but {len(self.params)} were specified."
+                f"The number of dimensions of the result shape {len(bcast_result_desc.shape)}"
+                f"does not match the nmuber of broadcast parameters {len(self.params)}."
             )
 
         if isinstance(bcast_value_desc, dace_data.Scalar):
@@ -139,18 +138,12 @@ class Broadcast(dace_nodes.LibraryNode):
                     f" than the result ({len(bcast_result_desc.shape)})."
                 )
 
-            for src_dim, bcast_dst_dim in enumerate(self.brodcast_in_dims):
+            # TODO(phimuell): Improve these tests.
+            for bcast_dst_dim in self.brodcast_in_dims:
                 if bcast_dst_dim < 0:
-                    raise ValueError("Negative broadcast")
+                    raise ValueError(f"Negative dimension index ({bcast_dst_dim}) is invalid.")
                 if bcast_dst_dim >= len(bcast_result_desc.shape):
                     raise ValueError("Out of range broadcast dim found.")
-
-                # Only do the size matching test if the sizes are known, as different
-                #  symbols can have the same value.
-                src_size = bcast_value_desc.shape[src_dim]
-                dst_size = bcast_result_desc.shape[bcast_dst_dim]
-                if str(src_size).isdigit() and str(dst_size).isdigit() and (src_size != dst_size):
-                    raise ValueError("Size mismatch found.")
 
 
 def inplace_broadcast_expander(
@@ -170,7 +163,7 @@ def inplace_broadcast_expander(
         iter(state.out_edges(bcast_node))
     )
 
-    # TODO(phimuell): Add warning.
+    # TODO(edopao): Remember Philip to forbid it, i.e. force specification of it.
     map_params: list[str] = (
         [f"__bcast{dst_dim}" for dst_dim in range(len(output_edge.data.subset))]
         if bcast_node.params is None
@@ -178,9 +171,9 @@ def inplace_broadcast_expander(
     )
 
     output_subset: list[str] = map_params.copy()
-    map_ranges: dict[str, dace_sbs.Range] = {
-        map_param: dace_sbs.Range([sbs])
-        for map_param, sbs in zip(map_params, output_edge.data.subset)
+    map_ranges: dict[str, dace_subset.Range] = {
+        map_param: dace_subset.Range([sbs])
+        for map_param, sbs in zip(map_params, output_edge.data.subset, strict=True)
     }
 
     input_subset: list[str]
@@ -190,7 +183,7 @@ def inplace_broadcast_expander(
         bcast_value_offset = input_edge.data.subset.min_element()
         input_subset = [
             f"{map_params[dst_dim]} + ({offset})"
-            for dst_dim, offset in zip(bcast_node.brodcast_in_dims, bcast_value_offset)
+            for dst_dim, offset in zip(bcast_node.brodcast_in_dims, bcast_value_offset, strict=True)
         ]
 
     me, mx = state.add_map(f"__gt4py_broadcast_map_{bcast_node.name}", ndrange=map_ranges)
@@ -245,12 +238,11 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
 
     @staticmethod
     def expansion(node: Broadcast, state: dace.SDFGState, sdfg: dace.SDFG) -> dace.SDFG:
-        # TODO:
-        #   - Modify the edges on the outside.
-        #   - Handle the missing symbols.
 
         # NOTE: We have to cheat a here a bit. Actually only parts of the output
-        #   would be mapped into the nested SDFG.
+        #   would be mapped into the nested SDFG. However, we do not want that.
+        #   Instead we will modify the edges on the outside, such that everything
+        #   is mapped into the nested SDFG.
         assert isinstance(node, Broadcast)
         assert state.out_degree(node) == 1 and state.in_degree(node) == 1
 
@@ -293,8 +285,8 @@ class BroadcastExpandInlined(dace_transform.ExpandTransformation):
 
         # To ensure that the full data is passed into the nested SDFG, which we
         #  assumed because of how we want that everything is mapped into.
-        input_edge.data.subset = dace_sbs.Range.from_array(bcast_value.desc(sdfg))
-        output_edge.data.subset = dace_sbs.Range.from_array(bcast_result.desc(sdfg))
+        input_edge.data.subset = dace_subset.Range.from_array(bcast_value.desc(sdfg))
+        output_edge.data.subset = dace_subset.Range.from_array(bcast_result.desc(sdfg))
 
         # NOTE: We will not update `nsdfg.symbols`, instead we will rely on
         #   `add_nested_sdfg()` that is called implicitly by the expansion driver.

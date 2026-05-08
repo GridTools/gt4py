@@ -19,7 +19,7 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtir_library_nodes,
+    library_nodes as gtx_dace_library_nodes,
     sdfg_args as gtx_dace_args,
 )
 from gt4py.next.program_processors.runners.dace.lowering import (
@@ -345,7 +345,7 @@ def translate_broadcast(
     if isinstance(bcast_arg, gtir.Literal):
         assert isinstance(bcast_arg.type, ts.ScalarType)
         bcast_value_tlet, connector_mapping = sdfg_builder.add_tasklet(
-            sdfg_builder.unique_tasklet_name(bcast_node_name),
+            bcast_node_name,  # Ensures association between node name and Tasklet name.
             sdfg=ctx.sdfg,
             state=ctx.state,
             inputs=set(),
@@ -361,7 +361,7 @@ def translate_broadcast(
             connector_mapping["__out"],
             bcast_value,
             None,
-            dace.Memlet.from_array(bcast_value_name, bcast_value_desc),
+            dace.Memlet(data=bcast_value_name, subset="0"),
         )
         broadcast_in_dims = []
 
@@ -416,7 +416,7 @@ def translate_broadcast(
                 ", ".join(bcast_value_subset_components)
             )
 
-    bcast_node = gtir_library_nodes.Broadcast(
+    bcast_node = gtx_dace_library_nodes.Broadcast(
         name=bcast_node_name,
         broadcast_in_dims=broadcast_in_dims,
         params=field_dims,

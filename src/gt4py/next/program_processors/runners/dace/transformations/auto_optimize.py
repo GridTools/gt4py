@@ -381,6 +381,8 @@ def gt_auto_optimize(
         for node, state in list(sdfg.all_nodes_recursive()):
             if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
                 node.expand(state)
+                if validate_all:
+                    sdfg.validate()
 
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
@@ -673,7 +675,7 @@ def _gt_auto_process_top_level_maps(
         if simplify_res:
             broadcast_related_results = sum(
                 simplify_res.get(xtrans_name, 0)
-                for xtrans_name in ["ScalarBrodcastInliner", "BrodcastChainRemover"]
+                for xtrans_name in ["InlineBroadcastAccess", "BrodcastChainRemover"]
             )
         else:
             broadcast_related_results = 0
@@ -681,6 +683,8 @@ def _gt_auto_process_top_level_maps(
             for node, state in list(sdfg.all_nodes_recursive()):
                 if isinstance(node, gtir_library_nodes.Broadcast):
                     gtir_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
+                    if validate_all:
+                        sdfg.validate()
 
     # Replace `concat_where` nodes
     # TODO(phimuell): Are there better locations for this transformation?

@@ -122,7 +122,7 @@ def test_map_replacement(
     util.compile_and_run_sdfg(sdfg, **ref)
 
     nb_applied = sdfg.apply_transformations_repeated(
-        gtx_transformations.ScalarBrodcastInliner, validate_all=True
+        gtx_transformations.InlineBroadcastAccess, validate_all=True
     )
     assert nb_applied == 1
     assert util.count_nodes(sdfg, gtx_lib_nodes.Broadcast) == 0
@@ -220,7 +220,7 @@ def test_indirect_access_broadcast():
     #   Tasklet to make sure that it is indeed an indirect access. The safest way
     #   to do it would be to add another Library node for it.
     nb_applied = sdfg.apply_transformations_repeated(
-        gtx_transformations.ScalarBrodcastInliner, validate_all=True
+        gtx_transformations.InlineBroadcastAccess, validate_all=True
     )
     assert nb_applied == 0
 
@@ -272,7 +272,7 @@ def test_access_node_chain():
     assert all(e.src is not bcast_lib for e in state.in_edges(c))
 
     nb_applied = sdfg.apply_transformations_repeated(
-        gtx_transformations.ScalarBrodcastInliner, validate_all=True
+        gtx_transformations.InlineBroadcastAccess, validate_all=True
     )
     assert nb_applied == 2
 
@@ -339,7 +339,7 @@ def test_access_node_fan_out():
     assert all(res_name in sdfg.arrays for res_name in res_names)
 
     nb_applied = sdfg.apply_transformations_repeated(
-        gtx_transformations.ScalarBrodcastInliner, validate_all=True
+        gtx_transformations.InlineBroadcastAccess, validate_all=True
     )
     assert nb_applied == 1
 
@@ -404,7 +404,7 @@ def test_access_node_multi_connection():
     assert len(bcast_libs_before) == 1
 
     nb_applied = sdfg.apply_transformations_repeated(
-        gtx_transformations.ScalarBrodcastInliner, validate_all=True
+        gtx_transformations.InlineBroadcastAccess, validate_all=True
     )
     assert nb_applied == 1
 

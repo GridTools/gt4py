@@ -65,7 +65,7 @@ _GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
         "SingleStateGlobalSelfCopyElimination",
         "MultiStateGlobalSelfCopyElimination",
         "MapToCopy",
-        "ScalarBrodcastInliner",
+        "InlineBroadcastAccess",
     }
 )
 """Simplify stages disabled during the optimization of dataflow inside the Maps."""

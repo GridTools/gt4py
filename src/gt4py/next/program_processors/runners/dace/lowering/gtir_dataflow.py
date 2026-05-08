@@ -1354,10 +1354,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 identity=reduce_identity.value,
                 init=reduce_init.value,
                 debuginfo=gtir_to_sdfg_utils.debug_info(node),
+                input_conn=inp_conn,
+                output_conn=outp_conn,
+                mask_conn=mask_conn,
             )
-            reduce_node.input_conn = inp_conn
-            reduce_node.output_conn = outp_conn
-            reduce_node.mask_conn = mask_conn
         else:
             reduce_node = dace_stdlib.Reduce(
                 "reduce",
