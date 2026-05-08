@@ -93,6 +93,29 @@ def test_register_subclasses():
     )
 
 
+def test_singledispatcher():
+    from gt4py.eve.utils import singledispatcher
+
+    class Base:
+        pass
+
+    class Derived(Base):
+        pass
+
+    dispatcher = singledispatcher(
+        lambda _: "default",
+        {
+            Base: lambda _: "base",
+            Derived: lambda _: "derived",
+        },
+    )
+
+    assert dispatcher(1) == "default"
+    assert dispatcher(Base()) == "base"
+    assert dispatcher(Derived()) == "derived"
+    assert dispatcher.registry.keys() == {object, Base, Derived}
+
+
 class ModelClass(eve.datamodels.DataModel):
     data: Any
 

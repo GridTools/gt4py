@@ -42,7 +42,7 @@ fingerprint_reducer = eve_utils.singledispatcher(
     utils.fingerprint_reducer,
     {
         types.FunctionType: lambda f: (
-            f.__class__,
+            tuple,
             (),
             (
                 source_utils.make_source_definition_from_function(f),
@@ -59,7 +59,7 @@ fingerprinter = functools.partial(
 
 
 @dataclasses.dataclass(frozen=True)
-class BaseStage(utils.FingerprintedDataclass):
+class BaseStage(utils.CachedFingerprintedDataclass):
     """Base class for optimized Fingerprinted implementations in frozen dataclasses."""
 
     fingerprinter = staticmethod(fingerprinter)

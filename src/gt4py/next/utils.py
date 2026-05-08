@@ -195,7 +195,7 @@ class FingerprintedABC(abc.ABC):
 
 fingerprint_reducer = eve_utils.singledispatcher(
     lambda _: NotImplemented,
-    {FingerprintedABC: lambda obj: (obj.__class__, (), (obj.fingerprint,))},
+    {FingerprintedABC: lambda obj: (type(obj), (), (obj.fingerprint,))},
 )
 fingerprint_pickler = eve_utils.custom_pickler(fingerprint_reducer, name="FingerprintPickler")
 
@@ -216,34 +216,33 @@ class FingerprintedMixin:
 
     __slots__ = ()
 
-    fingerprinter = staticmethod(fingerprint)
+    @staticmethod
+    def fingerprinter(instance: Fingerprinted) -> str:
+        try:
+            return fingerprint(instance.__reduce__())
+        except AttributeError:
+            return ""
 
     @property
     def fingerprint(self) -> str:
         return self.fingerprinter(self)
 
 
-assert issubclass(FingerprintedMixin, FingerprintedABC)
-if TYPE_CHECKING:
-    _FM: type[Fingerprinted] = FingerprintedMixin
-
-
-class CachedFingerprintedMixin:
+class CachedFingerprintedMixin(FingerprintedMixin):
     """Mixin to add an optimized implementation of the Fingerprinted protocol to frozen classes."""
-
-    fingerprinter = staticmethod(fingerprint)
 
     @(functools.cached_property if not TYPE_CHECKING else property)
     def fingerprint(self) -> str:
         return self.fingerprinter(self)
 
 
+assert issubclass(FingerprintedMixin, FingerprintedABC)
 assert issubclass(CachedFingerprintedMixin, FingerprintedABC)
 if TYPE_CHECKING:
     _CFM: type[Fingerprinted] = CachedFingerprintedMixin
 
 
-class FingerprintedDataclass(CachedFingerprintedMixin, MetadataBasedPicklingMixin):
+class CachedFingerprintedDataclass(CachedFingerprintedMixin, MetadataBasedPicklingMixin):
     __slots__ = ()
 
 

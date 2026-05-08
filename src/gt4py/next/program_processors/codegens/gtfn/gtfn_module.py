@@ -46,7 +46,7 @@ class GTFNTranslationStep(
         definitions.CompilableProgramDef,
         stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec],
     ],
-    utils.FingerprintedDataclass,
+    utils.CachedFingerprintedDataclass,
 ):
     code_spec: Optional[code_specs.HeaderAndSourceCodeSpec] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135

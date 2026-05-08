@@ -140,7 +140,7 @@ ArgStaticDescriptorsContextsByType: TypeAlias = Mapping[
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileTimeArgs:
+class CompileTimeArgs(utils.CachedFingerprintedDataclass):
     """Compile-time standins for arguments to a GTX program to be used in ahead-of-time compilation."""
 
     args: tuple[ts.TypeSpec, ...]
@@ -174,6 +174,19 @@ class CompileTimeArgs:
     @classmethod
     def empty(cls) -> Self:
         return cls(tuple(), {}, {}, None, {})
+
+    @staticmethod
+    def fingerprinter(instance: utils.Fingerprinted) -> str:
+        assert isinstance(instance, CompileTimeArgs)
+        return utils.fingerprint(
+            (
+                instance.args,
+                sorted(instance.kwargs.items()),
+                sorted(instance.offset_provider.items()),
+                instance.column_axis,
+                instance.argument_descriptor_contexts,
+            )
+        )
 
 
 # This is not really accurate, just an approximation

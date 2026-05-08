@@ -95,7 +95,7 @@ class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co
 class NamedStepSequence(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.FingerprintedDataclass,
+    utils.CachedFingerprintedDataclass,
 ):
     """
     Workflow with linear succession of named steps.
@@ -164,7 +164,7 @@ class NamedStepSequence(
 class MultiWorkflow(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.FingerprintedDataclass,
+    utils.CachedFingerprintedDataclass,
 ):
     """A flexible workflow, where the sequence of steps depends on the input type."""
 
@@ -182,7 +182,7 @@ class MultiWorkflow(
 @dataclasses.dataclass(frozen=True)
 class StepSequence(
     ChainableWorkflowMixin[StartT, EndT],
-    utils.FingerprintedDataclass,
+    utils.CachedFingerprintedDataclass,
 ):
     """
     Composable workflow of single input callables.
@@ -235,7 +235,7 @@ class StepSequence(
 class CachedStep(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.FingerprintedDataclass,
+    utils.CachedFingerprintedDataclass,
     Generic[StartT, EndT, HashT],
 ):
     """
@@ -266,9 +266,9 @@ class CachedStep(
     key_function: Callable[[StartT], HashT] = dataclasses.field(
         default=utils.fingerprint, metadata=utils.gt4py_metadata(pickle=False)
     )  # type: ignore[assignment]
-    cache: OpaqueMutableMapping[HashT, EndT] = dataclasses.field(
+    cache: OpaqueMutableMapping[str, EndT] = dataclasses.field(
         repr=False, default_factory=dict, metadata=utils.gt4py_metadata(pickle=False)
-    )  # type: ignore[assignment]
+    )
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
@@ -287,7 +287,7 @@ class CachedStep(
 class SkippableStep(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.FingerprintedDataclass,
+    utils.CachedFingerprintedDataclass,
 ):
     step: Workflow[StartT, EndT]
 

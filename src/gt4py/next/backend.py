@@ -145,7 +145,7 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 #  `transforms` -> `frontend_transforms`
 #  `executor` -> `backend_transforms`
 @dataclasses.dataclass(frozen=True)
-class Backend(utils.FingerprintedDataclass, Generic[core_defs.DeviceTypeT]):
+class Backend(utils.CachedFingerprintedDataclass, Generic[core_defs.DeviceTypeT]):
     name: str
     executor: workflow.Workflow[definitions.CompilableProgramDef, stages.ExecutableProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]

@@ -12,46 +12,9 @@ import dataclasses
 from collections.abc import Callable
 from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
 
-from gt4py.eve import utils
-from gt4py.next import common
-from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import code_specs, definitions
+from gt4py.next import utils
+from gt4py.next.otf import code_specs
 from gt4py.next.otf.binding import interface
-
-
-def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
-    """Given closure compute a hash uniquely determining if we need to recompile."""
-    offset_provider = program_def.args.offset_provider
-    return hash(
-        (
-            program_def.data,
-            # As the frontend types contain lists they are not hashable. As a workaround we just
-            # use content_hash here.
-            utils.content_hash(tuple(arg for arg in program_def.args.args)),
-            common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
-            program_def.args.column_axis,
-        )
-    )
-
-
-def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef) -> str:
-    """
-    Generates a unique hash string for a stencil source program representing
-    the program, sorted offset_provider, and column_axis.
-    """
-    program: itir.Program = program_def.data
-    offset_provider: common.OffsetProvider = program_def.args.offset_provider
-    column_axis: Optional[common.Dimension] = program_def.args.column_axis
-
-    program_hash = utils.content_hash(
-        (
-            program.fingerprint(),
-            sorted(offset_provider.items(), key=lambda el: el[0]),
-            column_axis,
-        )
-    )
-
-    return program_hash
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
@@ -59,7 +22,7 @@ TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramSource(Generic[CodeSpecT]):
+class ProgramSource(utils.CachedFingerprintedDataclass, Generic[CodeSpecT]):
     """
     Standalone source code translated from an IR along with information relevant for OTF compilation.
 
@@ -76,7 +39,7 @@ class ProgramSource(Generic[CodeSpecT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class BindingSource(Generic[CodeSpecT, TargetCodeSpecT]):
+class BindingSource(utils.CachedFingerprintedDataclass, Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Companion source code for translated program source code.
 
@@ -92,7 +55,7 @@ class BindingSource(Generic[CodeSpecT, TargetCodeSpecT]):
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableProject(Generic[CodeSpecT, TargetCodeSpecT]):
+class CompilableProject(utils.CachedFingerprintedDataclass, Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
