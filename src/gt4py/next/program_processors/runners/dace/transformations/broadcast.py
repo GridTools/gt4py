@@ -277,7 +277,17 @@ class InlineBroadcastAccess(dace_transformation.SingleStateTransformation):
         connection.
         """
 
+        # Create a new node and find a new name for it.
         new_bcast_node = copy.deepcopy(bcast_node)
+        known_bcast_names: set[str] = set()
+        for other_state in state.sdfg.states():
+            for node in other_state.nodes():
+                if isinstance(node, gtx_lib_nodes.Broadcast):
+                    known_bcast_names.add(node.label)
+        new_bcast_name = dace.utils.find_new_name(new_bcast_node.label, known_bcast_names)
+        new_bcast_node.name = new_bcast_name
+        new_bcast_node.label = new_bcast_name
+
         state.add_node(new_bcast_node)
 
         state.add_edge(
