@@ -35,7 +35,8 @@ import numpy as np
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.base import Frontend, register
-from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
+from gt4py.cartesian.frontend.defir_builder import DefIRBuilder
+from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR
 from gt4py.cartesian.frontend.exceptions import (
     GTScriptAssertionError,
     GTScriptDataTypeError,
@@ -301,6 +302,19 @@ class VerticalIntervalParser(IntervalParser):
     if an `ast.Subscript` is passed, this parses its slice attribute.
     """
 
+    def __init__(
+        self,
+        axis_name: str,
+        fields: dict[str, nodes.FieldDecl],
+        literal_precision: int,
+        loc: Optional[nodes.Location] = None,
+    ):
+        super().__init__(axis_name, fields, loc)
+        self._literal_precision = literal_precision
+
+    def _default_int_datatype(self) -> nodes.DataType:
+        return nodes.DataType.from_dtype(np.dtype(f"i{int(self._literal_precision / 8)}"))
+
     def visit_Name(self, node: ast.Name) -> nodes.Ref:
         # Handle the field accesses
         if node.id in self.fields:
@@ -322,9 +336,10 @@ class VerticalIntervalParser(IntervalParser):
         node: Union[ast.Slice, ast.Subscript, ast.Constant],
         axis_name: str,
         fields: dict[str, nodes.FieldDecl],
+        literal_precision: int,
         loc: Optional[nodes.Location] = None,
     ) -> nodes.AxisInterval:
-        parser = cls(axis_name, fields, loc)
+        parser = cls(axis_name, fields, literal_precision, loc)
 
         if isinstance(node, ast.Subscript):
             raise parser.interval_error
@@ -354,7 +369,42 @@ class VerticalIntervalParser(IntervalParser):
         return nodes.AxisInterval(start=start, end=end, loc=loc)
 
     def visit_Subscript(self, node: ast.Subscript):
-        # This was previously allowed but is discontinued now.
+        # Check that this is a higher dimensional field
+        if isinstance(node.value, ast.Subscript) and isinstance(node.value.value, ast.Name):
+            field_name = node.value.value.id
+            # Ensure the indexing is correct, first we need a 0-offset in i and j
+            if isinstance(node.value.slice, ast.Tuple):
+                axis_offsets: list[ast.Constant] = node.value.slice.elts
+                if not all(offset.value == 0 for offset in axis_offsets):
+                    raise self.interval_error
+            else:
+                raise self.interval_error
+            # then we parse the actual offset in the higher dimension
+            if isinstance(node.slice, ast.Tuple):
+                higher_dim_offset = [self.visit(data_idx) for data_idx in node.slice.elts]
+            else:
+                higher_dim_offset = [self.visit(node.slice)]
+            literal_index = [
+                nodes.ScalarLiteral(value=i, data_type=self._default_int_datatype())
+                for i in higher_dim_offset
+            ]
+
+            return nodes.FieldRef.at_center(
+                name=field_name,
+                axes=self.fields[field_name].axes,
+                loc=nodes.Location.from_ast_node(node),
+                data_index=literal_index,
+            )
+        # This is a non-higher dimensional field, but a normal field accessed with an offset
+        if isinstance(node.value, ast.Name) and isinstance(node.slice, ast.Tuple):
+            # We need to check that the offset is 0 everywhere, since no horizontal dependencies are allowed
+            axis_offsets: list[ast.Constant] = node.slice.elts
+            if not all(offset.value == 0 for offset in axis_offsets):
+                raise self.interval_error
+            # If the offset is 0, we are safe to visit the field
+            return self.visit(node.value)
+
+        # Legal syntax never allows you to arrive here
         raise self.interval_error
 
 
@@ -1073,7 +1123,13 @@ class IRMaker(ast.NodeVisitor):
             interval_node = args[0]
 
         seq_name = nodes.Domain.LatLonGrid().sequential_axis.name
-        interval = VerticalIntervalParser.apply(interval_node, seq_name, self.fields, loc=loc)
+        interval = VerticalIntervalParser.apply(
+            interval_node,
+            seq_name,
+            self.fields,
+            loc=loc,
+            literal_precision=self.literal_int_precision,
+        )
 
         if (
             interval.start.level == nodes.LevelMarker.END
@@ -1342,7 +1398,7 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(result, nodes.VarRef):
             assert index is not None
             result.index = index[0]
-        else:
+        elif isinstance(result, nodes.FieldRef):
             if isinstance(index, nodes.AbsoluteKIndex):
                 result.offset = index
             elif isinstance(node.value, ast.Name):
@@ -1390,6 +1446,12 @@ class IRMaker(ast.NodeVisitor):
                     "Unrecognized subscript expression",
                     loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
                 )
+
+        else:
+            raise GTScriptSyntaxError(
+                f"Unrecognized node type {type(result)} is subscripted",
+                loc=nodes.Location.from_ast_node(node, scope=self.stencil_name),
+            )
 
         return result
 
@@ -2021,7 +2083,6 @@ class GTScriptParser(ast.NodeVisitor):
         self.options = options
         self.build_info = options.build_info
         self.main_name = options.name
-        self.definition_ir = None
         self.external_context = externals or {}
         self.resolved_externals = {}
         self.block = None
@@ -2464,7 +2525,6 @@ class GTScriptParser(ast.NodeVisitor):
             func_node=main_func_node,
         )
 
-        # Generate definition IR
         domain = nodes.Domain.LatLonGrid()
         computations = IRMaker(
             fields=fields_decls,
@@ -2477,50 +2537,21 @@ class GTScriptParser(ast.NodeVisitor):
             options=self.options,
         )(self.ast_root)
 
-        self.definition_ir = nodes.StencilDefinition(
-            name=self.main_name,
+        return DefIRBuilder(self.main_name).build(
             domain=domain,
             api_signature=api_signature,
-            api_fields=[
-                fields_decls[item.name] for item in api_signature if item.name in fields_decls
-            ],
-            parameters=[
-                parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
-            ],
+            fields_decls=fields_decls,
+            parameter_decls=parameter_decls,
             computations=init_computations + computations,
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),
         )
 
-        self.definition_ir = UnrollVectorAssignments.apply(
-            self.definition_ir, fields_decls=fields_decls
-        )
-        return self.definition_ir
-
 
 @register
 class GTScriptFrontend(Frontend):
     name = "gtscript"
-
-    @classmethod
-    def get_stencil_id(cls, qualified_name, definition, externals, options_id):
-        cls.prepare_stencil_definition(definition, externals or {})
-        fingerprint = {
-            "__main__": definition._gtscript_["canonical_ast"],
-            "docstring": inspect.getdoc(definition),
-            "api_annotations": f"[{', '.join(str(item) for item in definition._gtscript_['api_annotations'])}]",
-        }
-        for name, value in definition._gtscript_["externals"].items():
-            fingerprint[name] = (
-                value._gtscript_["canonical_ast"] if hasattr(value, "_gtscript_") else value
-            )
-
-        definition_id = gt_utils.shashed_id(fingerprint)
-        version = gt_utils.shashed_id(definition_id, options_id)
-        stencil_id = gt_definitions.StencilID(qualified_name, version)
-
-        return stencil_id
 
     @classmethod
     def prepare_stencil_definition(

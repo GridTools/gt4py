@@ -95,10 +95,13 @@ def set_dace_config(
             "compiler.cuda.args",
             value=f"{cuda_dbginfo} -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
         )
-    dace.Config.set(
-        "compiler.cuda.hip_args",
-        value=f"-fPIC {dbginfo} -O3 -march=native -Wno-unused-parameter",
-    )
+    if gt_hipargs := os.environ.get("HIPFLAGS", None):
+        dace.Config.set("compiler.cuda.hip_args", value=gt_hipargs)
+    else:
+        dace.Config.set(
+            "compiler.cuda.hip_args",
+            value=f"-fPIC {dbginfo} -O3 -march=native -Wno-unused-parameter",
+        )
 
     # By design, we do not allow converting Memlets to Maps during code generation.
     #  If needed, Memles are converted to Maps explicitly by gt4py in the `gt_auto_optimize`
@@ -130,6 +133,14 @@ def set_dace_config(
     #  unless enabled through env variable.
     dace.Config.set(
         "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
+    )
+
+    # In debug mode use `development` otherwise use `production`.
+    # NOTE: In case you want to run with optimizations, but would like to have the full
+    #   DaCe folder, i.e. `development` mode, then export `DACE_compiler_build_folder_mode`
+    #   set to `development` (small case matters).
+    dace.Config.set(
+        "compiler", "build_folder_mode", value=("development" if gtx_config.DEBUG else "production")
     )
 
     # We are not interested in storing the history of SDFG transformations.
