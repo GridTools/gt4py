@@ -83,16 +83,29 @@ class Broadcast(dace_nodes.LibraryNode):
                 for param in params
             ]
 
+    @property
+    def free_symbols(self) -> set[str]:
+        # This function is needed to ensure that the names in `params` are not used
+        #  as free symbols.
+        return set()
+
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         if len(self.brodcast_in_dims) != len(set(self.brodcast_in_dims)):
             raise ValueError("`Broadcast dimensions must be unique")
 
+        # They are two different properties, that are upon initialization the same
+        #  but there is no check to ensure that this stays this way.
+        if self.name != self.label:
+            raise ValueError(
+                "Label of `Broadcast` node, `{self.label}`, does not match its name, `{self.name}`."
+            )
+
         # TODO(phimuell): Handle empty Memlets in the input.
-        if state.in_degree(self) != 1 or next(iter(state.in_edges(self))).dst_conn == _INPUT_NAME:
+        if state.in_degree(self) != 1 or next(iter(state.in_edges(self))).dst_conn != _INPUT_NAME:
             raise ValueError("GT4Py Broadcast node needs exactly one input.")
         if (
             state.out_degree(self) != 1
-            or next(iter(state.out_edges(self))).src_conn == _OUTPUT_NAME
+            or next(iter(state.out_edges(self))).src_conn != _OUTPUT_NAME
         ):
             raise ValueError("GT4Py Broadcast node needs exactly one output.")
 
