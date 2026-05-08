@@ -28,10 +28,10 @@ _gpu_compiler_configuration = gpu_configuration(GT4PY_COMPILE_OPT_LEVEL)
 GT4PY_EXTRA_COMPILE_OPT_FLAGS = os.environ.get("GT4PY_EXTRA_COMPILE_OPT_FLAGS", "")
 
 # Settings dict
-GT4PY_EXTRA_COMPILE_ARGS = os.environ.get(
-    "GT4PY_EXTRA_COMPILE_ARGS", _cxx_compiler_infos.cxx_compile_flags
-)
-_extra_compile_args = GT4PY_EXTRA_COMPILE_ARGS.split(" ") if GT4PY_EXTRA_COMPILE_ARGS else []
+GT4PY_EXTRA_COMPILE_ARGS = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
+_extra_compile_args = []
+_extra_compile_args.extend(GT4PY_EXTRA_COMPILE_ARGS.split(" "))
+_extra_compile_args.extend(_cxx_compiler_infos.cxx_compile_flags.split(" "))
 
 GT4PY_EXTRA_LINK_ARGS = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
 extra_link_args = GT4PY_EXTRA_LINK_ARGS.split(" ") if GT4PY_EXTRA_LINK_ARGS else []
