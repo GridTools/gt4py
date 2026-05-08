@@ -183,10 +183,17 @@ def inplace_broadcast_expander(
         else list(bcast_node.params)
     )
 
-    output_subset: list[str] = map_params.copy()
+    # NOTE: Creating it that way allows to have numbers as Map bounds for subsets such
+    #   as `[a:(a + 5)]`.
+    bcast_size = output_edge.data.subset.size()
+    output_offset = output_edge.data.subset.min_element()
+    output_subset: list[str] = [
+        f"({offset}) + ({param})" for offset, param in zip(output_offset, map_params)
+    ]
+
     map_ranges: dict[str, dace_subset.Range] = {
-        map_param: dace_subset.Range([sbs])
-        for map_param, sbs in zip(map_params, output_edge.data.subset, strict=True)
+        map_param: dace_subset.Range.from_string(f"0:({dim_size})")
+        for map_param, dim_size in zip(map_params, bcast_size, strict=True)
     }
 
     input_subset: list[str]
