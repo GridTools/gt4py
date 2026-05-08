@@ -91,6 +91,60 @@ class TestMetadataBasedPickling:
             assert getattr(restored, field_name) == expected_value
 
 
+class _DuckFingerprinted:
+    @property
+    def fingerprint(self):
+        return "duck"
+
+    @property
+    def fingerprinter(self):
+        return lambda _: "duck"
+
+
+def test_fingerprintedabc_subclasshook_recognizes_duck_types():
+    assert issubclass(_DuckFingerprinted, utils.FingerprintedABC)
+
+
+class _TestFingerprinted(utils.FingerprintedABC):
+    def __init__(self, value: str, noise: str):
+        self.value = value
+        self.noise = noise
+
+    @staticmethod
+    def fingerprinter(instance: "_TestFingerprinted") -> str:
+        return instance.value
+
+
+def test_fingerprint_uses_fingerprinted_state_only():
+    a = _TestFingerprinted("id", noise="left")
+    b = _TestFingerprinted("id", noise="right")
+    c = _TestFingerprinted("other", noise="left")
+
+    assert utils.fingerprint(a) == utils.fingerprint(b)
+    assert utils.fingerprint(a) != utils.fingerprint(c)
+
+
+class _CachedTestFingerprinted(utils.CachedFingerprintedMixin):
+    calls = 0
+
+    def __init__(self, value: str):
+        self.value = value
+
+    @staticmethod
+    def fingerprinter(instance: "_CachedTestFingerprinted") -> str:
+        _CachedTestFingerprinted.calls += 1
+        return instance.value
+
+
+def test_cached_fingerprinted_mixin_computes_fingerprint_once_per_instance():
+    _CachedTestFingerprinted.calls = 0
+    instance = _CachedTestFingerprinted("stable")
+
+    assert instance.fingerprint == "stable"
+    assert instance.fingerprint == "stable"
+    assert _CachedTestFingerprinted.calls == 1
+
+
 def test_tree_map_default():
     @utils.tree_map
     def testee(x):

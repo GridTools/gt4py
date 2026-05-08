@@ -355,7 +355,7 @@ class DaCeTranslator(
         stages.ProgramSource[code_specs.SDFGCodeSpec],
     ],
     definitions.TranslationStep[code_specs.SDFGCodeSpec],
-    utils.FingerprintedDataclass,
+    utils.CachedFingerprintedDataclass,
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
