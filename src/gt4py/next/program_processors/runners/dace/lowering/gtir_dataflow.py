@@ -837,9 +837,16 @@ class LambdaToDataflow(eve.NodeVisitor):
             # If the result is currently written to a transient node, inside the nested SDFG,
             # we need to allocate a non-transient data node.
             result_desc = edge.result.dc_node.desc(sdfg)
-            output_desc = result_desc.clone()
-            output_desc.transient = False
-            output_data = sdfg.add_datadesc(output_data, output_desc, find_new_name=True)
+            if isinstance(sym.type, ts.ScalarType) and isinstance(result_desc, dace.data.Array):
+                # TODO(edopao): a scalar should not be represented as an array, but
+                # currently this can happen because of an issue workaround, see the
+                # todo comment above in `_visit_if_branch_arg()`.
+                assert len(result_desc.shape) == 1 and result_desc.shape[0] == 1
+                _, output_desc = sdfg.add_scalar(output_data, result_desc.dtype)
+            else:
+                output_desc = result_desc.clone()
+                output_desc.transient = False
+                output_data = sdfg.add_datadesc(output_data, output_desc, find_new_name=True)
         output_node = state.add_access(output_data)
         state.add_nedge(
             edge.result.dc_node,
