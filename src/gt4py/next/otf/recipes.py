@@ -14,10 +14,11 @@ from gt4py.next.otf import definitions, stages, workflow
 
 
 @dataclasses.dataclass(frozen=True)
-class OTFCompileWorkflow(workflow.NamedStepSequence):
+class OTFCompileWorkflow(
+    workflow.NamedStepSequence[definitions.CompilableProgramDef, stages.CompilationArtifact]
+):
     """The typical compiled backend steps composed into a workflow."""
 
     translation: definitions.TranslationStep
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject]
-    compilation: workflow.Workflow[stages.CompilableProject, stages.ExecutableProgram]
-    decoration: workflow.Workflow[stages.ExecutableProgram, stages.ExecutableProgram]
+    compilation: workflow.Workflow[stages.CompilableProject, stages.CompilationArtifact]

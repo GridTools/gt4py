@@ -37,8 +37,9 @@ def test_backend_factory_trait_device():
     assert cpu_version.executor.translation.device_type is core_defs.DeviceType.CPU
     assert gpu_version.executor.translation.device_type is core_defs.DeviceType.CUDA
 
-    assert cpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CPU
-    assert gpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CUDA
+    # The compilation step now also carries device_type so it can stamp the artifact.
+    assert cpu_version.executor.compilation.device_type is core_defs.DeviceType.CPU
+    assert gpu_version.executor.compilation.device_type is core_defs.DeviceType.CUDA
 
     assert custom_layout_allocators.is_field_allocator_for(
         cpu_version.allocator, core_defs.DeviceType.CPU

@@ -147,16 +147,17 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
-    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.ExecutableProgram]
+    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     transforms: workflow.Workflow[definitions.ConcreteProgramDef, definitions.CompilableProgramDef]
 
     def compile(
         self, program: definitions.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
     ) -> stages.ExecutableProgram:
-        return self.executor(
+        artifact = self.executor(
             self.transforms(definitions.ConcreteProgramDef(data=program, args=compile_time_args))
         )
+        return artifact.load()
 
     @property
     def __gt_allocator__(
