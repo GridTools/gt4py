@@ -32,6 +32,8 @@ GT4PY_EXTRA_COMPILE_ARGS = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
 _extra_compile_args = []
 _extra_compile_args.extend(GT4PY_EXTRA_COMPILE_ARGS.split(" "))
 _extra_compile_args.extend(_cxx_compiler_infos.cxx_compile_flags.split(" "))
+# Clean up for empty flags (GCC special)
+_extra_compile_args = [flag for flag in _extra_compile_args if flag.strip()]
 
 GT4PY_EXTRA_LINK_ARGS = os.environ.get("GT4PY_EXTRA_LINK_ARGS", "")
 extra_link_args = GT4PY_EXTRA_LINK_ARGS.split(" ") if GT4PY_EXTRA_LINK_ARGS else []
