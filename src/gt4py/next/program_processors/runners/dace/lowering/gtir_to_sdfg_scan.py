@@ -383,7 +383,7 @@ def _lower_lambda_to_nested_sdfg(
         assert scan_init_data.gt_type.offset_type
         offset_type = scan_init_data.gt_type.offset_type
         offset_provider_type = sdfg_builder.get_offset_provider_type(offset_type.value)
-        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        assert isinstance(offset_provider_type, gtx_common.ConnectivityType)
         list_size = offset_provider_type.max_neighbors
         return [scan_column_size, dace.symbolic.SymExpr(list_size)]
 

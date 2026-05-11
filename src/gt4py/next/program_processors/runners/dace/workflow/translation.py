@@ -57,7 +57,7 @@ def find_constant_symbols(
         # Same for connectivity tables, for which the first dimension is always horizontal
         for offset, conn_type in offset_provider_type.items():
             if (
-                isinstance(conn_type, common.NeighborConnectivityType)
+                isinstance(conn_type, common.ConnectivityType)
                 and (conn_id := gtx_dace_args.connectivity_identifier(offset)) in sdfg.arrays
             ):
                 assert not sdfg.arrays[conn_id].transient

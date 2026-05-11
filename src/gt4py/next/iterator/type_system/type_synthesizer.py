@@ -326,7 +326,7 @@ def neighbors(
     )
     assert isinstance(it, it_ts.IteratorType)
     conn_type = common.get_offset_type(offset_provider_type, offset_literal.value)
-    assert isinstance(conn_type, common.NeighborConnectivityType)
+    assert isinstance(conn_type, common.ConnectivityType)
     return ts.ListType(element_type=it.element_type, offset_type=conn_type.neighbor_dim)
 
 
@@ -494,7 +494,7 @@ def _resolve_dimensions(
         ...     itir.OffsetLiteral(value=0),
         ... )
         >>> offset_provider_type = {
-        ...     "V2E": common.NeighborConnectivityType(
+        ...     "V2E": common.ConnectivityType(
         ...         domain=(Vertex, V2E),
         ...         codomain=Edge,
         ...         skip_value=None,
@@ -515,7 +515,7 @@ def _resolve_dimensions(
             offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
             if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
                 continue  # No shift applied
-            if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
+            if isinstance(offset_type, (fbuiltins.FieldOffset, common.ConnectivityType)):
                 if input_dim == offset_type.codomain:  # Check if input fits to offset
                     input_dim = offset_type.domain[0]  # Update input_dim for next iteration
         resolved_dims.append(input_dim)
@@ -670,7 +670,7 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
                 type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
                 if isinstance(type_, common.Dimension):
                     pass
-                elif isinstance(type_, common.NeighborConnectivityType):
+                elif isinstance(type_, common.ConnectivityType):
                     found = False
                     for i, dim in enumerate(new_position_dims):
                         if dim.value == type_.source_dim.value:

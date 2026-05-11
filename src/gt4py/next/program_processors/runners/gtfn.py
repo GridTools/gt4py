@@ -98,7 +98,7 @@ def extract_connectivity_args(
         if (ndarray := getattr(conn, "ndarray", None)) is not None
     ]
     assert all(
-        common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
+        isinstance(conn, common.Connectivity) and field_utils.verify_device_field_type(conn, device)
         for conn in offset_provider.values()
         if hasattr(conn, "ndarray")
     )

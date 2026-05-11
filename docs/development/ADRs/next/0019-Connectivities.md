@@ -31,7 +31,7 @@ We update and introduce the following concepts
 
 **NeighborTable** is a _NeighborConnectivity_ backed by a buffer.
 
-**ConnectivityType**, **NeighborConnectivityType** contains all information that is needed for compilation.
+**ConnectivityType** contains all information that is needed for compilation.
 
 ### Full definitions
 

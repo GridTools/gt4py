@@ -330,7 +330,7 @@ def _construct_if_branch_output(
         offset_provider_type = sdfg_builder.get_offset_provider_type(
             out_type.dtype.offset_type.value
         )
-        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        assert isinstance(offset_provider_type, gtx_common.ConnectivityType)
         shape = [*shape, offset_provider_type.max_neighbors]
 
     out, _ = sdfg_builder.add_temp_array(ctx.sdfg, shape, dtype)

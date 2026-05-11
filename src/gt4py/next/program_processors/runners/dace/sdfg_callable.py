@@ -99,7 +99,7 @@ def get_sdfg_conn_args(
     for offset, connectivity in offset_provider.items():
         name = gtx_dace_args.connectivity_identifier(offset)
         if name in sdfg.arrays:
-            assert gtx_common.is_neighbor_connectivity(connectivity)
+            assert isinstance(connectivity, gtx_common.Connectivity)
             assert field_utils.verify_device_field_type(
                 connectivity,
                 core_defs.CUPY_DEVICE_TYPE

@@ -714,7 +714,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             offset_provider_type = self.subgraph_builder.get_offset_provider_type(
                 arg.gt_dtype.offset_type.value
             )
-            assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+            assert isinstance(offset_provider_type, gtx_common.ConnectivityType)
             inner_desc = dace.data.Array(
                 dtype=arg_desc.dtype, shape=[offset_provider_type.max_neighbors]
             )
@@ -985,7 +985,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         offset = node.args[0].value
         assert isinstance(offset, str)
         conn_type = self.subgraph_builder.get_offset_provider_type(offset)
-        assert isinstance(conn_type, gtx_common.NeighborConnectivityType)
+        assert isinstance(conn_type, gtx_common.ConnectivityType)
 
         it = self.visit(node.args[1])
         assert isinstance(it, IteratorExpr)
@@ -1210,7 +1210,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         tasklet_expression = f"{output_connector} = {fun_python_code}"
 
         input_args = [self.visit(arg) for arg in node.args]
-        input_conn_types: dict[gtx_common.Dimension, gtx_common.NeighborConnectivityType] = {}
+        input_conn_types: dict[gtx_common.Dimension, gtx_common.ConnectivityType] = {}
         for input_arg in input_args:
             assert isinstance(input_arg.gt_dtype, ts.ListType)
             assert input_arg.gt_dtype.offset_type is not None
@@ -1219,7 +1219,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 # this input argument is the result of `make_const_list`
                 continue
             offset_provider_t = self.subgraph_builder.get_offset_provider_type(offset_type.value)
-            assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
+            assert isinstance(offset_provider_t, gtx_common.ConnectivityType)
             input_conn_types[offset_type] = offset_provider_t
 
         if len(input_conn_types) == 0:
@@ -1332,7 +1332,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _make_reduce_with_skip_values(
         self,
         input_expr: ValueExpr | MemletExpr,
-        offset_provider_type: gtx_common.NeighborConnectivityType,
+        offset_provider_type: gtx_common.ConnectivityType,
         reduce_init: SymbolExpr,
         reduce_identity: SymbolExpr,
         reduce_wcr: str,
@@ -1478,7 +1478,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         offset_type = input_expr.gt_dtype.offset_type
         offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset_type.value)
-        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        assert isinstance(offset_provider_type, gtx_common.ConnectivityType)
 
         if offset_provider_type.has_skip_values:
             self._make_reduce_with_skip_values(
@@ -1655,7 +1655,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _make_unstructured_shift(
         self,
         it: IteratorExpr,
-        conn_type: gtx_common.NeighborConnectivityType,
+        conn_type: gtx_common.ConnectivityType,
         conn_node: dace_nodes.AccessNode,
         offset_expr: DataExpr,
     ) -> IteratorExpr:

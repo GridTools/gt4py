@@ -71,7 +71,6 @@ def _unstructured_translate_range_statically(
     """
     assert common.is_offset_provider(offset_provider)
     connectivity = offset_provider[tag]
-    assert common.is_neighbor_connectivity(connectivity)
     skip_value = connectivity.skip_value
 
     # fold & convert expr into actual integers
@@ -192,7 +191,7 @@ class SymbolicDomain:
                 new_ranges[current_dim] = SymbolicRange.translate(
                     self.ranges[current_dim], val.value
                 )
-            elif isinstance(connectivity_type, common.NeighborConnectivityType):
+            elif isinstance(connectivity_type, common.ConnectivityType):
                 # unstructured shift
                 assert (
                     isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)

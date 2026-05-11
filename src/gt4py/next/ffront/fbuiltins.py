@@ -481,7 +481,6 @@ class FieldOffset(runtime.Offset):
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
         elif isinstance(offset_definition, common.Connectivity):
-            assert common.is_neighbor_connectivity(offset_definition)
             named_index = common.NamedIndex(self.target[-1], offset)
             connectivity = offset_definition[named_index]
         else:

@@ -53,7 +53,7 @@ def _max_domain_range_sizes(offset_provider: common.OffsetProvider) -> dict[str,
     """
     sizes: dict[str, int] = {}
     for provider in offset_provider.values():
-        if common.is_neighbor_connectivity(provider):
+        if isinstance(provider, common.Connectivity):
             src_dim = provider.__gt_type__().source_dim.value
             codomain_dim = provider.__gt_type__().codomain.value
             sizes[src_dim] = max(sizes.get(src_dim, 0), provider.ndarray.shape[0])

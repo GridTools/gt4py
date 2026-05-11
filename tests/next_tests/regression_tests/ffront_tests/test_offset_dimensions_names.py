@@ -51,7 +51,7 @@ def test_offset_dimension_name_differ(case):
     """
     Ensure that gtfn works with offset name that differs from the name of the local dimension.
 
-    If the value of the `NeighborConnectivityType.neighbor_dim` did not match the `FieldOffset` value,
+    If the value of the `ConnectivityType.neighbor_dim` did not match the `FieldOffset` value,
     gtfn would silently ignore the neighbor index, see https://github.com/GridTools/gridtools/pull/1814.
     """
 

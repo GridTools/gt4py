@@ -766,14 +766,14 @@ def test_neighbor_sum_with_non_zero_origin(unstructured_case):
     a = cases.allocate(unstructured_case, testee, "a")()
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
-    ORIGIN = 2
+    origin = 2
     e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
     neighbor_iter = iter(enumerate(e2v_table))
-    edge_start = next(i for i, v in neighbor_iter if all(v >= ORIGIN))
-    edge_stop = next(i for i, v in neighbor_iter if any(v < ORIGIN))
+    edge_start = next(i for i, v in neighbor_iter if all(v >= origin))
+    edge_stop = next(i for i, v in neighbor_iter if any(v < origin))
 
     ref = np.sum(a.ndarray[e2v_table[edge_start:edge_stop,]], axis=1)
-    cases.verify(unstructured_case, testee, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
+    cases.verify(unstructured_case, testee, a[origin:], out=out[edge_start:edge_stop], ref=ref)
 
 
 @pytest.mark.uses_unstructured_shift

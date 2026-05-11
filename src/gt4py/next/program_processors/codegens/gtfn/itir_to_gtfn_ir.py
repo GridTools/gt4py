@@ -166,9 +166,7 @@ def _collect_offset_definitions(
                 offset_definitions[offset_name] = TagDefinition(
                     name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )
-        elif isinstance(
-            connectivity_type := dim_or_connectivity_type, common.NeighborConnectivityType
-        ):
+        elif isinstance(connectivity_type := dim_or_connectivity_type, common.ConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
             if offset_name != connectivity_type.neighbor_dim.value:
@@ -456,7 +454,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             for o in shift_offsets:
                 if o in self.offset_provider_type and isinstance(
                     common.get_offset_type(self.offset_provider_type, o),
-                    common.NeighborConnectivityType,
+                    common.ConnectivityType,
                 ):
                     connectivities.append(SymRef(id=o))
         return UnstructuredDomain(
