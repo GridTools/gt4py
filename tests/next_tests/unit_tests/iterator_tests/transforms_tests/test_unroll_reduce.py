@@ -16,7 +16,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
-    return common.NeighborConnectivityType(
+    return common.ConnectivityType(
         domain=[common.Dimension("dummy_origin"), common.Dimension("dummy_neighbor")],
         codomain=common.Dimension("dummy_codomain"),
         skip_value=common._DEFAULT_SKIP_VALUE if has_skip_values else None,

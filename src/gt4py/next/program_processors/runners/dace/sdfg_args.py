@@ -83,7 +83,7 @@ def _field_symbol(
         assert m[1] in offset_provider_type
         offset = m[1]
         conn_type = offset_provider_type[offset]
-        assert isinstance(conn_type, gtx_common.NeighborConnectivityType)
+        assert isinstance(conn_type, gtx_common.ConnectivityType)
         if dim == conn_type.source_dim:
             name = f"__{field_name}_source_{sym}"
         elif dim == conn_type.neighbor_dim:
@@ -130,14 +130,14 @@ def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol
 
 def filter_connectivity_types(
     offset_provider_type: gtx_common.OffsetProviderType,
-) -> dict[str, gtx_common.NeighborConnectivityType]:
+) -> dict[str, gtx_common.ConnectivityType]:
     """
-    Filter offset provider types of type `NeighborConnectivityType`.
+    Filter offset provider types of type `ConnectivityType`.
 
     In other words, filter out the cartesian offset providers.
     """
     return {
         offset: conn
         for offset, conn in offset_provider_type.items()
-        if isinstance(conn, gtx_common.NeighborConnectivityType)
+        if isinstance(conn, gtx_common.ConnectivityType)
     }

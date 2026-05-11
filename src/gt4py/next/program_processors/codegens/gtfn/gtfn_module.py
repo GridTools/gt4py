@@ -93,7 +93,7 @@ class GTFNTranslationStep(
                         # translate sparse dimensions to tuple dtype
                         dim_name = dim.value
                         connectivity = common.get_offset_type(offset_provider_type, dim_name)
-                        assert isinstance(connectivity, common.NeighborConnectivityType)
+                        assert isinstance(connectivity, common.ConnectivityType)
                         size = connectivity.max_neighbors
                         arg = f"gridtools::sid::dimension_to_tuple_like<generated::{dim_name}_t, {size}>({arg})"
             arg_exprs.append(arg)
@@ -106,7 +106,7 @@ class GTFNTranslationStep(
         arg_exprs: list[str] = []
 
         for name, connectivity_type in offset_provider_type.items():
-            if isinstance(connectivity_type, common.NeighborConnectivityType):
+            if isinstance(connectivity_type, common.ConnectivityType):
                 if connectivity_type.dtype.scalar_type not in [np.int32, np.int64]:
                     raise ValueError(
                         "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
@@ -138,7 +138,7 @@ class GTFNTranslationStep(
                 pass
             else:
                 raise AssertionError(
-                    f"Expected offset provider type '{name}' to be a 'NeighborConnectivityType' or 'Dimension', "
+                    f"Expected offset provider type '{name}' to be a 'ConnectivityType' or 'Dimension', "
                     f"got '{type(connectivity_type).__name__}'."
                 )
 

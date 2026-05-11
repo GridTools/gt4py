@@ -1012,21 +1012,17 @@ class ConnectivityKind(enum.Flag):
 
 
 @dataclasses.dataclass(frozen=True)
-class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
+class ConnectivityType:
     domain: tuple[Dimension, ...]
     codomain: Dimension
     skip_value: Optional[core_defs.IntegralScalar]
     dtype: core_defs.DType
+    # TODO(havogt): refactor towards encoding this information in the local dimensions of the ConnectivityType.domain
+    max_neighbors: int
 
     @property
     def has_skip_values(self) -> bool:
         return self.skip_value is not None
-
-
-@dataclasses.dataclass(frozen=True)
-class NeighborConnectivityType(ConnectivityType):
-    # TODO(havogt): refactor towards encoding this information in the local dimensions of the ConnectivityType.domain
-    max_neighbors: int
 
     @property
     def source_dim(self) -> Dimension:
@@ -1053,21 +1049,13 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
         """
 
     def __gt_type__(self) -> ConnectivityType:
-        if is_neighbor_connectivity(self):
-            return NeighborConnectivityType(
-                domain=self.domain.dims,
-                codomain=self.codomain,
-                dtype=self.dtype,
-                skip_value=self.skip_value,
-                max_neighbors=self.ndarray.shape[1],
-            )
-        else:
-            return ConnectivityType(
-                domain=self.domain.dims,
-                codomain=self.codomain,
-                dtype=self.dtype,
-                skip_value=self.skip_value,
-            )
+        return ConnectivityType(
+            domain=self.domain.dims,
+            codomain=self.codomain,
+            dtype=self.dtype,
+            skip_value=self.skip_value,
+            max_neighbors=self.ndarray.shape[1],
+        )
 
     @property
     def kind(self) -> ConnectivityKind:
@@ -1178,39 +1166,8 @@ def _connectivity(
     raise NotImplementedError
 
 
-class NeighborConnectivity(Connectivity, Protocol):
-    # TODO(havogt): work towards encoding this properly in the type
-    def __gt_type__(self) -> NeighborConnectivityType: ...
-
-
-def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
-    if not isinstance(obj, Connectivity):
-        return False
-    domain_dims = obj.domain.dims
-    return (
-        len(domain_dims) == 2
-        and domain_dims[0].kind is DimensionKind.HORIZONTAL
-        and domain_dims[1].kind is DimensionKind.LOCAL
-    )
-
-
-class NeighborTable(
-    NeighborConnectivity, Protocol
-):  # TODO(havogt): try to express by inheriting from NdArrayConnectivityField (but this would require a protocol to move it out of `embedded.nd_array_field`)
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        # Note that this property is currently already there from inheriting from `Field`,
-        # however this seems wrong, therefore we explicitly introduce it here (or it should come
-        # implicitly from the `NdArrayConnectivityField` protocol).
-        ...
-
-
-def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
-    return is_neighbor_connectivity(obj) and hasattr(obj, "ndarray")
-
-
-OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
-OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
+OffsetProviderElem: TypeAlias = Dimension | Connectivity
+OffsetProviderTypeElem: TypeAlias = Dimension | ConnectivityType
 # Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
 # use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]

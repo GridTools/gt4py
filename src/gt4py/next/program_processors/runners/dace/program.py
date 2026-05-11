@@ -153,10 +153,10 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         if not self.compilation_options.connectivities:
             return {}
 
-        used_connectivities: dict[str, gtx_common.NeighborConnectivity] = {
+        used_connectivities: dict[str, gtx_common.Connectivity] = {
             conn_id: conn
             for offset, conn in self.compilation_options.connectivities.items()
-            if gtx_common.is_neighbor_table(conn)
+            if isinstance(conn, gtx_common.Connectivity)
             and (conn_id := gtx_dace_args.connectivity_identifier(offset))
             in self.sdfg_closure_cache["arrays"]
         }

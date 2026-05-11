@@ -53,15 +53,15 @@ def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
 def _get_connectivity(
     applied_reduce_node: itir.FunCall,
     offset_provider_type: common.OffsetProviderType,
-) -> common.NeighborConnectivityType:
+) -> common.ConnectivityType:
     """Return single connectivity that is compatible with the arguments of the reduce."""
     if not cpm.is_applied_reduce(applied_reduce_node):
         raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
-    connectivities: list[common.NeighborConnectivityType] = []
+    connectivities: list[common.ConnectivityType] = []
     for o in _get_partial_offset_tags(applied_reduce_node.args):
         conn = common.get_offset_type(offset_provider_type, o)
-        assert isinstance(conn, common.NeighborConnectivityType)
+        assert isinstance(conn, common.ConnectivityType)
         connectivities.append(conn)
 
     if not connectivities:
