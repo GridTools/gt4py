@@ -230,13 +230,9 @@ def inplace_broadcast_expander(
     )
     me.add_scope_connectors(input_edge.data.data)
 
-    state.add_edge(
-        bcast_tlet,
-        "__out",
-        mx,
-        f"IN_{output_edge.data.data}",
-        dace.Memlet(data=output_edge.data.data, subset=", ".join(output_subset)),
-    )
+    # NOTE: The order is important. First we need to create the edge outside the Map
+    #   and then the one inside. This is important to ensure that the Memlet is
+    #   properly initialized, i.e. `_is_data_src` is set.
     state.add_edge(
         mx,
         f"OUT_{output_edge.data.data}",
@@ -244,7 +240,15 @@ def inplace_broadcast_expander(
         output_edge.dst_conn,
         dace.Memlet(data=output_edge.data.data, subset=copy.deepcopy(output_edge.data.subset)),
     )
+    new_output_edge = state.add_edge(
+        bcast_tlet,
+        "__out",
+        mx,
+        f"IN_{output_edge.data.data}",
+        dace.Memlet(data=output_edge.data.data, subset=", ".join(output_subset)),
+    )
     mx.add_scope_connectors(output_edge.data.data)
+    assert new_output_edge.data._is_data_src is not None
 
     # Now delete the node.
     state.remove_node(bcast_node)
