@@ -21,7 +21,7 @@ from gt4py.eve import (
     datamodels,
     utils as eve_utils,
 )
-from gt4py.eve.extended_typing import Any, Generic, TypeAlias, TypeVar, Union
+from gt4py.eve.extended_typing import Any, Generic, NestedTuple, TypeAlias, TypeVar, Union
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
@@ -136,6 +136,10 @@ class TupleExpr(Expr):
 class TupleComprehension(Expr):
     """
     tuple(element_expr for target in iterable)
+
+    Note: The structure here differs from the one in the python ast. Here we group target and
+    element expression, in order to cleanly nest by the symbols being introduced, whereas in
+    the python ast target and iterable are grouped into generator nodes.
     """
 
     inner: TupleComprehensionMapper
@@ -145,7 +149,7 @@ class TupleComprehension(Expr):
 # this is essentially a lambda, the difference is for a lambda we might not know the type of the
 # args, therefor this is named differently at the moment.
 class TupleComprehensionMapper(LocatedNode, SymbolTableTrait):
-    target: Any  # should be: NestedInTuple[DataSymbol] but this has a problem in eve
+    target: NestedTuple[DataSymbol]
     element_expr: Expr
 
 

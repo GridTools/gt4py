@@ -151,7 +151,7 @@ class TupleType(DataType):
 class VarArgType(DataType):
     """Represents a variable number of arguments of the same type."""
 
-    element_type: DataType  # TODO: maybe also support different DataTypes
+    element_type: DataType
 
     def __str__(self) -> str:
         return f"VarArg[{self.element_type}]"

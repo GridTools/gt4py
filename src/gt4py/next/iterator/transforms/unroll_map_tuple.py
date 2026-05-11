@@ -29,7 +29,7 @@ class UnrollMapTuple(eve.NodeTranslator):
         node = self.generic_visit(node)
 
         if cpm.is_call_to(node.fun, "map_tuple"):
-            # TODO: we have to duplicate the function here since the domain inference can not handle them yet
+            # TODO: we have to duplicate the function as domain inference only supports direct calls
             f = node.fun.args[0]
             tup = node.args[0]
             itir_inference.reinfer(tup)
