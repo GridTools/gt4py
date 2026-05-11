@@ -57,6 +57,22 @@ def _gnu_cxx_flags(optimization_level: str) -> list[str]:
     return flags
 
 
+def _apple_clang_cxx_flags(optimization_level: str) -> list[str]:
+    flags = []
+    if optimization_level == "0":
+        flags.append("-g")
+
+    return flags
+
+
+def _llvm_clang_cxx_flags(optimization_level: str) -> list[str]:
+    flags = []
+    if optimization_level == "0":
+        flags.append("-g")
+
+    return flags
+
+
 def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
     """Return a set of defaults for the compiler flags"""
 
@@ -97,9 +113,11 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
         # so we remove the flag and disallow OpenMP altogether
         name = CxxCompilerName.APPLE_CLANG
         open_mp_flags = ""
+        cxx_flags.extend(_apple_clang_cxx_flags(optimization_level))
         enable_openmp = False
     elif "clang" in version_name_on_cli.lower():
         name = CxxCompilerName.CLANG
+        cxx_flags.extend(_llvm_clang_cxx_flags(optimization_level))
 
     return CxxCompilerDefaults(
         name,
