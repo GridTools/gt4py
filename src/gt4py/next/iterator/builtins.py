@@ -413,6 +413,11 @@ def concat_where(*args):
 
 
 @builtin_dispatch
+def map_tuple(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def get_domain_range(*args):
     raise BackendNotSelectedError()
 
