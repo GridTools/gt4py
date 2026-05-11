@@ -22,10 +22,7 @@ The following passes are included:
 """
 
 
-_GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST: Final[set[str]] = GT_SIMPLIFY_DEFAULT_SKIP_SET | {
-    "InlineBroadcastAccess",
-    "BrodcastChainRemover",
-}
+_GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST: Final[set[str]] = GT_SIMPLIFY_DEFAULT_SKIP_SET
 """Simplify stages disabled during the initial simplification.
 """
 
