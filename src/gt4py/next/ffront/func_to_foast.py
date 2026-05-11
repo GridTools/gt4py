@@ -476,16 +476,15 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
         assert isinstance(node.func, ast.Name)
         (arg,) = node.args
-        if node.func.id == "tuple":
-            if not (
-                isinstance(arg, ast.Constant)
-                or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
-                or isinstance(arg, ast.GeneratorExp)
-            ):
-                raise errors.DSLError(
-                    self.get_location(node),
-                    f"'{self._func_name(node)}()' only takes literal arguments or a generator expression.",
-                )
+        if not (
+            isinstance(arg, ast.Constant)
+            or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
+            or (node.func.id == "tuple" and isinstance(arg, ast.GeneratorExp))
+        ):
+            raise errors.DSLError(
+                self.get_location(node),
+                f"'{self._func_name(node)}()' only takes literal arguments or a generator expression.",
+            )
 
     def _func_name(self, node: ast.Call) -> str:
         return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.
