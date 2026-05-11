@@ -288,14 +288,19 @@ class InlineBroadcastAccess(dace_transformation.SingleStateTransformation):
         new_bcast_node.name = new_bcast_name
         new_bcast_node.label = new_bcast_name
 
-        state.add_node(new_bcast_node)
+        # TODO(phimuell): Handle empty edges.
+        assert state.in_degree(bcast_node) == 1
+        bcast_value_edge = next(iter(state.in_edges(bcast_node)))
+        assert bcast_value_edge.src is bcast_value
 
+        # Add the new broadcast node and connect it to `bcast_value`.
+        state.add_node(new_bcast_node)
         state.add_edge(
             bcast_value,
             None,
             new_bcast_node,
             "_inp",
-            dace.Memlet(data=bcast_value.data, subset="0"),
+            copy.deepcopy(bcast_value_edge.data),
         )
 
         new_dst_subset: dace_sbs.Subset = copy.deepcopy(
