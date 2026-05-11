@@ -382,6 +382,7 @@ def test_tuple_comprehension_other_fo(cartesian_case):
         ref=lambda t, f: tuple(el * f for el in t),
     )
 
+
 @pytest.mark.uses_tuple_args
 def test_nested_tuple_comprehension(cartesian_case):
     @gtx.field_operator
