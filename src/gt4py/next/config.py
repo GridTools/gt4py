@@ -90,6 +90,18 @@ BUILD_CACHE_LIFETIME: BuildCacheLifetime = BuildCacheLifetime[
 ]
 
 
+def _get_build_cache_version_id() -> str:
+    from gt4py import __version__
+
+    return __version__
+
+
+#: Version ID for the build cache. It should only be overridden by advanced users
+#: testing toolchain changes that are expected to break compatibility with previously cached builds.
+BUILD_CACHE_VERSION_ID: str = (
+    os.environ.get("BUILD_CACHE_VERSION_ID") or _get_build_cache_version_id()
+)
+
 #: Build type to be used when CMake is used to compile generated code.
 #: Might have no effect when CMake is not used as part of the toolchain.
 # FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
