@@ -158,18 +158,9 @@ def get_gt_pyext_build_opts(
             extra_link_args=extra_link_args,
         )
 
-    if gt_config.build_settings["openmp"]["use_openmp"]:
+    if gt_config.build_settings["openmp"]["use_openmp"] and not uses_cuda:
         cpp_flags = gt_config.build_settings["openmp"]["cppflags"]
-        if uses_cuda:
-            cuda_flags = []
-            for cpp_flag in cpp_flags:
-                if is_rocm_gpu:
-                    cuda_flags.extend([cpp_flag])
-                else:
-                    cuda_flags.extend(["--compiler-options", cpp_flag])
-            build_opts["extra_compile_args"]["cuda"].extend(cuda_flags)
-        elif cpp_flags:
-            build_opts["extra_compile_args"].extend(cpp_flags)
+        build_opts["extra_compile_args"].extend(cpp_flags)
 
         ld_flags = gt_config.build_settings["openmp"]["ldflags"]
         if ld_flags:
