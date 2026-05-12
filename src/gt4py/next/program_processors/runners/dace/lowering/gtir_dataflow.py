@@ -1015,11 +1015,11 @@ class LambdaToDataflow(eve.NodeVisitor):
         outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
 
         # map the connectivities that were used inside the nested SDFG
-        used_connectivities = {
+        used_connectivities = [
             aname
             for aname, adesc in nsdfg.arrays.items()
             if gtx_dace_args.is_connectivity_identifier(aname) and not adesc.transient
-        }
+        ]
 
         # all free symbols are mapped to the symbols available in parent SDFG
         nsdfg_symbols_mapping = {str(sym): sym for sym in nsdfg.free_symbols}
