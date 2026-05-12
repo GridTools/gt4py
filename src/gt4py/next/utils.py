@@ -34,6 +34,7 @@ from typing import (
 
 from gt4py.eve import datamodels, utils as eve_utils
 from gt4py.eve.extended_typing import Self
+from gt4py.next import config
 
 
 GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
@@ -199,6 +200,7 @@ fingerprint_reducer = eve_utils.singledispatcher(
 )
 fingerprint_pickler = eve_utils.custom_pickler(fingerprint_reducer, name="FingerprintPickler")
 
+
 fingerprint: Callable[[Any], str] = functools.partial(
     eve_utils.content_hash, pickler=fingerprint_pickler
 )
@@ -209,6 +211,10 @@ It uses `eve_utils.content_hash` as fingerprinting function. If the object
 is an instance of a class implementing the `FingerprintedProtocol`, it will
 instead use the `fingerprint` property of the object as its content hash.
 """
+
+versioned_fingerprint: Callable[[Any], str] = functools.partial(
+    eve_utils.content_hash, config.BUILD_CACHE_VERSION_ID, pickler=fingerprint_pickler
+)
 
 
 class FingerprintedMixin:
