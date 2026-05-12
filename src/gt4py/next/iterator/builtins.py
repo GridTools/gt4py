@@ -413,6 +413,11 @@ def concat_where(*args):
 
 
 @builtin_dispatch
+def map_tuple(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def get_domain_range(*args):
     raise BackendNotSelectedError()
 
@@ -498,7 +503,8 @@ BUILTINS = {
     "lift",
     "make_const_list",
     "make_tuple",
-    "map_",
+    "map_tuple",
+    "map_",  # TODO: rename to map_list
     "named_range",
     "neighbors",
     "reduce",

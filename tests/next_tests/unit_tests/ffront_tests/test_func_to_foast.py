@@ -447,3 +447,36 @@ def test_tuple_index_failure():
 
     with pytest.raises(errors.DSLError, match=r"need .* literal"):
         _ = FieldOperatorParser.apply_to_function(tuple_index_failure)
+
+
+def test_tuple_compr_non_tuple_iterable_failure():
+    def testee(arg: float):
+        return tuple(_ for _ in arg)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape("Iterable in generator expression must be a tuple, got 'float64'."),
+    ):
+        _ = FieldOperatorParser.apply_to_function(testee)
+
+
+def test_nested_tuple_compr_failure():
+    def testee(nested_tuple: tuple[tuple[gtx.Field[[TDim], float64], ...], ...], factor: int32):
+        return tuple(grandchild * factor for child in nested_tuple for grandchild in child)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape("Nested generator expressions are not supported."),
+    ):
+        _ = FieldOperatorParser.apply_to_function(testee)
+
+
+def test_tuple_compr_unpacking_failure():
+    def testee(arg: tuple[int32, ...]):
+        return tuple(a * b for a, b in arg)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape("Cannot unpack non-iterable 'int32' object."),
+    ):
+        _ = FieldOperatorParser.apply_to_function(testee)

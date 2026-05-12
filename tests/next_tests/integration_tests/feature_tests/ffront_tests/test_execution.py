@@ -365,6 +365,109 @@ def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+def test_fixed_len_tuple_comprehension(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        tracers: tuple[cases.IField, cases.IField], factor: int32
+    ) -> tuple[cases.IField, cases.IField]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_var_len_tuple_comprehension(cartesian_case):
+    @gtx.field_operator
+    def testee(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_tuple_comprehension_other_fo(cartesian_case):
+    @gtx.field_operator
+    def inner(tracer: cases.IField, factor: int32) -> cases.IField:
+        return tracer * factor
+
+    @gtx.field_operator
+    def testee(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(inner(tracer, factor) for tracer in tracers)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_nested_tuple_comprehension(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        vals: tuple[tuple[cases.IField, ...], ...], factor: int32
+    ) -> tuple[tuple[cases.IField, ...], ...]:
+        return tuple(tuple(grand_child * factor for grand_child in child) for child in vals)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(tuple(grand_child * f for grand_child in child) for child in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_nested_tuple_comprehension_shadowing_names(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        vals: tuple[tuple[cases.IField, ...], ...], factor: int32
+    ) -> tuple[tuple[cases.IField, ...], ...]:
+        return tuple(tuple(child * factor for child in child) for child in vals)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(tuple(child * f for child in child) for child in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_multi_target_tuple_comprehension(cartesian_case):
+    @gtx.field_operator
+    def testee(nested_tuple: tuple[tuple[int32, cases.IField], ...]) -> tuple[cases.IField, ...]:
+        return tuple(factor * tracer for factor, tracer in nested_tuple)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t: tuple(f * el for f, el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_tuple_vararg(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        tracers: tuple[cases.IFloatField, ...], factor: float
+    ) -> tuple[cases.IFloatField, cases.IFloatField]:
+        return tracers[0] * factor, tracers[1] * factor
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t[:2]),
+    )
+
+
+@pytest.mark.uses_tuple_args
 @pytest.mark.xfail(reason="Iterator of tuple approach in lowering does not allow this.")
 def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     @gtx.field_operator

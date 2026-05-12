@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
 from gt4py.eve import (
@@ -22,6 +21,7 @@ from gt4py.eve import (
     datamodels,
     utils as eve_utils,
 )
+from gt4py.eve.extended_typing import Any, Generic, TypeAlias, TypeVar, Union
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
@@ -121,6 +121,36 @@ class Attribute(Expr):
 
 class TupleExpr(Expr):
     elts: list[Expr]
+
+
+# TODO(tehrengruber): extend this to supported nested tuple comprehension.
+#  e.g. `tuple(element_expr for child in nested_tuple for grand_child in child)`
+#  would be represented by:
+#  ```
+#  class TupleComprehension(Expr):                              # ruff: noqa: ERA001
+#    inner: TupleComprehensionMapper | NestedTupleCompr         # ruff: noqa: ERA001
+#  class NestedTupleCompr(Expr, SymbolTableTrait):              # ruff: noqa: ERA001
+#    params: tuple[DataSymbol]                                  # ruff: noqa: ERA001
+#    body: TupleComprehension                                   # ruff: noqa: ERA001
+#  ```
+class TupleComprehension(Expr):
+    """
+    tuple(element_expr for target in iterable)
+
+    Note: The structure here differs from the one in the python ast. Here we group target and
+    element expression, in order to cleanly nest by the symbols being introduced, whereas in
+    the python ast target and iterable are grouped into generator nodes.
+    """
+
+    inner: TupleComprehensionMapper
+    iterable: Expr
+
+
+# this is essentially a lambda, the difference is for a lambda we might not know the type of the
+# args, therefor this is named differently at the moment.
+class TupleComprehensionMapper(LocatedNode, SymbolTableTrait):
+    target: Any  # TODO(tehrengruber): should be NestedTuple[DataSymbol], but this breaks in eve
+    element_expr: Expr
 
 
 class UnaryOp(Expr):

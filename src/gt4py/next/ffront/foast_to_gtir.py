@@ -8,6 +8,7 @@
 
 
 import dataclasses
+import functools
 from typing import Any, Callable, Optional
 
 from gt4py import eve
@@ -256,6 +257,29 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> itir.Expr:
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
+
+    def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> itir.Expr:
+        target = self.visit(node.inner.target, **kwargs)
+        element_expr = self.visit(node.inner.element_expr, **kwargs)
+
+        # e.g. `(... for el1, el2 in ...)` -> `(let el1 = t[0], el2[1] ... for t in ...)`
+        if isinstance(target, tuple):
+            flat_targets = utils.flatten_nested_tuple(target)
+            new_target = next(self.uid_generator["__tuple_comprh"])
+            flat_targets_vals = utils.flatten_nested_tuple(
+                utils.tree_map(
+                    lambda _, path: functools.reduce(
+                        lambda el, i: im.tuple_get(i, el), path, new_target
+                    ),
+                    with_path_arg=True,
+                )(target)
+            )
+            target = new_target
+            element_expr = im.let(*zip(flat_targets, flat_targets_vals))(element_expr)
+
+        return im.call(im.call("map_tuple")(im.lambda_(target)(element_expr)))(
+            self.visit(node.iterable, **kwargs)
+        )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators

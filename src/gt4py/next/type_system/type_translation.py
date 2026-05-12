@@ -75,6 +75,16 @@ def make_constructor_type(type_spec: ts.TypeSpec) -> ts.ConstructorType:
                 )
             )
 
+        case ts.DeferredType(constraint=ts.TupleType):
+            return ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=None)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=ts.DeferredType(constraint=ts.VarArgType),
+                )
+            )
+
         case ts.NamedCollectionType() as named_tuple_type:
             type_ = pkgutil.resolve_name(named_tuple_type.original_python_type)
             pos_or_kw_args = {k: t for k, t in zip(type_spec.keys, type_spec.types)}
@@ -132,7 +142,7 @@ def canonicalize_type_hint(
     *,
     globalns: Optional[dict[str, Any]] = None,
     localns: Optional[dict[str, Any]] = None,
-) -> tuple[Any, tuple[Any, ...], tuple[Any, ...]]:
+) -> tuple[Any, tuple[Any, ...] | None, tuple[Any, ...]]:
     """
     Canonicalize python type annotations as a tuple of (canonical_type, type_args, annotated_extra_args).
     """
@@ -158,7 +168,8 @@ def canonicalize_type_hint(
             type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
 
     canonical_type = typing.get_origin(type_hint) or type_hint
-    args = typing.get_args(type_hint)
+    # in order to distinguish tuple and tuple[()] the former returns None here
+    args = typing.get_args(type_hint) if typing.get_origin(type_hint) else None
 
     return canonical_type, args, tuple(extra_args)
 
@@ -179,17 +190,29 @@ def from_type_hint(
 
     match canonical_type:
         case builtins.tuple:
-            if not args:
-                raise ValueError(f"Tuple annotation '{type_hint}' requires at least one argument.")
-            if Ellipsis in args:
-                raise ValueError(f"Unbound tuples '{type_hint}' are not allowed.")
-            tuple_types = [from_type_hint_same_ns(arg) for arg in args]
-            assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
-            return ts.TupleType(types=tuple_types)
+            if isinstance(args, tuple) and not any(arg is Ellipsis for arg in args):
+                tuple_types = [from_type_hint_same_ns(arg) for arg in args]
+                assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
+                return ts.TupleType(types=tuple_types)
+            elif isinstance(args, tuple) and len(args) == 2 and args[1] is Ellipsis:
+                return ts.VarArgType(element_type=from_type_hint_same_ns(args[0]))
+            elif args is None:
+                # TODO(tehrengruber): We use `DeferredType` until we have an actual representation
+                #  for a generic type.
+                return ts.DeferredType(constraint=ts.TupleType)
+            else:
+                raise ValueError(
+                    f"Tuple annotation '{type_hint}' must either, "
+                    f"be a list of concrete arguments (e.g. 'tuple[int]'), "
+                    f"be a variadic tuple (e.g. 'tuple[int, ...]'), ",
+                    "or have no arguments (e.g. tuple).",
+                )
 
         case common.Field:
-            if (n_args := len(args)) != 2:
-                raise ValueError(f"Field type requires two arguments, got {n_args}: '{type_hint}'.")
+            if args is None or len(args) != 2:
+                raise ValueError(
+                    f"Field type requires two arguments, got {len(args or ())}: '{type_hint}'."
+                )
             dims: list[common.Dimension] = []
             dim_arg, dtype_arg = args
             dim_arg = (

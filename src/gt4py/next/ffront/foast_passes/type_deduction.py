@@ -5,7 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
 import textwrap
 from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 
@@ -24,6 +23,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.iterator import builtins
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.utils import tree_map
 
 
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
@@ -428,6 +428,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         f"Tuples need to be indexed with literal integers, got '{node.index}'.",
                     ) from ex
                 new_type = types[index]
+            case ts.VarArgType(element_type=element_type):
+                new_type = (
+                    element_type  # TODO: we only temporarily allow any index for vararg types
+                )
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
@@ -673,6 +677,64 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_elts = self.visit(node.elts, **kwargs)
         new_type = ts.TupleType(types=[element.type for element in new_elts])
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
+
+    def visit_TupleComprehension(
+        self, node: foast.TupleComprehension, **kwargs: Any
+    ) -> foast.TupleComprehension:
+        target = self.visit(node.inner.target, **kwargs)
+        iterable = self.visit(node.iterable, **kwargs)
+        if isinstance(iterable.type, ts.TupleType):
+            if len(iterable.type.types) > 0 and not all(
+                t == iterable.type.types[0] for t in iterable.type.types
+            ):
+                raise errors.DSLError(
+                    iterable.location,
+                    "Not implemented. All elements of the iterable in a tuple comprehensions must have the same type.",
+                )
+            element_type = iterable.type.types[0]
+        elif isinstance(iterable.type, ts.VarArgType):
+            element_type = iterable.type.element_type
+        else:
+            raise errors.DSLError(
+                iterable.location,
+                f"Iterable in generator expression must be a tuple, got '{iterable.type}'.",
+            )
+
+        inner_kwargs = {"symtable": node.inner.annex.symtable, **kwargs}
+
+        @tree_map(with_path_arg=True)
+        def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> None:
+            try:
+                type_ = element_type
+                for i in path:
+                    if not isinstance(type_, ts.TupleType) or len(type_.types) <= i:
+                        raise IndexError()
+                    type_ = type_.types[i]
+                return self.visit(target_el, refine_type=type_, **inner_kwargs)
+            except IndexError:
+                raise errors.DSLError(
+                    target_el.location, f"Cannot unpack non-iterable '{type_}' object."
+                ) from None
+
+        new_target = process_target(target)
+
+        element_expr = self.visit(node.inner.element_expr, **inner_kwargs)
+
+        return_type: ts.TupleType | ts.VarArgType
+        if isinstance(iterable.type, ts.TupleType):
+            return_type = ts.TupleType(types=[element_expr.type] * len(iterable.type.types))
+        else:
+            assert isinstance(iterable.type, ts.VarArgType)
+            return_type = ts.VarArgType(element_type=element_expr.type)
+
+        return foast.TupleComprehension(
+            inner=foast.TupleComprehensionMapper(
+                target=new_target, element_expr=element_expr, location=node.location
+            ),
+            iterable=iterable,
+            location=node.location,
+            type=return_type,
+        )
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
