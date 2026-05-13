@@ -13,7 +13,7 @@ from typing import Callable, Final
 
 import factory
 
-import gt4py.next.allocators as next_allocators
+import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common, config, factory_utils
 from gt4py.next.otf import stages, workflow
@@ -32,6 +32,8 @@ class DaCeBackendFactory(factory_utils.Factory):
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
+        unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
+            in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
             compute time.
         use_zero_origin: Can be set to `True` when all fields passed as program
@@ -61,6 +63,10 @@ class DaCeBackendFactory(factory_utils.Factory):
         use_zero_origin: bool = False
         device_type = core_defs.DeviceType.CPU
         hash_function = stages.compilation_hash
+        unstructured_horizontal_has_unit_stride: bool = (
+            config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        )
+        use_max_domain_range_on_unstructured_shift: bool | None = None
 
         @factory_utils.dynamic_transformer(default=factory.Dict({}))
         def optimization_args(self, optimization_args: dict) -> dict:
@@ -80,7 +86,7 @@ class DaCeBackendFactory(factory_utils.Factory):
             # Set `unit_strides_kind` based on the gt4py env configuration.
             return optimization_args | {
                 "unit_strides_kind": common.DimensionKind.HORIZONTAL
-                if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+                if self.unstructured_horizontal_has_unit_stride
                 else None
             }
 
@@ -101,9 +107,15 @@ class DaCeBackendFactory(factory_utils.Factory):
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
             translation__async_sdfg_call=factory.SelfAttribute("...async_sdfg_call"),
             translation__auto_optimize_args=factory.SelfAttribute("...optimization_args"),
+            translation__unstructured_horizontal_has_unit_stride=factory.SelfAttribute(
+                "...unstructured_horizontal_has_unit_stride"
+            ),
             translation__use_metrics=factory.SelfAttribute("...use_metrics"),
             translation__disable_field_origin_on_program_arguments=factory.SelfAttribute(
                 "...use_zero_origin"
+            ),
+            translation__use_max_domain_range_on_unstructured_shift=factory.SelfAttribute(
+                "...use_max_domain_range_on_unstructured_shift"
             ),
         )
     )

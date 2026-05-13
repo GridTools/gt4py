@@ -15,52 +15,52 @@ from typing import Generic
 from gt4py.next.otf import workflow
 
 
-PrgT = typing.TypeVar("PrgT")
-ArgT = typing.TypeVar("ArgT")
-StartT = typing.TypeVar("StartT")
-EndT = typing.TypeVar("EndT")
+S = typing.TypeVar("S")
+T = typing.TypeVar("T")
+DefT = typing.TypeVar("DefT")
+ArgsT = typing.TypeVar("ArgsT")
 
 
 @dataclasses.dataclass
-class CompilableProgram(Generic[PrgT, ArgT]):
-    data: PrgT
-    args: ArgT
+class ConcreteArtifact(Generic[DefT, ArgsT]):
+    data: DefT
+    args: ArgsT
 
 
 @dataclasses.dataclass(frozen=True)
 class DataOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
-    workflow.Workflow[CompilableProgram[StartT, ArgT], CompilableProgram[EndT, ArgT]],
-    Generic[ArgT, StartT, EndT],
+    workflow.Workflow[ConcreteArtifact[S, ArgsT], ConcreteArtifact[T, ArgsT]],
+    Generic[ArgsT, S, T],
 ):
-    step: workflow.Workflow[StartT, EndT]
+    step: workflow.Workflow[S, T]
 
-    def __call__(self, inp: CompilableProgram[StartT, ArgT]) -> CompilableProgram[EndT, ArgT]:
-        return CompilableProgram(data=self.step(inp.data), args=inp.args)
+    def __call__(self, inp: ConcreteArtifact[S, ArgsT]) -> ConcreteArtifact[T, ArgsT]:
+        return ConcreteArtifact(data=self.step(inp.data), args=inp.args)
 
 
 @dataclasses.dataclass(frozen=True)
 class ArgsOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
-    workflow.Workflow[CompilableProgram[PrgT, StartT], CompilableProgram[PrgT, EndT]],
-    Generic[PrgT, StartT, EndT],
+    workflow.Workflow[ConcreteArtifact[DefT, S], ConcreteArtifact[DefT, T]],
+    Generic[DefT, S, T],
 ):
-    step: workflow.Workflow[StartT, EndT]
+    step: workflow.Workflow[S, T]
 
-    def __call__(self, inp: CompilableProgram[PrgT, StartT]) -> CompilableProgram[PrgT, EndT]:
-        return CompilableProgram(data=inp.data, args=self.step(inp.args))
+    def __call__(self, inp: ConcreteArtifact[DefT, S]) -> ConcreteArtifact[DefT, T]:
+        return ConcreteArtifact(data=inp.data, args=self.step(inp.args))
 
 
 @dataclasses.dataclass(frozen=True)
 class StripArgsAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
-    workflow.Workflow[CompilableProgram[StartT, ArgT], EndT],
-    Generic[ArgT, StartT, EndT],
+    workflow.Workflow[ConcreteArtifact[S, ArgsT], T],
+    Generic[ArgsT, S, T],
 ):
-    step: workflow.Workflow[StartT, EndT]
+    step: workflow.Workflow[S, T]
 
-    def __call__(self, inp: CompilableProgram[StartT, ArgT]) -> EndT:
+    def __call__(self, inp: ConcreteArtifact[S, ArgsT]) -> T:
         return self.step(inp.data)

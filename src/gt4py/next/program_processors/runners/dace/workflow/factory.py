@@ -76,5 +76,5 @@ class DaCeWorkflowFactory(factory.Factory):
     @factory.lazy_attribute
     def decoration(
         self: factory.builder.Resolver,
-    ) -> Callable[[stages.CompiledProgram], stages.CompiledProgram]:
+    ) -> Callable[[stages.ExecutableProgram], stages.ExecutableProgram]:
         return functools.partial(decoration_step.convert_args, device=self.device_type)

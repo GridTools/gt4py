@@ -18,9 +18,8 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import languages, stages, step_types, workflow
+from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import interface
-from gt4py.next.otf.languages import LanguageSettings
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
     sdfg_args as gtx_dace_args,
@@ -34,12 +33,13 @@ def find_constant_symbols(
     ir: itir.Program,
     sdfg: dace.SDFG,
     offset_provider_type: common.OffsetProviderType,
-    disable_field_origin_on_program_arguments: bool = False,
+    disable_field_origin_on_program_arguments: bool,
+    unstructured_horizontal_has_unit_stride: bool,
 ) -> dict[str, int]:
     """Helper function to find symbols to replace with constant values."""
     constant_symbols: dict[str, int] = {}
 
-    if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE:
+    if unstructured_horizontal_has_unit_stride:
         # Search the stride symbols corresponding to the horizontal dimension
         for p in ir.params:
             if isinstance(p.type, ts.FieldType):
@@ -190,33 +190,31 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         has_side_effects = True
 
     else:
-        sync_code = ""
+        sync_code = "/* The SDFG execution should already be synchronized */"
         has_side_effects = False
 
     #### 2. Timestamp the SDFG entry point.
+    start_block = sdfg.start_block
     entry_if_region, begin_state = _make_if_region_for_metrics_collection(
-        "program_entry", metrics_level, sdfg
+        "metrics_entry", metrics_level, sdfg
     )
-
-    for source_state in sdfg.source_nodes():
-        if source_state is entry_if_region:
-            continue
-        sdfg.add_edge(entry_if_region, source_state, dace.InterstateEdge())
-        source_state.is_start_block = False
-    assert sdfg.out_degree(entry_if_region) > 0
-    entry_if_region.is_start_block = True
+    sdfg.add_edge(entry_if_region, start_block, dace.InterstateEdge())
+    sdfg.start_block = sdfg.node_id(entry_if_region)
+    assert sdfg.start_block is entry_if_region
 
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
         outputs={"time"},
-        code="""\
+        code=f"""\
+{sync_code}
 auto now = std::chrono::high_resolution_clock::now();
 time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
     ).count();
         """,
         language=dace.dtypes.Language.CPP,
+        side_effects=has_side_effects,
     )
     begin_state.add_edge(
         tlet_start_timer,
@@ -228,13 +226,12 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
 
     #### 3. Collect the SDFG end timestamp and produce the compute metric.
     exit_if_region, end_state = _make_if_region_for_metrics_collection(
-        "program_exit", metrics_level, sdfg
+        "metrics_exit", metrics_level, sdfg
     )
-
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is exit_if_region:
+    for sink_node in sdfg.sink_nodes():
+        if sink_node is exit_if_region:
             continue
-        sdfg.add_edge(sink_state, exit_if_region, dace.InterstateEdge())
+        sdfg.add_edge(sink_node, exit_if_region, dace.InterstateEdge())
     assert sdfg.in_degree(exit_if_region) > 0
 
     # Populate the branch that computes the stencil time metric
@@ -242,8 +239,8 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
         outputs={"duration"},
-        code=sync_code
-        + """
+        code=f"""\
+{sync_code}
 auto now = std::chrono::high_resolution_clock::now();
 auto run_cpp_end_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
@@ -293,8 +290,6 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     This means that `CompiledSDFG.fast_call()` will return only after all computations
     have _finished_ and the results are available. This function only has an effect for
     work that runs on the GPU. Furthermore, all work is scheduled on the default stream.
-
-    Todo: Revisit this function once DaCe changes its behaviour in this regard.
     """
 
     if not gpu:
@@ -320,10 +315,10 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     #  because that code is only run at the `exit()` stage, not after a call. Thus we
     #  will generate an SDFGState that contains a Tasklet with the sync call.
     sync_state = sdfg.add_state("sync_state")
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is sync_state:
+    for sink_node in sdfg.sink_nodes():
+        if sink_node is sync_state:
             continue
-        sdfg.add_edge(sink_state, sync_state, dace.InterstateEdge())
+        sdfg.add_edge(sink_node, sync_state, dace.InterstateEdge())
     assert sdfg.in_degree(sync_state) > 0
 
     # NOTE: Since the synchronization is done through the Tasklet explicitly,
@@ -356,18 +351,21 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProgram, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
+        definitions.CompilableProgramDef,
+        stages.ProgramSource[code_specs.SDFGCodeSpec],
     ],
-    step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
+    definitions.TranslationStep[code_specs.SDFGCodeSpec],
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
     async_sdfg_call: bool
+    unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
 
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
+    use_max_domain_range_on_unstructured_shift: bool | None = None
 
     def generate_sdfg(
         self,
@@ -384,14 +382,22 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(ir, offset_provider=offset_provider)
+            ir = itir_transforms.apply_fieldview_transforms(
+                ir,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                offset_provider=offset_provider,
+            )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
         sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
-            ir, sdfg, offset_provider_type, self.disable_field_origin_on_program_arguments
+            ir,
+            sdfg,
+            offset_provider_type,
+            self.disable_field_origin_on_program_arguments,
+            self.unstructured_horizontal_has_unit_stride,
         )
 
         if self.auto_optimize:
@@ -440,8 +446,8 @@ class DaCeTranslator(
         return sdfg
 
     def __call__(
-        self, inp: stages.CompilableProgram
-    ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
+        self, inp: definitions.CompilableProgramDef
+    ) -> stages.ProgramSource[code_specs.SDFGCodeSpec]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
@@ -459,19 +465,14 @@ class DaCeTranslator(
             for param, arg_type in zip(program.params, arg_types)
         )
 
-        module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
-            stages.ProgramSource(
-                entry_point=interface.Function(program.id, program_parameters),
-                # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
-                #   We compute the hash in order to refresh `cfg_list` on the SDFG,
-                #   which makes the JSON serialization stable.
-                source_code=sdfg.to_json(hash=True),
-                library_deps=tuple(),
-                language=languages.SDFG,
-                language_settings=languages.LanguageSettings(
-                    formatter_key="", formatter_style="", file_extension="sdfg"
-                ),
-            )
+        module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
+            entry_point=interface.Function(program.id, program_parameters),
+            # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
+            #   We compute the hash in order to refresh `cfg_list` on the SDFG,
+            #   which makes the JSON serialization stable.
+            source_code=sdfg.to_json(hash=True),
+            library_deps=tuple(),
+            code_spec=code_specs.SDFGCodeSpec(),
         )
         return module
 

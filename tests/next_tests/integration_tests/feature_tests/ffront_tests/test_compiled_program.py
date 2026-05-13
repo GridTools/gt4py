@@ -5,7 +5,9 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+import inspect
+import warnings
+from typing import Optional, NamedTuple
 from unittest import mock
 
 import numpy as np
@@ -16,7 +18,7 @@ import contextlib
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import errors, config
-from gt4py.next.otf import compiled_program, options
+from gt4py.next.otf import compiled_program, options, arguments
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
@@ -35,9 +37,15 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     skip_value_mesh,
 )
 
+from gt4py.next.otf import arguments
 
 _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
+
+
+class NamedTupleNamedCollection(NamedTuple):
+    u: cases.IField
+    v: cases.IField
 
 
 @pytest.fixture(
@@ -202,6 +210,11 @@ def compile_testee_unstructured(unstructured_case):
     return testee
 
 
+@pytest.fixture
+def compile_testee_unstructured_no_jit(compile_testee_unstructured):
+    return compile_testee_unstructured.with_compilation_options(enable_jit=False)
+
+
 def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
@@ -236,23 +249,24 @@ def skip_value_mesh_descriptor(exec_alloc_descriptor):
 
 
 def test_compile_unstructured_jit(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh and simple_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=[
             skip_value_mesh_descriptor.offset_provider,
             unstructured_case.offset_provider,
         ],
-        enable_jit=False,
     )
 
     # and executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
-    compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
+    compile_testee_unstructured_no_jit(
+        *args, offset_provider=unstructured_case.offset_provider, **kwargs
+    )
 
     v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
     assert np.allclose(
@@ -262,73 +276,72 @@ def test_compile_unstructured_jit(
 
 
 def test_compile_unstructured_wrong_offset_provider(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=skip_value_mesh_descriptor.offset_provider,
-        enable_jit=False,
     )
 
     # but executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
 
     with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
-        compile_testee_unstructured(
+        compile_testee_unstructured_no_jit(
             *args, offset_provider=unstructured_case.offset_provider, **kwargs
         )
 
 
 def test_compile_unstructured_modified_offset_provider(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=skip_value_mesh_descriptor.offset_provider,
-        enable_jit=False,
     )
 
     # but executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
 
     with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
-        compile_testee_unstructured(
+        compile_testee_unstructured_no_jit(
             *args, offset_provider=unstructured_case.offset_provider, **kwargs
         )
 
 
 def test_compile_unstructured_for_two_offset_providers(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh and simple_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=[
             skip_value_mesh_descriptor.offset_provider,
             unstructured_case.offset_provider,
         ],
-        enable_jit=False,
     )
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
 
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
-    compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
+    compile_testee_unstructured_no_jit(
+        *args, offset_provider=unstructured_case.offset_provider, **kwargs
+    )
 
     v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
     assert np.allclose(
@@ -400,7 +413,9 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
-    assert compile_variants_testee.compilation_options.static_params == (
+    assert compile_variants_testee._compiled_programs.argument_descriptor_mapping[
+        arguments.StaticArg
+    ] == (
         "scalar_int",
         "scalar_float",
         "scalar_bool",
@@ -579,7 +594,14 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
 
     # the compile_variants_testee has static_params set and is compiled (in a previous test)
-    assert len(compile_variants_testee.compilation_options.static_params) > 0
+    assert (
+        len(
+            compile_variants_testee._compiled_programs.argument_descriptor_mapping[
+                arguments.StaticArg
+            ]
+        )
+        > 0
+    )
     assert compile_variants_testee._compiled_programs is not None
 
     # but now we reset the compiled programs
@@ -630,7 +652,14 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
 
     # the compile_variants_testee has static_params set and is compiled (in a previous test)
-    assert len(compile_variants_testee.compilation_options.static_params) > 0
+    assert (
+        len(
+            compile_variants_testee._compiled_programs.argument_descriptor_mapping[
+                arguments.StaticArg
+            ]
+        )
+        > 0
+    )
     assert compile_variants_testee._compiled_programs is not None
 
     # but now we reset the compiled programs and fix to other static params
@@ -915,3 +944,88 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
         gtx.wait_for_compilation()
         # ... and afterwards compilation still works
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+
+
+def test_compile_variants_decorator_static_domains(cartesian_case):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    captured_cargs: Optional[arguments.CompileTimeArgs] = None
+
+    class CaptureCompileTimeArgsBackend:
+        def __getattr__(self, name):
+            return getattr(cartesian_case.backend, name)
+
+        def compile(self, program, compile_time_args):
+            nonlocal captured_cargs
+            captured_cargs = compile_time_args
+
+            return cartesian_case.backend.compile(program, compile_time_args)
+
+    @gtx.field_operator
+    def identity_like(inp: tuple[cases.IField, cases.IField, float]):
+        return NamedTupleNamedCollection(u=inp[0], v=inp[1])
+
+    # the float argument here is merely to test that static domains work for tuple arguments
+    # of inhomogeneous types
+    @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
+    def testee(inp: tuple[cases.IField, cases.IField, float], out: NamedTupleNamedCollection):
+        identity_like(inp, out=out)
+
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    out = cases.allocate(cartesian_case, testee, "out")()
+
+    testee(inp, out, offset_provider={})
+    assert np.allclose(inp[0].ndarray, out[0].ndarray)
+    assert np.allclose(inp[1].ndarray, out[1].ndarray)
+
+    assert testee._compiled_programs.argument_descriptor_mapping[
+        arguments.FieldDomainDescriptor
+    ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
+    assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
+        "inp": (
+            arguments.FieldDomainDescriptor(inp[0].domain),
+            arguments.FieldDomainDescriptor(inp[1].domain),
+            None,
+        ),
+        "out": (
+            arguments.FieldDomainDescriptor(out[0].domain),
+            arguments.FieldDomainDescriptor(out[1].domain),
+        ),
+    }
+
+
+@pytest.fixture
+def scan_operator_testee(cartesian_case):
+    """A scan operator called directly as a FieldOperator — the only case where _is_generic=True."""
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    @gtx.scan_operator(axis=KDim, forward=True, init=0, backend=cartesian_case.backend)
+    def testee(carry: gtx.int32, inp: gtx.int32) -> gtx.int32:
+        return carry + inp
+
+    return testee
+
+
+@pytest.mark.uses_scan
+def test_warn_on_direct_scan_operator_call(cartesian_case, scan_operator_testee):
+    """A warning is emitted when a scan operator is called directly as a FieldOperator.
+
+    Scan operators called directly (not wrapped in a @program) are the only case where
+    _is_generic is True, triggering the 'not optimized' generic-program warning.
+    """
+    k_size = cartesian_case.default_sizes[KDim]
+    inp = cartesian_case.as_field([KDim], np.arange(k_size, dtype=np.int32))
+    out = cartesian_case.as_field([KDim], np.zeros(k_size, dtype=np.int32))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        call_lineno = inspect.currentframe().f_lineno + 1
+        scan_operator_testee(inp, out=out, offset_provider=cartesian_case.offset_provider)
+
+    generic_warnings = [w for w in caught if "generic" in str(w.message)]
+    assert len(generic_warnings) == 1
+    w = generic_warnings[0]
+    assert w.filename == __file__
+    assert w.lineno == call_lineno

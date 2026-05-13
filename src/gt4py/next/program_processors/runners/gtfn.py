@@ -13,7 +13,7 @@ import factory
 import numpy as np
 
 import gt4py._core.definitions as core_defs
-import gt4py.next.allocators as next_allocators
+import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import filecache
 from gt4py.next import backend, common, config, factory_utils, field_utils
 from gt4py.next.embedded import nd_array_field
@@ -44,8 +44,8 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
-) -> stages.CompiledProgram:
+    inp: stages.ExecutableProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+) -> stages.ExecutableProgram:
     def decorated_program(
         *args: Any,
         offset_provider: dict[str, common.Connectivity | common.Dimension],
@@ -135,7 +135,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             )
         return value
 
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
         nanobind.bind_source
     )
 
@@ -148,7 +148,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     @factory.lazy_attribute
     def decoration(
         self: factory.builder.Resolver,
-    ) -> Callable[[stages.CompiledProgram], stages.CompiledProgram]:
+    ) -> Callable[[stages.ExecutableProgram], stages.ExecutableProgram]:
         return functools.partial(convert_args, device=self.device_type)
 
 

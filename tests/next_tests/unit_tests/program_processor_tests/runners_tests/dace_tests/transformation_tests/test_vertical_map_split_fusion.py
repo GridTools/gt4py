@@ -23,7 +23,9 @@ from . import util
 
 def serial_map_sdfg(N, extra_intermediate_edge=False):
     sdfg = dace.SDFG(
-        util.unique_name("serial_map" if extra_intermediate_edge else "serial_map_extra_edge")
+        gtx_transformations.utils.unique_name(
+            "serial_map" if extra_intermediate_edge else "serial_map_extra_edge"
+        )
     )
     A, _ = sdfg.add_array("A", [N], dtype=dace.float64)
     B, _ = sdfg.add_array("B", [N], dtype=dace.float64)
@@ -150,7 +152,7 @@ def test_vertical_map_fusion_disabled():
 @pytest.mark.parametrize("run_map_fusion", [True, False])
 def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
     N = 80
-    sdfg = dace.SDFG(util.unique_name("simple"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple"))
     A, _ = sdfg.add_array("A", shape=(N,), dtype=dace.float64, strides=(1,))
     B, _ = sdfg.add_array("B", shape=(N,), dtype=dace.float64, strides=(1,))
     C, _ = sdfg.add_array("C", shape=(N,), dtype=dace.float64, strides=(1,))

@@ -255,12 +255,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """Computes the partition the of the nodes of the Map.
 
         The function divides the nodes into two sets, defined as:
-        - The independent nodes `\mathcal{I}`:
+        - The independent nodes `\\mathcal{I}`:
             These are the nodes, whose output does not depend on the blocked
             dimension. These nodes can be relocated between the outer and inner map.
             Nodes in these set does not necessarily have a direct edge to map entry.
             However, the exists a path from `outer_entry` to any node in this set.
-        - The dependent nodes `\mathcal{D}`:
+        - The dependent nodes `\\mathcal{D}`:
             These are the nodes, whose output depend on the blocked dimension.
             Thus they can not be relocated between the two maps, but will remain
             inside the inner scope. All these nodes have at least one edge to map entry.
