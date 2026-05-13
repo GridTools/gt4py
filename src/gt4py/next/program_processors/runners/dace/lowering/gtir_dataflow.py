@@ -277,7 +277,7 @@ class DataflowOutputEdge:
         outside data container is removed, the caller is responsible to propagate
         the strides of the destination array to the array inside the nested SDFG.
         """
-        # We doo not allow removing the last node of the dataflow inside a map scope,
+        # We don't allow removing the last node of the dataflow inside a map scope,
         # because the same reults could be written to multiple destiation nodes ouside
         # the map scope, in case of field operators returning tuples.
         allow_removal_of_last_node: Final[bool] = False
