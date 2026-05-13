@@ -499,8 +499,8 @@ def _gt_map_strides_into_nested_sdfg(
         # A scalar does not have a stride that must be propagated.
         return
 
-    if functools.reduce(operator.mul, inner_shape) == 1:
-        # Arrays with size 1 in all dimensions do not need strides.
+    if (functools.reduce(operator.mul, inner_shape) == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+        # Arrays with size 1 in all dimensions don't use strides.
         return
 
     # Now determine the new stride that is needed on the inside.
