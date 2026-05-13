@@ -115,7 +115,7 @@ def test_inlining_of_scalar_works_integration(testee_prog):
     hijacked_program = None
 
     def pirate(program: toolchain.ConcreteArtifact):
-        # Replaces the gtfn otf_workflow: and steals the compilable program,
+        # Replaces the gtfn backend transformation: and steals the compilable program,
         # then returns a dummy "CompiledProgram" that does nothing.
         nonlocal hijacked_program
         hijacked_program = program
