@@ -277,6 +277,10 @@ class DataflowOutputEdge:
         outside data container is removed, the caller is responsible to propagate
         the strides of the destination array to the array inside the nested SDFG.
         """
+        # We doo not allow removing the last node of the dataflow inside a map scope,
+        # because the same reults could be written to multiple destiation nodes ouside
+        # the map scope, in case of field operators returning tuples.
+        allow_removal_of_last_node: Final[bool] = False
         dest_desc = self.result.dc_node.desc(self.state)
         write_edge = self.state.in_edges(self.result.dc_node)[0]
 
@@ -301,7 +305,7 @@ class DataflowOutputEdge:
         else:
             remove_last_node = False
 
-        if remove_last_node:
+        if allow_removal_of_last_node and remove_last_node:
             src_node = write_edge.src
             src_node_connector = write_edge.src_conn
             src_subset = write_edge.data.src_subset
