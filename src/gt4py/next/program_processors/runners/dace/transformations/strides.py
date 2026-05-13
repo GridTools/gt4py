@@ -528,7 +528,9 @@ def _gt_map_strides_into_nested_sdfg(
         raise NotImplementedError("NestedSDFGs can not be used to increase the rank.")
 
     if len(new_strides) != len(inner_shape):
-        # It might still be possible to access an array at index 0.
+        # It could still be possible to access an array at index 0. Consider a memlet
+        # which only writes index 0 to the inner shape (dim_oinflow == 1), although
+        # the inner shape is larger than 1, but we only read index 0 inside the SDFG.
         warnings.warn("Failed to compute the inner strides.", stacklevel=2)
         return
 
