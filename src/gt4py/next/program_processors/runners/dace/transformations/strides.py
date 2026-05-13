@@ -6,8 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import functools
-import operator
+import warnings
 from typing import Optional, TypeAlias
 
 import dace
@@ -499,10 +498,6 @@ def _gt_map_strides_into_nested_sdfg(
         # A scalar does not have a stride that must be propagated.
         return
 
-    if (functools.reduce(operator.mul, inner_shape, 1) == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-        # Arrays with size 1 in all dimensions don't use strides.
-        return
-
     # Now determine the new stride that is needed on the inside.
     new_strides: list = []
     if len(outer_shape) == len(inner_shape):
@@ -533,7 +528,9 @@ def _gt_map_strides_into_nested_sdfg(
         raise NotImplementedError("NestedSDFGs can not be used to increase the rank.")
 
     if len(new_strides) != len(inner_shape):
-        raise ValueError("Failed to compute the inner strides.")
+        # It might still be possible to access an array at index 0.
+        warnings.warn("Failed to compute the inner strides.", stacklevel=2)
+        return
 
     # For the strides of the arrays inside the nested SDFG we will create a new unique
     #  symbol which is initialized, through the symbol mapping, to the value of this
