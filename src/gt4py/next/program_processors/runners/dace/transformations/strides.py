@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import functools
+import operator
 from typing import Optional, TypeAlias
 
 import dace
@@ -495,6 +497,10 @@ def _gt_map_strides_into_nested_sdfg(
 
     if isinstance(inner_desc, dace_data.Scalar):
         # A scalar does not have a stride that must be propagated.
+        return
+
+    if functools.reduce(operator.mul, inner_shape) == 1:
+        # Arrays with size 1 in all dimensions do not need strides.
         return
 
     # Now determine the new stride that is needed on the inside.
