@@ -17,6 +17,7 @@ from typing import Any, Callable, Generic, Protocol, TypeVar
 from typing_extensions import Self
 
 from gt4py.eve.extended_typing import OpaqueMutableMapping
+from gt4py.next import utils
 
 
 StartT = TypeVar("StartT")
@@ -92,7 +93,9 @@ class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co
 
 @dataclasses.dataclass(frozen=True)
 class NamedStepSequence(
-    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    utils.CachedFingerprintedDataclass,
 ):
     """
     Workflow with linear succession of named steps.
@@ -159,7 +162,9 @@ class NamedStepSequence(
 
 @dataclasses.dataclass(frozen=True)
 class MultiWorkflow(
-    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    utils.CachedFingerprintedDataclass,
 ):
     """A flexible workflow, where the sequence of steps depends on the input type."""
 
@@ -175,7 +180,10 @@ class MultiWorkflow(
 
 
 @dataclasses.dataclass(frozen=True)
-class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
+class StepSequence(
+    ChainableWorkflowMixin[StartT, EndT],
+    utils.CachedFingerprintedDataclass,
+):
     """
     Composable workflow of single input callables.
 
@@ -227,6 +235,7 @@ class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
 class CachedStep(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
+    utils.CachedFingerprintedDataclass,
     Generic[StartT, EndT, HashT],
 ):
     """
@@ -254,22 +263,31 @@ class CachedStep(
     """
 
     step: Workflow[StartT, EndT]
-    hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
-    cache: OpaqueMutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
+    key_function: Callable[[StartT], HashT] = dataclasses.field(
+        default=utils.fingerprint, metadata=utils.gt4py_metadata(pickle=False)
+    )  # type: ignore[assignment]
+    cache: OpaqueMutableMapping[str, EndT] = dataclasses.field(
+        repr=False, default_factory=dict, metadata=utils.gt4py_metadata(pickle=False)
+    )
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
-        hash_ = self.hash_function(inp)
+        hash_ = self.cache_key(inp)
         try:
             result = self.cache[hash_]
         except KeyError:
             result = self.cache[hash_] = self.step(inp)
         return result
 
+    def cache_key(self, inp: StartT) -> str:
+        return utils.fingerprint((self, self.key_function(inp)))
+
 
 @dataclasses.dataclass(frozen=True)
 class SkippableStep(
-    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    utils.CachedFingerprintedDataclass,
 ):
     step: Workflow[StartT, EndT]
 

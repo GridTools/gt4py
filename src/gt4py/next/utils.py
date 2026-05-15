@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import abc
 import copyreg
 import dataclasses
 import functools
@@ -15,12 +16,14 @@ import inspect
 import itertools
 import types
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     ClassVar,
     Final,
     Optional,
     ParamSpec,
+    Protocol,
     Sequence,
     TypeAlias,
     TypeGuard,
@@ -30,6 +33,8 @@ from typing import (
 )
 
 from gt4py.eve import datamodels, utils as eve_utils
+from gt4py.eve.extended_typing import Self
+from gt4py.next import config
 
 
 GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
@@ -111,7 +116,7 @@ def _get_metadata_based_state_getstate(cls: type) -> _StandardGetStateMethod:
     return __getstate__
 
 
-class MetadataBasedPickling:
+class MetadataBasedPicklingMixin:
     """
     Mixin for adding metadata-based pickling to dataclass-like objects.
 
@@ -136,6 +141,115 @@ class MetadataBasedPickling:
     # Note: we don't implement `__setstate__` as the output of our custom
     #  `__getstate__` implementation should be compatible with the default
     #  implementation.
+
+
+class Fingerprinted(Protocol):
+    """
+    Protocol for objects that can be fingerprinted with a custom function.
+
+    The fingerprint should be a stable hash string representing the state of the object.
+    """
+
+    __slots__ = ()
+
+    @property
+    def fingerprint(self) -> str:
+        """Get the fingerprint of the object."""
+        ...
+
+    @property
+    def fingerprinter(self) -> Callable[[Fingerprinted], str]:
+        """Get the fingerprinting function for the object."""
+        ...
+
+
+class FingerprintedABC(abc.ABC):
+    """
+    ABC of objects implementing the fingerprinting protocol.
+
+    It provides a custom subclass hook to recognize classes implementing the
+    protocol without inheriting from the ABC, without the performance problems
+    of using `isinstance` checks on runtime-checkable protocols directly.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool | types.NotImplementedType:
+        if (
+            cls is FingerprintedABC
+            and hasattr(subclass, "fingerprint")
+            and hasattr(subclass, "fingerprinter")
+        ):
+            return True
+
+        return NotImplemented
+
+    @staticmethod
+    @abc.abstractmethod
+    def fingerprinter(instance: FingerprintedABC) -> str: ...  # to be implemented by subclasses
+
+    @property
+    def fingerprint(self: Self) -> str:
+        return self.fingerprinter(self)
+
+
+fingerprint_reducer = eve_utils.singledispatcher(
+    lambda _: NotImplemented,
+    {FingerprintedABC: lambda obj: (type(obj), (), (obj.fingerprint,))},
+)
+fingerprint_pickler = eve_utils.custom_pickler(fingerprint_reducer, name="FingerprintPickler")
+
+
+fingerprint: Callable[[Any], str] = functools.partial(
+    eve_utils.content_hash, pickler=fingerprint_pickler
+)
+"""
+Default fingerprinting function for GT4Py objects.
+
+It uses `eve_utils.content_hash` as fingerprinting function. If the object
+is an instance of a class implementing the `FingerprintedProtocol`, it will
+instead use the `fingerprint` property of the object as its content hash.
+"""
+
+versioned_fingerprint: Callable[[Any], str] = functools.partial(
+    eve_utils.content_hash, config.BUILD_CACHE_VERSION_ID, pickler=fingerprint_pickler
+)
+
+
+class FingerprintedMixin:
+    """General mixin to add support for the Fingerprinted protocol to any class."""
+
+    __slots__ = ()
+
+    @staticmethod
+    def fingerprinter(instance: Fingerprinted) -> str:
+        try:
+            return fingerprint(instance.__reduce__())
+        except AttributeError:
+            return ""
+
+    @property
+    def fingerprint(self) -> str:
+        return self.fingerprinter(self)
+
+
+class CachedFingerprintedMixin(FingerprintedMixin):
+    """Mixin to add an optimized implementation of the Fingerprinted protocol to frozen classes."""
+
+    @(functools.cached_property if not TYPE_CHECKING else property)
+    def fingerprint(self) -> str:
+        return self.fingerprinter(self)
+
+
+assert issubclass(FingerprintedMixin, FingerprintedABC)
+assert issubclass(CachedFingerprintedMixin, FingerprintedABC)
+if TYPE_CHECKING:
+    _CFM: type[Fingerprinted] = CachedFingerprintedMixin
+
+
+class CachedFingerprintedDataclass(CachedFingerprintedMixin, MetadataBasedPicklingMixin):
+    __slots__ = ()
 
 
 class RecursionGuard:

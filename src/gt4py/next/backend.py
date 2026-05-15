@@ -12,7 +12,7 @@ import dataclasses
 from typing import Generic
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import custom_layout_allocators as next_allocators
+from gt4py.next import custom_layout_allocators as next_allocators, utils
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_past,
@@ -145,7 +145,7 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 #  `transforms` -> `frontend_transforms`
 #  `executor` -> `backend_transforms`
 @dataclasses.dataclass(frozen=True)
-class Backend(Generic[core_defs.DeviceTypeT]):
+class Backend(utils.CachedFingerprintedDataclass, Generic[core_defs.DeviceTypeT]):
     name: str
     executor: workflow.Workflow[definitions.CompilableProgramDef, stages.ExecutableProgram]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]

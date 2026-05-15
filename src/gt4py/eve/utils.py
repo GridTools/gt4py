@@ -630,6 +630,16 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
     return "__noninstantiable__" in cls.__dict__
 
 
+def singledispatcher(
+    default: Callable[P, T],
+    implementations: dict[type, Callable[[Any], Any]],
+) -> Callable[P, T]:
+    result = functools.singledispatch(default)
+    for cls, func in implementations.items():
+        result.register(cls)(func)
+    return result
+
+
 def content_hash(
     *args: Any,
     hash_algorithm: str | xtyping.HashlibAlgorithm | None = None,
@@ -669,6 +679,7 @@ def content_hash(
 
 def custom_pickler(
     reducer: Callable[[Any], tuple | types.NotImplementedType],
+    *,
     name: str | None = None,
 ) -> type[pickle.Pickler]:
     """
@@ -685,7 +696,9 @@ def custom_pickler(
 
 def custom_pickler_from_reducers(
     custom_reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
+    *,
     name: str | None = None,
+    default_reducer: Callable[[Any], tuple | types.NotImplementedType] = lambda _: NotImplemented,
 ) -> type[pickle.Pickler]:
     """
     Create a pickler with the provided reducers registered in reducer override.
@@ -696,13 +709,8 @@ def custom_pickler_from_reducers(
     the `dispatch_table` dict, to allow easy pickle customization of entire class
     hierarchies.
     """
-    reducer = functools.singledispatch(
-        cast(Callable[[Any], tuple | types.NotImplementedType], lambda _: NotImplemented)
-    )
-    for cls, func in custom_reducers.items():
-        reducer.register(cls)(func)
 
-    return custom_pickler(reducer, name=name)
+    return custom_pickler(singledispatcher(default_reducer, custom_reducers), name=name)
 
 
 ddiff = deepdiff.diff.DeepDiff

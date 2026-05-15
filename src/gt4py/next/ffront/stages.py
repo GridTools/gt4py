@@ -22,24 +22,51 @@ dialects contain `AST`.
 
 from __future__ import annotations
 
-import collections.abc
 import dataclasses
 import functools
-import hashlib
 import types
 import typing
 from typing import Any, Optional, TypeVar
 
-import xxhash
-
-from gt4py.eve import extended_typing as xtyping
-from gt4py.next import common
+from gt4py.eve import utils as eve_utils
+from gt4py.next import common, utils
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.otf import arguments, toolchain
 
 
+# Create a custom pickler for the BaseStage `fingerprinter` that handles
+# `types.FunctionType` by using its source code and closure variables.
+# This should be enough for the use case of GT4Py DSL definitions,
+# which are expected to be pure functions without complicated closures.
+fingerprint_reducer = eve_utils.singledispatcher(
+    utils.fingerprint_reducer,
+    {
+        types.FunctionType: lambda f: (
+            tuple,
+            (),
+            (
+                source_utils.make_source_definition_from_function(f),
+                source_utils.get_closure_vars_from_function(f),
+            ),
+        )
+    },
+)
+
+fingerprinter = functools.partial(
+    eve_utils.content_hash,
+    pickler=eve_utils.custom_pickler(fingerprint_reducer, name="FFrontFingerprintPickler"),
+)
+
+
 @dataclasses.dataclass(frozen=True)
-class DSLFieldOperatorDef:
+class BaseStage(utils.CachedFingerprintedDataclass):
+    """Base class for optimized Fingerprinted implementations in frozen dataclasses."""
+
+    fingerprinter = staticmethod(fingerprinter)
+
+
+@dataclasses.dataclass(frozen=True)
+class DSLFieldOperatorDef(BaseStage):
     definition: types.FunctionType
     node_class: type[foast.OperatorNode] = foast.FieldOperator
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -53,7 +80,7 @@ ConcreteDSLFieldOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 
 @dataclasses.dataclass(frozen=True)
-class FOASTOperatorDef:
+class FOASTOperatorDef(BaseStage):
     foast_node: foast.OperatorNode
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
@@ -67,7 +94,7 @@ ConcreteFOASTOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 
 @dataclasses.dataclass(frozen=True)
-class DSLProgramDef:
+class DSLProgramDef(BaseStage):
     definition: types.FunctionType
     grid_type: Optional[common.GridType] = None
     debug: bool = False
@@ -79,7 +106,7 @@ ConcreteDSLProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 
 @dataclasses.dataclass(frozen=True)
-class PASTProgramDef:
+class PASTProgramDef(BaseStage):
     past_node: past.Program
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
@@ -92,88 +119,3 @@ ConcretePASTProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 DSLDefinition = DSLFieldOperatorDef | DSLProgramDef
 DSLDefinitionT = TypeVar("DSLDefinitionT", DSLFieldOperatorDef, DSLProgramDef)
-
-
-def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
-    hasher: xtyping.HashlibAlgorithm
-    if not algorithm:
-        hasher = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
-    elif isinstance(algorithm, str):
-        hasher = hashlib.new(algorithm)
-    else:
-        hasher = algorithm
-
-    add_content_to_fingerprint(obj, hasher)
-    return hasher.hexdigest()
-
-
-@functools.singledispatch
-def add_content_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
-    hasher.update(str(obj).encode())
-
-
-for t in (str, int):
-    add_content_to_fingerprint.register(t, add_content_to_fingerprint.registry[object])
-
-
-@add_content_to_fingerprint.register(DSLFieldOperatorDef)
-@add_content_to_fingerprint.register(FOASTOperatorDef)
-@add_content_to_fingerprint.register(DSLProgramDef)
-@add_content_to_fingerprint.register(PASTProgramDef)
-@add_content_to_fingerprint.register(toolchain.ConcreteArtifact)
-@add_content_to_fingerprint.register(arguments.CompileTimeArgs)
-def add_stage_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
-    add_content_to_fingerprint(obj.__class__, hasher)
-    for field in dataclasses.fields(obj):
-        add_content_to_fingerprint(getattr(obj, field.name), hasher)
-
-
-def add_jit_args_id_to_fingerprint(
-    obj: arguments.JITArgs, hasher: xtyping.HashlibAlgorithm
-) -> None:
-    add_content_to_fingerprint(str(id(obj)), hasher)
-
-
-@add_content_to_fingerprint.register
-def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgorithm) -> None:
-    sourcedef = source_utils.SourceDefinition.from_function(obj)
-    for item in sourcedef:
-        add_content_to_fingerprint(item, hasher)
-
-    closure_vars = source_utils.get_closure_vars_from_function(obj)
-    for item in sorted(closure_vars.items(), key=lambda x: x[0]):
-        add_content_to_fingerprint(item, hasher)
-
-
-@add_content_to_fingerprint.register
-def add_dict_to_fingerprint(obj: dict, hasher: xtyping.HashlibAlgorithm) -> None:
-    # just a small helper to additionally allow sorting types (by just using their name)
-    def key_function(key: Any) -> Any:
-        if isinstance(key, type):
-            return key.__module__, key.__qualname__
-        return key
-
-    for key in sorted(obj.keys(), key=key_function):
-        add_content_to_fingerprint(key, hasher)
-        add_content_to_fingerprint(obj[key], hasher)
-
-
-@add_content_to_fingerprint.register
-def add_type_to_fingerprint(obj: type, hasher: xtyping.HashlibAlgorithm) -> None:
-    hasher.update(obj.__name__.encode())
-
-
-@add_content_to_fingerprint.register
-def add_sequence_to_fingerprint(
-    obj: collections.abc.Iterable, hasher: xtyping.HashlibAlgorithm
-) -> None:
-    for item in obj:
-        add_content_to_fingerprint(item, hasher)
-
-
-@add_content_to_fingerprint.register
-def add_foast_located_node_to_fingerprint(
-    obj: foast.LocatedNode, hasher: xtyping.HashlibAlgorithm
-) -> None:
-    add_content_to_fingerprint(obj.location, hasher)
-    add_content_to_fingerprint(str(obj), hasher)

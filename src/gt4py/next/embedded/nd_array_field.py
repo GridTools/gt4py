@@ -106,7 +106,7 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 class NdArrayField(
     common.MutableField[common.DimsT, core_defs.ScalarT],
     common.FieldBuiltinFuncRegistry,
-    utils.MetadataBasedPickling,
+    utils.MetadataBasedPicklingMixin,
 ):
     """
     Shared field implementation for NumPy-like fields.

@@ -18,7 +18,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import common, config
+from gt4py.next import common, config, utils
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
@@ -125,6 +125,7 @@ class DaCeCompiler(
         CompiledDaceProgram,
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+    utils.CachedFingerprintedDataclass,
 ):
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 

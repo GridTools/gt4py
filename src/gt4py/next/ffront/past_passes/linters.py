@@ -51,7 +51,7 @@ def linter_factory(
 ) -> workflow.Workflow[PASTProgramDef, PASTProgramDef]:
     wf = lint_misnamed_functions.chain(lint_undefined_symbols)
     if cached:
-        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+        wf = workflow.CachedStep(step=wf, key_function=ffront_stages.fingerprinter)
     return wf
 
 

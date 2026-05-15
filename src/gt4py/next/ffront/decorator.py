@@ -83,7 +83,9 @@ def embedded_program_call_context(
 
 
 @dataclasses.dataclass(frozen=True)
-class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
+class _CompilableGTEntryPointMixin(
+    utils.CachedFingerprintedDataclass, Generic[ffront_stages.DSLDefinitionT]
+):
     """
     Mixing used by program and program-like objects.
 
@@ -862,23 +864,3 @@ def scan_operator(
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_fieldop_to_fingerprint(obj: FieldOperator, hasher: xtyping.HashlibAlgorithm) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_foast_fieldop_to_fingerprint(
-    obj: FieldOperatorFromFoast, hasher: xtyping.HashlibAlgorithm
-) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.foast_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_program_to_fingerprint(obj: Program, hasher: xtyping.HashlibAlgorithm) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
