@@ -10,7 +10,7 @@
 
 import enum
 import warnings
-from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
+from typing import Any, Callable, List, Optional, Sequence, TypeAlias, Union
 
 import dace
 from dace import data as dace_data
@@ -118,9 +118,11 @@ def gt_auto_optimize(
     gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
     gpu_block_size_3d: Optional[Sequence[int | str] | str] = None,
     gpu_maxnreg: Optional[int] = None,
-    blocking_dim: Optional[gtx_common.Dimension] = None,
+    blocking_dims: Optional[List[gtx_common.Dimension]] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
+    promote_independent_memlets_for_blocking: bool = False,
+    blocking_independent_node_threshold: Optional[int] = None,
     scan_loop_unrolling: bool = False,
     scan_loop_unrolling_factor: int = 0,
     disable_splitting: bool = False,
@@ -179,7 +181,7 @@ def gt_auto_optimize(
         gpu_block_size_{1, 2, 3}d: Allows to specify the GPU thread block size for
             1, 2 and 3 dimension Maps individually. See the `gpu_block_size_spec`
             argument of `gt_gpu_transformation()` for more.
-        blocking_dim: On which dimension blocking should be applied.
+        blocking_dims: On which dimensions blocking should be applied. Priority based on the order of the passed dimensions.
         blocking_size: How many elements each block should process.
         blocking_only_if_independent_nodes: If `True`, the default, only apply loop
             blocking if there are independent nodes in the Map, see the
@@ -323,9 +325,11 @@ def gt_auto_optimize(
         # Optimize the interior of the Maps:
         sdfg = _gt_auto_process_dataflow_inside_maps(
             sdfg=sdfg,
-            blocking_dim=blocking_dim,
+            blocking_dims=blocking_dims,
             blocking_size=blocking_size,
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
+            promote_independent_memlets_for_blocking=promote_independent_memlets_for_blocking,
+            blocking_independent_node_threshold=blocking_independent_node_threshold,
             scan_loop_unrolling=scan_loop_unrolling,
             scan_loop_unrolling_factor=scan_loop_unrolling_factor,
             fuse_tasklets=fuse_tasklets,
@@ -671,9 +675,11 @@ def _gt_auto_process_top_level_maps(
 
 def _gt_auto_process_dataflow_inside_maps(
     sdfg: dace.SDFG,
-    blocking_dim: Optional[gtx_common.Dimension],
+    blocking_dims: Optional[list[gtx_common.Dimension]],
     blocking_size: int,
     blocking_only_if_independent_nodes: Optional[bool],
+    promote_independent_memlets_for_blocking: Optional[bool],
+    blocking_independent_node_threshold: Optional[int],
     scan_loop_unrolling: bool,
     scan_loop_unrolling_factor: int,
     fuse_tasklets: bool,
@@ -694,12 +700,14 @@ def _gt_auto_process_dataflow_inside_maps(
     # Separate Tasklets into dependent and independent parts to promote data
     #  reusability. It is important that this step has to be performed before
     #  `TaskletFusion` is used.
-    if blocking_dim is not None:
+    if blocking_dims is not None:
         sdfg.apply_transformations_once_everywhere(
             gtx_transformations.LoopBlocking(
                 blocking_size=blocking_size,
-                blocking_parameter=blocking_dim,
+                blocking_parameters=blocking_dims,
                 require_independent_nodes=blocking_only_if_independent_nodes,
+                promote_independent_memlets=promote_independent_memlets_for_blocking,
+                independent_node_threshold=blocking_independent_node_threshold,
             ),
             validate=False,
             validate_all=validate_all,
