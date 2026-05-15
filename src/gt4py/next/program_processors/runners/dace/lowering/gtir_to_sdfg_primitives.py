@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import abc
+from collections import Counter
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
@@ -95,6 +96,7 @@ def _create_field_operator_impl(
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace_nodes.MapExit,
+    output_consumer_count: dict[dace_nodes.AccessNode, int],
 ) -> gtir_to_sdfg_types.FieldopData:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -166,8 +168,11 @@ def _create_field_operator_impl(
         )
     field_node = ctx.state.add_access(field_name)
 
-    # and here the edge writing the dataflow result data through the map exit node
-    output_edge.connect(map_exit, field_node, field_subset)
+    # and here the edge writing the dataflow result data through the map exit node.
+    # Note that we cannot remove the output data access node only if this is used
+    #  for mutiple fields in a return tuple.
+    allow_removal_of_last_node = output_consumer_count[output_edge.result.dc_node] == 1
+    output_edge.connect(map_exit, field_node, field_subset, allow_removal_of_last_node)
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
@@ -217,17 +222,24 @@ def _create_field_operator(
     for edge in input_edges:
         edge.connect(map_entry)
 
+    # The same output node could be used for multiple fields in case of tuple return.
+    # In this case, the output access node cannot be removed.
+    consumer_count = Counter(
+        oedge.result.dc_node
+        for oedge in gtx_utils.flatten_nested_tuple((output_tree,))
+        if oedge is not None
+    )
     if isinstance(node_type, ts.FieldType):
         assert isinstance(output_tree, gtir_dataflow.DataflowOutputEdge)
         return _create_field_operator_impl(
-            ctx, sdfg_builder, domain, output_tree, node_type, map_exit
+            ctx, sdfg_builder, domain, output_tree, node_type, map_exit, consumer_count
         )
     else:
         # handle tuples of fields
         output_symbol_tree = gtir_to_sdfg_utils.make_symbol_tree("x", node_type)
         return gtx_utils.tree_map(
             lambda output_edge, output_sym: _create_field_operator_impl(
-                ctx, sdfg_builder, domain, output_edge, output_sym.type, map_exit
+                ctx, sdfg_builder, domain, output_edge, output_sym.type, map_exit, consumer_count
             )
         )(output_tree, output_symbol_tree)
 

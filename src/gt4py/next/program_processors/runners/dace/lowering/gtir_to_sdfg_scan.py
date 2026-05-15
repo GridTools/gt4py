@@ -22,6 +22,7 @@ This is likely to change in the future, to enable GTIR optimizations for scan.
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Iterable, Sequence
 
 import dace
@@ -73,6 +74,7 @@ def _create_scan_field_operator_impl(
     output_domain: infer_domain.NonTupleDomainAccess,
     output_type: ts.FieldType,
     map_exit: dace_nodes.MapExit | None,
+    output_consumer_count: dict[dace_nodes.AccessNode, int],
 ) -> gtir_to_sdfg_types.FieldopData | None:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -146,7 +148,12 @@ def _create_scan_field_operator_impl(
     #  Up to now the nested SDFG is writing into a transient data container that
     #  has the size to hold one column. The function below, that does the connection,
     #  will remove that transient and write directly to the result field.
-    inner_map_output_temporary_removed = output_edge.connect(map_exit, field_node, field_subset)
+    #  Note that we cannot remove the output data access node only if this is used
+    #  for mutiple fields in a return tuple.
+    allow_removal_of_last_node = output_consumer_count[output_edge.result.dc_node] == 1
+    inner_map_output_temporary_removed = output_edge.connect(
+        map_exit, field_node, field_subset, allow_removal_of_last_node
+    )
     if not inner_map_output_temporary_removed:
         raise ValueError("The scan nested SDFG is expected to write directly to the result field.")
 
@@ -244,6 +251,14 @@ def _create_scan_field_operator(
         else im.sym("__gtir_unused_dummy_var", node_type)
     )
 
+    # The same output node could be used for multiple fields in case of tuple return.
+    # In this case, the output access node cannot be removed.
+    consumer_count = Counter(
+        oedge.result.dc_node
+        for oedge in gtx_utils.flatten_nested_tuple((output,))
+        if oedge is not None
+    )
+
     return gtx_utils.tree_map(
         lambda edge, domain, sym: _create_scan_field_operator_impl(
             ctx,
@@ -252,6 +267,7 @@ def _create_scan_field_operator(
             domain,
             sym.type,
             map_exit,
+            consumer_count,
         )
     )(output, output_domain, dummy_output_symbol)
 

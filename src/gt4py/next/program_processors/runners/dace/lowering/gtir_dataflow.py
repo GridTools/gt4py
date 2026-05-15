@@ -269,6 +269,7 @@ class DataflowOutputEdge:
         map_exit: Optional[dace_nodes.MapExit],
         dest: dace_nodes.AccessNode,
         dest_subset: dace_subsets.Range,
+        allow_removal_of_last_node: bool,
     ) -> bool:
         """Create a connection to the `dest` node, writing the given `dest_subset`.
 
@@ -277,35 +278,34 @@ class DataflowOutputEdge:
         outside data container is removed, the caller is responsible to propagate
         the strides of the destination array to the array inside the nested SDFG.
         """
-        # We don't allow removing the last node of the dataflow inside a map scope,
-        # because the same reults could be written to multiple destiation nodes ouside
-        # the map scope, in case of field operators returning tuples.
-        allow_removal_of_last_node: Final[bool] = False
         dest_desc = self.result.dc_node.desc(self.state)
         write_edge = self.state.in_edges(self.result.dc_node)[0]
 
-        if self.state.out_degree(self.result.dc_node) != 0:
-            remove_last_node = False
-        elif isinstance(write_edge.src, dace_nodes.Tasklet):
-            # The temporary data written by a tasklet can be safely deleted.
-            remove_last_node = True
-        elif isinstance(write_edge.src, dace_nodes.NestedSDFG):
-            if isinstance(dest_desc, dace.data.Scalar):
-                # We keep scalar temporary storage, as a general rule, since it
-                # does not affect performance of the generated code. This scalar
-                # is only required in some cases, e.g. for nested SDFGs implementing
-                # reduction, which use a WCR memlet for the reduction operation.
+        if allow_removal_of_last_node:
+            if self.state.out_degree(self.result.dc_node) != 0:
                 remove_last_node = False
-            else:
-                # We remove the transient array on the output connection of a nested
-                # SDFG and write directly to the destination node.
-                # The caller is responsible to propagate the strides of the destination
-                # array to the array inside the nested SDFG.
+            elif isinstance(write_edge.src, dace_nodes.Tasklet):
+                # The temporary data written by a tasklet can be safely deleted.
                 remove_last_node = True
+            elif isinstance(write_edge.src, dace_nodes.NestedSDFG):
+                if isinstance(dest_desc, dace.data.Scalar):
+                    # We keep scalar temporary storage, as a general rule, since it
+                    # does not affect performance of the generated code. This scalar
+                    # is only required in some cases, e.g. for nested SDFGs implementing
+                    # reduction, which use a WCR memlet for the reduction operation.
+                    remove_last_node = False
+                else:
+                    # We remove the transient array on the output connection of a nested
+                    # SDFG and write directly to the destination node.
+                    # The caller is responsible to propagate the strides of the destination
+                    # array to the array inside the nested SDFG.
+                    remove_last_node = True
+            else:
+                remove_last_node = False
         else:
             remove_last_node = False
 
-        if allow_removal_of_last_node and remove_last_node:
+        if remove_last_node:
             src_node = write_edge.src
             src_node_connector = write_edge.src_conn
             src_subset = write_edge.data.src_subset
