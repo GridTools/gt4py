@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import warnings
 from typing import Optional, TypeAlias
 
 import dace
@@ -527,7 +528,11 @@ def _gt_map_strides_into_nested_sdfg(
         raise NotImplementedError("NestedSDFGs can not be used to increase the rank.")
 
     if len(new_strides) != len(inner_shape):
-        raise ValueError("Failed to compute the inner strides.")
+        # It could still be possible to access an array at index 0. Consider a memlet
+        # which only writes index 0 to the inner shape (dim_oinflow == 1), although
+        # the inner shape is larger than 1, but we only read index 0 inside the SDFG.
+        warnings.warn("Failed to compute the inner strides.", stacklevel=2)
+        return
 
     # For the strides of the arrays inside the nested SDFG we will create a new unique
     #  symbol which is initialized, through the symbol mapping, to the value of this

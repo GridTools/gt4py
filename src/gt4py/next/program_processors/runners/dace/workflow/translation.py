@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 from typing import Any, Optional
 
 import dace
@@ -17,7 +18,8 @@ import factory
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
 from gt4py.next.instrumentation import metrics
-from gt4py.next.iterator import ir as itir, transforms as itir_transforms
+from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
@@ -357,6 +359,7 @@ class DaCeTranslator(
     definitions.TranslationStep[code_specs.SDFGCodeSpec],
 ):
     device_type: core_defs.DeviceType
+    apply_common_transform: bool
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
     async_sdfg_call: bool
@@ -375,6 +378,31 @@ class DaCeTranslator(
         with gtx_wfdcommon.dace_context(device_type=self.device_type):
             return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
+    def _preprocess_program(
+        self,
+        program: itir.Program,
+        offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    ) -> itir.Program:
+        apply_common_transforms = functools.partial(
+            pass_manager.apply_common_transforms,
+            offset_provider=offset_provider,
+            force_inline_lambda_args=True,
+            transform_concat_where_to_as_fieldop=False,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+        )
+
+        new_program = apply_common_transforms(program, unroll_reduce=False)
+
+        if any(
+            node.id == "neighbors"
+            for node in new_program.pre_walk_values().if_isinstance(itir.SymRef)
+        ):
+            # if we don't unroll, there may be lifts left in the itir which can't
+            # be lowered to SDFG. In this case, just retry with unrolled reductions.
+            new_program = apply_common_transforms(program, unroll_reduce=True)
+
+        return new_program
+
     def _generate_sdfg_without_configuring_dace(
         self,
         ir: itir.Program,
@@ -382,11 +410,14 @@ class DaCeTranslator(
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(
-                ir,
-                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
-                offset_provider=offset_provider,
-            )
+            if self.apply_common_transform:
+                ir = self._preprocess_program(ir, offset_provider)
+            else:
+                ir = pass_manager.apply_fieldview_transforms(
+                    ir,
+                    use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                    offset_provider=offset_provider,
+                )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
