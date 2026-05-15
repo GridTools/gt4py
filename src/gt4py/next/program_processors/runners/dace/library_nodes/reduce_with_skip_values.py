@@ -27,8 +27,8 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
 
     # Properties
     wcr = dace_properties.LambdaProperty(default="lambda a, b: a")
-    identity = dace_properties.SymbolicProperty(default=0, to_json=lambda x: str(x))
-    init = dace_properties.SymbolicProperty(default=0, to_json=lambda x: str(x))
+    identity = dace_properties.Property(default=0)
+    init = dace_properties.Property(default=0)
     input_conn = dace_properties.Property(default="_in")
     output_conn = dace_properties.Property(default="_out")
     mask_conn = dace_properties.Property(default="_mask")
