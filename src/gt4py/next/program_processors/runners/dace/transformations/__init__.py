@@ -19,6 +19,7 @@ from .auto_optimize import (
     GT4PyAutoOptHookStage,
     gt_auto_optimize,
 )
+from .broadcast import BrodcastChainRemover, InlineBroadcastAccess
 from .concat_where_mapper import (
     gt_apply_concat_where_replacement_on_sdfg,
     gt_check_if_concat_where_node_is_replaceable,
@@ -88,6 +89,7 @@ from .utils import gt_make_transients_persistent, unique_name
 
 
 __all__ = [
+    "BrodcastChainRemover",
     "CopyChainRemover",
     "DoubleWriteRemover",
     "FuseHorizontalConditionBlocks",
@@ -100,6 +102,7 @@ __all__ = [
     "GT4PyStateFusion",
     "HorizontalMapFusionCallback",
     "HorizontalMapSplitCallback",
+    "InlineBroadcastAccess",
     "LoopBlocking",
     "MapFusionHorizontal",
     "MapFusionVertical",

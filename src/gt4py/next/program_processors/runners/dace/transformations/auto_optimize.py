@@ -20,7 +20,10 @@ from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtir_library_nodes,
+    transformations as gtx_transformations,
+)
 
 
 class GT4PyAutoOptHook(enum.Enum):
@@ -369,6 +372,16 @@ def gt_auto_optimize(
                     stacklevel=0,
                 )
 
+        # We now expand all GT4Py specific library nodes.
+        #  We do this such that we have control over all the Maps that are there.
+        # NOTE: `Broadcast` nodes were already expanded in the top level dataflow phase.
+        # TODO(phimuell): It is probably the right place, but maybe there is a better one.
+        for node, state in list(sdfg.all_nodes_recursive()):
+            if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
+                node.expand(state)
+                if validate_all:
+                    sdfg.validate()
+
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
             gpu=gpu,
@@ -459,6 +472,7 @@ def _gt_auto_process_top_level_maps(
     if GT4PyAutoOptHook.TopLevelDataFlowPre in optimization_hooks:
         optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](sdfg)  # type: ignore[call-arg]
 
+    broadcast_nodes_have_been_expanded = False
     while True:
         # First we do scan the entire SDFG to figure out which data is only
         #  used once and can be deleted.
@@ -643,7 +657,33 @@ def _gt_auto_process_top_level_maps(
         # Determine if the SDFG has been modified by comparing the hash.
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
         if old_sdfg_hash == sdfg_hash:
-            break
+            # If broadcast nodes have been expanded already then exit the loop.
+            if broadcast_nodes_have_been_expanded:
+                break
+
+            # Broadcast nodes have not been expanded. Do it now and try again.
+            #  The idea is that the splitter get a chance of integrating them
+            #  into other stencils.
+            sdfg.apply_transformations_repeated(
+                [
+                    gtx_transformations.BrodcastChainRemover(single_use_data=single_use_data),
+                    gtx_transformations.InlineBroadcastAccess(single_use_data=single_use_data),
+                ],
+                validate=False,
+                validate_all=validate_all,
+            )
+            expanded_broadcast_node = False
+            for node, state in list(sdfg.all_nodes_recursive()):
+                if isinstance(node, gtir_library_nodes.Broadcast):
+                    gtir_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
+                    if validate_all:
+                        sdfg.validate()
+                    expanded_broadcast_node = True
+            broadcast_nodes_have_been_expanded = True
+
+            # There was no broadcast node in the SDFG, so we can exit.
+            if not expanded_broadcast_node:
+                break
 
         # The SDFG was modified by the transformations above. The SDFG was
         #  modified. Call Simplify and try again to further optimize.
@@ -751,8 +791,8 @@ def _gt_auto_process_dataflow_inside_maps(
     # NestedSDFGs inside the ConditionalBlocks it fuses.
     sdfg.apply_transformations_repeated(
         gtx_transformations.FuseHorizontalConditionBlocks(),
-        validate=True,
-        validate_all=True,
+        validate=False,
+        validate_all=validate_all,
     )
 
     # Move dataflow into the branches of the `if` such that they are only evaluated

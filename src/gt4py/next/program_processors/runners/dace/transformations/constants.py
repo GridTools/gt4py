@@ -24,8 +24,6 @@ The following passes are included:
 
 _GT_AUTO_OPT_INITIAL_STEP_SIMPLIFY_SKIP_LIST: Final[set[str]] = GT_SIMPLIFY_DEFAULT_SKIP_SET
 """Simplify stages disabled during the initial simplification.
-
-For now it is an alias of the default skip list `GT_SIMPLIFY_DEFAULT_SKIP_SET`.
 """
 
 _GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = GT_SIMPLIFY_DEFAULT_SKIP_SET | {
@@ -65,6 +63,7 @@ _GT_AUTO_OPT_INNER_DATAFLOW_STAGE_SIMPLIFY_SKIP_LIST: Final[set[str]] = (
         "SingleStateGlobalSelfCopyElimination",
         "MultiStateGlobalSelfCopyElimination",
         "MapToCopy",
+        "InlineBroadcastAccess",
     }
 )
 """Simplify stages disabled during the optimization of dataflow inside the Maps."""
