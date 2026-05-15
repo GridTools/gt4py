@@ -139,9 +139,10 @@ if SKIP_DACE_WARNINGS:
     # NOTE: Ideally we would suppress the warnings using context managers directly in
     #   the backend. However, because this is not thread safe in Python versions before
     #   3.14, we have to do it here.
-    warnings.filterwarnings(action="ignore", module="^dace(\..+)?")
+    warnings.filterwarnings(action="ignore", module=r"^dace(\..+)?")
     warnings.filterwarnings(
-        action="ignore", module="^gt4py.next.program_processors.runners.dace.transformations(\..+)?"
+        action="ignore",
+        module=r"^gt4py.next.program_processors.runners.dace.transformations(\..+)?",
     )
 
 
