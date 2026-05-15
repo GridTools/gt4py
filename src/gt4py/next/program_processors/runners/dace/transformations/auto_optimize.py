@@ -20,7 +20,10 @@ from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtir_library_nodes,
+    transformations as gtx_transformations,
+)
 
 
 class GT4PyAutoOptHook(enum.Enum):
@@ -368,6 +371,15 @@ def gt_auto_optimize(
                     f"Could not restore the demoted field '{demoted_field}' back to a global.",
                     stacklevel=0,
                 )
+
+        # We now expand all GT4Py specific library nodes.
+        #  We do this such that we have control over all the Maps that are there.
+        # TODO(phimuell): It is probably the right place, but maybe there is a better one.
+        for node, state in list(sdfg.all_nodes_recursive()):
+            if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
+                node.expand(state)
+                if validate_all:
+                    sdfg.validate()
 
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
@@ -751,8 +763,8 @@ def _gt_auto_process_dataflow_inside_maps(
     # NestedSDFGs inside the ConditionalBlocks it fuses.
     sdfg.apply_transformations_repeated(
         gtx_transformations.FuseHorizontalConditionBlocks(),
-        validate=True,
-        validate_all=True,
+        validate=False,
+        validate_all=validate_all,
     )
 
     # Move dataflow into the branches of the `if` such that they are only evaluated
