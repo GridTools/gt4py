@@ -237,6 +237,15 @@ def gt_auto_optimize(
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
 
+    # We expand the GT4Py reduce nodes with skip values.
+    # TODO(edopao,phimuell): Check where this should be done. Doing it here ensures
+    #  the same result as if the reduce expression was lowered before optimization.
+    for node, state in list(sdfg.all_nodes_recursive()):
+        if isinstance(node, gtir_library_nodes.ReduceWithSkipValues):
+            node.expand(state)
+            if validate_all:
+                sdfg.validate()
+
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
@@ -371,15 +380,6 @@ def gt_auto_optimize(
                     f"Could not restore the demoted field '{demoted_field}' back to a global.",
                     stacklevel=0,
                 )
-
-        # We now expand all GT4Py specific library nodes.
-        #  We do this such that we have control over all the Maps that are there.
-        # TODO(phimuell): It is probably the right place, but maybe there is a better one.
-        for node, state in list(sdfg.all_nodes_recursive()):
-            if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
-                node.expand(state)
-                if validate_all:
-                    sdfg.validate()
 
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
