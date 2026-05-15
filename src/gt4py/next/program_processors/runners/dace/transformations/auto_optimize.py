@@ -751,8 +751,8 @@ def _gt_auto_process_dataflow_inside_maps(
     # NestedSDFGs inside the ConditionalBlocks it fuses.
     sdfg.apply_transformations_repeated(
         gtx_transformations.FuseHorizontalConditionBlocks(),
-        validate=True,
-        validate_all=True,
+        validate=False,
+        validate_all=validate_all,
     )
 
     # Move dataflow into the branches of the `if` such that they are only evaluated
