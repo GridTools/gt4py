@@ -237,11 +237,7 @@ disable_error_code = "call-arg"
 module = 'gt4py.cartesian.frontend.nodes'
 
 [[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.cartesian.frontend.node_util'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
+disable_error_code = "call-arg"
 module = 'gt4py.cartesian.frontend.gtscript_frontend'
 
 [[tool.mypy.overrides]]
