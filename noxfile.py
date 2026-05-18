@@ -107,10 +107,7 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
     "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
 }
-CodeGenCartesianTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "markers": ["requires_dace"]},
-}
-CodeGenNextTestSettings = CodeGenTestSettings | {
+CodeGenDaceTestSettings = CodeGenTestSettings | {
     "dace": {"extras": [], "markers": ["requires_dace"]},
 }
 
@@ -165,7 +162,7 @@ def test_cartesian(
 ) -> None:
     """Run selected 'gt4py.cartesian' tests."""
 
-    codegen_settings = CodeGenCartesianTestSettings[codegen]
+    codegen_settings = CodeGenDaceTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     extras = [
         "standard",
@@ -248,7 +245,7 @@ def test_next(
 ) -> None:
     """Run selected 'gt4py.next' tests."""
 
-    codegen_settings = CodeGenNextTestSettings[codegen]
+    codegen_settings = CodeGenDaceTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     extras = [
         "standard",
