@@ -18,7 +18,7 @@
 # that selection.
 #
 # The actual logic lives in:
-#   ci/dace_deterministic_codegen/dace_deterministic_codegen.py   (harness)
+#   ci/dace_deterministic_codegen/dace_deterministic_codegen.py   (checker)
 #   ci/dace_deterministic_codegen/bootstrap_icon4py.py            (venv prep)
 #   ci/dace_deterministic_codegen/run_in_ci.sh                    (CI driver)
 #

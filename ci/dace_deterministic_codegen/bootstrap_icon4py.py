@@ -16,7 +16,7 @@ dependencies into `$VIRTUAL_ENV`.
 
 This is what makes the editable gt4py / dace branches survive everything
 downstream — including the icon4py noxfile's own `uv sync` call when our
-dace_deterministic_codegen harness runs `nox --no-venv`.
+dace_deterministic_codegen checker runs `nox --no-venv`.
 
 Usage (run from anywhere):
 

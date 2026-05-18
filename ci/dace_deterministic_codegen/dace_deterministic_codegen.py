@@ -17,11 +17,11 @@ is a determinism bug.
 Compares only the contents of `<program>/src/` — the actual generated
 backend code. Currently supports cpu, cuda, and hip (hip is emitted by
 dace under `src/cuda/hip/`). Any other top-level backend under `src/`
-(mpi, sve, mlir, snitch, …) causes the harness to fail with a clear
+(mpi, sve, mlir, snitch, …) causes the checker to fail with a clear
 message rather than silently ignore it.
 
 Valid `--selection` and `--component` values are read from icon4py's
-own `noxfile.py` at runtime (no hardcoding here), so the harness
+own `noxfile.py` at runtime (no hardcoding here), so the checker
 tracks any future changes to icon4py's parametrization automatically.
 
 Mirrors icon4py's `ci/dace.yml` invocation pattern, with the session
@@ -83,7 +83,7 @@ CODEGEN_ROOT = "src"
 #: `cuda/` (with `rglob` picking up the nested hip files).
 #:
 #: If a snapshot ever encounters another top-level backend (mpi, sve,
-#: mlir, snitch, …), the harness fails loudly rather than silently
+#: mlir, snitch, …), the checker fails loudly rather than silently
 #: ignoring — those would need explicit support added here.
 SUPPORTED_BACKENDS: frozenset[str] = frozenset({"cpu", "cuda"})
 
@@ -246,7 +246,7 @@ def snapshot_run(cache_root: Path) -> dict[str, ProgramSnapshot]:
             if bd.name not in SUPPORTED_BACKENDS:
                 raise UnsupportedBackendError(
                     f"unsupported dace backend `{bd.name}/` found under "
-                    f"{src_root} — this harness currently supports "
+                    f"{src_root} — this checker currently supports "
                     f"{sorted(SUPPORTED_BACKENDS)} as top-level backends "
                     f"(HIP is handled under `cuda/hip/`). Add explicit "
                     f"support in dace_deterministic_codegen.py before "
@@ -589,7 +589,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
 
-    # Resolve every path to absolute up-front, so the harness can be run
+    # Resolve every path to absolute up-front, so the checker can be run
     # from any cwd. We print what the path resolved to — `--icon4py ../foo`
     # behaves intuitively but it's nice to confirm what it landed on.
     icon4py = args.icon4py.expanduser().resolve()
@@ -607,7 +607,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     # Introspect icon4py's noxfile to discover the legal selection /
-    # component values. This avoids hardcoding the lists, so the harness
+    # component values. This avoids hardcoding the lists, so the checker
     # auto-tracks any future changes to icon4py's noxfile structure.
     try:
         valid_selections, valid_components = introspect_icon4py_noxfile(noxfile_path)

@@ -7,15 +7,15 @@ runs. Exit 0 = identical (deterministic), exit 1 = different.
 
 Currently supports the **cpu**, **cuda**, and **HIP** dace backends.
 HIP is supported transparently: dace emits HIP code under `src/cuda/hip/`
-(target_name="cuda", target_type="hip"), and the harness's recursive
+(target_name="cuda", target_type="hip"), and the checker's recursive
 sweep of `src/cuda/` picks it up automatically. If a run emits anything
-else under `src/` (mpi, sve, mlir, snitch, …) the harness fails
+else under `src/` (mpi, sve, mlir, snitch, …) the checker fails
 immediately with a clear message — silently ignoring an unfamiliar
 backend would mean reporting "deterministic" without actually checking
 the relevant code.
 
 Valid `--selection` and `--component` values are read from icon4py's
-own `noxfile.py` at runtime — no hardcoding here, so the harness
+own `noxfile.py` at runtime — no hardcoding here, so the checker
 auto-tracks any future changes to icon4py's parametrization.
 
 Mirrors icon4py's `ci/dace.yml`, with the session name configurable:
@@ -87,7 +87,7 @@ from icon4py's `noxfile.py` at runtime. As of icon4py main, that's:
 - `--component`: `advection`, `diffusion`, `dycore`, `microphysics`,
   `muphys`, `common`, `driver`, `standalone_driver`, `testing`
 
-If icon4py adds or renames these, the harness picks it up automatically;
+If icon4py adds or renames these, the checker picks it up automatically;
 no update needed here. If you pass an invalid value, the error message
 lists the actual valid set extracted from your icon4py checkout.
 
@@ -173,11 +173,11 @@ across invocations, copy the directory before re-running.
 
 ## CI integration
 
-The harness runs in CSCS CI as a separate `dace-determinism` stage,
+The checker runs in CSCS CI as a separate `dace-determinism` stage,
 defined in `ci/cscs-ci-dace-determinism.yml` and wired into the
 pipeline via `ci/cscs-ci.yml`. A small driver script,
 `ci/dace_deterministic_codegen/run_in_ci.sh`, encapsulates the
-clone + bootstrap + harness invocation so the YAML stays minimal and
+clone + bootstrap + checker invocation so the YAML stays minimal and
 the same flow can be reproduced locally.
 
 ### Reproducing a CI run locally

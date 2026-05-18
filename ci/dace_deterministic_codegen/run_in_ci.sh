@@ -7,9 +7,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Driver for running the dace_deterministic_codegen harness in CI.
+# Driver for running the dace_deterministic_codegen checker in CI.
 #
-# Encapsulates the clone + bootstrap + harness invocation so the YAML
+# Encapsulates the clone + bootstrap + checker invocation so the YAML
 # stays minimal and the logic is easy to reproduce locally (just set
 # the env vars and run the script).
 #
@@ -49,8 +49,8 @@
 #     from the same local path.
 #
 # Exit codes: passed through from dace_deterministic_codegen.py.
-#   0 = deterministic, 1 = differs, 2/3/4 = harness errors.
-#   See the harness README for the full table.
+#   0 = deterministic, 1 = differs, 2/3/4 = checker errors.
+#   See the checker README for the full table.
 
 set -euo pipefail
 
@@ -105,12 +105,12 @@ fi
 DACE_DETERMINISM_WORKDIR_DEFAULT="${ICON4PY_PATH}/_dace_deterministic_codegen"
 DACE_DETERMINISM_WORKDIR="${DACE_DETERMINISM_WORKDIR:-${DACE_DETERMINISM_WORKDIR_DEFAULT}}"
 
-HARNESS_DIR="${GT4PY_PATH}/ci/dace_deterministic_codegen"
-HARNESS="${HARNESS_DIR}/dace_deterministic_codegen.py"
-BOOTSTRAP="${HARNESS_DIR}/bootstrap_icon4py.py"
+CHECKER_DIR="${GT4PY_PATH}/ci/dace_deterministic_codegen"
+CHECKER="${CHECKER_DIR}/dace_deterministic_codegen.py"
+BOOTSTRAP="${CHECKER_DIR}/bootstrap_icon4py.py"
 
-if [[ ! -f "$HARNESS" ]]; then
-    echo "error: harness not found at $HARNESS" >&2
+if [[ ! -f "$CHECKER" ]]; then
+    echo "error: checker not found at $CHECKER" >&2
     echo "       (is GT4PY_PATH=$GT4PY_PATH the gt4py repo root?)" >&2
     exit 2
 fi
@@ -178,18 +178,18 @@ if [[ -n "${DACE_PATH:-}" ]]; then
 fi
 python "${BOOTSTRAP}" "${bootstrap_args[@]}"
 
-# --- Step 4: run the determinism harness ---------------------------------
-echo "==> [4/4] running the determinism harness"
+# --- Step 4: run the determinism checker ---------------------------------
+echo "==> [4/4] running the determinism checker"
 echo "    selection=${DACE_DETERMINISM_SELECTION} component=${DACE_DETERMINISM_COMPONENT}"
 echo "    python=${DACE_DETERMINISM_PYTHON} backend=${DACE_DETERMINISM_BACKEND} grid=${DACE_DETERMINISM_GRID}"
 echo "    workdir=${DACE_DETERMINISM_WORKDIR}"
 
 # Run with `set +e` and capture the exit code so the artifact-copy step
-# below runs whether the harness reported determinism, non-determinism,
-# or a tooling error. The harness is the source of truth on the exit
+# below runs whether the checker reported determinism, non-determinism,
+# or a tooling error. The checker is the source of truth on the exit
 # code; we just defer reacting to it.
 set +e
-python "${HARNESS}" \
+python "${CHECKER}" \
     --icon4py   "${ICON4PY_PATH}" \
     --selection "${DACE_DETERMINISM_SELECTION}" \
     --component "${DACE_DETERMINISM_COMPONENT}" \
@@ -197,13 +197,13 @@ python "${HARNESS}" \
     --workdir   "${DACE_DETERMINISM_WORKDIR}" \
     --posarg=--backend="${DACE_DETERMINISM_BACKEND}" \
     --posarg=--grid="${DACE_DETERMINISM_GRID}"
-harness_rc=$?
+checker_rc=$?
 set -e
 
 # --- Step 5 (optional): publish artifacts --------------------------------
 # If DACE_DETERMINISM_ARTIFACT_DIR is set (typically in CI to a path
 # under ${CI_PROJECT_DIR}), copy the workdir there so GitLab can pick
-# it up as a build artifact. We do this whether the harness passed or
+# it up as a build artifact. We do this whether the checker passed or
 # failed — both outcomes have a useful report.txt.
 if [[ -n "${DACE_DETERMINISM_ARTIFACT_DIR:-}" ]]; then
     echo "==> publishing artifacts to ${DACE_DETERMINISM_ARTIFACT_DIR}"
@@ -212,12 +212,12 @@ if [[ -n "${DACE_DETERMINISM_ARTIFACT_DIR:-}" ]]; then
     if [[ -d "${DACE_DETERMINISM_WORKDIR}" ]]; then
         cp -r "${DACE_DETERMINISM_WORKDIR}" "${DACE_DETERMINISM_ARTIFACT_DIR}"
     else
-        # Harness errored before creating the workdir — leave a note so
+        # Checker errored before creating the workdir — leave a note so
         # the artifact upload still has something for diagnosis from the
         # GitLab UI without ssh'ing to the runner.
         mkdir -p "${DACE_DETERMINISM_ARTIFACT_DIR}"
         cat > "${DACE_DETERMINISM_ARTIFACT_DIR}/MISSING_WORKDIR.txt" <<NOTE
-The dace_deterministic_codegen harness exited with code ${harness_rc}
+The dace_deterministic_codegen checker exited with code ${checker_rc}
 before creating its workdir at:
   ${DACE_DETERMINISM_WORKDIR}
 
@@ -228,4 +228,4 @@ NOTE
     fi
 fi
 
-exit $harness_rc
+exit $checker_rc
