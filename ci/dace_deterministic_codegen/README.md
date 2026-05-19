@@ -5,14 +5,19 @@ through `nox` **twice** with isolated gt4py build caches, then compares
 the generated source code under each program's `src/` between the two
 runs. Exit 0 = identical (deterministic), exit 1 = different.
 
-Currently supports the **cpu**, **cuda**, and **HIP** dace backends.
-HIP is supported transparently: dace emits HIP code under `src/cuda/hip/`
-(target_name="cuda", target_type="hip"), and the checker's recursive
-sweep of `src/cuda/` picks it up automatically. If a run emits anything
-else under `src/` (mpi, sve, mlir, snitch, …) the checker fails
-immediately with a clear message — silently ignoring an unfamiliar
-backend would mean reporting "deterministic" without actually checking
-the relevant code.
+The check compares **everything** generated under `<program>/src/`,
+recursively. On a typical run that includes both the CPU host glue
+(`cpu/<file>.cpp`) and the device kernels (`cuda/<file>.cu` for CUDA,
+`cuda/hip/<file>.cpp` for HIP — dace nests HIP one level inside `cuda/`
+via `target_name="cuda"`, `target_type="hip"`). All of it gets hashed
+and diffed: a regression in the host glue is just as much a determinism
+failure as one in the device kernel.
+
+The top-level layout under `src/` is gated to the dace backends we've
+verified: `cpu/` and `cuda/` (with HIP picked up automatically inside
+`cuda/`). If a run emits anything else there the checker fails immediately
+with a clear message rather than silently ignoring the unfamiliar directory
+and reporting a false "deterministic".
 
 Valid `--selection` and `--component` values are read from icon4py's
 own `noxfile.py` at runtime — no hardcoding here, so the checker
