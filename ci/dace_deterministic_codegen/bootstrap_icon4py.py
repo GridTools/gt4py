@@ -89,7 +89,12 @@ def run(cmd: list[str], cwd: Path) -> None:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
+    description = (
+        __doc__.split("\n\n", 1)[0]
+        if __doc__
+        else "Bootstrap icon4py into the currently activated venv (the gt4py CI venv)."
+    )
+    p = argparse.ArgumentParser(description=description)
     p.add_argument(
         "--icon4py",
         required=True,

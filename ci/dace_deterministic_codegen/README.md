@@ -211,5 +211,14 @@ export DACE_DETERMINISM_PYTHON=3.10
 export DACE_DETERMINISM_BACKEND=dace_cpu
 export DACE_DETERMINISM_GRID=icon_regional
 
+# GPU runs only: inject icon4py's GPU extra into the nox session venv.
+# Without this, cupy isn't installed in the session venv, so
+# gt4py's `CUPY_DEVICE_TYPE` is None and icon4py's `GPU` constant
+# (model_backends.py:19) is None, and the pytest fixture fails at
+# get_allocator(None). cuda12/13 on Santis GH200, rocm6/7 on AMD.
+# The driver script forwards this to icon4py's
+# ICON4PY_NOX_UV_CUSTOM_SESSION_EXTRAS (noxfile.py).
+# export DACE_DETERMINISM_NOX_EXTRAS=...
+
 bash $GT4PY_PATH/ci/dace_deterministic_codegen/run_in_ci.sh
 ```

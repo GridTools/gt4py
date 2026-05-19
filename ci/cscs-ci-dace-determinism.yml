@@ -101,6 +101,12 @@ dace_determinism_cscs_gh200_cuda:
           - PY_VERSION: '3.10'
   variables:
     DACE_DETERMINISM_BACKEND: 'dace_gpu'
+    # Inject icon4py's `cuda12` extra into the nox session venv. Without
+    # this, cupy isn't installed in the session, `gtx.CUPY_DEVICE_TYPE`
+    # resolves to None, and the pytest fixture explodes at
+    # `get_allocator(None)`. Mirrors icon4py's own ci/base.yml:107 for
+    # the Santis GH200 (aarch64) test template.
+    DACE_DETERMINISM_NOX_EXTRAS: 'cuda12'
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8

@@ -34,6 +34,17 @@
 #   DACE_DETERMINISM_ARTIFACT_DIR    If set, the workdir is copied here at the end
 #                                    (success or failure). Set to a path under
 #                                    ${CI_PROJECT_DIR} for GitLab CI artifact upload.
+#   DACE_DETERMINISM_NOX_EXTRAS      Extra icon4py optional-dependency groups to
+#                                    inject into the nox session venv's `uv sync`
+#                                    (e.g. "cuda12/13" on Santis GH200, "rocm6/7" on
+#                                    AMD). Required for dace_gpu / gtfn_gpu runs:
+#                                    icon4py's `model_backends.py` reads
+#                                    `gtx.CUPY_DEVICE_TYPE`, which is `None`
+#                                    unless cupy is installed in the nox venv,
+#                                    which only happens via the cuda12/13/
+#                                    rocm6/7 extra. Forwarded verbatim to icon4py's
+#                                    `ICON4PY_NOX_UV_CUSTOM_SESSION_EXTRAS`
+#                                    (noxfile.py). Leave unset for dace_cpu.
 #
 # Custom dace branch behaviour:
 #   - If DACE_REPO is unset, dace lands in the nox session venv via
@@ -183,6 +194,11 @@ echo "==> [4/4] running the determinism checker"
 echo "    selection=${DACE_DETERMINISM_SELECTION} component=${DACE_DETERMINISM_COMPONENT}"
 echo "    python=${DACE_DETERMINISM_PYTHON} backend=${DACE_DETERMINISM_BACKEND} grid=${DACE_DETERMINISM_GRID}"
 echo "    workdir=${DACE_DETERMINISM_WORKDIR}"
+
+if [[ -n "${DACE_DETERMINISM_NOX_EXTRAS:-}" ]]; then
+    echo "    nox_extras=${DACE_DETERMINISM_NOX_EXTRAS}"
+    export ICON4PY_NOX_UV_CUSTOM_SESSION_EXTRAS="${DACE_DETERMINISM_NOX_EXTRAS}"
+fi
 
 # Run with `set +e` and capture the exit code so the artifact-copy step
 # below runs whether the checker reported determinism, non-determinism,
