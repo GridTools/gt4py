@@ -20,10 +20,7 @@ from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtx_library_nodes,
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 class GT4PyAutoOptHook(enum.Enum):
@@ -237,12 +234,10 @@ def gt_auto_optimize(
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
 
-    # We expand the GT4Py reduce nodes with skip values.
+    # We only use reduce library nodes, and we expand them here before optimizing.
     # TODO(edopao,phimuell): Check where this should be done. Doing it here ensures
-    #  the same result as if the reduce expression was lowered before optimization.
-    for node, state in list(sdfg.all_nodes_recursive()):
-        if isinstance(node, gtx_library_nodes.ReduceWithSkipValues):
-            node.expand(state, "pure")
+    #  the same result as if the reduce expression was lowered to a dataflow graph.
+    sdfg.expand_library_nodes(recursive=True)
 
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
