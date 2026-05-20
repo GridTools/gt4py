@@ -234,11 +234,6 @@ def gt_auto_optimize(
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
 
-    # We only use reduce library nodes, and we expand them here before optimizing.
-    # TODO(edopao,phimuell): Check where this should be done. Doing it here ensures
-    #  the same result as if the reduce expression was lowered to a dataflow graph.
-    sdfg.expand_library_nodes(recursive=True)
-
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
