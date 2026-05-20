@@ -8,22 +8,30 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
-# DaCe codegen determinism check (icon4py-driven)
-# ===============================================
+# DaCe codegen determinism check
+# ==============================
 #
-# Drives an icon4py test selection through nox twice with isolated
-# GT4PY_BUILD_CACHE_DIR per run, then asserts the generated source
-# under each <program>/src/ is byte-identical between the two runs.
+# Drives gt4py's `test_*_determinism` nox sessions, each of which
+# runs pytest twice with isolated GT4PY_BUILD_CACHE_DIR and asserts
+# the DaCe-generated source files under <program>/src/ are
+# byte-identical between the two runs.
+#
 # A diff means the gt4py + dace toolchain is non-deterministic for
-# that selection.
+# that test selection.
 #
-# The actual logic lives in:
-#   ci/dace_deterministic_codegen/dace_deterministic_codegen.py   (checker)
-#   ci/dace_deterministic_codegen/bootstrap_icon4py.py            (venv prep)
-#   ci/dace_deterministic_codegen/run_in_ci.sh                    (CI driver)
+# Logic lives in:
+#   noxfile.py                                   (test_*_determinism sessions)
+#   scripts/dace_deterministic_codegen.py        (cache comparison lib + CLI)
 #
-# This file just wires those into GitLab CI: when to run, on which
-# runners, with which selection × component matrix.
+# This file just wires those sessions into GitLab CI: when to run, on
+# which runners, and with which (session, device) cells.
+#
+# Run policy
+# ----------
+#   - Scheduled (nightly) on `main`.
+#   - Manual via "Run Pipeline" from the GitLab UI on any branch.
+#   - NOT on every commit. Each cell is two end-to-end pytest runs;
+#     the cost vs. signal for "every PR" is bad.
 #
 # Failure semantics
 # -----------------
@@ -31,65 +39,40 @@
 #   surface regressions on the dashboard without gating merges. Drop
 #   `allow_failure` once we have a sustained green stretch on `main`.
 #
-# Custom dace branch
-# ------------------
-#   To test a dace fork/branch (e.g. unmerged determinism work), set
-#   DACE_REPO and DACE_REF in the variables block below. When unset,
-#   dace resolves through icon4py's existing source pin (currently the
-#   GridTools/pypi published wheel). See run_in_ci.sh for the details.
+# Adding new matrix cells
+# -----------------------
+#   The (subpackage, device, meshlib) dimension uses GitLab's
+#   `parallel.matrix` via NOX_SESSION. Adding cells is a one-line
+#   change to the relevant matrix block.
 
 stages:
   - dace-determinism
 
-variables:
-  ICON4PY_REPO: 'https://github.com/C2SM/icon4py.git'
-  ICON4PY_REF: 'main'
-
-  # Custom dace fork/branch under test. Leave both empty to resolve
-  # dace through icon4py's existing source pin. Set both together to
-  # install editable dace from a clone of DACE_REPO @ DACE_REF.
-  # Example for the deterministic codegen branch:
-  #   DACE_REPO: 'https://github.com/GridTools/dace.git'
-  #   DACE_REF:  'dace_toolchain_deterministic'
-  DACE_REPO: ''
-  DACE_REF: ''
-
-# Shared template for all dace-determinism jobs
+# Shared template for all dace-determinism jobs.
 .dace_determinism_common:
   stage: dace-determinism
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
     PY_VERSION: '3.10'
-    DACE_DETERMINISM_PYTHON: '${PY_VERSION}'
-    DACE_DETERMINISM_SELECTION: 'stencils'
-    DACE_DETERMINISM_GRID: 'icon_regional'
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 30
-  # Don't block merges on determinism regressions — yet. Flip to
-  # `false` once the toolchain is reliably converged.
+  rules:
+    # Schedule + manual web trigger only. No on-push, no on-MR.
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - when: never
   allow_failure: true
   artifacts:
     when: always
     paths:
-      - _dace_deterministic_codegen/${DACE_DETERMINISM_BACKEND}/${DACE_DETERMINISM_COMPONENT}/
+      - _dace_deterministic_codegen/
     expire_in: 1 month
   script:
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
-    # The gt4py CI Docker image already sets VIRTUAL_ENV and prepends
-    # ${VIRTUAL_ENV}/bin to PATH (see ci/Dockerfile), so
-    # `python`, `uv`, `nox` etc. resolve to the venv binaries without
-    # sourcing activate. Matches the .test_common pattern.
-    - export GT4PY_PATH="${WORKDIR}/gt4py"
-    - export ICON4PY_PATH="${WORKDIR}/icon4py"
-    # Custom dace branch: only set DACE_PATH if DACE_REPO is non-empty.
-    # run_in_ci.sh treats DACE_PATH (along with DACE_REPO/DACE_REF) as
-    # the trigger to clone + install dace editable.
-    - if [ -n "${DACE_REPO}" ]; then export DACE_PATH="${WORKDIR}/dace"; fi
-    # Per-cell artifact subdirectory (matches artifacts.paths above).
-    - export DACE_DETERMINISM_ARTIFACT_DIR="${CI_PROJECT_DIR}/_dace_deterministic_codegen/${DACE_DETERMINISM_BACKEND}/${DACE_DETERMINISM_COMPONENT}"
-    - bash "${WORKDIR}/gt4py/ci/dace_deterministic_codegen/run_in_ci.sh"
+    - cd "${WORKDIR}/gt4py" && ./noxfile.py -s "${NOX_SESSION}"
 
+# GPU determinism on Santis GH200 (CUDA 12).
 dace_determinism_cscs_gh200_cuda:
   extends:
     - .container-runner-santis-gh200
@@ -100,25 +83,17 @@ dace_determinism_cscs_gh200_cuda:
         matrix:
           - PY_VERSION: '3.10'
   variables:
-    DACE_DETERMINISM_BACKEND: 'dace_gpu'
-    # Inject icon4py's `cuda12` extra into the nox session venv. Without
-    # this, cupy isn't installed in the session, `gtx.CUPY_DEVICE_TYPE`
-    # resolves to None, and the pytest fixture explodes at
-    # `get_allocator(None)`. Mirrors icon4py's own ci/base.yml:107 for
-    # the Santis GH200 (aarch64) test template.
-    DACE_DETERMINISM_NOX_EXTRAS: 'cuda12'
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   parallel:
     matrix:
-      - DACE_DETERMINISM_COMPONENT:
-          - dycore
-          - advection
-          - diffusion
-          - muphys
+      - NOX_SESSION:
+          - "test_next_determinism-3.10(cuda12, nomesh)"
+          - "test_cartesian_determinism-3.10(cuda12)"
 
+# CPU determinism on Santis GH200.
 dace_determinism_cscs_gh200_cpu:
   extends:
     - .container-runner-santis-gh200
@@ -129,14 +104,11 @@ dace_determinism_cscs_gh200_cpu:
         matrix:
           - PY_VERSION: '3.10'
   variables:
-    DACE_DETERMINISM_BACKEND: 'dace_cpu'
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   parallel:
     matrix:
-      - DACE_DETERMINISM_COMPONENT:
-          - dycore
-          - advection
-          - diffusion
-          - muphys
+      - NOX_SESSION:
+          - "test_next_determinism-3.10(cpu, nomesh)"
+          - "test_cartesian_determinism-3.10(cpu)"

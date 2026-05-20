@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import os
 import pathlib
+import shutil
+import sys
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
 
@@ -342,6 +344,208 @@ def test_typing_exports(session: nox.Session) -> None:
         "typing_tests",
         "typing_tests",
         *session.posargs,
+    )
+
+
+# -- DaCe codegen determinism check --
+#
+# The two `test_*_determinism` sessions below each run gt4py's pytest
+# selection twice with isolated GT4PY_BUILD_CACHE_DIR per run, then
+# verify the DaCe-generated source files under <program>/src/ are
+# byte-identical between the two runs. A diff is a determinism bug
+# somewhere in the gt4py + dace toolchain for that test selection.
+#
+# Comparison logic (snapshot, hash, diff, report) lives in
+# `scripts/dace_deterministic_codegen.py`; the helper below just
+# wires gt4py's existing pytest invocation pattern into a "run
+# twice + compare" loop.
+#
+# Workdir at REPO_ROOT/_dace_deterministic_codegen/ (wiped before
+# each session invocation):
+#   run1/.gt4py_cache/...    (first run's cached programs)
+#   run2/.gt4py_cache/...    (second run's cached programs)
+#   diffs/<program>/<file>.diff   (only on mismatch)
+#   report.txt                    (human-readable summary)
+#
+# Only `dace` codegen is checked (`internal` doesn't go through dace),
+# so the codegen parameter is dropped from these sessions' signatures.
+
+DACE_DETERMINISM_WORKDIR_NAME: Final = "_dace_deterministic_codegen"
+
+
+def _run_dace_determinism_check(
+    session: nox.Session,
+    pytest_args: Sequence[str],
+) -> None:
+    """Run pytest twice with isolated GT4PY_BUILD_CACHE_DIR and verify the
+    DaCe-generated source files are byte-identical between the two runs.
+
+    On mismatch, calls ``session.error(...)`` with a pointer to the
+    diffs/ directory and report.txt so the failure is actionable.
+    """
+    workdir = REPO_ROOT / DACE_DETERMINISM_WORKDIR_NAME
+    if workdir.exists():
+        shutil.rmtree(workdir)
+
+    run1_dir = workdir / "run1"
+    run2_dir = workdir / "run2"
+    run1_dir.mkdir(parents=True)
+    run2_dir.mkdir(parents=True)
+
+    # gt4py appends `.gt4py_cache` to GT4PY_BUILD_CACHE_DIR, so we pass
+    # the parent directory and the cache lands at .gt4py_cache/ underneath.
+    # Setting GT4PY_BUILD_CACHE_LIFETIME to `persistent` keeps the cache
+    # around long enough for the snapshot pass to read it.
+    #
+    # Setting DACE_compiler_build_folder_mode to `development` is REQUIRED.
+    # gt4py configures dace to `production` mode by default, which cleans
+    # up the dace build folder after compilation — leaving only the
+    # compiled .so/.dylib and stripping the src/ tree we need to
+    # diff. Forcing `development` keeps src/cpu/*.cpp and
+    # src/cuda/*.cu around so the checker has codegen to compare.
+    # (See src/gt4py/next/program_processors/runners/dace/workflow/
+    # common.py:138-144 for the upstream config this overrides; the
+    # comment there explicitly documents this env var as the escape
+    # hatch.)
+    for run_dir in (run1_dir, run2_dir):
+        session.run(
+            *pytest_args,
+            *session.posargs,
+            env=session.env
+            | {
+                "GT4PY_BUILD_CACHE_DIR": str(run_dir),
+                "GT4PY_BUILD_CACHE_LIFETIME": "persistent",
+                "DACE_compiler_build_folder_mode": "development",
+            },
+        )
+
+    # Import the comparison library from scripts/. It uses only stdlib,
+    # so it runs fine in nox's runtime python (no session venv needed).
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from scripts.dace_deterministic_codegen import (
+        DeterminismError,
+        NoProgramsObservedError,
+        NoSourceFilesObservedError,
+        UnsupportedBackendError,
+        check_determinism,
+    )
+
+    try:
+        check_determinism(
+            run1_dir / ".gt4py_cache",
+            run2_dir / ".gt4py_cache",
+            diffs_dir=workdir / "diffs",
+            report_path=workdir / "report.txt",
+        )
+    except DeterminismError as e:
+        session.error(f"{e}\nSee {workdir / 'report.txt'} and {workdir / 'diffs'}/")
+    except NoProgramsObservedError as e:
+        session.error(f"{e}\nLikely the pytest selection collected no tests.")
+    except NoSourceFilesObservedError as e:
+        session.error(str(e))
+    except UnsupportedBackendError as e:
+        session.error(str(e))
+    finally:
+        # Reclaim disk after the comparison. The two per-run gt4py caches
+        # are ~hundreds of MB each in development mode, and dace's own
+        # `.dacecache/` at the repo root (used for SDFGs not routed
+        # through gt4py's build_folder override) is comparably bulky.
+        # We always keep `workdir/diffs/` and `workdir/report.txt` —
+        # those are the artifacts a maintainer actually needs to debug
+        # a determinism failure; the raw caches are reproducible by
+        # rerunning the session.
+        for victim in (
+            run1_dir,
+            run2_dir,
+            REPO_ROOT / ".dacecache",
+        ):
+            if victim.exists():
+                session.log(f"cleanup: removing {victim}")
+                shutil.rmtree(victim, ignore_errors=True)
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "dace", "determinism"])
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+def test_cartesian_determinism(
+    session: nox.Session,
+    device: DeviceOption,
+) -> None:
+    """Run selected 'gt4py.cartesian' DaCe tests twice and verify codegen
+    is byte-identical between the two runs."""
+
+    codegen_settings = CodeGenDaceTestSettings["dace"]
+    device_settings = DeviceTestSettings[device]
+    extras = [
+        "standard",
+        "testing",
+        *codegen_settings.get("extras", []),
+        *device_settings.get("extras", []),
+    ]
+    groups = ["test", *codegen_settings.get("groups", []), *device_settings.get("groups", [])]
+
+    install_session_venv(session, extras=extras, groups=groups)
+
+    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
+
+    _run_dace_determinism_check(
+        session,
+        pytest_args=[
+            *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+            "-m",
+            f"{markers}",
+            str(pathlib.Path("tests") / "cartesian_tests"),
+        ],
+    )
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["next", "dace", "determinism"])
+@nox.parametrize(
+    "meshlib",
+    [
+        nox.param("nomesh", id="nomesh", tags=["nomesh"]),
+        nox.param("atlas", id="atlas", tags=["atlas"]),
+    ],
+)
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+def test_next_determinism(
+    session: nox.Session,
+    device: DeviceOption,
+    meshlib: Literal["nomesh", "atlas"],
+) -> None:
+    """Run selected 'gt4py.next' DaCe tests twice and verify codegen
+    is byte-identical between the two runs."""
+
+    codegen_settings = CodeGenDaceTestSettings["dace"]
+    device_settings = DeviceTestSettings[device]
+    extras = [
+        "standard",
+        "testing",
+        *codegen_settings.get("extras", []),
+        *device_settings.get("extras", []),
+    ]
+    groups = ["test", *codegen_settings.get("groups", []), *device_settings.get("groups", [])]
+    mesh_markers: list[str] = []
+
+    match meshlib:
+        case "nomesh":
+            mesh_markers.append("not requires_atlas")
+        case "atlas":
+            mesh_markers.append("requires_atlas")
+            groups.append("frameworks")
+
+    install_session_venv(session, extras=extras, groups=groups)
+
+    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
+
+    _run_dace_determinism_check(
+        session,
+        pytest_args=[
+            *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+            "-m",
+            f"{markers}",
+            str(pathlib.Path("tests") / "next_tests"),
+        ],
     )
 
 
