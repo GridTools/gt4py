@@ -20,7 +20,7 @@ from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import compiler
+from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
@@ -124,7 +124,9 @@ class GTFNCompileWorkflowFactory(factory.Factory):
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
                     hash_function=stages.fingerprint_compilable_program,
-                    cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
+                    cache=filecache.FileCache(
+                        str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
+                    ),
                 )
             ),
         )
