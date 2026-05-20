@@ -33,10 +33,7 @@ from gt4py.next.iterator.ir_utils import (
 )
 from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
-from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtx_library_nodes,
-    sdfg_args as gtx_dace_args,
-)
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
     gtir_to_sdfg_concat_where,
@@ -1363,13 +1360,6 @@ def build_sdfg_from_gtir(
     sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
-
-    # We expand the GT4Py reduce nodes with skip values.
-    # TODO(edopao,phimuell): Check where this should be done. Doing it here ensures
-    # the same result as if the reduce expression was lowered to a dataflow graph.
-    for node, state in list(sdfg.all_nodes_recursive()):
-        if isinstance(node, gtx_library_nodes.ReduceWithSkipValues):
-            node.expand(state)
 
     sdfg.validate()
     return sdfg
