@@ -20,10 +20,7 @@ from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtir_library_nodes,
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 class GT4PyAutoOptHook(enum.Enum):
@@ -236,15 +233,6 @@ def gt_auto_optimize(
     """
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
-
-    # We expand the GT4Py reduce nodes with skip values.
-    # TODO(edopao,phimuell): Check where this should be done. Doing it here ensures
-    #  the same result as if the reduce expression was lowered before optimization.
-    for node, state in list(sdfg.all_nodes_recursive()):
-        if isinstance(node, gtir_library_nodes.ReduceWithSkipValues):
-            node.expand(state)
-            if validate_all:
-                sdfg.validate()
 
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
