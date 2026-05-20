@@ -134,11 +134,11 @@ def test_gtfn_file_cache(program_example):
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
     cached_gtfn_translation_step = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=True
+        gpu=False, cached=True, executor__cached_translation=True
     ).executor.step.translation
 
     bare_gtfn_translation_step = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=False
+        gpu=False, cached=True, executor__cached_translation=False
     ).executor.step.translation
 
     cache_key = stages.fingerprint_compilable_program(compilable_program)
@@ -162,7 +162,7 @@ def test_gtfn_file_cache(program_example):
 def test_gtfn_file_cache_whole_workflow(cartesian_case_no_backend):
     cartesian_case = cartesian_case_no_backend
     cartesian_case.backend = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=True
+        gpu=False, cached=True, executor__cached_translation=True
     )
     cartesian_case.allocator = next_allocators.StandardCPUFieldBufferAllocator()
 
