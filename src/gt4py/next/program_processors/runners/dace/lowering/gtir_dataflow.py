@@ -36,7 +36,7 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtir_library_nodes,
+    library_nodes as gtx_library_nodes,
     sdfg_args as gtx_dace_args,
 )
 from gt4py.next.program_processors.runners.dace.lowering import (
@@ -1405,7 +1405,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
             self.sdfg.arrays[connectivity].transient = False
 
-            reduce_node = gtir_library_nodes.ReduceWithSkipValues(
+            reduce_node = gtx_library_nodes.ReduceWithSkipValues(
                 name=self.subgraph_builder.unique_lib_node_name("reduce_with_skip_values"),
                 wcr=reduce_wcr,
                 identity=reduce_identity.value,
