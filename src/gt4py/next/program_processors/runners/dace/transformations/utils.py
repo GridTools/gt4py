@@ -18,8 +18,6 @@ from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
 
-from gt4py.next.program_processors.runners.dace import library_nodes as gtx_lib
-
 
 _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
 
@@ -558,7 +556,7 @@ def reconfigure_dataflow_after_rerouting(
         #  the full array, but essentially slice a bit.
         pass
 
-    elif isinstance(other_node, (dace_stdlib.Reduce, gtx_lib.ReduceWithSkipValues)):
+    elif isinstance(other_node, dace_stdlib.Reduce):
         # For now we only handle the case that the reduction node is writing into
         #  `new_node`, before the data was written into `old_node`. In that case
         #  there is nothing to do, we just do some checks.

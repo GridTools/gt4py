@@ -35,10 +35,7 @@ from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
-from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtx_library_nodes,
-    sdfg_args as gtx_dace_args,
-)
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_python_codegen,
     gtir_to_sdfg,
@@ -1378,80 +1375,99 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
-        reduce_wcr = "lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y")
-
-        result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, reduce_identity.dc_dtype)
-        result_node = self.state.add_access(result)
 
         input_expr = self.visit(node.args[0])
         assert isinstance(input_expr, (MemletExpr, ValueExpr))
-        assert (
-            isinstance(input_expr.gt_dtype, ts.ListType)
-            and input_expr.gt_dtype.offset_type is not None
-        )
+        assert isinstance(input_expr.gt_dtype, ts.ListType)
+        assert input_expr.gt_dtype.element_type == node.type
+        assert input_expr.gt_dtype.offset_type is not None
         offset_type = input_expr.gt_dtype.offset_type
         offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset_type.value)
         assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
 
-        inp_conn = "_in"
-        outp_conn = "_out"
-        mask_conn = "_mask"
+        inp_expr_for_reduce: MemletExpr | ValueExpr
         if offset_provider_type.has_skip_values:
             assert (
                 isinstance(input_expr.gt_dtype, ts.ListType)
                 and input_expr.gt_dtype.offset_type is not None
             )
             offset_type = input_expr.gt_dtype.offset_type
-            connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
-            self.sdfg.arrays[connectivity].transient = False
-
-            reduce_node = gtx_library_nodes.ReduceWithSkipValues(
-                name=self.subgraph_builder.unique_lib_node_name("reduce_with_skip_values"),
-                wcr=reduce_wcr,
-                identity=reduce_identity.value,
-                init=reduce_init.value,
-                debuginfo=gtir_to_sdfg_utils.debug_info(node),
-                input_conn=inp_conn,
-                output_conn=outp_conn,
-                mask_conn=mask_conn,
-            )
-            self.state.add_node(reduce_node)
-
             origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
+            connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
+            connectivity_desc = self.sdfg.data(connectivity)
+            connectivity_desc.transient = False
+
+            neighbors_data, _ = self.subgraph_builder.add_temp_array(
+                self.sdfg, (offset_provider_type.max_neighbors,), input_expr.gt_dtype.element_type
+            )
+            neighbors_tasklet, connector_mapping = self._add_tasklet(
+                name="mask_skip_values",
+                inputs={"_in", "_mask"},
+                outputs={"_out"},
+                code="\n".join(
+                    f"_out[{i}] = _in[{i}] if _mask[{origin_map_index}, {i}] != {gtx_common._DEFAULT_SKIP_VALUE} else {reduce_identity.value}"
+                    for i in range(offset_provider_type.max_neighbors)
+                ),
+            )
+            neighbors_node = self.state.add_access(neighbors_data)
+
+            if isinstance(input_expr, MemletExpr):
+                self._add_input_data_edge(
+                    input_expr.dc_node,
+                    input_expr.subset,
+                    neighbors_tasklet,
+                    connector_mapping["_in"],
+                )
+            else:
+                self.state.add_edge(
+                    input_expr.dc_node,
+                    None,
+                    neighbors_tasklet,
+                    connector_mapping["_in"],
+                    self.sdfg.make_array_memlet(input_expr.dc_node.data),
+                )
             self._add_input_data_edge(
                 self.state.add_access(connectivity),
-                dace_subsets.Range.from_string(
-                    f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
-                ),
-                reduce_node,
-                mask_conn,
+                dace_subsets.Range.from_array(connectivity_desc),
+                neighbors_tasklet,
+                connector_mapping["_mask"],
             )
-        else:
-            reduce_node = dace_stdlib.Reduce(
-                name=self.subgraph_builder.unique_lib_node_name("reduce"),
-                wcr=reduce_wcr,
-                axes=None,
-                identity=reduce_init.value,
-                debuginfo=gtir_to_sdfg_utils.debug_info(node),
-                inputs={inp_conn},
-                outputs={outp_conn},
-            )
-            self.state.add_node(reduce_node)
-
-        if isinstance(input_expr, MemletExpr):
-            self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node, inp_conn)
-        else:
             self.state.add_edge(
-                input_expr.dc_node,
+                neighbors_tasklet,
+                connector_mapping["_out"],
+                neighbors_node,
                 None,
+                dace.Memlet(data=neighbors_data, subset=f"0:{offset_provider_type.max_neighbors}"),
+            )
+            inp_expr_for_reduce = ValueExpr(dc_node=neighbors_node, gt_dtype=node.type)
+        else:
+            inp_expr_for_reduce = input_expr
+
+        reduce_node = dace_stdlib.Reduce(
+            name=self.subgraph_builder.unique_lib_node_name("reduce"),
+            wcr="lambda x, y: " + gtir_python_codegen.format_builtin(op_name, "x", "y"),
+            axes=None,
+            identity=reduce_init.value,
+            debuginfo=gtir_to_sdfg_utils.debug_info(node),
+            schedule=dace.ScheduleType.Sequential,
+        )
+        self.state.add_node(reduce_node)
+
+        result, _ = self.subgraph_builder.add_temp_scalar(self.sdfg, reduce_identity.dc_dtype)
+        result_node = self.state.add_access(result)
+
+        if isinstance(inp_expr_for_reduce, MemletExpr):
+            self._add_input_data_edge(
+                inp_expr_for_reduce.dc_node, inp_expr_for_reduce.subset, reduce_node
+            )
+        else:
+            self.state.add_nedge(
+                inp_expr_for_reduce.dc_node,
                 reduce_node,
-                inp_conn,
-                self.sdfg.make_array_memlet(input_expr.dc_node.data),
+                self.sdfg.make_array_memlet(inp_expr_for_reduce.dc_node.data),
             )
 
-        self.state.add_edge(
-            reduce_node, outp_conn, result_node, None, dace.Memlet(data=result, subset="0")
-        )
+        self.state.add_nedge(reduce_node, result_node, dace.Memlet(data=result, subset="0"))
         return ValueExpr(result_node, node.type)
 
     def _split_shift_args(
