@@ -349,7 +349,7 @@ def test_typing_exports(session: nox.Session) -> None:
 
 # -- DaCe codegen determinism check --
 #
-# The two `test_*_determinism` sessions below each run gt4py's pytest
+# The two `test_*_dace_determinism` sessions below each run gt4py's pytest
 # selection twice with isolated GT4PY_BUILD_CACHE_DIR per run, then
 # verify the DaCe-generated source files under <program>/src/ are
 # byte-identical between the two runs. A diff is a determinism bug
@@ -467,7 +467,7 @@ def _run_dace_determinism_check(
 
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "dace", "determinism"])
 @nox.parametrize("device", [*DeviceNoxParam.values()])
-def test_cartesian_determinism(
+def test_cartesian_dace_determinism(
     session: nox.Session,
     device: DeviceOption,
 ) -> None:
@@ -508,7 +508,7 @@ def test_cartesian_determinism(
     ],
 )
 @nox.parametrize("device", [*DeviceNoxParam.values()])
-def test_next_determinism(
+def test_next_dace_determinism(
     session: nox.Session,
     device: DeviceOption,
     meshlib: Literal["nomesh", "atlas"],

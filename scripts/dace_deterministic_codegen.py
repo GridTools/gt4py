@@ -72,7 +72,6 @@ import hashlib
 import re
 import sys
 from pathlib import Path
-from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +134,7 @@ class NoSourceFilesObservedError(RuntimeError):
 class DeterminismError(RuntimeError):
     """Two snapshots compared non-identical. ``.results`` carries the details."""
 
-    def __init__(self, message: str, results: list["ProgramResult"]) -> None:
+    def __init__(self, message: str, results: list[ProgramResult]) -> None:
         super().__init__(message)
         self.results = results
 
@@ -363,12 +362,9 @@ def render_report(results: list[ProgramResult]) -> str:
     for r in results:
         lines.append(f"  [{'MATCH ' if r.match else 'DIFFER'}] {r.name}")
         if not r.match:
-            for rel in r.differing_files:
-                lines.append(f"           differs: {rel}")
-            for rel in r.only_in_run1:
-                lines.append(f"           only in run1: {rel}")
-            for rel in r.only_in_run2:
-                lines.append(f"           only in run2: {rel}")
+            lines.extend(f"           differs: {rel}" for rel in r.differing_files)
+            lines.extend(f"           only in run1: {rel}" for rel in r.only_in_run1)
+            lines.extend(f"           only in run2: {rel}" for rel in r.only_in_run2)
 
     lines.append("")
     if n_total == 0:
@@ -389,8 +385,8 @@ def check_determinism(
     cache1: Path,
     cache2: Path,
     *,
-    diffs_dir: Optional[Path] = None,
-    report_path: Optional[Path] = None,
+    diffs_dir: Path | None = None,
+    report_path: Path | None = None,
 ) -> list[ProgramResult]:
     """Compare two gt4py caches; write artifacts; raise on mismatch.
 
@@ -461,7 +457,7 @@ def check_determinism(
 # ---------------------------------------------------------------------------
 
 
-def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="dace_deterministic_codegen",
         description=(
@@ -501,7 +497,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
     try:

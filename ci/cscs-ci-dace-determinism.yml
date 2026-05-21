@@ -11,7 +11,7 @@
 # DaCe codegen determinism check
 # ==============================
 #
-# Drives gt4py's `test_*_determinism` nox sessions, each of which
+# Drives gt4py's `test_*_dace_determinism` nox sessions, each of which
 # runs pytest twice with isolated GT4PY_BUILD_CACHE_DIR and asserts
 # the DaCe-generated source files under <program>/src/ are
 # byte-identical between the two runs.
@@ -20,7 +20,7 @@
 # that test selection.
 #
 # Logic lives in:
-#   noxfile.py                                   (test_*_determinism sessions)
+#   noxfile.py                                   (test_*_dace_determinism sessions)
 #   scripts/dace_deterministic_codegen.py        (cache comparison lib + CLI)
 #
 # This file just wires those sessions into GitLab CI: when to run, on
@@ -90,8 +90,8 @@ dace_determinism_cscs_gh200_cuda:
   parallel:
     matrix:
       - NOX_SESSION:
-          - "test_next_determinism-3.10(cuda12, nomesh)"
-          - "test_cartesian_determinism-3.10(cuda12)"
+          - "test_next_dace_determinism-3.10(cuda12, nomesh)"
+          - "test_cartesian_dace_determinism-3.10(cuda12)"
 
 # CPU determinism on Santis GH200.
 dace_determinism_cscs_gh200_cpu:
@@ -110,5 +110,5 @@ dace_determinism_cscs_gh200_cpu:
   parallel:
     matrix:
       - NOX_SESSION:
-          - "test_next_determinism-3.10(cpu, nomesh)"
-          - "test_cartesian_determinism-3.10(cpu)"
+          - "test_next_dace_determinism-3.10(cpu, nomesh)"
+          - "test_cartesian_dace_determinism-3.10(cpu)"
