@@ -1398,7 +1398,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             connectivity_desc.transient = False
 
             neighbors_data, _ = self.subgraph_builder.add_temp_array(
-                self.sdfg, (offset_provider_type.max_neighbors,), input_expr.gt_dtype.element_type
+                self.sdfg, (offset_provider_type.max_neighbors,), reduce_identity.dc_dtype
             )
             neighbors_tasklet, connector_mapping = self._add_tasklet(
                 name="mask_skip_values",
