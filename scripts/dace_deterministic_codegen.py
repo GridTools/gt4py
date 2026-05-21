@@ -21,8 +21,7 @@ picked up automatically under ``cuda/hip/``). It deliberately
 ignores SDFGs, build artifacts, source maps, and runtime metadata.
 
 If a snapshot ever encounters a top-level backend other than cpu or
-cuda (mpi, sve, mlir, snitch, ...), it errors with a clear message
-rather than silently skipping.
+cuda, it errors with a clear message rather than silently skipping.
 
 As a library
 ------------

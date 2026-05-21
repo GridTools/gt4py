@@ -404,7 +404,7 @@ def _run_dace_determinism_check(
     # diff. Forcing `development` keeps src/cpu/*.cpp and
     # src/cuda/*.cu around so the checker has codegen to compare.
     # (See src/gt4py/next/program_processors/runners/dace/workflow/
-    # common.py:138-144 for the upstream config this overrides; the
+    # common.py for the upstream config this overrides; the
     # comment there explicitly documents this env var as the escape
     # hatch.)
     for run_dir in (run1_dir, run2_dir):
@@ -455,14 +455,14 @@ def _run_dace_determinism_check(
         # those are the artifacts a maintainer actually needs to debug
         # a determinism failure; the raw caches are reproducible by
         # rerunning the session.
-        for victim in (
+        for tbd in (
             run1_dir,
             run2_dir,
             REPO_ROOT / ".dacecache",
         ):
-            if victim.exists():
-                session.log(f"cleanup: removing {victim}")
-                shutil.rmtree(victim, ignore_errors=True)
+            if tbd.exists():
+                session.log(f"cleanup: removing {tbd}")
+                shutil.rmtree(tbd, ignore_errors=True)
 
 
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "dace", "determinism"])

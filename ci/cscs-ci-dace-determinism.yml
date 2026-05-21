@@ -65,7 +65,6 @@ stages:
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
     - cd "${WORKDIR}/gt4py" && ./noxfile.py -s "${NOX_SESSION}"
 
-# GPU determinism on Santis GH200 (CUDA 12).
 dace_determinism_cscs_gh200_cuda:
   extends:
     - .container-runner-santis-gh200
@@ -86,7 +85,6 @@ dace_determinism_cscs_gh200_cuda:
           - "test_next_dace_determinism-3.10(cuda12, nomesh)"
           - "test_cartesian_dace_determinism-3.10(cuda12)"
 
-# CPU determinism on Santis GH200.
 dace_determinism_cscs_gh200_cpu:
   extends:
     - .container-runner-santis-gh200
