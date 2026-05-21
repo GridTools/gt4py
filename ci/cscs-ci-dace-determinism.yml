@@ -8,52 +8,96 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
-# DaCe codegen determinism check
-# ==============================
+# DaCe codegen determinism check — STANDALONE CSCS-CI PIPELINE
+# ============================================================
 #
+# How to trigger
+# --------------
+# Whitelisted users trigger it on any PR by posting the comment:
+#
+#     cscs-ci run dace-determinism
+#
+# What it does
+# ------------
 # Drives gt4py's `test_*_dace_determinism` nox sessions, each of which
-# runs pytest twice with isolated GT4PY_BUILD_CACHE_DIR and asserts
-# the DaCe-generated source files under <program>/src/ are
-# byte-identical between the two runs.
-#
-# A diff means the gt4py + dace toolchain is non-deterministic for
-# that test selection.
+# runs pytest twice with isolated GT4PY_BUILD_CACHE_DIR and asserts the
+# DaCe-generated source files under <program>/src/ are byte-identical
+# between the two runs. A diff means the gt4py + dace toolchain is
+# non-deterministic for that test selection.
 #
 # Logic lives in:
-#   noxfile.py                                   (test_*_dace_determinism sessions)
-#   scripts/dace_deterministic_codegen.py        (cache comparison lib + CLI)
-#
-# This file just wires those sessions into GitLab CI: when to run, on
-# which runners, and with which (session, device) cells.
-#
-# Failure semantics
-# -----------------
-#   `allow_failure: true` while the determinism work stabilizes —
-#   surface regressions on the dashboard without gating merges. Drop
-#   `allow_failure` once we have a sustained green stretch on `main`.
-#
-# Adding new matrix cells
-# -----------------------
-#   The (subpackage, device, meshlib) dimension uses GitLab's
-#   `parallel.matrix` via NOX_SESSION. Adding cells is a one-line
-#   change to the relevant matrix block.
+#   noxfile.py                              (test_*_dace_determinism sessions)
+#   scripts/dace_deterministic_codegen.py   (cache comparison lib + CLI)
+
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+  - local: 'ci/cscs-ci-ext-config.yml'
+
+variables:
+  CUDA_VERSION: '12.6.2'
+  ROCM_VERSION: '7.1.1'
+  UBUNTU_VERSION: '24.04'
+  UV_VERSION: '0.11.2'
 
 stages:
-  - dace-determinism
+  - build
+  - test
 
-# Shared template for all dace-determinism jobs.
+# -- Build stage --------------------------------------------------------------
+# Mirrors `.build_common` in `cscs-ci.yml` and produces the same image tags
+# (so the cached image from the default pipeline is reused when available).
+# Both CUDA (for GH200) and ROCm (for AMD MI300) variants are built — the
+# determinism matrix below covers cpu+cuda on GH200 and rocm7 on AMD.
+.build_common:
+  stage: build
+  extends:
+    - .dynamic-image-name
+  variables:
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION}
+    CSCS_REBUILD_POLICY: if-not-exists
+    DOCKERFILE: ci/Dockerfile
+    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
+    PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}
+    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
+  parallel:
+    matrix:
+      - PY_VERSION: ['3.10']
+
+.build_extra_cuda:
+  variables:
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
+    EXTRA_UV_SYNC_ARGS: "--extra cuda12"
+
+.build_extra_rocm:
+  variables:
+    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
+    EXTRA_UV_SYNC_ARGS: "--extra rocm7"
+    EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx942 ROCM_HOME=/opt/rocm"
+    KUBERNETES_MEMORY_REQUEST: "64Gi"
+    KUBERNETES_MEMORY_LIMIT: "64Gi"
+
+build_cscs_gh200:
+  extends:
+    - .container-builder-cscs-gh200
+    - .build_common
+    - .build_extra_cuda
+  needs: []
+
+build_cscs_amd_rocm:
+  extends:
+    - .container-builder-cscs-zen2
+    - .build_common
+    - .build_extra_rocm
+  needs: []
+
+# -- Test stage: the determinism check ----------------------------------------
 .dace_determinism_common:
-  stage: dace-determinism
+  stage: test
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
     PY_VERSION: '3.10'
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 30
-  rules:
-    # Schedule + manual web trigger only. No on-push, no on-MR.
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - when: never
   allow_failure: true
   artifacts:
     when: always
@@ -103,3 +147,27 @@ dace_determinism_cscs_gh200_cpu:
       - NOX_SESSION:
           - "test_next_dace_determinism-3.10(cpu, nomesh)"
           - "test_cartesian_dace_determinism-3.10(cpu)"
+
+dace_determinism_cscs_amd_rocm:
+  extends:
+    - .tds-container-runner-beverin-mi200
+    - .dace_determinism_common
+  needs:
+    - job: build_cscs_amd_rocm
+      parallel:
+        matrix:
+          - PY_VERSION: '3.10'
+  variables:
+    SLURM_GPUS_PER_NODE: 4
+    SLURM_PARTITION: mi300
+    GT4PY_BUILD_JOBS: 8
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    CMAKE_PREFIX_PATH: /opt/rocm
+    CUDA_HOME: /opt/rocm
+    CXX: /opt/rocm/bin/hipcc
+    SLURM_TIMELIMIT: 40
+  parallel:
+    matrix:
+      - NOX_SESSION:
+          - "test_next_dace_determinism-3.10(rocm7, nomesh)"
+          - "test_cartesian_dace_determinism-3.10(rocm7)"
