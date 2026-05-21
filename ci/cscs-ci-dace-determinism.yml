@@ -26,13 +26,6 @@
 # This file just wires those sessions into GitLab CI: when to run, on
 # which runners, and with which (session, device) cells.
 #
-# Run policy
-# ----------
-#   - Scheduled (nightly) on `main`.
-#   - Manual via "Run Pipeline" from the GitLab UI on any branch.
-#   - NOT on every commit. Each cell is two end-to-end pytest runs;
-#     the cost vs. signal for "every PR" is bad.
-#
 # Failure semantics
 # -----------------
 #   `allow_failure: true` while the determinism work stabilizes —
