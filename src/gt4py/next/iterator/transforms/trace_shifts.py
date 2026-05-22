@@ -53,14 +53,16 @@ class Sentinel(eve.StrEnum):
 
 @dataclasses.dataclass(frozen=True)
 class ShiftRecorder:
-    recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]] = dataclasses.field(
-        default_factory=dict
+    recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral | ir.CartesianOffset, ...]]] = (
+        dataclasses.field(default_factory=dict)
     )
 
     def register_node(self, inp: ir.Expr | ir.Sym) -> None:
         self.recorded_shifts.setdefault(id(inp), set())
 
-    def __call__(self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral, ...]) -> None:
+    def __call__(
+        self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral | ir.CartesianOffset, ...]
+    ) -> None:
         self.recorded_shifts[id(inp)].add(offsets)
 
 
@@ -69,7 +71,9 @@ class ForwardingShiftRecorder:
     wrapped_tracer: Any
     shift_recorder: ShiftRecorder
 
-    def __call__(self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral, ...]):
+    def __call__(
+        self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral | ir.CartesianOffset, ...]
+    ):
         self.shift_recorder(inp, offsets)
         # Forward shift to wrapped tracer such it can record the shifts of the parent nodes
         self.wrapped_tracer.shift(offsets).deref()
@@ -80,7 +84,7 @@ class Tracer:
     def deref(self):
         raise NotImplementedError()
 
-    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
+    def shift(self, offsets: tuple[ir.OffsetLiteral | ir.CartesianOffset, ...]):
         raise NotImplementedError()
 
 
@@ -88,9 +92,9 @@ class Tracer:
 class ArgTracer(Tracer):
     arg: ir.Expr | ir.Sym
     shift_recorder: ShiftRecorder | ForwardingShiftRecorder
-    offsets: tuple[ir.OffsetLiteral, ...] = ()
+    offsets: tuple[ir.OffsetLiteral | ir.CartesianOffset, ...] = ()
 
-    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
+    def shift(self, offsets: tuple[ir.OffsetLiteral | ir.CartesianOffset, ...]):
         return ArgTracer(
             arg=self.arg, shift_recorder=self.shift_recorder, offsets=self.offsets + tuple(offsets)
         )
@@ -106,7 +110,7 @@ class ArgTracer(Tracer):
 class CombinedTracer(Tracer):
     its: tuple[Tracer, ...]
 
-    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
+    def shift(self, offsets: tuple[ir.OffsetLiteral | ir.CartesianOffset, ...]):
         return CombinedTracer(tuple(_shift(*offsets)(it) for it in self.its))
 
     def deref(self):
@@ -332,7 +336,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     @classmethod
     def trace_stencil(
         cls, stencil: ir.Expr, *, num_args: Optional[int] = None, save_to_annex: bool = False
-    ) -> list[set[tuple[ir.OffsetLiteral, ...]]]:
+    ) -> list[set[tuple[ir.OffsetLiteral | ir.CartesianOffset, ...]]]:
         # If we get a lambda we can deduce the number of arguments.
         if isinstance(stencil, ir.Lambda):
             assert num_args is None or num_args == len(stencil.params)
@@ -378,7 +382,8 @@ trace_stencil = TraceShifts.trace_stencil
 
 
 def _save_to_annex(
-    node: ir.Node, recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]]
+    node: ir.Node,
+    recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral | ir.CartesianOffset, ...]]],
 ) -> None:
     for child_node in node.pre_walk_values():
         if id(child_node) in recorded_shifts:

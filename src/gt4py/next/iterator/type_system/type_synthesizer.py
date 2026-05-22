@@ -512,8 +512,9 @@ def _resolve_dimensions(
             shift_tuple[::2]
         ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
             if isinstance(off_literal, itir.CartesianOffset):
-                # cartesian offset with `domain == codomain`, does not change the dimension
-                continue
+                if off_literal.domain != off_literal.codomain:
+                    raise NotImplementedError("relocation (staggering) is not supported")
+                continue  # translation does not change the dimension
             assert isinstance(off_literal.value, str)
             offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
             if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
@@ -668,8 +669,9 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
                 if isinstance(offset_axis, it_ts.CartesianOffsetType):
-                    # cartesian offset with `domain == codomain`, position dims unchanged
-                    continue
+                    if offset_axis.domain != offset_axis.codomain:
+                        raise NotImplementedError("relocation (staggering) is not supported")
+                    continue  # translation leaves position dims unchanged
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                     offset_axis.value, str
                 )

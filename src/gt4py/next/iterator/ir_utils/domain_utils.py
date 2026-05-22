@@ -164,6 +164,7 @@ class SymbolicDomain:
         self: SymbolicDomain,
         shift: tuple[
             itir.OffsetLiteral
+            | itir.CartesianOffset
             | Literal[trace_shifts.Sentinel.VALUE, trace_shifts.Sentinel.ALL_NEIGHBORS],
             ...,
         ],
@@ -219,6 +220,7 @@ class SymbolicDomain:
                     )
                 else:
                     assert common.is_offset_provider(offset_provider)
+                    assert not isinstance(val, itir.CartesianOffset)  # offset value, never a node
                     new_range = _unstructured_translate_range_statically(
                         new_ranges[old_dim], off.value, val, offset_provider, self.as_expr()
                     )
