@@ -126,6 +126,26 @@ def _collect_dimensions_from_domain(
     return offset_definitions
 
 
+def _collect_dimensions_from_params(
+    params: Iterable[itir.Sym], grid_type: common.GridType
+) -> dict[str, TagDefinition]:
+    # gtfn references `generated::<dim>_t` for every parameter field dimension; declare a tag
+    # for each here so that dimensions appearing only in argument types (not in any domain or
+    # offset) are still defined. Restricted to cartesian: unstructured dimension tags need the
+    # horizontal/vertical aliases that the domain and connectivity collection provide.
+    offset_definitions: dict[str, TagDefinition] = {}
+    if grid_type != common.GridType.CARTESIAN:
+        return offset_definitions
+    for param in params:
+        if param.type is None:
+            continue
+        for type_ in type_info.primitive_constituents(param.type):
+            if isinstance(type_, ts.FieldType):
+                for dim in type_.dims:
+                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+    return offset_definitions
+
+
 def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
@@ -689,6 +709,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {
+            **_collect_dimensions_from_params(node.params, self.grid_type),
             **_collect_dimensions_from_domain(node.body),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider_type),
         }
