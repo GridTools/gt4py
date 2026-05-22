@@ -16,7 +16,7 @@ Notable changes to this project will be documented in this file. The format is b
 - Use utf-8 encoding for generated code.
 - Fix hashing used in stencil program cache.
 - Enforce cartesian layout to be given precedence in allocation striding.
-- Bump `pybind11` to `3.0.3` to fix issue on MacOS.
+- Bump `pybind11` to `3.0.3` to fix issue in previous `3.x` version.
 - Disable OpenMP for GPU backends.
 - Fix setting of CXX compiler flags.
 
