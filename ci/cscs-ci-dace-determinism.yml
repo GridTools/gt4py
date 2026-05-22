@@ -108,6 +108,8 @@ build_cscs_amd_rocm:
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
     - cd "${WORKDIR}/gt4py" && ./noxfile.py -s "${NOX_SESSION}"
+  after_script:
+    - cp -r "${WORKDIR}/gt4py/_dace_deterministic_codegen" "${CI_PROJECT_DIR}/" 2>/dev/null || true
 
 dace_determinism_cscs_gh200_cuda:
   extends:
