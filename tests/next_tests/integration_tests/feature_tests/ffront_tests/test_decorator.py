@@ -20,7 +20,6 @@ from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
-    simple_cartesian_grid,
 )
 
 
@@ -95,8 +94,7 @@ def test_offset_provider_cache(cartesian_case):
         offset_provider=cartesian_case.offset_provider,
     )
 
-    grid = simple_cartesian_grid()
-    grid_offset_provider = {"Ioff": grid.offset_provider["Ioff"]}
+    grid_offset_provider = {"Ioff": cases.IDim}
 
     mock_offset_provider_to_type = mock.MagicMock()
     impl_offset_provider_to_type = gtx_common.offset_provider_to_type

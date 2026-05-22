@@ -137,7 +137,8 @@ def _can_deref(x):
 
 def _shift(*offsets):
     assert all(
-        isinstance(offset, ir.OffsetLiteral) or offset in [Sentinel.ALL_NEIGHBORS, Sentinel.VALUE]
+        isinstance(offset, (ir.OffsetLiteral, ir.CartesianOffset))
+        or offset in [Sentinel.ALL_NEIGHBORS, Sentinel.VALUE]
         for offset in offsets
     )
 

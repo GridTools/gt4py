@@ -32,7 +32,11 @@ from gt4py import eve
 from gt4py.eve.extended_typing import MaybeNestedInTuple, NestedTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    ir_makers as im,
+    misc as itir_misc,
+)
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
@@ -1751,17 +1755,23 @@ class LambdaToDataflow(eve.NodeVisitor):
             node.args[0], node.fun.args
         )
 
-        # first argument of the shift node is the offset provider
-        assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
-        offset = offset_provider_arg.value
-        assert isinstance(offset, str)
-        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr = (
             SymbolExpr(offset_value_arg.value, gtir_to_sdfg_types.INDEX_DTYPE)
             if isinstance(offset_value_arg, gtir.OffsetLiteral)
             else self.visit(offset_value_arg)
         )
+
+        if isinstance(offset_provider_arg, gtir.CartesianOffset):
+            # cartesian shift; the dimension (incl. kind) is encoded in the node
+            offset_dim = itir_misc.dim_from_axis_literal(offset_provider_arg.codomain)
+            return self._make_cartesian_shift(it, offset_dim, offset_expr)
+
+        # first argument of the shift node is the offset provider
+        assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
+        offset = offset_provider_arg.value
+        assert isinstance(offset, str)
+        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
 
         if isinstance(offset_provider_type, gtx_common.Dimension):
             return self._make_cartesian_shift(it, offset_provider_type, offset_expr)

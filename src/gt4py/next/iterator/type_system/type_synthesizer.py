@@ -458,7 +458,7 @@ def _canonicalize_nb_fields(
 
 def _resolve_dimensions(
     input_dims: list[common.Dimension],
-    shift_tuple: tuple[itir.OffsetLiteral, ...],
+    shift_tuple: tuple[itir.OffsetLiteral | itir.CartesianOffset, ...],
     offset_provider_type: common.OffsetProviderType,
 ) -> list[common.Dimension]:
     """
@@ -511,6 +511,9 @@ def _resolve_dimensions(
         for off_literal in reversed(
             shift_tuple[::2]
         ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
+            if isinstance(off_literal, itir.CartesianOffset):
+                # cartesian offset with `domain == codomain`, does not change the dimension
+                continue
             assert isinstance(off_literal.value, str)
             offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
             if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
@@ -664,6 +667,9 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
             new_position_dims = [*it.position_dims]
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
+                if isinstance(offset_axis, it_ts.CartesianOffsetType):
+                    # cartesian offset with `domain == codomain`, position dims unchanged
+                    continue
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                     offset_axis.value, str
                 )

@@ -17,7 +17,7 @@ from gt4py.next import common
 
 from next_tests import definitions as test_definitions
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import Cell, KDim, Koff
+from next_tests.integration_tests.cases import Cell, KDim
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
 )
@@ -182,7 +182,7 @@ def test_setup(exec_alloc_descriptor):
         None
         if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
         else exec_alloc_descriptor,
-        offset_provider={"Koff": KDim},
+        offset_provider={},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,

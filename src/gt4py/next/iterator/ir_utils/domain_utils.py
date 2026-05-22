@@ -180,6 +180,15 @@ class SymbolicDomain:
             return self
         if len(shift) == 2:
             off, val = shift
+            if isinstance(off, itir.CartesianOffset):
+                if val is trace_shifts.Sentinel.VALUE:
+                    raise NotImplementedError("Dynamic offsets not supported.")
+                assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
+                dom = common.Dimension(value=off.domain.value, kind=off.domain.kind)
+                cod = common.Dimension(value=off.codomain.value, kind=off.codomain.kind)
+                assert dom == cod  # relocation (staggering) is not supported here
+                new_ranges[dom] = SymbolicRange.translate(self.ranges[dom], val.value)
+                return SymbolicDomain(self.grid_type, new_ranges)
             assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
             connectivity_type = common.get_offset_type(offset_provider_type, off.value)
 

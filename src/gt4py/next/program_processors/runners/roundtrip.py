@@ -64,6 +64,13 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
+
+    def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> str:
+        # `domain == codomain` here; render as the implicit offset of the (shared) dimension,
+        # which the embedded backend resolves to that dimension (kind-correct domains were
+        # already computed during domain inference on the `CartesianOffset` node).
+        return common.dimension_to_implicit_offset(node.codomain.value)
+
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
     FunctionDefinition = as_mako(
@@ -153,13 +160,18 @@ def fencil_generator(
     if debug:
         program = codegen.format_python_source(program)
 
+    # `CartesianOffset`s render to implicit offsets (see `EmbeddedDSL.visit_CartesianOffset`);
+    # collect those alongside the string `OffsetLiteral`s so they are defined in the module.
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
         .if_isinstance(itir.OffsetLiteral)
         .getattr("value")
         .if_isinstance(str)
         .to_set()
-    )
+    ) | {
+        common.dimension_to_implicit_offset(cart_offset.codomain.value)
+        for cart_offset in ir.pre_walk_values().if_isinstance(itir.CartesianOffset).to_set()
+    }
     axis_literals_set: Iterable[itir.AxisLiteral] = (
         ir.pre_walk_values().if_isinstance(itir.AxisLiteral).to_set()
     )

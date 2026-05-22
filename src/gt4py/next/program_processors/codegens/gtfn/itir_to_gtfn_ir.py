@@ -144,6 +144,25 @@ def _collect_offset_definitions(
     } | {**offset_provider_type}
     offset_definitions = {}
 
+    # cartesian shifts (`field(Dim + n)`) are encoded as `CartesianOffset` nodes and don't
+    # occur in the `offset_provider_type`; define a tag for each of their dimensions
+    cartesian_offsets: set[itir.CartesianOffset] = (
+        node.walk_values().if_isinstance(itir.CartesianOffset)
+    ).to_set()
+    for cart_offset in cartesian_offsets:
+        for axis in (cart_offset.domain, cart_offset.codomain):
+            if grid_type == common.GridType.CARTESIAN:
+                offset_definitions[axis.value] = TagDefinition(name=Sym(id=axis.value))
+            else:
+                assert grid_type == common.GridType.UNSTRUCTURED
+                if axis.kind != common.DimensionKind.VERTICAL:
+                    raise ValueError(
+                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
+                    )
+                offset_definitions[axis.value] = TagDefinition(
+                    name=Sym(id=axis.value), alias=_vertical_dimension
+                )
+
     for offset_name, dim_or_connectivity_type in offset_provider_type.items():
         if isinstance(dim_or_connectivity_type, common.Dimension):
             dim: common.Dimension = dim_or_connectivity_type
@@ -371,6 +390,10 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
+
+    def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> Literal:
+        # `domain == codomain` here; render as the (shared) dimension tag
+        return self.visit(node.codomain, **kwargs)
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
         return Literal(value=node.value, type="axis_literal")
