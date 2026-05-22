@@ -146,7 +146,7 @@ class PrettyPrinter(NodeTranslator):
     def visit_CartesianOffset(self, node: ir.CartesianOffset, *, prec: int) -> list[str]:
         (domain,) = self.visit(node.domain, prec=0)
         (codomain,) = self.visit(node.codomain, prec=0)
-        return [f"{domain}₂{codomain}"]
+        return [f"{domain}→{codomain}"]
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
         kind = ""

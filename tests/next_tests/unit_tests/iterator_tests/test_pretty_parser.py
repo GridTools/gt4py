@@ -108,7 +108,7 @@ def test_shift():
 
 
 def test_cartesian_offset():
-    testee = "Iₕ₂Jₕ"
+    testee = "Iₕ→Jₕ"
     expected = ir.CartesianOffset(
         domain=ir.AxisLiteral(value="I"), codomain=ir.AxisLiteral(value="J")
     )

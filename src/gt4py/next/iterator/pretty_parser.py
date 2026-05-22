@@ -86,7 +86,7 @@ GRAMMAR = """
     if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
 
     named_range: AXIS_LITERAL ":" "[" prec0 "," prec0 "["
-    cartesian_offset: AXIS_LITERAL "₂" AXIS_LITERAL
+    cartesian_offset: AXIS_LITERAL "→" AXIS_LITERAL
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
     declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" TYPE_LITERAL ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"

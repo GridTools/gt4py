@@ -66,9 +66,10 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     AxisLiteral = as_fmt("{value}")
 
     def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> str:
-        # `domain == codomain` here; shift along the dimension directly. The dimension is
-        # injected as a `gtx.Dimension` in the generated module (see `axis_literals` below) and
-        # the embedded `shift` accepts it as a self-describing cartesian offset.
+        # shift along the dimension directly. The dimension is injected as a `gtx.Dimension`
+        # in the generated module (see `axis_literals` below) and the embedded `shift` accepts
+        # it as a self-describing cartesian offset.
+        assert node.domain == node.codomain, "relocation (staggering) is not supported"
         return node.codomain.value
 
     FunCall = as_fmt("{fun}({','.join(args)})")

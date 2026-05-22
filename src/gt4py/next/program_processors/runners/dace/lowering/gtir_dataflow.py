@@ -1764,6 +1764,9 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(offset_provider_arg, gtir.CartesianOffset):
             # cartesian shift; the dimension (incl. kind) is encoded in the node
+            assert offset_provider_arg.domain == offset_provider_arg.codomain, (
+                "relocation (staggering) is not supported"
+            )
             offset_dim = itir_misc.dim_from_axis_literal(offset_provider_arg.codomain)
             return self._make_cartesian_shift(it, offset_dim, offset_expr)
 

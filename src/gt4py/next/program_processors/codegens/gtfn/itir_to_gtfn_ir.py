@@ -412,7 +412,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return OffsetLiteral(value=node.value)
 
     def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> Literal:
-        # `domain == codomain` here; render as the (shared) dimension tag
+        # render as the (shared) dimension tag
+        assert node.domain == node.codomain, "relocation (staggering) is not supported"
         return self.visit(node.codomain, **kwargs)
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:

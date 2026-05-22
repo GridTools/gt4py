@@ -201,7 +201,7 @@ def test_cartesian_offset():
     testee = ir.CartesianOffset(
         domain=ir.AxisLiteral(value="I"), codomain=ir.AxisLiteral(value="J")
     )
-    expected = "Iₕ₂Jₕ"
+    expected = "Iₕ→Jₕ"
     actual = pformat(testee)
     assert actual == expected
 
