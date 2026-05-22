@@ -145,3 +145,9 @@ def test_column_array_function_wrong_shape():
 
     with embedded_context.update(offset_provider={}, closure_column_range="SOMETHING"):
         test_func()
+
+
+def test_lift_accepts_cartesian_dimension_offset():
+    K = common.Dimension("K", kind=common.DimensionKind.VERTICAL)
+    lifted = embedded.lift(lambda *args: 0)()
+    lifted.shift(K, 1)  # must not raise

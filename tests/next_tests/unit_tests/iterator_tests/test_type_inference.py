@@ -170,6 +170,8 @@ def expression_test_cases():
         # shift
         (im.shift("V2E", 1)(im.ref("it", it_on_v_of_e_type)), it_on_e_of_e_type),
         (im.shift("Ioff", 1)(im.ref("it", it_ijk_type)), it_ijk_type),
+        # cartesian shift via `CartesianOffset`
+        (im.shift(im.cartesian_offset(IDim, IDim), 1)(im.ref("it", it_ijk_type)), it_ijk_type),
         # as_fieldop
         (
             im.as_fieldop("deref", i_domain)(im.ref("inp", float_i_field)),

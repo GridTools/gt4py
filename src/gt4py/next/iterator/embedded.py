@@ -195,7 +195,7 @@ class StridedConnectivityField(common.Connectivity):
 # position along that dimension directly; named offsets use a string `Tag` resolved via the
 # offset provider.
 OffsetPart: TypeAlias = Tag | common.Dimension | common.IntIndex
-CompleteOffset: TypeAlias = tuple[Tag, common.IntIndex]
+CompleteOffset: TypeAlias = tuple[Tag | common.Dimension, common.IntIndex]
 OffsetProviderElem: TypeAlias = common.OffsetProviderElem
 OffsetProvider: TypeAlias = common.OffsetProvider
 
@@ -407,7 +407,9 @@ def lift(stencil):
             def __init__(
                 self, stencil, args, *, offsets: Optional[list[OffsetPart]] = None, elem=None
             ) -> None:
-                assert not offsets or all(isinstance(o, (int, str)) for o in offsets)
+                assert not offsets or all(
+                    isinstance(o, (int, str, common.Dimension)) for o in offsets
+                )
                 self.stencil = stencil
                 self.args = args
                 self.offsets = offsets or []
@@ -536,7 +538,7 @@ for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
     globals()[math_builtin_name] = decorator(impl)
 
 
-def _named_range(axis: str, range_: Iterable[int]) -> Iterable[CompleteOffset]:
+def _named_range(axis: str, range_: Iterable[int]) -> Iterable[tuple[Tag, common.IntIndex]]:
     return ((axis, i) for i in range_)
 
 
