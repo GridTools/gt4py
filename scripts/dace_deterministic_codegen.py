@@ -15,13 +15,26 @@ test selection. Used by the ``test_*_determinism`` nox sessions in
 ``noxfile.py``; also runnable standalone for ad-hoc comparison of
 two existing caches.
 
-The check compares everything dace writes as generated source under
-each cached program's ``src/`` — ``cpu/`` and ``cuda/`` (with HIP
-picked up automatically under ``cuda/hip/``). It deliberately
-ignores SDFGs, build artifacts, source maps, and runtime metadata.
+Supports both gt4py cache layouts:
 
-If a snapshot ever encounters a top-level backend other than cpu or
-cuda, it errors with a clear message rather than silently skipping.
+* ``layout="next"`` (default) — the ``gt4py.next`` cache, a flat
+  ``<cache_root>/<name>_<sha256>/src/{cpu,cuda}/...`` structure
+  written via ``GT4PY_BUILD_CACHE_DIR``. Compares everything dace
+  writes as generated source under each program's ``src/``.
+  Unknown top-level backends (anything other than cpu/cuda, with
+  HIP nesting under cuda/hip) raise :class:`UnsupportedBackendError`.
+
+* ``layout="cartesian"`` — the ``gt4py.cartesian`` cache, a deeply
+  nested ``<cache_root>/py<pyver>_<cachever>/<backend>/<test.module
+  .path>/<Class>_<backend>_<id>/...`` structure written via
+  ``GT_CACHE_ROOT`` + ``GT_CACHE_PYTEST_DIR`` (with the conftest's
+  ``--keep-gtcache`` flag needed to survive ``pytest_sessionfinish``).
+  Compares the top-level ``m_*.py`` loader plus ``bindings.{cpp,cu}``
+  and ``computation.hpp`` under ``m_*_pyext_BUILD/``. Skips compiled
+  artifacts (``*.so``, ``*.o``, ``__pycache__/``), gzipped SDFG
+  archives (``*.sdfgz`` — gzip headers carry timestamps), the
+  metadata file (``*.cacheinfo``), and the recursive build mirror
+  directories (``_GT_/``, ``tmp/``) inside ``_pyext_BUILD/``.
 
 As a library
 ------------
@@ -33,7 +46,8 @@ As a library
     check_determinism(
         cache1=Path(".../run1/.gt4py_cache"),
         cache2=Path(".../run2/.gt4py_cache"),
-        diffs_dir=Path(".../diffs"),    # optional
+        layout="next",                       # or "cartesian"
+        diffs_dir=Path(".../diffs"),         # optional
         report_path=Path(".../report.txt"),  # optional
     )
 
@@ -41,8 +55,8 @@ Raises ``DeterminismError`` on mismatch, ``NoProgramsObservedError``
 if both caches are empty, ``NoSourceFilesObservedError`` if programs
 were cached but contain no source files (typically a missing
 ``DACE_compiler_build_folder_mode=development``), or
-``UnsupportedBackendError`` if the codegen produced an unfamiliar
-backend layout.
+``UnsupportedBackendError`` if the next-layout codegen produced an
+unfamiliar top-level backend.
 
 As a CLI
 --------
@@ -50,8 +64,9 @@ As a CLI
 ::
 
     python scripts/dace_deterministic_codegen.py \\
-        --run1 path/to/cache1/.gt4py_cache \\
-        --run2 path/to/cache2/.gt4py_cache \\
+        --run1 path/to/cache1 \\
+        --run2 path/to/cache2 \\
+        --layout {next,cartesian} \\
         [--diffs-dir DIR] [--report FILE]
 
 Exit codes:
@@ -71,6 +86,14 @@ import hashlib
 import re
 import sys
 from pathlib import Path
+from typing import Literal
+
+
+#: Cache layout dispatch tag. ``"next"`` is the gt4py.next cache
+#: (flat ``<root>/<name>_<sha256>/src/...`` structure); ``"cartesian"``
+#: is the gt4py.cartesian cache (deeply nested ``<root>/py<pyver>_*/
+#: <backend>/<test.module.path>/<Class>_<backend>_<id>/...``).
+Layout = Literal["next", "cartesian"]
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +127,53 @@ CODEGEN_ROOT = "src"
 #: mlir, snitch, ...), the checker fails loudly rather than silently
 #: ignoring — those would need explicit support added here.
 SUPPORTED_BACKENDS: frozenset[str] = frozenset({"cpu", "cuda"})
+
+
+# Cartesian layout constants ------------------------------------------------
+
+#: Suffix that marks the per-stencil build directory inside a cartesian
+#: program folder, e.g. ``m_TestCopy_dacecpu_4__dacecpu_a8441f26b4_pyext_BUILD/``.
+#: Inside that directory we look at the TOP LEVEL only — its ``_GT_/`` and
+#: ``tmp/`` subdirectories contain recursive copies of the build path that
+#: setuptools spawns when building into an absolute prefix, and those are
+#: build artifacts, not codegen output.
+CARTESIAN_BUILD_DIR_SUFFIX = "_pyext_BUILD"
+
+#: Names of files inside ``m_*_pyext_BUILD/`` whose contents we byte-compare.
+#: ``bindings.{cpp,cu}`` is gt4py.cartesian's pybind11 wrapper around the
+#: dace SDFG; ``computation.hpp`` is dace's generated kernel implementation.
+#: Both reflect the codegen surface directly — a non-deterministic codegen
+#: pass will show up here.
+CARTESIAN_BUILD_SOURCE_NAMES: frozenset[str] = frozenset(
+    {"bindings.cpp", "bindings.cu", "computation.hpp"}
+)
+
+#: Directory-name prefixes inside a program folder that we MUST NOT descend
+#: into when searching for ``m_*.py`` loader stubs. ``__pycache__`` is
+#: Python's bytecode cache; the build dir holds compiler-generated artifacts.
+CARTESIAN_SKIP_DIRS: frozenset[str] = frozenset({"__pycache__"})
+
+#: The 10-hex codegen digest gt4py.cartesian embeds in filenames like
+#: ``m_<Class>_<backend>_<id>__<backend>_<DIGEST>.py`` and the build
+#: directory ``m_..._<DIGEST>_pyext_BUILD/``. We replace it with the
+#: literal ``<DIGEST>`` in the snapshot's relpath keys so that
+#: ``bindings.cpp`` from run1 (digest ``a8441f26b4``) and from run2
+#: (digest ``bbbbbbbbbb``) map to the same path, surfacing a real
+#: content diff rather than two "only-in-one-run" entries that look
+#: like flaky test selection.
+#:
+#: The pattern matches ``_`` + 10 lowercase hex + a boundary that is
+#: either a file extension (``.py``, ``.so``, ``.sdfgz``, ``.cacheinfo``)
+#: or the literal ``_pyext_BUILD`` suffix. Anchoring on those endings
+#: avoids false-positive matches inside arbitrary identifiers.
+CARTESIAN_DIGEST_RE = re.compile(r"_(?P<digest>[0-9a-f]{10})(?=(\.|_pyext_BUILD))")
+
+
+def _normalize_cartesian_relpath(relpath: str) -> str:
+    """Replace the 10-hex codegen digest in a cartesian relpath with the
+    literal token ``<DIGEST>``. Idempotent. Leaves non-matching paths
+    unchanged."""
+    return CARTESIAN_DIGEST_RE.sub("_<DIGEST>", relpath)
 
 
 # ---------------------------------------------------------------------------
@@ -145,8 +215,17 @@ class DeterminismError(RuntimeError):
 
 @dataclasses.dataclass(frozen=True)
 class FileEntry:
+    #: Logical relative path used as the comparison key. For ``layout="next"``
+    #: this is the on-disk path under the program folder verbatim. For
+    #: ``layout="cartesian"`` the 10-hex codegen digest in filenames is
+    #: replaced with the literal token ``<DIGEST>`` so equivalent files
+    #: across two runs (which carry different digests) still pair up.
     relpath: str
     sha256: str
+    #: The actual filename on disk relative to the program folder. Equal to
+    #: ``relpath`` for next; un-normalized (real digest preserved) for
+    #: cartesian. Used by :func:`write_diffs` to read the file back.
+    disk_relpath: str
 
 
 @dataclasses.dataclass
@@ -156,20 +235,35 @@ class ProgramSnapshot:
     files: dict[str, FileEntry]
 
 
-def snapshot_run(cache_root: Path) -> dict[str, ProgramSnapshot]:
+def snapshot_run(cache_root: Path, *, layout: Layout = "next") -> dict[str, ProgramSnapshot]:
     """Walk a gt4py build cache and snapshot every program's generated source.
+
+    Dispatches on ``layout`` to either :func:`_snapshot_run_next` (the flat
+    ``<root>/<name>_<sha256>/src/...`` structure of gt4py.next) or
+    :func:`_snapshot_run_cartesian` (the deeply nested
+    ``<root>/py<pyver>_*/<backend>/<test.module.path>/<Class>_<backend>_<id>/...``
+    structure of gt4py.cartesian).
+
+    Returns an empty dict (rather than raising) when the path doesn't
+    exist or contains no programs in the expected layout; callers can
+    pair the empty result with :func:`_diagnose_empty_cache` for a
+    human-readable explanation of why.
+    """
+    if layout == "next":
+        return _snapshot_run_next(cache_root)
+    if layout == "cartesian":
+        return _snapshot_run_cartesian(cache_root)
+    raise ValueError(f"unknown layout: {layout!r}, expected 'next' or 'cartesian'")
+
+
+def _snapshot_run_next(cache_root: Path) -> dict[str, ProgramSnapshot]:
+    """Snapshot a gt4py.next-layout cache.
 
     The input directory's name is irrelevant — the function looks for
     immediate subdirectories matching ``<name>_<64-char-hex-digest>``
-    (gt4py's program-folder naming) and reads ``<program>/src/``
+    (gt4py.next's program-folder naming) and reads ``<program>/src/``
     recursively under each one. HIP files at ``src/cuda/hip/`` are
     picked up automatically by the recursive walk.
-
-    Returns an empty dict (rather than raising) when the path does not
-    exist, is not a directory, has no subdirectories, or has only
-    subdirectories whose names don't match the program-folder pattern.
-    Callers can use :func:`_diagnose_empty_cache` to get a human
-    description of which of those it was.
 
     Raises :class:`UnsupportedBackendError` if any program's ``src/``
     contains a top-level backend not in :data:`SUPPORTED_BACKENDS`.
@@ -212,8 +306,77 @@ def snapshot_run(cache_root: Path) -> dict[str, ProgramSnapshot]:
             if not fpath.is_file():
                 continue
             rel = fpath.relative_to(folder).as_posix()
-            files[rel] = FileEntry(relpath=rel, sha256=_sha256(fpath))
+            files[rel] = FileEntry(relpath=rel, sha256=_sha256(fpath), disk_relpath=rel)
         out[name] = ProgramSnapshot(name=name, folder=folder, files=files)
+    return out
+
+
+def _snapshot_run_cartesian(cache_root: Path) -> dict[str, ProgramSnapshot]:
+    """Snapshot a gt4py.cartesian-layout cache.
+
+    Program identity is the **relative path** from ``cache_root`` to the
+    ``<Class>_<backend>_<id>`` folder, e.g.
+    ``py310_1013/dacecpu/cartesian_tests/integration_tests/multi_feature_tests
+    /test_suites/TestCopy_dacecpu_4``. Two runs of the same parametrized
+    test should produce the same relative path, so this works as a stable
+    matching key across runs.
+
+    Files compared per program (everything else is skipped — see module
+    docstring for rationale):
+
+      * ``m_*.py`` at the top of the program folder — the gt4py loader
+        stub. Its filename embeds the 10-hex codegen digest, and the file
+        body references it; either changing is a determinism signal.
+      * Files exactly one level inside ``m_*_pyext_BUILD/`` whose basename
+        is in :data:`CARTESIAN_BUILD_SOURCE_NAMES` (``bindings.cpp``,
+        ``bindings.cu``, ``computation.hpp``). The ``_GT_/`` and ``tmp/``
+        subdirectories of the build dir are recursive build-path mirrors
+        that setuptools creates when targeting an absolute prefix — they
+        contain object files and duplicated outputs, not codegen.
+    """
+    if not cache_root.is_dir():
+        return {}
+
+    # Discover program folders by finding every top-level `m_*.py` loader.
+    # "Top-level" here means: not under __pycache__ and not under any
+    # *_pyext_BUILD directory (which contains its own copies of generated
+    # files we don't want).
+    program_dirs: set[Path] = set()
+    for py in cache_root.rglob("m_*.py"):
+        if not py.is_file():
+            continue
+        parts = py.relative_to(cache_root).parts
+        # Reject if any ancestor is __pycache__ or any *_pyext_BUILD dir
+        if any(
+            p in CARTESIAN_SKIP_DIRS or p.endswith(CARTESIAN_BUILD_DIR_SUFFIX) for p in parts[:-1]
+        ):
+            continue
+        program_dirs.add(py.parent)
+
+    out: dict[str, ProgramSnapshot] = {}
+    for prog_dir in sorted(program_dirs):
+        program_id = prog_dir.relative_to(cache_root).as_posix()
+
+        files: dict[str, FileEntry] = {}
+
+        # Top-level m_*.py file(s) — the gt4py loader stub(s).
+        for f in sorted(prog_dir.glob("m_*.py")):
+            if f.is_file():
+                rel = _normalize_cartesian_relpath(f.name)
+                files[rel] = FileEntry(relpath=rel, sha256=_sha256(f), disk_relpath=f.name)
+
+        # Files DIRECTLY under any m_*_pyext_BUILD/ — iterdir, not rglob,
+        # so we don't descend into _GT_/ or tmp/ which carry build artifacts.
+        for build_dir in sorted(prog_dir.glob(f"m_*{CARTESIAN_BUILD_DIR_SUFFIX}")):
+            if not build_dir.is_dir():
+                continue
+            for f in sorted(build_dir.iterdir()):
+                if f.is_file() and f.name in CARTESIAN_BUILD_SOURCE_NAMES:
+                    disk_rel = f"{build_dir.name}/{f.name}"
+                    rel = _normalize_cartesian_relpath(disk_rel)
+                    files[rel] = FileEntry(relpath=rel, sha256=_sha256(f), disk_relpath=disk_rel)
+
+        out[program_id] = ProgramSnapshot(name=program_id, folder=prog_dir, files=files)
     return out
 
 
@@ -225,19 +388,39 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _diagnose_empty_cache(cache_root: Path) -> str:
-    """Return a one-line explanation of why :func:`snapshot_run` found nothing.
-
-    Distinguishes "path didn't exist", "path is a file", "directory has
-    no subdirectories", and "directory has subdirectories but none match
-    the program-folder pattern" (with a sample of the names found, so a
-    wrong-path mistake — e.g. passing the parent of ``.gt4py_cache`` —
-    is immediately visible).
-    """
+def _diagnose_empty_cache(cache_root: Path, *, layout: Layout = "next") -> str:
+    """Return a one-line explanation of why :func:`snapshot_run` found nothing."""
     if not cache_root.exists():
         return "path does not exist"
     if not cache_root.is_dir():
         return "path exists but is not a directory"
+
+    if layout == "cartesian":
+        # For cartesian we expect <root>/py<pyver>_<cachever>/<backend>/...
+        # If there's no py*_*/, the user likely passed the wrong path
+        # (e.g. the run_dir instead of run_dir/gt_cache).
+        subdirs = sorted(p for p in cache_root.iterdir() if p.is_dir())
+        if not subdirs:
+            return "directory has no subdirectories"
+        pyver_dirs = [p for p in subdirs if re.match(r"^py\d+_\d+$", p.name)]
+        if not pyver_dirs:
+            sample_names = [p.name for p in subdirs[:3]]
+            suffix = f" (and {len(subdirs) - 3} more)" if len(subdirs) > 3 else ""
+            return (
+                f"directory contains {len(subdirs)} subdirectory(ies) but none "
+                f"match cartesian's per-Python-version pattern `py<N>_<N>/` "
+                f"(saw: {sample_names}{suffix}). Did you pass the cache root, "
+                f"or its parent?"
+            )
+        # py*/ exists but no m_*.py loader stubs were found anywhere
+        return (
+            "cartesian cache structure present but contains no `m_*.py` loader "
+            "stubs at any depth — pytest probably collected zero tests, or the "
+            "conftest's `--keep-gtcache` flag wasn't passed and the cache was "
+            "wiped at session teardown."
+        )
+
+    # Fall through to the next-layout diagnostic
     subdirs = sorted(p for p in cache_root.iterdir() if p.is_dir())
     if not subdirs:
         return "directory has no subdirectories"
@@ -348,8 +531,13 @@ def write_diffs(
         s1, s2 = snap1.get(r.name), snap2.get(r.name)
         prog_dir = diffs_dir / r.name
         for rel in r.differing_files:
-            f1 = (s1.folder / rel) if s1 else None
-            f2 = (s2.folder / rel) if s2 else None
+            # `rel` is the canonical (normalized) key; the on-disk filename
+            # may differ from it (cartesian normalizes the 10-hex digest).
+            # Look up the per-side FileEntry to recover the real path.
+            e1 = s1.files.get(rel) if s1 else None
+            e2 = s2.files.get(rel) if s2 else None
+            f1 = (s1.folder / e1.disk_relpath) if (s1 and e1) else None
+            f2 = (s2.folder / e2.disk_relpath) if (s2 and e2) else None
             if not (f1 and f2 and f1.exists() and f2.exists()):
                 continue
             try:
@@ -431,44 +619,48 @@ def check_determinism(
     diffs_dir: Path | None = None,
     report_path: Path | None = None,
     tolerate_missing: bool = True,
+    layout: Layout = "next",
 ) -> list[ProgramResult]:
     """Compare two gt4py caches; write artifacts; raise on mismatch.
 
-    Snapshots both caches (under ``<program>/src/`` recursively) and
+    Snapshots both caches (using the ``layout``-specific walker) and
     diffs them. Optionally writes per-file unified diffs to
     ``diffs_dir/<program>/`` and a human-readable summary to
     ``report_path``.
 
     Returns the list of :class:`ProgramResult` on a successful match.
 
-    The ``tolerate_missing`` parameter controls how programs that ended
-    up cached in only one of the two runs are treated:
-
-    * ``True`` (default, lenient) — only programs that are in BOTH caches but
-      whose source files differ byte-for-byte trigger
-      :class:`DeterminismError`. Programs cached on only one side are
-      still itemized in the report (so you can investigate) but do not
-      cause the check to fail.
-    * ``False`` (strict) — any program missing from one side
-      is a determinism failure, on the theory that test selection
-      should be deterministic and a missing program signals real
-      non-determinism somewhere in the toolchain.
+    Parameters
+    ----------
+    cache1, cache2
+        Roots of the two caches to compare. For ``layout="next"``, this
+        is the ``.gt4py_cache/`` directory (i.e. the parent of all the
+        ``<name>_<sha256>/`` program folders). For ``layout="cartesian"``,
+        this is the directory pointed to by ``GT_CACHE_PYTEST_DIR`` (i.e.
+        the parent of ``py<pyver>_<cachever>/``).
+    layout
+        Which cache layout to expect. See module docstring for details.
+    tolerate_missing
+        See module docstring. Default ``True`` (lenient).
+    diffs_dir, report_path
+        If set, persist diagnostic artifacts.
 
     Raises:
         UnsupportedBackendError:
-            A snapshot contained a backend other than cpu/cuda.
+            (next layout only) A snapshot contained a backend other than cpu/cuda.
         NoProgramsObservedError:
-            Both caches were empty — likely zero tests collected.
+            Both caches were empty — likely zero tests collected or the
+            cache was wiped at teardown.
         NoSourceFilesObservedError:
-            Programs were cached but no source files survived
-            (usually a missing ``DACE_compiler_build_folder_mode=development``).
+            Programs were cached but no source files survived (usually a
+            missing ``DACE_compiler_build_folder_mode=development``).
         DeterminismError:
             One or more programs differed between the two runs. Under
             ``tolerate_missing=True`` this requires at least one
             *content* difference.
     """
-    snap1 = snapshot_run(cache1)
-    snap2 = snapshot_run(cache2)
+    snap1 = snapshot_run(cache1, layout=layout)
+    snap2 = snapshot_run(cache2, layout=layout)
     results = compare(snap1, snap2)
 
     if diffs_dir is not None:
@@ -478,8 +670,8 @@ def check_determinism(
         report_path.write_text(render_report(results, tolerate_missing=tolerate_missing))
 
     if not results:
-        diag1 = _diagnose_empty_cache(cache1)
-        diag2 = _diagnose_empty_cache(cache2)
+        diag1 = _diagnose_empty_cache(cache1, layout=layout)
+        diag2 = _diagnose_empty_cache(cache2, layout=layout)
         raise NoProgramsObservedError(
             "no programs observed in either cache:\n"
             f"  run1 ({cache1}): {diag1}\n"
@@ -487,7 +679,7 @@ def check_determinism(
         )
 
     # Safety net for the silent-false-positive case where both runs cached
-    # programs but every program's src/ tree is empty — typically because
+    # programs but every program's source tree is empty — typically because
     # dace's build_folder_mode is `production` (the gt4py default). Without
     # this, the comparator would see {} == {} for every program and report
     # `deterministic` despite there being nothing to compare.
@@ -495,14 +687,20 @@ def check_determinism(
         len(s.files) for s in snap2.values()
     )
     if total_files == 0:
+        if layout == "cartesian":
+            hint = (
+                "programs were cached but contain none of `m_*.py`, "
+                "`bindings.{cpp,cu}`, or `computation.hpp`"
+            )
+        else:
+            hint = "none of them contain any source files under src/"
         raise NoSourceFilesObservedError(
-            f"{len(results)} program(s) cached, but none of them contain any "
-            f"source files under src/. This almost always means dace's build "
-            f"folder mode is `production` rather than `development`, which "
-            f"strips the codegen output after compilation. Set "
-            f"DACE_compiler_build_folder_mode=development (lowercase matters) "
-            f"before running the tests so src/cpu/*.cpp and src/cuda/*.cu "
-            f"survive into the cache."
+            f"{len(results)} program(s) cached, but {hint}. This almost "
+            f"always means dace's build folder mode is `production` rather "
+            f"than `development`, which strips the codegen output after "
+            f"compilation. Set DACE_compiler_build_folder_mode=development "
+            f"(lowercase matters) before running the tests so the codegen "
+            f"survives into the cache."
         )
 
     # Count true differs (program in both runs, content differs) and missing
@@ -546,14 +744,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         required=True,
         type=Path,
         metavar="PATH",
-        help="Path to the first .gt4py_cache directory.",
+        help=(
+            "Path to the first cache root. For --layout next, this is the "
+            ".gt4py_cache/ directory. For --layout cartesian, this is the "
+            "directory that GT_CACHE_PYTEST_DIR pointed to (the parent of "
+            "py<ver>_<format>/)."
+        ),
     )
     p.add_argument(
         "--run2",
         required=True,
         type=Path,
         metavar="PATH",
-        help="Path to the second .gt4py_cache directory.",
+        help="Path to the second cache root. Same conventions as --run1.",
+    )
+    p.add_argument(
+        "--layout",
+        choices=["next", "cartesian"],
+        default="next",
+        help=(
+            "Cache layout. `next` is gt4py.next's flat "
+            "<root>/<name>_<sha256>/src/... structure (default). `cartesian` "
+            "is gt4py.cartesian's deeply nested "
+            "<root>/py<ver>_<format>/<backend>/<test.path>/<Class>_<bk>_<id>/ "
+            "structure."
+        ),
     )
     p.add_argument(
         "--diffs-dir",
@@ -594,6 +809,7 @@ def main(argv: list[str] | None = None) -> int:
             diffs_dir=args.diffs_dir.expanduser().resolve() if args.diffs_dir else None,
             report_path=args.report.expanduser().resolve() if args.report else None,
             tolerate_missing=args.tolerate_missing,
+            layout=args.layout,
         )
     except UnsupportedBackendError as e:
         print(f"error: {e}", file=sys.stderr)
