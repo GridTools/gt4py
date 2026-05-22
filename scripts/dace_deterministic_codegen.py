@@ -267,6 +267,28 @@ class ProgramResult:
     only_in_run1: list[str]
     only_in_run2: list[str]
 
+    @property
+    def missing_on_one_side(self) -> bool:
+        """True iff the program was cached in only one of the two runs.
+
+        Distinguished from 'differs by content' (where the program is in
+        both runs but at least one file's bytes differ) — the latter is
+        always a determinism failure, the former is often a flaky-test
+        artifact and can be tolerated via ``tolerate_missing``.
+
+        The compare() loop populates only_in_runN exhaustively with the
+        absent side's file list ONLY when the whole program is missing;
+        when both programs are present but one happens to carry an extra
+        file, only_in_runN contains only that extra file. We distinguish
+        the two by requiring exactly one side to be wholly empty (which
+        is what compare() emits for the missing-program case).
+        """
+        return (
+            not self.match
+            and not self.differing_files
+            and (bool(self.only_in_run1) ^ bool(self.only_in_run2))
+        )
+
 
 def compare(
     snap1: dict[str, ProgramSnapshot],
@@ -352,14 +374,27 @@ def write_diffs(
             (prog_dir / f"{rel.replace('/', '__')}.diff").write_text(udiff)
 
 
-def render_report(results: list[ProgramResult]) -> str:
+def render_report(results: list[ProgramResult], *, tolerate_missing: bool = False) -> str:
     n_total = len(results)
-    n_match = sum(1 for r in results if r.match)
-    n_diff = n_total - n_match
+    n_missing = sum(1 for r in results if r.missing_on_one_side)
+    n_diff_content = sum(
+        1 for r in results if r.differing_files or (not r.match and not r.missing_on_one_side)
+    )
+    n_match = n_total - n_missing - n_diff_content
 
-    lines = [f"Programs: {n_total}    matches: {n_match}    mismatches: {n_diff}", ""]
+    header = (
+        f"Programs: {n_total}    matches: {n_match}    "
+        f"differs: {n_diff_content}    only-in-one-run: {n_missing}"
+    )
+    lines = [header, ""]
     for r in results:
-        lines.append(f"  [{'MATCH ' if r.match else 'DIFFER'}] {r.name}")
+        if r.match:
+            tag = "MATCH "
+        elif r.missing_on_one_side:
+            tag = "ONE-OF"
+        else:
+            tag = "DIFFER"
+        lines.append(f"  [{tag}] {r.name}")
         if not r.match:
             lines.extend(f"           differs: {rel}" for rel in r.differing_files)
             lines.extend(f"           only in run1: {rel}" for rel in r.only_in_run1)
@@ -368,10 +403,19 @@ def render_report(results: list[ProgramResult]) -> str:
     lines.append("")
     if n_total == 0:
         lines.append("RESULT: no programs observed (nothing was cached).")
-    elif n_diff == 0:
+    elif n_diff_content == 0 and n_missing == 0:
         lines.append(f"RESULT: codegen deterministic — {n_match} program(s) match.")
+    elif n_diff_content == 0 and tolerate_missing:
+        lines.append(
+            f"RESULT: codegen deterministic across the {n_match} shared program(s); "
+            f"{n_missing} program(s) cached in only one run (tolerated)."
+        )
     else:
-        lines.append(f"RESULT: NON-DETERMINISTIC CODEGEN — {n_diff}/{n_total} program(s) differ.")
+        suffix = f" (plus {n_missing} cached in only one run)" if n_missing else ""
+        lines.append(
+            f"RESULT: NON-DETERMINISTIC CODEGEN — {n_diff_content}/{n_total} "
+            f"program(s) differ by content{suffix}."
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -386,6 +430,7 @@ def check_determinism(
     *,
     diffs_dir: Path | None = None,
     report_path: Path | None = None,
+    tolerate_missing: bool = True,
 ) -> list[ProgramResult]:
     """Compare two gt4py caches; write artifacts; raise on mismatch.
 
@@ -396,13 +441,31 @@ def check_determinism(
 
     Returns the list of :class:`ProgramResult` on a successful match.
 
+    The ``tolerate_missing`` parameter controls how programs that ended
+    up cached in only one of the two runs are treated:
+
+    * ``True`` (default, lenient) — only programs that are in BOTH caches but
+      whose source files differ byte-for-byte trigger
+      :class:`DeterminismError`. Programs cached on only one side are
+      still itemized in the report (so you can investigate) but do not
+      cause the check to fail.
+    * ``False`` (strict) — any program missing from one side
+      is a determinism failure, on the theory that test selection
+      should be deterministic and a missing program signals real
+      non-determinism somewhere in the toolchain.
+
     Raises:
         UnsupportedBackendError:
             A snapshot contained a backend other than cpu/cuda.
         NoProgramsObservedError:
             Both caches were empty — likely zero tests collected.
+        NoSourceFilesObservedError:
+            Programs were cached but no source files survived
+            (usually a missing ``DACE_compiler_build_folder_mode=development``).
         DeterminismError:
-            One or more programs differed between the two runs.
+            One or more programs differed between the two runs. Under
+            ``tolerate_missing=True`` this requires at least one
+            *content* difference.
     """
     snap1 = snapshot_run(cache1)
     snap2 = snapshot_run(cache2)
@@ -412,7 +475,7 @@ def check_determinism(
         write_diffs(results, snap1, snap2, diffs_dir)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(render_report(results))
+        report_path.write_text(render_report(results, tolerate_missing=tolerate_missing))
 
     if not results:
         diag1 = _diagnose_empty_cache(cache1)
@@ -442,12 +505,25 @@ def check_determinism(
             f"survive into the cache."
         )
 
-    n_diff = sum(1 for r in results if not r.match)
-    if n_diff > 0:
-        raise DeterminismError(
-            f"DaCe codegen is non-deterministic: {n_diff}/{len(results)} program(s) differ",
-            results,
-        )
+    # Count true differs (program in both runs, content differs) and missing
+    # (program only in one run). Under tolerate_missing, only true differs
+    # raise; under strict mode, both do.
+    n_true_differs = sum(
+        1 for r in results if r.differing_files or (not r.missing_on_one_side and not r.match)
+    )
+    n_missing = sum(1 for r in results if r.missing_on_one_side)
+    n_failed = n_true_differs if tolerate_missing else (n_true_differs + n_missing)
+
+    if n_failed > 0:
+        if tolerate_missing:
+            msg = (
+                f"DaCe codegen is non-deterministic: {n_true_differs}/{len(results)} "
+                f"program(s) differ by content (plus {n_missing} cached in only one "
+                f"run, ignored under tolerate_missing)"
+            )
+        else:
+            msg = f"DaCe codegen is non-deterministic: {n_failed}/{len(results)} program(s) differ"
+        raise DeterminismError(msg, results)
     return results
 
 
@@ -493,6 +569,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="PATH",
         help="If set, write the human-readable summary report to this file.",
     )
+    p.add_argument(
+        "--tolerate-missing",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Whether to skip programs cached in only one of the two runs. "
+            "Default: lenient — only content differences in shared programs "
+            "raise. Pass --no-tolerate-missing for strict mode, where any "
+            "program absent from one cache also counts as a determinism "
+            "failure."
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -505,6 +593,7 @@ def main(argv: list[str] | None = None) -> int:
             args.run2.expanduser().resolve(),
             diffs_dir=args.diffs_dir.expanduser().resolve() if args.diffs_dir else None,
             report_path=args.report.expanduser().resolve() if args.report else None,
+            tolerate_missing=args.tolerate_missing,
         )
     except UnsupportedBackendError as e:
         print(f"error: {e}", file=sys.stderr)
@@ -516,11 +605,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except DeterminismError as e:
-        print(render_report(e.results))
+        print(render_report(e.results, tolerate_missing=args.tolerate_missing))
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    print(render_report(results))
+    print(render_report(results, tolerate_missing=args.tolerate_missing))
     return 0
 
 

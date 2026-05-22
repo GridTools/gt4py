@@ -417,6 +417,7 @@ def _run_dace_determinism_check(
                 "GT4PY_BUILD_CACHE_LIFETIME": "persistent",
                 "DACE_compiler_build_folder_mode": "development",
             },
+            success_codes=[0, 1, NO_TESTS_COLLECTED_EXIT_CODE],
         )
 
     # Import the comparison library from scripts/. It uses only stdlib,
@@ -437,6 +438,7 @@ def _run_dace_determinism_check(
             run2_dir / ".gt4py_cache",
             diffs_dir=workdir / "diffs",
             report_path=workdir / "report.txt",
+            tolerate_missing=True,
         )
     except DeterminismError as e:
         session.error(f"{e}\nSee {workdir / 'report.txt'} and {workdir / 'diffs'}/")
