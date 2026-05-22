@@ -77,6 +77,7 @@ GRAMMAR = """
     ?prec9: _literal
         | SYM_REF
         | named_range
+        | cartesian_offset
         | "(" prec0 ")"
 
     ?stmt: set_at | if_stmt
@@ -85,6 +86,7 @@ GRAMMAR = """
     if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
 
     named_range: AXIS_LITERAL ":" "[" prec0 "," prec0 "["
+    cartesian_offset: AXIS_LITERAL "₂" AXIS_LITERAL
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
     declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" TYPE_LITERAL ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
@@ -199,6 +201,11 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def named_range(self, name: ir.AxisLiteral, start: ir.Expr, end: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="named_range"), args=[name, start, end])
+
+    def cartesian_offset(
+        self, domain: ir.AxisLiteral, codomain: ir.AxisLiteral
+    ) -> ir.CartesianOffset:
+        return ir.CartesianOffset(domain=domain, codomain=codomain)
 
     def cartesian_domain(self, *ranges: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=list(ranges))

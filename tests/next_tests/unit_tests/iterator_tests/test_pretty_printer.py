@@ -197,6 +197,15 @@ def test_shift():
     assert actual == expected
 
 
+def test_cartesian_offset():
+    testee = ir.CartesianOffset(
+        domain=ir.AxisLiteral(value="I"), codomain=ir.AxisLiteral(value="J")
+    )
+    expected = "Iₕ₂Jₕ"
+    actual = pformat(testee)
+    assert actual == expected
+
+
 def test_tuple_get():
     testee = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
