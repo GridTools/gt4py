@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q --script
+#!/usr/bin/env -S uv run -q --script --python 3.12
 #
 # GT4Py - GridTools Framework
 #
@@ -8,19 +8,29 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 #
+# Note:
+#   The explicit '--python 3.11' in the shebang is only needed due
+#   to the existence of the .python-versions file, which overrides
+#   the PEP 723 'requires-python' metadata.
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
 from __future__ import annotations
 
+import os
 import pathlib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
 
 import nox
+import tomllib
 
+
+# This is needed because uv now fails to create an env when it already exists.
+# See: https://github.com/astral-sh/uv/issues/17899
+os.environ["UV_VENV_CLEAR"] = "1"
 
 # This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
 # is not guaranteed to be available in the venv where `nox` is running.
@@ -37,10 +47,13 @@ nox.options.sessions = [
     "test_cartesian-3.12(dace, cpu)",
     "test_cartesian-3.13(internal, cpu)",
     "test_cartesian-3.13(dace, cpu)",
+    "test_cartesian-3.14(internal, cpu)",
+    "test_cartesian-3.14(dace, cpu)",
     "test_eve-3.10",
     "test_eve-3.11",
     "test_eve-3.12",
     "test_eve-3.13",
+    "test_eve-3.14",
     "test_next-3.10(internal, cpu, nomesh)",
     "test_next-3.10(dace, cpu, nomesh)",
     "test_next-3.11(internal, cpu, nomesh)",
@@ -49,14 +62,18 @@ nox.options.sessions = [
     "test_next-3.12(dace, cpu, nomesh)",
     "test_next-3.13(internal, cpu, nomesh)",
     "test_next-3.13(dace, cpu, nomesh)",
+    "test_next-3.14(internal, cpu, nomesh)",
+    "test_next-3.14(dace, cpu, nomesh)",
     "test_package-3.10",
     "test_package-3.11",
     "test_package-3.12",
     "test_package-3.13",
+    "test_package-3.14",
     "test_storage-3.10(cpu)",
     "test_storage-3.11(cpu)",
     "test_storage-3.12(cpu)",
     "test_storage-3.13(cpu)",
+    "test_storage-3.14(cpu)",
 ]
 
 REPO_ROOT: Final = pathlib.Path(__file__).parent.resolve().absolute()
@@ -65,9 +82,12 @@ PYTHON_VERSIONS: Final[list[str]] = [
     for line in (REPO_ROOT / ".python-versions").read_text().splitlines()
     if (v := line.strip()) and not v.startswith("#")
 ]
+REQUIRES_PYTHON = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"][
+    "requires-python"
+]
 
 # -- Parameter sets --
-DeviceOption: TypeAlias = Literal["cpu", "cuda12", "rocm6_0"]
+DeviceOption: TypeAlias = Literal["cpu", "cuda12", "cuda13", "rocm6", "rocm7"]
 DeviceNoxParam: Final[dict[DeviceOption, nox.param]] = {
     device: nox.param(device, id=device, tags=[device]) for device in DeviceOption.__args__
 }
@@ -85,15 +105,10 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": [], "markers": ["not requires_dace"]}
+    "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
 }
-# Use dace-cartesian group to select the appropriate dace version
-CodeGenCartesianTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "groups": ["dace-cartesian"], "markers": ["requires_dace"]},
-}
-# Install dace-next group to select the appropriate dace version
-CodeGenNextTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "groups": ["dace-next"], "markers": ["requires_dace"]},
+CodeGenDaceTestSettings = CodeGenTestSettings | {
+    "dace": {"extras": [], "markers": ["requires_dace"]},
 }
 
 
@@ -117,7 +132,10 @@ def install_session_venv(
         "uv",
         "sync",
         "--python",
-        str(session.python),
+        # uv does not yet combine explicit python version requests with the
+        # `requires-python` range in `pyproject.toml`, so we do it manually.
+        # See: https://github.com/astral-sh/uv/issues/16654
+        f"{REQUIRES_PYTHON}, ~={session.python!s}.0",
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
@@ -144,7 +162,7 @@ def test_cartesian(
 ) -> None:
     """Run selected 'gt4py.cartesian' tests."""
 
-    codegen_settings = CodeGenCartesianTestSettings[codegen]
+    codegen_settings = CodeGenDaceTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     extras = [
         "standard",
@@ -227,7 +245,7 @@ def test_next(
 ) -> None:
     """Run selected 'gt4py.next' tests."""
 
-    codegen_settings = CodeGenNextTestSettings[codegen]
+    codegen_settings = CodeGenDaceTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     extras = [
         "standard",
@@ -309,6 +327,21 @@ def test_storage(
         *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+    )
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["next"])
+def test_typing_exports(session: nox.Session) -> None:
+    """Test GT4Py usability in a typed client context."""
+    install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
+
+    session.run(
+        "pytest",
+        "-sv",
+        "--mypy-testing-base",
+        "typing_tests",
+        "typing_tests",
+        *session.posargs,
     )
 
 

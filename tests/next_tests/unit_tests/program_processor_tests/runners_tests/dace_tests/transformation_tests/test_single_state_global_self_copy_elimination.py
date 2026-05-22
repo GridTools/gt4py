@@ -25,7 +25,7 @@ import dace
 
 def _make_self_copy_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
     """Generates an SDFG that contains the self copying pattern."""
-    sdfg = dace.SDFG(util.unique_name("self_copy_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("self_copy_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "GT":
@@ -46,7 +46,7 @@ def _make_self_copy_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
 
 
 def _make_direct_self_copy_elimination_used_sdfg() -> dace.SDFG:
-    sdfg = dace.SDFG(util.unique_name("direct_self_copy_elimination_used"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("direct_self_copy_elimination_used"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "ABCG":
@@ -88,7 +88,7 @@ def _make_self_copy_sdfg_with_multiple_paths() -> tuple[
     `SingleStateGlobalDirectSelfCopyElimination` transformation can not handle
     this case, but its split node can handle it.
     """
-    sdfg = dace.SDFG(util.unique_name("self_copy_sdfg_with_multiple_paths"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("self_copy_sdfg_with_multiple_paths"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "GT":
@@ -132,7 +132,9 @@ def _make_concat_where_like(
         j_idx = 0
         j_range = "1:10"
 
-    sdfg = dace.SDFG(util.unique_name(f"self_copy_sdfg_concat_where_like_{j_desc}_level"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name(f"self_copy_sdfg_concat_where_like_{j_desc}_level")
+    )
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -215,7 +217,11 @@ def _make_concat_where_like_with_silent_write_to_g1(
     dace_nodes.AccessNode,
     dace_nodes.AccessNode,
 ]:
-    sdfg = dace.SDFG(util.unique_name(f"self_copy_sdfg_concat_where_like_multiple_writes_to_g1"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name(
+            f"self_copy_sdfg_concat_where_like_multiple_writes_to_g1"
+        )
+    )
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -307,7 +313,9 @@ def _make_concat_where_like_41_to_60(
     dace_nodes.AccessNode,
     dace_nodes.AccessNode,
 ]:
-    sdfg = dace.SDFG(util.unique_name(f"self_copy_sdfg_concat_where_like_41_to_60"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name(f"self_copy_sdfg_concat_where_like_41_to_60")
+    )
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -443,7 +451,7 @@ def _make_concat_where_like_not_possible() -> tuple[
     """Because the "Bulk Map" writes more into `tmp` than is written back
     the transformation is not applicable.
     """
-    sdfg = dace.SDFG(util.unique_name(f"self_copy_too_big_bulk_write"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"self_copy_too_big_bulk_write"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -499,7 +507,7 @@ def _make_multi_t_patch_sdfg() -> tuple[
     uninitialized because it is not read.
     """
 
-    sdfg = dace.SDFG(util.unique_name(f"multi_t_patch_description_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"multi_t_patch_description_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "gabt":
@@ -582,7 +590,7 @@ def _make_not_everything_is_written_back(
     in fact running `SplitAccessNode` would do the job.
     """
 
-    sdfg = dace.SDFG(util.unique_name(f"not_everything_is_written_back"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"not_everything_is_written_back"))
     state = sdfg.add_state(is_start_block=True)
 
     consumer_shape = (10,) if consume_all_of_t else (6,)
@@ -645,7 +653,7 @@ def _make_not_everything_is_written_back(
 def _make_write_write_conflict(
     conflict_at_t: bool,
 ) -> dace.SDFG:
-    sdfg = dace.SDFG(util.unique_name(f"write_write_conflict_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"write_write_conflict_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "gto":
@@ -717,7 +725,7 @@ def _make_write_write_conflict(
 
 
 def _make_read_write_conflict() -> dace.SDFG:
-    sdfg = dace.SDFG(util.unique_name(f"write_write_conflict_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name(f"write_write_conflict_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "gtom":
@@ -896,7 +904,7 @@ def test_global_self_copy_elimination_tmp_downstream():
 
 
 def test_direct_global_self_copy_simple():
-    sdfg = dace.SDFG(util.unique_name("simple_direct_self_copy"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple_direct_self_copy"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(

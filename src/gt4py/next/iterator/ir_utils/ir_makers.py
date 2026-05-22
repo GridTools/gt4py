@@ -453,7 +453,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]],
+    ranges_or_domain: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] | common.Domain,
 ) -> itir.FunCall:
     """
     >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
@@ -462,7 +462,17 @@ def domain(
     'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
     'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
+    >>> ij_domain = common.domain({IDim: (0, 10), JDim: (0, 20)})
+    >>> str(domain(common.GridType.UNSTRUCTURED, ij_domain))
+    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
+    if isinstance(ranges_or_domain, common.Domain):
+        domain = ranges_or_domain
+        ranges = {d: (r.start, r.stop) for d, r in zip(domain.dims, domain.ranges)}
+    else:
+        assert isinstance(ranges_or_domain, dict)
+        ranges = ranges_or_domain
+
     if isinstance(grid_type, common.GridType):
         grid_type = f"{grid_type!s}_domain"
     expr = call(grid_type)(

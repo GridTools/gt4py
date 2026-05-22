@@ -68,3 +68,74 @@ def test_visit_literal(literal: oir.Literal, expected: str):
     visitor = oir_to_tasklet.OIRToTasklet()
 
     assert visitor.visit_Literal(literal) == expected
+
+
+@pytest.mark.parametrize(
+    "exponent,expected_ipow_usage",
+    [
+        (oir.Literal(value="0", dtype=common.DataType.INT32), False),
+        (oir.Literal(value="1", dtype=common.DataType.INT32), True),
+        (oir.Literal(value="2", dtype=common.DataType.INT32), True),
+        (oir.Literal(value="3", dtype=common.DataType.INT32), True),
+        (oir.Literal(value="3", dtype=common.DataType.INT16), True),
+        (oir.Literal(value="3", dtype=common.DataType.INT8), True),
+        (oir.Literal(value="3", dtype=common.DataType.INT64), True),
+        (oir.Literal(value="4", dtype=common.DataType.INT32), False),
+        (oir.Literal(value="2.0", dtype=common.DataType.FLOAT32), False),
+        (
+            oir.BinaryOp(
+                op=common.ArithmeticOperator.ADD,
+                left=oir.Literal(value="1", dtype=common.DataType.INT32),
+                right=oir.Literal(value="0", dtype=common.DataType.INT32),
+            ),
+            False,
+        ),
+        (
+            oir.UnaryOp(
+                op=common.UnaryOperator.NEG,
+                expr=oir.Literal(value="2", dtype=common.DataType.INT32),
+            ),
+            False,
+        ),
+    ],
+)
+def test_integer_power_function(exponent: oir.Expr, expected_ipow_usage: bool) -> None:
+    base = oir.ScalarAccess(name="A", dtype=common.DataType.FLOAT32)
+    pow_call = oir.NativeFuncCall(func=common.NativeFunction.POW, args=[base, exponent])
+
+    visitor = oir_to_tasklet.OIRToTasklet()
+    fake_context = oir_to_tasklet.Context(
+        code="asdf", targets=set(), inputs={}, outputs={}, tree=None, scope=None
+    )
+    tasklet_code = visitor.visit_NativeFuncCall(pow_call, ctx=fake_context, is_target=False)
+
+    uses_ipow = "ipow" in tasklet_code
+    assert uses_ipow == expected_ipow_usage
+
+
+def test_integer_power_zero() -> None:
+    base = oir.ScalarAccess(name="A", dtype=common.DataType.FLOAT32)
+    exponent = oir.Literal(value="0", dtype=common.DataType.INT32)
+    pow_call = oir.NativeFuncCall(func=common.NativeFunction.POW, args=[base, exponent])
+
+    visitor = oir_to_tasklet.OIRToTasklet()
+    fake_context = oir_to_tasklet.Context(
+        code="asdf", targets=set(), inputs={}, outputs={}, tree=None, scope=None
+    )
+    tasklet_code = visitor.visit_NativeFuncCall(pow_call, ctx=fake_context, is_target=False)
+
+    assert tasklet_code == "float(1)"
+
+
+def test_integer_power_of_integer() -> None:
+    base = oir.ScalarAccess(name="A", dtype=common.DataType.INT32)
+    exponent = oir.Literal(value="2", dtype=common.DataType.INT32)
+    pow_call = oir.NativeFuncCall(func=common.NativeFunction.POW, args=[base, exponent])
+
+    visitor = oir_to_tasklet.OIRToTasklet()
+    fake_context = oir_to_tasklet.Context(
+        code="asdf", targets=set(), inputs={}, outputs={}, tree=None, scope=None
+    )
+    tasklet_code = visitor.visit_NativeFuncCall(pow_call, ctx=fake_context, is_target=False)
+
+    assert "ipow" not in tasklet_code

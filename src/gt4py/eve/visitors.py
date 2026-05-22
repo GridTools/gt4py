@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import collections.abc
 import copy
+import enum
 from typing import ClassVar
 
 from . import concepts, trees
@@ -188,8 +189,9 @@ class NodeTranslator(NodeVisitor):
 
             return new_node
 
-        if isinstance(node, (list, tuple, set, collections.abc.Set)) or (
-            isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
+        if (isinstance(node, (list, set, collections.abc.Set))) or (
+            isinstance(node, collections.abc.Sequence)
+            and not isinstance(node, (str, bytes, enum.Enum))
         ):
             # Sequence or set: create a new container instance with the new values
             return node.__class__(  # type: ignore

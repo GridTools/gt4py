@@ -22,7 +22,8 @@ def process_elements(
     arg_types: Optional[Iterable[ts.TypeSpec]] = None,
 ) -> itir.FunCall:
     """
-    Recursively applies a processing function to all primitive constituents of a tuple.
+    Recursively applies a processing function to all primitive constituents of a tuple or
+    named collection.
 
     Arguments:
         process_func: A callable that takes an itir.Expr representing a leaf-element of `objs`.
@@ -60,7 +61,7 @@ def _process_elements_impl(
     current_el_type: ts.TypeSpec,
     arg_types: Optional[Iterable[ts.TypeSpec]],
 ) -> itir.Expr:
-    if isinstance(current_el_type, ts.TupleType):
+    if isinstance(current_el_type, (ts.TupleType, ts.NamedCollectionType)):
         result = im.make_tuple(
             *(
                 _process_elements_impl(

@@ -26,7 +26,7 @@ def _make_movable_tasklet(
 ) -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.Tasklet, dace_nodes.AccessNode, dace_nodes.MapEntry
 ]:
-    sdfg = dace.SDFG(util.unique_name("gpu_promotable_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("gpu_promotable_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
 
     sdfg.add_scalar("outer_scalar", dtype=dace.float64, transient=True)

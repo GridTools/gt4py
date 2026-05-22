@@ -29,7 +29,7 @@ def _make_simple_linear_chain_sdfg() -> dace.SDFG:
 
     All intermediates have the same size.
     """
-    sdfg = dace.SDFG(util.unique_name("simple_linear_chain_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple_linear_chain_sdfg"))
 
     for name in ["a", "b", "c", "d", "e"]:
         sdfg.add_array(
@@ -75,7 +75,7 @@ def _make_diff_sizes_pull_chain_sdfg() -> tuple[
     - The AccessNode that is used as final output, refers to `e`.
     - The Tasklet that is within the Map.
     """
-    sdfg = dace.SDFG(util.unique_name("diff_size_linear_pull_chain_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("diff_size_linear_pull_chain_sdfg"))
 
     array_size_increment = 10
     array_size = 10
@@ -118,7 +118,7 @@ def _make_diff_sizes_push_chain_sdfg() -> tuple[
     Same as `_make_simple_linear_pull_chain_sdfg()` but the intermediates become
     smaller and smaller, so the full shape of the destination array is always written.
     """
-    sdfg = dace.SDFG(util.unique_name("diff_size_linear_push_chain_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("diff_size_linear_push_chain_sdfg"))
 
     array_size_decrement = 10
     array_size = 50
@@ -155,7 +155,7 @@ def _make_diff_sizes_push_chain_sdfg() -> tuple[
 
 def _make_multi_stage_reduction_sdfg() -> dace.SDFG:
     """Creates an SDFG that has a two stage copy reduction."""
-    sdfg = dace.SDFG(util.unique_name("multi_stage_reduction"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("multi_stage_reduction"))
     state: dace.SDFGState = sdfg.add_state(is_start_block=True)
 
     # This is the size of the arrays, if not mentioned here, then its size is 10.
@@ -221,7 +221,7 @@ def _make_not_fully_copied() -> dace.SDFG:
     Make an SDFG where two intermediate array is not fully copied. Thus the
     transformation only applies once, when `d` is removed.
     """
-    sdfg = dace.SDFG(util.unique_name("not_fully_copied_intermediate"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("not_fully_copied_intermediate"))
 
     for name in ["a", "b", "c", "d", "e"]:
         sdfg.add_array(
@@ -257,7 +257,7 @@ def _make_possible_cyclic_sdfg() -> dace.SDFG:
     If the transformation would remove `a1` then it would create a cycle. Thus the
     transformation should not apply.
     """
-    sdfg = dace.SDFG(util.unique_name("possible_cyclic_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("possible_cyclic_sdfg"))
 
     anames = ["i1", "a1", "a2", "o1"]
     for name in anames:
@@ -331,7 +331,7 @@ def _make_linear_chain_with_nested_sdfg_sdfg() -> tuple[dace.SDFG, dace.SDFG]:
 
     inner_sdfg = make_inner_sdfg()
 
-    sdfg = dace.SDFG(util.unique_name("linear_chain_with_nested_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("linear_chain_with_nested_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     array_size_increment = 10
@@ -370,7 +370,7 @@ def _make_linear_chain_with_nested_sdfg_sdfg() -> tuple[dace.SDFG, dace.SDFG]:
 
 def _make_a1_has_output_sdfg() -> dace.SDFG:
     """Here `a1` has an output degree of 2, one to `a2` and one to another output."""
-    sdfg = dace.SDFG(util.unique_name("a1_has_an_additional_output_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("a1_has_an_additional_output_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     # All other arrays have a size of 10.
@@ -411,7 +411,9 @@ def _make_copy_chain_with_reduction_node(
     dace_nodes.AccessNode,
     dace_nodes.AccessNode,
 ]:
-    sdfg = dace.SDFG(util.unique_name("copy_chain_remover_with_reduction_sdfg"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("copy_chain_remover_with_reduction_sdfg")
+    )
     state = sdfg.add_state(is_start_block=True)
 
     if output_an_array:

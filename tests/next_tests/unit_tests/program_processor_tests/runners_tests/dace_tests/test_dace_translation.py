@@ -8,7 +8,6 @@
 
 """Test the translation stage of the dace backend workflow."""
 
-from unittest import mock
 import pytest
 
 import re
@@ -69,6 +68,7 @@ def _translate_gtir_to_sdfg(
             auto_optimize=auto_optimize,
             auto_optimize_args=None,
             async_sdfg_call=async_sdfg_call,
+            unstructured_horizontal_has_unit_stride=False,
             use_metrics=use_metrics,
         ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
 
@@ -97,18 +97,21 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
         ],
     )
 
-    with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", has_unit_stride):
-        sdfg = _translate_gtir_to_sdfg(
-            ir=ir,
-            offset_provider=SKIP_VALUE_MESH.offset_provider,
-            device_type=core_defs.DeviceType.CPU,
-            auto_optimize=False,
-            async_sdfg_call=False,
-        )
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir,
+        offset_provider=SKIP_VALUE_MESH.offset_provider,
+        device_type=core_defs.DeviceType.CPU,
+        auto_optimize=False,
+        async_sdfg_call=False,
+    )
 
-        constant_symbols = dace_wf_translation.find_constant_symbols(
-            ir, sdfg, SKIP_VALUE_MESH.offset_provider_type, disable_field_origin
-        )
+    constant_symbols = dace_wf_translation.find_constant_symbols(
+        ir=ir,
+        sdfg=sdfg,
+        offset_provider_type=SKIP_VALUE_MESH.offset_provider_type,
+        disable_field_origin_on_program_arguments=disable_field_origin,
+        unstructured_horizontal_has_unit_stride=has_unit_stride,
+    )
 
     expected = {}
     if has_unit_stride:

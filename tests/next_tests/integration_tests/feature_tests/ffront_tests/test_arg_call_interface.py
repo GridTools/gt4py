@@ -305,9 +305,9 @@ def test_direct_fo_call_with_domain_arg(cartesian_case):
     out = cases.allocate(
         cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
     )()
-    ref = inp.array_ns.zeros(size)
+    ref = np.zeros(size)
     ref[0] = ref[-1] = 42
-    ref[1:-1] = inp.ndarray[1:-1]
+    ref[1:-1] = inp.asnumpy()[1:-1]
 
     cases.verify(cartesian_case, testee, inp, out=out, domain={IDim: (1, size - 1)}, ref=ref)
 
@@ -323,8 +323,8 @@ def test_direct_fo_call_with_domain_arg_tuple_return(cartesian_case):
     out = cases.allocate(
         cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
     )()
-    ref = inp.array_ns.zeros(size)
+    ref = np.zeros(size)
     ref[0] = ref[-1] = 42
-    ref[1:-1] = inp.ndarray[1:-1]
+    ref[1:-1] = inp.asnumpy()[1:-1]
 
     cases.verify(cartesian_case, testee, inp, out=out, domain={IDim: (1, size - 1)}, ref=(ref, ref))

@@ -223,7 +223,7 @@ def if_(
 @_register_builtin_type_synthesizer
 def make_const_list(scalar: ts.ScalarType) -> ts.ListType:
     assert isinstance(scalar, ts.ScalarType)
-    return ts.ListType(element_type=scalar)
+    return ts.ListType(element_type=scalar, offset_type=None)
 
 
 @_register_builtin_type_synthesizer
@@ -283,7 +283,7 @@ def concat_where(
         tb_dtype, fb_dtype = (type_info.extract_dtype(b) for b in [tb, fb])
 
         assert tb_dtype == fb_dtype, (
-            f"Field arguments must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
+            f"Field arguments to 'concat_where' must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
         )
         dtype = tb_dtype
 
@@ -625,8 +625,8 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         arg_el_types = [arg.element_type for arg in args]
         el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
         assert isinstance(el_type, ts.DataType)
-        offset_types = [arg.offset_type for arg in args if arg.offset_type]
-        offset_type = offset_types[0] if offset_types else None
+        offset_types = [arg.offset_type for arg in args if arg.offset_type is not None]
+        offset_type = offset_types[0]
         assert all(offset_type == arg for arg in offset_types)
         return ts.ListType(element_type=el_type, offset_type=offset_type)
 
@@ -638,6 +638,9 @@ def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @type_synthesizer
     def applied_reduce(*args: ts.ListType, offset_provider_type: common.OffsetProviderType):
         assert all(isinstance(arg, ts.ListType) for arg in args)
+        assert any(
+            arg.offset_type is not None for arg in args
+        )  # we only have `make_const_list`s in the reduce which is not allowed
         return op(
             init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
         )

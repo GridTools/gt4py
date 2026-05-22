@@ -239,7 +239,7 @@ def test_concat_where_invalid_dtype():
 
     with pytest.raises(
         errors.DSLError,
-        match=re.escape("Field arguments must be of same dtype, got 'float64' != 'int32'."),
+        match="Field arguments to 'concat_where' must be of same dtype, got 'float64' != 'int32'.",
     ):
         _ = FieldOperatorParser.apply_to_function(domain_comparison)
 
@@ -430,7 +430,10 @@ def test_where_bad_dim():
     def bad_dim_where(a: Field[[ADim], bool], b: Field[[ADim], float64]):
         return where(a, ((5.0, 9.0), (b, 6.0)), b)
 
-    with pytest.raises(errors.DSLError, match=r"Return arguments need to be of same type"):
+    with pytest.raises(
+        errors.DSLError,
+        match="Second and third argument to 'where' must have the same tuple/collection structure",
+    ):
         _ = FieldOperatorParser.apply_to_function(bad_dim_where)
 
 
@@ -742,3 +745,33 @@ def test_tuples_and_named_collections():
     )
     assert parsed.params[0].type == expected
     assert parsed.body.stmts[-1].value.type == expected
+
+
+def test_concat_where_wrong_structure():
+    def testee(
+        interior: cnc.NamedTupleNamedCollection,
+        boundary: cnc.DataclassNamedCollection,
+    ) -> tuple[cnc.NamedTupleNamedCollection, cnc.NamedTupleNamedCollection]:
+        return concat_where(cnc.TDim == 0, boundary, interior)
+
+    with pytest.raises(
+        errors.DSLError,
+        match="Second and third argument to 'concat_where' must have the same tuple/collection structure",
+    ):
+        parsed = FieldOperatorParser.apply_to_function(testee)
+
+
+def test_concat_where_wrong_structure_nested():
+    def testee(
+        interior0: cnc.NamedTupleNamedCollection,
+        interior1: cnc.NamedTupleNamedCollection,
+        boundary0: cnc.DataclassNamedCollection,
+        boundary1: cnc.NamedTupleNamedCollection,
+    ) -> tuple[cnc.NamedTupleNamedCollection, cnc.NamedTupleNamedCollection]:
+        return concat_where(cnc.TDim == 0, (boundary0, boundary1), (interior0, interior1))
+
+    with pytest.raises(
+        errors.DSLError,
+        match="Second and third argument to 'concat_where' must have the same tuple/collection structure",
+    ):
+        parsed = FieldOperatorParser.apply_to_function(testee)

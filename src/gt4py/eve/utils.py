@@ -25,8 +25,6 @@ import pprint
 import re
 import types
 import typing
-import uuid
-import warnings
 
 import deepdiff
 import xxhash
@@ -47,6 +45,7 @@ from boltons.strutils import (
 
 from . import extended_typing as xtyping
 from .extended_typing import (
+    TYPE_CHECKING,
     Any,
     ArgsOnlyCallable,
     Callable,
@@ -283,6 +282,8 @@ class CustomDefaultDictBase(collections.defaultdict[_K, _V]):
 
     """
 
+    __slots__ = ()
+
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
 
@@ -464,6 +465,15 @@ def optional_lru_cache(
     return _decorator(func) if func is not None else _decorator
 
 
+class EqualityBy(HashableBy):
+    """Use a hash function as the definition of equality for the wrapped object."""
+
+    __hash__ = HashableBy.__hash__
+
+    def __eq__(self, other: Any) -> bool:
+        return self is other or hash(self) == hash(other)
+
+
 # TODO(egparedes): it would be more efficient to implement the caching logic
 # here instead of relying on `functools.lru_cache` and wrapping/unwrapping the
 # arguments.
@@ -477,7 +487,8 @@ def lru_cache(
     """
     Wrap :func:`functools.lru_cache` but allow customizing the cache key.
 
-    Be careful: `key(obj1) == key(obj2)` must imply `obj1 == obj2`.
+    Be careful, with custom `key` functions, `key(obj1) == key(obj2)` automatically
+    implies `obj1 == obj2`, i.e. they are considered equal.
 
     >>> @lru_cache(key=id)
     ... def func(x):
@@ -504,12 +515,13 @@ def lru_cache(
             @functools.wraps(func)
             def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
                 return cached_func(
-                    *(hashable_by(key, arg) for arg in args),
-                    **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
+                    *(EqualityBy(key, arg) for arg in args),
+                    **{k: EqualityBy(key, arg) for k, arg in kwargs.items()},
                 )
 
             inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
             inner.cache_info = cached_func.cache_info  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+            inner.cache_clear = cached_func.cache_clear  # type: ignore[attr-defined]  # mypy not aware of functools.cache_clear behavior
 
             return typing.cast(Callable[_P, _T], inner)
 
@@ -653,6 +665,44 @@ def content_hash(
     assert isinstance(result, str)
 
     return result
+
+
+def custom_pickler(
+    reducer: Callable[[Any], tuple | types.NotImplementedType],
+    name: str | None = None,
+) -> type[pickle.Pickler]:
+    """
+    Create a custom pickler class using the provided function as reducer override.
+    """
+    pickler = type(
+        name or f"CustomReducePickler_{name or id(reducer)}",
+        (pickle.Pickler,),
+        {"reducer_override": staticmethod(reducer)},
+    )
+
+    return pickler
+
+
+def custom_pickler_from_reducers(
+    custom_reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
+    name: str | None = None,
+) -> type[pickle.Pickler]:
+    """
+    Create a pickler with the provided reducers registered in reducer override.
+
+    Since it uses `functools.singledispatch` for the implementation of the
+    reducer override, the custom reducers are used for the types in the keys
+    AND any of its subclasses. This explicitly deviates from the behavior of
+    the `dispatch_table` dict, to allow easy pickle customization of entire class
+    hierarchies.
+    """
+    reducer = functools.singledispatch(
+        cast(Callable[[Any], tuple | types.NotImplementedType], lambda _: NotImplemented)
+    )
+    for cls, func in custom_reducers.items():
+        reducer.register(cls)(func)
+
+    return custom_pickler(reducer, name=name)
 
 
 ddiff = deepdiff.diff.DeepDiff
@@ -832,6 +882,10 @@ class Namespace(types.SimpleNamespace, Generic[T]):
 
     asdict = as_dict
 
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> T: ...
+
 
 class FrozenNamespace(Namespace[T]):
     """An immutable version of :class:`Namespace`.
@@ -871,64 +925,22 @@ class FrozenNamespace(Namespace[T]):
         return self.__cached_hash_value__
 
 
-@dataclasses.dataclass
-class UIDGenerator:
-    """Simple unique id generator using different methods."""
+@dataclasses.dataclass(frozen=True)
+class SequentialIDGenerator:
+    """Simple sequential ID generator."""
 
-    prefix: Optional[str] = dataclasses.field(default=None, kw_only=True)
-    width: Optional[int] = dataclasses.field(default=None, kw_only=True)
-    warn_unsafe: Optional[bool] = dataclasses.field(default=None, kw_only=True)
+    prefix: str = ""
+    counter: Iterator[int] = dataclasses.field(default_factory=itertools.count)
+    #: A string to be used as template for the new ids.
+    #: It should contain the `{prefix}`and `{id}` format keys.
+    format: str = "{prefix}_{id}"
 
-    _counter: Iterator[int] = dataclasses.field(
-        default_factory=functools.partial(itertools.count, 1), init=False
-    )
-    """Constantly increasing counter for generation of sequential unique ids."""
+    def __next__(self) -> str:
+        return self.format.format(prefix=self.prefix, id=next(self.counter))
 
-    def random_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a random globally unique id."""
-        width = width or self.width or 8
-        if width <= 4:
-            raise ValueError(f"Width must be a positive number > 4 ({width} provided).")
-        prefix = prefix or self.prefix
-        u = uuid.uuid4()
-        s = str(u).replace("-", "")[:width]
-        return f"{prefix}_{s}" if prefix else f"{s}"
+    def next(self) -> str:
+        return self.__next__()
 
-    def sequential_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a sequential unique id (for the current session)."""
-        width = width or self.width
-        if width is not None and width < 1:
-            raise ValueError(f"Width must be a positive number ({width} provided).")
-        prefix = prefix or self.prefix
-        count = next(self._counter)
-        s = f"{count:0{width}}" if width else f"{count}"
-        return f"{prefix}_{s}" if prefix else f"{s}"
-
-    def reset_sequence(self, start: int = 1, *, warn_unsafe: Optional[bool] = None) -> UIDGenerator:
-        """Reset generator counter.
-
-        It returns the same instance to allow resetting at initialization:
-
-        Example:
-            >>> generator = UIDGenerator().reset_sequence(3)
-
-        Notes:
-            If the new start value is lower than the last generated UID, new
-            IDs are not longer guaranteed to be unique.
-
-        """
-        if start < 0:
-            raise ValueError(f"Starting value must be a positive number ({start} provided).")
-        if warn_unsafe is None:
-            warn_unsafe = self.warn_unsafe
-        if warn_unsafe and start < next(self._counter):
-            warnings.warn("Unsafe reset of UIDGenerator ({self})", stacklevel=2)
-        self._counter = itertools.count(start)
-
-        return self
-
-
-UIDs = UIDGenerator()
 
 # -- Iterators --
 S = TypeVar("S")

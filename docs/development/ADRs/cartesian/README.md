@@ -27,6 +27,7 @@ ADRs about frontend and backend are separated in respective folders. General (e.
 ### General topics / concepts
 
 - [Experimental features](./experimental-features.md): what you can (and can't) expect from experimental features.
+- [Compiler detection](./compiler-detection.md): what you can (and can't) expect out of the box.
 
 ### Frontend
 
@@ -39,14 +40,16 @@ Remember: [Experimental features](./experimental-features.md) might change at an
 
 - [Absolute indexing in `K`](./experimental/indexing-absolute-k.md): Tradeoffs behind absolute indexation vs. relative offsets
 - [Expose iteration index in `K`](./experimental/iteration-index-k.md): Pandora's box of accessing the current iteration index (in `K`)
+- [2D temporaries](./experimental/2d-temporaries.md): temporary 2D storage within a stencil
+- [Runtime Intervals](./experimental/runtime-intervals.md): Allow for runtime specification of interval bounds
 
 ### Backend
 
 Backend ADRs are sorted per backend in the following table:
 
-| Backend name | ADRs                                                                                                                                                                                               |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`      | [Debug backend](./backend/debug.md)                                                                                                                                                                |
-| `dace:*`     | [`dace:*` backends](./backend/dace.md) \| [`dace:cpu_kfirst`](./backend/dace-cpu-kfirst.md) <br/> [Schedule tree](./backend/dace-schedule-tree.md) <br/> [DaCe version](./backend/dace-version.md) |
-| `numpy`      | (none so far)                                                                                                                                                                                      |
-| `gt:*`       | (none so far)                                                                                                                                                                                      |
+| Backend name | ADRs                                                                                                                                                                                                                                                 |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`      | [Debug backend](./backend/debug.md)                                                                                                                                                                                                                  |
+| `dace:*`     | [`dace:*` backends](./backend/dace.md) <br/> [`dace:cpu_kfirst`](./backend/dace-cpu-kfirst.md) \| [`dace:cpu_KJI`](./backend/dace-cpu-KJI.md) <br/> [Schedule tree](./backend/dace-schedule-tree.md) <br/> [DaCe version](./backend/dace-version.md) |
+| `numpy`      | (none so far)                                                                                                                                                                                                                                        |
+| `gt:*`       | (none so far)                                                                                                                                                                                                                                        |

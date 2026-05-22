@@ -10,14 +10,14 @@ from typing import Tuple
 
 import numpy as np
 import pytest
+from packaging import version
 
 pytest.importorskip("atlas4py")
 
-import gt4py._core.definitions as core_defs
 from gt4py import next as gtx
-from gt4py.next import allocators, neighbor_sum
-from gt4py.next.iterator import atlas_utils
+from gt4py.next import neighbor_sum
 
+from next_tests import definitions as test_definitions
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
 )
@@ -31,6 +31,18 @@ from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
     assert_close,
     nabla_setup,
 )
+
+
+def _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor) -> None:
+    if exec_alloc_descriptor is test_definitions.cupy_execution:
+        cp = test_definitions.cupy_execution.allocator
+        if cp.cuda.runtime.is_hip:
+            cp_version = version.parse(cp.__version__)
+            if cp_version.major == 14 and cp_version.minor == 0 and cp_version.micro < 2:
+                # see https://github.com/cupy/cupy/issues/9742 and https://github.com/cupy/cupy/issues/9829
+                pytest.skip(
+                    "CuPy 14.0.0 and 14.0.1 have a bug that causes this test to fail when jit compiling for hip."
+                )
 
 
 @gtx.field_operator
@@ -65,9 +77,7 @@ def pnabla(
 
 @pytest.mark.requires_atlas
 def test_ffront_compute_zavgS(exec_alloc_descriptor):
-    # TODO(havogt): fix nabla setup to work with GPU
-    if exec_alloc_descriptor.allocator.device_type != core_defs.DeviceType.CPU:
-        pytest.skip("This test is only supported on CPU devices yet")
+    _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor)
 
     setup = nabla_setup(allocator=exec_alloc_descriptor.allocator)
 
@@ -88,9 +98,7 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
 
 @pytest.mark.requires_atlas
 def test_ffront_nabla(exec_alloc_descriptor):
-    # TODO(havogt): fix nabla setup to work with GPU
-    if exec_alloc_descriptor.allocator.device_type != core_defs.DeviceType.CPU:
-        pytest.skip("This test is only supported on CPU devices yet")
+    _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor)
 
     setup = nabla_setup(allocator=exec_alloc_descriptor.allocator)
 

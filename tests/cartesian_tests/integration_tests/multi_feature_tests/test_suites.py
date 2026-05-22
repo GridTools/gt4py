@@ -923,11 +923,17 @@ class TestHorizontalRegionsCorners(gt_testing.StencilTestSuite):
 
     def definition(field_in, field_out):
         with computation(PARALLEL), interval(...):
-            with horizontal(region[I[0] : I[2], J[0] : J[2]], region[I[-3] : I[-1], J[-3] : J[-1]]):
+            with horizontal(
+                region[I[0] : I[0] + 2, J[0] : J[0] + 2],
+                region[I[-1] - 2 : I[-1], J[-1] - 2 : J[-1]],
+            ):
                 field_out = (  # noqa: F841 [unused-variable]
                     field_in + 1.0
                 )
-            with horizontal(region[I[0] : I[2], J[-3] : J[-1]], region[I[-3] : I[-1], J[0] : J[2]]):
+            with horizontal(
+                region[I[0] : I[0] + 2, J[-1] - 2 : J[-1]],
+                region[I[-1] - 2 : I[-1], J[0] : J[0] + 2],
+            ):
                 field_out = (  # noqa: F841 [unused-variable]
                     field_in - 1.0
                 )

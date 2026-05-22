@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import allocators as gtx_allocators, common as gtx_common
+from gt4py.next import common as gtx_common, custom_layout_allocators as gtx_allocators
 
 from gt4py._core import definitions as core_defs
 from next_tests.integration_tests import cases
@@ -50,14 +50,14 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             backend
-        ).with_connectivities(gtx_common.offset_provider_to_type(cartesian_case.offset_provider))(
-            in_field, tmp_field
-        )
+        ).with_compilation_options(
+            connectivities=gtx_common.offset_provider_to_type(cartesian_case.offset_provider)
+        )(in_field, tmp_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(
             backend
-        ).with_connectivities(gtx_common.offset_provider_to_type(cartesian_case.offset_provider))(
-            tmp_field, out_field
-        )
+        ).with_compilation_options(
+            connectivities=gtx_common.offset_provider_to_type(cartesian_case.offset_provider)
+        )(tmp_field, out_field)
 
     # use unique SDFG folder in dace cache to avoid clashes between parallel pytest workers
     with dace.config.set_temporary("cache", value="unique"):
@@ -109,7 +109,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         allocator=allocator,
     )
 
-    testee2 = testee.with_backend(backend).with_connectivities({"E2V": e2v})
+    testee2 = testee.with_backend(backend).with_compilation_options(connectivities={"E2V": e2v})
 
     @dace.program
     def sdfg(
@@ -118,7 +118,9 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         offset_provider: OffsetProvider_t,
         connectivities: dace.compiletime,
     ):
-        testee2.with_connectivities(connectivities)(a, out, offset_provider=offset_provider)
+        testee2.with_compilation_options(connectivities=connectivities)(
+            a, out, offset_provider=offset_provider
+        )
         return out
 
     connectivities = {"E2V": e2v}  # replace 'e2v' with 'e2v.__gt_type__()' when GTIR is AOT

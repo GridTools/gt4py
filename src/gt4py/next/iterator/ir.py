@@ -7,12 +7,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import functools
+import pickle
 import typing
 from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
-from gt4py.eve import Coerced, SymbolName, SymbolRef, utils as eve_utils
-from gt4py.eve.concepts import SourceLocation
+from gt4py.eve import Coerced, SymbolName, SymbolRef, concepts, utils as eve_utils
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.next import common
 from gt4py.next.iterator.builtins import BUILTINS
@@ -22,9 +23,20 @@ from gt4py.next.type_system import type_specifications as ts
 DimensionKind = common.DimensionKind
 
 
+#: A custom pickler which ignores "location" and "type" attribute of IR nodes.
+_semantic_node_pickler: type[pickle.Pickler] = concepts.skipping_fields_node_pickler(
+    "location", "type"
+)
+
+#: Generates an unique fingerprint for IR nodes ignoring their location and type attributes.
+semantic_fingerprint: concepts.NodeFingerprinter = functools.partial(
+    eve_utils.content_hash, pickler=_semantic_node_pickler
+)
+
+
 @eve_utils.noninstantiable
 class Node(eve.Node):
-    location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
+    location: Optional[concepts.SourceLocation] = eve.field(default=None, repr=False, compare=False)
 
     # TODO(tehrengruber): include in comparison if value is not None
     type: Optional[ts.TypeSpec] = eve.field(default=None, repr=False, compare=False)
@@ -33,9 +45,7 @@ class Node(eve.Node):
         """
         Generates a unique hash string for this node that is location and type agnostic.
         """
-        return eve_utils.content_hash(
-            self, pickler=eve.concepts.selective_node_pickler("type", "location")
-        )
+        return semantic_fingerprint(self)
 
     def __str__(self) -> str:
         from gt4py.next.iterator.pretty_printer import pformat

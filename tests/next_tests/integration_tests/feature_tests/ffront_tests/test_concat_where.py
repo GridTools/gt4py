@@ -7,11 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
-from typing import Tuple
 import pytest
 from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
 from gt4py import next as gtx
-from gt4py.next import errors
 from gt4py.next import broadcast
 from gt4py.next.ffront.experimental import concat_where
 from next_tests.integration_tests import cases

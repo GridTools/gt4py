@@ -37,7 +37,7 @@ def _make_distributed_split_sdfg() -> tuple[
     dace.SDFGState,
     dace_nodes.AccessNode,
 ]:
-    sdfg = dace.SDFG(util.unique_name("distributed_split_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("distributed_split_sdfg"))
     state = sdfg.add_state(is_start_block=True)
     state2 = sdfg.add_state_after(state)
 
@@ -115,7 +115,7 @@ def test_distributed_split():
 def _make_split_node_simple_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.MapExit, dace_nodes.MapExit
 ]:
-    sdfg = dace.SDFG(util.unique_name("single_state_split"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("single_state_split"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abt":
@@ -201,7 +201,7 @@ def test_simple_node_split():
 def _make_split_edge_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode
 ]:
-    sdfg = dace.SDFG(util.unique_name("split_edge"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("split_edge"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abt":
@@ -281,7 +281,7 @@ def test_split_edge():
 
 
 def test_split_edge_2d():
-    sdfg = dace.SDFG(util.unique_name("split_edge_2d"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("split_edge_2d"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "ab":
@@ -409,7 +409,6 @@ def test_subset_merging_stability():
     stable_result: Optional[set[dace_sbs.Subset]] = None
     for permut in itertools.permutations(subsets):
         merged_subset = gtx_dace_split.subset_merger(list(permut))
-        print(merged_subset)
 
         assert merged_subset is not None
         assert len(merged_subset) == 2
@@ -418,3 +417,67 @@ def test_subset_merging_stability():
             stable_result = {copy.deepcopy(ss) for ss in merged_subset}
         else:
             assert set(merged_subset) == stable_result
+
+
+def _make_sdfg_for_deterministic_splitting() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode
+]:
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("deterministic_splitter"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "abtcd":
+        sdfg.add_array(
+            name,
+            shape=(40,),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+    t = state.add_access("t")
+
+    state.add_nedge(state.add_access("a"), t, dace.Memlet("a[1:31] -> [10:40]"))
+    state.add_nedge(state.add_access("b"), t, dace.Memlet("b[2:12] -> [0:10]"))
+    state.add_nedge(t, state.add_access("c"), dace.Memlet("t[0:10] -> [2:12]"))
+    state.add_nedge(t, state.add_access("d"), dace.Memlet("t[10:40] -> [1:31]"))
+
+    sdfg.validate()
+    return sdfg, state, t
+
+
+@pytest.mark.parametrize("use_first_split_order", [True, False])
+def test_deterministic_splitting(use_first_split_order: bool):
+    import dace
+
+    sdfg, state, t = _make_sdfg_for_deterministic_splitting()
+    assert util.count_nodes(sdfg, dace_nodes.AccessNode) == 5
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    split_description = [dace_sbs.Range.from_string("0:10"), dace_sbs.Range.from_string("10:40")]
+    expected_split_order = [
+        dace_sbs.Range.from_string(split) for split in sorted(map(str, split_description))
+    ]
+    if use_first_split_order:
+        split_description = list(reversed(split_description))
+
+    access_node_fragments = gtx_transformations.splitting_tools.split_node(
+        state=state,
+        sdfg=sdfg,
+        node_to_split=t,
+        split_description=split_description,
+        allow_to_bypass_nodes=False,
+    )
+    assert len(access_node_fragments) == 2
+    after_ac = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(after_ac) == 6
+    assert "t" not in after_ac
+    assert {"t_split_0", "t_split_1"}.issubset(ac.data for ac in after_ac)
+
+    for i, (split, access_node_fragment) in enumerate(access_node_fragments.items()):
+        assert split == expected_split_order[i]
+        expected_data_name = f"t_split_{i}"
+        assert access_node_fragment.data == expected_data_name
+        assert access_node_fragment.desc(sdfg).shape[0] == split.size()[0]
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)

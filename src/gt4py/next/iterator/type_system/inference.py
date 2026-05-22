@@ -33,7 +33,7 @@ def _is_representable_as_int(s: int | str) -> bool:
 
 
 def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
-    if node.type:
+    if node.type and not isinstance(type_, ts.DeferredType):
         assert type_info.is_compatible_type(node.type, type_), (
             f"Node {node!s} already has a type {node.type} which differs from {type_}."
         )
@@ -444,10 +444,12 @@ class ITIRTypeInference(eve.NodeTranslator):
             # the target can have fewer elements than the expr in which case the output from the
             # expression is simply discarded.
             expr_type = functools.reduce(
-                lambda tuple_type, i: tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
-                # `ts.DeferredType` only occurs for scans returning a tuple
-                if not isinstance(tuple_type, ts.DeferredType)
-                else ts.DeferredType(constraint=None),
+                lambda tuple_type, i: (
+                    tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
+                    # `ts.DeferredType` only occurs for scans returning a tuple
+                    if not isinstance(tuple_type, ts.DeferredType)
+                    else ts.DeferredType(constraint=None)
+                ),
                 path,
                 node.expr.type,
             )

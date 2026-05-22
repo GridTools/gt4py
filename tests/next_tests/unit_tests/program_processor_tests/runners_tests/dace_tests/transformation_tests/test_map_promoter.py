@@ -14,7 +14,7 @@ from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
-    gtir_to_sdfg_utils as gtx_sdfg_utils,
+    lowering as gtx_dace_lowering,
     transformations as gtx_transformations,
 )
 
@@ -31,7 +31,7 @@ def _make_serial_map_promotion_sdfg(
 ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]:
     shape_1d = (N,)
     shape_2d = (N, N)
-    sdfg = dace.SDFG(util.unique_name("serial_promotable_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("serial_promotable_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     # 1D Arrays
@@ -252,7 +252,7 @@ def test_serial_map_promotion_on_symbolic_range(use_symbolic_range):
 def test_serial_map_promotion_2d_top_1d_bottom():
     """Does not apply because the bottom map needs to be promoted."""
 
-    sdfg = dace.SDFG(util.unique_name("serial_map_promoter_2d_map_on_top"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("serial_map_promoter_2d_map_on_top"))
     state = sdfg.add_state(is_start_block=True)
 
     # 2D Arrays
@@ -311,11 +311,11 @@ def test_serial_map_promotion_2d_top_1d_bottom():
 def _make_horizontal_promoter_sdfg(
     d1_map_is_vertical: bool,
 ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapEntry]:
-    sdfg = dace.SDFG(util.unique_name("serial_map_promoter_tester"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("serial_map_promoter_tester"))
     state = sdfg.add_state(is_start_block=True)
 
-    h_idx = gtx_sdfg_utils.get_map_variable(gtx_common.Dimension("boden"))
-    v_idx = gtx_sdfg_utils.get_map_variable(
+    h_idx = gtx_dace_lowering.get_map_variable(gtx_common.Dimension("boden"))
+    v_idx = gtx_dace_lowering.get_map_variable(
         gtx_common.Dimension("K", gtx_common.DimensionKind.VERTICAL)
     )
 
@@ -447,7 +447,9 @@ def test_horizonal_promotion_promotion_and_merge(d1_map_is_vertical: bool):
 def _make_sdfg_different_1d_map_name(
     d1_map_param: str,
 ) -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("serial_map_promoter_different_names_" + d1_map_param))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("serial_map_promoter_different_names_" + d1_map_param)
+    )
     state = sdfg.add_state(is_start_block=True)
 
     # 1D Arrays

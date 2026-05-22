@@ -56,7 +56,6 @@ def get_gt_pyext_build_opts(
     opt_level: Literal["0", "1", "2", "3", "s"] = "3",
     extra_opt_flags: str = "",
     add_profile_info: bool = False,
-    uses_openmp: bool = True,
     uses_cuda: bool = False,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
     include_dirs: list[str] = []
@@ -159,20 +158,11 @@ def get_gt_pyext_build_opts(
             extra_link_args=extra_link_args,
         )
 
-    if uses_openmp:
-        cpp_flags = gt_config.build_settings["openmp_cppflags"]
-        if uses_cuda:
-            cuda_flags = []
-            for cpp_flag in cpp_flags:
-                if is_rocm_gpu:
-                    cuda_flags.extend([cpp_flag])
-                else:
-                    cuda_flags.extend(["--compiler-options", cpp_flag])
-            build_opts["extra_compile_args"]["cuda"].extend(cuda_flags)
-        elif cpp_flags:
-            build_opts["extra_compile_args"].extend(cpp_flags)
+    if gt_config.build_settings["openmp"]["use_openmp"] and not uses_cuda:
+        cpp_flags = gt_config.build_settings["openmp"]["cppflags"]
+        build_opts["extra_compile_args"].extend(cpp_flags)
 
-        ld_flags = gt_config.build_settings["openmp_ldflags"]
+        ld_flags = gt_config.build_settings["openmp"]["ldflags"]
         if ld_flags:
             build_opts["extra_link_args"].extend(ld_flags)
 

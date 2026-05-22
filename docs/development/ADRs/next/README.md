@@ -32,7 +32,7 @@ Writing a new ADR is simple:
 
 ### Embedded Execution
 
-_None_
+- [0022 - Limitations of embedded concat_where](0022-Limitations-of-embedded-concat_where.md)
 
 ### Transformations
 

@@ -29,11 +29,7 @@ from gt4py.eve.extended_typing import (
     final,
 )
 from gt4py.next import common, errors, named_collections, utils
-from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
-
-
-DATA_T = TypeVar("DATA_T")
 
 
 def _make_dict_expr(exprs: dict[str, str]) -> str:
@@ -117,6 +113,15 @@ class StaticArg(ArgStaticDescriptor, Generic[core_defs.ScalarT]):
 
 
 @dataclasses.dataclass(frozen=True)
+class FieldDomainDescriptor(ArgStaticDescriptor):
+    domain: common.Domain
+
+    @classmethod
+    def attribute_extractor_exprs(cls, arg_expr: str) -> dict[str, str]:
+        return {"domain": f"({arg_expr}).domain"}
+
+
+@dataclasses.dataclass(frozen=True)
 class JITArgs:
     """Concrete (runtime) arguments to a GTX program in a format that can be passed into the toolchain."""
 
@@ -126,6 +131,12 @@ class JITArgs:
     @classmethod
     def from_signature(cls, *args: Any, **kwargs: Any) -> Self:
         return cls(args=args, kwargs=kwargs)
+
+
+ArgStaticDescriptorsContext: TypeAlias = dict[str, MaybeNestedInTuple[ArgStaticDescriptor | None]]
+ArgStaticDescriptorsContextsByType: TypeAlias = Mapping[
+    type[ArgStaticDescriptor], ArgStaticDescriptorsContext
+]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -140,10 +151,7 @@ class CompileTimeArgs:
     #: If an argument or element of an argument has no descriptor, the respective value is `None`.
     #: E.g., for a tuple argument `a` with type `ts.TupleTupe(types=[field_t, int32_t])` a possible
     #  context would be `{"a": (FieldDomainDescriptor(...), None)}`.
-    argument_descriptor_contexts: Mapping[
-        type[ArgStaticDescriptor],
-        dict[str, MaybeNestedInTuple[ArgStaticDescriptor | None]],
-    ]
+    argument_descriptor_contexts: ArgStaticDescriptorsContextsByType
 
     @property
     def offset_provider_type(self) -> common.OffsetProviderType:
@@ -166,20 +174,6 @@ class CompileTimeArgs:
     @classmethod
     def empty(cls) -> Self:
         return cls(tuple(), {}, {}, None, {})
-
-
-def jit_to_aot_args(
-    inp: JITArgs,
-) -> CompileTimeArgs:
-    return CompileTimeArgs.from_concrete(*inp.args, **inp.kwargs)
-
-
-def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
-    toolchain.CompilableProgram[DATA_T, JITArgs],
-    toolchain.CompilableProgram[DATA_T, CompileTimeArgs],
-]:
-    """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
-    return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
 
 
 # This is not really accurate, just an approximation
@@ -237,7 +231,11 @@ def make_primitive_value_args_extractor(
     The returned function has the signature `(*args, **kwargs) -> (args, kwargs)`,
     where `args` is a tuple of positional arguments and `kwargs` is a dictionary of
     keyword arguments containing the extracted primitive values where needed.
+
+    This function only uses structural information of the type, primitive values may be
+    passed as :ref:`ts.DeferredType`.
     """
+
     args_param = "args"
     kwargs_param = "kwargs"
     num_args_to_extract = 0

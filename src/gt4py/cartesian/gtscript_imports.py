@@ -182,12 +182,12 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
 
         if self.path_stats(self.path) != self.path_stats(str(self.module_file.absolute())):
             assert fullname is not None
-            self.module_file.write_text(self.get_source_code(fullname))
+            self.module_file.write_text(self.get_source_code(fullname), encoding="utf-8")
 
         return str(self.module_file)
 
     def get_source_code(self, fullname: str) -> str:
-        return self.plpath.read_text().replace(GTS_COMMENT, GTS_IMPORT)
+        return self.plpath.read_text(encoding="utf-8").replace(GTS_COMMENT, GTS_IMPORT)
 
     def create_module(self, spec: importlib.machinery.ModuleSpec) -> ModuleType:
         module = ModuleType(name=spec.name)

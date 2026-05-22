@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.eve.pattern_matching import ObjectPattern as P
+from gt4py.next import utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import fuse_maps, inline_lambdas
 
@@ -40,15 +41,7 @@ _p_sym = P(ir.Sym)
 _p_symref = P(ir.SymRef)
 
 
-def _apply_fuse_maps(ir: ir.Node) -> ir.Node:
-    result = fuse_maps.FuseMaps().visit(ir)
-    result = inline_lambdas.InlineLambdas.apply(
-        result
-    )  # FuseMaps does not inline everything which makes the expected result harder to test
-    return result
-
-
-def test_simple():
+def test_simple(uids: utils.IDGeneratorPool):
     testee = _map(
         ir.SymRef(id="plus"),
         ir.SymRef(id="a"),
@@ -77,11 +70,13 @@ def test_simple():
         ir.SymRef(id="c"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_simple_with_lambdas():
+def test_simple_with_lambdas(uids: utils.IDGeneratorPool):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="a"),
@@ -110,11 +105,13 @@ def test_simple_with_lambdas():
         ir.SymRef(id="c"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_simple_reduce():
+def test_simple_reduce(uids: utils.IDGeneratorPool):
     testee = _reduce(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="init"),
@@ -143,11 +140,13 @@ def test_simple_reduce():
         ir.SymRef(id="b"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_nested():
+def test_nested(uids: utils.IDGeneratorPool):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="a"),
@@ -188,11 +187,13 @@ def test_nested():
         ir.SymRef(id="d"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_multiple_maps_with_colliding_symbol_names():
+def test_multiple_maps_with_colliding_symbol_names(uids: utils.IDGeneratorPool):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         _map(
@@ -226,5 +227,7 @@ def test_multiple_maps_with_colliding_symbol_names():
         ir.SymRef(id="d"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)

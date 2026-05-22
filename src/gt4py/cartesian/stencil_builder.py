@@ -290,7 +290,7 @@ class StencilBuilder:
         """
         if not self.module_path.exists():
             return ""
-        return self.module_path.read_text()
+        return self.module_path.read_text(encoding="utf-8")
 
     @property
     def class_name(self) -> str:

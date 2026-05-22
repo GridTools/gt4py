@@ -23,11 +23,13 @@ from gt4py.storage.cartesian.utils import allocate_cpu, allocate_gpu, normalize_
 
 
 CPU_LAYOUTS = [
-    name for name, info in gt4py.storage.layout.REGISTRY.items() if info["device"] == "cpu"
+    name
+    for name, info in gt4py.storage.cartesian.layout_registry.REGISTRY.items()
+    if info["device"] == "cpu"
 ]
 GPU_LAYOUTS = [
     pytest.param(name, marks=pytest.mark.requires_gpu)
-    for name, info in gt4py.storage.layout.REGISTRY.items()
+    for name, info in gt4py.storage.cartesian.layout_registry.REGISTRY.items()
     if info["device"] == "gpu"
 ]
 

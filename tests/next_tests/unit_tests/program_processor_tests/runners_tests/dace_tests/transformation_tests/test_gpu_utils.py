@@ -15,6 +15,7 @@ from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace.transformations import (
     gpu_utils as gtx_dace_fieldview_gpu_utils,
+    utils as gtx_transformations_utils,
 )
 
 from . import util
@@ -42,7 +43,7 @@ def _get_trivial_gpu_promotable(
         tasklet_code: The body of the Tasklet inside the trivial map.
         trivial_map_range: Range of the trivial map, defaults to `"0"`.
     """
-    sdfg = dace.SDFG(util.unique_name("gpu_promotable_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations_utils.unique_name("gpu_promotable_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
     sdfg.add_symbol("N", dace.int32)
 
@@ -155,7 +156,7 @@ def test_trivial_gpu_map_promoter_2():
 @pytest.mark.parametrize("method", [0, 1])
 def test_set_gpu_properties(method: int):
     """Tests the `gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize()`."""
-    sdfg = dace.SDFG(util.unique_name("gpu_properties_test"))
+    sdfg = dace.SDFG(gtx_transformations_utils.unique_name("gpu_properties_test"))
     state = sdfg.add_state(is_start_block=True)
 
     map_entries: dict[int, dace_nodes.MapEntry] = {}
@@ -232,7 +233,7 @@ def test_set_gpu_properties(method: int):
 
 def test_set_gpu_properties_1D():
     """Tests the `gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize()` with 1D maps."""
-    sdfg = dace.SDFG(util.unique_name("gpu_properties_test"))
+    sdfg = dace.SDFG(gtx_transformations_utils.unique_name("gpu_properties_test"))
     state = sdfg.add_state(is_start_block=True)
 
     map_entries: dict[int, dace_nodes.MapEntry] = {}
@@ -299,7 +300,7 @@ def test_set_gpu_properties_1D():
 
 def test_set_gpu_properties_2D_3D():
     """Tests the `gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize()` with 2D, 3D and 4D maps."""
-    sdfg = dace.SDFG(util.unique_name("gpu_properties_test"))
+    sdfg = dace.SDFG(gtx_transformations_utils.unique_name("gpu_properties_test"))
     state = sdfg.add_state(is_start_block=True)
 
     map_entries: dict[int, dace_nodes.MapEntry] = {}
@@ -351,3 +352,32 @@ def test_set_gpu_properties_2D_3D():
     assert len(map4.params) == 4
     assert map4.gpu_block_size == [1, 2, 32]
     assert map4.gpu_launch_bounds == "0"
+
+
+def test_set_gpu_maxnreg():
+    """Tests if gpu_maxnreg property is set correctly to GPU maps."""
+    sdfg = dace.SDFG(gtx_transformations_utils.unique_name("gpu_maxnreg_test"))
+    state = sdfg.add_state(is_start_block=True)
+    dim = 2
+    shape = (10,) * (dim - 1) + (1,)
+    sdfg.add_array(f"A_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global)
+    sdfg.add_array(f"B_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global)
+    _, me, _ = state.add_mapped_tasklet(
+        f"map_{dim}",
+        map_ranges={f"__i{i}": f"0:{s}" for i, s in enumerate(shape)},
+        inputs={"__in": dace.Memlet(f"A_{dim}[{','.join(f'__i{i}' for i in range(dim))}]")},
+        code="__out = math.cos(__in)",
+        outputs={"__out": dace.Memlet(f"B_{dim}[{','.join(f'__i{i}' for i in range(dim))}]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+    sdfg.apply_gpu_transformations()
+    gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
+        sdfg=sdfg,
+        block_size_1d=(128, 1, 1),
+        block_size_2d=(64, 2, 1),
+        block_size_3d=(2, 2, 32),
+        block_size=(32, 4, 1),
+        gpu_maxnreg=128,
+    )
+    assert me.gpu_maxnreg == 128

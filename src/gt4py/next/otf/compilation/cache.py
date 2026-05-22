@@ -34,7 +34,7 @@ def _serialize_source(source: stages.ProgramSource) -> str:
     parameters = [_serialize_param(param) for param in source.entry_point.parameters]
     dependencies = [_serialize_library_dependency(dep) for dep in source.library_deps]
     return f"""\
-    language: {source.language}
+    language: {source.code_spec}
     name: {source.entry_point.name}
     params: {", ".join(parameters)}
     deps: {", ".join(dependencies)}
@@ -49,8 +49,19 @@ def _cache_folder_name(source: stages.ProgramSource) -> str:
     return source.entry_point.name + "_" + fingerprint_hex_str
 
 
+def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:
+    """Return the base directory for cached artifacts with the given lifetime."""
+    match lifetime:
+        case config.BuildCacheLifetime.SESSION:
+            return _session_cache_dir_path
+        case config.BuildCacheLifetime.PERSISTENT:
+            return config.BUILD_CACHE_DIR
+        case _:
+            raise ValueError("Unsupported caching lifetime.")
+
+
 def get_cache_folder(
-    compilable_source: stages.CompilableSource, lifetime: config.BuildCacheLifetime
+    compilable_source: stages.CompilableProject, lifetime: config.BuildCacheLifetime
 ) -> pathlib.Path:
     """
     Construct the path to where the build system project artifact of a compilable source should be cached.
@@ -60,14 +71,7 @@ def get_cache_folder(
     # TODO(ricoh): make dependent on binding source too or add alternative that depends on bindings
     folder_name = _cache_folder_name(compilable_source.program_source)
 
-    match lifetime:
-        case config.BuildCacheLifetime.SESSION:
-            base_path = _session_cache_dir_path
-        case config.BuildCacheLifetime.PERSISTENT:
-            base_path = config.BUILD_CACHE_DIR
-        case _:
-            raise ValueError("Unsupported caching lifetime.")
-
+    base_path = get_cache_base_path(lifetime)
     base_path.mkdir(exist_ok=True)
 
     complete_path = base_path / folder_name

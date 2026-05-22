@@ -5,15 +5,17 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
 import functools
+import inspect
 from collections.abc import Callable
-from typing import Iterator, Sequence, cast
+from typing import Any, Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
+from gt4py.eve import datamodels
 from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common, utils
+from gt4py.next.ffront.type_specifications import ProgramType
 from gt4py.next.type_system import type_info
 
 
@@ -52,21 +54,6 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
     return isinstance(field, ts.FieldType) and len(field.dims) == 0
 
 
-def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
-    """
-    Promote scalar primitive constituents to zero dimensional fields.
-
-    E.g. all elements of a tuple which are scalars are promoted to a zero dimensional field.
-    """
-
-    def promote_el(type_el: ts.TypeSpec) -> ts.TypeSpec:
-        if isinstance(type_el, ts.ScalarType):
-            return ts.FieldType(dims=[], dtype=type_el)
-        return type_el
-
-    return type_info.apply_to_primitive_constituents(promote_el, type_)
-
-
 def promote_zero_dims(
     function_type: ts.FunctionType, args: Sequence[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> tuple[tuple, dict]:
@@ -80,12 +67,12 @@ def promote_zero_dims(
         def _as_field(arg_el: ts.TypeSpec, path: tuple[int, ...]) -> ts.TypeSpec:
             param_el = param
             for idx in path:
-                if not isinstance(param_el, ts.TupleType):
+                if not isinstance(param_el, ts.COLLECTION_TYPE_SPECS):
                     # The parameter has a different structure than the actual argument. Just return
                     # the argument unpromoted and let the further error handling take care of printing
                     # a meaningful error.
                     return arg_el
-                param_el = param_el.types[idx]
+                param_el = param_el.types[idx]  # type: ignore[attr-defined] # checked in condition above
 
             if _is_zero_dim_field(param_el) and (
                 type_info.is_number(arg_el) or type_info.is_logical(arg_el)
@@ -96,7 +83,9 @@ def promote_zero_dims(
                     raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
-        return type_info.apply_to_primitive_constituents(_as_field, arg, with_path_arg=True)
+        res = tree_map_type(_as_field, with_path_arg=True)(arg)
+        assert isinstance(res, ts.TypeSpec)
+        return res
 
     new_args = [*args]
     for i, (param, arg) in enumerate(
@@ -186,13 +175,25 @@ def function_signature_incompatibilities_fieldop(
     )
 
 
-def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType | ts.TupleType:
+def _tree_map_type_constructor_drop_python_type(
+    value: ts.CollectionTypeSpecT,
+    elems: NestedTuple[ts.DataType],
+) -> ts.CollectionTypeSpecT:
+    result = _tree_map_type_constructor(value, elems)
+    if isinstance(value, ts.NamedCollectionType):
+        result = datamodels.evolve(result, original_python_type=ts.ANY_PYTHON_TYPE_NAME)
+    return result
+
+
+def _scan_param_promotion(
+    param: ts.TypeSpec, arg: ts.TypeSpec
+) -> ts.FieldType | ts.TupleType | ts.NamedCollectionType:
     """
     Promote parameter of a scan pass to match dimensions of respective scan operator argument.
 
     More specifically: Given a scalar type `param` and a field type `arg` return a field with the
     dtype of the `param` and the dimensions of `arg`. If `param` is a composite of scalars
-    the promotion is element-wise.
+    the promotion is element-wise. If `arg` is a scalar, the result is a 0-d field.
 
     Example:
     --------
@@ -221,8 +222,16 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    res = type_info.apply_to_primitive_constituents(_as_field, param, with_path_arg=True)
-    assert isinstance(res, (ts.FieldType, ts.TupleType))
+    # Note: In the promotion of the scalar type to field type we drop the information about
+    # the original python type in NamedCollections as we want to be able to express compatibility
+    # between named collections of scalars and their structurally equivalent collection of fields.
+    # Once we support generic named collections, this special case will disappear.
+    res = tree_map_type(
+        _as_field,
+        result_collection_constructor=_tree_map_type_constructor_drop_python_type,
+        with_path_arg=True,
+    )(param)
+    assert isinstance(res, (ts.FieldType, ts.TupleType, ts.NamedCollectionType))
     return res
 
 
@@ -340,4 +349,112 @@ def return_type_scanop(
     return cast(
         ts.TypeSpec,
         tree_map_type(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype),
+    )
+
+
+def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.FunctionType:
+    """
+    Return the type of a callable when encountered in context of a program.
+
+    A callable can be a field-, scan-operator or a simple function (though the latter is not
+    implemented in the frontent). The program context is either inside of a program or even
+    outside the GT4Py where all callables behave as if they were called from inside a program.
+
+    For example a simple field operator like
+
+    ```
+    @field_operator
+    def identity(a: IField) -> IField: ...
+    ```
+
+    has the signature of the following program in the context of a program.
+
+    ```
+    @program
+    def identity(a: IField, *, out: IField) -> None: ...
+    ```
+    """
+    if isinstance(callable_type, ts_ffront.FieldOperatorType):
+        definition = callable_type.definition
+        return ProgramType(
+            definition=ts.FunctionType(
+                pos_only_args=definition.pos_only_args,
+                pos_or_kw_args=definition.pos_or_kw_args | {"out": definition.returns},
+                kw_only_args=definition.kw_only_args,
+                returns=ts.VoidType(),
+            )
+        )
+    elif isinstance(callable_type, ts_ffront.ScanOperatorType):
+        as_deferred_type_with_same_structure = tree_map_type(
+            lambda _: ts.DeferredType(constraint=None)
+        )
+        scan_pass_type = callable_type.definition
+        _, *non_carry_args = scan_pass_type.pos_or_kw_args.items()
+        pos_or_kw_args = dict(non_carry_args) | {"out": scan_pass_type.returns}
+        assert not scan_pass_type.pos_only_args
+        return ProgramType(
+            ts.FunctionType(
+                pos_only_args=[],
+                # TODO(tehrengruber): What we actually want is a generic type here, but we don't
+                #  have that concept yet.
+                pos_or_kw_args={
+                    k: as_deferred_type_with_same_structure(t) for k, t in pos_or_kw_args.items()
+                },
+                kw_only_args={
+                    k: as_deferred_type_with_same_structure(t)
+                    for k, t in scan_pass_type.kw_only_args.items()
+                },
+                returns=ts.VoidType(),
+            )
+        )
+    assert isinstance(callable_type, (ts.FunctionType, ts_ffront.ProgramType))
+    return callable_type
+
+
+def _signature_from_callable_in_program_context(
+    callable_type: ts.CallableType,
+) -> inspect.Signature:
+    if isinstance(callable_type, ts_ffront.ProgramType):
+        return _signature_from_callable_in_program_context(callable_type.definition)
+    elif isinstance(callable_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType):
+        operator_signature = _signature_from_callable_in_program_context(callable_type.definition)
+        params = list(operator_signature.parameters.values())
+        if isinstance(callable_type, ts_ffront.ScanOperatorType):
+            params = params[1:]  # Remove the carry state arg
+        return inspect.Signature(
+            parameters=[*params, inspect.Parameter("out", inspect.Parameter.KEYWORD_ONLY)],
+            return_annotation=inspect.Signature.empty,
+        )
+    assert isinstance(callable_type, ts.FunctionType)
+    return inspect.Signature(
+        parameters=(
+            [
+                *(
+                    inspect.Parameter(name=str(i), kind=inspect.Parameter.POSITIONAL_ONLY)
+                    for i, type_ in enumerate(callable_type.pos_only_args)
+                ),
+                *(
+                    inspect.Parameter(name=name, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                    for name, type_ in callable_type.pos_or_kw_args.items()
+                ),
+                *(
+                    inspect.Parameter(name=name, kind=inspect.Parameter.KEYWORD_ONLY)
+                    for name, type_ in callable_type.kw_only_args.items()
+                ),
+            ]
+        ),
+        return_annotation=callable_type.returns,
+    )
+
+
+def make_args_canonicalizer(
+    callable_type: ts.CallableType, **kwargs: Any
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+    """
+    Create a call arguments canonicalizer function from a given signature.
+
+    See :ref:`utils.make_args_canonicalizer`.
+    """
+    return utils.make_args_canonicalizer(
+        _signature_from_callable_in_program_context(callable_type), **kwargs
     )

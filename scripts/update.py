@@ -95,34 +95,42 @@ def package_version(new_version_number: str) -> None:
     try:
         with open(common.REPO_ROOT / "pyproject.toml", "rb") as f:
             data = tomllib.load(f)
-            current_version = data["tool"]["versioningit"]["default-version"]
+            current_default_version = data["tool"]["versioningit"]["default-version"]
     except Exception as e:
         rich.print(
             f"Incompatible or missing 'tool.versioningit.default-version' key in 'pyproject.toml': {e}"
         )
         raise typer.Exit(ExitCode.UNRECOGNIZED_PYPROJECT_TOML) from e
 
-    new_version = f"{new_version_number!s}+unknown.version.details"
+    LOCAL_PART = "+unknown.version.details"
+    assert current_default_version.endswith(LOCAL_PART), (
+        f"Current default version '{current_default_version}' does not end with expected local part '{LOCAL_PART}'."
+    )
+    new_default_version = f"{new_version_number!s}{LOCAL_PART}"
 
     # Hardcode the new default version in pyproject.toml
     pyproject_path = common.REPO_ROOT / "pyproject.toml"
     pyproject_path.write_text(
-        pyproject_path.read_text().replace(f'"{current_version}"', f'"{new_version}"', 1)
+        pyproject_path.read_text().replace(
+            f'default-version = "{current_default_version}"',
+            f'default-version = "{new_default_version}"',
+            1,
+        )
     )
 
     # Hardcode the new default version in __about__.py
     about_path = common.REPO_ROOT / "src" / "gt4py" / "__about__.py"
     current_about_text = about_path.read_text()
-    if f'"{current_version}"' not in current_about_text:
+    if f'"{current_default_version}"' not in current_about_text:
         rich.print(
-            f"[red]Error:[/red] Current version '{current_version}' not found in '__about__.py'."
+            f"[red]Error:[/red] Current version '{current_default_version}' not found in '__about__.py'."
         )
         raise typer.Exit(ExitCode.INVALID_CURRENT_VERSION_IN_ABOUT_PY)
 
     about_path.write_text(
         current_about_text.replace(
-            f'\non_build_version: Final = "{current_version}"',
-            f'\non_build_version: Final = "{new_version}"',
+            f'\non_build_version: Final = "{current_default_version}"',
+            f'\non_build_version: Final = "{new_default_version}"',
             1,
         )
     )

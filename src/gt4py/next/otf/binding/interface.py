@@ -12,11 +12,16 @@ import dataclasses
 
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve import codegen
-from gt4py.next.otf import languages
+from gt4py.next.otf import code_specs
 
 
-def format_source(settings: languages.LanguageSettings, source: str) -> str:
-    return codegen.format_source(settings.formatter_key, source, style=settings.formatter_style)
+def format_source(source_code_spec: code_specs.SourceCodeSpec, source: str) -> str:
+    assert source_code_spec.formatter_key is not None, (
+        "No formatter key specified in source code specification."
+    )
+    return codegen.format_source(
+        source_code_spec.formatter_key, source, **(source_code_spec.formatter_options or {})
+    )
 
 
 @dataclasses.dataclass(frozen=True)

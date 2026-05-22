@@ -270,6 +270,22 @@ def test_lru_cache_key_id_called_once():
     assert cached.cache_info().misses == 1
 
 
+def test_lru_cache_no_eq_call():
+    class A:
+        def __hash__(self) -> int:
+            return 1
+
+        def __eq__(self, other):
+            raise ValueError()  # this function should never be called
+
+    @eve.utils.lru_cache(key=lambda x: hash(x))
+    def func(x):
+        pass
+
+    func(A())
+    func(A())
+
+
 def test_fluid_partial():
     from gt4py.eve.utils import fluid_partial
 
@@ -371,86 +387,30 @@ def test_case_style_converter(name_with_cases):
             ]
 
 
-# -- UIDGenerator --
-class TestUIDGenerator:
-    def test_random_id(self):
-        from gt4py.eve.utils import UIDGenerator, UIDs
+# -- SequentialIDGenerator --
+class TestSequentialIDGenerator:
+    def test_basic(self):
+        from gt4py.eve.utils import SequentialIDGenerator
 
-        a = UIDs.random_id()
-        b = UIDs.random_id()
-        c = UIDs.random_id()
-        assert a != b and a != c and b != c
-        assert UIDs.random_id(prefix="abcde").startswith("abcde")
-        assert len(UIDs.random_id(width=10)) == 10
-        with pytest.raises(ValueError, match="Width"):
-            UIDs.random_id(width=-1)
-        with pytest.raises(ValueError, match="Width"):
-            UIDs.random_id(width=4)
+        uids = SequentialIDGenerator()
+        first = next(uids)
+        second = uids.next()
+        assert next(uids) != first != second
 
-        uids = UIDGenerator(prefix="abcde")
-        assert uids.sequential_id().startswith("abcde")
-        assert uids.sequential_id(prefix="xyz").startswith("xyz")
+    def test_prefix(self):
+        from gt4py.eve.utils import SequentialIDGenerator
 
-        uids = UIDGenerator(width=12)
-        assert len(uids.sequential_id()) == 12
-        assert len(UIDs.sequential_id(width=10)) == 10
+        uids = SequentialIDGenerator(prefix="test_")
+        uid = next(uids)
+        assert uid.startswith("test_")
 
-    def test_sequential_id(self):
-        from gt4py.eve.utils import UIDGenerator, UIDs
+    def test_format(self):
+        from gt4py.eve.utils import SequentialIDGenerator
 
-        i = UIDs.sequential_id()
-        assert UIDs.sequential_id() != i
-        assert UIDs.sequential_id(prefix="abcde").startswith("abcde")
-        assert len(UIDs.sequential_id(width=10)) == 10
-        assert not UIDs.sequential_id().startswith("0")
-        with pytest.raises(ValueError, match="Width"):
-            UIDs.sequential_id(width=-1)
-
-        uids = UIDGenerator(prefix="abcde")
-        assert uids.prefix == "abcde"
-        assert uids.sequential_id().startswith("abcde")
-        assert uids.sequential_id(prefix="xyz").startswith("xyz")
-
-        uids = UIDGenerator(width=12)
-        assert uids.width == 12
-        assert len(uids.sequential_id()) == 12
-        assert len(UIDs.sequential_id(width=10)) == 10
-
-    def test_reset_sequence(self):
-        import warnings
-
-        from gt4py.eve.utils import UIDGenerator, UIDs
-
-        i = UIDs.sequential_id()
-        counter = int(i)
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-
-            UIDs.reset_sequence(counter + 10)
-            assert int(UIDs.sequential_id()) == counter + 10
-
-            UIDs.reset_sequence(counter + 1, warn_unsafe=False)
-
-        with pytest.warns(UserWarning, match="Unsafe reset"):
-            UIDs.reset_sequence(counter, warn_unsafe=True)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-
-            uids = UIDGenerator(warn_unsafe=True).reset_sequence(10)
-            counter = int(uids.sequential_id())
-            assert uids.warn_unsafe is True
-            assert counter == 10
-
-            uids.reset_sequence(counter + 10)
-            uids.reset_sequence(1, warn_unsafe=False)
-
-        uids.reset_sequence(10, warn_unsafe=False)
-        with pytest.warns(UserWarning, match="Unsafe reset"):
-            uids.reset_sequence(1)
-
-        with pytest.raises(ValueError, match="must be a positive number"):
-            uids.reset_sequence(-1)
+        prefix = "UID"
+        uids = SequentialIDGenerator(format="{prefix}-{id:04d}", prefix=prefix)
+        uid = next(uids)
+        assert len(uid) == len(prefix) + 1 + 4  # prefix + '-' + zero-padded id
 
 
 # -- Iterators --
@@ -470,3 +430,98 @@ def test_xenumerate():
     from gt4py.eve.utils import xenumerate
 
     assert list(xenumerate(string.ascii_letters[:3])) == [(0, "a"), (1, "b"), (2, "c")]
+
+
+# -- Custom Pickler utilities --
+@dataclasses.dataclass
+class _Offseter:
+    offset: int
+    calls_log: list[int] = dataclasses.field(default_factory=list)
+
+    def __call__(self, a: int) -> int:
+        self.calls_log.append(a)
+        return a + self.offset
+
+
+def test_custom_pickler_with_singledispatch_reducer():
+    import functools
+    import io
+    import pickle
+
+    from gt4py.eve.utils import custom_pickler
+
+    offseter = _Offseter(4)
+    offseter(2)
+    offseter(3)
+    assert offseter.calls_log == [2, 3]
+
+    @functools.singledispatch
+    def my_reducer(obj):
+        return NotImplemented
+
+    my_reducer.register(
+        _Offseter,
+        lambda obj: (
+            obj.__class__,
+            (),
+            (
+                ("offset", obj.offset),
+                ("calls_log", []),
+            ),
+        ),
+    )
+
+    pickler_cls = custom_pickler(my_reducer, name="MyCustomPickler")
+
+    assert issubclass(pickler_cls, pickle.Pickler)
+    assert pickler_cls.__name__ == "MyCustomPickler"
+
+    # Verify we can instantiate the pickler
+    buf = io.BytesIO()
+    pickler = pickler_cls(buf)
+    assert hasattr(pickler, "reducer_override")
+
+    # Verify the custom pickler is used for objects of type _Offseter
+    # and that calls_log is ignored
+    pickler.dump([1, offseter])
+    custom_dump_1 = buf.getvalue()
+
+    std_buf = io.BytesIO()
+    std_pickler = pickle.Pickler(std_buf)
+    std_pickler.dump([1, offseter])
+    std_dump_1 = std_buf.getvalue()
+
+    assert custom_dump_1 != std_dump_1
+
+    buf2 = io.BytesIO()
+    pickler = pickler_cls(buf2)
+    pickler.dump([1, _Offseter(4)])  # calls_log should be an empty list
+    custom_dump_2 = buf2.getvalue()
+
+    assert custom_dump_1 == custom_dump_2
+
+    # Verify the custom pickler is not used for objects of other types
+    buf = io.BytesIO()
+    pickler = pickler_cls(buf)
+    pickler.dump([1])
+    custom_dump = buf.getvalue()
+
+    std_buf = io.BytesIO()
+    std_pickler = pickle.Pickler(std_buf)
+    std_pickler.dump([1])
+    std_dump = std_buf.getvalue()
+
+    # This time they should be equal
+    assert custom_dump == std_dump
+
+
+def test_custom_pickler_from_reducers_creates_subclass():
+    import pickle
+    from gt4py.eve.utils import custom_pickler_from_reducers
+
+    reducers = {int: (lambda obj: (int, (obj,)))}
+    pickler_cls = custom_pickler_from_reducers(reducers, name="TestPickler")
+
+    assert issubclass(pickler_cls, pickle.Pickler)
+    assert pickler_cls.__name__ == "TestPickler"
+    assert hasattr(pickler_cls, "reducer_override")

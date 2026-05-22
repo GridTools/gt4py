@@ -48,7 +48,7 @@ def _make_test_sdfg(
     if out_offset is None:
         out_offset = in_offset
 
-    sdfg = dace.SDFG(util.unique_name("map_buffer"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("map_buffer"))
     state = sdfg.add_state(is_start_block=True)
     names = {input_name, tmp_name, output_name}
     for name in names:
@@ -220,7 +220,7 @@ def test_map_buffer_elimination_offset_5():
 
 def test_map_buffer_elimination_not_apply():
     """Indirect accessing, because of this the double buffer is needed."""
-    sdfg = dace.SDFG(util.unique_name("map_buffer"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("map_buffer"))
     state = sdfg.add_state(is_start_block=True)
 
     names = ["A", "tmp", "idx"]
@@ -269,7 +269,7 @@ def test_map_buffer_elimination_with_nested_sdfgs():
     stride1, stride2, stride3 = [dace.symbol(f"stride{i}", dace.int32) for i in range(3)]
 
     # top-level sdfg
-    sdfg = dace.SDFG(util.unique_name("map_buffer"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("map_buffer"))
     inp, inp_desc = sdfg.add_array("__inp", (10,), dace.float64)
     out, out_desc = sdfg.add_array(
         "__out", (10, 10, 10), dace.float64, strides=(stride1, stride2, stride3)
@@ -278,14 +278,14 @@ def test_map_buffer_elimination_with_nested_sdfgs():
     state = sdfg.add_state()
     tmp_node = state.add_access(tmp)
 
-    nsdfg1 = dace.SDFG(util.unique_name("map_buffer"))
+    nsdfg1 = dace.SDFG(gtx_transformations.utils.unique_name("map_buffer"))
     inp1, inp1_desc = nsdfg1.add_array("__inp", (10,), dace.float64)
     out1, out1_desc = nsdfg1.add_array("__out", (10, 10), dace.float64)
     tmp1, _ = nsdfg1.add_temp_transient_like(out1_desc)
     state1 = nsdfg1.add_state()
     tmp1_node = state1.add_access(tmp1)
 
-    nsdfg2 = dace.SDFG(util.unique_name("map_buffer"))
+    nsdfg2 = dace.SDFG(gtx_transformations.utils.unique_name("map_buffer"))
     inp2, _ = nsdfg2.add_array("__inp", (10,), dace.float64)
     out2, out2_desc = nsdfg2.add_array("__out", (10,), dace.float64)
     tmp2, _ = nsdfg2.add_temp_transient_like(out2_desc)

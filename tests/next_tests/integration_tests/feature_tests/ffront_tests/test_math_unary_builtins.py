@@ -195,10 +195,9 @@ def test_basic_trig(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case,
         basic_trig_fieldop,
-        ref=lambda inp1, inp2: np.sin(np.cos(inp1))
-        - np.sinh(np.cosh(inp2))
-        + np.tan(inp1)
-        - np.tanh(inp2),
+        ref=lambda inp1, inp2: (
+            np.sin(np.cos(inp1)) - np.sinh(np.cosh(inp2)) + np.tan(inp1) - np.tanh(inp2)
+        ),
     )
 
 

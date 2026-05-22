@@ -1,0 +1,277 @@
+  - case: fieldop
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
+      zeros = gtx.zeros({KDim: range(10)}, dtype=gtx.int32)
+      more_zeros = foo(zeros)
+
+  - case: fieldop_sig_with_kwargs
+    main: |
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator(grid_type=None, backend=None)
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
+
+  - case: fieldop_sig_with_partial_kwargs
+    main: |
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator(grid_type=None)
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
+
+  - case: scanop_sig_min
+    main: |
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.scan_operator(axis=KDim)
+      def somescanop(
+          carry: float,
+          val: float,
+      ) -> float:
+          return carry + val
+
+  - case: scanop_sig_with_kwargs
+    main: |
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
+      def somescanop(
+          carry: float,
+          val: float,
+      ) -> float:
+          return carry + val
+
+  - case: program_sig
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
+
+      @gtx.program
+      def foo_prg(
+          a: gtx.Field[gtx.Dims[KDim], gtx.int32],
+          b: gtx.Field[gtx.Dims[KDim], gtx.int32],
+          start: gtx.int32,
+          end: gtx.int32
+      ) -> None:
+          foo(a, out=b, domain={KDim: (start, end)})
+
+  - case: program_sig_with_kwargs
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
+
+      @gtx.program(backend=None, grid_type=gtx.common.GridType.UNSTRUCTURED)
+      def foo_prg(
+          a: gtx.Field[gtx.Dims[KDim], gtx.int32],
+          b: gtx.Field[gtx.Dims[KDim], gtx.int32],
+          start: gtx.int32,
+          end: gtx.int32
+      ) -> None:
+          foo(a, out=b, domain={KDim: (start, end)})
+
+  - case: program_sig_with_partial_kwargs
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
+
+      @gtx.program(grid_type=None)
+      def foo_prg(
+          a: gtx.Field[gtx.Dims[KDim], gtx.int32],
+          b: gtx.Field[gtx.Dims[KDim], gtx.int32],
+          start: gtx.int32,
+          end: gtx.int32
+      ) -> None:
+          foo(a, out=b, domain={KDim: (start, end)})
+
+  - case: call_where
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      CellDim = gtx.Dimension("CellDim", kind=gtx.DimensionKind.HORIZONTAL)
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
+      CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
+
+      def foo(
+          mask: CellKField[bool], a: CellKField[gtx.float64], b: CellKField[gtx.float64]
+      ) -> CellKField[gtx.float64]:
+          tmp = gtx.where(mask & (a >= 0.0), b, 0.0)
+          return gtx.where(mask, tmp, b)
+
+
+  - case: call_where_tuples
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      CellDim = gtx.Dimension("CellDim", kind=gtx.DimensionKind.HORIZONTAL)
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
+      CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
+      CKTuple: typing.TypeAlias = tuple[CellKField[T], CellKField[T]]
+
+      def foo(
+          mask: CellKField[bool], a: CKTuple[gtx.float64], b: CKTuple[gtx.float64]
+      ) -> CKTuple[T]:
+          return gtx.where(mask, a, b)
+
+  - case: where_real_life
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+      from gt4py.next import where
+
+      CellDim = gtx.Dimension("CellDim", kind=gtx.DimensionKind.HORIZONTAL)
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
+      CellField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim], T]
+      CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
+
+      @gtx.field_operator
+      def _postprocess_antidiffusive_cell_fluxes_and_min_max(
+          refin_ctrl: CellField[gtx.int32],
+          p_cc: CellKField[gtx.float64],
+          z_tracer_new_low: CellKField[gtx.float64],
+          z_tracer_max: CellKField[gtx.float64],
+          z_tracer_min: CellKField[gtx.float64],
+          lo_bound: gtx.int32,
+          hi_bound: gtx.int32,
+      ) -> tuple[
+          CellKField[gtx.float64],
+          CellKField[gtx.float64],
+          CellKField[gtx.float64],
+      ]:
+          condition = (refin_ctrl == lo_bound) | (refin_ctrl == hi_bound)
+          z_tracer_new_out = where(
+              condition,
+              gtx.minimum(1.1 * p_cc, gtx.maximum(0.9 * p_cc, z_tracer_new_low)),
+              z_tracer_new_low,
+          )
+
+          z_tracer_max_out = where(
+              condition, gtx.astype(gtx.maximum(p_cc, z_tracer_new_out), gtx.float64), z_tracer_max
+          )
+          z_tracer_min_out = where(
+              condition, gtx.astype(gtx.minimum(p_cc, z_tracer_new_out), gtx.float64), z_tracer_min
+          )
+
+          return (z_tracer_new_out, z_tracer_max_out, z_tracer_min_out)
+
+  - case: with_backend_fieldop
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
+
+      def foo_with_backend(backend: gtx.typing.Backend | None) -> None:
+          _ = foo.with_backend(backend)
+
+  - case: with_backend_scanop
+    main: |
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.scan_operator(axis=KDim)
+      def somescanop(
+          carry: float,
+          val: float,
+      ) -> float:
+          return carry + val
+
+      def somescanop_with_backend(backend: gtx.typing.Backend | None) -> None:
+          _ = somescanop.with_backend(backend)
+
+  - case: with_backend_program
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
+
+      @gtx.program
+      def foo_prg(
+          a: gtx.Field[gtx.Dims[KDim], gtx.int32],
+          b: gtx.Field[gtx.Dims[KDim], gtx.int32],
+          start: gtx.int32,
+          end: gtx.int32
+      ) -> None:
+          foo(a, out=b, domain={KDim: (start, end)})
+
+      def foo_prg_with_backend(backend: gtx.typing.Backend | None) -> None:
+          _ = foo_prg.with_backend(backend)
+
+  - case: astype_return_type
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      CDim = gtx.Dimension("CDim", kind=gtx.DimensionKind.HORIZONTAL)
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator
+      def foo(
+          a: gtx.Field[gtx.Dims[CDim, KDim], gtx.float32],
+          d: gtx.float32
+      ) -> gtx.Field[gtx.Dims[CDim, KDim], gtx.float64]:
+          z = gtx.astype(d * a, gtx.float64)
+          return z
+
+  - case: xarray_typing
+    main: |
+      import xarray
+      a: xarray.NamedArray

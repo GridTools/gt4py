@@ -62,7 +62,7 @@ def _perform_reorder_test(
 
 def _make_test_sdfg(map_params: list[str]) -> dace.SDFG:
     """Generate an SDFG for the test."""
-    sdfg = dace.SDFG(util.unique_name("gpu_promotable_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("gpu_promotable_sdfg"))
     state: dace.SDFGState = sdfg.add_state("state", is_start_block=True)
     dim = len(map_params)
     for aname in ["a", "b"]:

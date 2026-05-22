@@ -21,7 +21,7 @@ from . import util
 def _make_sdfg_1(
     consumer_is_map: bool,
 ) -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("simple_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(

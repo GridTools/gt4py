@@ -95,3 +95,30 @@ def test_make_container_constructor(
             assert (constructed_value.asnumpy() == expected_value.asnumpy()).all()
         else:
             constructed_value == expected_value
+
+
+@pytest.mark.parametrize(
+    "first,second,expected",
+    [
+        (1, 41, 42),  # works without collections
+        ((1,), (41,), (42,)),  # works for simple tuples
+        (
+            # Note: we ignore typing and instantiate the collection with scalars for this test
+            cnc.DataclassNamedCollection(41, 43),
+            cnc.DataclassNamedCollection(1, -1),
+            cnc.DataclassNamedCollection(42, 42),
+        ),
+        (  # named collection in tuple
+            (cnc.SingleElementNamedTupleNamedCollection(x=1),),
+            (cnc.SingleElementNamedTupleNamedCollection(x=41),),
+            (cnc.SingleElementNamedTupleNamedCollection(x=42),),
+        ),
+    ],
+)
+def test_tree_map_named_collection_no_named_collection(first, second, expected):
+    @named_collections.tree_map_named_collection
+    def add(first, second):
+        return first + second
+
+    # Note: this comparison works only if we don't have fields in the collection as it relies on `==` comparison.
+    assert add(first, second) == expected

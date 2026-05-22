@@ -12,16 +12,82 @@ import inspect
 import math
 import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
-from typing import Any, Callable, Final, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Final,
+    Generic,
+    ParamSpec,
+    Tuple,
+    TypeAlias,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 import numpy as np
 from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import common, named_collections
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
+
+
+__all__ = [  # noqa: RUF022 [unsorted-dunder-all] # type: ignore[attr-defined]
+    "bool",
+    "float",
+    "float32",
+    "float64",
+    "int",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "tuple",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "IndexType",
+    "neighbor_sum",
+    "max_over",
+    "min_over",
+    "where",
+    "broadcast",
+    "astype",
+    "abs",
+    "neg",
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
+    "minimum",
+    "maximum",
+    "fmod",
+    "power",
+    "isfinite",
+    "isinf",
+    "isnan",
+]
 
 
 PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
@@ -78,6 +144,8 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
         assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
         return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
+    elif t in named_collections.CUSTOM_NAMED_COLLECTION_TYPES:
+        return ts.NamedCollectionType
     else:
         raise AssertionError("Illegal type encountered.")
 
@@ -138,13 +206,37 @@ class BuiltInFunction(Generic[_R, _P]):
 
 
 CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
-FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
+FieldT1 = TypeVar(
+    "FieldT1",
+    bound=Union[common.Field, core_defs.Scalar, Tuple, named_collections.CustomNamedCollection],
+)
+FieldT2 = TypeVar(
+    "FieldT2",
+    bound=Union[common.Field, core_defs.Scalar, Tuple, named_collections.CustomNamedCollection],
+)
 
 
 class WhereBuiltinFunction(
-    BuiltInFunction[_R, [CondT, FieldT, FieldT]], Generic[_R, CondT, FieldT]
+    BuiltInFunction[_R, [CondT, FieldT1, FieldT2]],
+    Generic[_R, CondT, FieldT1, FieldT2],
 ):
-    def __call__(self, cond: CondT, true_field: FieldT, false_field: FieldT) -> _R:
+    @overload  # type: ignore[override] # this technically clashes with the superclass
+    def __call__(  # type: ignore[overload-overlap] # without both overloads mypy raises false positives
+        self,
+        cond: CondT,
+        true_field: common.Field | core_defs.ScalarT,
+        false_field: common.Field | core_defs.ScalarT,
+    ) -> common.Field: ...
+
+    @overload
+    def __call__(
+        self,
+        cond: CondT,
+        true_field: Tuple | core_defs.ScalarT,
+        false_field: Tuple | core_defs.ScalarT,
+    ) -> Tuple: ...
+
+    def __call__(self, cond: CondT, true_field: FieldT1, false_field: FieldT2) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
@@ -188,11 +280,23 @@ def broadcast(
 @WhereBuiltinFunction
 def where(
     mask: common.Field,
-    true_field: common.Field | core_defs.ScalarT | Tuple,
-    false_field: common.Field | core_defs.ScalarT | Tuple,
+    true_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
+    false_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     /,
 ) -> common.Field | Tuple:
     raise NotImplementedError()
+
+
+@overload
+def astype(value: common.Field, type_: type, /) -> common.Field: ...
+
+
+@overload
+def astype(value: core_defs.ScalarT, type_: type, /) -> core_defs.ScalarT: ...
+
+
+@overload
+def astype(value: Tuple, type_: type, /) -> Tuple: ...
 
 
 @BuiltInFunction
@@ -241,7 +345,7 @@ _UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL: Final = {
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL.keys()]
 
 
-def _make_unary_math_builtin(name: str) -> None:
+def _make_unary_math_builtin(name: str) -> BuiltInFunction:
     _math_builtin = (
         _UNARY_MATH_NUMBER_BUILTIN_IMPL
         | _UNARY_MATH_FP_BUILTIN_IMPL
@@ -257,20 +361,40 @@ def _make_unary_math_builtin(name: str) -> None:
         return cast(common.Field | core_defs.ScalarT, _math_builtin(value))  # type: ignore[operator, arg-type] # calling a function of unknown type; trunc not supported for all types
 
     impl.__name__ = name
-    globals()[name] = BuiltInFunction(impl)
+    return BuiltInFunction(impl)
 
 
-for f in (
-    UNARY_MATH_NUMBER_BUILTIN_NAMES
-    + UNARY_MATH_FP_BUILTIN_NAMES
-    + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
-):
-    _make_unary_math_builtin(f)
+abs = _make_unary_math_builtin("abs")  # noqa: A001 [shadowing]
+neg = _make_unary_math_builtin("neg")
+sin = _make_unary_math_builtin("sin")
+cos = _make_unary_math_builtin("cos")
+tan = _make_unary_math_builtin("tan")
+arcsin = _make_unary_math_builtin("arcsin")
+arccos = _make_unary_math_builtin("arccos")
+arctan = _make_unary_math_builtin("arctan")
+sinh = _make_unary_math_builtin("sinh")
+cosh = _make_unary_math_builtin("cosh")
+tanh = _make_unary_math_builtin("tanh")
+arcsinh = _make_unary_math_builtin("arcsinh")
+arccosh = _make_unary_math_builtin("arccosh")
+arctanh = _make_unary_math_builtin("arctanh")
+sqrt = _make_unary_math_builtin("sqrt")
+exp = _make_unary_math_builtin("exp")
+log = _make_unary_math_builtin("log")
+gamma = _make_unary_math_builtin("gamma")
+cbrt = _make_unary_math_builtin("cbrt")
+floor = _make_unary_math_builtin("floor")
+ceil = _make_unary_math_builtin("ceil")
+trunc = _make_unary_math_builtin("trunc")
+isfinite = _make_unary_math_builtin("isfinite")
+isinf = _make_unary_math_builtin("isinf")
+isnan = _make_unary_math_builtin("isnan")
+
 
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 
-def _make_binary_math_builtin(name: str) -> None:
+def _make_binary_math_builtin(name: str) -> BuiltInFunction:
     def impl(
         lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
     ) -> common.Field | core_defs.ScalarT:
@@ -280,11 +404,14 @@ def _make_binary_math_builtin(name: str) -> None:
         return getattr(np, name)(lhs, rhs)
 
     impl.__name__ = name
-    globals()[name] = BuiltInFunction(impl)
+    return BuiltInFunction(impl)
 
 
-for f in BINARY_MATH_NUMBER_BUILTIN_NAMES:
-    _make_binary_math_builtin(f)
+minimum = _make_binary_math_builtin("minimum")
+maximum = _make_binary_math_builtin("maximum")
+fmod = _make_binary_math_builtin("fmod")
+power = _make_binary_math_builtin("power")
+
 
 MATH_BUILTIN_NAMES = (
     UNARY_MATH_NUMBER_BUILTIN_NAMES
@@ -303,11 +430,22 @@ FUN_BUILTIN_NAMES = [
     *MATH_BUILTIN_NAMES,
 ]
 
+assert all(isinstance(globals()[f], BuiltInFunction) for f in FUN_BUILTIN_NAMES), (
+    "Missing builtin function"
+)
+
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
 
-__all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"})]
+should_export = (set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"}
+actual_export = set(__all__)
+assert (diff := should_export - actual_export) == set(), (
+    f"Missing symbol(s) in 'fbuiltins.__all__': {diff}"
+)
+assert (diff := actual_export - should_export) == set(), (
+    f"Symbol(s) exported but not defined in 'fbuiltins': {diff}"
+)
 
 
 # TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual

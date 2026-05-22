@@ -34,7 +34,7 @@ E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 
 
 def assert_close(expected, actual):
-    assert math.isclose(expected, actual), "expected={}, actual={}".format(expected, actual)
+    assert np.allclose(expected, actual), "expected={}, actual={}".format(expected, actual)
 
 
 class nabla_setup:

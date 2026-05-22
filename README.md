@@ -1,7 +1,7 @@
 [![logo](https://raw.githubusercontent.com/GridTools/gt4py/gh-pages/v1.0/_static/logo.svg)](https://GridTools.github.io/gt4py)
 
 ![license](https://img.shields.io/github/license/GridTools/gt4py)
-[![slack](https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a)](https://join.slack.com/t/gridtools/shared_invite/zt-1mceuj747-59swuowC3MKAuCFyNAnc1g)
+[![slack](https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a)](https://join.slack.com/t/gridtools/shared_invite/zt-3pg63o8a8-huyrLZgLgC4RS42S9FGDZA)
 
 [![Daily CI](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml/badge.svg)](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml)
 ![test-components](https://github.com/GridTools/gt4py/actions/workflows/test-components.yml/badge.svg?branch=main)
@@ -78,15 +78,13 @@ git clone https://github.com/gridtools/gt4py.git
 cd gt4py
 
 # Let uv create the development environment at `.venv`.
-uv sync --extra cartesian  # for gt4py.cartesian. Include DaCe with: --group dace-cartesian
-uv sync --extra next       # for gt4py.next. Include DaCe with: --group dace-next
+uv sync --extra cartesian  # for gt4py.cartesian
+uv sync --extra next       # for gt4py.next
 
 # The `--extra cartesian` (or `--extra next`) option tells uv to install
 # the optional run-time dependencies of gt4py.cartesian (or gt4py.next),
 # and thus it is not strictly necessary.
 # The 'dev' group with the core development dependencies is installed by default.
-# DaCe-related dependencies are different for gt4py.cartesian and gt4py.next,
-# so they won't be installed unless the specific dace group option is added.
 
 # Finally, activate the virtual environment and start writing code!
 source .venv/bin/activate

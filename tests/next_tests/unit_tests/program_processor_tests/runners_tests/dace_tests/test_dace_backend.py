@@ -46,8 +46,8 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     def testee(a: cases.IField, b: cases.IField, out: cases.IField):
         testee_op(a, b, out=out)
 
-    mock_top_level_dataflow_hook1 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookFun)
-    mock_top_level_dataflow_hook2 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookFun)
+    mock_top_level_dataflow_hook1 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookStage)
+    mock_top_level_dataflow_hook2 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookStage)
 
     if not auto_optimize:
         optimization_args = {}
@@ -91,17 +91,17 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     monkeypatch.setattr(gtx_transformations, "gt_auto_optimize", mocked_auto_optimize)
     monkeypatch.setattr(gtx_transformations, "gt_gpu_transformation", mocked_gpu_transformation)
 
-    with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", on_gpu):
-        custom_backend = dace_wf_backend.make_dace_backend(
-            gpu=on_gpu,
-            cached=False,
-            auto_optimize=auto_optimize,
-            async_sdfg_call=True,
-            optimization_args=optimization_args,
-            use_metrics=True,
-        )
-        testee.with_backend(custom_backend).compile(offset_provider={})
-        gtx.wait_for_compilation()
+    custom_backend = dace_wf_backend.make_dace_backend(
+        gpu=on_gpu,
+        cached=False,
+        auto_optimize=auto_optimize,
+        async_sdfg_call=True,
+        optimization_args=optimization_args,
+        unstructured_horizontal_has_unit_stride=on_gpu,
+        use_metrics=True,
+    )
+    testee.with_backend(custom_backend).compile(offset_provider={})
+    gtx.wait_for_compilation()
 
     # check call to `gt_gpu_transformation()`
     if on_gpu:

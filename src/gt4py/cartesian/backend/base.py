@@ -15,9 +15,7 @@ import os
 import pathlib
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Protocol
-
-from typing_extensions import deprecated
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from gt4py import storage as gt_storage
 from gt4py.cartesian import definitions as gt_definitions, utils as gt_utils
@@ -213,7 +211,7 @@ class BaseBackend(Backend):
 
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_text(module_source)
+            file_path.write_text(module_source, encoding="utf-8")
             self.builder.caching.update_cache_info()
 
         module = self._load()
@@ -227,10 +225,6 @@ class BaseBackend(Backend):
         """Generate the module source code with or without stencil id."""
         args_data = args_data or make_args_data_from_gtir(self.builder.gtir_pipeline)
         return self.MODULE_GENERATOR_CLASS(self.builder)(args_data)
-
-
-class MakeModuleSourceCallable(Protocol):
-    def __call__(self, *, args_data: ModuleData | None = None) -> str: ...
 
 
 class BasePyExtBackend(BaseBackend):
@@ -293,7 +287,7 @@ class BasePyExtBackend(BaseBackend):
                 sources.append(str(src_file_path))
 
             if source is not gt_utils.NOTHING:
-                src_file_path.write_text(source)
+                src_file_path.write_text(source, encoding="utf-8")
 
         pyext_target_file_path = self.builder.pkg_path
         qualified_pyext_name = self.pyext_module_path
@@ -316,27 +310,3 @@ class BasePyExtBackend(BaseBackend):
         self.builder.with_backend_data(
             {"pyext_module_name": module_name, "pyext_file_path": file_path}
         )
-
-
-def disabled(message: str, *, enabled_env_var: str) -> Callable[[type[Backend]], type[Backend]]:
-    # We push for hard deprecation here by raising by default and warning if enabling has been forced.
-    enabled = bool(int(os.environ.get(enabled_env_var, "0")))
-    if enabled:
-        return deprecated(message)
-
-    def _decorator(cls: type[Backend]) -> type[Backend]:
-        def _no_generate(obj) -> type[StencilObject]:
-            raise NotImplementedError(
-                f"Disabled '{cls.name}' backend: 'f{message}'\n",
-                f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",
-            )
-
-        # Replace generate method with raise
-        if not hasattr(cls, "generate"):
-            raise ValueError(f"Coding error. Expected a generate method on {cls}")
-        # Flag that it got disabled for register lookup
-        cls.disabled = True  # type: ignore
-        cls.generate = _no_generate  # type: ignore
-        return cls
-
-    return _decorator

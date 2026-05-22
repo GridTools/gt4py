@@ -5,7 +5,6 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from gt4py import eve
@@ -13,6 +12,7 @@ from gt4py.cartesian import utils
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.numpy import npir
+from gt4py.cartesian.gtc.numpy.npir import AxisName, KMaskFieldAccess
 from gt4py.cartesian.gtc.passes.horizontal_masks import compute_relative_mask
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_extents
 
@@ -84,8 +84,10 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             "Absolute K indexation (e.g. `field.at(...)`) is an experimental feature and not yet implemented for the `numpy` backend."
         )
 
-    def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> None:
-        raise NotImplementedError(f"Iterator access ({node.name}) is not implemented for numpy")
+    def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> KMaskFieldAccess:
+        if node.name != AxisName.K:
+            raise ValueError(f"Axis {node.name} cannot be accessed, only K.")
+        return KMaskFieldAccess()
 
     def visit_RuntimeAxisBound(self, node: common.RuntimeAxisBound, **kwargs: Any) -> None:
         raise NotImplementedError(

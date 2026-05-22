@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
-from gt4py.next.program_processors.runners.dace.gtir_to_sdfg import build_sdfg_from_gtir
 from gt4py.next.program_processors.runners.dace.sdfg_callable import get_sdfg_args
 from gt4py.next.program_processors.runners.dace.workflow.backend import (
     make_dace_backend,
@@ -21,7 +20,6 @@ from gt4py.next.program_processors.runners.dace.workflow.backend import (
 
 
 __all__ = [
-    "build_sdfg_from_gtir",
     "get_sdfg_args",
     "make_dace_backend",
     "run_dace_cpu",

@@ -16,8 +16,7 @@ import re
 from typing import Literal, Optional
 
 from gt4py import eve
-from gt4py.eve import utils as eve_utils
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir, ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -175,7 +174,7 @@ class CollapseTuple(
         def all(self) -> CollapseTuple.Transformation:
             return functools.reduce(operator.or_, self.__members__.values())
 
-    uids: eve_utils.UIDGenerator
+    uids: utils.IDGeneratorPool
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     REINFER_TYPES = True
@@ -194,7 +193,7 @@ class CollapseTuple(
         enabled_transformations: Optional[Transformation] = None,
         # allow sym references without a symbol declaration, mostly for testing
         allow_undeclared_symbols: bool = False,
-        uids: Optional[eve_utils.UIDGenerator] = None,
+        uids: utils.IDGeneratorPool,
     ) -> itir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.
@@ -209,7 +208,6 @@ class CollapseTuple(
         """
         enabled_transformations = enabled_transformations or cls.enabled_transformations
         offset_provider_type = offset_provider_type or {}
-        uids = uids or eve_utils.UIDGenerator()
 
         if isinstance(node, itir.Program):
             within_stencil = False
@@ -331,7 +329,7 @@ class CollapseTuple(
             new_args: list[itir.Expr] = []
             for arg in node.args:
                 if cpm.is_call_to(node, "make_tuple") and not _is_trivial_make_tuple_call(node):
-                    new_arg = im.ref(self.uids.sequential_id(prefix="__ct_el"), arg.type)
+                    new_arg = im.ref(next(self.uids["__ct_el"]), arg.type)
                     self._preserve_annex(arg, new_arg)
                     new_args.append(new_arg)
                     bound_vars[im.sym(new_arg.id, arg.type)] = arg
@@ -432,8 +430,7 @@ class CollapseTuple(
                     returns=node.type,
                 )
                 f_params = [
-                    im.sym(self.uids.sequential_id(prefix="__ct_el_cps"), type_)
-                    for type_ in tuple_type.types
+                    im.sym(next(self.uids["__ct_el_cps"]), type_) for type_ in tuple_type.types
                 ]
                 f_args = [im.ref(param.id, param.type) for param in f_params]
                 f_body = ir_misc.with_altered_arg(node, i, im.make_tuple(*f_args))
@@ -454,9 +451,9 @@ class CollapseTuple(
 
                 # this is the symbol refering to the tuple value inside the two branches of the
                 # if, e.g. a symbol refering to `{1, 2}` and `{3, 4}` respectively
-                tuple_var = self.uids.sequential_id(prefix="__ct_tuple_cps")
+                tuple_var = next(self.uids["__ct_tuple_cps"])
                 # this is the symbol refering to our continuation, e.g. `cont` in our example.
-                f_var = self.uids.sequential_id(prefix="__ct_cont")
+                f_var = next(self.uids["__ct_cont"])
                 new_branches = []
                 for branch in [true_branch, false_branch]:
                     new_branch = im.let(tuple_var, branch)(

@@ -8,6 +8,7 @@
 
 import math
 import operator
+import pickle
 from typing import Callable, Iterable, Optional
 
 import numpy as np
@@ -819,6 +820,46 @@ def test_setitem_wrong_domain():
         field[(1, slice(None))] = value_incompatible
 
 
+def test_nd_array_field_getstate_excludes_cached_properties():
+    """Test that __getstate__ only serializes dataclass fields, excluding cached properties."""
+    data = np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
+    field = constructors.as_field((D0, D1), data)
+
+    # Access a cached property to populate the cache
+    _ = field.__gt_buffer_info__
+    assert "__gt_buffer_info__" in field.__dict__
+
+    state = field.__getstate__()
+
+    # State should only contain dataclass instance fields (_domain, _ndarray)
+    assert "_domain" in state
+    assert "_ndarray" in state
+    assert "array_ns" not in state  # ClassVar
+    assert "__gt_buffer_info__" not in state
+    assert "__dict__" not in state
+
+
+def test_nd_array_field_pickle_roundtrip():
+    """Test that NdArrayField can be pickled and unpickled correctly using getstate/setstate."""
+    original = constructors.as_field((D0, D1), np.arange(12.0).reshape(3, 4))
+
+    # Access cached property to ensure it's not included in serialization
+    _ = original.__gt_buffer_info__
+    assert "__gt_buffer_info__" in original.__dict__
+
+    # Perform a real pickle roundtrip, exercising __getstate__ and __setstate__
+    pickled = pickle.dumps(original)
+    restored = pickle.loads(pickled)
+
+    # Verify restoration
+    assert restored.domain == original.domain
+    assert np.array_equal(restored.ndarray, original.ndarray)
+    assert restored.dtype == original.dtype
+    assert restored.shape == original.shape
+    # Cached property should not be present in the restored instance
+    assert "__gt_buffer_info__" not in restored.__dict__
+
+
 def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
     import dataclasses
 
@@ -837,6 +878,54 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
     buffer_info = e2v_conn.__gt_buffer_info__
     assert buffer_info == common.BufferInfo.from_ndarray(e2v_conn.ndarray)
     assert buffer_info is e2v_conn.__gt_buffer_info__
+
+
+def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    e2v_conn = common._connectivity(
+        np.asarray([2, 3, 4, 5]),
+        domain=common.domain([common.named_range((E, (0, 4)))]),
+        codomain=V,
+    )
+
+    _ = e2v_conn.inverse_image(UnitRange(2, 5))
+    assert "_cache" in e2v_conn.__dict__
+
+    _ = e2v_conn.__gt_buffer_info__
+    assert "__gt_buffer_info__" in e2v_conn.__dict__
+
+    state = e2v_conn.__getstate__()
+    assert state["_codomain"] == V
+    assert state["_skip_value"] is None
+    assert "_cache" not in state
+    assert "__gt_buffer_info__" not in state
+
+
+def test_nd_array_connectivity_field_setstate_restores_state_without_caches():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    original = common._connectivity(
+        np.asarray([2, 3, 4, 5]),
+        domain=common.domain([common.named_range((E, (0, 4)))]),
+        codomain=V,
+        skip_value=-1,
+    )
+    restored = common._connectivity(
+        np.asarray([0, 0, 0, 0]),
+        domain=common.domain([common.named_range((E, (0, 4)))]),
+        codomain=V,
+    )
+
+    restored = pickle.loads(pickle.dumps(original))
+
+    assert restored.codomain == original.codomain
+    assert restored.skip_value == original.skip_value
+    assert np.array_equal(restored.ndarray, original.ndarray)
+    assert "_cache" not in restored.__dict__
+    assert "__gt_buffer_info__" not in restored.__dict__
 
 
 def test_connectivity_field_inverse_image():

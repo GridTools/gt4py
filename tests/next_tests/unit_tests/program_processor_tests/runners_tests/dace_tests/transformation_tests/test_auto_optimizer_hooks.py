@@ -14,7 +14,6 @@ from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
-    gtir_to_sdfg_utils as gtx_sdfg_utils,
     transformations as gtx_transformations,
 )
 
@@ -22,7 +21,7 @@ from . import util
 
 
 def _make_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("test"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("test"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abcde":
