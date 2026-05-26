@@ -281,6 +281,7 @@ class DataflowOutputEdge:
         outside data container is removed, the caller is responsible to propagate
         the strides of the destination array to the array inside the nested SDFG.
         """
+        dest_desc = self.result.dc_node.desc(self.state)
         write_edge = self.state.in_edges(self.result.dc_node)[0]
 
         # Check the kind of node which writes the result
@@ -289,11 +290,18 @@ class DataflowOutputEdge:
             assert map_exit is not None
             remove_last_node = True
         elif isinstance(write_edge.src, dace_nodes.NestedSDFG):
-            # We remove the transient array on the output connection of a nested
-            # SDFG and write directly to the destination node.
-            # The caller is responsible to propagate the strides of the destination
-            # array to the array inside the nested SDFG.
-            remove_last_node = True
+            if isinstance(dest_desc, dace.data.Scalar):
+                # We keep scalar temporary storage, as a general rule, since it
+                # does not affect performance of the generated code. This scalar
+                # is only required in some cases, e.g. for nested SDFGs implementing
+                # reduction, which use a WCR memlet for the reduction operation.
+                remove_last_node = False
+            else:
+                # We remove the transient array on the output connection of a nested
+                # SDFG and write directly to the destination node.
+                # The caller is responsible to propagate the strides of the destination
+                # array to the array inside the nested SDFG.
+                remove_last_node = True
         else:
             remove_last_node = False
 
