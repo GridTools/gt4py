@@ -131,7 +131,6 @@ dace_determinism_cscs_gh200_cuda:
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
-    SLURM_TIMELIMIT: 90
   parallel:
     matrix:
       - NOX_SESSION:
@@ -151,7 +150,6 @@ dace_determinism_cscs_gh200_cpu:
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
-    SLURM_TIMELIMIT: 90
   parallel:
     matrix:
       - NOX_SESSION:
