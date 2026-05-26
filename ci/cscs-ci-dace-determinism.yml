@@ -96,6 +96,7 @@ build_cscs_amd_rocm:
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
     PY_VERSION: '3.10'
+    USE_MPI: 0
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 60
   allow_failure: true
@@ -130,6 +131,7 @@ dace_determinism_cscs_gh200_cuda:
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    SLURM_TIMELIMIT: 90
   parallel:
     matrix:
       - NOX_SESSION:
@@ -149,6 +151,7 @@ dace_determinism_cscs_gh200_cpu:
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    SLURM_TIMELIMIT: 90
   parallel:
     matrix:
       - NOX_SESSION:
