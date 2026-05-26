@@ -1244,8 +1244,8 @@ dependencies = [
 
 [[package]]
 name = "dace"
-version = "2.3.5"
-source = { git = "https://github.com/philip-paul-mueller/dace?branch=phimuell__new-gpu-codegen-dev#28c27de36a387af49c2bf75c25e6a1d257f12d15" }
+version = "2.3.6"
+source = { git = "https://github.com/philip-paul-mueller/dace?branch=phimuell__new-gpu-codegen-dev#54580a05aafb467b3c556cab1219bf07a20209f7" }
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
@@ -1789,7 +1789,7 @@ dace-cartesian = [
     { name = "dace", version = "1.0.0", source = { git = "https://github.com/GridTools/dace?branch=romanc%2Fstree-v2#d5fbadb626389e425fac5ed93d2a880811eca41f" } },
 ]
 dace-next = [
-    { name = "dace", version = "2.3.5", source = { git = "https://github.com/philip-paul-mueller/dace?branch=phimuell__new-gpu-codegen-dev#28c27de36a387af49c2bf75c25e6a1d257f12d15" } },
+    { name = "dace", version = "2.3.6", source = { git = "https://github.com/philip-paul-mueller/dace?branch=phimuell__new-gpu-codegen-dev#54580a05aafb467b3c556cab1219bf07a20209f7" } },
 ]
 dev = [
     { name = "atlas4py" },
