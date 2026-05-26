@@ -558,9 +558,12 @@ def test_cartesian_dace_determinism(
             *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
             "-m",
             f"{markers}",
-            "--ignore=tests/cartesian_tests/unit_tests/test_gtc/dace",
-            "--ignore=tests/cartesian_tests/unit_tests/backend_tests/test_dace_backend.py",
-            str(pathlib.Path("tests") / "cartesian_tests"),
+            # Restrict to integration tests only. The dace-marked
+            # tests under unit_tests/ either build SDFGs by hand or
+            # exercise sub-stages of the dace backend in isolation,
+            # neither of which populates gt_cache/ in a way the
+            # determinism comparator can see.
+            str(pathlib.Path("tests") / "cartesian_tests" / "integration_tests"),
         ],
         layout="cartesian",
     )
@@ -611,13 +614,12 @@ def test_next_dace_determinism(
             *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
             "-m",
             f"{markers}",
-            "--ignore=tests/next_tests/unit_tests/program_processor_tests/runners_tests/dace_tests/transformation_tests",
-            "--ignore=tests/next_tests/unit_tests/program_processor_tests/runners_tests/dace_tests/test_gtir_to_sdfg.py",
-            "--ignore=tests/next_tests/unit_tests/program_processor_tests/runners_tests/dace_tests/test_dace_translation.py",
-            "--ignore=tests/next_tests/unit_tests/program_processor_tests/runners_tests/dace_tests/test_dace_domain.py",
-            "--ignore=tests/next_tests/unit_tests/program_processor_tests/runners_tests/dace_tests/test_dace_sdfg_callable.py",
-            "--ignore=tests/next_tests/unit_tests/program_processor_tests/runners_tests/dace_tests/test_dace_utils.py",
-            str(pathlib.Path("tests") / "next_tests"),
+            # Restrict to integration tests only. The dace-marked
+            # tests under unit_tests/ either build SDFGs by hand or
+            # exercise sub-stages of the dace backend in isolation,
+            # neither of which populates .gt4py_cache/ in a way the
+            # determinism comparator can see.
+            str(pathlib.Path("tests") / "next_tests" / "integration_tests"),
         ],
         layout="next",
     )
