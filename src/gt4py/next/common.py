@@ -977,40 +977,6 @@ class BufferInfo:
         return self.hash_key
 
 
-class ConnectivityKind(enum.Flag):
-    """
-    Describes the kind of connectivity field.
-
-    - `ALTER_DIMS`: change the dimensions of the data field domain.
-    - `ALTER_STRUCT`: transform structured of the data inside the field (non-compact transformation).
-
-    | Dims \\ Struct |    No                    |    Yes                   |
-    | -------------- | ------------------------ | ------------------------ |
-    |   No           | Translation (I -> I)     | Reshuffling (I x K -> K) |
-    |   Yes          | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
-
-    """
-
-    ALTER_DIMS = enum.auto()
-    ALTER_STRUCT = enum.auto()
-
-    @classmethod
-    def translation(cls) -> ConnectivityKind:
-        return cls(0)
-
-    @classmethod
-    def relocation(cls) -> ConnectivityKind:
-        return cls.ALTER_DIMS
-
-    @classmethod
-    def reshuffling(cls) -> ConnectivityKind:
-        return cls.ALTER_STRUCT
-
-    @classmethod
-    def remapping(cls) -> ConnectivityKind:
-        return cls.ALTER_DIMS | cls.ALTER_STRUCT
-
-
 @dataclasses.dataclass(frozen=True)
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
     domain: tuple[Dimension, ...]
@@ -1053,7 +1019,7 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
         """
 
     def __gt_type__(self) -> ConnectivityType:
-        if is_neighbor_connectivity(self):
+        if is_neighbor_table(self):
             return NeighborConnectivityType(
                 domain=self.domain.dims,
                 codomain=self.codomain,
@@ -1068,10 +1034,6 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
                 dtype=self.dtype,
                 skip_value=self.skip_value,
             )
-
-    @property
-    def kind(self) -> ConnectivityKind:
-        return ConnectivityKind.remapping()
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
@@ -1151,6 +1113,27 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
         raise TypeError("'Connectivity' does not support this operation.")
 
 
+class GatherConnectivity(Connectivity[DimsT, DimT_co]):
+    """A `Connectivity` whose `premap` rearranges data via advanced indexing (a gather).
+
+    The defining contract is that the index map is materializable as an integer index table via
+    `ndarray` (table-backed today; in principle a function evaluated over the domain). The gather
+    algorithm (`embedded.nd_array_field._gather_premap`) is responsible for laying that table out
+    over the output domain. Affine connectivities (cartesian shifts / relocations) are *not*
+    `GatherConnectivity`: their `premap` is a compact domain relabel that moves no data and has no
+    `ndarray`. The affine-vs-gather distinction has no structural witness (an affine connectivity
+    still has an `ndarray` attribute, it just raises), so it is a nominal type, not a `Protocol`.
+    """
+
+    # TODO(havogt): This is a bare annotation, not an `@abc.abstractmethod`, on purpose. Making it
+    #  abstract would force `NdArrayConnectivityField` abstract too: with `GatherConnectivity` ahead
+    #  of `NdArrayField` in the MRO, the abstract `ndarray` shadows `NdArrayField`'s concrete one.
+    #  Reordering the bases would fix that but then `NdArrayField`'s arithmetic operators would
+    #  shadow `Connectivity`'s raising stubs (connectivities would start accepting `+` etc.). A bare
+    #  annotation documents the contract for type checkers with no runtime effect.
+    ndarray: core_defs.NDArrayObject
+
+
 # Utility function to construct a `Field` from different buffer representations.
 # Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
 @functools.singledispatch
@@ -1178,12 +1161,19 @@ def _connectivity(
     raise NotImplementedError
 
 
-class NeighborConnectivity(Connectivity, Protocol):
+class NeighborTable(Connectivity, Protocol):
     # TODO(havogt): work towards encoding this properly in the type
     def __gt_type__(self) -> NeighborConnectivityType: ...
 
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        # Note that this property is currently already there from inheriting from `Field`,
+        # however this seems wrong, therefore we explicitly introduce it here (or it should come
+        # implicitly from the `NdArrayConnectivityField` protocol).
+        ...
 
-def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
+
+def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
     if not isinstance(obj, Connectivity):
         return False
     domain_dims = obj.domain.dims
@@ -1194,22 +1184,7 @@ def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
     )
 
 
-class NeighborTable(
-    NeighborConnectivity, Protocol
-):  # TODO(havogt): try to express by inheriting from NdArrayConnectivityField (but this would require a protocol to move it out of `embedded.nd_array_field`)
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        # Note that this property is currently already there from inheriting from `Field`,
-        # however this seems wrong, therefore we explicitly introduce it here (or it should come
-        # implicitly from the `NdArrayConnectivityField` protocol).
-        ...
-
-
-def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
-    return is_neighbor_connectivity(obj) and hasattr(obj, "ndarray")
-
-
-OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
+OffsetProviderElem: TypeAlias = Dimension | NeighborTable
 OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
 # Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
 # use the `get_offset` and `get_offset_type` functions instead.
@@ -1335,14 +1310,6 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     @property
     def skip_value(self) -> None:
         return None
-
-    @functools.cached_property
-    def kind(self) -> ConnectivityKind:
-        return (
-            ConnectivityKind.translation()
-            if self.domain_dim == self.codomain
-            else ConnectivityKind.relocation()
-        )
 
     @classmethod
     def for_translation(

@@ -16,7 +16,15 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, constructors
-from gt4py.next.common import Dimension, Domain, Field, NamedIndex, NamedRange, UnitRange
+from gt4py.next.common import (
+    Dimension,
+    DimensionKind,
+    Domain,
+    Field,
+    NamedIndex,
+    NamedRange,
+    UnitRange,
+)
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
@@ -438,64 +446,143 @@ def test_remapping_premap():
     assert np.all(result.ndarray == expected.ndarray)
 
 
-def test_identity_connectivity():
-    D0 = Dimension("D0")
-    D1 = Dimension("D1")
-    D2 = Dimension("D2")
+def test_remapping_premap_multineighbor():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
 
-    domain = common.Domain(
-        dims=(D0, D1, D2),
-        ranges=(common.UnitRange(0, 3), common.UnitRange(0, 4), common.UnitRange(0, 5)),
+    V_START, V_STOP = 2, 7
+    v_field = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
     )
-    codomains = [D0, D1, D2]
+    table = np.asarray([[2, 3], [3, 4], [4, 5]], dtype=int)  # (E, E2V) -> V
+    e2v_conn = common._connectivity(
+        table,
+        domain=common.Domain(dims=(E, E2V), ranges=(UnitRange(0, 3), UnitRange(0, 2))),
+        codomain=V,
+    )
 
-    expected = {
-        D0: nd_array_field.NumPyArrayConnectivityField.from_array(
-            np.array(
-                [
-                    [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
-                    [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
-                    [[2, 2, 2, 2, 2], [2, 2, 2, 2, 2], [2, 2, 2, 2, 2], [2, 2, 2, 2, 2]],
-                ],
-                dtype=int,
-            ),
-            codomain=D0,
-            domain=domain,
-        ),
-        D1: nd_array_field.NumPyArrayConnectivityField.from_array(
-            np.array(
-                [
-                    [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
-                    [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
-                    [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
-                ],
-                dtype=int,
-            ),
-            codomain=D1,
-            domain=domain,
-        ),
-        D2: nd_array_field.NumPyArrayConnectivityField.from_array(
-            np.array(
-                [
-                    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
-                    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
-                    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
-                ],
-                dtype=int,
-            ),
-            codomain=D2,
-            domain=domain,
-        ),
-    }
+    result = v_field.premap(e2v_conn)
+    expected = common._field(
+        -0.1 * table,  # v_field[v] == -0.1 * v
+        domain=common.Domain(dims=(E, E2V), ranges=(UnitRange(0, 3), UnitRange(0, 2))),
+    )
 
-    for codomain in codomains:
-        result = nd_array_field._identity_connectivity(
-            domain, codomain, cls=nd_array_field.NumPyArrayConnectivityField
-        )
-        assert result.codomain == expected[codomain].codomain
-        assert result.domain == expected[codomain].domain
-        assert result.dtype == expected[codomain].dtype
-        assert np.all(result.ndarray == expected[codomain].ndarray)
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_remapping_premap_same_dim():
+    V = Dimension("V")
+
+    V_START, V_STOP = 2, 7
+    v_field = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    v2v_conn = common._connectivity(
+        np.roll(np.arange(V_START, V_STOP), 1),
+        domain=common.Domain(dims=(V,), ranges=[UnitRange(V_START, V_STOP)]),
+        codomain=V,
+    )
+
+    result = v_field.premap(v2v_conn)
+    expected = common._field(
+        -0.1 * np.roll(np.arange(V_START, V_STOP), 1),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_remapping_premap_same_dim_multineighbor():
+    # Regression for #1583: source dim == target dim with a LOCAL neighbor dim (C2E2CO shape).
+    V = Dimension("V")
+    V2V = Dimension("V2V", kind=DimensionKind.LOCAL)
+
+    V_START, V_STOP = 2, 7
+    v_field = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    v2v_conn = common._connectivity(
+        np.stack(
+            [np.roll(np.arange(V_START, V_STOP), 1), np.roll(np.arange(V_START, V_STOP), -1)],
+            axis=1,
+        ),
+        domain=common.Domain(dims=(V, V2V), ranges=[UnitRange(V_START, V_STOP), UnitRange(0, 2)]),
+        codomain=V,
+    )
+
+    result = v_field.premap(v2v_conn)
+    expected = common._field(
+        np.stack(
+            [
+                -0.1 * np.roll(np.arange(V_START, V_STOP), 1),
+                -0.1 * np.roll(np.arange(V_START, V_STOP), -1),
+            ],
+            axis=1,
+        ),
+        domain=common.Domain(dims=(V, V2V), ranges=(UnitRange(V_START, V_STOP), UnitRange(0, 2))),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_premap_same_dim_multineighbor_with_extra_dim():
+    # The actual #1583 bug shape: C2E2CO on a field with an extra (kept) dimension.
+    C = Dimension("C")
+    K = Dimension("K")
+    C2E2CO = Dimension("C2E2CO", kind=DimensionKind.LOCAL)
+
+    NC, NK, NN = 5, 3, 4
+    c_field = common._field(
+        np.arange(NC * NK).reshape(NC, NK).astype(float),
+        domain=common.Domain(dims=(C, K), ranges=(UnitRange(0, NC), UnitRange(0, NK))),
+    )
+    table = (np.arange(NC)[:, None] + np.arange(NN)[None, :]) % NC  # (C, C2E2CO) -> C
+    conn = common._connectivity(
+        table,
+        domain=common.Domain(dims=(C, C2E2CO), ranges=(UnitRange(0, NC), UnitRange(0, NN))),
+        codomain=C,
+    )
+
+    result = c_field.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(C, C2E2CO, K), ranges=(UnitRange(0, NC), UnitRange(0, NN), UnitRange(0, NK))
+    )
+    assert np.all(result.ndarray == c_field.ndarray[table])  # out[c, n, k] == f[table[c, n], k]
+
+
+def test_gather_premap_multiple_connectivities():
+    # Multiple gather connectivities introducing new dims in a single premap (was unsupported).
+    A = Dimension("A")
+    B = Dimension("B")
+    X = Dimension("X")
+    Y = Dimension("Y")
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    ca = np.asarray([2, 0, 1], dtype=int)  # (X,) -> A
+    cb = np.asarray([1, 2, 3, 0], dtype=int)  # (Y,) -> B
+    conn_a = common._connectivity(
+        ca, domain=common.Domain(dims=(X,), ranges=(UnitRange(0, NA),)), codomain=A
+    )
+    conn_b = common._connectivity(
+        cb, domain=common.Domain(dims=(Y,), ranges=(UnitRange(0, NB),)), codomain=B
+    )
+
+    result = f.premap(conn_a, conn_b)
+
+    assert result.domain == common.Domain(dims=(X, Y), ranges=(UnitRange(0, NA), UnitRange(0, NB)))
+    assert np.all(result.ndarray == f.ndarray[np.ix_(ca, cb)])  # out[x, y] == f[ca[x], cb[y]]
 
 
 @pytest.mark.parametrize(
