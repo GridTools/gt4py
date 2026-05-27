@@ -56,7 +56,6 @@ stages:
     DOCKERFILE: ci/Dockerfile
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
     PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}
-
     WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
   parallel:
     matrix:
@@ -152,9 +151,12 @@ dace_determinism_cscs_gh200:
       variables:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
-    - if: $SUBPACKAGE == 'cartesian' && $SUBVARIANT == 'cuda12'
+    - if: $SUBPACKAGE == 'cartesian' && $SUBVARIANT == 'cpu'
       variables:
-        GT4PY_BUILD_JOBS: 1
+        GT4PY_CARTESIAN_DETERMINISM_XDIST: 2
+    - if: $SUBPACKAGE == 'cartesian'
+      variables:
+        GT4PY_CARTESIAN_DETERMINISM_XDIST: 4
     - when: on_success
 
 dace_determinism_cscs_amd_rocm:
@@ -174,5 +176,7 @@ dace_determinism_cscs_amd_rocm:
     CXX: /opt/rocm/bin/hipcc
   rules:
     - *exclude_variants_rules
+    - if: $SUBPACKAGE == 'cartesian'
+      variables:
+        GT4PY_CARTESIAN_DETERMINISM_XDIST: 4
     - when: on_success
-
