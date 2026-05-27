@@ -704,9 +704,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         input_memlets = {}
         for dataname in inner_ctx_globals:
             if dataname in data_args:
-                # The global data refers to an argument. However, it might not be used.
-                # If it is used, i.e. `data_args[dataname]` is not `None` then we will
-                # fully map it into the nested SDFG. Otherwise we will remove bellow.
+                # The global data refers to an argument. If the argument is initialized,
+                # i.e. `data_args[dataname]` is not `None`, the argument is used by
+                # the lambda and we fully map it into the nested SDFG. Otherwise, we
+                # remove the data descriptor from the nested SDFG (see the next for-loop).
                 if (arg_node := data_args[dataname]) is not None:
                     input_memlets[dataname] = outer_ctx.sdfg.make_array_memlet(
                         arg_node.dc_node.data
@@ -720,8 +721,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 # the number of input connectors, this check is necessary for tuple
                 # arguments, for which domain inference has detected that one or more
                 # of the nested fields is not used. In such cases, the corresponding
-                # argument in the top-level lambda is expected to be None to setup an
-                # input edge.
+                # argument in the top-level lambda is expected to be `None` and it
+                # is not possible to setup an input edge.
                 # Note that we call `remove_data()` with `validate=True` to ensure
                 # that the data is not used by any access node.
                 try:
