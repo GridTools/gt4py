@@ -15,10 +15,12 @@ import functools
 import inspect
 import itertools
 import types
+from unicodedata import name
+import weakref
+from collections.abc import Callable, Mapping
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ClassVar,
     Final,
     Optional,
@@ -32,9 +34,10 @@ from typing import (
     overload,
 )
 
-from gt4py.eve import datamodels, utils as eve_utils
-from gt4py.eve.extended_typing import Self
-from gt4py.next import config
+from array_api_compat.cupy import Literal
+
+from gt4py.eve import concepts, datamodels, utils as eve_utils
+from gt4py.eve import extended_typing as xtyping
 
 
 GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
@@ -143,113 +146,92 @@ class MetadataBasedPicklingMixin:
     #  implementation.
 
 
-class Fingerprinted(Protocol):
-    """
-    Protocol for objects that can be fingerprinted with a custom function.
+Fingerprinter: TypeAlias = Callable[[Any], str]
 
+
+def _pass_through_pickler(instance: Any) -> NotImplemented:
+    """
+    A pickler that doesn't do any transformation and just returns the instance as is.
+
+    This can be used as a base for custom picklers that want to handle only specific types
+    and delegate the rest to the default pickling behavior.
+    """
+    return NotImplemented
+
+
+@dataclasses.dataclass(frozen=True)
+class PickleReduceFingerprinter:
+    """
     The fingerprint should be a stable hash string representing the state of the object.
+
+    Since it uses `functools.singledispatch` for the implementation of the
+    reducer override, the custom reducers are used for the types in the keys
+    AND any of its subclasses. This explicitly deviates from the behavior of
+    the `dispatch_table` dict, to allow easy pickle customization of entire class
+    hierarchies.
+
     """
-
-    __slots__ = ()
-
-    @property
-    def fingerprint(self) -> str:
-        """Get the fingerprint of the object."""
-        ...
-
-    @property
-    def fingerprinter(self) -> Callable[[Fingerprinted], str]:
-        """Get the fingerprinting function for the object."""
-        ...
-
-
-class FingerprintedABC(abc.ABC):
-    """
-    ABC of objects implementing the fingerprinting protocol.
-
-    It provides a custom subclass hook to recognize classes implementing the
-    protocol without inheriting from the ABC, without the performance problems
-    of using `isinstance` checks on runtime-checkable protocols directly.
-    """
-
-    __slots__ = ()
 
     @classmethod
-    def __subclasshook__(cls, subclass: type) -> bool | types.NotImplementedType:
-        if (
-            cls is FingerprintedABC
-            and hasattr(subclass, "fingerprint")
-            and hasattr(subclass, "fingerprinter")
-        ):
-            return True
+    def from_parts(
+        cls,
+        *args: PickleReduceFingerprinter,
+        reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
+        name: str | None = None,
+    ) -> PickleReduceFingerprinter:
+        """Alternative constructor to create a PickleFingerprinter from a dict of reducers."""
 
-        return NotImplemented
+        new_reducers = {}
+        for fprinter in args:
+            if not isinstance(fprinter, PickleReduceFingerprinter):
+                raise TypeError(
+                    f"Expected only PickleReduceFingerprinter instances, got '{fprinter}'"
+                )
+            new_reducers.update(fprinter.reduce_dispatcher.registry)
+        new_reducers.update(reducers)
 
-    @staticmethod
-    @abc.abstractmethod
-    def fingerprinter(instance: FingerprintedABC) -> str: ...  # to be implemented by subclasses
+        return cls(
+            eve_utils.singledispatcher(_pass_through_pickler, implementations=new_reducers),
+            **({"name": name} if name else {}),
+        )
 
-    @property
-    def fingerprint(self: Self) -> str:
-        return self.fingerprinter(self)
+    reduce_dispatcher: xtyping.SingleDispatchCallable[[Any], str]
+    name: str = dataclasses.field(default="CustomPickleFingerprinter", kw_only=True)
 
-
-fingerprint_reducer = eve_utils.singledispatcher(
-    lambda _: NotImplemented,
-    {FingerprintedABC: lambda obj: (type(obj), (), (obj.fingerprint,))},
-)
-fingerprint_pickler = eve_utils.custom_pickler(fingerprint_reducer, name="FingerprintPickler")
-
-
-fingerprint: Callable[[Any], str] = functools.partial(
-    eve_utils.content_hash, pickler=fingerprint_pickler
-)
-"""
-Default fingerprinting function for GT4Py objects.
-
-It uses `eve_utils.content_hash` as fingerprinting function. If the object
-is an instance of a class implementing the `FingerprintedProtocol`, it will
-instead use the `fingerprint` property of the object as its content hash.
-"""
-
-versioned_fingerprint: Callable[[Any], str] = functools.partial(
-    eve_utils.content_hash, config.BUILD_CACHE_VERSION_ID, pickler=fingerprint_pickler
-)
-
-
-class FingerprintedMixin:
-    """General mixin to add support for the Fingerprinted protocol to any class."""
-
-    __slots__ = ()
-
-    @staticmethod
-    def fingerprinter(instance: Fingerprinted) -> str:
-        try:
-            return fingerprint(instance.__reduce__())
-        except AttributeError:
-            return ""
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "_pickler",
+            eve_utils.custom_overriden_pickler(self.reduce_dispatcher, name=self.name),
+        )
 
     @property
-    def fingerprint(self) -> str:
-        return self.fingerprinter(self)
+    def pickler(self) -> weakref.WeakKeyDictionary[Any, str]:
+        return self._pickler
+
+    def __call__(self, instance: Any) -> str:
+        """Fingerprint the given object."""
+        return eve_utils.content_hash(instance, pickler=self._pickler)
 
 
-class CachedFingerprintedMixin(FingerprintedMixin):
-    """Mixin to add an optimized implementation of the Fingerprinted protocol to frozen classes."""
+@functools.cache
+def skipping_fields_node_fingerprinter(*skipped_fields: str) -> PickleReduceFingerprinter:
+    """
+    Return a `pickle.Pickler` to serialize a node skipping the given fields in the node or any of
+    its child nodes.
+    """
+    skipped_fields_set = set(skipped_fields)
 
-    @(functools.cached_property if not TYPE_CHECKING else property)
-    def fingerprint(self) -> str:
-        return self.fingerprinter(self)
-
-
-assert issubclass(FingerprintedMixin, FingerprintedABC)
-assert issubclass(CachedFingerprintedMixin, FingerprintedABC)
-if TYPE_CHECKING:
-    _CFM: type[Fingerprinted] = CachedFingerprintedMixin
-
-
-class CachedFingerprintedDataclass(CachedFingerprintedMixin, MetadataBasedPicklingMixin):
-    __slots__ = ()
+    return PickleReduceFingerprinter.from_parts(
+        reducers={
+            concepts.Node: lambda obj: (
+                obj.__class__,
+                (),
+                tuple((k, v) for k, v in obj.iter_children_items() if k not in skipped_fields_set),
+            ),
+        },
+        name=f"SkippingFieldsNodeFingerprinter__{', '.join(skipped_fields)}",
+    )
 
 
 class RecursionGuard:

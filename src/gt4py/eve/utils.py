@@ -25,6 +25,7 @@ import pprint
 import re
 import types
 import typing
+import weakref
 
 import deepdiff
 import xxhash
@@ -49,6 +50,7 @@ from .extended_typing import (
     Any,
     ArgsOnlyCallable,
     Callable,
+    ClassVar,
     Collection,
     Dict,
     Generic,
@@ -633,16 +635,31 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
 def singledispatcher(
     default: Callable[P, T],
     implementations: dict[type, Callable[[Any], Any]],
-) -> Callable[P, T]:
+) -> xtyping.SingleDispatchCallable[P, T]:
     result = functools.singledispatch(default)
     for cls, func in implementations.items():
         result.register(cls)(func)
-    return result
+    return cast(xtyping.SingleDispatchCallable[P, T], result)
+
+
+def custom_overriden_pickler(
+    reducer_override: Callable[[Any], tuple | types.NotImplementedType], *, name: str | None = None
+) -> type[pickle.Pickler]:
+    """
+    Create a custom pickler class using the provided function as reducer override.
+    """
+    pickler = type(
+        name or f"CustomReducePickler_{name or id(reducer_override)}",
+        (pickle.Pickler,),
+        {"reducer_override": staticmethod(reducer_override)},
+    )
+
+    return pickler
 
 
 def content_hash(
     *args: Any,
-    hash_algorithm: str | xtyping.HashlibAlgorithm | None = None,
+    hash_algorithm: xtyping.HashlibAlgorithm | None = None,
     pickler: type = pickle.Pickler,
 ) -> str:
     """Stable content-based hash function using instance serialization data.
@@ -659,58 +676,18 @@ def content_hash(
             Defaults to :class:`xxhash.xxh64`.
 
     """
-    hasher: xtyping.HashlibAlgorithm
     if hash_algorithm is None:
-        hasher = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
-    elif isinstance(hash_algorithm, str):
-        hasher = hashlib.new(hash_algorithm)
-    else:
-        hasher = hash_algorithm
+        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
+    assert hash_algorithm is not None
 
     buf = io.BytesIO()
     pickler(buf).dump(args)
 
-    hasher.update(buf.getvalue())
-    result = hasher.hexdigest()
+    hash_algorithm.update(buf.getvalue())
+    result = hash_algorithm.hexdigest()
     assert isinstance(result, str)
 
     return result
-
-
-def custom_pickler(
-    reducer: Callable[[Any], tuple | types.NotImplementedType],
-    *,
-    name: str | None = None,
-) -> type[pickle.Pickler]:
-    """
-    Create a custom pickler class using the provided function as reducer override.
-    """
-    pickler = type(
-        name or f"CustomReducePickler_{name or id(reducer)}",
-        (pickle.Pickler,),
-        {"reducer_override": staticmethod(reducer)},
-    )
-
-    return pickler
-
-
-def custom_pickler_from_reducers(
-    custom_reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
-    *,
-    name: str | None = None,
-    default_reducer: Callable[[Any], tuple | types.NotImplementedType] = lambda _: NotImplemented,
-) -> type[pickle.Pickler]:
-    """
-    Create a pickler with the provided reducers registered in reducer override.
-
-    Since it uses `functools.singledispatch` for the implementation of the
-    reducer override, the custom reducers are used for the types in the keys
-    AND any of its subclasses. This explicitly deviates from the behavior of
-    the `dispatch_table` dict, to allow easy pickle customization of entire class
-    hierarchies.
-    """
-
-    return custom_pickler(singledispatcher(default_reducer, custom_reducers), name=name)
 
 
 ddiff = deepdiff.diff.DeepDiff
@@ -1234,14 +1211,12 @@ class XIterable(Iterable[T]):
             >>> list(it.getitem(0))
             ['a', 'b', 'c']
 
-            >>> it = xiter(
-            ...     [
-            ...         dict(name="AA", age=20, country="US"),
-            ...         dict(name="BB", age=30, country="UK"),
-            ...         dict(name="CC", age=40, country="EU"),
-            ...         dict(country="CH"),
-            ...     ]
-            ... )
+            >>> it = xiter([
+            ...     dict(name="AA", age=20, country="US"),
+            ...     dict(name="BB", age=30, country="UK"),
+            ...     dict(name="CC", age=40, country="EU"),
+            ...     dict(country="CH"),
+            ... ])
             >>> list(it.getitem("name", "age", default=None))
             [('AA', 20), ('BB', 30), ('CC', 40), (None, None)]
 

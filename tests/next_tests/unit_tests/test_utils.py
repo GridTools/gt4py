@@ -11,6 +11,7 @@ import inspect
 import pickle
 import pytest
 
+from gt4py import eve
 from gt4py.eve import datamodels
 from gt4py.next import utils
 
@@ -91,58 +92,33 @@ class TestMetadataBasedPickling:
             assert getattr(restored, field_name) == expected_value
 
 
-class _DuckFingerprinted:
-    @property
-    def fingerprint(self):
-        return "duck"
+def test_skipping_fields_node_pickler_skips_nested_fields_and_is_cached():
+    skipped_field_pickler = eve.concepts.skipping_fields_node_pickler("int_value")
+    assert skipped_field_pickler is eve.concepts.skipping_fields_node_pickler("int_value")
 
-    @property
-    def fingerprinter(self):
-        return lambda _: "duck"
+    node_a = definitions.CompoundNode(
+        int_value=1,
+        location=definitions.make_location_node(fixed=True),
+        simple=definitions.make_simple_node(fixed=True),
+        simple_loc=definitions.make_simple_node_with_loc(fixed=True),
+        simple_opt=definitions.make_simple_node_with_optionals(fixed=True),
+        other_simple_opt=None,
+    )
+    node_b = copy.deepcopy(node_a)
 
+    node_b.int_value += 100
+    node_b.simple.int_value += 100
+    node_b.simple_loc.int_value += 100
+    node_b.simple_opt.int_value += 100
 
-def test_fingerprintedabc_subclasshook_recognizes_duck_types():
-    assert issubclass(_DuckFingerprinted, utils.FingerprintedABC)
+    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) == eve.utils.content_hash(
+        node_b, pickler=skipped_field_pickler
+    )
 
-
-class _TestFingerprinted(utils.FingerprintedABC):
-    def __init__(self, value: str, noise: str):
-        self.value = value
-        self.noise = noise
-
-    @staticmethod
-    def fingerprinter(instance: "_TestFingerprinted") -> str:
-        return instance.value
-
-
-def test_fingerprint_uses_fingerprinted_state_only():
-    a = _TestFingerprinted("id", noise="left")
-    b = _TestFingerprinted("id", noise="right")
-    c = _TestFingerprinted("other", noise="left")
-
-    assert utils.fingerprint(a) == utils.fingerprint(b)
-    assert utils.fingerprint(a) != utils.fingerprint(c)
-
-
-class _CachedTestFingerprinted(utils.CachedFingerprintedMixin):
-    calls = 0
-
-    def __init__(self, value: str):
-        self.value = value
-
-    @staticmethod
-    def fingerprinter(instance: "_CachedTestFingerprinted") -> str:
-        _CachedTestFingerprinted.calls += 1
-        return instance.value
-
-
-def test_cached_fingerprinted_mixin_computes_fingerprint_once_per_instance():
-    _CachedTestFingerprinted.calls = 0
-    instance = _CachedTestFingerprinted("stable")
-
-    assert instance.fingerprint == "stable"
-    assert instance.fingerprint == "stable"
-    assert _CachedTestFingerprinted.calls == 1
+    node_b.simple.str_value = "changed"
+    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) != eve.utils.content_hash(
+        node_b, pickler=skipped_field_pickler
+    )
 
 
 def test_tree_map_default():

@@ -34,13 +34,19 @@ from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, 
 from gt4py.next.otf import arguments, toolchain
 
 
+#: Generate an unique fingerprint for `eve.Node`s ignoring its "location" attribute.
+nonlocated_fingerprint: utils.PickleReduceFingerprinter = utils.skipping_fields_node_fingerprinter(
+    "location"
+)
+
+
 # Create a custom pickler for the BaseStage `fingerprinter` that handles
 # `types.FunctionType` by using its source code and closure variables.
 # This should be enough for the use case of GT4Py DSL definitions,
 # which are expected to be pure functions without complicated closures.
-fingerprint_reducer = eve_utils.singledispatcher(
-    utils.fingerprint_reducer,
-    {
+ffront_stage_fingerprinter = utils.PickleReduceFingerprinter.from_parts(
+    nonlocated_fingerprint,
+    reducers={
         types.FunctionType: lambda f: (
             tuple,
             (),
@@ -52,21 +58,9 @@ fingerprint_reducer = eve_utils.singledispatcher(
     },
 )
 
-fingerprinter = functools.partial(
-    eve_utils.content_hash,
-    pickler=eve_utils.custom_pickler(fingerprint_reducer, name="FFrontFingerprintPickler"),
-)
-
 
 @dataclasses.dataclass(frozen=True)
-class BaseStage(utils.CachedFingerprintedDataclass):
-    """Base class for optimized Fingerprinted implementations in frozen dataclasses."""
-
-    fingerprinter = staticmethod(fingerprinter)
-
-
-@dataclasses.dataclass(frozen=True)
-class DSLFieldOperatorDef(BaseStage):
+class DSLFieldOperatorDef(utils.MetadataBasedPicklingMixin):
     definition: types.FunctionType
     node_class: type[foast.OperatorNode] = foast.FieldOperator
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -80,7 +74,7 @@ ConcreteDSLFieldOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 
 @dataclasses.dataclass(frozen=True)
-class FOASTOperatorDef(BaseStage):
+class FOASTOperatorDef(utils.MetadataBasedPicklingMixin):
     foast_node: foast.OperatorNode
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
@@ -94,7 +88,7 @@ ConcreteFOASTOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 
 @dataclasses.dataclass(frozen=True)
-class DSLProgramDef(BaseStage):
+class DSLProgramDef(utils.MetadataBasedPicklingMixin):
     definition: types.FunctionType
     grid_type: Optional[common.GridType] = None
     debug: bool = False
@@ -106,7 +100,7 @@ ConcreteDSLProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 
 @dataclasses.dataclass(frozen=True)
-class PASTProgramDef(BaseStage):
+class PASTProgramDef(utils.MetadataBasedPicklingMixin):
     past_node: past.Program
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None

@@ -23,16 +23,6 @@ from gt4py.next.type_system import type_specifications as ts
 DimensionKind = common.DimensionKind
 
 
-#: A custom pickler which ignores "location" and "type" attribute of IR nodes.
-_semantic_node_pickler: type[pickle.Pickler] = concepts.skipping_fields_node_pickler(
-    "location", "type"
-)
-
-#: Generates an unique fingerprint for IR nodes ignoring their location and type attributes.
-semantic_fingerprint: concepts.NodeFingerprinter = functools.partial(
-    eve_utils.content_hash, pickler=_semantic_node_pickler
-)
-
 
 @eve_utils.noninstantiable
 class Node(eve.Node):

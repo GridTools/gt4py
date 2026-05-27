@@ -233,23 +233,3 @@ class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from Da
 class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
     pass
 
-
-NodeFingerprinter: TypeAlias = Callable[[Node], str]
-
-
-@functools.cache
-def skipping_fields_node_pickler(*skipped_fields: str) -> type[pickle.Pickler]:
-    """
-    Return a `pickle.Pickler` to serialize a node skipping the given fields in the node or any of
-    its child nodes.
-    """
-    skipped_fields_set = set(skipped_fields)
-    return utils.custom_pickler_from_reducers(
-        {
-            Node: lambda obj: (
-                obj.__class__,
-                (),
-                tuple((k, v) for k, v in obj.iter_children_items() if k not in skipped_fields_set),
-            ),
-        }
-    )

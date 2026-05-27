@@ -120,31 +120,3 @@ class TestNode:
             )
         )
 
-
-def test_skipping_fields_node_pickler_skips_nested_fields_and_is_cached():
-    skipped_field_pickler = eve.concepts.skipping_fields_node_pickler("int_value")
-    assert skipped_field_pickler is eve.concepts.skipping_fields_node_pickler("int_value")
-
-    node_a = definitions.CompoundNode(
-        int_value=1,
-        location=definitions.make_location_node(fixed=True),
-        simple=definitions.make_simple_node(fixed=True),
-        simple_loc=definitions.make_simple_node_with_loc(fixed=True),
-        simple_opt=definitions.make_simple_node_with_optionals(fixed=True),
-        other_simple_opt=None,
-    )
-    node_b = copy.deepcopy(node_a)
-
-    node_b.int_value += 100
-    node_b.simple.int_value += 100
-    node_b.simple_loc.int_value += 100
-    node_b.simple_opt.int_value += 100
-
-    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) == eve.utils.content_hash(
-        node_b, pickler=skipped_field_pickler
-    )
-
-    node_b.simple.str_value = "changed"
-    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) != eve.utils.content_hash(
-        node_b, pickler=skipped_field_pickler
-    )
