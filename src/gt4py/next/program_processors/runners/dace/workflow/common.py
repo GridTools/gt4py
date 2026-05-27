@@ -109,6 +109,9 @@ def set_dace_config(
     #  This setting allows to throw an exception if any implicit Copy-Map slips thorugh.
     dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
 
+    # Use the new GPU code generator
+    dace.Config.set("compiler.cuda.implementation", value="experimental")
+
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
     #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first
     #  idea was to use just one stream. However, even in that case the generator
