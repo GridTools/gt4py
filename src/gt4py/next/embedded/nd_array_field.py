@@ -316,6 +316,17 @@ class NdArrayField(
         if not any(is_gather):
             return _domain_premap(self, *conn_fields)
 
+        # Reject only order-dependent chains: a connectivity reading a dimension that another one
+        # *removes* (a dimension-introducing remap, whose codomain is not in its own domain).
+        # Reshuffles keep their codomain, so combining them is fine even when they read each other's.
+        removed = {c.codomain for c in conn_fields if c.codomain not in c.domain.dims}
+        for c in conn_fields:
+            if reads := removed & ({*c.domain.dims} - {c.codomain}):
+                raise ValueError(
+                    f"Cannot 'premap' with connectivities where one reads dimension(s) {reads} that "
+                    "another replaces; apply such chained remaps in separate 'premap' calls."
+                )
+
         return _gather_premap(self, *cast(list[common.GatherConnectivity], conn_fields))
 
     def __call__(
@@ -585,45 +596,53 @@ def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> 
     return data.__class__.from_array(data._ndarray, domain=new_domain, dtype=data.dtype)
 
 
+def _gather_output_domain(
+    field_domain: common.Domain, connectivities: Sequence[common.GatherConnectivity]
+) -> common.Domain:
+    """Output domain of a gather: each connectivity's codomain becomes its own domain dimensions."""
+    domain = field_domain
+    for conn in connectivities:
+        cod = conn.codomain
+        # the connectivity's domain, restricted to where it maps into the codomain's range
+        narrowed = {
+            nr.dim: nr.unit_range for nr in conn.inverse_image(field_domain[cod].unit_range)
+        }
+        # dimensions the connectivity adds that are not in the field yet
+        introduced = [
+            common.NamedRange(dim, rng) for dim, rng in narrowed.items() if dim not in domain.dims
+        ]
+        result: list[common.NamedRange] = []
+        for nr in domain:
+            if nr.dim == cod:  # the codomain expands into the connectivity's domain dimensions
+                if cod in narrowed:  # keep the codomain itself when it maps to itself
+                    result.append(common.NamedRange(cod, nr.unit_range & narrowed[cod]))
+                result.extend(introduced)
+            elif nr.dim in narrowed:  # a dimension shared with the connectivity: narrow it
+                result.append(common.NamedRange(nr.dim, nr.unit_range & narrowed[nr.dim]))
+            else:
+                result.append(nr)
+        domain = common.Domain(*result)
+    return domain
+
+
 def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivity) -> NdArrayField:
     """`premap` via a single advanced-index gather (dimension-preserving and -introducing cases)."""
     xp = data.array_ns
-
-    new_dims = list(data.domain.dims)
-    new_ranges = list(data.domain.ranges)
-    for conn in connectivities:
-        cod = conn.codomain
-        cod_pos = new_dims.index(cod)
-        inv = conn.inverse_image(data.domain[cod].unit_range)
-        inv_dims = [nr.dim for nr in inv]
-        fresh_ranges = []
-        for nr in inv:
-            if nr.dim in new_dims:
-                i = new_dims.index(nr.dim)
-                new_ranges[i] = new_ranges[i] & nr.unit_range
-            else:
-                fresh_ranges.append(nr)
-        if cod in inv_dims:
-            insert_pos = cod_pos + 1
-        else:
-            del new_dims[cod_pos]
-            del new_ranges[cod_pos]
-            insert_pos = cod_pos
-        for offset, nr in enumerate(fresh_ranges):
-            new_dims.insert(insert_pos + offset, nr.dim)
-            new_ranges.insert(insert_pos + offset, nr.unit_range)
-    new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
-
+    new_domain = _gather_output_domain(data.domain, connectivities)
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
-    take_indices = []
-    for dim in data.domain.dims:
-        if dim in conn_by_codomain:
-            idx = _connectivity_index_array(conn_by_codomain[dim], new_domain, xp)
-        else:
-            idx = _identity_index_array(new_domain, dim, xp)
-        take_indices.append(idx - data.domain[dim].unit_range.start)  # shift to 0-based indexing
-    new_buffer = data._ndarray[tuple(take_indices)]
 
+    # one index array per original field dimension (the connectivity's, or identity), broadcast over
+    # the output domain and shifted to 0-based buffer indices, then a single advanced-index gather
+    take_indices = tuple(
+        (
+            _connectivity_index_array(conn_by_codomain[dim], new_domain, xp)
+            if dim in conn_by_codomain
+            else _identity_index_array(new_domain, dim, xp)
+        )
+        - data.domain[dim].unit_range.start
+        for dim in data.domain.dims
+    )
+    new_buffer = data._ndarray[take_indices]
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
 
 
@@ -631,9 +650,11 @@ def _connectivity_index_array(
     connectivity: common.GatherConnectivity, domain: common.Domain, xp: ModuleType
 ) -> core_defs.NDArrayObject:
     """`connectivity`'s index table laid out over `domain` (not yet shifted to 0-based)."""
+    # restrict the table to the output ranges of the connectivity's own dimensions
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     arr = xp.asarray(conn.ndarray)
+    # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
     ndim = conn.domain.ndim
     fresh_axis = {
         dim: ndim + i for i, dim in enumerate(d for d in domain.dims if d not in conn.domain.dims)
@@ -642,11 +663,11 @@ def _connectivity_index_array(
         fresh_axis[dim] if dim in fresh_axis else conn.domain.dim_index(dim, allow_missing=False)
         for dim in domain.dims
     )
-    if fresh_axis:
+    if fresh_axis:  # add size-1 axes for output dimensions the connectivity does not span
         arr = xp.expand_dims(arr, axis=tuple(fresh_axis.values()))
-    arr = xp.transpose(arr, transposed_axes)
+    arr = xp.transpose(arr, transposed_axes)  # reorder to the output dimension order
     if arr.shape != domain.shape:
-        arr = xp.broadcast_to(arr, domain.shape)
+        arr = xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
     return arr
 
 
