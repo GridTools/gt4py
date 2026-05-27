@@ -511,6 +511,20 @@ def _run_dace_determinism_check(
     except UnsupportedBackendError as e:
         session.error(str(e))
     finally:
+        # Dump the determinism report to stdout so it lands in the CI
+        # log. report.txt itself only lives on the runner filesystem
+        # and isn't easy to retrieve after the job ends, but the CI
+        # log is. Printed on both success and failure so we always
+        # have a baseline of what programs were observed and which
+        # (if any) differed. The report is small — one line per
+        # program plus a short header — bounded by the test selection.
+        report_path = workdir / "report.txt"
+        if report_path.exists():
+            banner = "=" * 70
+            print(f"\n{banner}\ndeterminism report ({report_path}):\n{banner}")
+            print(report_path.read_text(), end="")
+            print(f"{banner}\n", flush=True)
+
         # Reclaim disk after the comparison. The two per-run caches are
         # ~hundreds of MB each in development mode, and dace's own
         # `.dacecache/` at the repo root (used for SDFGs not routed
@@ -558,12 +572,7 @@ def test_cartesian_dace_determinism(
             *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
             "-m",
             f"{markers}",
-            # Restrict to integration tests only. The dace-marked
-            # tests under unit_tests/ either build SDFGs by hand or
-            # exercise sub-stages of the dace backend in isolation,
-            # neither of which populates gt_cache/ in a way the
-            # determinism comparator can see.
-            str(pathlib.Path("tests") / "cartesian_tests" / "integration_tests"),
+            str(pathlib.Path("tests") / "cartesian_tests"),
         ],
         layout="cartesian",
     )
@@ -614,12 +623,7 @@ def test_next_dace_determinism(
             *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
             "-m",
             f"{markers}",
-            # Restrict to integration tests only. The dace-marked
-            # tests under unit_tests/ either build SDFGs by hand or
-            # exercise sub-stages of the dace backend in isolation,
-            # neither of which populates .gt4py_cache/ in a way the
-            # determinism comparator can see.
-            str(pathlib.Path("tests") / "next_tests" / "integration_tests"),
+            str(pathlib.Path("tests") / "next_tests"),
         ],
         layout="next",
     )
