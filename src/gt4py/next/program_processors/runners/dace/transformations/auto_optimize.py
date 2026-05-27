@@ -21,7 +21,7 @@ from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtir_library_nodes,
+    library_nodes as gtx_library_nodes,
     transformations as gtx_transformations,
 )
 
@@ -375,9 +375,9 @@ def gt_auto_optimize(
         # We now expand all GT4Py specific library nodes.
         #  We do this such that we have control over all the Maps that are there.
         # NOTE: `Broadcast` nodes were already expanded in the top level dataflow phase.
-        # TODO(phimuell): It is probably the right place, but maybe there is a better one.
+        # TODO(edopao,phimuell): It is probably the right place, but maybe there is a better one.
         for node, state in list(sdfg.all_nodes_recursive()):
-            if isinstance(node, gtir_library_nodes.GTIR_LIBRARY_NODES):
+            if isinstance(node, gtx_library_nodes.GTIR_LIBRARY_NODES):
                 node.expand(state)
                 if validate_all:
                     sdfg.validate()
@@ -674,8 +674,8 @@ def _gt_auto_process_top_level_maps(
             )
             expanded_broadcast_node = False
             for node, state in list(sdfg.all_nodes_recursive()):
-                if isinstance(node, gtir_library_nodes.Broadcast):
-                    gtir_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
+                if isinstance(node, gtx_library_nodes.Broadcast):
+                    gtx_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
                     if validate_all:
                         sdfg.validate()
                     expanded_broadcast_node = True

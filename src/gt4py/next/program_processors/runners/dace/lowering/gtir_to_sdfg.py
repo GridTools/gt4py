@@ -127,6 +127,10 @@ class DataflowBuilder(Protocol):
         It also modifies the tasklet connectors by adding a prefix string (see
         `gtir_to_sdfg_utils.get_tasklet_connector()`), in order to avoid name conflicts
         with SDFG data. Otherwise, SDFG validation would detect such conflicts and fail.
+
+        Returns:
+            The created tasklet node and the mapping from original connector names to
+            modified connector names.
         """
         if isinstance(inputs, set):
             inputs = {k: None for k in sorted(inputs)}
@@ -164,6 +168,12 @@ class DataflowBuilder(Protocol):
         """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns a unique name.
 
         It also modifies the tasklet connectors, in the same way as `add_tasklet()`.
+
+        Returns:
+            A tuple consisting of:
+            - The created tasklet node.
+            - The map entry and exit nodes of the created map.
+            - The mapping from original connector names to modified connector names.
         """
         assert inputs.keys().isdisjoint(outputs.keys())
 

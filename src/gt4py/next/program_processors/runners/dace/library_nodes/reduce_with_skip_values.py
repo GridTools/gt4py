@@ -26,12 +26,12 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
     default_implementation: Final[str | None] = "pure"
 
     # Properties
-    wcr = dace_properties.LambdaProperty(default="lambda a, b: a")
-    identity = dace_properties.SymbolicProperty(default=0, to_json=lambda x: str(x))
-    init = dace_properties.SymbolicProperty(default=0, to_json=lambda x: str(x))
-    input_conn = dace_properties.Property(default="_in")
-    output_conn = dace_properties.Property(default="_out")
-    mask_conn = dace_properties.Property(default="_mask")
+    wcr = dace_properties.LambdaProperty(allow_none=True)
+    identity = dace_properties.Property(allow_none=True)
+    init = dace_properties.Property(allow_none=True)
+    input_conn = dace_properties.Property(dtype=str)
+    output_conn = dace_properties.Property(dtype=str)
+    mask_conn = dace_properties.Property(dtype=str)
 
     def __init__(
         self,
@@ -39,42 +39,33 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
         wcr: str,
         identity: dace.symbolic.SymbolicType,
         init: dace.symbolic.SymbolicType,
+        input_conn: str,
+        output_conn: str,
+        mask_conn: str,
         debuginfo: dace.dtypes.DebugInfo | None = None,
-        input_conn: str | None = None,
-        output_conn: str | None = None,
-        mask_conn: str | None = None,
     ) -> None:
-        if input_conn is None:
-            input_conn = self.input_conn
-        else:
-            self.input_conn = input_conn
-
-        if output_conn is None:
-            output_conn = self.output_conn
-        else:
-            self.output_conn = output_conn
-
-        if mask_conn is None:
-            mask_conn = self.mask_conn
-        else:
-            self.mask_conn = mask_conn
-
         super().__init__(name, inputs={input_conn, mask_conn}, outputs={output_conn})
         self.wcr = wcr
         self.identity = identity
         self.init = init
+        self.input_conn = input_conn
+        self.output_conn = output_conn
+        self.mask_conn = mask_conn
         self.debuginfo = debuginfo
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
-        assert len(list(state.in_edges_by_connector(self, self.input_conn))) == 1
+        if len(list(state.in_edges_by_connector(self, self.input_conn))) != 1:
+            raise ValueError(f"Expected exactly one input edge on connector {self.input_conn}.")
         inedge: dace_graph.MultiConnectorEdge = next(
             state.in_edges_by_connector(self, self.input_conn)
         )
-        assert len(list(state.out_edges_by_connector(self, self.output_conn))) == 1
+        if len(list(state.out_edges_by_connector(self, self.output_conn))) != 1:
+            raise ValueError(f"Expected exactly one output edge on connector {self.output_conn}.")
         outedge: dace_graph.MultiConnectorEdge = next(
             state.out_edges_by_connector(self, self.output_conn)
         )
-        assert len(list(state.in_edges_by_connector(self, self.mask_conn))) == 1
+        if len(list(state.in_edges_by_connector(self, self.mask_conn))) != 1:
+            raise ValueError(f"Expected exactly one input edge on connector {self.mask_conn}.")
         maskedge: dace_graph.MultiConnectorEdge = next(
             state.in_edges_by_connector(self, self.mask_conn)
         )
@@ -87,9 +78,15 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
             raise ValueError(
                 f"Invalid shape {mask_desc.shape} of mask array, expected constant neighbors size."
             )
-        if inedge.data.num_elements() != max_neighbors:
+        if (
+            inedge.data.num_elements() != max_neighbors
+            or inedge.data.src_subset.size().count(max_neighbors) != 1
+        ):
             raise ValueError(f"Invalid memlet on input connector {self.input_conn}.")
-        if maskedge.data.num_elements() != max_neighbors:
+        if (
+            maskedge.data.num_elements() != max_neighbors
+            or maskedge.data.src_subset.size().count(max_neighbors) != 1
+        ):
             raise ValueError(f"Invalid memlet on input connector {self.mask_conn}.")
         if outedge.data.num_elements() != 1:
             raise ValueError(f"Invalid memlet on output connector {self.output_conn}.")
@@ -122,6 +119,8 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         max_neighbors = mask_desc.shape[1]
         assert isinstance(max_neighbors, int) or str(max_neighbors).isdigit()
 
+        # In validation, we already checked that the input subset collects exactly
+        #  `max_neighbors` elements along one dimension.
         local_dim_index = inedge.data.src_subset.size().index(max_neighbors)
 
         nsdfg = dace.SDFG(node.label)

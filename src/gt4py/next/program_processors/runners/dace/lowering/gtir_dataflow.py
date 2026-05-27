@@ -36,7 +36,7 @@ from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtir_library_nodes,
+    library_nodes as gtx_library_nodes,
     sdfg_args as gtx_dace_args,
 )
 from gt4py.next.program_processors.runners.dace.lowering import (
@@ -1404,31 +1404,47 @@ class LambdaToDataflow(eve.NodeVisitor):
         inp_conn = "_in"
         outp_conn = "_out"
         mask_conn = "_mask"
-
         if offset_provider_type.has_skip_values:
-            name = self.subgraph_builder.unique_nsdfg_name("reduce_with_skip_values")
-            reduce_node = gtir_library_nodes.ReduceWithSkipValues(
-                name,
-                reduce_wcr,
+            assert (
+                isinstance(input_expr.gt_dtype, ts.ListType)
+                and input_expr.gt_dtype.offset_type is not None
+            )
+            offset_type = input_expr.gt_dtype.offset_type
+            connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
+            self.sdfg.arrays[connectivity].transient = False
+
+            reduce_node = gtx_library_nodes.ReduceWithSkipValues(
+                name=self.subgraph_builder.unique_lib_node_name("reduce_with_skip_values"),
+                wcr=reduce_wcr,
                 identity=reduce_identity.value,
                 init=reduce_init.value,
-                debuginfo=gtir_to_sdfg_utils.debug_info(node),
                 input_conn=inp_conn,
                 output_conn=outp_conn,
                 mask_conn=mask_conn,
+                debuginfo=gtir_to_sdfg_utils.debug_info(node),
+            )
+            self.state.add_node(reduce_node)
+
+            origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
+            self._add_input_data_edge(
+                self.state.add_access(connectivity),
+                dace_subsets.Range.from_string(
+                    f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
+                ),
+                reduce_node,
+                mask_conn,
             )
         else:
             reduce_node = dace_stdlib.Reduce(
-                "reduce",
-                reduce_wcr,
+                name=self.subgraph_builder.unique_lib_node_name("reduce"),
+                wcr=reduce_wcr,
                 axes=None,
                 identity=reduce_init.value,
-                schedule=dace.dtypes.ScheduleType.Default,
                 debuginfo=gtir_to_sdfg_utils.debug_info(node),
                 inputs={inp_conn},
                 outputs={outp_conn},
             )
-        self.state.add_node(reduce_node)
+            self.state.add_node(reduce_node)
 
         if isinstance(input_expr, MemletExpr):
             self._add_input_data_edge(input_expr.dc_node, input_expr.subset, reduce_node, inp_conn)
@@ -1440,35 +1456,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 inp_conn,
                 self.sdfg.make_array_memlet(input_expr.dc_node.data),
             )
+
         self.state.add_edge(
             reduce_node, outp_conn, result_node, None, dace.Memlet(data=result, subset="0")
         )
-
-        if offset_provider_type.has_skip_values:
-            assert (
-                isinstance(input_expr.gt_dtype, ts.ListType)
-                and input_expr.gt_dtype.offset_type is not None
-            )
-
-            offset_type = input_expr.gt_dtype.offset_type
-            connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
-            connectivity_node = self.state.add_access(connectivity)
-            connectivity_desc = connectivity_node.desc(self.sdfg)
-            connectivity_desc.transient = False
-
-            # The layout of connectivity tables is known.
-            assert len(offset_provider_type.domain) == 2
-            assert offset_provider_type.domain[1].kind == gtx_common.DimensionKind.LOCAL
-            origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.source_dim)
-            self._add_input_data_edge(
-                connectivity_node,
-                dace_subsets.Range.from_string(
-                    f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
-                ),
-                reduce_node,
-                mask_conn,
-            )
-
         return ValueExpr(result_node, node.type)
 
     def _split_shift_args(
