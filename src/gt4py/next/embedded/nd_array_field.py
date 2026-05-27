@@ -306,9 +306,6 @@ class NdArrayField(
                 f" {repeated_codomain_dims}."
             )
 
-        # Gather connectivities rearrange data; affine ones (cartesian shift/relocation) only
-        # relabel the domain. Whether a gather changes dimensions depends on the field, so that is
-        # resolved in `_gather_premap`, not by the connectivity type.
         is_gather = [isinstance(c, common.GatherConnectivity) for c in conn_fields]
         if any(is_gather) and not all(is_gather):
             raise ValueError(
@@ -589,18 +586,9 @@ def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> 
 
 
 def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivity) -> NdArrayField:
-    """`premap` implementation that gathers data via advanced indexing.
-
-    Subsumes both the dimension-preserving and dimension-introducing cases: each connectivity
-    replaces its codomain dimension in the output domain with its own domain dimensions, and a
-    single advanced-index gather over all field dimensions produces the result. Whether a
-    dimension is introduced or kept follows from set membership in the output domain, so no
-    classification of the connectivity is needed.
-    """
+    """`premap` via a single advanced-index gather (dimension-preserving and -introducing cases)."""
     xp = data.array_ns
 
-    # Output domain: replace each codomain by the connectivity's domain dims, narrowing dims already
-    # present in the field in place. (A naive `Domain.replace` would duplicate such shared dims.)
     new_dims = list(data.domain.dims)
     new_ranges = list(data.domain.ranges)
     for conn in connectivities:
@@ -615,11 +603,9 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
                 new_ranges[i] = new_ranges[i] & nr.unit_range
             else:
                 fresh_ranges.append(nr)
-        if (
-            cod in inv_dims
-        ):  # codomain survives (it is one of its own domain dims): keep, append after
+        if cod in inv_dims:
             insert_pos = cod_pos + 1
-        else:  # codomain is replaced by the connectivity's domain dims
+        else:
             del new_dims[cod_pos]
             del new_ranges[cod_pos]
             insert_pos = cod_pos
@@ -644,24 +630,20 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
 def _connectivity_index_array(
     connectivity: common.GatherConnectivity, domain: common.Domain, xp: ModuleType
 ) -> core_defs.NDArrayObject:
-    """Lay a gather connectivity's index table out over `domain` (restrict, expand, transpose, broadcast).
-
-    Generic over any gather connectivity: it only uses `restrict`, `ndarray` and `domain`. Returns
-    raw index values (in the field's index space); the caller applies the 0-based shift.
-    """
+    """`connectivity`'s index table laid out over `domain` (not yet shifted to 0-based)."""
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     arr = xp.asarray(conn.ndarray)
-    expanded_axes: list[int] = []
-    transposed_axes: list[int] = []
-    for dim in domain.dims:
-        axis = conn.domain.dim_index(dim)
-        if axis is None:
-            expanded_axes.append(conn.domain.ndim + len(expanded_axes))
-            axis = expanded_axes[-1]
-        transposed_axes.append(axis)
-    if expanded_axes:
-        arr = xp.expand_dims(arr, axis=expanded_axes)
+    ndim = conn.domain.ndim
+    fresh_axis = {
+        dim: ndim + i for i, dim in enumerate(d for d in domain.dims if d not in conn.domain.dims)
+    }
+    transposed_axes = tuple(
+        fresh_axis[dim] if dim in fresh_axis else conn.domain.dim_index(dim, allow_missing=False)
+        for dim in domain.dims
+    )
+    if fresh_axis:
+        arr = xp.expand_dims(arr, axis=tuple(fresh_axis.values()))
     arr = xp.transpose(arr, transposed_axes)
     if arr.shape != domain.shape:
         arr = xp.broadcast_to(arr, domain.shape)
