@@ -66,15 +66,18 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
         self.debuginfo = debuginfo
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
-        assert len(list(state.in_edges_by_connector(self, self.input_conn))) == 1
+        if len(list(state.in_edges_by_connector(self, self.input_conn))) != 1:
+            raise ValueError(f"Expected exactly one input edge on connector {self.input_conn}.")
         inedge: dace_graph.MultiConnectorEdge = next(
             state.in_edges_by_connector(self, self.input_conn)
         )
-        assert len(list(state.out_edges_by_connector(self, self.output_conn))) == 1
+        if len(list(state.out_edges_by_connector(self, self.output_conn))) != 1:
+            raise ValueError(f"Expected exactly one output edge on connector {self.output_conn}.")
         outedge: dace_graph.MultiConnectorEdge = next(
             state.out_edges_by_connector(self, self.output_conn)
         )
-        assert len(list(state.in_edges_by_connector(self, self.mask_conn))) == 1
+        if len(list(state.in_edges_by_connector(self, self.mask_conn))) != 1:
+            raise ValueError(f"Expected exactly one input edge on connector {self.mask_conn}.")
         maskedge: dace_graph.MultiConnectorEdge = next(
             state.in_edges_by_connector(self, self.mask_conn)
         )
