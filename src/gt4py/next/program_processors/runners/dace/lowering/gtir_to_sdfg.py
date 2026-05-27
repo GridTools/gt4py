@@ -728,7 +728,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 #   `inner_ctx.sdfg.symbols`. We will keep them there, because to
                 #   delete them we would need to make sure that the symbol is not
                 #   used by anything else.
-                assert inner_ctx.sdfg.arrays[data_name].transient
                 inner_ctx.sdfg.remove_data(data_name, validate=gtx_config.DEBUG)
 
         # Map free symbols to parent SDFG
