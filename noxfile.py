@@ -552,10 +552,34 @@ def test_cartesian_dace_determinism(
 
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
+    # gt4py.cartesian's setuptools-based compile path has been observed to
+    # deadlock under pytest-xdist's `-n auto` (=32 on a typical SLURM
+    # allocation) when used with the determinism check's double-pytest-pass
+    # workflow: pytest hangs silently inside `multi_feature_tests/
+    # test_code_generation.py` or `test_dace_parsing.py` with no further
+    # output until SLURM SIGTERMs the job at the time limit. Symptom is
+    # consistent across cpu / cuda12 / rocm7 — i.e. it's compile-contention,
+    # not host-compiler-specific.
+    #
+    # Unlike gt4py.next, cartesian has no env var that bounds compile
+    # parallelism (`GT4PY_BUILD_JOBS` is only read in
+    # `src/gt4py/next/config.py`), so the only knob we have here is the
+    # xdist worker count itself. Capping at 4 by default keeps a healthy
+    # margin from the contention threshold. Raise via
+    # `GT4PY_CARTESIAN_DETERMINISM_XDIST` (e.g. set "8" or "auto" in CI)
+    # if a higher count is known-safe in the target environment.
+    xdist_workers = os.environ.get("GT4PY_CARTESIAN_DETERMINISM_XDIST", "4")
+
     _run_dace_determinism_check(
         session,
         pytest_args=[
-            *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+            "pytest",
+            "--cache-clear",
+            "-sv",
+            "-n",
+            xdist_workers,
+            "--dist",
+            "loadgroup",
             "-m",
             f"{markers}",
             str(pathlib.Path("tests") / "cartesian_tests"),
