@@ -1418,10 +1418,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 wcr=reduce_wcr,
                 identity=reduce_identity.value,
                 init=reduce_init.value,
-                debuginfo=gtir_to_sdfg_utils.debug_info(node),
                 input_conn=inp_conn,
                 output_conn=outp_conn,
                 mask_conn=mask_conn,
+                debuginfo=gtir_to_sdfg_utils.debug_info(node),
             )
             self.state.add_node(reduce_node)
 

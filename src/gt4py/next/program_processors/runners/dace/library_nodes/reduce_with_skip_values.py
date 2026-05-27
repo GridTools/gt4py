@@ -26,12 +26,12 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
     default_implementation: Final[str | None] = "pure"
 
     # Properties
-    wcr = dace_properties.LambdaProperty(default="lambda a, b: a")
-    identity = dace_properties.Property(default=0)
-    init = dace_properties.Property(default=0)
-    input_conn = dace_properties.Property(default="_in")
-    output_conn = dace_properties.Property(default="_out")
-    mask_conn = dace_properties.Property(default="_mask")
+    wcr = dace_properties.LambdaProperty(allow_none=True)
+    identity = dace_properties.Property(allow_none=True)
+    init = dace_properties.Property(allow_none=True)
+    input_conn = dace_properties.Property(dtype=str)
+    output_conn = dace_properties.Property(dtype=str)
+    mask_conn = dace_properties.Property(dtype=str)
 
     def __init__(
         self,
@@ -39,30 +39,18 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
         wcr: str,
         identity: dace.symbolic.SymbolicType,
         init: dace.symbolic.SymbolicType,
+        input_conn: str,
+        output_conn: str,
+        mask_conn: str,
         debuginfo: dace.dtypes.DebugInfo | None = None,
-        input_conn: str | None = None,
-        output_conn: str | None = None,
-        mask_conn: str | None = None,
     ) -> None:
-        if input_conn is None:
-            input_conn = self.input_conn
-        else:
-            self.input_conn = input_conn
-
-        if output_conn is None:
-            output_conn = self.output_conn
-        else:
-            self.output_conn = output_conn
-
-        if mask_conn is None:
-            mask_conn = self.mask_conn
-        else:
-            self.mask_conn = mask_conn
-
         super().__init__(name, inputs={input_conn, mask_conn}, outputs={output_conn})
         self.wcr = wcr
         self.identity = identity
         self.init = init
+        self.input_conn = input_conn
+        self.output_conn = output_conn
+        self.mask_conn = mask_conn
         self.debuginfo = debuginfo
 
     def validate(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
