@@ -20,10 +20,10 @@
 # What it does
 # ------------
 # Drives gt4py's `test_*_dace_determinism` nox sessions, each of which
-# runs pytest twice with isolated GT4PY_BUILD_CACHE_DIR and asserts the
-# DaCe-generated source files under <program>/src/ are byte-identical
-# between the two runs. A diff means the gt4py + dace toolchain is
-# non-deterministic for that test selection.
+# runs pytest twice with isolated build caches and asserts the
+# DaCe-generated source files are byte-identical between the two runs.
+# A diff means the gt4py + dace toolchain is non-deterministic for that
+# test selection.
 #
 # Logic lives in:
 #   noxfile.py                              (test_*_dace_determinism sessions)
@@ -39,15 +39,13 @@ variables:
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.11.2'
 
+.test_python_versions: &test_python_versions ['3.10']
+
 stages:
   - build
   - test
 
-# -- Build stage --------------------------------------------------------------
-# Mirrors `.build_common` in `cscs-ci.yml` and produces the same image tags
-# (so the cached image from the default pipeline is reused when available).
-# Both CUDA (for GH200) and ROCm (for AMD MI300) variants are built — the
-# determinism matrix below covers cpu+cuda on GH200 and rocm7 on AMD.
+# -- Build stage --
 .build_common:
   stage: build
   extends:
@@ -58,10 +56,11 @@ stages:
     DOCKERFILE: ci/Dockerfile
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
     PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}
+
     WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
   parallel:
     matrix:
-      - PY_VERSION: ['3.10']
+      - PY_VERSION: *test_python_versions
 
 .build_extra_cuda:
   variables:
@@ -90,13 +89,13 @@ build_cscs_amd_rocm:
     - .build_extra_rocm
   needs: []
 
-# -- Test stage: the determinism check ----------------------------------------
+# -- Test stage --
 .dace_determinism_common:
   stage: test
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
-    PY_VERSION: '3.10'
-    USE_MPI: 0
+    TEST_VARIANTS: 'cpu'
+    USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 60
   allow_failure: true
@@ -105,76 +104,75 @@ build_cscs_amd_rocm:
     paths:
       - _dace_deterministic_codegen/
     expire_in: 1 month
+  parallel:
+    matrix:
+      - SUBPACKAGE: [cartesian]
+        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
+        PY_VERSION: *test_python_versions
+      - SUBPACKAGE: [next]
+        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
+        DETAIL: ["nomesh"]
+        PY_VERSION: *test_python_versions
+  rules: &exclude_variants_rules
+    - if: '$SUBVARIANT == "cpu" && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
+      when: never
+    - if: '$SUBVARIANT == "cuda12" && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
+      when: never
+    - if: '$SUBVARIANT == "rocm7" && ($TEST_VARIANTS !~ /(^|\s)rocm7(\s|$)/)'
+      when: never
+
   script:
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
+    - export NOX_SESSION_ARGS="(${SUBVARIANT}${DETAIL:+, $DETAIL})"
     - |
       cd "${WORKDIR}/gt4py"
       nox_rc=0
-      ./noxfile.py -s "${NOX_SESSION}" || nox_rc=$?
+      ./noxfile.py -s "test_${SUBPACKAGE}_dace_determinism-${PY_VERSION}${NOX_SESSION_ARGS}" || nox_rc=$?
       if [ -d _dace_deterministic_codegen ]; then
         cp -r _dace_deterministic_codegen "${CI_PROJECT_DIR}/"
       fi
       exit $nox_rc
 
-dace_determinism_cscs_gh200_cuda:
+dace_determinism_cscs_gh200:
   extends:
     - .container-runner-santis-gh200
     - .dace_determinism_common
   needs:
-    - job: build_cscs_gh200
-      parallel:
-        matrix:
-          - PY_VERSION: '3.10'
+    - build_cscs_gh200
   variables:
+    TEST_VARIANTS: 'cpu cuda12'
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
-  parallel:
-    matrix:
-      - NOX_SESSION:
-          - "test_next_dace_determinism-3.10(cuda12, nomesh)"
-          - "test_cartesian_dace_determinism-3.10(cuda12)"
-
-dace_determinism_cscs_gh200_cpu:
-  extends:
-    - .container-runner-santis-gh200
-    - .dace_determinism_common
-  needs:
-    - job: build_cscs_gh200
-      parallel:
-        matrix:
-          - PY_VERSION: '3.10'
-  variables:
-    SLURM_PARTITION: 'shared'
-    GT4PY_BUILD_JOBS: 8
-    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
-  parallel:
-    matrix:
-      - NOX_SESSION:
-          - "test_next_dace_determinism-3.10(cpu, nomesh)"
-          - "test_cartesian_dace_determinism-3.10(cpu)"
+  rules:
+    - *exclude_variants_rules
+    - if: $SUBPACKAGE == 'next' && $DETAIL == 'nomesh'
+      variables:
+        # TODO: investigate why the dace tests seem to hang with multiple jobs
+        GT4PY_BUILD_JOBS: 1
+    - if: $SUBPACKAGE == 'cartesian' && $SUBVARIANT == 'cuda12'
+      variables:
+        GT4PY_BUILD_JOBS: 1
+    - when: on_success
 
 dace_determinism_cscs_amd_rocm:
   extends:
     - .tds-container-runner-beverin-mi200
     - .dace_determinism_common
   needs:
-    - job: build_cscs_amd_rocm
-      parallel:
-        matrix:
-          - PY_VERSION: '3.10'
+    - build_cscs_amd_rocm
   variables:
+    TEST_VARIANTS: 'rocm7'
     SLURM_GPUS_PER_NODE: 4
-    SLURM_PARTITION: mi300
     GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    SLURM_PARTITION: mi300
     CMAKE_PREFIX_PATH: /opt/rocm
     CUDA_HOME: /opt/rocm
     CXX: /opt/rocm/bin/hipcc
-  parallel:
-    matrix:
-      - NOX_SESSION:
-          - "test_next_dace_determinism-3.10(rocm7, nomesh)"
-          - "test_cartesian_dace_determinism-3.10(rocm7)"
+  rules:
+    - *exclude_variants_rules
+    - when: on_success
+
