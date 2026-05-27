@@ -1131,6 +1131,7 @@ class GatherConnectivity(Connectivity[DimsT, DimT_co]):
     #  Reordering the bases would fix that but then `NdArrayField`'s arithmetic operators would
     #  shadow `Connectivity`'s raising stubs (connectivities would start accepting `+` etc.). A bare
     #  annotation documents the contract for type checkers with no runtime effect.
+    #  See also the TODO on `Field.ndarray`: ideally `ndarray` would not live on the abstract base.
     ndarray: core_defs.NDArrayObject
 
 

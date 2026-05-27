@@ -260,9 +260,9 @@ class NdArrayField(
         Note that cartesian shifts (e.g. `I → I_half`, `(I+1): I → I`) are just simpler
         versions of these cases where the internal structure of the data (codomain) is
         preserved and therefore the `premap` operation can be implemented as a compact
-        domain translation (i.e. only transform the domain without altering the data). Such
-        connectivities are not :class:`common.GatherConnectivity` and dispatch to `_domain_premap`;
-        gather connectivities dispatch to `_gather_premap`.
+        domain translation (i.e. only transform the domain without altering the data). Such affine
+        connectivities only relabel the domain; data-rearranging cases are handled as
+        advanced-indexing gathers (:class:`common.GatherConnectivity`).
 
         Args:
             *connectivities: connectivities to be used for the `premap` operation. If only one
