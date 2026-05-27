@@ -90,9 +90,15 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
             raise ValueError(
                 f"Invalid shape {mask_desc.shape} of mask array, expected constant neighbors size."
             )
-        if inedge.data.num_elements() != max_neighbors:
+        if (
+            inedge.data.num_elements() != max_neighbors
+            or inedge.data.src_subset.size().count(max_neighbors) != 1
+        ):
             raise ValueError(f"Invalid memlet on input connector {self.input_conn}.")
-        if maskedge.data.num_elements() != max_neighbors:
+        if (
+            maskedge.data.num_elements() != max_neighbors
+            or maskedge.data.src_subset.size().count(max_neighbors) != 1
+        ):
             raise ValueError(f"Invalid memlet on input connector {self.mask_conn}.")
         if outedge.data.num_elements() != 1:
             raise ValueError(f"Invalid memlet on output connector {self.output_conn}.")
@@ -125,6 +131,8 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         max_neighbors = mask_desc.shape[1]
         assert isinstance(max_neighbors, int) or str(max_neighbors).isdigit()
 
+        # In validation, we already checked that the input subset collects exactly
+        #  `max_neighbors` elements along one dimension.
         local_dim_index = inedge.data.src_subset.size().index(max_neighbors)
 
         nsdfg = dace.SDFG(node.label)
