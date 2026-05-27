@@ -422,8 +422,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         dst_node: dace_nodes.Node,
         dst_conn: Optional[str] = None,
     ) -> None:
-        new_subset = copy.deepcopy(src_subset)  # guarantee unique subset objects
-        edge = MemletInputEdge(self.state, src, new_subset, dst_node, dst_conn)
+        src_subset = copy.deepcopy(src_subset)  # guarantee unique subset objects
+        edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
 
     def _add_edge(
