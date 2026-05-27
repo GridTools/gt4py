@@ -140,7 +140,7 @@ dace_determinism_cscs_gh200:
   needs:
     - build_cscs_gh200
   variables:
-    TEST_VARIANTS: 'cpu cuda12'
+    TEST_VARIANTS: 'cuda12'
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
@@ -151,9 +151,6 @@ dace_determinism_cscs_gh200:
       variables:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
-    - if: $SUBPACKAGE == 'cartesian' && $SUBVARIANT == 'cpu'
-      variables:
-        GT4PY_CARTESIAN_DETERMINISM_XDIST: 3
     - if: $SUBPACKAGE == 'cartesian'
       variables:
         GT4PY_CARTESIAN_DETERMINISM_XDIST: 4
@@ -166,7 +163,7 @@ dace_determinism_cscs_amd_rocm:
   needs:
     - build_cscs_amd_rocm
   variables:
-    TEST_VARIANTS: 'rocm7'
+    TEST_VARIANTS: 'cpu rocm7'
     SLURM_GPUS_PER_NODE: 4
     GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
