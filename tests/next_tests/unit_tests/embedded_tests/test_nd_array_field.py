@@ -585,6 +585,182 @@ def test_gather_premap_multiple_connectivities():
     assert np.all(result.ndarray == f.ndarray[np.ix_(ca, cb)])  # out[x, y] == f[ca[x], cb[y]]
 
 
+def test_gather_premap_reshuffle_multiple_connectivities():
+    # Simultaneous multi-axis reshuffle (the multi-axis `as_offset` shape): codomains stay in their
+    # own domains, so out[i, j] = f[ci[i, j], cj[i, j]] (not a sequential composition).
+    I = Dimension("I")
+    J = Dimension("J")
+
+    NI, NJ = 3, 4
+    f = common._field(
+        np.arange(NI * NJ).reshape(NI, NJ).astype(float),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ))),
+    )
+    ci = np.asarray([[1, 2, 0, 1], [2, 0, 1, 2], [0, 1, 2, 0]], dtype=int)  # (I, J) -> I
+    cj = np.asarray([[3, 0, 1, 2], [0, 1, 2, 3], [1, 2, 3, 0]], dtype=int)  # (I, J) -> J
+    dom = common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ)))
+    conn_i = common._connectivity(ci, domain=dom, codomain=I)
+    conn_j = common._connectivity(cj, domain=dom, codomain=J)
+
+    result = f.premap(conn_i, conn_j)
+
+    assert result.domain == dom
+    assert np.all(result.ndarray == f.ndarray[ci, cj])
+
+
+def test_gather_premap_two_connectivities_same_new_dim():
+    # Two connectivities introducing the *same* new dim -> diagonal gather out[x] = f[ca[x], cb[x]].
+    A = Dimension("A")
+    B = Dimension("B")
+    X = Dimension("X")
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    ca = np.asarray([2, 0, 1], dtype=int)
+    cb = np.asarray([1, 3, 0], dtype=int)
+    conn_a = common._connectivity(
+        ca, domain=common.Domain(dims=(X,), ranges=(UnitRange(0, 3),)), codomain=A
+    )
+    conn_b = common._connectivity(
+        cb, domain=common.Domain(dims=(X,), ranges=(UnitRange(0, 3),)), codomain=B
+    )
+
+    result = f.premap(conn_a, conn_b)
+
+    assert result.domain == common.Domain(dims=(X,), ranges=(UnitRange(0, 3),))
+    assert np.all(result.ndarray == f.ndarray[ca, cb])
+
+
+def test_gather_premap_reads_non_codomain_field_dim():
+    # A connectivity that reads a field dim (B) other than its codomain (A): B is shared/narrowed.
+    A = Dimension("A")
+    B = Dimension("B")
+    L = Dimension("L", kind=DimensionKind.LOCAL)
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    table = np.asarray([[2, 0], [0, 1], [1, 2], [2, 0]], dtype=int)  # (B, L) -> A
+    conn = common._connectivity(
+        table,
+        domain=common.Domain(dims=(B, L), ranges=(UnitRange(0, NB), UnitRange(0, 2))),
+        codomain=A,
+    )
+
+    result = f.premap(conn)
+
+    assert result.domain == common.Domain(dims=(L, B), ranges=(UnitRange(0, 2), UnitRange(0, NB)))
+    # out[l, b] = f[table[b, l], b]
+    assert np.all(result.ndarray == f.ndarray[table.T, np.arange(NB)[None, :]])
+
+
+def test_gather_premap_shared_domain_dim():
+    # Two connectivities sharing a non-codomain domain dim (S): S is intersected and kept once.
+    A = Dimension("A")
+    B = Dimension("B")
+    S = Dimension("S")
+    T = Dimension("T")
+    U = Dimension("U")
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    c1 = np.asarray([[2, 0, 1], [1, 2, 0]], dtype=int)  # (S, T) -> A
+    c2 = np.asarray([[1, 3], [0, 2]], dtype=int)  # (S, U) -> B
+    conn_a = common._connectivity(
+        c1, domain=common.Domain(dims=(S, T), ranges=(UnitRange(0, 2), UnitRange(0, 3))), codomain=A
+    )
+    conn_b = common._connectivity(
+        c2, domain=common.Domain(dims=(S, U), ranges=(UnitRange(0, 2), UnitRange(0, 2))), codomain=B
+    )
+
+    result = f.premap(conn_a, conn_b)
+
+    assert result.domain == common.Domain(
+        dims=(S, T, U), ranges=(UnitRange(0, 2), UnitRange(0, 3), UnitRange(0, 2))
+    )
+    # out[s, t, u] = f[c1[s, t], c2[s, u]]
+    assert np.all(result.ndarray == f.ndarray[c1[:, :, None], c2[:, None, :]])
+
+
+def test_gather_premap_mix_introducing_and_preserving():
+    # One connectivity introduces a dim (X), another reshuffles a dim in place (B): allowed together.
+    A = Dimension("A")
+    B = Dimension("B")
+    X = Dimension("X")
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    ca = np.asarray([2, 0, 1], dtype=int)  # (X,) -> A  (introduces X)
+    cb = np.asarray([1, 2, 3, 0], dtype=int)  # (B,) -> B  (reshuffle)
+    conn_a = common._connectivity(
+        ca, domain=common.Domain(dims=(X,), ranges=(UnitRange(0, 3),)), codomain=A
+    )
+    conn_b = common._connectivity(
+        cb, domain=common.Domain(dims=(B,), ranges=(UnitRange(0, NB),)), codomain=B
+    )
+
+    result = f.premap(conn_a, conn_b)
+
+    assert result.domain == common.Domain(dims=(X, B), ranges=(UnitRange(0, 3), UnitRange(0, NB)))
+    # out[x, b] = f[ca[x], cb[b]]
+    assert np.all(result.ndarray == f.ndarray[ca[:, None], cb[None, :]])
+
+
+def test_premap_chained_connectivities_raises():
+    # One connectivity reads a dim (B) that another remaps -> unsupported chained composition.
+    A = Dimension("A")
+    B = Dimension("B")
+    L = Dimension("L", kind=DimensionKind.LOCAL)
+    M = Dimension("M")
+
+    f = common._field(
+        np.arange(12).reshape(3, 4).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, 3), UnitRange(0, 4))),
+    )
+    c1 = common._connectivity(  # (B, L) -> A  (reads B)
+        np.asarray([[2, 0], [0, 1], [1, 2], [2, 0]], dtype=int),
+        domain=common.Domain(dims=(B, L), ranges=(UnitRange(0, 4), UnitRange(0, 2))),
+        codomain=A,
+    )
+    c2 = common._connectivity(  # (M,) -> B  (remaps B)
+        np.asarray([2, 0, 1], dtype=int),
+        domain=common.Domain(dims=(M,), ranges=(UnitRange(0, 3),)),
+        codomain=B,
+    )
+
+    with pytest.raises(ValueError, match="replaces"):
+        f.premap(c1, c2)
+
+
+def test_premap_non_contiguous_inverse_image_raises():
+    # A connectivity whose in-range indices are not a contiguous block cannot yield a contiguous domain.
+    V = Dimension("V")
+    E = Dimension("E")
+
+    f = common._field(
+        np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
+    )
+    conn = common._connectivity(
+        np.asarray([0, 1, 99, 3, 4], dtype=int),  # value 99 (out of range) sits in the interior
+        domain=common.Domain(dims=(E,), ranges=(UnitRange(0, 5),)),
+        codomain=V,
+    )
+
+    with pytest.raises(ValueError, match="non-contiguous"):
+        f.premap(conn)
+
+
 @pytest.mark.parametrize(
     "new_dims,field,expected_domain",
     [
