@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import abc
+import copy
 import dataclasses
 from typing import (
     Any,
@@ -313,7 +314,7 @@ class DataflowOutputEdge:
         else:
             src_node = write_edge.dst
             src_node_connector = None
-            src_subset = write_edge.data.dst_subset
+            src_subset = copy.deepcopy(write_edge.data.dst_subset)
 
         if map_exit is None:
             self.state.add_edge(
@@ -421,7 +422,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         dst_node: dace_nodes.Node,
         dst_conn: Optional[str] = None,
     ) -> None:
-        edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
+        new_subset = copy.deepcopy(src_subset)  # guarantee unique subset objects
+        edge = MemletInputEdge(self.state, src, new_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
 
     def _add_edge(
