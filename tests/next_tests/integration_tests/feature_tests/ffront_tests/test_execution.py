@@ -747,7 +747,9 @@ def test_nested_reduction(unstructured_case):
 
 
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.xfail(reason="Not yet supported in lowering, requires `map_list`ing of inner reduce op.")
+@pytest.mark.xfail(
+    reason="Not yet supported in lowering, requires `map_list`ing of inner reduce op."
+)
 def test_nested_reduction_shift_first(unstructured_case):
     @gtx.field_operator
     def testee(inp: cases.EField) -> cases.EField:
