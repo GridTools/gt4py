@@ -22,6 +22,7 @@ This is likely to change in the future, to enable GTIR optimizations for scan.
 
 from __future__ import annotations
 
+import copy
 from collections import Counter
 from typing import Iterable, Sequence
 
@@ -510,7 +511,9 @@ def _lower_lambda_to_nested_sdfg(
             update_state.add_access(scan_result_data),
             update_state.add_access(scan_carry_data),
             dace.Memlet(
-                data=scan_result_data, subset=scan_result_subset, other_subset=scan_result_subset
+                data=scan_result_data,
+                subset=copy.deepcopy(scan_result_subset),
+                other_subset=copy.deepcopy(scan_result_subset),
             ),
         )
 

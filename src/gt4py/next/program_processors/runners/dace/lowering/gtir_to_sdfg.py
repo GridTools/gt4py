@@ -73,6 +73,9 @@ class DataflowBuilder(Protocol):
     @abc.abstractmethod
     def unique_temp_name(self) -> str: ...
 
+    @abc.abstractmethod
+    def unique_lib_node_name(self, lib_node_type: str) -> str: ...
+
     def add_temp_array(
         self, sdfg: dace.SDFG, shape: Sequence[Any], dtype: dace.dtypes.typeclass
     ) -> tuple[str, dace.data.Scalar]:
@@ -118,12 +121,16 @@ class DataflowBuilder(Protocol):
         code: str,
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
-    ) -> dace_nodes.Tasklet:
+    ) -> tuple[dace_nodes.Tasklet, dict[str, str]]:
         """Wrapper of `dace.SDFGState.add_tasklet` that assigns a unique name.
 
         It also modifies the tasklet connectors by adding a prefix string (see
         `gtir_to_sdfg_utils.get_tasklet_connector()`), in order to avoid name conflicts
         with SDFG data. Otherwise, SDFG validation would detect such conflicts and fail.
+
+        Returns:
+            The created tasklet node and the mapping from original connector names to
+            modified connector names.
         """
         if isinstance(inputs, set):
             inputs = {k: None for k in sorted(inputs)}
@@ -161,6 +168,12 @@ class DataflowBuilder(Protocol):
         """Wrapper of `dace.SDFGState.add_mapped_tasklet` that assigns a unique name.
 
         It also modifies the tasklet connectors, in the same way as `add_tasklet()`.
+
+        Returns:
+            A tuple consisting of:
+            - The created tasklet node.
+            - The map entry and exit nodes of the created map.
+            - The mapping from original connector names to modified connector names.
         """
         assert inputs.keys().isdisjoint(outputs.keys())
 
@@ -677,7 +690,63 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             if output is not None and (dataname := output.dc_node.data) not in data_args
         }
 
+        connectivity_arrays = {
+            gtx_dace_args.connectivity_identifier(offset)
+            for offset in gtx_dace_args.filter_connectivity_types(self.offset_provider_type)
+        }
+
+        inner_ctx_globals = [
+            dataname
+            for dataname, datadesc in inner_ctx.sdfg.arrays.items()
+            if not datadesc.transient
+        ]
+
+        input_memlets = {}
+        for dataname in inner_ctx_globals:
+            if dataname in data_args:
+                # The global data refers to an argument. If the argument is initialized,
+                # i.e. `data_args[dataname]` is not `None`, the argument is used by
+                # the lambda and we fully map it into the nested SDFG. Otherwise, we
+                # remove the data descriptor from the nested SDFG (see the next for-loop).
+                if (arg_node := data_args[dataname]) is not None:
+                    input_memlets[dataname] = outer_ctx.sdfg.make_array_memlet(
+                        arg_node.dc_node.data
+                    )
+            else:
+                # Always capture connectivity arrays from parent scope.
+                # For other GTIR-symbols (scalars, arrays), check if it is allowed.
+                assert dataname in outer_ctx.sdfg.arrays
+                assert dataname in connectivity_arrays or capture_outer_data
+                # We check whether this global data can be removed. Besides reducing
+                # the number of input connectors, this check is necessary for tuple
+                # arguments, for which domain inference has detected that one or more
+                # of the nested fields is not used. In such cases, the corresponding
+                # argument in the top-level lambda is expected to be `None` and it
+                # is not possible to setup an input edge.
+                # Note that we call `remove_data()` with `validate=True` to ensure
+                # that the data is not used by any access node.
+                try:
+                    inner_ctx.sdfg.remove_data(dataname, validate=True)
+                except ValueError:
+                    # It is accessed in the lambda SDFG, so we need to setup an input edge.
+                    outer_ctx.sdfg.arrays[dataname].transient = False
+                    input_memlets[dataname] = outer_ctx.sdfg.make_array_memlet(dataname)
+
+        # We have to remove the uninitialized and unused data from the SDFG. This is
+        # needed because otherwise the transients (that are not used) are picked up
+        # by `free_symbols`.
+        for data_name, data_node in data_args.items():
+            if data_node is None:
+                # NOTE: We only delete the data descriptor and not the symbols that
+                #   are used for its shape/strides, i.e. they are still in
+                #   `inner_ctx.sdfg.symbols`. We will keep them there, because to
+                #   delete them we would need to make sure that the symbol is not
+                #   used by anything else.
+                inner_ctx.sdfg.remove_data(data_name, validate=gtx_config.DEBUG)
+
         # Map free symbols to parent SDFG
+        # NOTE: This must happen after we cleaned up the SDFG to make sure that the
+        #   "dead data" is not added to the free symbols.
         nsdfg_symbols_mapping = {}
         for dc_symbol in inner_ctx.sdfg.free_symbols:
             if dc_symbol in data_args:
@@ -694,48 +763,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for gt_symbol, arg in data_args.items():
             if arg is not None:
                 nsdfg_symbols_mapping |= arg.get_symbol_mapping(gt_symbol, outer_ctx.sdfg)
-
-        connectivity_arrays = {
-            gtx_dace_args.connectivity_identifier(offset)
-            for offset in gtx_dace_args.filter_connectivity_types(self.offset_provider_type)
-        }
-
-        inner_ctx_globals = [
-            dataname
-            for dataname, datadesc in inner_ctx.sdfg.arrays.items()
-            if not datadesc.transient
-        ]
-
-        input_memlets = {}
-        for dataname in inner_ctx_globals:
-            if dataname in data_args:
-                # Uninitialized arguments should not be used inside the nested SDFG.
-                if (arg_node := data_args[dataname]) is None:
-                    inner_ctx.sdfg.remove_data(dataname, validate=gtx_config.DEBUG)
-                else:
-                    input_memlets[dataname] = outer_ctx.sdfg.make_array_memlet(
-                        arg_node.dc_node.data
-                    )
-            else:
-                # Always capture connectivity arrays from parent scope.
-                # For other GTIR-symbols (scalars, arrays), check if it is allowed.
-                assert dataname in outer_ctx.sdfg.arrays
-                assert dataname in connectivity_arrays or capture_outer_data
-                # We check whether this global data can be removed. Besides reducing
-                # the number of input connectors, this check is necessary for tuple
-                # arguments, for which domain inference has detected that one or more
-                # of the nested fields is not used. In such cases, the corresponding
-                # argument in the top-level lambda is expected to be None (see how
-                # this case is handled in the if-branch above) and it is not possible
-                # to setup an input edge.
-                # Note that we call `remove_data()` with `validate=True` to ensure
-                # that the data is not used by any access node.
-                try:
-                    inner_ctx.sdfg.remove_data(dataname, validate=True)
-                except ValueError:
-                    # It is accessed in the lambda SDFG, so we need to setup an input edge.
-                    outer_ctx.sdfg.arrays[dataname].transient = False
-                    input_memlets[dataname] = outer_ctx.sdfg.make_array_memlet(dataname)
 
         nsdfg_node = outer_ctx.state.add_nested_sdfg(
             inner_ctx.sdfg,
@@ -758,6 +785,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
     def unique_temp_name(self) -> str:
         return f"{next(self.uids['gtir_tmp'])}"
+
+    def unique_lib_node_name(self, lib_node_type: str) -> str:
+        return f"{next(self.uids[lib_node_type])}"
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[gtx_common.Dimension]
