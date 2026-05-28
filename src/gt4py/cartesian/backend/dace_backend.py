@@ -95,6 +95,7 @@ def _sdfg_add_arrays_and_edges(
     inputs: set[str] | dict[str, dtypes.typeclass],
     outputs: set[str] | dict[str, dtypes.typeclass],
     origins: dict[str, tuple[int, ...]],
+    domain: tuple[int, ...],
 ) -> None:
     for name, array in inner_sdfg.arrays.items():
         if array.transient:
@@ -129,12 +130,20 @@ def _sdfg_add_arrays_and_edges(
                 if axis not in axes:
                     continue
                 o = origin[index]
-                e = field_info[name].boundary.lower_indices[cartesian_index]
+                lower, upper = field_info[name].boundary[cartesian_index]
                 s = inner_sdfg.arrays[name].shape[index]
-                ranges.append(
-                    # s - 1 because ranges are inclusive
-                    (o - max(0, e), o - max(0, e) + s - 1, 1)
-                )
+                if axis == CartesianSpace.Axis.K.name:
+                    d = domain[cartesian_index]
+                    ranges.append(
+                        # max(0, lower) because ...
+                        # d - 1 because ranges are inclusive
+                        (o - max(0, lower), o + upper + d - 1, 1)
+                    )
+                else:
+                    ranges.append(
+                        # s - 1 because ranges are inclusive
+                        (o - max(0, lower), o - max(0, lower) + s - 1, 1)
+                    )
                 index += 1
 
             # Add data dimensions to the range
@@ -264,7 +273,7 @@ def freeze_origin_domain_sdfg(
     nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
-        field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
+        field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin, domain
     )
 
     # in special case of empty domain, remove entire SDFG.
