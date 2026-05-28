@@ -55,7 +55,7 @@ class Compiler(
         stages.ExecutableProgram,
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 

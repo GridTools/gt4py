@@ -8,16 +8,14 @@
 
 from __future__ import annotations
 
-import abc
 import copyreg
 import dataclasses
 import functools
 import inspect
 import itertools
+import pickle
 import types
-from unicodedata import name
-import weakref
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -25,7 +23,6 @@ from typing import (
     Final,
     Optional,
     ParamSpec,
-    Protocol,
     Sequence,
     TypeAlias,
     TypeGuard,
@@ -34,10 +31,7 @@ from typing import (
     overload,
 )
 
-from array_api_compat.cupy import Literal
-
-from gt4py.eve import concepts, datamodels, utils as eve_utils
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import concepts, datamodels, extended_typing as xtyping, utils as eve_utils
 
 
 GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
@@ -160,7 +154,7 @@ def _pass_through_pickler(instance: Any) -> NotImplemented:
 
 
 @dataclasses.dataclass(frozen=True)
-class PickleReduceFingerprinter:
+class CustomPicklingFingerprinter:
     """
     The fingerprint should be a stable hash string representing the state of the object.
 
@@ -173,56 +167,74 @@ class PickleReduceFingerprinter:
     """
 
     @classmethod
-    def from_parts(
+    def from_reducers(
         cls,
-        *args: PickleReduceFingerprinter,
-        reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
+        *args: CustomPicklingFingerprinter
+        | dict[type, Callable[[Any], tuple | types.NotImplementedType]],
         name: str | None = None,
-    ) -> PickleReduceFingerprinter:
+    ) -> CustomPicklingFingerprinter:
         """Alternative constructor to create a PickleFingerprinter from a dict of reducers."""
 
         new_reducers = {}
-        for fprinter in args:
-            if not isinstance(fprinter, PickleReduceFingerprinter):
+        for arg in args:
+            if isinstance(arg, CustomPicklingFingerprinter):
+                arg = arg.reduce_dispatcher.registry
+            elif not isinstance(arg, dict):
                 raise TypeError(
-                    f"Expected only PickleReduceFingerprinter instances, got '{fprinter}'"
+                    f"Expected only CustomPicklingFingerprinter instances, got '{arg}' of type '{type(arg)}'"
                 )
-            new_reducers.update(fprinter.reduce_dispatcher.registry)
-        new_reducers.update(reducers)
+            new_reducers.update(arg)
 
+        init_args = {"name": name} if name else {}
         return cls(
             eve_utils.singledispatcher(_pass_through_pickler, implementations=new_reducers),
-            **({"name": name} if name else {}),
+            **init_args,
         )
 
     reduce_dispatcher: xtyping.SingleDispatchCallable[[Any], str]
-    name: str = dataclasses.field(default="CustomPickleFingerprinter", kw_only=True)
+    name: str = dataclasses.field(default="CustomPicklingFingerprinter", kw_only=True)
+
+    if TYPE_CHECKING:
+        pickler: pickle.Pickler
 
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
-            "_pickler",
+            "pickler",
             eve_utils.custom_overriden_pickler(self.reduce_dispatcher, name=self.name),
         )
 
-    @property
-    def pickler(self) -> weakref.WeakKeyDictionary[Any, str]:
-        return self._pickler
-
     def __call__(self, instance: Any) -> str:
         """Fingerprint the given object."""
-        return eve_utils.content_hash(instance, pickler=self._pickler)
+        return eve_utils.content_hash(instance, pickler=self.pickler)
+
+
+sorting_sets_fingerprinter = CustomPicklingFingerprinter.from_reducers(
+    {
+        dict: lambda obj: (
+            obj.__class__,
+            (),
+            tuple((k, v) for k, v in sorted(obj.items())),
+        ),
+        set: lambda obj: (
+            obj.__class__,
+            (),
+            tuple(sorted(obj)),
+        ),
+    },
+    name="SortingSetsFingerprinter",
+)
 
 
 @functools.cache
-def skipping_fields_node_fingerprinter(*skipped_fields: str) -> PickleReduceFingerprinter:
+def skipping_fields_node_fingerprinter(*skipped_fields: str) -> CustomPicklingFingerprinter:
     """
     Return a `pickle.Pickler` to serialize a node skipping the given fields in the node or any of
     its child nodes.
     """
     skipped_fields_set = set(skipped_fields)
 
-    return PickleReduceFingerprinter.from_parts(
+    return CustomPicklingFingerprinter.from_reducers(
         reducers={
             concepts.Node: lambda obj: (
                 obj.__class__,

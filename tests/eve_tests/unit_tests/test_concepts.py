@@ -119,4 +119,3 @@ class TestNode:
                 sample_node.iter_children_items(), sample_node.iter_children_values()
             )
         )
-

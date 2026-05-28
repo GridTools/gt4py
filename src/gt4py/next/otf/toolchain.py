@@ -23,7 +23,7 @@ ArgsT = typing.TypeVar("ArgsT")
 
 
 @dataclasses.dataclass
-class ConcreteArtifact(utils.CachedFingerprintedDataclass, Generic[DefT, ArgsT]):
+class ConcreteArtifact(utils.MetadataBasedPicklingMixin, Generic[DefT, ArgsT]):
     data: DefT
     args: ArgsT
 
@@ -33,7 +33,7 @@ class DataOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
     workflow.Workflow[ConcreteArtifact[S, ArgsT], ConcreteArtifact[T, ArgsT]],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
     Generic[ArgsT, S, T],
 ):
     step: workflow.Workflow[S, T]
@@ -47,7 +47,7 @@ class ArgsOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
     workflow.Workflow[ConcreteArtifact[DefT, S], ConcreteArtifact[DefT, T]],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
     Generic[DefT, S, T],
 ):
     step: workflow.Workflow[S, T]
@@ -61,7 +61,7 @@ class StripArgsAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
     workflow.Workflow[ConcreteArtifact[S, ArgsT], T],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
     Generic[ArgsT, S, T],
 ):
     step: workflow.Workflow[S, T]

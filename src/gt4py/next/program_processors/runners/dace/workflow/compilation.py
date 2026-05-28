@@ -125,7 +125,7 @@ class DaCeCompiler(
         CompiledDaceProgram,
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
 ):
     """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 

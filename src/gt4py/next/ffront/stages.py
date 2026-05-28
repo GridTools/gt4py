@@ -23,30 +23,23 @@ dialects contain `AST`.
 from __future__ import annotations
 
 import dataclasses
-import functools
 import types
 import typing
 from typing import Any, Optional, TypeVar
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next import common, utils
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.otf import arguments, toolchain
-
-
-#: Generate an unique fingerprint for `eve.Node`s ignoring its "location" attribute.
-nonlocated_fingerprint: utils.PickleReduceFingerprinter = utils.skipping_fields_node_fingerprinter(
-    "location"
-)
 
 
 # Create a custom pickler for the BaseStage `fingerprinter` that handles
 # `types.FunctionType` by using its source code and closure variables.
 # This should be enough for the use case of GT4Py DSL definitions,
 # which are expected to be pure functions without complicated closures.
-ffront_stage_fingerprinter = utils.PickleReduceFingerprinter.from_parts(
-    nonlocated_fingerprint,
-    reducers={
+semantic_fingerprinter = utils.CustomPicklingFingerprinter.from_reducers(
+    foast.semantic_fingerprinter,
+    utils.sorting_sets_fingerprinter,
+    {
         types.FunctionType: lambda f: (
             tuple,
             (),

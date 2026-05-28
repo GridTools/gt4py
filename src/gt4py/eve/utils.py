@@ -16,7 +16,6 @@ import collections.abc
 import dataclasses
 import enum
 import functools
-import hashlib
 import io
 import itertools
 import operator
@@ -25,7 +24,6 @@ import pprint
 import re
 import types
 import typing
-import weakref
 
 import deepdiff
 import xxhash
@@ -50,7 +48,6 @@ from .extended_typing import (
     Any,
     ArgsOnlyCallable,
     Callable,
-    ClassVar,
     Collection,
     Dict,
     Generic,
@@ -677,7 +674,7 @@ def content_hash(
 
     """
     if hash_algorithm is None:
-        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
+        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
     assert hash_algorithm is not None
 
     buf = io.BytesIO()
@@ -1211,12 +1208,14 @@ class XIterable(Iterable[T]):
             >>> list(it.getitem(0))
             ['a', 'b', 'c']
 
-            >>> it = xiter([
-            ...     dict(name="AA", age=20, country="US"),
-            ...     dict(name="BB", age=30, country="UK"),
-            ...     dict(name="CC", age=40, country="EU"),
-            ...     dict(country="CH"),
-            ... ])
+            >>> it = xiter(
+            ...     [
+            ...         dict(name="AA", age=20, country="US"),
+            ...         dict(name="BB", age=30, country="UK"),
+            ...         dict(name="CC", age=40, country="EU"),
+            ...         dict(country="CH"),
+            ...     ]
+            ... )
             >>> list(it.getitem("name", "age", default=None))
             [('AA', 20), ('BB', 30), ('CC', 40), (None, None)]
 

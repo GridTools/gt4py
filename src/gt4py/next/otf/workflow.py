@@ -95,7 +95,7 @@ class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co
 class NamedStepSequence(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
 ):
     """
     Workflow with linear succession of named steps.
@@ -164,7 +164,7 @@ class NamedStepSequence(
 class MultiWorkflow(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
 ):
     """A flexible workflow, where the sequence of steps depends on the input type."""
 
@@ -182,7 +182,7 @@ class MultiWorkflow(
 @dataclasses.dataclass(frozen=True)
 class StepSequence(
     ChainableWorkflowMixin[StartT, EndT],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
 ):
     """
     Composable workflow of single input callables.
@@ -235,7 +235,7 @@ class StepSequence(
 class CachedStep(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
     Generic[StartT, EndT, HashT],
 ):
     """
@@ -287,7 +287,7 @@ class CachedStep(
 class SkippableStep(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.CachedFingerprintedDataclass,
+    utils.MetadataBasedPicklingMixin,
 ):
     step: Workflow[StartT, EndT]
 

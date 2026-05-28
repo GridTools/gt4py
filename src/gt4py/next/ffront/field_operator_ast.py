@@ -8,28 +8,23 @@
 
 from __future__ import annotations
 
-import functools
 from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
-from gt4py.eve import (
-    Coerced,
-    Node,
-    SourceLocation,
-    SymbolName,
-    SymbolRef,
-    concepts as eve_concepts,
-    datamodels,
-    utils as eve_utils,
-)
+from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
+from gt4py.next import utils
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next import utils
 
 
-#
+#: Generate an unique fingerprint for `eve.Node`s ignoring its "location" attribute.
+semantic_fingerprinter: utils.CustomPicklingFingerprinter = (
+    utils.skipping_fields_node_fingerprinter("location")
+)
+
+
 class LocatedNode(Node):
     location: SourceLocation = eve.field(repr=False, compare=False)
 

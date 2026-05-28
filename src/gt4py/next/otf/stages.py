@@ -22,7 +22,7 @@ TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramSource(utils.CachedFingerprintedDataclass, Generic[CodeSpecT]):
+class ProgramSource(utils.MetadataBasedPicklingMixin, Generic[CodeSpecT]):
     """
     Standalone source code translated from an IR along with information relevant for OTF compilation.
 
@@ -39,7 +39,7 @@ class ProgramSource(utils.CachedFingerprintedDataclass, Generic[CodeSpecT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class BindingSource(utils.CachedFingerprintedDataclass, Generic[CodeSpecT, TargetCodeSpecT]):
+class BindingSource(utils.MetadataBasedPicklingMixin, Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Companion source code for translated program source code.
 
@@ -55,7 +55,7 @@ class BindingSource(utils.CachedFingerprintedDataclass, Generic[CodeSpecT, Targe
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableProject(utils.CachedFingerprintedDataclass, Generic[CodeSpecT, TargetCodeSpecT]):
+class CompilableProject(utils.MetadataBasedPicklingMixin, Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
