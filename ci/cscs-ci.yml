@@ -154,7 +154,7 @@ test_cscs_gh200:
 
 test_cscs_amd_rocm:
   extends:
-    - .tds-container-runner-beverin-mi200
+    - .container-runner-beverin-mi200
     - .test_common
   needs:
     - build_cscs_amd_rocm
