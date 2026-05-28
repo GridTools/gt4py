@@ -16,6 +16,7 @@ import dataclasses
 import functools
 import itertools
 import threading
+import types
 import warnings
 import weakref
 from collections.abc import Callable, Hashable, Sequence
@@ -356,6 +357,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         with _pools_per_root_lock:
             _pools_per_root[result] += 1
         return result
+
+    @property
+    def definition(self) -> types.FunctionType:
+        return self.definition_stage.definition
 
     def __post_init__(self) -> None:
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.

@@ -10,7 +10,6 @@
 
 include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
-  - local: 'ci/cscs-ci-ext-config.yml'
 
 # Note:
 #   block-name-with-dashes      -> defined in remote cscs-ci ext include
@@ -48,7 +47,7 @@ stages:
     # To override the defaults, just define these variables in the actual job.
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
     PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}  # The $DOCKER_TAG tag is added in the before_script of .dynamic-image-name
-    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
+    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml uv.lock'
   parallel:
     matrix:
       - PY_VERSION: *test_python_versions
@@ -154,7 +153,7 @@ test_cscs_gh200:
 
 test_cscs_amd_rocm:
   extends:
-    - .tds-container-runner-beverin-mi200
+    - .container-runner-beverin-mi200
     - .test_common
   needs:
     - build_cscs_amd_rocm
