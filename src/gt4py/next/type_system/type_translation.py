@@ -190,13 +190,17 @@ def from_type_hint(
 
     match canonical_type:
         case builtins.tuple:
-            if isinstance(args, tuple) and not any(arg is Ellipsis for arg in args):
+            if (
+                isinstance(args, tuple)
+                and len(args) > 0
+                and not any(arg is Ellipsis for arg in args)
+            ):
                 tuple_types = [from_type_hint_same_ns(arg) for arg in args]
                 assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
                 return ts.TupleType(types=tuple_types)
             elif isinstance(args, tuple) and len(args) == 2 and args[1] is Ellipsis:
                 return ts.VarArgType(element_type=from_type_hint_same_ns(args[0]))
-            elif args is None:
+            elif args is None or (isinstance(args, tuple) and len(args) == 0):
                 # TODO(tehrengruber): We use `DeferredType` until we have an actual representation
                 #  for a generic type.
                 return ts.DeferredType(constraint=ts.TupleType)

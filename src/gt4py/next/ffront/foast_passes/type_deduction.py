@@ -684,9 +684,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         target = self.visit(node.inner.target, **kwargs)
         iterable = self.visit(node.iterable, **kwargs)
         if isinstance(iterable.type, ts.TupleType):
-            if len(iterable.type.types) > 0 and not all(
-                t == iterable.type.types[0] for t in iterable.type.types
-            ):
+            if len(iterable.type.types) == 0:
+                raise errors.DSLError(
+                    iterable.location,
+                    "Cannot iterate over an empty tuple in a tuple comprehension.",
+                )
+            if not all(t == iterable.type.types[0] for t in iterable.type.types):
                 raise errors.DSLError(
                     iterable.location,
                     "Not implemented: all elements of the iterable in a tuple comprehension must have the same type.",

@@ -510,7 +510,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         "the result can only be deduced at runtime.",
                     )
 
-                def parse_target(target: ast.expr) -> NestedTuple[foast.Name]:
+                def parse_target(target: ast.expr) -> NestedTuple[foast.DataSymbol]:
                     if isinstance(target, ast.Tuple):
                         return tuple(parse_target(el) for el in target.elts)
                     assert isinstance(target, ast.Name)
