@@ -451,7 +451,7 @@ def _insert_nested_sdfg(
         dace.Memlet(
             data=outer_output_name,
             subset=edge_to_replace.data.src_subset.offset_new(offset, negative=True),
-            other_subset=edge_to_replace.data.get_dst_subset(edge_to_replace, state),
+            other_subset=copy.deepcopy(edge_to_replace.data.get_dst_subset(edge_to_replace, state)),
         ),
     )
 
@@ -547,7 +547,7 @@ def _populate_nested_sdfg(
                     memlet=dace.Memlet(
                         data=output_name,
                         subset=dace_sbs.Range.from_array(output_desc),
-                        other_subset=oedge.data.get_src_subset(oedge, state),
+                        other_subset=copy.deepcopy(oedge.data.get_src_subset(oedge, state)),
                     ),
                 )
 
