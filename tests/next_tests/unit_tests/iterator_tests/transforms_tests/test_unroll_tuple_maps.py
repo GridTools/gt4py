@@ -9,7 +9,7 @@
 from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.unroll_tree_map import UnrollTreeMap
+from gt4py.next.iterator.transforms.unroll_tuple_maps import UnrollTupleMaps
 from gt4py.next.type_system import type_specifications as ts
 
 IDim = common.Dimension("IDim")
@@ -55,7 +55,7 @@ def test_tree_map_tuple_multi_arg():
         ),
         out_type=i_tuple_field,
     )
-    result = UnrollTreeMap.apply(program, uids=uids)
+    result = UnrollTupleMaps.apply(program, uids=uids)
 
     expected = _make_program(
         [im.sym("a", i_tuple_field), im.sym("b", i_tuple_field)],
@@ -78,7 +78,7 @@ def test_tree_map_tuple_nested():
         im.call(im.call("tree_map_tuple")(_neg()))(im.ref("t", nested)),
         out_type=nested,
     )
-    result = UnrollTreeMap.apply(program, uids=uids)
+    result = UnrollTupleMaps.apply(program, uids=uids)
 
     expected = _make_program(
         [im.sym("t", nested)],
@@ -106,7 +106,7 @@ def test_map_tuple_single_arg():
         im.call(im.call("map_tuple")(_neg()))(im.ref("t", i_tuple_field)),
         out_type=i_tuple_field,
     )
-    result = UnrollTreeMap.apply(program, uids=uids)
+    result = UnrollTupleMaps.apply(program, uids=uids)
 
     expected = _make_program(
         [im.sym("t", i_tuple_field)],
@@ -130,7 +130,7 @@ def test_map_tuple_does_not_recurse():
         im.call(im.call("map_tuple")(g))(im.ref("t", nested)),
         out_type=i_tuple_field,
     )
-    result = UnrollTreeMap.apply(program, uids=uids)
+    result = UnrollTupleMaps.apply(program, uids=uids)
 
     expected = _make_program(
         [im.sym("t", nested)],

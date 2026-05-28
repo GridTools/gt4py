@@ -54,7 +54,7 @@ _UNROLLERS = {
 
 
 @dataclasses.dataclass
-class UnrollTreeMap(eve.NodeTranslator):
+class UnrollTupleMaps(eve.NodeTranslator):
     """Unroll tuple-map ITIR builtins (`tree_map_tuple`, `map_tuple`) into `make_tuple`."""
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
