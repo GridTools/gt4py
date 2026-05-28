@@ -1210,13 +1210,10 @@ def test_concat_where(
             ),
             (),
         ),
-        # empty domain [3, 3) → normalized to [0, 0), invert sees (0, 0)
+        # empty domain → complement is the full line
         (
             common.Domain(dims=(D0,), ranges=(UnitRange(3, 3),)),
-            (
-                common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 0),)),
-                common.Domain(dims=(D0,), ranges=(UnitRange(0, common.Infinity.POSITIVE),)),
-            ),
+            (common.Domain(dims=(D0,), ranges=(UnitRange.infinite(),)),),
         ),
     ],
 )

@@ -850,16 +850,11 @@ def _intersect_fields(
     )
 
 
-def _stack_domains(*domains: common.Domain, dim: common.Dimension) -> Optional[common.Domain]:
+def _stack_domains(*domains: common.Domain, dim: common.Dimension) -> common.Domain:
     if not domains:
         return common.Domain()
     dim_start = domains[0][dim].unit_range.start
-    dim_stop = dim_start
-    for domain in domains:
-        if not domain[dim].unit_range.start == dim_stop:
-            return None
-        else:
-            dim_stop = domain[dim].unit_range.stop
+    dim_stop = domains[-1][dim].unit_range.stop
     return domains[0].replace(dim, common.NamedRange(dim, common.UnitRange(dim_start, dim_stop)))
 
 
@@ -869,11 +864,13 @@ def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
     sorted_fields = sorted(fields, key=lambda f: f.domain[dim].unit_range.start)
 
     for prev, curr in itertools.pairwise(sorted_fields):
-        if curr.domain[dim].unit_range.start < prev.domain[dim].unit_range.stop:
+        left = prev.domain[dim].unit_range.stop
+        right = curr.domain[dim].unit_range.start
+        if left > right:
             raise ValueError("Fields to concatenate must not overlap.")
+        if left < right:
+            raise embedded_exceptions.NonContiguousDomain(f"Cannot concatenate fields along {dim}.")
     new_domain = _stack_domains(*[f.domain for f in sorted_fields], dim=dim)
-    if new_domain is None:
-        raise embedded_exceptions.NonContiguousDomain(f"Cannot concatenate fields along {dim}.")
     nd_array_class = _get_nd_array_class(*sorted_fields)
     return nd_array_class.from_array(
         nd_array_class.array_ns.concatenate(
@@ -891,6 +888,9 @@ def _invert_domain(domain: common.Domain) -> tuple[common.Domain, ...]:
     assert domain.ndim == 1
     dim = domain.dims[0]
     rng = domain.ranges[0]
+
+    if rng.is_empty():
+        return (common.Domain(dims=(dim,), ranges=(common.UnitRange.infinite(),)),)
 
     result = []
     if rng.start is not common.Infinity.NEGATIVE:
