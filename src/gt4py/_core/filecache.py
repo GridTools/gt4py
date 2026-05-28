@@ -25,7 +25,6 @@ class FileCache:
 
     def __init__(self, path: str | os.PathLike):
         self.path = pathlib.Path(path).resolve()
-        self.path.mkdir(parents=True, exist_ok=True)
 
     def _get_path(self, key: Hashable) -> pathlib.Path:
         """Return the path where an item with `key` is stored."""
@@ -41,6 +40,7 @@ class FileCache:
                 return pickle.load(f)
 
     def __setitem__(self, key: Hashable, value: Any) -> None:
+        self.path.mkdir(parents=True, exist_ok=True)
         with locking.lock(path := self._get_path(key)):
             with open(path, "wb") as f:
                 pickle.dump(value, f, protocol=5)
