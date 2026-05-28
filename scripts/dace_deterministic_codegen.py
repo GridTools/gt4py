@@ -235,13 +235,20 @@ class DeterminismError(RuntimeError):
         self.results = results
 
 
-class IntraRunNonDeterminismError(RuntimeError):
-    """Same program compiled by multiple xdist workers within ONE run, with
-    differing output. A strictly stronger failure than the run1-vs-run2
-    check: codegen is non-deterministic even at fixed inputs in a single
-    run. Only reachable under per-worker cache isolation (parallel cartesian
-    determinism); see ``_strip_worker_segment`` and the conftest fixture
-    ``_isolate_dace_cache_per_worker``."""
+@dataclasses.dataclass
+class IntraRunDivergence:
+    """Record of a program compiled more than once *within a single run*
+    (by different xdist workers, under per-worker cache isolation) whose
+    copies are NOT byte-identical. This is intra-run non-determinism — a
+    strictly stronger finding than the run1-vs-run2 check, since it shows
+    codegen varies at fixed inputs within one run. Recorded and reported
+    rather than raised: DaCe codegen is known to be non-deterministic, so
+    this is an expected finding to surface, not a reason to abort."""
+
+    name: str
+    folder_a: Path
+    folder_b: Path
+    differing_files: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +278,12 @@ class ProgramSnapshot:
     files: dict[str, FileEntry]
 
 
-def snapshot_run(cache_root: Path, *, layout: Layout = "next") -> dict[str, ProgramSnapshot]:
+def snapshot_run(
+    cache_root: Path,
+    *,
+    layout: Layout = "next",
+    intra_run_divergences: list["IntraRunDivergence"] | None = None,
+) -> dict[str, ProgramSnapshot]:
     """Walk a gt4py build cache and snapshot every program's generated source.
 
     Dispatches on ``layout`` to either :func:`_snapshot_run_next` (the flat
@@ -288,7 +300,7 @@ def snapshot_run(cache_root: Path, *, layout: Layout = "next") -> dict[str, Prog
     if layout == "next":
         return _snapshot_run_next(cache_root)
     if layout == "cartesian":
-        return _snapshot_run_cartesian(cache_root)
+        return _snapshot_run_cartesian(cache_root, intra_run_divergences=intra_run_divergences)
     raise ValueError(f"unknown layout: {layout!r}, expected 'next' or 'cartesian'")
 
 
@@ -347,7 +359,11 @@ def _snapshot_run_next(cache_root: Path) -> dict[str, ProgramSnapshot]:
     return out
 
 
-def _snapshot_run_cartesian(cache_root: Path) -> dict[str, ProgramSnapshot]:
+def _snapshot_run_cartesian(
+    cache_root: Path,
+    *,
+    intra_run_divergences: list["IntraRunDivergence"] | None = None,
+) -> dict[str, ProgramSnapshot]:
     """Snapshot a gt4py.cartesian-layout cache.
 
     Program identity is the **relative path** from ``cache_root`` to the
@@ -421,23 +437,34 @@ def _snapshot_run_cartesian(cache_root: Path) -> dict[str, ProgramSnapshot]:
         # more than one xdist worker (e.g. two tests that build an identical
         # stencil land on different workers). After stripping the worker
         # segment they collide on one program_id. That's expected and benign
-        # *iff* the two copies are byte-identical — which is exactly what
-        # determinism requires. If they differ, codegen is non-deterministic
-        # even within a single run, which is a strictly stronger failure than
-        # the run1-vs-run2 check; surface it rather than letting last-writer
-        # silently win.
+        # *iff* the two copies are byte-identical — which is what determinism
+        # requires. If they differ, codegen is non-deterministic even within a
+        # single run (a strictly stronger signal than the run1-vs-run2 check).
+        # We RECORD that divergence (rather than raising) so it lands in the
+        # determinism report alongside the run1-vs-run2 findings; DaCe codegen
+        # is known to be non-deterministic, so an intra-run divergence is an
+        # expected finding to report, not a reason to abort the run.
         prev = out.get(program_id)
         if prev is not None:
             prev_hashes = {r: e.sha256 for r, e in prev.files.items()}
             this_hashes = {r: e.sha256 for r, e in snapshot.files.items()}
-            if prev_hashes != this_hashes:
-                raise IntraRunNonDeterminismError(
-                    f"program {program_id!r} was compiled by multiple xdist "
-                    f"workers within a single run and the copies differ "
-                    f"(intra-run non-determinism): "
-                    f"{prev.folder} vs {snapshot.folder}"
+            if prev_hashes != this_hashes and intra_run_divergences is not None:
+                differing = sorted(
+                    rel
+                    for rel in (set(prev_hashes) | set(this_hashes))
+                    if prev_hashes.get(rel) != this_hashes.get(rel)
                 )
-            # Identical — keep the first; nothing to merge.
+                intra_run_divergences.append(
+                    IntraRunDivergence(
+                        name=program_id,
+                        folder_a=prev.folder,
+                        folder_b=snapshot.folder,
+                        differing_files=differing,
+                    )
+                )
+            # Keep the first copy as the canonical snapshot for the
+            # run1-vs-run2 comparison; the divergence (if any) is recorded
+            # separately above.
             continue
         out[program_id] = snapshot
     return out
@@ -625,7 +652,12 @@ def write_diffs(
             (prog_dir / f"{rel.replace('/', '__')}.diff").write_text(udiff)
 
 
-def render_report(results: list[ProgramResult], *, tolerate_missing: bool = False) -> str:
+def render_report(
+    results: list[ProgramResult],
+    *,
+    tolerate_missing: bool = False,
+    intra_run_divergences: list[IntraRunDivergence] | None = None,
+) -> str:
     n_total = len(results)
     n_missing = sum(1 for r in results if r.missing_on_one_side)
     n_diff_content = sum(
@@ -633,9 +665,11 @@ def render_report(results: list[ProgramResult], *, tolerate_missing: bool = Fals
     )
     n_match = n_total - n_missing - n_diff_content
 
+    n_intra = len(intra_run_divergences) if intra_run_divergences else 0
     header = (
         f"Programs: {n_total}    matches: {n_match}    "
         f"differs: {n_diff_content}    only-in-one-run: {n_missing}"
+        + (f"    intra-run-divergent: {n_intra}" if n_intra else "")
     )
     lines = [header, ""]
     for r in results:
@@ -651,11 +685,29 @@ def render_report(results: list[ProgramResult], *, tolerate_missing: bool = Fals
             lines.extend(f"           only in run1: {rel}" for rel in r.only_in_run1)
             lines.extend(f"           only in run2: {rel}" for rel in r.only_in_run2)
 
+    # Intra-run divergences: the same program compiled twice WITHIN one run
+    # (by different xdist workers) with differing output. Reported separately
+    # because it's a distinct, stronger axis of non-determinism than the
+    # run1-vs-run2 comparison above. Informational — does not change the
+    # run1-vs-run2 verdict below — but each entry is concrete proof that
+    # codegen is non-deterministic at fixed inputs.
+    if n_intra:
+        lines.append("")
+        lines.append(
+            f"Intra-run divergences (same program, differing output within ONE run): {n_intra}"
+        )
+        for d in intra_run_divergences:  # type: ignore[union-attr]
+            lines.append(f"  [INTRA ] {d.name}")
+            lines.extend(f"           differs: {rel}" for rel in d.differing_files)
+            lines.append(f"           copy A: {d.folder_a}")
+            lines.append(f"           copy B: {d.folder_b}")
+
     lines.append("")
     if n_total == 0:
         lines.append("RESULT: no programs observed (nothing was cached).")
     elif n_diff_content == 0 and n_missing == 0:
-        lines.append(f"RESULT: codegen deterministic — {n_match} program(s) match.")
+        base = f"RESULT: codegen deterministic — {n_match} program(s) match."
+        lines.append(base)
     elif n_diff_content == 0 and tolerate_missing:
         lines.append(
             f"RESULT: codegen deterministic across the {n_match} shared program(s); "
@@ -666,6 +718,11 @@ def render_report(results: list[ProgramResult], *, tolerate_missing: bool = Fals
         lines.append(
             f"RESULT: NON-DETERMINISTIC CODEGEN — {n_diff_content}/{n_total} "
             f"program(s) differ by content{suffix}."
+        )
+    if n_intra:
+        lines.append(
+            f"NOTE: additionally, {n_intra} program(s) showed intra-run divergence "
+            f"(differing output across xdist workers within a single run)."
         )
     return "\n".join(lines) + "\n"
 
@@ -722,15 +779,22 @@ def check_determinism(
             ``tolerate_missing=True`` this requires at least one
             *content* difference.
     """
-    snap1 = snapshot_run(cache1, layout=layout)
-    snap2 = snapshot_run(cache2, layout=layout)
+    intra_run_divergences: list[IntraRunDivergence] = []
+    snap1 = snapshot_run(cache1, layout=layout, intra_run_divergences=intra_run_divergences)
+    snap2 = snapshot_run(cache2, layout=layout, intra_run_divergences=intra_run_divergences)
     results = compare(snap1, snap2)
 
     if diffs_dir is not None:
         write_diffs(results, snap1, snap2, diffs_dir)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(render_report(results, tolerate_missing=tolerate_missing))
+        report_path.write_text(
+            render_report(
+                results,
+                tolerate_missing=tolerate_missing,
+                intra_run_divergences=intra_run_divergences,
+            )
+        )
 
     if not results:
         diag1 = _diagnose_empty_cache(cache1, layout=layout)
