@@ -629,9 +629,14 @@ def map_list(op):
     return call(call("map_list")(op))
 
 
-def tree_map(op):
-    """Create a `tree_map` call: tree_map(op)(tup1, tup2, ...)."""
-    return call(call("tree_map")(op))
+def tree_map_tuple(op):
+    """Create a `tree_map_tuple` call: tree_map_tuple(op)(tup1, tup2, ...)."""
+    return call(call("tree_map_tuple")(op))
+
+
+def map_tuple(op):
+    """Create a `map_tuple` call: map_tuple(op)(tup)."""
+    return call(call("map_tuple")(op))
 
 
 def reduce(op, expr):

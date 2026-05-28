@@ -632,30 +632,50 @@ def map_list(op: TypeSynthesizer) -> TypeSynthesizer:
     return applied_map
 
 
-@_register_builtin_type_synthesizer
-def tree_map(op: TypeSynthesizer) -> TypeSynthesizer:
+def _tuple_map_synthesizer(builtin_name: str, *, recursive: bool) -> TypeSynthesizer:
+    """Shared implementation for `tree_map_tuple` (recursive) and `map_tuple` (top-level)."""
+
     @type_synthesizer
-    def applied_map(
-        *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
-    ) -> ts.TupleType:
-        if not args:
-            raise TypeError("tree_map requires at least one argument.")
-        if not all(isinstance(a, ts.TupleType) for a in args):
-            raise TypeError(
-                "tree_map requires all top-level arguments to be TupleType, "
-                f"got {[type(a).__name__ for a in args]}."
-            )
+    def factory(op: TypeSynthesizer) -> TypeSynthesizer:
+        @type_synthesizer
+        def applied_map(
+            *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
+        ) -> ts.TupleType:
+            if not args:
+                raise TypeError(f"'{builtin_name}' requires at least one argument.")
+            if not recursive and len(args) != 1:
+                raise TypeError(f"'{builtin_name}' requires exactly one argument, got {len(args)}.")
+            if not all(isinstance(a, ts.TupleType) for a in args):
+                raise TypeError(
+                    f"'{builtin_name}' requires all top-level arguments to be TupleType, "
+                    f"got {[type(a).__name__ for a in args]}."
+                )
 
-        def leaf_op(*leaf_types: ts.TypeSpec) -> ts.TypeSpec:
-            return op(*leaf_types, offset_provider_type=offset_provider_type)  # type: ignore[return-value]
+            def leaf_op(*leaf_types: ts.TypeSpec) -> ts.TypeSpec:
+                return op(*leaf_types, offset_provider_type=offset_provider_type)  # type: ignore[return-value]
 
-        return utils.tree_map(  # type: ignore[return-value]
-            leaf_op,
-            collection_type=ts.TupleType,
-            result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
-        )(*args)
+            if recursive:
+                return utils.tree_map(  # type: ignore[return-value]
+                    leaf_op,
+                    collection_type=ts.TupleType,
+                    result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
+                )(*args)
 
-    return applied_map
+            # Non-recursive: apply `op` once per top-level element.
+            (arg,) = args
+            return ts.TupleType(types=[leaf_op(el) for el in arg.types])
+
+        return applied_map
+
+    return factory
+
+
+tree_map_tuple = _register_builtin_type_synthesizer(
+    _tuple_map_synthesizer("tree_map_tuple", recursive=True), fun_names=["tree_map_tuple"]
+)
+map_tuple = _register_builtin_type_synthesizer(
+    _tuple_map_synthesizer("map_tuple", recursive=False), fun_names=["map_tuple"]
+)
 
 
 @_register_builtin_type_synthesizer

@@ -16,8 +16,47 @@ from gt4py.next.iterator.type_system import inference as itir_inference
 from gt4py.next.type_system import type_specifications as ts
 
 
+def _tree_map_tuple_body(
+    f: itir.Expr, tup_refs: list[str], tup_types: list[ts.TupleType]
+) -> itir.Expr:
+    """Recursively unroll `tree_map_tuple(f)(t1, ..., tN)` into `make_tuple` calls."""
+
+    @utils.tree_map(
+        collection_type=ts.TupleType,
+        result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
+        with_path_arg=True,
+    )
+    def mapper(*args):
+        *_el_types, path = args
+        return im.call(f)(
+            *(
+                functools.reduce(lambda expr, i: im.tuple_get(i, expr), path, im.ref(ref_name))
+                for ref_name in tup_refs
+            )
+        )
+
+    return mapper(*tup_types)
+
+
+def _map_tuple_body(f: itir.Expr, tup_refs: list[str], tup_types: list[ts.TupleType]) -> itir.Expr:
+    """Unroll `map_tuple(f)(t)` over top-level elements only (no recursion)."""
+    (ref_name,) = tup_refs
+    (tup_type,) = tup_types
+    return im.make_tuple(
+        *(im.call(f)(im.tuple_get(i, im.ref(ref_name))) for i in range(len(tup_type.types)))
+    )
+
+
+_UNROLLERS = {
+    "tree_map_tuple": _tree_map_tuple_body,
+    "map_tuple": _map_tuple_body,
+}
+
+
 @dataclasses.dataclass
 class UnrollTreeMap(eve.NodeTranslator):
+    """Unroll tuple-map ITIR builtins (`tree_map_tuple`, `map_tuple`) into `make_tuple`."""
+
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     uids: utils.IDGeneratorPool
@@ -29,11 +68,14 @@ class UnrollTreeMap(eve.NodeTranslator):
     def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)
 
-        if not cpm.is_call_to(node.fun, "tree_map"):
+        builtin_name = next((name for name in _UNROLLERS if cpm.is_call_to(node.fun, name)), None)
+        if builtin_name is None:
             return node
 
+        assert isinstance(node.fun, itir.FunCall)
         f = node.fun.args[0]
         tup_args = node.args
+
         tup_types: list[ts.TupleType] = []
         for tup in tup_args:
             itir_inference.reinfer(tup)
@@ -41,22 +83,8 @@ class UnrollTreeMap(eve.NodeTranslator):
             tup_types.append(tup.type)
 
         tup_refs = [next(self.uids["_utm"]) for _ in tup_args]
+        body = _UNROLLERS[builtin_name](f, tup_refs, tup_types)
 
-        @utils.tree_map(
-            collection_type=ts.TupleType,
-            result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
-            with_path_arg=True,
-        )
-        def mapper(*args):
-            *_el_types, path = args
-            return im.call(f)(
-                *(
-                    functools.reduce(lambda expr, i: im.tuple_get(i, expr), path, im.ref(ref_name))
-                    for ref_name in tup_refs
-                )
-            )
-
-        result = im.let(*zip(tup_refs, tup_args))(mapper(*tup_types))
-
+        result = im.let(*zip(tup_refs, tup_args))(body)
         itir_inference.reinfer(result)
         return result
