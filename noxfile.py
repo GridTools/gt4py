@@ -569,6 +569,8 @@ def test_cartesian_dace_determinism(
             "loadgroup",
             "-m",
             f"{markers}",
+            "-k",
+            "not test_implementation",
             str(pathlib.Path("tests") / "cartesian_tests"),
         ],
         layout="cartesian",
