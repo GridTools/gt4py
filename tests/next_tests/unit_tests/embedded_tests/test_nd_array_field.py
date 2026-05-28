@@ -28,6 +28,7 @@ from gt4py.next.common import (
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
+from gt4py.next.ffront.experimental import as_offset
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
@@ -759,6 +760,114 @@ def test_premap_non_contiguous_inverse_image_raises():
 
     with pytest.raises(ValueError, match="non-contiguous"):
         f.premap(conn)
+
+
+def test_as_offset_1d():
+    # Dynamic per-point shift along I: out[i] == f[i + off[i]], full domain when all shifts in-bounds.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    f = common._field(
+        np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+    off_arr = np.asarray([1, 0, -1, 0, 1, 0, -1, 0, 1, 0], dtype=int)
+    off = common._field(off_arr, domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),)))
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    assert np.all(result.ndarray == f.ndarray[np.arange(10) + off_arr])
+
+
+def test_as_offset_2d_shift_one_keep_other():
+    # Shift along I by a per-(i, j) offset, leave J: out[i, j] == f[i + off[i, j], j].
+    I = Dimension("I")
+    J = Dimension("J")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    NI, NJ = 4, 3
+    dom = common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ)))
+    f = common._field(np.arange(NI * NJ).reshape(NI, NJ).astype(float), domain=dom)
+    off_arr = np.asarray([[1, 1, 0], [0, 0, 1], [1, -1, 0], [-1, 0, -1]], dtype=int)
+    off = common._field(off_arr, domain=dom)
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == dom
+    i = np.arange(NI)[:, None]
+    j = np.arange(NJ)[None, :]
+    assert np.all(result.ndarray == f.ndarray[i + off_arr, j])
+
+
+def test_as_offset_boundary_narrows_domain():
+    # A uniform out-of-bounds shift narrows the result to the contiguous in-range sub-domain.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    f = common._field(
+        np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+    off = common._field(
+        np.full(10, -1, dtype=int), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == common.Domain(dims=(I,), ranges=(UnitRange(1, 10),))
+    assert np.all(result.ndarray == f.ndarray[0:9])  # out[i] == f[i - 1]
+
+
+def test_as_offset_scattered_oob_raises():
+    # An out-of-bounds shift in the interior cannot yield a contiguous domain.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    f = common._field(
+        np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+    off = common._field(
+        np.asarray([0, 0, 0, 99, 0, 0, 0, 0, 0, 0], dtype=int),
+        domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),)),
+    )
+
+    with pytest.raises(ValueError, match="non-contiguous"):
+        f.premap(as_offset(Ioff, off))
+
+
+def test_as_offset_introduces_dimension():
+    # `off` carries a dim the field lacks: the result gains it, out[i, j] == f[i + off[i, j]].
+    I = Dimension("I")
+    J = Dimension("J")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    f = common._field(
+        np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+    off_arr = np.tile(np.asarray([1, 0, -1, 0, 1, 0, -1, 0, 1, 0], dtype=int)[:, None], (1, 3))
+    off = common._field(
+        off_arr, domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange(0, 3)))
+    )
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == common.Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange(0, 3)))
+    assert np.all(result.ndarray == f.ndarray[np.arange(10)[:, None] + off_arr])
+
+
+def test_as_offset_neighbor_offset_raises():
+    # `as_offset` along a neighbor offset (2-element target) is not implemented.
+    Vertex = Dimension("Vertex", kind=DimensionKind.HORIZONTAL)
+    Edge = Dimension("Edge", kind=DimensionKind.HORIZONTAL)
+    V2EDim = Dimension("V2EDim", kind=DimensionKind.LOCAL)
+    V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+
+    off = common._field(
+        np.zeros(3, dtype=int),
+        domain=common.Domain(dims=(Vertex,), ranges=(UnitRange(0, 3),)),
+    )
+
+    with pytest.raises(NotImplementedError, match="neighbor"):
+        as_offset(V2E, off)
 
 
 @pytest.mark.parametrize(

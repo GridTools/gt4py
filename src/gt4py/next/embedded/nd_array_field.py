@@ -925,6 +925,26 @@ def _concat_where(
 NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type] # TODO(havogt): this is still the "old" concat_where, needs to be replaced in a next PR
 
 
+def _as_offset(offset_: fbuiltins.FieldOffset, offset_field: NdArrayField) -> common.Connectivity:
+    if len(offset_.target) == 2:
+        raise NotImplementedError(
+            "'as_offset' is not implemented for neighbor offsets, only for Cartesian shifts."
+        )
+    source_dim = offset_.source
+    domain = offset_field.domain
+    xp = offset_field.array_ns
+    src_idx = domain.dim_index(source_dim, allow_missing=False)
+    src_range = domain[src_idx].unit_range
+    shape = tuple(len(src_range) if i == src_idx else 1 for i in range(len(domain)))
+    coords = xp.arange(src_range.start, src_range.stop).reshape(shape)
+    return common._connectivity(
+        xp.asarray(offset_field.ndarray) + coords, codomain=source_dim, domain=domain
+    )
+
+
+NdArrayField.register_builtin_func(experimental.as_offset, _as_offset)  # type: ignore[arg-type]
+
+
 def _make_reduction(
     builtin_name: str, array_builtin_name: str, initial_value_op: Callable
 ) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT]]:
