@@ -152,9 +152,6 @@ dace_determinism_cscs_gh200:
       variables:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
-    - if: $SUBPACKAGE == 'cartesian'
-      variables:
-        GT4PY_CARTESIAN_DETERMINISM_XDIST: 4
     - when: on_success
 
 dace_determinism_cscs_amd_rocm:
@@ -174,7 +171,4 @@ dace_determinism_cscs_amd_rocm:
     CXX: /opt/rocm/bin/hipcc
   rules:
     - *exclude_variants_rules
-    - if: $SUBPACKAGE == 'cartesian'
-      variables:
-        GT4PY_CARTESIAN_DETERMINISM_XDIST: 4
     - when: on_success
