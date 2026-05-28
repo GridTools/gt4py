@@ -30,63 +30,30 @@
 #   scripts/dace_deterministic_codegen.py   (cache comparison lib + CLI)
 
 include:
-  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
-  - local: 'ci/cscs-ci-ext-config.yml'
-
-variables:
-  CUDA_VERSION: '12.6.2'
-  ROCM_VERSION: '7.1.1'
-  UBUNTU_VERSION: '24.04'
-  UV_VERSION: '0.11.2'
+  - local: 'ci/cscs-ci-base.yml'
 
 .test_python_versions: &test_python_versions ['3.10']
 
-stages:
-  - build
-  - test
-
 # -- Build stage --
-.build_common:
-  stage: build
+build_cscs_gh200:
   extends:
-    - .dynamic-image-name
-  variables:
-    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION}
-    CSCS_REBUILD_POLICY: if-not-exists
-    DOCKERFILE: ci/Dockerfile
-    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
-    PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}
-    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
+    - .container-builder-cscs-gh200
+    - .build_settings
+    - .build_extra_cuda
+  needs: []
   parallel:
     matrix:
       - PY_VERSION: *test_python_versions
 
-.build_extra_cuda:
-  variables:
-    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
-    EXTRA_UV_SYNC_ARGS: "--extra cuda12"
-
-.build_extra_rocm:
-  variables:
-    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
-    EXTRA_UV_SYNC_ARGS: "--extra rocm7"
-    EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx942 ROCM_HOME=/opt/rocm"
-    KUBERNETES_MEMORY_REQUEST: "64Gi"
-    KUBERNETES_MEMORY_LIMIT: "64Gi"
-
-build_cscs_gh200:
-  extends:
-    - .container-builder-cscs-gh200
-    - .build_common
-    - .build_extra_cuda
-  needs: []
-
 build_cscs_amd_rocm:
   extends:
     - .container-builder-cscs-zen2
-    - .build_common
+    - .build_settings
     - .build_extra_rocm
   needs: []
+  parallel:
+    matrix:
+      - PY_VERSION: *test_python_versions
 
 # -- Test stage --
 .dace_determinism_common:
@@ -155,7 +122,7 @@ dace_determinism_cscs_gh200:
 
 dace_determinism_cscs_amd_rocm:
   extends:
-    - .tds-container-runner-beverin-mi200
+    - .container-runner-beverin-mi200
     - .dace_determinism_common
   needs:
     - build_cscs_amd_rocm
