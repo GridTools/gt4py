@@ -422,7 +422,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         dst_node: dace_nodes.Node,
         dst_conn: Optional[str] = None,
     ) -> None:
-        src_subset = copy.deepcopy(src_subset)  # guarantee unique subset objects
+        src_subset = copy.deepcopy(src_subset)  # avoid referencing a subset used by another edge
         edge = MemletInputEdge(self.state, src, src_subset, dst_node, dst_conn)
         self.input_edges.append(edge)
 
