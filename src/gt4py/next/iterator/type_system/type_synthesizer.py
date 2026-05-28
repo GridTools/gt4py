@@ -632,10 +632,11 @@ def map_list(op: TypeSynthesizer) -> TypeSynthesizer:
     return applied_map
 
 
-def _tuple_map_synthesizer(builtin_name: str, *, recursive: bool) -> TypeSynthesizer:
+def _tuple_map_synthesizer(
+    builtin_name: str, *, recursive: bool
+) -> Callable[..., TypeOrTypeSynthesizer]:
     """Shared implementation for `tree_map_tuple` (recursive) and `map_tuple` (top-level)."""
 
-    @type_synthesizer
     def factory(op: TypeSynthesizer) -> TypeSynthesizer:
         @type_synthesizer
         def applied_map(
