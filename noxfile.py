@@ -552,10 +552,11 @@ def test_cartesian_dace_determinism(
 
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
-    xdist_workers = os.environ.get(
-        "GT4PY_CARTESIAN_DETERMINISM_XDIST",
-        "2" if device == "cpu" else "4",
-    )
+    xdist_workers = os.environ.get("GT4PY_CARTESIAN_DETERMINISM_XDIST", "0")
+    if xdist_workers == "0":
+        xdist_args: list[str] = ["-n", "0"]
+    else:
+        xdist_args = ["-n", xdist_workers, "--dist", "loadgroup"]
 
     _run_dace_determinism_check(
         session,
@@ -563,10 +564,7 @@ def test_cartesian_dace_determinism(
             "pytest",
             "--cache-clear",
             "-sv",
-            "-n",
-            xdist_workers,
-            "--dist",
-            "loadgroup",
+            *xdist_args,
             "-m",
             f"{markers}",
             "-k",
