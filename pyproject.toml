@@ -7,12 +7,6 @@ requires = ['cython>=3.0.0', 'setuptools>=77.0.3', 'versioningit>=3.1.1', 'wheel
 # -- Dependency groups --
 [dependency-groups]
 build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=77.0.3', 'wheel>=0.33.6']
-dace-cartesian = [
-  'dace>=1.0.2'  # refined in [tool.uv.sources]
-]
-dace-next = [
-  'dace==43!2026.04.27'  # uses custom index at 'https://github.com/GridTools/pypi'
-]
 dev = [
   {include-group = 'build'},
   {include-group = 'docs'},
@@ -106,6 +100,7 @@ dependencies = [
   'click>=8.0.0',
   'cmake>=3.22',
   'cytoolz>=1.0.1',
+  'dace>=2.0.0a3',
   'deepdiff>=8.1.0',
   'devtools>=0.6',
   'factory-boy>=3.3.3',
@@ -120,7 +115,7 @@ dependencies = [
   'numpy>=2.0.0 ; python_version < "3.14"',
   'numpy>=2.3.2 ; python_version >= "3.14"',  # first version with pre-built wheel for Python 3.14
   'packaging>=20.0',
-  'pybind11>=2.10.1,<3',  # cartesian: keeping <3 because of https://github.com/pybind/pybind11/issues/5975
+  'pybind11>=3.0.3',
   'setuptools>=77.0.3',
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
@@ -462,10 +457,6 @@ conflicts = [
     {extra = 'jax-cuda13'},
     {extra = 'rocm6'},
     {extra = 'rocm7'}
-  ],
-  [
-    {group = 'dace-cartesian'},
-    {group = 'dace-next'}
   ]
 ]
 default-groups = ["dev"]
@@ -481,17 +472,14 @@ explicit = true
 name = 'gridtools'
 url = 'https://gridtools.github.io/pypi/'
 
-# -- Example: {index = "gridtools", group = "dace-next"}
+# Add the uv source below to pull dace from the gridtools index instead of PyPI:
+# dace = {index = "gridtools"}
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = [
-  {git = "https://github.com/GridTools/dace", branch = "romanc/stree-v2", group = "dace-cartesian"},
-  {index = "gridtools", group = "dace-next"}
-]
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "1.1.9+unknown.version.details"
+default-version = "1.1.10+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
