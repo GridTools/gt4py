@@ -269,10 +269,10 @@ class NdArrayField(
                 connectivity is passed, it will be expanded to fully defined connectivities for
                 each dimension in the domain of the field according to the rules described above.
                 If more than one connectivity is passed, they all must satisfy:
-                - be of the same kind or encode only compact domain transformations
-                - the codomain of each connectivity must be different
-                - for reshuffling operations, all connectivities must have the same domain
-                (Note that remapping operations only support a single connectivity argument.)
+                - they are either all affine (domain-only) or all gather connectivities
+                - their codomains are pairwise distinct
+                - no connectivity reads a dimension that another one replaces (i.e. removes
+                  from the field domain by introducing new dimensions in its place)
 
         """  # noqa: RUF002  # TODO(egparedes): move docstring to the `premap` builtin function when it exists
 
@@ -316,9 +316,10 @@ class NdArrayField(
         if not any(is_gather):
             return _domain_premap(self, *conn_fields)
 
-        # Reject only order-dependent chains: a connectivity reading a dimension that another one
-        # *removes* (a dimension-introducing remap, whose codomain is not in its own domain).
-        # Reshuffles keep their codomain, so combining them is fine even when they read each other's.
+        # Reject only order-dependent chains: a connectivity reading a dimension that another
+        # one removes (one whose codomain is not in its own domain, so it gets replaced in the
+        # output). Connectivities that keep their codomain do not remove any dimension and can
+        # always be combined.
         removed = {c.codomain for c in conn_fields if c.codomain not in c.domain.dims}
         for c in conn_fields:
             if reads := removed & ({*c.domain.dims} - {c.codomain}):
@@ -599,7 +600,8 @@ def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> 
 def _gather_output_domain(
     field_domain: common.Domain, connectivities: Sequence[common.GatherConnectivity]
 ) -> common.Domain:
-    """Output domain of a gather: each connectivity's codomain becomes its own domain dimensions."""
+    """Output domain of a simultaneous gather: each codomain is replaced by the dimensions of its
+    connectivity's domain; dimensions shared with the field domain are intersected in place."""
     domain = field_domain
     for conn in connectivities:
         cod = conn.codomain
