@@ -51,6 +51,9 @@ semantic_fingerprinter = utils.CustomPicklingFingerprinter.from_reducers(
     },
 )
 
+#: Public alias for semantic_fingerprinter.
+fingerprinter = semantic_fingerprinter
+
 
 @dataclasses.dataclass(frozen=True)
 class DSLFieldOperatorDef(utils.MetadataBasedPicklingMixin):
@@ -59,6 +62,10 @@ class DSLFieldOperatorDef(utils.MetadataBasedPicklingMixin):
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
     grid_type: Optional[common.GridType] = None
     debug: bool = False
+
+    @property
+    def fingerprint(self) -> str:
+        return semantic_fingerprinter(self)
 
 
 ConcreteDSLFieldOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
@@ -74,6 +81,10 @@ class FOASTOperatorDef(utils.MetadataBasedPicklingMixin):
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
     debug: bool = False
 
+    @property
+    def fingerprint(self) -> str:
+        return semantic_fingerprinter(self)
+
 
 ConcreteFOASTOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
     FOASTOperatorDef, arguments.CompileTimeArgs
@@ -85,6 +96,10 @@ class DSLProgramDef(utils.MetadataBasedPicklingMixin):
     definition: types.FunctionType
     grid_type: Optional[common.GridType] = None
     debug: bool = False
+
+    @property
+    def fingerprint(self) -> str:
+        return semantic_fingerprinter(self)
 
 
 ConcreteDSLProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
@@ -98,6 +113,10 @@ class PASTProgramDef(utils.MetadataBasedPicklingMixin):
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
     debug: bool = False
+
+    @property
+    def fingerprint(self) -> str:
+        return semantic_fingerprinter(self)
 
 
 ConcretePASTProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
