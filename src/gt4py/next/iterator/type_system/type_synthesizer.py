@@ -614,7 +614,7 @@ def scan(
 
 
 @_register_builtin_type_synthesizer
-def map_(op: TypeSynthesizer) -> TypeSynthesizer:
+def map_list(op: TypeSynthesizer) -> TypeSynthesizer:
     @type_synthesizer
     def applied_map(
         *args: ts.ListType, offset_provider_type: common.OffsetProviderType

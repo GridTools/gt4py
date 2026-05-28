@@ -299,7 +299,7 @@ def test_astype_local_field():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.op_as_fieldop(im.map_(im.lambda_("val")(im.cast_("val", "int32"))))("a")
+    reference = im.op_as_fieldop(im.map_list(im.lambda_("val")(im.cast_("val", "int32"))))("a")
 
     assert lowered.expr == reference
 
@@ -832,9 +832,9 @@ def test_reduction_lowering_expr():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    mapped = im.op_as_fieldop(im.map_("multiplies"))(
+    mapped = im.op_as_fieldop(im.map_list("multiplies"))(
         im.op_as_fieldop("make_const_list")(im.literal("1.1", "float64")),
-        im.op_as_fieldop(im.map_("plus"))(ssa.unique_name("e1_nbh", 0), "e2"),
+        im.op_as_fieldop(im.map_list("plus"))(ssa.unique_name("e1_nbh", 0), "e2"),
     )
 
     reference = im.let(

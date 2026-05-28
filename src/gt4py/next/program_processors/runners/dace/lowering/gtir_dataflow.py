@@ -1176,7 +1176,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         The map operation is applied on the local dimension of input fields.
         In the example below, the local dimension consists of a list of neighbor
         values as the first argument, and a list of constant values `1.0`:
-        `map_(plus)(neighbors(V2E, it), make_const_list(1.0))`
+        `map_list(plus)(neighbors(V2E, it), make_const_list(1.0))`
 
         The `plus` operation is lowered to a tasklet inside a map that computes
         the domain of the local dimension (in this example, max neighbors in V2E).
@@ -1234,7 +1234,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # The dataflow we build in this class has some loose connections on input edges.
         # These edges are described as set of nodes, that will have to be connected to
         # external data source nodes passing through the map entry node of the field map.
-        # Similarly to `neighbors` expressions, the `map_` input edges terminate on view
+        # Similarly to `neighbors` expressions, the `map_list` input edges terminate on view
         # nodes (see `_construct_local_view` in the for-loop below), because it is simpler
         # than representing map-to-map edges (which require memlets with 2 pass-nodes).
         input_memlets = {}
@@ -1261,7 +1261,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         result_node = self.state.add_access(result)
 
         if conn_type.has_skip_values:
-            # In case the `map_` input expressions contain skip values, we use
+            # In case the `map_list` input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
             conn_data = gtx_dace_args.connectivity_identifier(offset_type.value)
             conn_desc = self.sdfg.arrays[conn_data]
@@ -1764,12 +1764,12 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(node.type, ts.ListType):
             # The only builtin function (so far) handled here that returns a list
-            # is 'make_const_list'. There are other builtin functions (map_, neighbors)
+            # is 'make_const_list'. There are other builtin functions (map_list, neighbors)
             # that return a list but they are handled in specialized visit methods.
             # This method (the generic visitor for builtin functions) always returns
             # a single value. This is also the case of 'make_const_list' expression:
             # it simply broadcasts a scalar on the local domain of another expression,
-            # for example 'map_(plus)(neighbors(V2Eₒ, it), make_const_list(1.0))'.
+            # for example 'map_list(plus)(neighbors(V2Eₒ, it), make_const_list(1.0))'.
             # Therefore we handle `ListType` as a single-element array with shape (1,)
             # that will be accessed in a map expression on a local domain.
             assert isinstance(node.type.element_type, ts.ScalarType)

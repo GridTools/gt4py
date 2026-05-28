@@ -44,7 +44,7 @@ class CollapseListGet(eve.PreserveLocationVisitor, eve.NodeTranslator):
             if cpm.is_call_to(node.args[1], "make_const_list"):
                 return node.args[1].args[0]
             if cpm.is_applied_map(node.args[1]):
-                # list_get(0, map_(λ(val_) → foo(val_, int64))(·__sym_1))
+                # list_get(0, map_list(λ(val_) → foo(val_, int64))(·__sym_1))
                 # -> (λ(val_) → foo(val_, int64))(list_get(0, ·__sym_1))
                 lsts = node.args[1].args
                 assert len(node.args[1].fun.args) == 1  # a single lambda in the map

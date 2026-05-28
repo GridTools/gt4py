@@ -95,7 +95,7 @@ def _is_collectable_expr(node: itir.Node) -> bool:
     if isinstance(node, itir.FunCall):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
-        # do also not collect reduce, map_ and neighbors nodes if they are left in the IR at this point, this may lead to
+        # do also not collect reduce, map_list and neighbors nodes if they are left in the IR at this point, this may lead to
         #  conceptual problems (other parts of the tool chain rely on the arguments being present directly
         #  on the reduce FunCall node (connectivity deduction)), as well as problems with the imperative backend
         #  backend (single pass eager depth first visit approach), see also https://github.com/GridTools/gt4py/issues/1795
@@ -104,7 +104,7 @@ def _is_collectable_expr(node: itir.Node) -> bool:
         # do also not collect index nodes because otherwise the right hand side of SetAts becomes a let statement
         #  instead of an as_fieldop
         if cpm.is_call_to(
-            node, ("lift", "shift", "neighbors", "reduce", "map_", "index")
+            node, ("lift", "shift", "neighbors", "reduce", "map_list", "index")
         ) or cpm.is_applied_lift(node):
             return False
         return True

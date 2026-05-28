@@ -1230,7 +1230,7 @@ def test_gtir_neighbors_as_input():
                             im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))
                         ),
                         inner_domain,
-                    )(im.op_as_fieldop(im.map_("divides"), inner_domain)("v2e_field", "x"))
+                    )(im.op_as_fieldop(im.map_list("divides"), inner_domain)("v2e_field", "x"))
                 ),
                 domain=outer_domain,
                 target=gtir.SymRef(id="vertices"),
@@ -1439,8 +1439,8 @@ def test_gtir_reduce_dot_product():
                         im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))
                     )
                 )(
-                    im.op_as_fieldop(im.map_("plus"))(
-                        im.op_as_fieldop(im.map_("multiplies"))(
+                    im.op_as_fieldop(im.map_list("plus"))(
+                        im.op_as_fieldop(im.map_list("multiplies"))(
                             im.as_fieldop_neighbors("V2E", "edges"),
                             "v2e_field",
                         ),

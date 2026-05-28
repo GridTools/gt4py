@@ -53,7 +53,7 @@ def neighbors(*args):
 
 
 @builtin_dispatch
-def map_(*args):
+def map_list(*args):
     raise BackendNotSelectedError()
 
 
@@ -504,7 +504,7 @@ BUILTINS = {
     "make_const_list",
     "make_tuple",
     "tree_map",
-    "map_",  # TODO: rename to map_list
+    "map_list",
     "named_range",
     "neighbors",
     "reduce",

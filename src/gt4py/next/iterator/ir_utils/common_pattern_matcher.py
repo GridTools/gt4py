@@ -71,7 +71,7 @@ def is_applied_map(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
         isinstance(arg, itir.FunCall)
         and isinstance(arg.fun, itir.FunCall)
         and isinstance(arg.fun.fun, itir.SymRef)
-        and arg.fun.fun.id == "map_"
+        and arg.fun.fun.id == "map_list"
     )
 
 

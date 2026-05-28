@@ -1455,8 +1455,8 @@ def _get_offset(*lists: _List | _ConstList) -> Optional[runtime.Offset]:
     raise AssertionError("All lists must have the same offset.")
 
 
-@builtins.map_.register(EMBEDDED)
-def map_(op):
+@builtins.map_list.register(EMBEDDED)
+def map_list(op):
     def impl_(*lists):
         offset = _get_offset(*lists)
         if offset is None:

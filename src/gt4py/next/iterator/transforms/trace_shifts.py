@@ -259,7 +259,7 @@ _START_CTX: Final = {
     "scan": _scan,
     "reduce": _reduce,
     "neighbors": _neighbors,
-    "map_": _map,
+    "map_list": _map,
     "if_": _if,
     "make_tuple": _make_tuple,
 }

@@ -18,7 +18,7 @@ from gt4py.next.iterator.transforms import inline_lambdas
 @dataclasses.dataclass(frozen=True)
 class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
-    Fuses nested `map_`s.
+    Fuses nested `map_list`s.
 
     Preconditions:
       - `FunctionDefinitions` are inlined
@@ -29,7 +29,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
     to
         map(λ(a, b, c) → f(a, g(b, c)))(a, b, c)
 
-        reduce(λ(x, y) → f(x, y), init)(map_(g(z, w))(a, b))
+        reduce(λ(x, y) → f(x, y), init)(map_list(g(z, w))(a, b))
     to
         reduce(λ(x, y, z) → f(x, g(y, z)), init)(a, b)
     """
@@ -93,7 +93,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
                 new_op = ir.Lambda(params=new_params, expr=new_body)
                 if cpm.is_applied_map(node):
                     return ir.FunCall(
-                        fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]), args=new_args
+                        fun=ir.FunCall(fun=ir.SymRef(id="map_list"), args=[new_op]), args=new_args
                     )
                 else:  # is_applied_reduce(node)
                     return ir.FunCall(

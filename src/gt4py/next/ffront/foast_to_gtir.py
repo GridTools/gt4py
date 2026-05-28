@@ -526,7 +526,7 @@ def _map(
     original_arg_types: tuple[ts.TypeSpec, ...],
 ) -> itir.FunCall:
     """
-    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
+    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_list`ing lists.
     """
     if all(
         isinstance(t, (ts.ScalarType, ts.DimensionType, ts.DomainType))
@@ -539,7 +539,7 @@ def _map(
             promote_to_list(arg_type)(larg)
             for arg_type, larg in zip(original_arg_types, lowered_args)
         )
-        op = im.map_(op)
+        op = im.map_list(op)
 
     return im.op_as_fieldop(op)(*lowered_args)
 

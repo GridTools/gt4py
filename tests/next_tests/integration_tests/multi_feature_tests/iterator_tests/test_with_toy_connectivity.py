@@ -16,7 +16,7 @@ from gt4py.next.iterator.builtins import (
     lift,
     list_get,
     make_const_list,
-    map_,
+    map_list,
     multiplies,
     neighbors,
     plus,
@@ -101,7 +101,7 @@ def test_sum_edges_to_vertices(program_processor, stencil):
 
 @fundef
 def map_neighbors(in_edges):
-    return reduce(plus, 0)(map_(plus)(neighbors(V2E, in_edges), neighbors(V2E, in_edges)))
+    return reduce(plus, 0)(map_list(plus)(neighbors(V2E, in_edges), neighbors(V2E, in_edges)))
 
 
 def test_map_neighbors(program_processor):
@@ -123,7 +123,7 @@ def test_map_neighbors(program_processor):
 
 @fundef
 def map_make_const_list(in_edges):
-    return reduce(plus, 0)(map_(multiplies)(neighbors(V2E, in_edges), make_const_list(2)))
+    return reduce(plus, 0)(map_list(multiplies)(neighbors(V2E, in_edges), make_const_list(2)))
 
 
 @pytest.mark.uses_constant_fields
