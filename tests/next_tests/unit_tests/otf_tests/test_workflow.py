@@ -8,6 +8,7 @@
 
 import dataclasses
 
+from gt4py.next import utils
 from gt4py.next.otf import workflow
 
 
@@ -31,6 +32,14 @@ class NamedStepsExample(workflow.NamedStepSequence[int, str]):
 @dataclasses.dataclass(frozen=True)
 class SingleStep(workflow.NamedStepSequence[int, StageTwo]):
     step: workflow.Workflow[int, StageTwo]
+
+
+@dataclasses.dataclass(frozen=True)
+class _StepWithValue:
+    v: int
+
+    def __call__(self, x: int) -> int:
+        return x + self.v
 
 
 def step_one(inp: StageOne) -> StageTwo:
@@ -67,11 +76,15 @@ def test_chain_from_named():
     assert full_workflow(StageOne(42)) == "42"
 
 
+def _append_one(inp: list[int]) -> list[int]:
+    return [*inp, 1]
+
+
 def test_cached_with_hashing():
     def hashing(inp: list[int]) -> int:
         return hash(sum(inp))
 
-    wf = workflow.CachedStep(step=lambda inp: [*inp, 1], key_function=hashing)
+    wf = workflow.CachedStep(step=_append_one, key_function=hashing)
 
     assert wf([1, 2, 3]) == [1, 2, 3, 1]
     assert wf([3, 2, 1]) == [1, 2, 3, 1]
@@ -82,3 +95,33 @@ def test_replace():
     wf = NamedStepsExample(repeat=lambda inp: [inp] * 3, strify=lambda inp: str(inp))
     wf_repl = wf.replace(repeat=lambda inp: [inp] * 4)
     assert wf_repl(4) == "[4, 4, 4, 4]"
+
+
+def test_fingerprint_is_defined():
+    assert callable(utils.fingerprint)
+    assert isinstance(utils.fingerprint("hello"), str)
+
+
+def test_versioned_fingerprint_is_defined():
+    assert callable(utils.versioned_fingerprint)
+    result = utils.versioned_fingerprint("hello")
+    assert isinstance(result, str)
+    assert result != utils.fingerprint("hello")
+
+
+def test_fingerprint_is_stable_for_dicts():
+    d1 = {"b": 2, "a": 1}
+    d2 = {"a": 1, "b": 2}
+    assert utils.fingerprint(d1) == utils.fingerprint(d2)
+
+
+def test_fingerprint_differs_for_different_objects():
+    assert utils.fingerprint({"a": 1}) != utils.fingerprint({"a": 2})
+
+
+def test_cached_step_cache_key_includes_step_config():
+    """Two CachedStep instances with different step configs produce different cache keys."""
+    # Use dataclass steps with different configurations (v=1 vs v=2)
+    cs1 = workflow.CachedStep(step=_StepWithValue(v=1))
+    cs2 = workflow.CachedStep(step=_StepWithValue(v=2))
+    assert cs1.cache_key(42) != cs2.cache_key(42)

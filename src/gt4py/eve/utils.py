@@ -644,10 +644,14 @@ def custom_overriden_pickler(
 ) -> type[pickle.Pickler]:
     """
     Create a custom pickler class using the provided function as reducer override.
+
+    Uses the pure Python ``pickle._Pickler`` as the base class (instead of the C-extension
+    ``pickle.Pickler``) so that ``reducer_override`` is called for all types, including
+    built-in types like ``dict`` and ``set`` that are bypassed by the C-extension fast path.
     """
     pickler = type(
         name or f"CustomReducePickler_{name or id(reducer_override)}",
-        (pickle.Pickler,),
+        (pickle._Pickler,),  # type: ignore[attr-defined]  # _Pickler is the pure-Python impl
         {"reducer_override": staticmethod(reducer_override)},
     )
 
