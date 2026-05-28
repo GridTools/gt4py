@@ -98,6 +98,7 @@ build_cscs_amd_rocm:
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 60
   allow_failure: true
+  resource_group: ${SLURM_PARTITION}_${SUBPACKAGE}
   artifacts:
     when: always
     paths:
