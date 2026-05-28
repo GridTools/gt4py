@@ -262,7 +262,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         target = self.visit(node.inner.target, **kwargs)
         element_expr = self.visit(node.inner.element_expr, **kwargs)
 
-        # e.g. `(... for el1, el2 in ...)` -> `(let el1 = t[0], el2[1] ... for t in ...)`
+        # e.g. `(... for el1, el2 in ...)` -> `(let el1 = t[0], el2 = t[1] ... for t in ...)`
         if isinstance(target, tuple):
             flat_targets = utils.flatten_nested_tuple(target)
             new_target = next(self.uid_generator["__tuple_comprh"])

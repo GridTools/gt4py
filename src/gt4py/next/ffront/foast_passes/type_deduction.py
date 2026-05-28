@@ -689,7 +689,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(
                     iterable.location,
-                    "Not implemented. All elements of the iterable in a tuple comprehensions must have the same type.",
+                    "Not implemented: all elements of the iterable in a tuple comprehension must have the same type.",
                 )
             element_type = iterable.type.types[0]
         elif isinstance(iterable.type, ts.VarArgType):
@@ -703,7 +703,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         inner_kwargs = {"symtable": node.inner.annex.symtable, **kwargs}
 
         @tree_map(with_path_arg=True)
-        def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> None:
+        def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> foast.Symbol:
             try:
                 type_ = element_type
                 for i in path:

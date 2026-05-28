@@ -168,7 +168,7 @@ def canonicalize_type_hint(
             type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
 
     canonical_type = typing.get_origin(type_hint) or type_hint
-    # in order to distinguish tuple and tuple[()] the former returns None here
+    # In order to distinguish `tuple` from `tuple[()]`, the former returns None here.
     args = typing.get_args(type_hint) if typing.get_origin(type_hint) else None
 
     return canonical_type, args, tuple(extra_args)
@@ -202,10 +202,10 @@ def from_type_hint(
                 return ts.DeferredType(constraint=ts.TupleType)
             else:
                 raise ValueError(
-                    f"Tuple annotation '{type_hint}' must either, "
+                    f"Tuple annotation '{type_hint}' must either "
                     f"be a list of concrete arguments (e.g. 'tuple[int]'), "
-                    f"be a variadic tuple (e.g. 'tuple[int, ...]'), ",
-                    "or have no arguments (e.g. tuple).",
+                    f"be a variadic tuple (e.g. 'tuple[int, ...]'), "
+                    f"or have no arguments (e.g. 'tuple')."
                 )
 
         case common.Field:

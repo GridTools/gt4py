@@ -506,7 +506,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 if gen_expr.generators[0].ifs != []:
                     raise errors.DSLError(
                         self.get_location(node),
-                        "Conditionals are not supported in generator expressions as they size of "
+                        "Conditionals are not supported in generator expressions as the size of "
                         "the result can only be deduced at runtime.",
                     )
 

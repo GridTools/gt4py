@@ -137,17 +137,17 @@ class TupleComprehension(Expr):
     """
     tuple(element_expr for target in iterable)
 
-    Note: The structure here differs from the one in the python ast. Here we group target and
-    element expression, in order to cleanly nest by the symbols being introduced, whereas in
-    the python ast target and iterable are grouped into generator nodes.
+    Note: The structure here differs from the one in the Python AST. Here we group target and
+    element expression in order to cleanly nest by the symbols being introduced, whereas in
+    the Python AST target and iterable are grouped into generator nodes.
     """
 
     inner: TupleComprehensionMapper
     iterable: Expr
 
 
-# this is essentially a lambda, the difference is for a lambda we might not know the type of the
-# args, therefor this is named differently at the moment.
+# This is essentially a lambda. The difference is that for a lambda we might not know the type of
+# the args; therefore this is named differently at the moment.
 class TupleComprehensionMapper(LocatedNode, SymbolTableTrait):
     target: Any  # TODO(tehrengruber): should be NestedTuple[DataSymbol], but this breaks in eve
     element_expr: Expr
