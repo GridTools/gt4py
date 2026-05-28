@@ -168,6 +168,33 @@ CARTESIAN_SKIP_DIRS: frozenset[str] = frozenset({"__pycache__"})
 #: avoids false-positive matches inside arbitrary identifiers.
 CARTESIAN_DIGEST_RE = re.compile(r"_(?P<digest>[0-9a-f]{10})(?=(\.|_pyext_BUILD))")
 
+#: When the cartesian determinism tests run under pytest-xdist, each worker
+#: is given its own cache root (``<run>/gt_cache/<worker_id>/...``) so that
+#: two workers compiling byte-identical SDFGs never share — and never
+#: ``rmtree`` out from under each other — the dace build folder named by the
+#: SDFG hash. See tests/cartesian_tests/conftest.py:_isolate_dace_cache_per_worker.
+#:
+#: That worker segment is a *scheduling* artifact, not part of a program's
+#: identity: the same stencil may compile on ``gw3`` in run1 and ``gw7`` in
+#: run2. If it leaked into ``program_id`` (which is the relative path from
+#: the cache root), run1 and run2 would key the same program differently and
+#: every program would show as "only in one run". We therefore strip a
+#: leading ``gw<N>`` / ``master`` segment from the program path before using
+#: it as the comparison key. Serial runs (-n 0) use ``master`` and are
+#: handled by the same rule, so the key is identical whether the suite ran
+#: serially or in parallel.
+CARTESIAN_WORKER_SEG_RE = re.compile(r"^(gw\d+|master)/")
+
+
+def _strip_worker_segment(program_id: str) -> str:
+    """Drop a leading pytest-xdist worker-id path segment if present.
+
+    ``"gw3/py310_1013/dacegpu/.../copy_stencil"`` -> ``"py310_1013/dacegpu/.../copy_stencil"``.
+    Idempotent; leaves paths without a worker segment unchanged (so caches
+    produced without per-worker isolation still compare correctly).
+    """
+    return CARTESIAN_WORKER_SEG_RE.sub("", program_id)
+
 
 def _normalize_cartesian_relpath(relpath: str) -> str:
     """Replace the 10-hex codegen digest in a cartesian relpath with the
@@ -206,6 +233,15 @@ class DeterminismError(RuntimeError):
     def __init__(self, message: str, results: list[ProgramResult]) -> None:
         super().__init__(message)
         self.results = results
+
+
+class IntraRunNonDeterminismError(RuntimeError):
+    """Same program compiled by multiple xdist workers within ONE run, with
+    differing output. A strictly stronger failure than the run1-vs-run2
+    check: codegen is non-deterministic even at fixed inputs in a single
+    run. Only reachable under per-worker cache isolation (parallel cartesian
+    determinism); see ``_strip_worker_segment`` and the conftest fixture
+    ``_isolate_dace_cache_per_worker``."""
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +391,10 @@ def _snapshot_run_cartesian(cache_root: Path) -> dict[str, ProgramSnapshot]:
 
     out: dict[str, ProgramSnapshot] = {}
     for prog_dir in sorted(program_dirs):
-        program_id = prog_dir.relative_to(cache_root).as_posix()
+        # Strip any leading xdist worker-id segment (gw0/, master/, ...) so a
+        # program keyed identically across run1/run2 even if it compiled on a
+        # different worker each time. See CARTESIAN_WORKER_SEG_RE.
+        program_id = _strip_worker_segment(prog_dir.relative_to(cache_root).as_posix())
 
         files: dict[str, FileEntry] = {}
 
@@ -376,7 +415,31 @@ def _snapshot_run_cartesian(cache_root: Path) -> dict[str, ProgramSnapshot]:
                     rel = _normalize_cartesian_relpath(disk_rel)
                     files[rel] = FileEntry(relpath=rel, sha256=_sha256(f), disk_relpath=disk_rel)
 
-        out[program_id] = ProgramSnapshot(name=program_id, folder=prog_dir, files=files)
+        snapshot = ProgramSnapshot(name=program_id, folder=prog_dir, files=files)
+
+        # Under per-worker cache isolation the SAME program can be compiled by
+        # more than one xdist worker (e.g. two tests that build an identical
+        # stencil land on different workers). After stripping the worker
+        # segment they collide on one program_id. That's expected and benign
+        # *iff* the two copies are byte-identical — which is exactly what
+        # determinism requires. If they differ, codegen is non-deterministic
+        # even within a single run, which is a strictly stronger failure than
+        # the run1-vs-run2 check; surface it rather than letting last-writer
+        # silently win.
+        prev = out.get(program_id)
+        if prev is not None:
+            prev_hashes = {r: e.sha256 for r, e in prev.files.items()}
+            this_hashes = {r: e.sha256 for r, e in snapshot.files.items()}
+            if prev_hashes != this_hashes:
+                raise IntraRunNonDeterminismError(
+                    f"program {program_id!r} was compiled by multiple xdist "
+                    f"workers within a single run and the copies differ "
+                    f"(intra-run non-determinism): "
+                    f"{prev.folder} vs {snapshot.folder}"
+                )
+            # Identical — keep the first; nothing to merge.
+            continue
+        out[program_id] = snapshot
     return out
 
 

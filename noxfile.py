@@ -552,7 +552,7 @@ def test_cartesian_dace_determinism(
 
     markers = " and ".join(codegen_settings["markers"] + device_settings["markers"])
 
-    xdist_workers = os.environ.get("GT4PY_CARTESIAN_DETERMINISM_XDIST", "0")
+    xdist_workers = os.environ.get("GT4PY_CARTESIAN_DETERMINISM_XDIST", "auto")
     if xdist_workers == "0":
         xdist_args: list[str] = ["-n", "0"]
     else:
