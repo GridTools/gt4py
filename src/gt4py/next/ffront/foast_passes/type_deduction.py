@@ -890,6 +890,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         arg_1 = node.args[1].type
         assert isinstance(arg_0, ts.OffsetType)
         assert isinstance(arg_1, ts.FieldType)
+        if len(arg_0.target) != 1:
+            target_dims = ", ".join(d.value for d in arg_0.target)
+            raise errors.DSLError(
+                node.location,
+                f"'as_offset' is only supported for Cartesian offsets (single-dim target), "
+                f"got offset with target dimensions ({target_dims}).",
+            )
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
                 node.location,
