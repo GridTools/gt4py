@@ -38,6 +38,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_dataflow,
     gtir_domain,
@@ -53,7 +54,7 @@ def _parse_scan_fieldop_arg(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     field_domain: gtir_domain.FieldopDomain,
-) -> MaybeNestedInTuple[gtir_dataflow.MemletExpr]:
+) -> MaybeNestedInTuple[gtir_dataflow.MemletExpr | gtir_dataflow.SymbolExpr]:
     """Helper method to visit an expression passed as argument to a scan field operator.
 
     On the innermost level, a scan operator is lowered to a loop region which computes
@@ -77,6 +78,12 @@ def _parse_scan_fieldop_arg(
         return gtir_dataflow.MemletExpr(
             arg_expr.field, field_type, arg_expr.get_memlet_subset(ctx.sdfg)
         )
+
+    if isinstance(node, gtir.SymRef) and (symid := str(node.id)) in ctx.sdfg.symbols:
+        assert isinstance(node.type, ts.ScalarType)
+        dtype = gtx_dace_args.as_dace_type(node.type)
+        assert dtype == ctx.sdfg.symbols[symid]
+        return gtir_dataflow.SymbolExpr(symid, dtype)
 
     arg = sdfg_builder.visit(node, ctx=ctx)
 

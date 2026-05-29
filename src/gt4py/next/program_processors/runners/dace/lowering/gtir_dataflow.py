@@ -1005,6 +1005,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             symbol_mapping=nsdfg_symbols_mapping,
         )
 
+        input_edge_init_count = len(self.input_edges)
         for inner, input_expr in input_memlets.items():
             if isinstance(input_expr, MemletExpr):
                 self._add_input_data_edge(input_expr.dc_node, input_expr.subset, nsdfg_node, inner)
@@ -1026,6 +1027,12 @@ class LambdaToDataflow(eve.NodeVisitor):
                 nsdfg_node,
                 conn,
             )
+
+        if len(self.input_edges) == input_edge_init_count:
+            # if there are no input edges, we still need to add an empty edge to
+            # ensure that the nested SDFG is inside the map scope
+            edge = EmptyInputEdge(self.state, nsdfg_node)
+            self.input_edges.append(edge)
 
         return (
             gtx_utils.tree_map(write_output_of_nested_sdfg_to_temporary)(result)
@@ -1913,6 +1920,7 @@ def translate_lambda_to_dataflow(
     flat_arg_nodes = (
         x.field if isinstance(x, IteratorExpr) else x.dc_node  # type: ignore[attr-defined]
         for x in gtx_utils.flatten_nested_tuple(tuple(args))
+        if not isinstance(x, SymbolExpr)
     )
     state.remove_nodes_from([node for node in flat_arg_nodes if state.degree(node) == 0])
 

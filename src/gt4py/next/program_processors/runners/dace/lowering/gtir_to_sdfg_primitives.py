@@ -73,11 +73,17 @@ def _parse_fieldop_arg(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     domain: gtir_domain.FieldopDomain,
-) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
+) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr | gtir_dataflow.SymbolExpr:
     """
     Helper method to visit an expression passed as argument to a field operator
     and create the local view for the field argument.
     """
+    if isinstance(node, gtir.SymRef) and (symid := str(node.id)) in ctx.sdfg.symbols:
+        assert isinstance(node.type, ts.ScalarType)
+        dtype = gtx_dace_args.as_dace_type(node.type)
+        assert dtype == ctx.sdfg.symbols[symid]
+        return gtir_dataflow.SymbolExpr(symid, dtype)
+
     arg = sdfg_builder.visit(node, ctx=ctx)
 
     if not isinstance(arg, gtir_to_sdfg_types.FieldopData):
