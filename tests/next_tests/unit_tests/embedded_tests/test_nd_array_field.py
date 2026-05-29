@@ -761,6 +761,23 @@ def test_premap_non_contiguous_inverse_image_raises():
         f.premap(conn)
 
 
+def test_premap_disjoint_inverse_image_raises():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    f = common._field(
+        np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
+    )
+    conn = common._connectivity(
+        np.arange(100, 105, dtype=int),
+        domain=common.Domain(dims=(E,), ranges=(UnitRange(0, 5),)),
+        codomain=V,
+    )
+
+    with pytest.raises(ValueError, match="non-contiguous"):
+        f.premap(conn)
+
+
 @pytest.mark.parametrize(
     "new_dims,field,expected_domain",
     [

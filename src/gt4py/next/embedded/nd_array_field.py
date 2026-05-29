@@ -698,6 +698,9 @@ def _hyperslice(
     """
     select_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
 
+    if not xp.any(select_mask):
+        return None
+
     nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
 
     slices = tuple(
