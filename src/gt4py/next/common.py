@@ -110,7 +110,7 @@ class Dimension:
     def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...
     def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
         if isinstance(value, Dimension):
-            return self.value == value.value
+            return self.value == value.value and self.kind == value.kind
         if isinstance(value, core_defs.INTEGRAL_TYPES):
             int_value = cast(core_defs.IntegralScalar, value)
             return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
@@ -124,7 +124,7 @@ class Dimension:
     def __ne__(self, value: core_defs.IntegralScalar) -> Domain: ...
     def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
         if isinstance(value, Dimension):
-            return self.value != value.value
+            return self.value != value.value or self.kind != value.kind
         if isinstance(value, core_defs.INTEGRAL_TYPES):
             raise NotImplementedError(
                 "'Dimension.__ne__' with an integer value produces two disjoint domains, "
