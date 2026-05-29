@@ -779,6 +779,24 @@ def test_as_offset_1d():
     assert np.all(result.ndarray == f.ndarray[np.arange(10) + off_arr])
 
 
+def test_as_offset_narrow_offset_dtype_no_wrap():
+    # An int8 offset field over a domain larger than 128 must not wrap into the index table.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    N = 200
+    f = common._field(
+        np.arange(N).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, N),))
+    )
+    off_arr = np.zeros(N, dtype=np.int8)
+    off = common._field(off_arr, domain=common.Domain(dims=(I,), ranges=(UnitRange(0, N),)))
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == common.Domain(dims=(I,), ranges=(UnitRange(0, N),))
+    assert np.all(result.ndarray == f.ndarray)
+
+
 def test_as_offset_2d_shift_one_keep_other():
     # Shift along I by a per-(i, j) offset, leave J: out[i, j] == f[i + off[i, j], j].
     I = Dimension("I")

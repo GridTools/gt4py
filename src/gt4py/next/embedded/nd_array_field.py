@@ -907,7 +907,7 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> com
         )
     source_dim = offset.source
     coords = _identity_index_array(
-        offset_field.domain, source_dim, offset_field.array_ns, dtype=offset_field.ndarray.dtype
+        offset_field.domain, source_dim, offset_field.array_ns, dtype=fbuiltins.IndexType
     )
     return common._connectivity(
         offset_field.ndarray + coords, codomain=source_dim, domain=offset_field.domain
