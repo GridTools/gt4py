@@ -22,6 +22,7 @@ import operator
 import pickle
 import pprint
 import re
+import sys
 import types
 import typing
 
@@ -639,29 +640,48 @@ def singledispatcher(
     return cast(xtyping.SingleDispatchCallable[P, T], result)
 
 
+def standard_module_pickle_reduce(m: types.ModuleType) -> tuple:
+    """
+    Pickle a module by name reference, consistent with standard pickle behavior.
+
+    Handles ``types.ModuleType`` explicitly: the C-extension pickler has an internal fast path
+    for modules, but the pure Python pickler does not, causing ``TypeError: cannot pickle
+    'module' object`` when modules appear in fingerprinted data. We mimic the C-extension
+    behavior by serializing modules by reference (their name in ``sys.modules``).
+    """
+    return (sys.modules.__getitem__, (m.__name__,))
+
+
 def custom_overriden_pickler(
-    reducer_override: Callable[[Any], tuple | types.NotImplementedType], *, name: str | None = None
+    reducer_override: Callable[[Any], tuple | types.NotImplementedType],
+    *,
+    name: str | None = None,
+    skip_builtin_types: bool = True,
 ) -> type[pickle.Pickler]:
     """
     Create a custom pickler class using the provided function as reducer override.
-
-    Uses the pure Python ``pickle._Pickler`` as the base class (instead of the C-extension
-    ``pickle.Pickler``) so that ``reducer_override`` is called for all types, including
-    built-in types like ``dict`` and ``set`` that are bypassed by the C-extension fast path.
     """
-    pickler = type(
+    if skip_builtin_types:
+        base_pickler_class = pickle.Pickler
+    else:
+        # The public Pickler (implemented in C) shortcuts some built-in types for performance.
+        # If we use want to override built-in types, we need to the _Pickler pure-Python
+        # implementation.
+        base_pickler_class = pickle._Pickler  # type: ignore[attr-defined]  # mypy not aware of pickle._Pickler
+
+    pickler_cls = type(
         name or f"CustomReducePickler_{name or id(reducer_override)}",
-        (pickle._Pickler,),  # type: ignore[attr-defined]  # _Pickler is the pure-Python impl
+        (base_pickler_class,),
         {"reducer_override": staticmethod(reducer_override)},
     )
-
-    return pickler
+    assert issubclass(pickler_cls, pickle.Pickler)
+    return pickler_cls
 
 
 def content_hash(
     *args: Any,
     hash_algorithm: xtyping.HashlibAlgorithm | None = None,
-    pickler: type = pickle.Pickler,
+    pickler_type: type[pickle.Pickler] = pickle.Pickler,
 ) -> str:
     """Stable content-based hash function using instance serialization data.
 
@@ -682,7 +702,7 @@ def content_hash(
     assert hash_algorithm is not None
 
     buf = io.BytesIO()
-    pickler(buf).dump(args)
+    pickler_type(buf).dump(args)
 
     hash_algorithm.update(buf.getvalue())
     result = hash_algorithm.hexdigest()

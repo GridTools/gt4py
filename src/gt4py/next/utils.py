@@ -143,7 +143,7 @@ class MetadataBasedPicklingMixin:
 Fingerprinter: TypeAlias = Callable[[Any], str]
 
 
-def _pass_through_pickler(instance: Any) -> NotImplemented:
+def _pass_through_pickler(instance: Any) -> types.NotImplementedType:
     """
     A pickler that doesn't do any transformation and just returns the instance as is.
 
@@ -195,18 +195,27 @@ class CustomPicklingFingerprinter:
     name: str = dataclasses.field(default="CustomPicklingFingerprinter", kw_only=True)
 
     if TYPE_CHECKING:
-        pickler: pickle.Pickler
+        pickler_type: type[pickle.Pickler]
 
     def __post_init__(self) -> None:
+        registered_types = set(self.reduce_dispatcher.registry.keys())
+        skip_builtin_types = not ({dict, set, list, tuple} & registered_types)
+        if not skip_builtin_types and types.ModuleType in registered_types:
+            self.reduce_dispatcher.register(
+                types.ModuleType, eve_utils.standard_module_pickle_reduce
+            )
+        custom_pickler = eve_utils.custom_overriden_pickler(
+            self.reduce_dispatcher, name=self.name, skip_builtin_types=skip_builtin_types
+        )
         object.__setattr__(
             self,
-            "pickler",
-            eve_utils.custom_overriden_pickler(self.reduce_dispatcher, name=self.name),
+            "pickler_type",
+            custom_pickler,
         )
 
     def __call__(self, instance: Any) -> str:
         """Fingerprint the given object."""
-        return eve_utils.content_hash(instance, pickler=self.pickler)
+        return eve_utils.content_hash(instance, pickler_type=self.pickler_type)
 
 
 sorting_sets_fingerprinter = CustomPicklingFingerprinter.from_reducers(
@@ -261,10 +270,10 @@ def versioned_fingerprint(obj: Any) -> str:
     """
     # Lazy import to avoid circular dependency: utils.py must not import from gt4py.next
     # at module level, as most gt4py.next modules import from utils.py.
-    from gt4py.next import config  # noqa: PLC0415
+    from gt4py.next import config
 
     return eve_utils.content_hash(
-        config.BUILD_CACHE_VERSION_ID, obj, pickler=fingerprint.pickler
+        config.BUILD_CACHE_VERSION_ID, obj, pickler_type=fingerprint.pickler
     )
 
 

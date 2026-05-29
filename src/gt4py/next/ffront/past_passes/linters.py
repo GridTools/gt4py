@@ -13,7 +13,6 @@ from gt4py.next.ffront.stages import ConcretePASTProgramDef, PASTProgramDef
 from gt4py.next.otf import toolchain, workflow
 
 
-@workflow.make_step
 def lint_misnamed_functions(
     inp: ffront_stages.PASTProgramDef,
 ) -> ffront_stages.PASTProgramDef:
@@ -32,7 +31,6 @@ def lint_misnamed_functions(
     return inp
 
 
-@workflow.make_step
 def lint_undefined_symbols(
     inp: ffront_stages.PASTProgramDef,
 ) -> ffront_stages.PASTProgramDef:
@@ -49,7 +47,7 @@ def lint_undefined_symbols(
 def linter_factory(
     cached: bool = True, adapter: bool = True
 ) -> workflow.Workflow[PASTProgramDef, PASTProgramDef]:
-    wf = lint_misnamed_functions.chain(lint_undefined_symbols)
+    wf = workflow.StepSequence((lint_misnamed_functions, lint_undefined_symbols))
     if cached:
         wf = workflow.CachedStep(step=wf, key_function=ffront_stages.semantic_fingerprinter)
     return wf
