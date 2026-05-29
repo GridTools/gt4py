@@ -894,24 +894,21 @@ def _concat_where(
 NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type]
 
 
-def _as_offset(offset_: fbuiltins.FieldOffset, offset_field: NdArrayField) -> common.Connectivity:
-    if not fbuiltins.is_cartesian_offset(offset_):
-        target_dims = ", ".join(d.value for d in offset_.target)
+def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> common.Connectivity:
+    if not fbuiltins.is_cartesian_offset(offset):
+        target_dims = ", ".join(d.value for d in offset.target)
         raise ValueError(
             f"'as_offset' is only supported for Cartesian offsets "
             f"(target dimension equal to source dimension); "
-            f"got source '{offset_.source.value}' and target ({target_dims})."
+            f"got source '{offset.source.value}' and target ({target_dims})."
         )
-    source_dim = offset_.source
+    source_dim = offset.source
     domain = offset_field.domain
     xp = offset_field.array_ns
-    src_idx = domain.dim_index(source_dim, allow_missing=False)
-    src_range = domain[src_idx].unit_range
-    shape = tuple(len(src_range) if i == src_idx else 1 for i in range(len(domain)))
+    src_range = domain[source_dim].unit_range
+    shape = tuple(len(src_range) if dim == source_dim else 1 for dim in domain.dims)
     coords = xp.arange(src_range.start, src_range.stop).reshape(shape)
-    return common._connectivity(
-        xp.asarray(offset_field.ndarray) + coords, codomain=source_dim, domain=domain
-    )
+    return common._connectivity(offset_field.ndarray + coords, codomain=source_dim, domain=domain)
 
 
 NdArrayField.register_builtin_func(experimental.as_offset, _as_offset)  # type: ignore[arg-type]
