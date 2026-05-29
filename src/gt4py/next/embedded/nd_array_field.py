@@ -666,12 +666,15 @@ def _connectivity_index_array(
 
 
 def _identity_index_array(
-    domain: common.Domain, dim: common.Dimension, xp: ModuleType
+    domain: common.Domain,
+    dim: common.Dimension,
+    xp: ModuleType,
+    dtype: Optional[npt.DTypeLike] = None,
 ) -> core_defs.NDArrayObject:
     """Index array selecting `dim` unchanged over `domain`, in the field's index space."""
     d_idx = domain.dim_index(dim, allow_missing=False)
     unit_range = domain[d_idx].unit_range
-    indices = xp.arange(unit_range.start, unit_range.stop)
+    indices = xp.arange(unit_range.start, unit_range.stop, dtype=dtype)
     shape = tuple(len(indices) if i == d_idx else 1 for i in range(len(domain)))
     return xp.broadcast_to(xp.reshape(indices, shape), domain.shape)
 
@@ -899,16 +902,16 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> com
         target_dims = ", ".join(d.value for d in offset.target)
         raise ValueError(
             f"'as_offset' is only supported for Cartesian offsets "
-            f"(target dimension equal to source dimension); "
+            f"(single target dimension equal to source dimension); "
             f"got source '{offset.source.value}' and target ({target_dims})."
         )
     source_dim = offset.source
-    domain = offset_field.domain
-    xp = offset_field.array_ns
-    src_range = domain[source_dim].unit_range
-    shape = tuple(len(src_range) if dim == source_dim else 1 for dim in domain.dims)
-    coords = xp.arange(src_range.start, src_range.stop).reshape(shape)
-    return common._connectivity(offset_field.ndarray + coords, codomain=source_dim, domain=domain)
+    coords = _identity_index_array(
+        offset_field.domain, source_dim, offset_field.array_ns, dtype=offset_field.ndarray.dtype
+    )
+    return common._connectivity(
+        offset_field.ndarray + coords, codomain=source_dim, domain=offset_field.domain
+    )
 
 
 NdArrayField.register_builtin_func(experimental.as_offset, _as_offset)  # type: ignore[arg-type]

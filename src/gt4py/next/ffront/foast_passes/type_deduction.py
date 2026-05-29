@@ -895,7 +895,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise errors.DSLError(
                 node.location,
                 f"'as_offset' is only supported for Cartesian offsets "
-                f"(target dimension equal to source dimension); "
+                f"(single target dimension equal to source dimension); "
                 f"got source '{arg_0.source.value}' and target ({target_dims}).",
             )
         if not type_info.is_integral(arg_1):
