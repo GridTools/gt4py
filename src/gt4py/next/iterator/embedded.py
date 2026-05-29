@@ -572,7 +572,7 @@ def execute_shift(
                     new_entry[i] = 0
                 else:
                     offset_implementation = common.get_offset(offset_provider, tag)
-                    assert common.is_neighbor_connectivity(offset_implementation)
+                    assert common.is_neighbor_table(offset_implementation)
                     source_dim = offset_implementation.__gt_type__().source_dim
                     cur_index = pos[source_dim.value]
                     assert common.is_int_index(cur_index)
@@ -605,7 +605,7 @@ def execute_shift(
         else:
             raise AssertionError()
         return new_pos
-    elif common.is_neighbor_connectivity(offset_implementation):
+    elif common.is_neighbor_table(offset_implementation):
         source_dim = offset_implementation.__gt_type__().source_dim
         assert source_dim.value in pos
         new_pos = pos.copy()
@@ -1422,7 +1422,7 @@ class _List(Generic[DT]):
         offset_provider = embedded_context.get_offset_provider()
         assert offset_provider is not None
         connectivity = common.get_offset(offset_provider, offset_tag)
-        assert common.is_neighbor_connectivity(connectivity)
+        assert common.is_neighbor_table(connectivity)
         local_dim = connectivity.__gt_type__().neighbor_dim
         return ts.ListType(element_type=element_type, offset_type=local_dim)
 
@@ -1450,7 +1450,7 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     offset_provider = embedded_context.get_offset_provider()
     assert offset_provider is not None
     connectivity = common.get_offset(offset_provider, offset_str)
-    assert common.is_neighbor_connectivity(connectivity)
+    assert common.is_neighbor_table(connectivity)
     return _List(
         values=tuple(
             shifted.deref()
@@ -1528,7 +1528,7 @@ class SparseListIterator:
         offset_provider = embedded_context.get_offset_provider()
         assert offset_provider is not None
         connectivity = common.get_offset(offset_provider, self.list_offset)
-        assert common.is_neighbor_connectivity(connectivity)
+        assert common.is_neighbor_table(connectivity)
         return _List(
             values=tuple(
                 shifted.deref()
@@ -1785,7 +1785,7 @@ def _fieldspec_list_to_value(
             offset_type = type_.offset_type
             assert isinstance(offset_type, common.Dimension)
             connectivity = common.get_offset(offset_provider, offset_type.value)
-            assert common.is_neighbor_connectivity(connectivity)
+            assert common.is_neighbor_table(connectivity)
             return domain.insert(
                 len(domain),
                 common.named_range((offset_type, connectivity.__gt_type__().max_neighbors)),
