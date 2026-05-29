@@ -854,20 +854,30 @@ def test_as_offset_introduces_dimension():
     assert np.all(result.ndarray == f.ndarray[np.arange(10)[:, None] + off_arr])
 
 
-def test_as_offset_neighbor_offset_raises():
-    # `as_offset` along a neighbor offset (2-element target) is not implemented.
+def test_as_offset_non_cartesian_offset_raises():
+    # `as_offset` only supports Cartesian (self-shift) offsets: single target equal to source.
+    I = Dimension("I")
+    J = Dimension("J")
     Vertex = Dimension("Vertex", kind=DimensionKind.HORIZONTAL)
     Edge = Dimension("Edge", kind=DimensionKind.HORIZONTAL)
     V2EDim = Dimension("V2EDim", kind=DimensionKind.LOCAL)
-    V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 
-    off = common._field(
-        np.zeros(3, dtype=int),
-        domain=common.Domain(dims=(Vertex,), ranges=(UnitRange(0, 3),)),
+    off_I = common._field(
+        np.zeros(3, dtype=int), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 3),))
+    )
+    off_V = common._field(
+        np.zeros(3, dtype=int), domain=common.Domain(dims=(Vertex,), ranges=(UnitRange(0, 3),))
     )
 
-    with pytest.raises(NotImplementedError, match="neighbor"):
-        as_offset(V2E, off)
+    # 2-element target (neighbor offset)
+    V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+    with pytest.raises(ValueError, match="Cartesian"):
+        as_offset(V2E, off_V)
+
+    # 1-element target but source != target[0] (cross-dim)
+    IfromJ = fbuiltins.FieldOffset("IfromJ", source=I, target=(J,))
+    with pytest.raises(ValueError, match="Cartesian"):
+        as_offset(IfromJ, off_I)
 
 
 @pytest.mark.parametrize(

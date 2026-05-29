@@ -895,9 +895,12 @@ NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # 
 
 
 def _as_offset(offset_: fbuiltins.FieldOffset, offset_field: NdArrayField) -> common.Connectivity:
-    if len(offset_.target) == 2:
-        raise NotImplementedError(
-            "'as_offset' is not implemented for neighbor offsets, only for Cartesian shifts."
+    if not fbuiltins.is_cartesian_offset(offset_):
+        target_dims = ", ".join(d.value for d in offset_.target)
+        raise ValueError(
+            f"'as_offset' is only supported for Cartesian offsets "
+            f"(target dimension equal to source dimension); "
+            f"got source '{offset_.source.value}' and target ({target_dims})."
         )
     source_dim = offset_.source
     domain = offset_field.domain
