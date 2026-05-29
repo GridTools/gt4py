@@ -22,6 +22,7 @@ module in question is a submodule, defines `__all__` and exports many public API
 from .._core.definitions import CUPY_DEVICE_TYPE, Device, DeviceType, is_scalar_type
 from . import common, ffront, iterator, program_processors, typing
 from .common import (
+    CartesianConnectivity,
     Connectivity,
     Dimension,
     DimensionKind,

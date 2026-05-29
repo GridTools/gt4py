@@ -150,4 +150,4 @@ def test_column_array_function_wrong_shape():
 def test_lift_accepts_cartesian_dimension_offset():
     K = common.Dimension("K", kind=common.DimensionKind.VERTICAL)
     lifted = embedded.lift(lambda *args: 0)()
-    lifted.shift(K, 1)  # must not raise
+    lifted.shift(common.CartesianConnectivity(K), 1)  # must not raise

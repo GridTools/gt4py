@@ -18,13 +18,16 @@ from gt4py.next.iterator.builtins import (
     named_range,
     shift,
 )
-from gt4py.next.iterator.runtime import fendef, fundef, offset, set_at, temporary
+from gt4py.next.iterator.runtime import fendef, fundef, set_at, temporary
 
 from next_tests.unit_tests.conftest import program_processor_no_transforms, run_processor
 
 
-i = offset("i")
-j = offset("j")
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
+
+i = gtx.CartesianConnectivity(IDim)
+j = gtx.CartesianConnectivity(JDim)
 
 
 @fundef
@@ -42,16 +45,12 @@ def lap_ref(inp):
     return -4.0 * inp[1:-1, 1:-1] + inp[2:, 1:-1] + inp[1:-1, 2:] + inp[:-2, 1:-1] + inp[1:-1, :-2]
 
 
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
-
-
 def test_temporaries(program_processor_no_transforms):
     program_processor, validate = program_processor_no_transforms
     size = 10
     dtype = float64
 
-    @fendef(offset_provider={"i": IDim, "j": JDim})
+    @fendef
     def fencil(inp, out):
         halo_domain = cartesian_domain(
             named_range(IDim, -1, size + 1), named_range(JDim, -1, size + 1)

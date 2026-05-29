@@ -143,6 +143,8 @@ def make_node(o):
         return o
     if isinstance(o, common.Dimension):
         return AxisLiteral(value=o.value, kind=o.kind)
+    if isinstance(o, common.CartesianConnectivity):
+        return im.cartesian_offset(o.domain_dim, o.codomain)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)

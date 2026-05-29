@@ -191,11 +191,11 @@ class StridedConnectivityField(common.Connectivity):
 
 
 # Offsets
-# A cartesian shift can be encoded by a `common.Dimension` tag (carrying its kind), shifting the
-# position along that dimension directly; named offsets use a string `Tag` resolved via the
-# offset provider.
-OffsetPart: TypeAlias = Tag | common.Dimension | common.IntIndex
-CompleteOffset: TypeAlias = tuple[Tag | common.Dimension, common.IntIndex]
+# A cartesian shift can be passed as a `common.CartesianConnectivity` tag (carrying its source
+# axis, codomain, and integer offset); named offsets use a string `Tag` resolved via the offset
+# provider.
+OffsetPart: TypeAlias = Tag | common.CartesianConnectivity | common.IntIndex
+CompleteOffset: TypeAlias = tuple[Tag | common.CartesianConnectivity, common.IntIndex]
 OffsetProviderElem: TypeAlias = common.OffsetProviderElem
 OffsetProvider: TypeAlias = common.OffsetProvider
 
@@ -408,7 +408,7 @@ def lift(stencil):
                 self, stencil, args, *, offsets: Optional[list[OffsetPart]] = None, elem=None
             ) -> None:
                 assert not offsets or all(
-                    isinstance(o, (int, str, common.Dimension)) for o in offsets
+                    isinstance(o, (int, str, common.CartesianConnectivity)) for o in offsets
                 )
                 self.stencil = stencil
                 self.args = args
@@ -551,7 +551,7 @@ def _domain_iterator(domain: dict[Tag, range]) -> Iterable[ConcretePosition]:
 
 def execute_shift(
     pos: Position,
-    tag: Tag | common.Dimension,
+    tag: Tag | common.CartesianConnectivity,
     index: common.IntIndex,
     *,
     offset_provider: OffsetProvider,
@@ -587,11 +587,17 @@ def execute_shift(
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
         return cast(IncompletePosition, pos) | {tag: new_entry}
 
-    # a `Dimension` tag is a self-describing cartesian shift (e.g. from a `CartesianOffset`);
-    # named offsets are resolved through the offset provider
-    offset_implementation = (
-        tag if isinstance(tag, common.Dimension) else common.get_offset(offset_provider, tag)
-    )
+    # a `CartesianConnectivity` tag is a self-describing cartesian shift (e.g. from a
+    # `CartesianOffset` IR node); named offsets are resolved through the offset provider
+    if isinstance(tag, common.CartesianConnectivity):
+        new_pos = copy.copy(pos)
+        key = tag.codomain.value
+        if common.is_int_index(value := new_pos[key]):
+            new_pos[key] = value + index + tag.offset
+        else:
+            raise AssertionError()
+        return new_pos
+    offset_implementation = common.get_offset(offset_provider, tag)
     if isinstance(offset_implementation, common.Dimension):
         new_pos = copy.copy(pos)
         if common.is_int_index(value := new_pos[offset_implementation.value]):
@@ -625,7 +631,8 @@ def _is_list_of_complete_offsets(
     complete_offsets: list[tuple[Any, Any]],
 ) -> TypeGuard[list[CompleteOffset]]:
     return all(
-        isinstance(tag, (Tag, common.Dimension)) and isinstance(offset, (int, np.integer))
+        isinstance(tag, (Tag, common.CartesianConnectivity))
+        and isinstance(offset, (int, np.integer))
         for tag, offset in complete_offsets
     )
 
