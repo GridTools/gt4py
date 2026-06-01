@@ -667,7 +667,7 @@ def custom_overriden_pickler(
         # The public Pickler (implemented in C) shortcuts some built-in types for performance.
         # If we use want to override built-in types, we need to the _Pickler pure-Python
         # implementation.
-        base_pickler_class = pickle._Pickler  # type: ignore[attr-defined]  # mypy not aware of pickle._Pickler
+        base_pickler_class = cast(type[pickle.Pickler], pickle._Pickler)
 
     pickler_cls = type(
         name or f"CustomReducePickler_{name or id(reducer_override)}",
@@ -675,7 +675,7 @@ def custom_overriden_pickler(
         {"reducer_override": staticmethod(reducer_override)},
     )
 
-    return cast(type[pickle.Pickler], pickler_cls)
+    return pickler_cls
 
 
 def content_hash(

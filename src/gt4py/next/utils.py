@@ -15,7 +15,7 @@ import inspect
 import itertools
 import pickle
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -166,36 +166,42 @@ class CustomPicklingFingerprinter:
 
     """
 
+    reduce_dispatcher: xtyping.SingleDispatchCallable[[Any], tuple | types.NotImplementedType]
+    name: str = dataclasses.field(default="CustomPicklingFingerprinter", kw_only=True)
+
+    if TYPE_CHECKING:
+
+        @property
+        def pickler_type(self) -> type[pickle.Pickler]: ...
+
     @classmethod
     def from_reducers(
         cls,
         *args: CustomPicklingFingerprinter
-        | dict[type, Callable[[Any], tuple | types.NotImplementedType]],
+        | Mapping[type, Callable[[Any], tuple | types.NotImplementedType]],
         name: str | None = None,
     ) -> CustomPicklingFingerprinter:
         """Alternative constructor to create a PickleFingerprinter from a dict of reducers."""
 
-        new_reducers = {}
+        impls: dict[type, Callable[[Any], tuple | types.NotImplementedType]] = {}
         for arg in args:
             if isinstance(arg, CustomPicklingFingerprinter):
                 arg = arg.reduce_dispatcher.registry
-            elif not isinstance(arg, dict):
+            if not isinstance(arg, Mapping):
                 raise TypeError(
                     f"Expected only CustomPicklingFingerprinter instances, got '{arg}' of type '{type(arg)}'"
                 )
-            new_reducers.update(arg)
+            impls.update(arg)
 
-        init_args = {"name": name} if name else {}
-        return cls(
-            eve_utils.singledispatcher(_pass_through_pickler, implementations=new_reducers),
-            **init_args,
+        reduce_dispatcher = cast(
+            xtyping.SingleDispatchCallable[[Any], tuple | types.NotImplementedType],
+            eve_utils.singledispatcher(_pass_through_pickler, impls),
         )
-
-    reduce_dispatcher: xtyping.SingleDispatchCallable[[Any], str]
-    name: str = dataclasses.field(default="CustomPicklingFingerprinter", kw_only=True)
-
-    if TYPE_CHECKING:
-        pickler_type: type[pickle.Pickler]
+        return (
+            cls(reduce_dispatcher=reduce_dispatcher, name=name)
+            if name
+            else cls(reduce_dispatcher=reduce_dispatcher)
+        )
 
     def __post_init__(self) -> None:
         registered_types = set(self.reduce_dispatcher.registry.keys())
@@ -207,13 +213,13 @@ class CustomPicklingFingerprinter:
             self.reduce_dispatcher.register(
                 types.ModuleType, eve_utils.standard_module_pickle_reduce
             )
-        custom_pickler = eve_utils.custom_overriden_pickler(
+        pickler_type = eve_utils.custom_overriden_pickler(
             self.reduce_dispatcher, name=self.name, skip_builtin_types=skip_builtin_types
         )
         object.__setattr__(
             self,
             "pickler_type",
-            custom_pickler,
+            pickler_type,
         )
 
     def __call__(self, instance: Any) -> str:

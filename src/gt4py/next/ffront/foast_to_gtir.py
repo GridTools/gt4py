@@ -412,7 +412,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return self._lower_and_map("if_", *node.args)
 
         cond_ = self.visit(node.args[0])
-        cond_symref_name = f"__cond_{cond_.fingerprint()}"
+        cond_symref_name = f"__cond_{itir.semantic_fingerprinter(cond_)}"
 
         def create_if(
             true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]

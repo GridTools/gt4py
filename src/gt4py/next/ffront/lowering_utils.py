@@ -38,7 +38,7 @@ def process_elements(
     if isinstance(objs, itir.Expr):
         objs = (objs,)
 
-    var_names = tuple(f"__val_{obj.fingerprint()}" for obj in objs)
+    var_names = tuple(f"__val_{itir.semantic_fingerprinter(obj)}" for obj in objs)
     # Note: The same `var_name` might appear multiple times if the same object appears multiple
     # times. Since we use a dict to collect the bound variables, this is fine.
     bound_vars = {var_name: obj for var_name, obj in zip(var_names, objs)}

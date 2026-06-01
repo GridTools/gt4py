@@ -38,10 +38,6 @@ class Node(eve.Node):
 
         return pformat(self)
 
-    def fingerprint(self) -> str:
-        """Return a stable hash string for the semantic content of this node."""
-        return semantic_fingerprinter(self)
-
     def __hash__(self) -> int:
         return hash(
             (

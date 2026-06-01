@@ -41,7 +41,7 @@ def test_definition_stages_use_the_custom_fingerprinter():
     same_program = stages.DSLProgramDef(definition=_make_program_definition(1))
     different_program = stages.DSLProgramDef(definition=_make_program_definition(2))
 
-    assert first_fieldop.fingerprint == same_fieldop.fingerprint
-    assert first_fieldop.fingerprint != different_fieldop.fingerprint
-    assert first_program.fingerprint == same_program.fingerprint
-    assert first_program.fingerprint != different_program.fingerprint
+    assert stages.fingerprinter(first_fieldop) == stages.fingerprinter(same_fieldop)
+    assert stages.fingerprinter(first_fieldop) != stages.fingerprinter(different_fieldop)
+    assert stages.fingerprinter(first_program) == stages.fingerprinter(same_program)
+    assert stages.fingerprinter(first_program) != stages.fingerprinter(different_program)

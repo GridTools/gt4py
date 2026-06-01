@@ -47,7 +47,9 @@ def lint_undefined_symbols(
 def linter_factory(
     cached: bool = True, adapter: bool = True
 ) -> workflow.Workflow[PASTProgramDef, PASTProgramDef]:
-    wf = workflow.StepSequence((lint_misnamed_functions, lint_undefined_symbols))
+    wf: workflow.Workflow[PASTProgramDef, PASTProgramDef] = workflow.StepSequence(
+        (lint_misnamed_functions, lint_undefined_symbols)
+    )
     if cached:
         wf = workflow.CachedStep(step=wf, key_function=ffront_stages.semantic_fingerprinter)
     return wf
