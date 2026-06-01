@@ -49,7 +49,7 @@ class DaCeBackendFactory(factory.Factory):
             name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
-        key_function = utils.fingerprint
+        key_function = utils.stable_fingerprinter
         otf_workflow = factory.SubFactory(
             DaCeWorkflowFactory,
             device_type=factory.SelfAttribute("..device_type"),

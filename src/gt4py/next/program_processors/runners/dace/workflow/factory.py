@@ -47,7 +47,7 @@ class DaCeWorkflowFactory(factory.Factory):
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
-                    key_function=utils.versioned_fingerprint,
+                    key_function=utils.stable_fingerprinter,
                     cache=filecache.FileCache(
                         str(
                             cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME)

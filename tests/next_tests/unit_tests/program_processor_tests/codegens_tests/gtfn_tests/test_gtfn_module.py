@@ -92,7 +92,7 @@ def test_hash_and_diskcache(program_example, tmp_path):
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
-    hash = utils.versioned_fingerprint(compilable_program)
+    hash = utils.stable_fingerprinter(compilable_program)
 
     cache = filecache.FileCache(tmp_path)
     cache[hash] = compilable_program
@@ -105,25 +105,25 @@ def test_hash_and_diskcache(program_example, tmp_path):
     del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
-    assert hash == utils.versioned_fingerprint(compilable_program)
-    assert hash == utils.versioned_fingerprint(compilable_program_from_cache)
+    assert hash == utils.stable_fingerprinter(compilable_program)
+    assert hash == utils.stable_fingerprinter(compilable_program_from_cache)
 
     # hash is different if program changes
     altered_program_id = copy.deepcopy(compilable_program)
     altered_program_id.data.id = "example2"
-    assert utils.versioned_fingerprint(compilable_program) != utils.versioned_fingerprint(
+    assert utils.stable_fingerprinter(compilable_program) != utils.stable_fingerprinter(
         altered_program_id
     )
 
     altered_program_offset_provider = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_offset_provider.args, "offset_provider", {"Koff": KDim})
-    assert utils.versioned_fingerprint(compilable_program) != utils.versioned_fingerprint(
+    assert utils.stable_fingerprinter(compilable_program) != utils.stable_fingerprinter(
         altered_program_offset_provider
     )
 
     altered_program_column_axis = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_column_axis.args, "column_axis", KDim)
-    assert utils.versioned_fingerprint(compilable_program) != utils.versioned_fingerprint(
+    assert utils.stable_fingerprinter(compilable_program) != utils.stable_fingerprinter(
         altered_program_column_axis
     )
 

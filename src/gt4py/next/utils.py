@@ -227,7 +227,10 @@ class CustomPicklingFingerprinter:
         return eve_utils.content_hash(instance, pickler_type=self.pickler_type)
 
 
-sorting_sets_fingerprinter = CustomPicklingFingerprinter.from_reducers(
+#: Default fingerprinting function for GT4Py objects.
+#: Uses sorting for dicts and sets to ensure deterministic output regardless
+#: of insertion order.
+stable_fingerprinter = CustomPicklingFingerprinter.from_reducers(
     {
         dict: lambda obj: (
             obj.__class__,
@@ -261,28 +264,6 @@ def skipping_fields_node_fingerprinter(*skipped_fields: str) -> CustomPicklingFi
             ),
         },
         name=f"SkippingFieldsNodeFingerprinter__{', '.join(skipped_fields)}",
-    )
-
-
-#: Default fingerprinting function for GT4Py objects.
-#: Uses sorting for dicts and sets to ensure deterministic output regardless
-#: of insertion order.
-fingerprint: Fingerprinter = sorting_sets_fingerprinter
-
-
-def versioned_fingerprint(obj: Any) -> str:
-    """
-    Fingerprint that includes the GT4Py build cache version ID.
-
-    Use this for file-backed caches to ensure cached artifacts are invalidated
-    when the build toolchain version changes.
-    """
-    # Lazy import to avoid circular dependency: utils.py must not import from gt4py.next
-    # at module level, as most gt4py.next modules import from utils.py.
-    from gt4py.next import config
-
-    return eve_utils.content_hash(
-        config.BUILD_CACHE_VERSION_ID, obj, pickler_type=sorting_sets_fingerprinter.pickler_type
     )
 
 

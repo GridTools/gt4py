@@ -255,8 +255,8 @@ class CachedStep(
 
     step: Workflow[StartT, EndT]
     key_function: Callable[[StartT], HashT] = dataclasses.field(
-        default=utils.fingerprint, metadata=utils.gt4py_metadata(pickle=False)
-    )  # type: ignore[assignment]
+        metadata=utils.gt4py_metadata(pickle=False)
+    )
     cache: OpaqueMutableMapping[str, EndT] = dataclasses.field(
         repr=False, default_factory=dict, metadata=utils.gt4py_metadata(pickle=False)
     )
@@ -271,7 +271,7 @@ class CachedStep(
         return result
 
     def cache_key(self, inp: StartT) -> str:
-        return utils.fingerprint((self, self.key_function(inp)))
+        return utils.stable_fingerprinter((self, self.key_function(inp)))
 
 
 @dataclasses.dataclass(frozen=True)

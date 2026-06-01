@@ -98,29 +98,29 @@ def test_replace():
 
 
 def test_fingerprint_is_defined():
-    assert callable(utils.fingerprint)
-    assert isinstance(utils.fingerprint("hello"), str)
+    assert callable(utils.stable_fingerprinter)
+    assert isinstance(utils.stable_fingerprinter("hello"), str)
 
 
 def test_versioned_fingerprint_is_defined():
-    assert callable(utils.versioned_fingerprint)
-    result = utils.versioned_fingerprint("hello")
+    assert callable(utils.stable_fingerprinter)
+    result = utils.stable_fingerprinter("hello")
     assert isinstance(result, str)
-    assert result != utils.fingerprint("hello")
+    assert result != utils.stable_fingerprinter("hello")
 
 
 def test_fingerprint_is_stable_for_dicts():
     d1 = {"b": 2, "a": 1}
     d2 = {"a": 1, "b": 2}
-    assert utils.fingerprint(d1) == utils.fingerprint(d2)
+    assert utils.stable_fingerprinter(d1) == utils.stable_fingerprinter(d2)
 
 
 def test_fingerprint_is_stable_for_sets():
-    assert utils.fingerprint({3, 1, 2}) == utils.fingerprint({1, 2, 3})
+    assert utils.stable_fingerprinter({3, 1, 2}) == utils.stable_fingerprinter({1, 2, 3})
 
 
 def test_fingerprint_differs_for_different_objects():
-    assert utils.fingerprint({"a": 1}) != utils.fingerprint({"a": 2})
+    assert utils.stable_fingerprinter({"a": 1}) != utils.stable_fingerprinter({"a": 2})
 
 
 def test_fingerprint_handles_modules():
@@ -134,9 +134,9 @@ def test_fingerprint_handles_modules():
     import sys
 
     # Does not raise and is deterministic.
-    assert utils.fingerprint({"mod": os}) == utils.fingerprint({"mod": os})
+    assert utils.stable_fingerprinter({"mod": os}) == utils.stable_fingerprinter({"mod": os})
     # Different modules produce different fingerprints.
-    assert utils.fingerprint({"mod": os}) != utils.fingerprint({"mod": sys})
+    assert utils.stable_fingerprinter({"mod": os}) != utils.stable_fingerprinter({"mod": sys})
 
 
 def test_cached_step_cache_key_includes_step_config():

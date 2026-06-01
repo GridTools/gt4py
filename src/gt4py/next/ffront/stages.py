@@ -38,7 +38,7 @@ from gt4py.next.otf import arguments, toolchain
 # which are expected to be pure functions without complicated closures.
 semantic_fingerprinter = utils.CustomPicklingFingerprinter.from_reducers(
     foast.semantic_fingerprinter,
-    utils.sorting_sets_fingerprinter,
+    utils.stable_fingerprinter,
     {
         types.FunctionType: lambda f: (
             tuple,
