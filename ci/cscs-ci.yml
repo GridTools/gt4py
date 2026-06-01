@@ -162,11 +162,11 @@ test_cscs_amd_rocm:
     SLURM_GPUS_PER_NODE: 4
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
-    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 16
     SLURM_PARTITION: mi300
     CMAKE_PREFIX_PATH: /opt/rocm # for next
     CUDA_HOME: /opt/rocm # for cartesian
-    SLURM_TIMELIMIT: 20 # relaxed relative to gh200 as there is no pressure on the queue
+    SLURM_TIMELIMIT: 30 # relaxed relative to gh200 as there is no pressure on the queue
   rules:
     - *exclude_variants_rules
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
