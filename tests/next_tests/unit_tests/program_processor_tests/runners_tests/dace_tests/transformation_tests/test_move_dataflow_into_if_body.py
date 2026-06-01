@@ -2161,3 +2161,112 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
         #  However, we would need to perform some more modifications.
         assert len([ie for ie in state.in_edges(nsdfg) if ie.data.data == "b"]) == 2
         assert len([ac for ac in inner_ac if ac.data == "b"]) == 1
+
+
+def test_if_mover_symbol_clashes_with_inner_data():
+    """Tests that relocation is rejected when a tasklet free symbol clashes
+    with a data descriptor inside the nested SDFG.
+
+    The tasklet ``__out = my_var`` uses ``my_var`` as a free variable that refers
+    to the outer SDFG symbol. The nested SDFG also has ``my_var`` as an input
+    scalar data descriptor. If the transformation relocated the tasklet, the
+    free variable reference would silently resolve to the inner data descriptor
+    instead of the outer symbol, producing incorrect results. The transformation
+    must detect this conflict via ``_check_for_data_and_symbol_conflicts`` and
+    refuse to apply.
+    """
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("symbol_data_clash"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # `my_var` is a symbol in the outer SDFG, not a data container.
+    sdfg.add_symbol("my_var", dace.float64)
+
+    for name in ["b", "out"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("val", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("cond", dtype=dace.bool_, transient=True)
+
+    me, mx = state.add_map("map", ndrange={"__i": "0:10"})
+
+    # Build the nested SDFG. It contains `my_var` as a non-transient input scalar
+    # data descriptor — the same name as the symbol in the outer SDFG. This
+    # creates the name conflict that the transformation must detect.
+    # The two input connectors are named `my_var` (true branch) and `other_var`
+    # (false branch).
+    inner_sdfg = dace.SDFG("if_body_with_my_var")
+    for name in ["my_var", "other_var", "__output"]:
+        inner_sdfg.add_scalar(name, dtype=dace.float64, transient=False)
+    inner_sdfg.add_scalar("__cond", dtype=dace.bool_, transient=False)
+
+    if_region = dace.sdfg.state.ConditionalBlock("if_region")
+    inner_sdfg.add_node(if_region, is_start_block=True)
+
+    then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
+    tstate = then_body.add_state("true_branch", is_start_block=True)
+    tstate.add_nedge(
+        tstate.add_access("my_var"),
+        tstate.add_access("__output"),
+        dace.Memlet("my_var[0] -> [0]"),
+    )
+
+    else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
+    fstate = else_body.add_state("false_branch", is_start_block=True)
+    fstate.add_nedge(
+        fstate.add_access("other_var"),
+        fstate.add_access("__output"),
+        dace.Memlet("other_var[0] -> [0]"),
+    )
+
+    if_region.add_branch(dace.sdfg.state.CodeBlock("__cond"), then_body)
+    if_region.add_branch(dace.sdfg.state.CodeBlock("not __cond"), else_body)
+
+    if_block = state.add_nested_sdfg(
+        sdfg=inner_sdfg,
+        inputs={"my_var", "other_var", "__cond"},
+        outputs={"__output"},
+    )
+
+    # Tasklet with no input connectors that reads the outer symbol `my_var` as a
+    # free variable. This is the node the transformation would try to relocate.
+    tlet_sym = state.add_tasklet(  # noqa: F841  [only needed to verify can_be_applied]
+        "symbol_to_scalar",
+        inputs={},
+        outputs={"__out"},
+        code="__out = my_var",
+    )
+    val_ac = state.add_access("val")
+    cond_ac = state.add_access("cond")
+
+    # Place `tlet_sym` inside the map via an empty memlet from `me`.
+    state.add_nedge(me, tlet_sym, dace.Memlet())
+    state.add_edge(tlet_sym, "__out", val_ac, None, dace.Memlet("val[0]"))
+    state.add_edge(val_ac, None, if_block, "my_var", dace.Memlet("val[0]"))
+
+    # `other_var` is a direct pass-through from `b` via the map.
+    state.add_edge(state.add_access("b"), None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_b", if_block, "other_var", dace.Memlet("b[__i]"))
+    me.add_scope_connectors("b")
+
+    # Condition: a tasklet that writes True to `cond` when `__i` is even.
+    cond_tlet = state.add_tasklet(
+        "cond_tasklet",
+        inputs={},
+        outputs={"__out"},
+        code="__out = (__i % 2 == 0)",
+    )
+    state.add_nedge(me, cond_tlet, dace.Memlet())
+    state.add_edge(cond_tlet, "__out", cond_ac, None, dace.Memlet("cond[0]"))
+    state.add_edge(cond_ac, None, if_block, "__cond", dace.Memlet("cond[0]"))
+
+    # Output path.
+    state.add_edge(if_block, "__output", mx, "IN_out", dace.Memlet("out[__i]"))
+    state.add_edge(mx, "OUT_out", state.add_access("out"), None, dace.Memlet("out[0:10]"))
+    mx.add_scope_connectors("out")
+
+    sdfg.validate()
+
+    # The transformation must NOT apply. The free symbol `my_var` in `tlet_sym`
+    # has the same name as the input data descriptor `my_var` inside the nested
+    # SDFG. Relocating `tlet_sym` would silently replace the outer-symbol
+    # reference with a read of the inner scalar, producing wrong results.
+    _perform_test(sdfg, expected_applies=0, if_block=if_block)
