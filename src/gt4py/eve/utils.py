@@ -674,8 +674,8 @@ def custom_overriden_pickler(
         (base_pickler_class,),
         {"reducer_override": staticmethod(reducer_override)},
     )
-    assert issubclass(pickler_cls, pickle.Pickler)
-    return pickler_cls
+
+    return cast(type[pickle.Pickler], pickler_cls)
 
 
 def content_hash(

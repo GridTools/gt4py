@@ -16,7 +16,7 @@ from typing import Any, Optional, Sequence, TypeVar, Union
 import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from gt4py.next import common, config
-from gt4py.next.otf import code_specs, cpp_utils, stages, workflow
+from gt4py.next.otf import code_specs, cpp_utils, stages
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.type_system import type_specifications as ts
 
@@ -305,7 +305,6 @@ def create_bindings(
     return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "2.0.0"),))
 
 
-@workflow.make_step
 def bind_source(
     inp: stages.ProgramSource[CodeSpecT],
 ) -> stages.CompilableProject[CodeSpecT, code_specs.PythonCodeSpec]:

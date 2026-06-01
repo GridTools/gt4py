@@ -6,14 +6,16 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import copy
 import dataclasses
 import inspect
 import pickle
 import pytest
 
-from gt4py import eve
 from gt4py.eve import datamodels
 from gt4py.next import utils
+
+from eve_tests import definitions
 
 
 # Module-level classes so pickle can resolve them by qualified name.
@@ -92,9 +94,9 @@ class TestMetadataBasedPickling:
             assert getattr(restored, field_name) == expected_value
 
 
-def test_skipping_fields_node_pickler_skips_nested_fields_and_is_cached():
-    skipped_field_pickler = eve.concepts.skipping_fields_node_pickler("int_value")
-    assert skipped_field_pickler is eve.concepts.skipping_fields_node_pickler("int_value")
+def test_skipping_fields_node_fingerprinter_skips_nested_fields_and_is_cached():
+    fingerprinter = utils.skipping_fields_node_fingerprinter("int_value")
+    assert fingerprinter is utils.skipping_fields_node_fingerprinter("int_value")
 
     node_a = definitions.CompoundNode(
         int_value=1,
@@ -111,14 +113,10 @@ def test_skipping_fields_node_pickler_skips_nested_fields_and_is_cached():
     node_b.simple_loc.int_value += 100
     node_b.simple_opt.int_value += 100
 
-    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) == eve.utils.content_hash(
-        node_b, pickler=skipped_field_pickler
-    )
+    assert fingerprinter(node_a) == fingerprinter(node_b)
 
     node_b.simple.str_value = "changed"
-    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) != eve.utils.content_hash(
-        node_b, pickler=skipped_field_pickler
-    )
+    assert fingerprinter(node_a) != fingerprinter(node_b)
 
 
 def test_tree_map_default():

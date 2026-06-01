@@ -115,8 +115,28 @@ def test_fingerprint_is_stable_for_dicts():
     assert utils.fingerprint(d1) == utils.fingerprint(d2)
 
 
+def test_fingerprint_is_stable_for_sets():
+    assert utils.fingerprint({3, 1, 2}) == utils.fingerprint({1, 2, 3})
+
+
 def test_fingerprint_differs_for_different_objects():
     assert utils.fingerprint({"a": 1}) != utils.fingerprint({"a": 2})
+
+
+def test_fingerprint_handles_modules():
+    """Modules are unpicklable by default; the fingerprinter must serialize them by reference.
+
+    The fingerprinter overrides built-in container types and therefore uses the pure-Python
+    pickler, which (unlike the C extension) has no fast path for modules. The fingerprinter
+    registers a module reducer so that data containing module references can still be hashed.
+    """
+    import os
+    import sys
+
+    # Does not raise and is deterministic.
+    assert utils.fingerprint({"mod": os}) == utils.fingerprint({"mod": os})
+    # Different modules produce different fingerprints.
+    assert utils.fingerprint({"mod": os}) != utils.fingerprint({"mod": sys})
 
 
 def test_cached_step_cache_key_includes_step_config():

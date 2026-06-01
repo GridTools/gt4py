@@ -200,7 +200,10 @@ class CustomPicklingFingerprinter:
     def __post_init__(self) -> None:
         registered_types = set(self.reduce_dispatcher.registry.keys())
         skip_builtin_types = not ({dict, set, list, tuple} & registered_types)
-        if not skip_builtin_types and types.ModuleType in registered_types:
+        if not skip_builtin_types and types.ModuleType not in registered_types:
+            # The pure-Python pickler (used when overriding built-in types) cannot
+            # pickle modules out of the box, so register a reducer equivalent to
+            # the standard module unless the caller already provided a custom one.
             self.reduce_dispatcher.register(
                 types.ModuleType, eve_utils.standard_module_pickle_reduce
             )
@@ -273,7 +276,7 @@ def versioned_fingerprint(obj: Any) -> str:
     from gt4py.next import config
 
     return eve_utils.content_hash(
-        config.BUILD_CACHE_VERSION_ID, obj, pickler_type=fingerprint.pickler
+        config.BUILD_CACHE_VERSION_ID, obj, pickler_type=sorting_sets_fingerprinter.pickler_type
     )
 
 
