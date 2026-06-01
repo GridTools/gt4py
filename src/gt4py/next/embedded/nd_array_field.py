@@ -252,20 +252,19 @@ class NdArrayField(
         Note that cartesian shifts (e.g. `I → I_half`, `(I+1): I → I`) are just simpler
         versions of these cases where the internal structure of the data (codomain) is
         preserved and therefore the `premap` operation can be implemented as a compact
-        domain translation (i.e. only transform the domain without altering the data).
-
-        A table showing the relation between the connectivity kind and the supported cases
-        is shown in :class:`common.ConnectivityKind`.
+        domain translation (i.e. only transform the domain without altering the data). Such affine
+        connectivities only relabel the domain; data-rearranging cases are handled as
+        advanced-indexing gathers (:class:`common.GatherConnectivity`).
 
         Args:
             *connectivities: connectivities to be used for the `premap` operation. If only one
                 connectivity is passed, it will be expanded to fully defined connectivities for
                 each dimension in the domain of the field according to the rules described above.
                 If more than one connectivity is passed, they all must satisfy:
-                - be of the same kind or encode only compact domain transformations
-                - the codomain of each connectivity must be different
-                - for reshuffling operations, all connectivities must have the same domain
-                (Note that remapping operations only support a single connectivity argument.)
+                - they are either all affine (domain-only) or all gather connectivities
+                - their codomains are pairwise distinct
+                - no connectivity reads a dimension that another one replaces (i.e. removes
+                  from the field domain by introducing new dimensions in its place)
 
         """  # noqa: RUF002  # TODO(egparedes): move docstring to the `premap` builtin function when it exists
 
@@ -299,30 +298,29 @@ class NdArrayField(
                 f" {repeated_codomain_dims}."
             )
 
-        if any(c.kind & common.ConnectivityKind.ALTER_STRUCT for c in conn_fields) and any(
-            (~c.kind & common.ConnectivityKind.ALTER_STRUCT) for c in conn_fields
-        ):
+        is_gather = [isinstance(c, common.GatherConnectivity) for c in conn_fields]
+        if any(is_gather) and not all(is_gather):
             raise ValueError(
-                "Mixing connectivities that change the data structure with connectivities that do not is not allowed."
+                "Mixing connectivities that rearrange the data (gather) with connectivities that "
+                "only relabel the domain (affine) is not allowed."
             )
 
-        # Select actual implementation of the transformation
-        if not (conn_fields[0].kind & common.ConnectivityKind.ALTER_STRUCT):
+        if not any(is_gather):
             return _domain_premap(self, *conn_fields)
 
-        if any(c.kind & common.ConnectivityKind.ALTER_DIMS for c in conn_fields) and any(
-            (~c.kind & common.ConnectivityKind.ALTER_DIMS) for c in conn_fields
-        ):
-            raise ValueError(
-                "Mixing connectivities that change the dimensions in the domain with connectivities that do not is not allowed."
-            )
+        # Reject only order-dependent chains: a connectivity reading a dimension that another
+        # one removes (one whose codomain is not in its own domain, so it gets replaced in the
+        # output). Connectivities that keep their codomain do not remove any dimension and can
+        # always be combined.
+        removed = {c.codomain for c in conn_fields if c.codomain not in c.domain.dims}
+        for c in conn_fields:
+            if reads := removed & ({*c.domain.dims} - {c.codomain}):
+                raise ValueError(
+                    f"Cannot 'premap' with connectivities where one reads dimension(s) {reads} that "
+                    "another replaces; apply such chained remaps in separate 'premap' calls."
+                )
 
-        if not (conn_fields[0].kind & common.ConnectivityKind.ALTER_DIMS):
-            assert all(isinstance(c, NdArrayConnectivityField) for c in conn_fields)
-            return _reshuffling_premap(self, *cast(list[NdArrayConnectivityField], conn_fields))
-
-        assert len(conn_fields) == 1
-        return _remapping_premap(self, conn_fields[0])
+        return _gather_premap(self, *cast(list[common.GatherConnectivity], conn_fields))
 
     def __call__(
         self,
@@ -474,7 +472,7 @@ class NdArrayField(
 
 @dataclasses.dataclass(frozen=True)
 class NdArrayConnectivityField(
-    common.Connectivity[common.DimsT, common.DimT],
+    common.GatherConnectivity[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
     _codomain: common.DimT
@@ -521,14 +519,6 @@ class NdArrayConnectivityField(
     @property
     def skip_value(self) -> Optional[core_defs.IntegralScalar]:
         return self._skip_value
-
-    @functools.cached_property
-    def kind(self) -> common.ConnectivityKind:
-        return common.ConnectivityKind.ALTER_STRUCT | (
-            common.ConnectivityKind.ALTER_DIMS
-            if self.domain.dim_index(self.codomain) is None
-            else common.ConnectivityKind(0)
-        )
 
     # This embedded run-time cache is only used to speed up repeated calls to
     # `inverse_image` and `restrict`, and it should not be considered part of
@@ -599,143 +589,91 @@ def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> 
     return data.__class__.from_array(data._ndarray, domain=new_domain, dtype=data.dtype)
 
 
-def _reshuffling_premap(
-    data: NdArrayField, *connectivities: NdArrayConnectivityField
-) -> NdArrayField:
-    # Check that all connectivities have the same domain
-    assert len(connectivities) == 1 or all(
-        c.domain == connectivities[0].domain for c in connectivities[1:]
-    )
-
-    connectivity = connectivities[0]
-    xp = data.array_ns
-
-    # Reorder and complete connectivity dimensions to match the field domain
-    # It should be enough to check this only the first connectivity
-    # since all connectivities must have the same domain
-    transposed_axes = []
-    expanded_axes: list[int] = []
-    transpose_needed = False
-    for new_dim_idx, dim in enumerate(data.domain.dims):
-        if (dim_idx := connectivity.domain.dim_index(dim)) is None:
-            expanded_axes.append(connectivity.domain.ndim + len(expanded_axes))
-            dim_idx = expanded_axes[-1]
-        transposed_axes.append(dim_idx)
-        transpose_needed = transpose_needed | (dim_idx != new_dim_idx)
-
-    # Broadcast connectivity arrays to match the full domain
-    conn_map = {}
-    new_ranges = data.domain.ranges
+def _gather_output_domain(
+    field_domain: common.Domain, connectivities: Sequence[common.GatherConnectivity]
+) -> common.Domain:
+    """Output domain of a simultaneous gather: each codomain is replaced by the dimensions of its
+    connectivity's domain; dimensions shared with the field domain are intersected in place."""
+    domain = field_domain
     for conn in connectivities:
-        conn_ndarray = conn.ndarray
-        if expanded_axes:
-            conn_ndarray = xp.expand_dims(conn_ndarray, axis=expanded_axes)
-        if transpose_needed:
-            conn_ndarray = xp.transpose(conn_ndarray, transposed_axes)
-        if conn_ndarray.shape != data.domain.shape:
-            conn_ndarray = xp.broadcast_to(conn_ndarray, data.domain.shape)
-        if conn_ndarray is not conn.ndarray:
-            conn = conn.__class__.from_array(
-                conn_ndarray, domain=data.domain, codomain=conn.codomain
-            )
-        conn_map[conn.codomain] = conn
-        dim_idx = data.domain.dim_index(conn.codomain, allow_missing=False)
-        current_range: common.UnitRange = data.domain.ranges[dim_idx]
-        new_conn_ranges = connectivity.inverse_image(current_range).ranges
-        new_ranges = tuple(r & s for r, s in zip(new_ranges, new_conn_ranges))
+        cod = conn.codomain
+        # the connectivity's domain, restricted to where it maps into the codomain's range
+        narrowed = {
+            nr.dim: nr.unit_range for nr in conn.inverse_image(field_domain[cod].unit_range)
+        }
+        # dimensions the connectivity adds that are not in the field yet
+        introduced = [
+            common.NamedRange(dim, rng) for dim, rng in narrowed.items() if dim not in domain.dims
+        ]
+        result: list[common.NamedRange] = []
+        for nr in domain:
+            if nr.dim == cod:  # the codomain expands into the connectivity's domain dimensions
+                if cod in narrowed:  # keep the codomain itself when it maps to itself
+                    result.append(common.NamedRange(cod, nr.unit_range & narrowed[cod]))
+                result.extend(introduced)
+            elif nr.dim in narrowed:  # a dimension shared with the connectivity: narrow it
+                result.append(common.NamedRange(nr.dim, nr.unit_range & narrowed[nr.dim]))
+            else:
+                result.append(nr)
+        domain = common.Domain(*result)
+    return domain
 
-    conns_dims = [c.domain.dims for c in conn_map.values()]
-    for i in range(len(conns_dims) - 1):
-        if conns_dims[i] != conns_dims[i + 1]:
-            raise ValueError(
-                f"All premapping connectivities must have the same dimensions, got: {conns_dims}."
-            )
 
-    new_domain = common.Domain(dims=data.domain.dims, ranges=new_ranges)
+def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivity) -> NdArrayField:
+    """`premap` via a single advanced-index gather (dimension-preserving and -introducing cases)."""
+    xp = data.array_ns
+    new_domain = _gather_output_domain(data.domain, connectivities)
+    conn_by_codomain = {conn.codomain: conn for conn in connectivities}
 
-    # Create identity connectivities for the missing domain dimensions
-    for dim in data.domain.dims:
-        if dim not in conn_map:
-            conn_map[dim] = _identity_connectivity(new_domain, dim, cls=type(connectivity))
-
-    # Take data
+    # one index array per original field dimension (the connectivity's, or identity), broadcast over
+    # the output domain and shifted to 0-based buffer indices, then a single advanced-index gather
     take_indices = tuple(
-        conn_map[dim].ndarray - data.domain[dim].unit_range.start  # shift to 0-based indexing
+        (
+            _connectivity_index_array(conn_by_codomain[dim], new_domain, xp)
+            if dim in conn_by_codomain
+            else _identity_index_array(new_domain, dim, xp)
+        )
+        - data.domain[dim].unit_range.start
         for dim in data.domain.dims
     )
-    new_buffer = data._ndarray.__getitem__(take_indices)
+    new_buffer = data._ndarray[take_indices]
+    return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
 
-    return data.__class__.from_array(
-        new_buffer,
-        domain=new_domain,
-        dtype=data.dtype,
+
+def _connectivity_index_array(
+    connectivity: common.GatherConnectivity, domain: common.Domain, xp: ModuleType
+) -> core_defs.NDArrayObject:
+    """`connectivity`'s index table laid out over `domain` (not yet shifted to 0-based)."""
+    # restrict the table to the output ranges of the connectivity's own dimensions
+    sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
+    conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
+    arr = xp.asarray(conn.ndarray)
+    # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
+    ndim = conn.domain.ndim
+    fresh_axis = {
+        dim: ndim + i for i, dim in enumerate(d for d in domain.dims if d not in conn.domain.dims)
+    }
+    transposed_axes = tuple(
+        fresh_axis[dim] if dim in fresh_axis else conn.domain.dim_index(dim, allow_missing=False)
+        for dim in domain.dims
     )
+    if fresh_axis:  # add size-1 axes for output dimensions the connectivity does not span
+        arr = xp.expand_dims(arr, axis=tuple(fresh_axis.values()))
+    arr = xp.transpose(arr, transposed_axes)  # reorder to the output dimension order
+    if arr.shape != domain.shape:
+        arr = xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
+    return arr
 
 
-def _remapping_premap(data: NdArrayField, connectivity: common.Connectivity) -> NdArrayField:
-    new_dims = {*connectivity.domain.dims} - {connectivity.codomain}
-    if repeated_dims := (new_dims & {*data.domain.dims}):
-        raise ValueError(f"Remapped field will contain repeated dimensions '{repeated_dims}'.")
-
-    # Compute the new domain
-    dim = connectivity.codomain
-    dim_idx = data.domain.dim_index(dim)
-    if dim_idx is None:
-        raise ValueError(f"Incompatible index field, expected a field with dimension '{dim}'.")
-
-    current_range: common.UnitRange = data.domain[dim_idx][1]
-    new_ranges = connectivity.inverse_image(current_range)
-    new_domain = data.domain.replace(dim_idx, *new_ranges)
-
-    # Perform premap:
-    xp = data.array_ns
-
-    # 1- first restrict the connectivity to the new domain
-    restricted_connectivity_domain = common.Domain(*new_ranges)
-    restricted_connectivity = (
-        connectivity.restrict(restricted_connectivity_domain)
-        if restricted_connectivity_domain != connectivity.domain
-        else connectivity
-    )
-    assert isinstance(restricted_connectivity, common.Connectivity)
-
-    # 2- then compute the index array
-    new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
-
-    # 3- finally, take the new array
-    new_buffer = xp.take(data._ndarray, new_idx_array, axis=dim_idx)
-
-    return data.__class__.from_array(
-        new_buffer,
-        domain=new_domain,
-        dtype=data.dtype,
-    )
-
-
-_NdConnT = TypeVar("_NdConnT", bound=NdArrayConnectivityField)
-
-
-def _identity_connectivity(
-    domain: common.Domain, codomain: common.DimT, *, cls: type[_NdConnT]
-) -> _NdConnT:
-    assert codomain in domain.dims
-    xp = cls.array_ns
-    shape = domain.shape
-    d_idx = domain.dim_index(codomain, allow_missing=False)
-    indices = xp.arange(domain[d_idx].unit_range.start, domain[d_idx].unit_range.stop)
-    result = cls.from_array(
-        xp.broadcast_to(
-            indices[
-                tuple(slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims))
-            ],
-            shape,
-        ),
-        codomain=codomain,
-        domain=domain,
-        dtype=int,
-    )
-
-    return cast(_NdConnT, result)
+def _identity_index_array(
+    domain: common.Domain, dim: common.Dimension, xp: ModuleType
+) -> core_defs.NDArrayObject:
+    """Index array selecting `dim` unchanged over `domain`, in the field's index space."""
+    d_idx = domain.dim_index(dim, allow_missing=False)
+    unit_range = domain[d_idx].unit_range
+    indices = xp.arange(unit_range.start, unit_range.stop)
+    shape = tuple(len(indices) if i == d_idx else 1 for i in range(len(domain)))
+    return xp.broadcast_to(xp.reshape(indices, shape), domain.shape)
 
 
 def _hyperslice(
