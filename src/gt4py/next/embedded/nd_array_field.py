@@ -547,7 +547,7 @@ class NdArrayConnectivityField(
             xp = self.array_ns
             slices = _hyperslice(self._ndarray, image_range, xp, self.skip_value)
             if slices is None:
-                raise ValueError("Restriction generates non-contiguous dimensions.")
+                raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
             new_domain = self.domain.slice_at[slices]
             self._cache[cache_key] = new_domain

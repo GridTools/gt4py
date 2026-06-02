@@ -774,7 +774,7 @@ def test_premap_disjoint_inverse_image_raises():
         codomain=V,
     )
 
-    with pytest.raises(ValueError, match="non-contiguous"):
+    with pytest.raises(ValueError, match="empty"):
         f.premap(conn)
 
 
