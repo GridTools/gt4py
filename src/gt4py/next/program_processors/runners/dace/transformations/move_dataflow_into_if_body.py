@@ -419,9 +419,15 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         # We take the first node, since they are sorted it is deterministic.
                         inner_node = candidate_source_nodes[0]
 
-                    assert (outer_data, branch_state) not in rename_map
-                    assert not inner_sdfg.arrays[inner_node.data].transient
-                    rename_map[(outer_data, branch_state)] = inner_node.data
+                    # A different AccessNode object for the same outer data may have
+                    # already established the mapping (e.g. when the same non-transient
+                    # array is read via two separate AccessNode objects that both feed
+                    # input connectors of a relocated Tasklet). In that case skip
+                    # updating `rename_map` (the first one wins) but always record the
+                    # new outer node so that the edge-creation code below can look it up.
+                    if (outer_data, branch_state) not in rename_map:
+                        assert not inner_sdfg.arrays[inner_node.data].transient
+                        rename_map[(outer_data, branch_state)] = inner_node.data
                     node_map[(outer_node, branch_state)] = inner_node
 
                 else:
@@ -649,8 +655,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # A required symbol must not share its name with a data descriptor already present
         #  in the nested SDFG. If it did, after relocation the tasklet code would silently
         #  read the inner data descriptor instead of the outer symbol.
-        inner_arrays = if_block.sdfg.arrays
-        if any(sym in inner_arrays for sym in required_symbols):
+        if required_symbols.intersection(if_block.sdfg.arrays.keys()):
             return False
 
         return True
