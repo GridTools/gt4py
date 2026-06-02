@@ -649,8 +649,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # A required symbol must not share its name with a data descriptor already present
         #  in the nested SDFG. If it did, after relocation the tasklet code would silently
         #  read the inner data descriptor instead of the outer symbol.
-        inner_arrays = if_block.sdfg.arrays
-        if any(sym in inner_arrays for sym in required_symbols):
+        if required_symbols.intersection(if_block.sdfg.arrays.keys()):
             return False
 
         return True
