@@ -208,7 +208,7 @@ def test_set_gpu_properties(method: int):
     for node in sdfg.states()[0].nodes():
         if isinstance(node, dace_nodes.MapEntry):
             map_entries[int(node.label[4])] = node.map
-    map1, map2, map3, map4 = (map_entries[d].map for d in [1, 2, 3, 4])
+    map1, map2, map3, map4 = (map_entries[d] for d in [1, 2, 3, 4])
 
     # It takes the normal block size and does not regulate anything.
     assert len(map1.params) == 1
