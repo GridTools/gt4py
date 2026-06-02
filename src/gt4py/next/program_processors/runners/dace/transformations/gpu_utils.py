@@ -70,6 +70,9 @@ def gt_gpu_transformation(
             that you should set `try_removing_trivial_maps` to `False`.
         - The function assumes that the iteration order has been set correctly before
             it is called.
+        - To work around a bug in DaCe this function has to reconstruct the SDFG.
+            While this is done inplace, i.e. the passed object `sdfg` is reused, this
+            will invalidate all references to graph objects.
 
     Todo:
         - Currently only one block size for all maps is given, add more options.
@@ -93,6 +96,10 @@ def gt_gpu_transformation(
     #   Memlets are expanded.
     #   The reason for restoration of the SDFG inplace is because this function has
     #   modified the SDFG inplace and this behaviour should not be changed.
+    #   However, this also has a side effect, while the `sdfg` object, in some sense
+    #   the root, stains the same, all graph objects, such as `Map`, `MapEntry`,
+    #   `SDFGState` and so on, are equivalent but different objects. Thus, all
+    #   references to graph members are invalidated.
     json_dump = sdfg.to_json()
     _load_sdfg_from_json_inplace(sdfg, json_dump)
 
