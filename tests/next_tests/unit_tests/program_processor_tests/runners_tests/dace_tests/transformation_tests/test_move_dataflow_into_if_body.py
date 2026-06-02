@@ -2284,7 +2284,7 @@ def test_if_mover_two_accessnodes_same_outer_data():
 
     ```
     outer_a1("a") ──► IN_a1 ─┐
-                               ├─► tasklet_compute(a[__i]+a[__i]) ──► a_out ──► if_block.arg_true
+                             ├─► tasklet_compute(a[__i]+a[__i]) ──► a_out ──► if_block.arg_true
     outer_a2("a") ──► IN_a2 ─┘
     ```
 
