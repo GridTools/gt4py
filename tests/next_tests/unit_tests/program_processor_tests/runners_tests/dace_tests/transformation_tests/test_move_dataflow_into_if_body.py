@@ -2161,3 +2161,238 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
         #  However, we would need to perform some more modifications.
         assert len([ie for ie in state.in_edges(nsdfg) if ie.data.data == "b"]) == 2
         assert len([ac for ac in inner_ac if ac.data == "b"]) == 1
+
+
+def test_if_mover_symbol_clashes_with_inner_data():
+    """Tests that relocation is rejected when a tasklet free symbol clashes
+    with a data descriptor inside the nested SDFG.
+
+    The tasklet ``__out = my_var`` uses ``my_var`` as a free variable that refers
+    to the outer SDFG symbol. The nested SDFG also has ``my_var`` as an input
+    scalar data descriptor. If the transformation relocated the tasklet, the
+    free variable reference would silently resolve to the inner data descriptor
+    instead of the outer symbol, producing incorrect results. The transformation
+    must detect this conflict via ``_check_for_data_and_symbol_conflicts`` and
+    refuse to apply.
+    """
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("symbol_data_clash"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # `my_var` is a symbol in the outer SDFG, not a data container.
+    sdfg.add_symbol("my_var", dace.float64)
+
+    for name in ["b", "out"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("val", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("cond", dtype=dace.bool_, transient=True)
+
+    me, mx = state.add_map("map", ndrange={"__i": "0:10"})
+
+    # Build the nested SDFG. It contains `my_var` as a non-transient input scalar
+    # data descriptor — the same name as the symbol in the outer SDFG. This
+    # creates the name conflict that the transformation must detect.
+    # The two input connectors are named `my_var` (true branch) and `other_var`
+    # (false branch).
+    inner_sdfg = dace.SDFG("if_body_with_my_var")
+    for name in ["my_var", "other_var", "__output"]:
+        inner_sdfg.add_scalar(name, dtype=dace.float64, transient=False)
+    inner_sdfg.add_scalar("__cond", dtype=dace.bool_, transient=False)
+
+    if_region = dace.sdfg.state.ConditionalBlock("if_region")
+    inner_sdfg.add_node(if_region, is_start_block=True)
+
+    then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
+    tstate = then_body.add_state("true_branch", is_start_block=True)
+    tstate.add_nedge(
+        tstate.add_access("my_var"),
+        tstate.add_access("__output"),
+        dace.Memlet("my_var[0] -> [0]"),
+    )
+
+    else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
+    fstate = else_body.add_state("false_branch", is_start_block=True)
+    fstate.add_nedge(
+        fstate.add_access("other_var"),
+        fstate.add_access("__output"),
+        dace.Memlet("other_var[0] -> [0]"),
+    )
+
+    if_region.add_branch(dace.sdfg.state.CodeBlock("__cond"), then_body)
+    if_region.add_branch(dace.sdfg.state.CodeBlock("not __cond"), else_body)
+
+    if_block = state.add_nested_sdfg(
+        sdfg=inner_sdfg,
+        inputs={"my_var", "other_var", "__cond"},
+        outputs={"__output"},
+    )
+
+    # Tasklet with no input connectors that reads the outer symbol `my_var` as a
+    # free variable. This is the node the transformation would try to relocate.
+    tlet_sym = state.add_tasklet(  # noqa: F841  [only needed to verify can_be_applied]
+        "symbol_to_scalar",
+        inputs={},
+        outputs={"__out"},
+        code="__out = my_var",
+    )
+    val_ac = state.add_access("val")
+    cond_ac = state.add_access("cond")
+
+    # Place `tlet_sym` inside the map via an empty memlet from `me`.
+    state.add_nedge(me, tlet_sym, dace.Memlet())
+    state.add_edge(tlet_sym, "__out", val_ac, None, dace.Memlet("val[0]"))
+    state.add_edge(val_ac, None, if_block, "my_var", dace.Memlet("val[0]"))
+
+    # `other_var` is a direct pass-through from `b` via the map.
+    state.add_edge(state.add_access("b"), None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_b", if_block, "other_var", dace.Memlet("b[__i]"))
+    me.add_scope_connectors("b")
+
+    # Condition: a tasklet that writes True to `cond` when `__i` is even.
+    cond_tlet = state.add_tasklet(
+        "cond_tasklet",
+        inputs={},
+        outputs={"__out"},
+        code="__out = (__i % 2 == 0)",
+    )
+    state.add_nedge(me, cond_tlet, dace.Memlet())
+    state.add_edge(cond_tlet, "__out", cond_ac, None, dace.Memlet("cond[0]"))
+    state.add_edge(cond_ac, None, if_block, "__cond", dace.Memlet("cond[0]"))
+
+    # Output path.
+    state.add_edge(if_block, "__output", mx, "IN_out", dace.Memlet("out[__i]"))
+    state.add_edge(mx, "OUT_out", state.add_access("out"), None, dace.Memlet("out[0:10]"))
+    mx.add_scope_connectors("out")
+
+    sdfg.validate()
+
+    # The transformation must NOT apply. The free symbol `my_var` in `tlet_sym`
+    # has the same name as the input data descriptor `my_var` inside the nested
+    # SDFG. Relocating `tlet_sym` would silently replace the outer-symbol
+    # reference with a read of the inner scalar, producing wrong results.
+    _perform_test(sdfg, expected_applies=0, if_block=if_block)
+
+
+def test_if_mover_two_accessnodes_same_outer_data():
+    """
+    Trigger the AssertionError at the
+    ``assert (outer_data, branch_state) not in rename_map`` guard inside
+    ``_replicate_dataflow_into_branch`` when two *distinct* AccessNode objects
+    both carrying the same outer array name feed different input connectors of
+    a relocated Tasklet.
+
+    Concretely the outer SDFG looks like (inside a Map):
+
+    ```
+    outer_a1("a") ──► IN_a1 ─┐
+                             ├─► tasklet_compute(a[__i]+a[__i]) ──► a_out ──► if_block.arg_true
+    outer_a2("a") ──► IN_a2 ─┘
+    ```
+
+    ``tasklet_compute`` is relocatable (feeds only the true branch).
+    When ``_replicate_dataflow_into_branch`` processes its two incoming edges:
+
+    - Edge 1: ``outer_a1`` is unknown → goes through the ``else`` branch,
+      creates a new connector ``"a"`` and records
+      ``rename_map[("a", true_state)] = "a"``.
+
+    - Edge 2: ``outer_a2`` is a *different* Python object, so
+      ``(outer_a2, true_state)`` is not in ``node_map``.  But ``"a"`` is now
+      in ``fully_mapped_in_data``, so the code enters the
+      ``elif outer_data in fully_mapped_in_data`` branch and hits
+      ``assert (outer_data, branch_state) not in rename_map`` → crash.
+    """
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("two_accessnodes_same_outer_data"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # Outer arrays
+    for name in ["a", "b", "cond_in", "d"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+
+    # Transients
+    sdfg.add_scalar("a_out", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("b_out", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("cond_val", dtype=dace.bool_, transient=True)
+
+    me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
+
+    # Output
+    mx.add_in_connector("IN_d")
+    mx.add_out_connector("OUT_d")
+    state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
+
+    # "a" fed into the map via *two separate* outer AccessNode objects, each
+    # with its own MapEntry connector pair — the key requirement for the bug.
+    outer_a1 = state.add_access("a")
+    outer_a2 = state.add_access("a")
+    for outer_an, suffix in [(outer_a1, "1"), (outer_a2, "2")]:
+        me.add_in_connector(f"IN_a{suffix}")
+        me.add_out_connector(f"OUT_a{suffix}")
+        state.add_edge(outer_an, None, me, f"IN_a{suffix}", dace.Memlet("a[0:10]"))
+
+    # Tasklet that reads "a" via both map connectors (stencil-like).
+    # This is the node that will be relocated into the true branch.
+    tasklet_a = state.add_tasklet(
+        "tasklet_a",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
+    )
+    state.add_edge(me, "OUT_a1", tasklet_a, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(me, "OUT_a2", tasklet_a, "__in2", dace.Memlet("a[__i]"))
+    a_out_an = state.add_access("a_out")
+    state.add_edge(tasklet_a, "__out", a_out_an, None, dace.Memlet("a_out[0]"))
+
+    # Independent false-branch computation (different data, no sharing with "a")
+    me.add_in_connector("IN_b")
+    me.add_out_connector("OUT_b")
+    state.add_edge(state.add_access("b"), None, me, "IN_b", dace.Memlet("b[0:10]"))
+    tasklet_b = state.add_tasklet(
+        "tasklet_b", inputs={"__in"}, outputs={"__out"}, code="__out = __in"
+    )
+    state.add_edge(me, "OUT_b", tasklet_b, "__in", dace.Memlet("b[__i]"))
+    b_out_an = state.add_access("b_out")
+    state.add_edge(tasklet_b, "__out", b_out_an, None, dace.Memlet("b_out[0]"))
+
+    # Non-relocatable condition
+    me.add_in_connector("IN_cond_in")
+    me.add_out_connector("OUT_cond_in")
+    state.add_edge(
+        state.add_access("cond_in"), None, me, "IN_cond_in", dace.Memlet("cond_in[0:10]")
+    )
+    tasklet_cond = state.add_tasklet(
+        "tasklet_cond", inputs={"__in"}, outputs={"__out"}, code="__out = __in > 0.5"
+    )
+    cond_an = state.add_access("cond_val")
+    state.add_edge(me, "OUT_cond_in", tasklet_cond, "__in", dace.Memlet("cond_in[__i]"))
+    state.add_edge(tasklet_cond, "__out", cond_an, None, dace.Memlet("cond_val[0]"))
+
+    # if_block: true branch = arg_true, false branch = arg_false
+    if_block = _make_if_block(
+        state=state,
+        outer_sdfg=sdfg,
+        b1_name="arg_true",
+        b2_name="arg_false",
+        cond_name="__cond",
+        output_name="__output",
+    )
+    state.add_edge(a_out_an, None, if_block, "arg_true", dace.Memlet("a_out[0]"))
+    state.add_edge(b_out_an, None, if_block, "arg_false", dace.Memlet("b_out[0]"))
+    state.add_edge(cond_an, None, if_block, "__cond", dace.Memlet("cond_val[0]"))
+    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+
+    sdfg.validate()
+
+    # Before the fix ``apply()`` crashes with AssertionError:
+    #   assert ("a", true_state) not in rename_map
+    # because the first incoming edge of ``tasklet_a`` (from outer_a1) stores
+    # the entry and the second edge (from outer_a2) finds it already set.
+    _perform_test(sdfg, expected_applies=1)
+
+    # After a successful transformation both "a" tasklets should be inside the
+    # if_block and only the condition tasklet should remain outside.
+    top_tlet = util.count_nodes(state, dace_nodes.Tasklet, True)
+    assert len(top_tlet) == 1
+    assert top_tlet[0].label == "tasklet_cond"
+
+    inner_tlet = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
+    assert {t.label for t in inner_tlet} == {"tasklet_a", "tasklet_b"}
