@@ -59,11 +59,9 @@ def test_tree_map_tuple_multi_arg():
 
     expected = _make_program(
         [im.sym("a", i_tuple_field), im.sym("b", i_tuple_field)],
-        im.let(("_utm_0", "a"), ("_utm_1", "b"))(
-            im.make_tuple(
-                im.call(_plus())(im.tuple_get(0, "_utm_0"), im.tuple_get(0, "_utm_1")),
-                im.call(_plus())(im.tuple_get(1, "_utm_0"), im.tuple_get(1, "_utm_1")),
-            )
+        im.make_tuple(
+            im.call(_plus())(im.tuple_get(0, "a"), im.tuple_get(0, "b")),
+            im.call(_plus())(im.tuple_get(1, "a"), im.tuple_get(1, "b")),
         ),
         out_type=i_tuple_field,
     )
@@ -82,17 +80,15 @@ def test_tree_map_tuple_nested():
 
     expected = _make_program(
         [im.sym("t", nested)],
-        im.let("_utm_0", "t")(
+        im.make_tuple(
             im.make_tuple(
-                im.make_tuple(
-                    im.call(_neg())(im.tuple_get(0, im.tuple_get(0, "_utm_0"))),
-                    im.call(_neg())(im.tuple_get(1, im.tuple_get(0, "_utm_0"))),
-                ),
-                im.make_tuple(
-                    im.call(_neg())(im.tuple_get(0, im.tuple_get(1, "_utm_0"))),
-                    im.call(_neg())(im.tuple_get(1, im.tuple_get(1, "_utm_0"))),
-                ),
-            )
+                im.call(_neg())(im.tuple_get(0, im.tuple_get(0, "t"))),
+                im.call(_neg())(im.tuple_get(1, im.tuple_get(0, "t"))),
+            ),
+            im.make_tuple(
+                im.call(_neg())(im.tuple_get(0, im.tuple_get(1, "t"))),
+                im.call(_neg())(im.tuple_get(1, im.tuple_get(1, "t"))),
+            ),
         ),
         out_type=nested,
     )
@@ -110,11 +106,9 @@ def test_map_tuple_single_arg():
 
     expected = _make_program(
         [im.sym("t", i_tuple_field)],
-        im.let("_utm_0", "t")(
-            im.make_tuple(
-                im.call(_neg())(im.tuple_get(0, "_utm_0")),
-                im.call(_neg())(im.tuple_get(1, "_utm_0")),
-            )
+        im.make_tuple(
+            im.call(_neg())(im.tuple_get(0, "t")),
+            im.call(_neg())(im.tuple_get(1, "t")),
         ),
         out_type=i_tuple_field,
     )
@@ -134,10 +128,106 @@ def test_map_tuple_does_not_recurse():
 
     expected = _make_program(
         [im.sym("t", nested)],
-        im.let("_utm_0", "t")(
+        im.make_tuple(
+            im.call(g)(im.tuple_get(0, "t")),
+            im.call(g)(im.tuple_get(1, "t")),
+        ),
+        out_type=i_tuple_field,
+    )
+    assert result == expected
+
+
+def test_make_tuple_arg_is_collapsed():
+    """When the input tuple is a `make_tuple` literal, projection should collapse
+    directly to the element (no residual `tuple_get(make_tuple(...))`)."""
+    uids = utils.IDGeneratorPool()
+    program = _make_program(
+        [im.sym("a", i_field), im.sym("b", i_field)],
+        im.call(im.call("tree_map_tuple")(_neg()))(im.make_tuple("a", "b")),
+        out_type=i_tuple_field,
+    )
+    result = UnrollTupleMaps.apply(program, uids=uids)
+
+    expected = _make_program(
+        [im.sym("a", i_field), im.sym("b", i_field)],
+        im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b")),
+        out_type=i_tuple_field,
+    )
+    assert result == expected
+
+
+def test_nested_make_tuple_arg_is_collapsed():
+    """A nested `make_tuple` arg should be fully collapsed at every depth: each
+    `tuple_get(i, make_tuple(...))` along the recursion is folded directly."""
+    uids = utils.IDGeneratorPool()
+    nested = ts.TupleType(types=[i_tuple_field, i_tuple_field])
+    program = _make_program(
+        [
+            im.sym("a", i_field),
+            im.sym("b", i_field),
+            im.sym("c", i_field),
+            im.sym("d", i_field),
+        ],
+        im.call(im.call("tree_map_tuple")(_neg()))(
+            im.make_tuple(im.make_tuple("a", "b"), im.make_tuple("c", "d"))
+        ),
+        out_type=nested,
+    )
+    result = UnrollTupleMaps.apply(program, uids=uids)
+
+    expected = _make_program(
+        [
+            im.sym("a", i_field),
+            im.sym("b", i_field),
+            im.sym("c", i_field),
+            im.sym("d", i_field),
+        ],
+        im.make_tuple(
+            im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b")),
+            im.make_tuple(im.call(_neg())("c"), im.call(_neg())("d")),
+        ),
+        out_type=nested,
+    )
+    assert result == expected
+
+
+def test_map_tuple_with_make_tuple_arg_is_collapsed():
+    """The `make_tuple` short-circuit must also apply for the `map_tuple` builtin."""
+    uids = utils.IDGeneratorPool()
+    program = _make_program(
+        [im.sym("a", i_field), im.sym("b", i_field)],
+        im.call(im.call("map_tuple")(_neg()))(im.make_tuple("a", "b")),
+        out_type=i_tuple_field,
+    )
+    result = UnrollTupleMaps.apply(program, uids=uids)
+
+    expected = _make_program(
+        [im.sym("a", i_field), im.sym("b", i_field)],
+        im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b")),
+        out_type=i_tuple_field,
+    )
+    assert result == expected
+
+
+def test_non_trivial_arg_is_let_bound():
+    """Non-trivial (potentially expensive) tuple expressions must still be
+    let-bound to avoid duplicating work across leaf projections."""
+    uids = utils.IDGeneratorPool()
+    # `f(t)` is a non-trivial expression returning a tuple
+    f = im.lambda_("__t")(im.ref("__t", i_tuple_field))
+    program = _make_program(
+        [im.sym("t", i_tuple_field)],
+        im.call(im.call("tree_map_tuple")(_neg()))(im.call(f)(im.ref("t", i_tuple_field))),
+        out_type=i_tuple_field,
+    )
+    result = UnrollTupleMaps.apply(program, uids=uids)
+
+    expected = _make_program(
+        [im.sym("t", i_tuple_field)],
+        im.let("_utm_0", im.call(f)("t"))(
             im.make_tuple(
-                im.call(g)(im.tuple_get(0, "_utm_0")),
-                im.call(g)(im.tuple_get(1, "_utm_0")),
+                im.call(_neg())(im.tuple_get(0, "_utm_0")),
+                im.call(_neg())(im.tuple_get(1, "_utm_0")),
             )
         ),
         out_type=i_tuple_field,

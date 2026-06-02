@@ -16,8 +16,18 @@ from gt4py.next.iterator.type_system import inference as itir_inference
 from gt4py.next.type_system import type_specifications as ts
 
 
+def _collapsing_tuple_get(expr: itir.Expr, i: int) -> itir.Expr:
+    """Like `im.tuple_get`, but collapses immediately when `expr` is a `make_tuple` call.
+
+    Note: argument order is `(expr, i)` to allow use as a `functools.reduce` reducer.
+    """
+    if cpm.is_call_to(expr, "make_tuple"):
+        return expr.args[i]
+    return im.tuple_get(i, expr)
+
+
 def _tree_map_tuple_body(
-    f: itir.Expr, tup_refs: list[str], tup_types: list[ts.TupleType]
+    f: itir.Expr, tup_exprs: list[itir.Expr], tup_types: list[ts.TupleType]
 ) -> itir.Expr:
     """Recursively unroll `tree_map_tuple(f)(t1, ..., tN)` into `make_tuple` calls."""
 
@@ -29,21 +39,20 @@ def _tree_map_tuple_body(
     def mapper(*args):
         *_el_types, path = args
         return im.call(f)(
-            *(
-                functools.reduce(lambda expr, i: im.tuple_get(i, expr), path, im.ref(ref_name))
-                for ref_name in tup_refs
-            )
+            *(functools.reduce(_collapsing_tuple_get, path, tup_expr) for tup_expr in tup_exprs)
         )
 
     return mapper(*tup_types)
 
 
-def _map_tuple_body(f: itir.Expr, tup_refs: list[str], tup_types: list[ts.TupleType]) -> itir.Expr:
+def _map_tuple_body(
+    f: itir.Expr, tup_exprs: list[itir.Expr], tup_types: list[ts.TupleType]
+) -> itir.Expr:
     """Unroll `map_tuple(f)(t)` over top-level elements only (no recursion)."""
-    (ref_name,) = tup_refs
+    (tup_expr,) = tup_exprs
     (tup_type,) = tup_types
     return im.make_tuple(
-        *(im.call(f)(im.tuple_get(i, im.ref(ref_name))) for i in range(len(tup_type.types)))
+        *(im.call(f)(_collapsing_tuple_get(tup_expr, i)) for i in range(len(tup_type.types)))
     )
 
 
@@ -82,9 +91,23 @@ class UnrollTupleMaps(eve.NodeTranslator):
             assert isinstance(tup.type, ts.TupleType)
             tup_types.append(tup.type)
 
-        tup_refs = [next(self.uids["_utm"]) for _ in tup_args]
-        body = _UNROLLERS[builtin_name](f, tup_refs, tup_types)
+        # For trivial args (those that can be duplicated without cost or side effects),
+        # we substitute them directly into the body. This avoids leaving behind
+        # `tuple_get(i, make_tuple(...))` patterns that would otherwise require a
+        # separate cleanup pass (CollapseTuple). For non-trivial args we still
+        # introduce a `let` binding to avoid duplicating expensive sub-expressions.
+        substituted_exprs: list[itir.Expr] = []
+        let_bindings: list[tuple[str, itir.Expr]] = []
+        for tup in tup_args:
+            if isinstance(tup, (itir.SymRef, itir.Literal)) or cpm.is_call_to(tup, "make_tuple"):
+                substituted_exprs.append(tup)
+            else:
+                ref_name = next(self.uids["_utm"])
+                let_bindings.append((ref_name, tup))
+                substituted_exprs.append(im.ref(ref_name))
 
-        result = im.let(*zip(tup_refs, tup_args))(body)
+        body = _UNROLLERS[builtin_name](f, substituted_exprs, tup_types)
+
+        result = im.let(*let_bindings)(body) if let_bindings else body
         itir_inference.reinfer(result)
         return result
