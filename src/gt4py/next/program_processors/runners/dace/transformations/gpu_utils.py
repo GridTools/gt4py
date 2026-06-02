@@ -80,6 +80,17 @@ def gt_gpu_transformation(
         f"gt_gpu_transformation(): found unknown arguments: {', '.join(arg for arg in kwargs.keys())}"
     )
 
+    # NOTE: This is a hack that avoids some issues that are caused by DaCe
+    #   [PR#2366](github.com/spcl/dace/pull/2366). That PR made symbol serialization
+    #   type safe, but it had some strange side effect. In the GPU transformations
+    #   we expand Memlets that can not be represented as a `cudaMemcpy()` call. This
+    #   is also done in the `preprocess()` function of DaCe's GPU codegen, but there
+    #   the iteration order is not okay.
+
+    # NOTE: This is a hack.
+    json_dump = sdfg.to_json()
+    _load_sdfg_from_json_inplace(sdfg, json_dump)
+
     # Turn all global arrays (which we identify as input) into GPU memory.
     #  This way the GPU transformation will not create this copying stuff.
     if use_gpu_storage:
@@ -1064,3 +1075,58 @@ def gt_gpu_apply_mempool(sdfg: dace.SDFG) -> None:
             and desc.transient
         ):
             desc.pool = True
+
+
+def _load_sdfg_from_json_inplace(sdfg: dace.SDFG, json_obj: dict[str, Any]) -> dace.SDFG:
+    """Reconstruct the JSON dump `json` into `sdfg`.
+
+    This function is a hack and you should not use it.
+    """
+
+    # This function is based on `SDFG.from_json()`.
+
+    context = {"sdfg": None}
+    _type = json_obj["type"]
+    if _type != "SDFG":
+        raise TypeError("Class type mismatch")
+
+    attrs = dict(json_obj["attributes"])
+    json_obj = dict(json_obj)
+    json_obj["attributes"] = attrs
+    nodes = json_obj["nodes"]
+    edges = json_obj["edges"]
+
+    if "constants_prop" in attrs:
+        constants_prop = dace.serialize.loads(dace.serialize.dumps(attrs["constants_prop"]))
+    else:
+        constants_prop = None
+
+    sdfg.__dict__.clear()
+    sdfg.__init__(name=attrs["name"], constants=constants_prop, parent=context["sdfg"])
+
+    dace.serialize.set_properties_from_json(
+        sdfg, json_obj, ignore_properties={"constants_prop", "name", "hash"}
+    )
+
+    nodelist = []
+    for n in nodes:
+        nci = copy.copy(context)
+        nci["sdfg"] = sdfg
+
+        block = dace.serialize.from_json(n, context=nci)
+        sdfg.add_node(block)
+        nodelist.append(block)
+
+    for e in edges:
+        e = dace.serialize.from_json(e)
+        sdfg.add_edge(nodelist[int(e.src)], nodelist[int(e.dst)], e.data)
+
+    if "start_block" in json_obj:
+        sdfg._start_block = json_obj["start_block"]
+
+    if (
+        "source_files" in json_obj
+    ):  # This will only happen on the root SDFG, once deserialization is complete
+        sdfg.rematerialize_debuginfo_files(json_obj["source_files"])
+
+    return sdfg
