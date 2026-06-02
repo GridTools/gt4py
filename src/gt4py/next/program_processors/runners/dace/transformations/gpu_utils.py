@@ -85,9 +85,14 @@ def gt_gpu_transformation(
     #   type safe, but it had some strange side effect. In the GPU transformations
     #   we expand Memlets that can not be represented as a `cudaMemcpy()` call. This
     #   is also done in the `preprocess()` function of DaCe's GPU codegen, but there
-    #   the iteration order is not okay.
-
-    # NOTE: This is a hack.
+    #   the iteration order is such that it will lead to launch errors. The issue
+    #   now is that GT4Py decides to _not_ expand certain Memlets, but in the
+    #   codegen DaCe want's to expand them, leading to an error, since we suppress
+    #   this behaviour. At some time it was found out that serializing and deserializing
+    #   the SDFG fixes this behaviour. However, the net effect is, that now _all_
+    #   Memlets are expanded.
+    #   The reason for restoration of the SDFG inplace is because this function has
+    #   modified the SDFG inplace and this behaviour should not be changed.
     json_dump = sdfg.to_json()
     _load_sdfg_from_json_inplace(sdfg, json_dump)
 
