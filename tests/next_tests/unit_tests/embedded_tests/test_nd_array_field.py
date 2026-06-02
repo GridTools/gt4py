@@ -762,6 +762,23 @@ def test_premap_non_contiguous_inverse_image_raises():
         f.premap(conn)
 
 
+def test_premap_disjoint_inverse_image_raises():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    f = common._field(
+        np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
+    )
+    conn = common._connectivity(
+        np.arange(100, 105, dtype=int),
+        domain=common.Domain(dims=(E,), ranges=(UnitRange(0, 5),)),
+        codomain=V,
+    )
+
+    with pytest.raises(ValueError, match="empty"):
+        f.premap(conn)
+
+
 def test_as_offset_1d():
     # Dynamic per-point shift along I: out[i] == f[i + off[i]], full domain when all shifts in-bounds.
     I = Dimension("I")
@@ -1393,10 +1410,10 @@ def test_connectivity_field_inverse_image_2d_domain():
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(1, 3))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(2, 3))
 
 
@@ -1416,10 +1433,10 @@ def test_connectivity_field_inverse_image_non_contiguous():
     result = e2v_conn.inverse_image(UnitRange(V_START, 5))
     assert result[0] == (E, UnitRange(V_START, 5))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         e2v_conn.inverse_image(UnitRange(V_START, 6))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         e2v_conn.inverse_image(UnitRange(V_START, V_STOP))
 
 
@@ -1473,10 +1490,10 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(1, 3))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(2, 3))
 
 
