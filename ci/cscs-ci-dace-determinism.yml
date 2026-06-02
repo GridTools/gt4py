@@ -72,9 +72,6 @@ build_cscs_amd_rocm:
     expire_in: 1 month
   parallel:
     matrix:
-      - SUBPACKAGE: [cartesian]
-        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
-        PY_VERSION: *test_python_versions
       - SUBPACKAGE: [next]
         SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
         DETAIL: ["nomesh"]

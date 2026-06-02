@@ -40,40 +40,7 @@ def pytest_addoption(parser):
     parser.addoption("--keep-gtcache", action="store_true", default=False, dest="keep_gtcache")
 
 
-def _xdist_worker_id(session) -> str:
-    """Return this process's pytest-xdist worker id (``gw0``, ``gw1``, ...),
-    or ``"master"`` when running without xdist (``-n 0``) or in the
-    controller. Mirrors the ``worker_id`` fixture without needing a fixture
-    (we need it at session-start, before fixtures run)."""
-    # xdist sets this env var in each worker subprocess; absent in serial runs.
-    return os.environ.get("PYTEST_XDIST_WORKER", "master")
-
-
 def pytest_sessionstart(session):
-    global pytest_gt_cache_dir
-
-    # Per-worker cache isolation (parallel determinism runs).
-    #
-    # gt4py.cartesian compiles each stencil into a dace build folder named by
-    # the SDFG hash. Byte-identical stencils -> identical folder name. Under
-    # pytest-xdist, two workers compiling the same stencil would target the
-    # SAME build folder; on a CMake configure retry dace does
-    # `shutil.rmtree(build_folder); makedirs; cmake` (dace/codegen/compiler.py),
-    # so one worker can delete the folder out from under another worker's
-    # running compiler, wedging it until the CI time limit. Giving each worker
-    # its own cache subdirectory keeps identical stencils in distinct trees, so
-    # the race cannot occur and the determinism suite can run in parallel.
-    #
-    # The determinism comparator strips this `gw<N>` / `master` segment from
-    # program ids (see scripts/dace_deterministic_codegen.py:_strip_worker_segment),
-    # so isolating per worker here does not affect the run1-vs-run2 comparison.
-    # Serial runs (`-n 0`) get the `master` segment, which the comparator
-    # strips identically — so serial and parallel snapshots compare cleanly.
-    worker_id = _xdist_worker_id(session)
-    if worker_id != "master":
-        pytest_gt_cache_dir = os.path.join(pytest_gt_cache_dir, worker_id)
-        os.makedirs(pytest_gt_cache_dir, exist_ok=True)
-
     gt_config.cache_settings["dir_name"] = pytest_gt_cache_dir
     if session.config.option.keep_gtcache:
         print(f"\nNOTE: gt4py caches will be retained at {pytest_gt_cache_dir}\n")
