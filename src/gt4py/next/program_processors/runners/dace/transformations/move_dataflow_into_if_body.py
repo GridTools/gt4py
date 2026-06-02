@@ -646,6 +646,12 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             if conflicting_symbol != str(symbol_mapping[conflicting_symbol]):
                 return False
 
+        # A required symbol must not share its name with a data descriptor already present
+        #  in the nested SDFG. If it did, after relocation the tasklet code would silently
+        #  read the inner data descriptor instead of the outer symbol.
+        if required_symbols.intersection(if_block.sdfg.arrays.keys()):
+            return False
+
         return True
 
     def _has_if_block_relocatable_dataflow(
