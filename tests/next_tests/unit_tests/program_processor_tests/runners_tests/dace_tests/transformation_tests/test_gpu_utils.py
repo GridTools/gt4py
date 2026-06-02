@@ -159,7 +159,6 @@ def test_set_gpu_properties(method: int):
     sdfg = dace.SDFG(gtx_transformations_utils.unique_name("gpu_properties_test"))
     state = sdfg.add_state(is_start_block=True)
 
-    map_entries: dict[int, dace_nodes.MapEntry] = {}
     for dim in [1, 2, 3, 4]:
         shape = (10,) * dim
         sdfg.add_array(
@@ -168,7 +167,7 @@ def test_set_gpu_properties(method: int):
         sdfg.add_array(
             f"B_{dim}", shape=shape, dtype=dace.float64, storage=dace.StorageType.GPU_Global
         )
-        _, me, _ = state.add_mapped_tasklet(
+        state.add_mapped_tasklet(
             f"map_{dim}",
             map_ranges={f"__i{i}": f"0:{s}" for i, s in enumerate(shape)},
             inputs={"__in": dace.Memlet(f"A_{dim}[{','.join(f'__i{i}' for i in range(dim))}]")},
@@ -176,7 +175,7 @@ def test_set_gpu_properties(method: int):
             outputs={"__out": dace.Memlet(f"B_{dim}[{','.join(f'__i{i}' for i in range(dim))}]")},
             external_edges=True,
         )
-        map_entries[dim] = me
+    del state
     sdfg.validate()
 
     if method == 0:
@@ -204,6 +203,11 @@ def test_set_gpu_properties(method: int):
     else:
         raise ValueError(f"Unknown method {method}")
 
+    # Because of the inplace reconstruction all references to graph objects are destroyed.
+    map_entries: dict[int, dace_nodes.Map] = {}
+    for node in sdfg.states()[0].nodes():
+        if isinstance(node, dace_nodes.MapEntry):
+            map_entries[int(node.label[4])] = node.map
     map1, map2, map3, map4 = (map_entries[d].map for d in [1, 2, 3, 4])
 
     # It takes the normal block size and does not regulate anything.
@@ -259,6 +263,7 @@ def test_set_gpu_properties_1D():
         map_entries[dim] = me
     sdfg.validate()
 
+    # `get_set_gpu_blocksize()` is non destructive, so `map_entries` are still pointing into the SDFG.
     sdfg.apply_gpu_transformations()
     gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
         sdfg=sdfg,
@@ -323,6 +328,7 @@ def test_set_gpu_properties_2D_3D():
         map_entries[dim] = me
     sdfg.validate()
 
+    # `get_set_gpu_blocksize()` is non destructive, so `map_entries` are still pointing into the SDFG.
     sdfg.apply_gpu_transformations()
     gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
         sdfg=sdfg,
