@@ -33,9 +33,14 @@ from scripts.dace_deterministic_codegen import (  # noqa: E402
     UnsupportedBackendError,
     check_determinism,
     compare,
-    _collect,
+    _scan,
     render_report,
 )
+
+
+def _bags(cache: pathlib.Path):
+    """Signature bags keyed by logical name (the dict half of ``_scan``)."""
+    return _scan(cache)[0]
 
 
 def _program(cache: pathlib.Path, name: str, salt: str, sources: dict[str, str]) -> None:
@@ -50,21 +55,21 @@ def _program(cache: pathlib.Path, name: str, salt: str, sources: dict[str, str])
 def test_collect_groups_by_logical_name(tmp_path):
     cache = tmp_path / ".gt4py_cache"
     _program(cache, "apply_diffusion", "a", {"src/cpu/k.cpp": "x"})
-    assert set(_collect(cache)) == {"apply_diffusion"}
+    assert set(_bags(cache)) == {"apply_diffusion"}
 
 
 def test_collect_ignores_non_program_dirs(tmp_path):
     cache = tmp_path / ".gt4py_cache"
     _program(cache, "p", "a", {"src/cpu/k.cpp": "x"})
     (cache / "translation_cache").mkdir(parents=True)
-    assert set(_collect(cache)) == {"p"}
+    assert set(_bags(cache)) == {"p"}
 
 
 def test_collect_unsupported_backend_raises(tmp_path):
     cache = tmp_path / ".gt4py_cache"
     _program(cache, "p", "a", {"src/mpi/k.cpp": "x"})
     with pytest.raises(UnsupportedBackendError, match="mpi"):
-        _collect(cache)
+        _bags(cache)
 
 
 def test_deterministic_single_program_matches(tmp_path):
@@ -72,7 +77,7 @@ def test_deterministic_single_program_matches(tmp_path):
     c2 = tmp_path / "r2" / ".gt4py_cache"
     _program(c1, "copy", "a", {"src/cpu/k.cpp": "stable"})
     _program(c2, "copy", "a", {"src/cpu/k.cpp": "stable"})
-    (r,) = compare(_collect(c1), _collect(c2))
+    (r,) = compare(_bags(c1), _bags(c2))
     assert r.match
 
 
@@ -81,7 +86,7 @@ def test_nondeterministic_program_pairs_despite_digest(tmp_path):
     c2 = tmp_path / "r2" / ".gt4py_cache"
     _program(c1, "abs", "a", {"src/cpu/k.cpp": "A\n"})
     _program(c2, "abs", "b", {"src/cpu/k.cpp": "B\n"})
-    (r,) = compare(_collect(c1), _collect(c2))
+    (r,) = compare(_bags(c1), _bags(c2))
     assert not r.match
     assert not r.missing_on_one_side
     assert any(rel == "src/cpu/k.cpp" for rel, _ in r.only_in_run1)
@@ -95,7 +100,7 @@ def test_multiple_programs_same_name_same_bag_matches(tmp_path):
         _program(c1, "impl", salt, {"src/cpu/impl.cpp": src})
     for salt, src in [("x", "S1"), ("y", "S2"), ("z", "S3")]:
         _program(c2, "impl", salt, {"src/cpu/impl.cpp": src})
-    (r,) = compare(_collect(c1), _collect(c2))
+    (r,) = compare(_bags(c1), _bags(c2))
     assert r.match
     assert r.count1 == 3 and r.count2 == 3
 
@@ -107,7 +112,7 @@ def test_multiple_programs_perturbed_source_differs(tmp_path):
         _program(c1, "solve", salt, {"src/cpu/k.cpp": src})
     for salt, src in [("x", "S1"), ("y", "S2_PERTURBED")]:
         _program(c2, "solve", salt, {"src/cpu/k.cpp": src})
-    (r,) = compare(_collect(c1), _collect(c2))
+    (r,) = compare(_bags(c1), _bags(c2))
     assert not r.match
     assert not r.missing_on_one_side
 
@@ -119,7 +124,7 @@ def test_count_divergence_differs(tmp_path):
         _program(c1, "impl", salt, {"src/cpu/k.cpp": src})
     for salt, src in [("x", "S1"), ("y", "S2")]:
         _program(c2, "impl", salt, {"src/cpu/k.cpp": src})
-    (r,) = compare(_collect(c1), _collect(c2))
+    (r,) = compare(_bags(c1), _bags(c2))
     assert not r.match
     assert r.count1 == 3 and r.count2 == 2
 
@@ -129,7 +134,7 @@ def test_missing_on_one_side(tmp_path):
     c2 = tmp_path / "r2" / ".gt4py_cache"
     _program(c1, "only1", "a", {"src/cpu/k.cpp": "x"})
     c2.mkdir(parents=True)
-    (r,) = compare(_collect(c1), _collect(c2))
+    (r,) = compare(_bags(c1), _bags(c2))
     assert r.missing_on_one_side
     assert not r.match
 
@@ -191,5 +196,60 @@ def test_report_lists_mismatching_sources(tmp_path):
     c2 = tmp_path / "r2" / ".gt4py_cache"
     _program(c1, "p", "a", {"src/cpu/k.cpp": "v1"})
     _program(c2, "p", "b", {"src/cpu/k.cpp": "v2"})
-    text = render_report(compare(_collect(c1), _collect(c2)))
+    text = render_report(compare(_bags(c1), _bags(c2)))
     assert "DIFFER" in text and "NON-DETERMINISTIC" in text
+
+
+def test_two_sided_divergence_always_fails(tmp_path):
+    # run1 rendered S2, run2 rendered S2_PERTURBED in its place: novel content on
+    # both sides -> genuine nondeterminism, not tolerable.
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    for salt, src in [("a", "S1"), ("b", "S2")]:
+        _program(c1, "solve", salt, {"src/cpu/k.cpp": src})
+    for salt, src in [("x", "S1"), ("y", "S2_PERTURBED")]:
+        _program(c2, "solve", salt, {"src/cpu/k.cpp": src})
+    (r,) = compare(_bags(c1), _bags(c2))
+    assert r.divergent and not r.match
+    with pytest.raises(DeterminismError):
+        check_determinism(c1, c2, tolerate_missing=True)
+
+
+def test_one_sided_gap_tolerated(tmp_path):
+    # run1 compiled an extra instantiation (S2) that run2 never produced, with no
+    # unmatched content on run2's side: a different *set* of programs, not drift.
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    _program(c1, "testee", "a", {"src/cpu/k.cpp": "S1"})
+    _program(c1, "testee", "b", {"src/cpu/k.cpp": "S2"})
+    _program(c2, "testee", "x", {"src/cpu/k.cpp": "S1"})
+    (r,) = compare(_bags(c1), _bags(c2))
+    assert not r.match and not r.divergent and r.tolerable
+    check_determinism(c1, c2, tolerate_missing=True)  # tolerated
+    with pytest.raises(DeterminismError):
+        check_determinism(c1, c2, tolerate_missing=False)  # strict
+
+
+def test_count_surplus_tolerated(tmp_path):
+    # Same single signature, compiled twice in run1 and once in run2.
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    _program(c1, "impl", "a", {"src/cpu/k.cpp": "S1"})
+    _program(c1, "impl", "b", {"src/cpu/k.cpp": "S1"})
+    _program(c2, "impl", "x", {"src/cpu/k.cpp": "S1"})
+    (r,) = compare(_bags(c1), _bags(c2))
+    assert not r.match and not r.divergent
+    check_determinism(c1, c2, tolerate_missing=True)
+
+
+def test_empty_src_program_skipped(tmp_path):
+    # A program folder with an empty src/ on run1 must not manufacture a DIFFER
+    # against run2's real source for the same name.
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    (c1 / f"p_{hashlib.sha256(b'a').hexdigest()}" / "src").mkdir(parents=True)
+    _program(c2, "p", "b", {"src/cpu/k.cpp": "REAL"})
+    assert "p" not in _bags(c1)  # empty program excluded from the bag
+    (r,) = compare(_bags(c1), _bags(c2))
+    assert not r.divergent and r.missing_on_one_side
+    check_determinism(c1, c2, tolerate_missing=True)  # tolerated, not a failure

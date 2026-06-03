@@ -17,10 +17,23 @@ program may be compiled several times under one name with different baked
 parameters.
 
 For each logical name the check collects the multiset of generated-source
-hashes produced in each run and compares them. The codegen is deterministic for
-that name iff the two multisets are equal: both runs produced the same
-collection of sources, the same number of times, regardless of order. On a
-mismatch the differing sources are reported.
+signatures produced in each run and compares them. A signature is the set of
+``(relative-path, sha256)`` pairs of one compiled program. Two outcomes are
+distinguished when the bags are not equal:
+
+* **Divergence** — each run produced a signature the other never produced
+  (novel content on *both* sides). This is the fingerprint of nondeterministic
+  codegen: a computation rendered one way in run1 and a different way in run2.
+  Always a failure.
+* **One-sided gap** — extra signatures or extra copies appear on only one
+  side, with no unmatched content on the other. This is what a run compiling a
+  different *set* of programs looks like (e.g. a test erroring before codegen
+  in one run only, under ``-n auto``). It is reported but, like a whole program
+  missing from one run, tolerated unless ``tolerate_missing=False``.
+
+Programs whose ``src/`` holds no source files are excluded from the bags (they
+carry no codegen to compare); if no program anywhere has sources the check
+raises rather than reporting a vacuous match.
 
 Usage::
 
@@ -75,27 +88,21 @@ class DeterminismError(RuntimeError):
         self.results = results
 
 
-@dataclasses.dataclass(frozen=True)
-class SourceFile:
-    relpath: str
-    sha256: str
-    abspath: Path
-
-
-#: The full set of generated sources of one compiled program, as an
-#: order-independent signature usable as a multiset element.
-ProgramSources = frozenset
-
-
 @dataclasses.dataclass
 class NameResult:
     name: str
     match: bool
+    divergent: bool
     missing_on_one_side: bool
     only_in_run1: list[tuple[str, str]]
     only_in_run2: list[tuple[str, str]]
     count1: int
     count2: int
+
+    @property
+    def tolerable(self) -> bool:
+        """A non-match that is not divergence: extra programs on one side only."""
+        return not self.match and not self.divergent
 
 
 def _sha256(path: Path) -> str:
@@ -106,15 +113,25 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _collect(cache_root: Path) -> dict[str, collections.Counter]:
+def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter], int]:
+    """Return ``(bags, n_program_folders)`` for one cache.
+
+    ``bags`` maps each logical name to a Counter of program signatures, where a
+    signature is the frozenset of ``(relpath, sha256)`` source pairs. Program
+    folders whose ``src/`` yields no source files are counted in
+    ``n_program_folders`` but excluded from ``bags`` — they carry no codegen, so
+    folding them in as an empty signature would manufacture spurious mismatches.
+    """
     if not cache_root.is_dir():
-        return {}
+        return {}, 0
 
     by_name: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    n_folders = 0
     for folder in sorted(p for p in cache_root.iterdir() if p.is_dir()):
         m = PROGRAM_FOLDER_RE.match(folder.name)
         if not m:
             continue
+        n_folders += 1
         name = m.group("name")
 
         src_root = folder / CODEGEN_DIR
@@ -132,8 +149,9 @@ def _collect(cache_root: Path) -> dict[str, collections.Counter]:
                     rel = path.relative_to(folder).as_posix()
                     sources.append((rel, _sha256(path)))
 
-        by_name[name][frozenset(sources)] += 1
-    return dict(by_name)
+        if sources:
+            by_name[name][frozenset(sources)] += 1
+    return dict(by_name), n_folders
 
 
 def _diagnose_empty(cache_root: Path) -> str:
@@ -163,15 +181,25 @@ def compare(
         extra1 = bag1 - bag2
         extra2 = bag2 - bag1
         match = not extra1 and not extra2
+
+        # Novel = a signature wholly absent from the other run (not merely
+        # produced a different number of times). Divergence — the signature of
+        # nondeterministic codegen — is novel content appearing on *both* sides:
+        # run1 rendered something run2 never did and vice versa. Novelty on only
+        # one side is just a run compiling more programs than the other.
+        novel1 = any(sig not in bag2 for sig in extra1)
+        novel2 = any(sig not in bag1 for sig in extra2)
+        divergent = novel1 and novel2
         missing = not match and (count1 == 0 or count2 == 0)
 
-        only1 = sorted(rel_sha for src in extra1.elements() for rel_sha in src)
-        only2 = sorted(rel_sha for src in extra2.elements() for rel_sha in src)
+        only1 = sorted(rel_sha for sig in extra1.elements() for rel_sha in sig)
+        only2 = sorted(rel_sha for sig in extra2.elements() for rel_sha in sig)
 
         results.append(
             NameResult(
                 name=name,
                 match=match,
+                divergent=divergent,
                 missing_on_one_side=missing,
                 only_in_run1=only1,
                 only_in_run2=only2,
@@ -186,8 +214,10 @@ def write_diffs(results: list[NameResult], diffs_dir: Path) -> None:
     for r in results:
         if r.match:
             continue
+        kind = "divergent (nondeterministic)" if r.divergent else "one-sided (tolerable)"
         lines = [
             f"name: {r.name}",
+            f"classification: {kind}",
             f"run1 produced {r.count1} program(s), run2 produced {r.count2}",
             "",
             "generated sources in run1 with no match in run2:",
@@ -202,36 +232,49 @@ def write_diffs(results: list[NameResult], diffs_dir: Path) -> None:
 
 def render_report(results: list[NameResult], *, tolerate_missing: bool = False) -> str:
     n_total = len(results)
+    n_divergent = sum(1 for r in results if r.divergent)
     n_missing = sum(1 for r in results if r.missing_on_one_side)
-    n_differ = sum(1 for r in results if not r.match and not r.missing_on_one_side)
-    n_match = n_total - n_missing - n_differ
+    n_gap = sum(1 for r in results if r.tolerable and not r.missing_on_one_side)
+    n_match = n_total - n_divergent - n_missing - n_gap
+    n_tolerable = n_missing + n_gap
 
     lines = [
-        f"Programs: {n_total}    matches: {n_match}    "
-        f"differs: {n_differ}    only-in-one-run: {n_missing}",
+        f"Programs: {n_total}    matches: {n_match}    differs: {n_divergent}    "
+        f"only-in-one-run: {n_missing}    count-gap: {n_gap}",
         "",
     ]
     for r in results:
-        tag = "MATCH " if r.match else ("ONE-OF" if r.missing_on_one_side else "DIFFER")
+        if r.match:
+            tag = "MATCH "
+        elif r.divergent:
+            tag = "DIFFER"
+        elif r.missing_on_one_side:
+            tag = "ONE-OF"
+        else:
+            tag = "GAP   "
         lines.append(f"  [{tag}] {r.name}  (run1: {r.count1}, run2: {r.count2})")
-        if not r.match and not r.missing_on_one_side:
+        if r.divergent:
             lines += [f"           only in run1: {rel}" for rel, _ in r.only_in_run1]
             lines += [f"           only in run2: {rel}" for rel, _ in r.only_in_run2]
 
     lines.append("")
     if n_total == 0:
         lines.append("RESULT: no programs observed.")
-    elif n_differ == 0 and n_missing == 0:
+    elif n_divergent == 0 and n_tolerable == 0:
         lines.append(f"RESULT: codegen deterministic — {n_match} program(s) match.")
-    elif n_differ == 0 and tolerate_missing:
+    elif n_divergent == 0 and tolerate_missing:
         lines.append(
             f"RESULT: codegen deterministic across {n_match} shared program(s); "
-            f"{n_missing} cached in only one run (tolerated)."
+            f"{n_tolerable} compiled in only one run (tolerated)."
+        )
+    elif n_divergent == 0:
+        lines.append(
+            f"RESULT: FAILED (strict) — {n_tolerable} program(s) compiled in only one run."
         )
     else:
-        suffix = f" (plus {n_missing} cached in only one run)" if n_missing else ""
+        suffix = f" (plus {n_tolerable} compiled in only one run)" if n_tolerable else ""
         lines.append(
-            f"RESULT: NON-DETERMINISTIC CODEGEN — {n_differ}/{n_total} program(s) differ{suffix}."
+            f"RESULT: NON-DETERMINISTIC CODEGEN — {n_divergent}/{n_total} program(s) differ{suffix}."
         )
     return "\n".join(lines) + "\n"
 
@@ -244,9 +287,9 @@ def check_determinism(
     report_path: Path | None = None,
     tolerate_missing: bool = True,
 ) -> list[NameResult]:
-    run1 = _collect(cache1)
-    run2 = _collect(cache2)
-    results = compare(run1, run2)
+    bags1, n_folders1 = _scan(cache1)
+    bags2, n_folders2 = _scan(cache2)
+    results = compare(bags1, bags2)
 
     if diffs_dir is not None:
         write_diffs(results, diffs_dir)
@@ -254,35 +297,40 @@ def check_determinism(
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(render_report(results, tolerate_missing=tolerate_missing))
 
-    if not results:
+    if n_folders1 == 0 and n_folders2 == 0:
         raise NoProgramsObservedError(
             "no programs observed in either cache:\n"
             f"  run1 ({cache1}): {_diagnose_empty(cache1)}\n"
             f"  run2 ({cache2}): {_diagnose_empty(cache2)}"
         )
-
-    total_sources = sum(
-        len(src) for bag in (*run1.values(), *run2.values()) for src in bag.elements()
-    )
-    if total_sources == 0:
+    if not results:
         raise NoSourceFilesObservedError(
-            f"{len(results)} program(s) cached but none contain source files under "
-            f"{CODEGEN_DIR}/. Set DACE_compiler_build_folder_mode=development so the "
-            f"generated code is kept after compilation."
+            f"program(s) cached ({n_folders1} in run1, {n_folders2} in run2) but none "
+            f"contain source files under {CODEGEN_DIR}/. Set "
+            f"DACE_compiler_build_folder_mode=development so the generated code is kept "
+            f"after compilation."
         )
 
-    n_differ = sum(1 for r in results if not r.match and not r.missing_on_one_side)
-    n_missing = sum(1 for r in results if r.missing_on_one_side)
-    n_failed = n_differ if tolerate_missing else n_differ + n_missing
+    n_divergent = sum(1 for r in results if r.divergent)
+    n_tolerable = sum(1 for r in results if r.tolerable)
+    n_failed = n_divergent if tolerate_missing else n_divergent + n_tolerable
 
     if n_failed > 0:
         if tolerate_missing:
             msg = (
-                f"DaCe codegen is non-deterministic: {n_differ}/{len(results)} "
-                f"program(s) differ (plus {n_missing} cached in only one run, ignored)"
+                f"DaCe codegen is non-deterministic: {n_divergent}/{len(results)} "
+                f"program(s) differ (plus {n_tolerable} compiled in only one run, ignored)"
+            )
+        elif n_divergent == 0:
+            msg = (
+                f"determinism check failed (strict): {n_tolerable}/{len(results)} "
+                f"program(s) compiled in only one run"
             )
         else:
-            msg = f"DaCe codegen is non-deterministic: {n_failed}/{len(results)} program(s) differ"
+            msg = (
+                f"DaCe codegen is non-deterministic: {n_divergent}/{len(results)} differ "
+                f"(plus {n_tolerable} compiled in only one run)"
+            )
         raise DeterminismError(msg, results)
     return results
 
@@ -319,7 +367,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--tolerate-missing",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Ignore programs cached in only one run.",
+        help="Ignore programs compiled in only one run.",
     )
     return p.parse_args(argv)
 
@@ -344,10 +392,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except DeterminismError as e:
-        print(render_report(e.results, tolerate_missing=args.tolerate_missing))
+        if args.report is None:
+            print(render_report(e.results, tolerate_missing=args.tolerate_missing))
         print(f"error: {e}", file=sys.stderr)
         return 1
-    print(render_report(results, tolerate_missing=args.tolerate_missing))
+    if args.report is None:
+        print(render_report(results, tolerate_missing=args.tolerate_missing))
     return 0
 
 

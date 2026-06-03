@@ -404,7 +404,10 @@ def _run_dace_determinism_check(
     cache_subdir = ".gt4py_cache"
 
     dacecache = REPO_ROOT / ".dacecache"
-    dacecache_preexisted = dacecache.exists()
+
+    def wipe_dacecache() -> None:
+        if dacecache.exists():
+            shutil.rmtree(dacecache, ignore_errors=True)
 
     def env_for_run(run_dir: pathlib.Path) -> dict[str, str]:
         # gt4py.next appends `.gt4py_cache` to GT4PY_BUILD_CACHE_DIR, so we
@@ -427,6 +430,7 @@ def _run_dace_determinism_check(
         }
 
     for run_dir in (run1_dir, run2_dir):
+        wipe_dacecache()
         session.run(
             *pytest_args,
             *session.posargs,
@@ -475,9 +479,7 @@ def _run_dace_determinism_check(
         # `workdir/diffs/` and `workdir/report.txt` — those are the artifacts a
         # maintainer actually needs to debug a determinism failure; the raw
         # caches are reproducible by rerunning the session.
-        cleanup_targets = [run1_dir, run2_dir]
-        if not dacecache_preexisted:
-            cleanup_targets.append(dacecache)
+        cleanup_targets = [run1_dir, run2_dir, dacecache]
         for tbd in cleanup_targets:
             if tbd.exists():
                 session.log(f"cleanup: removing {tbd}")
