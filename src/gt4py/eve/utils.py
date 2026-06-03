@@ -692,9 +692,7 @@ def content_hash(
 
     Arguments:
         hash_algorithm: object implementing the `hash algorithm` interface
-            from :mod:`hashlib` or canonical name (`str`) of the
-            hash algorithm as defined in :mod:`hashlib`.
-            Defaults to :class:`xxhash.xxh64`.
+            from :mod:`hashlib`. Defaults to :class:`xxhash.xxh64`.
 
     """
     if hash_algorithm is None:

@@ -47,7 +47,10 @@ semantic_fingerprinter = utils.CustomPicklingFingerprinter.from_reducers(
                 source_utils.make_source_definition_from_function(f),
                 source_utils.get_closure_vars_from_function(f),
             ),
-        )
+        ),
+        # NOTE: classes used as closure variables (e.g. locally-defined `enum`s)
+        # that are not picklable by reference are handled by the `type` reducer
+        # inherited from `utils.stable_fingerprinter`.
     },
 )
 

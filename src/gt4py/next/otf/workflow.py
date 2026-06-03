@@ -232,25 +232,28 @@ class CachedStep(
     """
     Cached workflow of single input callables.
 
+    The cache key combines a fingerprint of the step itself (so that changes to
+    the step invalidate the cache) with the value returned by ``key_function``
+    for the given input. Because the step is fingerprinted via pickling, it must
+    be picklable (e.g. a module-level function, not a lambda or closure).
+
     Examples:
     ---------
-    >>> def heavy_computation(x: int) -> int:
-    ...     print("This might take a while...")
-    ...     return x
+    >>> cached_step = CachedStep(step=tuple, key_function=lambda x: x)
 
-    >>> cached_step = CachedStep(step=heavy_computation)
+    The result of the first invocation is computed and stored in the cache:
+    >>> result = cached_step([1, 2, 3])
+    >>> result
+    (1, 2, 3)
 
-    >>> cached_step(42)
-    This might take a while...
-    42
+    The next invocation for the same argument returns the cached object without
+    recomputing it:
+    >>> cached_step([1, 2, 3]) is result
+    True
 
-    The next invocation for the same argument will be cached:
-    >>> cached_step(42)
-    42
-
-    >>> cached_step(1)
-    This might take a while...
-    1
+    A different argument is computed and cached separately:
+    >>> cached_step([4, 5]) is result
+    False
     """
 
     step: Workflow[StartT, EndT]

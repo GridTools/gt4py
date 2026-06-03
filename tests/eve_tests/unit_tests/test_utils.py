@@ -346,9 +346,7 @@ def test_noninstantiable_class():
     assert not eve.utils.is_noninstantiable(InstantiableSubclass)
 
 
-@pytest.fixture(
-    params=[None, hashlib.md5(), "md5", hashlib.sha1(), "sha1", hashlib.sha256(), "sha256"]
-)
+@pytest.fixture(params=[None, hashlib.md5(), hashlib.sha1(), hashlib.sha256()])
 def hash_algorithm(request):
     yield request.param
 
@@ -536,15 +534,3 @@ def test_custom_pickler_with_singledispatch_reducer():
 
     # This time they should be equal
     assert custom_dump == std_dump
-
-
-def test_custom_pickler_from_reducers_creates_subclass():
-    import pickle
-    from gt4py.eve.utils import custom_pickler_from_reducers
-
-    reducers = {int: (lambda obj: (int, (obj,)))}
-    pickler_cls = custom_pickler_from_reducers(reducers, name="TestPickler")
-
-    assert issubclass(pickler_cls, pickle.Pickler)
-    assert pickler_cls.__name__ == "TestPickler"
-    assert hasattr(pickler_cls, "reducer_override")

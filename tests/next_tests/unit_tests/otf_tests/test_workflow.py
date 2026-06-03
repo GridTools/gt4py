@@ -102,11 +102,8 @@ def test_fingerprint_is_defined():
     assert isinstance(utils.stable_fingerprinter("hello"), str)
 
 
-def test_versioned_fingerprint_is_defined():
-    assert callable(utils.stable_fingerprinter)
-    result = utils.stable_fingerprinter("hello")
-    assert isinstance(result, str)
-    assert result != utils.stable_fingerprinter("hello")
+def test_fingerprint_is_stable_for_calls():
+    assert utils.stable_fingerprinter("hello") == utils.stable_fingerprinter("hello")
 
 
 def test_fingerprint_is_stable_for_dicts():
@@ -142,6 +139,6 @@ def test_fingerprint_handles_modules():
 def test_cached_step_cache_key_includes_step_config():
     """Two CachedStep instances with different step configs produce different cache keys."""
     # Use dataclass steps with different configurations (v=1 vs v=2)
-    cs1 = workflow.CachedStep(step=_StepWithValue(v=1))
-    cs2 = workflow.CachedStep(step=_StepWithValue(v=2))
+    cs1 = workflow.CachedStep(step=_StepWithValue(v=1), key_function=lambda x: x)
+    cs2 = workflow.CachedStep(step=_StepWithValue(v=2), key_function=lambda x: x)
     assert cs1.cache_key(42) != cs2.cache_key(42)

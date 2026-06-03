@@ -153,7 +153,7 @@ graph LR
 
 
 inp --> calc
-inp(A: int) --> ha{{"hash_function(A)"}} --> h("hash(A)") --> ck{{"check cache"}} -->|miss| miss("not in cache") --> calc{{add_3_times_2}} --> out(result)
+inp(A: int) --> ha{{"key_function(A)"}} --> h("hash(A)") --> ck{{"check cache"}} -->|miss| miss("not in cache") --> calc{{add_3_times_2}} --> out(result)
 ck -->|hit| hit("in cache") --> out
 ```
 
@@ -162,15 +162,20 @@ For this we can use the `CachedStep`, you will see something like below
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
-@gtx.otf.workflow.make_step
 def debug_print(inp: int) -> int:
     print("cache miss!")
     return inp
 
 
+# NOTE: `CachedStep` includes a fingerprint of the step itself in the cache key,
+# so the step (and any functions it wraps) must be picklable. We therefore keep
+# `debug_print` as a plain module-level function and wrap it with `make_step`
+# under a different name, instead of shadowing it with the `@make_step` decorator.
+debug_print_step = gtx.otf.workflow.make_step(debug_print)
+
 cached_calc = gtx.otf.workflow.CachedStep(
-    step=debug_print.chain(add_3_times_2),
-    hash_function=lambda i: str(i),  # using ints as their own hash
+    step=debug_print_step.chain(add_3_times_2),
+    key_function=lambda i: str(i),  # using ints as their own hash
 )
 
 cached_calc(1)
@@ -305,7 +310,7 @@ class StrToIntFactory(factory.Factory):
         )
         cached = factory.Trait(
             inner_step=factory.LazyAttribute(
-                lambda o: gtx.otf.workflow.CachedStep(step=(o.optional_or_not), hash_function=str)
+                lambda o: gtx.otf.workflow.CachedStep(step=(o.optional_or_not), key_function=str)
             )
         )
 

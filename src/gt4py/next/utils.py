@@ -242,6 +242,12 @@ stable_fingerprinter = CustomPicklingFingerprinter.from_reducers(
             (),
             tuple(sorted(obj)),
         ),
+        # Classes (e.g. locally-defined `enum`s or `unittest.mock.Mock`) may not
+        # be picklable by reference. Fingerprint them by their qualified name
+        # instead, which is stable and enough to tell them apart. `format` is
+        # used as a builtin reconstructor that, unlike `str`/`tuple`, is not
+        # itself a `type` (which would re-trigger this reducer endlessly).
+        type: lambda obj: (format, (f"{obj.__module__}.{obj.__qualname__}",)),
     },
     name="SortingSetsFingerprinter",
 )
