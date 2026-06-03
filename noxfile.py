@@ -435,10 +435,7 @@ def _run_dace_determinism_check(
             *pytest_args,
             *session.posargs,
             env=session.env | env_for_run(run_dir),
-            # The determinism check cares only about whether the DaCe codegen
-            # lands deterministically in the cache; individual test outcomes
-            # are irrelevant. Failed tests (exit code 1) often reflect runtime
-            # issues that have nothing to do with codegen.
+            # Individual test outcomes are irrelevant; only the generated code matters.
             success_codes=[0, 1, NO_TESTS_COLLECTED_EXIT_CODE],
         )
 
@@ -448,6 +445,7 @@ def _run_dace_determinism_check(
         sys.path.insert(0, str(REPO_ROOT))
     from scripts.dace_deterministic_codegen import (
         DeterminismError,
+        NoComparableProgramsError,
         NoProgramsObservedError,
         NoSourceFilesObservedError,
         UnsupportedBackendError,
@@ -460,13 +458,11 @@ def _run_dace_determinism_check(
             run2_dir / cache_subdir,
             diffs_dir=workdir / "diffs",
             report_path=workdir / "report.txt",
-            # Programs cached in only one run are reported but not counted as
-            # determinism failures — see the success_codes note above for why
-            # this is the right policy here.
-            tolerate_missing=True,
         )
     except DeterminismError as e:
         session.error(f"{e}\nSee {workdir / 'report.txt'} and {workdir / 'diffs'}/")
+    except NoComparableProgramsError as e:
+        session.error(f"{e}\nSee {workdir / 'report.txt'}.")
     except NoProgramsObservedError as e:
         session.error(f"{e}\nLikely the pytest selection collected no tests.")
     except NoSourceFilesObservedError as e:
