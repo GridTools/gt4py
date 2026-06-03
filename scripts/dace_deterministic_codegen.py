@@ -194,24 +194,12 @@ def write_diffs(results: list[NameResult], diffs_dir: Path) -> None:
     for r in results:
         if r.match:
             continue
-        kind = (
-            "generated sources differ"
-            if r.differs
-            else f"skipped: program counts differ between runs ({r.count1} vs {r.count2})"
-        )
-        lines = [
-            f"name: {r.name}",
-            f"classification: {kind}",
-            f"run1 produced {r.count1} program(s), run2 produced {r.count2}",
-            "",
-            "generated sources in run1 with no match in run2:",
-        ]
-        lines += [f"  {rel}  {sha}" for rel, sha in r.only_in_run1] or ["  (none)"]
-        lines += ["", "generated sources in run2 with no match in run1:"]
-        lines += [f"  {rel}  {sha}" for rel, sha in r.only_in_run2] or ["  (none)"]
+        c1 = collections.Counter(r.only_in_run1)
+        c2 = collections.Counter(r.only_in_run2)
+        relpaths = sorted({rel for rel, _ in (c1 - c2)} | {rel for rel, _ in (c2 - c1)})
         diffs_dir.mkdir(parents=True, exist_ok=True)
         safe = re.sub(r"[^A-Za-z0-9._-]+", "_", r.name)[:200]
-        (diffs_dir / f"{safe}.txt").write_text("\n".join(lines) + "\n")
+        (diffs_dir / f"{safe}.txt").write_text("\n".join([r.name, *relpaths]) + "\n")
 
 
 def render_report(results: list[NameResult]) -> str:
@@ -228,10 +216,7 @@ def render_report(results: list[NameResult]) -> str:
     ]
     for r in results:
         tag = "MATCH " if r.match else "DIFFER" if r.differs else "SKIP  "
-        lines.append(f"  [{tag}] {r.name}  (run1: {r.count1}, run2: {r.count2})")
-        if r.differs:
-            lines += [f"           only in run1: {rel}" for rel, _ in r.only_in_run1]
-            lines += [f"           only in run2: {rel}" for rel, _ in r.only_in_run2]
+        lines.append(f"  [{tag}] {r.name}")
 
     if n_skipped:
         lines += [

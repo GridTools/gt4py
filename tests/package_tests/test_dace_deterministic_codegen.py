@@ -199,7 +199,9 @@ def test_check_determinism_differs_writes_diff(tmp_path):
     diffs = tmp_path / "diffs"
     with pytest.raises(DeterminismError):
         check_determinism(c1, c2, diffs_dir=diffs)
-    assert (diffs / "abs.txt").exists()
+    body = (diffs / "abs.txt").read_text().splitlines()
+    assert body[0] == "abs"
+    assert "src/cpu/k.cpp" in body
 
 
 def test_no_programs_raises(tmp_path):
@@ -227,7 +229,8 @@ def test_report_lists_mismatching_sources(tmp_path):
     _program(c1, "p", "a", {"src/cpu/k.cpp": "v1"})
     _program(c2, "p", "b", {"src/cpu/k.cpp": "v2"})
     text = render_report(compare(_bags(c1), _bags(c2)))
-    assert "DIFFER" in text and "NON-DETERMINISTIC" in text
+    assert "[DIFFER]" in text and "NON-DETERMINISTIC" in text
+    assert "only in" not in text and "(run1:" not in text
 
 
 def test_report_notes_skipped(tmp_path):
