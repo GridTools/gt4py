@@ -131,6 +131,7 @@ class DaCeCompiler(
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType
+    add_gpu_trace_markers: bool = config.ADD_GPU_TRACE_MARKERS
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
 
     def __call__(
@@ -145,6 +146,16 @@ class DaCeCompiler(
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+
+            # Add TX markers to the generated GPU code for trace visualization tools.
+            if self.device_type == core_defs.CUPY_DEVICE_TYPE and self.add_gpu_trace_markers:
+                sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+                for node, _ in sdfg.all_nodes_recursive(
+                    # Also adds markers to scopes and maps that are NOT scheduled on GPU
+                    predicate=lambda x, _: isinstance(x, (dace.nodes.MapEntry, dace.sdfg.SDFGState))
+                ):
+                    node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+
             sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
                 sdfg_program = sdfg.compile(validate=False)
