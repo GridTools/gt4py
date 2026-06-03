@@ -47,6 +47,7 @@ import re
 import sys
 from pathlib import Path
 
+
 PROGRAM_FOLDER_RE = re.compile(r"^(?P<name>.+)_[0-9a-f]{64}$")
 CODEGEN_DIR = "src"
 SUPPORTED_BACKENDS = frozenset({"cpu", "cuda"})
@@ -230,8 +231,7 @@ def render_report(results: list[NameResult], *, tolerate_missing: bool = False) 
     else:
         suffix = f" (plus {n_missing} cached in only one run)" if n_missing else ""
         lines.append(
-            f"RESULT: NON-DETERMINISTIC CODEGEN — {n_differ}/{n_total} "
-            f"program(s) differ{suffix}."
+            f"RESULT: NON-DETERMINISTIC CODEGEN — {n_differ}/{n_total} program(s) differ{suffix}."
         )
     return "\n".join(lines) + "\n"
 
@@ -293,16 +293,34 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         description="Compare two gt4py.next build caches for deterministic DaCe codegen.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--run1", required=True, type=Path, metavar="PATH",
-                   help="First cache root (the .gt4py_cache/ directory).")
-    p.add_argument("--run2", required=True, type=Path, metavar="PATH",
-                   help="Second cache root.")
-    p.add_argument("--diffs-dir", type=Path, default=None, metavar="PATH",
-                   help="If set, write per-program mismatch reports here.")
-    p.add_argument("--report", type=Path, default=None, metavar="PATH",
-                   help="If set, write the summary report here.")
-    p.add_argument("--tolerate-missing", action=argparse.BooleanOptionalAction, default=True,
-                   help="Ignore programs cached in only one run.")
+    p.add_argument(
+        "--run1",
+        required=True,
+        type=Path,
+        metavar="PATH",
+        help="First cache root (the .gt4py_cache/ directory).",
+    )
+    p.add_argument("--run2", required=True, type=Path, metavar="PATH", help="Second cache root.")
+    p.add_argument(
+        "--diffs-dir",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="If set, write per-program mismatch reports here.",
+    )
+    p.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="If set, write the summary report here.",
+    )
+    p.add_argument(
+        "--tolerate-missing",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Ignore programs cached in only one run.",
+    )
     return p.parse_args(argv)
 
 
