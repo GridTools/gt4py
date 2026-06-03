@@ -547,7 +547,7 @@ class NdArrayConnectivityField(
             xp = self.array_ns
             slices = _hyperslice(self._ndarray, image_range, xp, self.skip_value)
             if slices is None:
-                raise ValueError("Restriction generates non-contiguous dimensions.")
+                raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
             new_domain = self.domain.slice_at[slices]
             self._cache[cache_key] = new_domain
@@ -700,6 +700,9 @@ def _hyperslice(
         would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
     """
     select_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
+
+    if not xp.any(select_mask):
+        return None
 
     nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
 
