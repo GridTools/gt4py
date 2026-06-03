@@ -160,7 +160,7 @@ def _make_if_region_for_metrics_collection(
     return if_region, then_state
 
 
-def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
+def add_instrumentation(sdfg: dace.SDFG, gpu: bool, add_gpu_trace_markers: bool = False) -> None:
     """
     Instrument SDFG with measurement of total execution time.
 
@@ -171,6 +171,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     The execution time is measured in seconds and represented as a 'float64' value.
     It is written to the global array 'SDFG_ARG_METRIC_COMPUTE_TIME'.
     """
+    has_gpu_code = gpu and _has_gpu_schedule(sdfg)
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
     metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
@@ -179,7 +180,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     # Even when the target device is GPU, it can happen that dace emits code without
     # GPU kernels. In this case, the cuda headers are not imported and the SDFG is
     # compiled as plain C++. Therefore, we also check here the schedule of SDFG maps.
-    if gpu and _has_gpu_schedule(sdfg):
+    if has_gpu_code:
         dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
         assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
 
@@ -265,7 +266,7 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         dace.Memlet(f"{output}[0]"),
     )
 
-    if gpu and _has_gpu_schedule(sdfg) and config.ADD_GPU_TRACE_MARKERS:
+    if has_gpu_code and add_gpu_trace_markers:
         sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
         for node, _ in sdfg.all_nodes_recursive():
             if isinstance(
@@ -441,7 +442,7 @@ class DaCeTranslator(
             make_sdfg_call_sync(sdfg, on_gpu)
 
         if self.use_metrics:
-            add_instrumentation(sdfg, on_gpu)
+            add_instrumentation(sdfg, on_gpu, self.add_gpu_trace_markers)
 
         return sdfg
 
