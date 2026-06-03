@@ -24,6 +24,21 @@ from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
+def _add_tx_markers(sdfg: dace.SDFG) -> None:
+    has_gpu_schedule = any(
+        getattr(node, "schedule", dace.dtypes.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
+        for node, _ in sdfg.all_nodes_recursive()
+    )
+
+    if has_gpu_schedule:
+        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+        for node, _ in sdfg.all_nodes_recursive(
+            # Also adds markers to scopes and maps that are NOT scheduled on GPU
+            predicate=lambda x, _: isinstance(x, (dace.nodes.MapEntry, dace.sdfg.state.SDFGState))
+        ):
+            node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+
+
 class CompiledDaceProgram:
     sdfg_program: dace.CompiledSDFG
 
@@ -148,13 +163,8 @@ class DaCeCompiler(
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
 
             # Add TX markers to the generated GPU code for trace visualization tools.
-            if self.device_type == core_defs.CUPY_DEVICE_TYPE and self.add_gpu_trace_markers:
-                sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-                for node, _ in sdfg.all_nodes_recursive(
-                    # Also adds markers to scopes and maps that are NOT scheduled on GPU
-                    predicate=lambda x, _: isinstance(x, (dace.nodes.MapEntry, dace.sdfg.SDFGState))
-                ):
-                    node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+            if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
+                _add_tx_markers(sdfg)
 
             sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
