@@ -360,7 +360,7 @@ def test_typing_exports(session: nox.Session) -> None:
 # byte-identical between the two runs. A diff is a determinism bug
 # somewhere in the gt4py + dace toolchain for that test selection.
 #
-# Comparison logic (snapshot, hash, diff, report) lives in
+# Hashing and comparison live in
 # `scripts/dace_deterministic_codegen.py`; the helper below just
 # wires gt4py's existing pytest invocation pattern into a "run
 # twice + compare" loop.
@@ -413,7 +413,7 @@ def _run_dace_determinism_check(
         # gt4py.next appends `.gt4py_cache` to GT4PY_BUILD_CACHE_DIR, so we
         # pass the parent directory and the cache lands at .gt4py_cache/
         # underneath. Setting GT4PY_BUILD_CACHE_LIFETIME to `persistent` keeps
-        # the cache around long enough for the snapshot pass to read it.
+        # the cache around long enough for the comparison to read it.
         #
         # Setting DACE_compiler_build_folder_mode to `development` is REQUIRED:
         # gt4py configures dace to `production` mode by default, which cleans
@@ -429,15 +429,38 @@ def _run_dace_determinism_check(
             "DACE_compiler_build_folder_mode": "development",
         }
 
+    def run_is_healthy(junit_xml: pathlib.Path) -> bool:
+        # A run is clean iff it collected tests and none failed or errored. We read
+        # the JUnit XML (written regardless of outcome) so the comparator can tell a
+        # legitimate skip (a test failed -> differing program count) from a genuine
+        # non-deterministic program count (counts differ in a clean pair).
+        import xml.etree.ElementTree as ET
+
+        if not junit_xml.is_file():
+            return False
+        root = ET.parse(junit_xml).getroot()
+        tests = failures = errors = 0
+        for suite in root.iter("testsuite"):
+            tests += int(suite.get("tests", 0))
+            failures += int(suite.get("failures", 0))
+            errors += int(suite.get("errors", 0))
+        return tests > 0 and failures == 0 and errors == 0
+
+    runs_healthy = True
     for run_dir in (run1_dir, run2_dir):
         wipe_dacecache()
+        junit_xml = run_dir / "pytest-junit.xml"
         session.run(
             *pytest_args,
             *session.posargs,
+            f"--junit-xml={junit_xml}",
             env=session.env | env_for_run(run_dir),
-            # Individual test outcomes are irrelevant; only the generated code matters.
+            # Allow individual test failures so we can read health from the XML; a
+            # failed test only changes how a count mismatch is classified, never
+            # whether content differences are reported.
             success_codes=[0, 1, NO_TESTS_COLLECTED_EXIT_CODE],
         )
+        runs_healthy = run_is_healthy(junit_xml) and runs_healthy
 
     # Import the comparison library from scripts/. It uses only stdlib, so it
     # runs fine in nox's runtime python (no session venv needed).
@@ -456,6 +479,7 @@ def _run_dace_determinism_check(
         check_determinism(
             run1_dir / cache_subdir,
             run2_dir / cache_subdir,
+            runs_healthy=runs_healthy,
             diffs_dir=workdir / "diffs",
             report_path=workdir / "report.txt",
         )

@@ -243,3 +243,45 @@ def test_report_notes_skipped(tmp_path):
     _program(c2, "p", "x", {"src/cpu/k.cpp": "S1"})
     text = render_report(compare(_bags(c1), _bags(c2)))
     assert "SKIP" in text and "Re-run" in text
+
+
+# --- run-health classification of count mismatches ---
+
+
+def test_count_mismatch_fails_when_runs_healthy(tmp_path):
+    # In a clean pair a differing count cannot be a failed test; it is
+    # non-deterministic program count and must be a failure.
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    _program(c1, "ok", "a", {"src/cpu/k.cpp": "S1"})
+    _program(c2, "ok", "a", {"src/cpu/k.cpp": "S1"})
+    _program(c1, "wobble", "a", {"src/cpu/k.cpp": "W1"})
+    _program(c1, "wobble", "b", {"src/cpu/k.cpp": "W2"})
+    _program(c2, "wobble", "x", {"src/cpu/k.cpp": "W1"})
+    check_determinism(c1, c2)  # health unknown -> tolerated skip
+    check_determinism(c1, c2, runs_healthy=False)  # a test failed -> tolerated skip
+    with pytest.raises(DeterminismError):
+        check_determinism(c1, c2, runs_healthy=True)  # clean pair -> failure
+
+
+def test_clean_pair_all_match_passes(tmp_path):
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    _program(c1, "copy", "a", {"src/cpu/k.cpp": "S1"})
+    _program(c2, "copy", "a", {"src/cpu/k.cpp": "S1"})
+    check_determinism(c1, c2, runs_healthy=True)
+
+
+def test_report_marks_count_as_failure_when_healthy(tmp_path):
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    _program(c1, "ok", "a", {"src/cpu/k.cpp": "S1"})
+    _program(c2, "ok", "a", {"src/cpu/k.cpp": "S1"})
+    _program(c1, "wobble", "a", {"src/cpu/k.cpp": "W1"})
+    _program(c1, "wobble", "b", {"src/cpu/k.cpp": "W2"})
+    _program(c2, "wobble", "x", {"src/cpu/k.cpp": "W1"})
+    results = compare(_bags(c1), _bags(c2))
+    healthy = render_report(results, runs_healthy=True)
+    assert "[COUNT ]" in healthy and "NON-DETERMINISTIC" in healthy
+    unknown = render_report(results)
+    assert "[SKIP  ]" in unknown and "Re-run" in unknown

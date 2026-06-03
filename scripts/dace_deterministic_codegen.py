@@ -20,19 +20,23 @@ pairs of one compiled program.
 A name is compared only when both runs compiled the same number of programs for
 it. The program count is a function of which tests ran, not of codegen, so equal
 counts mean the same programs were generated in both runs and any difference in
-their sources is codegen non-determinism. Names whose counts differ (a test
-failed or did not run in one of the runs) are reported and skipped. If no name
-is comparable the check raises rather than reporting a vacuous match.
+their sources is codegen non-determinism. Names whose counts differ are normally
+reported and skipped (a test failed or did not run in one of the runs). However,
+if both runs are known to have completed cleanly (``runs_healthy=True``), a
+differing count cannot be a failed test — it means the *number* of generated
+programs is itself non-deterministic — so it is counted as a failure instead.
+If no name is comparable the check raises rather than reporting a vacuous match.
 
 Usage::
 
     from scripts.dace_deterministic_codegen import check_determinism
-    check_determinism(run1_cache, run2_cache, diffs_dir=..., report_path=...)
+    check_determinism(run1_cache, run2_cache, runs_healthy=True,
+                      diffs_dir=..., report_path=...)
 
 CLI::
 
     python scripts/dace_deterministic_codegen.py --run1 PATH --run2 PATH \\
-        [--diffs-dir DIR] [--report FILE]
+        [--diffs-dir DIR] [--report FILE] [--runs-healthy/--no-runs-healthy]
 
 Exit codes: 0 deterministic, 1 differs, 2 bad args / unsupported backend /
 no source files / nothing comparable, 3 no programs observed.
@@ -101,6 +105,16 @@ class NameResult:
     @property
     def skipped(self) -> bool:
         return not self.comparable
+
+
+def _is_failure(r: NameResult, runs_healthy: bool | None) -> bool:
+    """Whether a name counts as a determinism failure.
+
+    A content difference always fails. A differing program count fails only when
+    both runs completed cleanly: then it cannot be a missing test and so is a
+    non-deterministic program count. Otherwise it is a tolerated skip.
+    """
+    return r.differs or (r.skipped and runs_healthy is True)
 
 
 def _sha256(path: Path) -> str:
@@ -202,39 +216,58 @@ def write_diffs(results: list[NameResult], diffs_dir: Path) -> None:
         (diffs_dir / f"{safe}.txt").write_text("\n".join([r.name, *relpaths]) + "\n")
 
 
-def render_report(results: list[NameResult]) -> str:
+def render_report(results: list[NameResult], *, runs_healthy: bool | None = None) -> str:
     n_total = len(results)
+    n_match = sum(1 for r in results if r.match)
     n_differ = sum(1 for r in results if r.differs)
     n_skipped = sum(1 for r in results if r.skipped)
-    n_match = n_total - n_differ - n_skipped
     n_comparable = n_total - n_skipped
+    n_failed = sum(1 for r in results if _is_failure(r, runs_healthy))
+    n_count = n_failed - n_differ  # count differences treated as failures
+    skips_fail = runs_healthy is True
 
+    skip_label = "count-mismatch" if skips_fail else "skipped"
     lines = [
         f"Programs: {n_total}    comparable: {n_comparable}    matches: {n_match}    "
-        f"differs: {n_differ}    skipped: {n_skipped}",
+        f"differs: {n_differ}    {skip_label}: {n_skipped}",
         "",
     ]
     for r in results:
-        tag = "MATCH " if r.match else "DIFFER" if r.differs else "SKIP  "
+        if r.match:
+            tag = "MATCH "
+        elif r.differs:
+            tag = "DIFFER"
+        elif _is_failure(r, runs_healthy):
+            tag = "COUNT "
+        else:
+            tag = "SKIP  "
         lines.append(f"  [{tag}] {r.name}")
 
     if n_skipped:
-        lines += [
-            "",
-            f"{n_skipped} program(s) skipped: the two runs compiled a different number "
-            "of them, so they are not comparable. Re-run until both runs are clean to "
-            "cover them.",
-        ]
+        if skips_fail:
+            note = (
+                f"{n_skipped} program(s) produced a different number of generated "
+                "variants between two clean runs — the program count itself is "
+                "non-deterministic (counted as a failure)."
+            )
+        else:
+            note = (
+                f"{n_skipped} program(s) skipped: the two runs compiled a different "
+                "number of them, so they are not comparable. Re-run until both runs "
+                "are clean to cover them."
+            )
+        lines += ["", note]
 
     lines.append("")
     if n_total == 0:
         lines.append("RESULT: no programs observed.")
-    elif n_differ > 0:
-        suffix = f" ({n_skipped} skipped)" if n_skipped else ""
-        lines.append(
-            f"RESULT: NON-DETERMINISTIC CODEGEN — {n_differ}/{n_comparable} "
-            f"comparable program(s) differ{suffix}."
-        )
+    elif n_failed > 0:
+        bits = []
+        if n_differ:
+            bits.append(f"{n_differ}/{n_comparable} comparable program(s) differ")
+        if n_count:
+            bits.append(f"{n_count} program(s) with non-deterministic count")
+        lines.append("RESULT: NON-DETERMINISTIC CODEGEN — " + "; ".join(bits) + ".")
     elif n_comparable == 0:
         lines.append(
             f"RESULT: NOTHING COMPARABLE — all {n_skipped} program(s) had differing "
@@ -254,6 +287,7 @@ def check_determinism(
     cache1: Path,
     cache2: Path,
     *,
+    runs_healthy: bool | None = None,
     diffs_dir: Path | None = None,
     report_path: Path | None = None,
 ) -> list[NameResult]:
@@ -265,7 +299,7 @@ def check_determinism(
         write_diffs(results, diffs_dir)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(render_report(results))
+        report_path.write_text(render_report(results, runs_healthy=runs_healthy))
 
     if n_folders1 == 0 and n_folders2 == 0:
         raise NoProgramsObservedError(
@@ -284,20 +318,28 @@ def check_determinism(
     n_differ = sum(1 for r in results if r.differs)
     n_skipped = sum(1 for r in results if r.skipped)
     n_comparable = len(results) - n_skipped
+    n_failed = sum(1 for r in results if _is_failure(r, runs_healthy))
 
-    if n_comparable == 0:
+    # Inconclusive only when nothing was comparable and the count mismatches
+    # cannot be blamed on codegen; in a clean pair those mismatches are failures.
+    if n_comparable == 0 and n_failed == 0:
         raise NoComparableProgramsError(
             f"no logical name had a matching program count in both runs "
             f"({n_skipped} name(s) skipped), so nothing could be compared. "
             f"Likely one run failed wholesale; re-run with both runs clean."
         )
-    if n_differ > 0:
-        extra = f" ({n_skipped} skipped)" if n_skipped else ""
-        raise DeterminismError(
-            f"DaCe codegen is non-deterministic: {n_differ}/{n_comparable} "
-            f"comparable program(s) differ{extra}",
-            results,
-        )
+
+    if n_failed > 0:
+        bits = []
+        if n_differ:
+            bits.append(f"{n_differ}/{n_comparable} comparable program(s) differ")
+        n_count = n_failed - n_differ
+        if n_count:
+            bits.append(
+                f"{n_count} program(s) produced a different number of generated "
+                f"variants between two clean runs"
+            )
+        raise DeterminismError("DaCe codegen is non-deterministic: " + "; ".join(bits), results)
     return results
 
 
@@ -323,6 +365,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         metavar="PATH",
         help="If set, write the summary report here.",
     )
+    p.add_argument(
+        "--runs-healthy",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Whether both runs completed cleanly. When set, a differing program "
+        "count is treated as a failure (non-deterministic count) instead of a skip.",
+    )
     return p.parse_args(argv)
 
 
@@ -332,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
         results = check_determinism(
             args.run1.expanduser().resolve(),
             args.run2.expanduser().resolve(),
+            runs_healthy=args.runs_healthy,
             diffs_dir=args.diffs_dir.expanduser().resolve() if args.diffs_dir else None,
             report_path=args.report.expanduser().resolve() if args.report else None,
         )
@@ -346,11 +396,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except DeterminismError as e:
         if args.report is None:
-            print(render_report(e.results))
+            print(render_report(e.results, runs_healthy=args.runs_healthy))
         print(f"error: {e}", file=sys.stderr)
         return 1
     if args.report is None:
-        print(render_report(results))
+        print(render_report(results, runs_healthy=args.runs_healthy))
     return 0
 
 
