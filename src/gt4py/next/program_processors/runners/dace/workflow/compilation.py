@@ -146,8 +146,12 @@ class DaCeCompiler(
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType
-    add_gpu_trace_markers: bool = config.ADD_GPU_TRACE_MARKERS
-    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+    add_gpu_trace_markers: bool = dataclasses.field(
+        default_factory=lambda: config.ADD_GPU_TRACE_MARKERS
+    )
+    cmake_build_type: config.CMakeBuildType = dataclasses.field(
+        default_factory=lambda: config.CMAKE_BUILD_TYPE
+    )
 
     def __call__(
         self,
