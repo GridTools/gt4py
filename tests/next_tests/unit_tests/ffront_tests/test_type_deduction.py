@@ -549,6 +549,29 @@ def test_as_offset_dtype():
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)
 
 
+def test_as_offset_non_cartesian():
+    Vertex = Dimension("Vertex", kind=DimensionKind.HORIZONTAL)
+    Edge = Dimension("Edge", kind=DimensionKind.HORIZONTAL)
+    V2EDim = Dimension("V2EDim", kind=DimensionKind.LOCAL)
+    V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+
+    def as_offset_neighbor(a: Field[[Edge], float], b: Field[[Edge], int]):
+        return a(as_offset(V2E, b))
+
+    with pytest.raises(errors.DSLError, match="Cartesian"):
+        _ = FieldOperatorParser.apply_to_function(as_offset_neighbor)
+
+    IDim = Dimension("IDim")
+    JDim = Dimension("JDim")
+    IfromJ = FieldOffset("IfromJ", source=IDim, target=(JDim,))
+
+    def as_offset_cross_dim(a: Field[[IDim], float], b: Field[[IDim], int]):
+        return a(as_offset(IfromJ, b))
+
+    with pytest.raises(errors.DSLError, match="Cartesian"):
+        _ = FieldOperatorParser.apply_to_function(as_offset_cross_dim)
+
+
 vpfloat: TypeAlias = float32
 wpfloat: TypeAlias = float64
 
