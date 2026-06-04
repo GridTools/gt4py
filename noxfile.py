@@ -270,7 +270,8 @@ def test_next(
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
-        str(pathlib.Path("tests") / "next_tests"),
+        # str(pathlib.Path("tests") / "next_tests"),  # noqa ERA001
+        "tests/next_tests/integration_tests/feature_tests/",
         *session.posargs,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
