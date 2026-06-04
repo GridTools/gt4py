@@ -106,6 +106,10 @@ def make_sdfg_call_async(sdfg: dace.SDFG, gpu: bool) -> None:
     Todo: Revisit this function once DaCe changes its behaviour in this regard.
     """
 
+    # TODO(phimuell, edopao): Revisit this function after we understand the new
+    #   code generator better.
+    return
+
     # This is only a problem on GPU.
     # TODO(phimuell): Figuring out what about OpenMP.
     if not gpu:
@@ -291,6 +295,10 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     have _finished_ and the results are available. This function only has an effect for
     work that runs on the GPU. Furthermore, all work is scheduled on the default stream.
     """
+
+    # TODO(phimuell, edopao): Revisit this function after we understand the new
+    #   code generator better.
+    return
 
     if not gpu:
         # This is only a problem on GPU. Dace uses OpenMP on CPU and
