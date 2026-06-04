@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "uv sync*": "allow",
+      "uv run pytest*": "allow",
+      "uv run ruff*": "allow",
+      "uv run mypy*": "allow",
+      "uv run tach*": "allow",
+      "uv run nox*": "allow",
+      "pre-commit run*": "allow",
+      "./noxfile.py*": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git push*": "ask",
+      "*": "ask"
+    }
+  }
+}
