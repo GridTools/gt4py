@@ -271,7 +271,7 @@ def test_next(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         *("-m", f"{markers}"),
         # str(pathlib.Path("tests") / "next_tests"),  # noqa ERA001
-        "tests/next_tests/integration_tests/feature_tests/ffront_tests/test_where.py",
+        "tests/next_tests/integration_tests/feature_tests/ffront_tests/test_named_collections.py::test_where_nested",
         *session.posargs,
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
