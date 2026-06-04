@@ -20,6 +20,7 @@ import io
 import itertools
 import operator
 import pickle
+import pkgutil
 import pprint
 import re
 import sys
@@ -640,7 +641,7 @@ def singledispatcher(
     return cast(xtyping.SingleDispatchCallable[P, T], result)
 
 
-def standard_module_pickle_reduce(m: types.ModuleType) -> tuple:
+def custom_module_pickle_reduce(m: types.ModuleType) -> tuple:
     """
     Pickle a module by name reference, consistent with standard pickle behavior.
 
@@ -650,6 +651,17 @@ def standard_module_pickle_reduce(m: types.ModuleType) -> tuple:
     behavior by serializing modules by reference (their name in ``sys.modules``).
     """
     return (sys.modules.__getitem__, (m.__name__,))
+
+
+def custom_pickle_reduce_by_reference(obj: type | types.FunctionType | types.ModuleType) -> tuple:
+    """
+    Pickle an object by reference, consistent with standard pickle behavior.
+
+    Handles objects that are pickled by reference in the C-extension pickler
+    (e.g. locally-defined `enum`s or `unittest.mock.Mock`) but not in the
+    pure Python pickler, such as classes and functions.
+    """
+    return (pkgutil.resolve_name, (f"{obj.__module__}:{obj.__qualname__}",))
 
 
 def custom_overridden_pickler(

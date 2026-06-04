@@ -213,9 +213,7 @@ class CustomPicklingFingerprinter:
             # deal with modules out of the box, so unless the caller already
             # provided a custom reducer for modules, we need to register a custom
             # reducer equivalent to the one in the standard implementation.
-            self.reduce_dispatcher.register(
-                types.ModuleType, eve_utils.standard_module_pickle_reduce
-            )
+            self.reduce_dispatcher.register(types.ModuleType, eve_utils.custom_module_pickle_reduce)
         pickler_type = eve_utils.custom_overridden_pickler(
             self.reduce_dispatcher, name=self.name, override_builtin_types=override_builtin_types
         )
@@ -230,6 +228,13 @@ class CustomPicklingFingerprinter:
         return eve_utils.content_hash(instance, pickler_type=self.pickler_type)
 
 
+def _stable_container_sort_key(obj: Any) -> Any:
+    """Return a deterministic sort key for container elements/keys."""
+    if isinstance(obj, (type, types.FunctionType, types.ModuleType)):
+        return eve_utils.custom_pickle_reduce_by_reference(obj)
+    return obj
+
+
 #: Default fingerprinting function for GT4Py objects.
 #: Uses sorting for dicts and sets to ensure deterministic output regardless
 #: of insertion order.
@@ -238,19 +243,17 @@ stable_fingerprinter = CustomPicklingFingerprinter.from_reducers(
         dict: lambda obj: (
             obj.__class__,
             (),
-            tuple((k, v) for k, v in sorted(obj.items())),
+            tuple(
+                (k, v)
+                for k, v in sorted(obj.items(), key=lambda kv: _stable_container_sort_key(kv[0]))
+            ),
         ),
         set: lambda obj: (
             obj.__class__,
             (),
-            tuple(sorted(obj)),
+            tuple(sorted(obj, key=_stable_container_sort_key)),
         ),
-        # Classes (e.g. locally-defined `enum`s or `unittest.mock.Mock`) may not
-        # be picklable by reference. Fingerprint them by their qualified name
-        # instead, which is stable and enough to tell them apart. `format` is
-        # used as a builtin reconstructor that, unlike `str`/`tuple`, is not
-        # itself a `type` (which would re-trigger this reducer endlessly).
-        type: lambda obj: (format, (f"{obj.__module__}.{obj.__qualname__}",)),
+        type: eve_utils.custom_pickle_reduce_by_reference,
     },
     name="SortingSetsFingerprinter",
 )
@@ -259,8 +262,9 @@ stable_fingerprinter = CustomPicklingFingerprinter.from_reducers(
 @functools.cache
 def skipping_fields_node_fingerprinter(*skipped_fields: str) -> CustomPicklingFingerprinter:
     """
-    Return a `pickle.Pickler` to serialize a node skipping the given fields in the node or any of
-    its child nodes.
+    Return a `CustomPicklingFingerprinter` that fingerprints a node while skipping fields.
+
+    The provided field names are ignored on the node itself and recursively on all child nodes.
     """
     skipped_fields_set = set(skipped_fields)
 
