@@ -96,19 +96,10 @@ build_cscs_amd_rocm:
     DACE_compiler_cuda_implementation: experimental
   parallel:
     matrix:
-      - SUBPACKAGE: [cartesian]
-        VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
-        PY_VERSION: *test_python_versions
-      - SUBPACKAGE: eve
-        PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
         VARIANT: ['internal', 'dace']
         SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
         DETAIL: ["nomesh", "atlas"]
-        PY_VERSION: *test_python_versions
-      - SUBPACKAGE: [storage]
-        VARIANT: ['cuda12', 'rocm7', 'cpu']
         PY_VERSION: *test_python_versions
   rules: &exclude_variants_rules
     # Extended jobs should reference this list anchor at the proper position of their
