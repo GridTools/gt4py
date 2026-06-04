@@ -656,18 +656,18 @@ def custom_overriden_pickler(
     reducer_override: Callable[[Any], tuple | types.NotImplementedType],
     *,
     name: str | None = None,
-    skip_builtin_types: bool = True,
+    override_builtin_types: bool = False,
 ) -> type[pickle.Pickler]:
     """
     Create a custom pickler class using the provided function as reducer override.
     """
-    if skip_builtin_types:
-        base_pickler_class = pickle.Pickler
-    else:
+    if override_builtin_types:
         # The public Pickler (implemented in C) shortcuts some built-in types for performance.
-        # If we use want to override built-in types, we need to the _Pickler pure-Python
+        # If we want to override built-in types, we need to the _Pickler pure-Python
         # implementation.
         base_pickler_class = cast(type[pickle.Pickler], pickle._Pickler)
+    else:
+        base_pickler_class = pickle.Pickler
 
     pickler_cls = type(
         name or f"CustomReducePickler_{name or id(reducer_override)}",

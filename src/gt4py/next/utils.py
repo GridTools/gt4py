@@ -205,16 +205,17 @@ class CustomPicklingFingerprinter:
 
     def __post_init__(self) -> None:
         registered_types = set(self.reduce_dispatcher.registry.keys())
-        skip_builtin_types = not ({dict, set, list, tuple} & registered_types)
-        if not skip_builtin_types and types.ModuleType not in registered_types:
-            # The pure-Python pickler (used when overriding built-in types) cannot
-            # pickle modules out of the box, so register a reducer equivalent to
-            # the standard module unless the caller already provided a custom one.
+        override_builtin_types = bool({dict, set, list, tuple} & registered_types)
+        if override_builtin_types and types.ModuleType not in registered_types:
+            # The pure-Python pickler required to override built-in types cannot
+            # deal with modules out of the box, so unless the caller already
+            # provided a custom reducer for modules, we need to register a custom
+            # reducer equivalent to the one in the standard implementation.
             self.reduce_dispatcher.register(
                 types.ModuleType, eve_utils.standard_module_pickle_reduce
             )
         pickler_type = eve_utils.custom_overriden_pickler(
-            self.reduce_dispatcher, name=self.name, skip_builtin_types=skip_builtin_types
+            self.reduce_dispatcher, name=self.name, override_builtin_types=override_builtin_types
         )
         object.__setattr__(
             self,
