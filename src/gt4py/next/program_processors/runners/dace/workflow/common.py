@@ -110,6 +110,7 @@ def set_dace_config(
     dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
 
     # Use the new GPU code generator
+    # NOTE: In the CI file we export the variable to force the experimental code gen to be used.
     dace.Config.set("compiler.cuda.implementation", value="experimental")
 
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
