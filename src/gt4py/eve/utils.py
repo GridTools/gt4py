@@ -652,7 +652,7 @@ def standard_module_pickle_reduce(m: types.ModuleType) -> tuple:
     return (sys.modules.__getitem__, (m.__name__,))
 
 
-def custom_overriden_pickler(
+def custom_overridden_pickler(
     reducer_override: Callable[[Any], tuple | types.NotImplementedType],
     *,
     name: str | None = None,

@@ -469,7 +469,7 @@ def test_custom_pickler_with_singledispatch_reducer():
     import io
     import pickle
 
-    from gt4py.eve.utils import custom_overriden_pickler
+    from gt4py.eve.utils import custom_overridden_pickler
 
     offseter = _Offseter(4)
     offseter(2)
@@ -492,7 +492,7 @@ def test_custom_pickler_with_singledispatch_reducer():
         ),
     )
 
-    pickler_cls = custom_overriden_pickler(my_reducer, name="MyCustomPickler")
+    pickler_cls = custom_overridden_pickler(my_reducer, name="MyCustomPickler")
 
     assert issubclass(pickler_cls, pickle.Pickler)
     assert pickler_cls.__name__ == "MyCustomPickler"

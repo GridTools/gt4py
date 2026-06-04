@@ -189,8 +189,10 @@ class CustomPicklingFingerprinter:
                 arg = arg.reduce_dispatcher.registry
             if not isinstance(arg, Mapping):
                 raise TypeError(
-                    f"Expected only CustomPicklingFingerprinter instances, got '{arg}' of type '{type(arg)}'"
+                    f"Expected only CustomPicklingFingerprinter instances or mappings of reducers, "
+                    f"got '{arg}' of type '{type(arg)}'"
                 )
+
             impls.update(arg)
 
         reduce_dispatcher = cast(
@@ -214,7 +216,7 @@ class CustomPicklingFingerprinter:
             self.reduce_dispatcher.register(
                 types.ModuleType, eve_utils.standard_module_pickle_reduce
             )
-        pickler_type = eve_utils.custom_overriden_pickler(
+        pickler_type = eve_utils.custom_overridden_pickler(
             self.reduce_dispatcher, name=self.name, override_builtin_types=override_builtin_types
         )
         object.__setattr__(
