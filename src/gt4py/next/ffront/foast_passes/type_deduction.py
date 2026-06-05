@@ -871,10 +871,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         new_type = new_type_constructor.type.definition.returns
 
-        return_type = type_info.apply_to_primitive_constituents(
-            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind),
-            value.type,
-        )
+        return_type = type_info.tree_map_type(
+            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind)
+        )(value.type)
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(
@@ -962,7 +961,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
             return return_type
 
-        return deduce_return_type(true_branch, false_branch)  # type: ignore[return-value]
+        return deduce_return_type(true_branch, false_branch)
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         mask_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)

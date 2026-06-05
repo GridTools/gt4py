@@ -19,26 +19,8 @@ from gt4py.next.ffront.type_specifications import ProgramType
 from gt4py.next.type_system import type_info
 
 
-def _tree_map_type_constructor(
-    value: ts.CollectionTypeSpecT,
-    elems: NestedTuple[ts.DataType],
-) -> ts.CollectionTypeSpecT:
-    return (
-        ts.NamedCollectionType(
-            keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
-        )
-        if isinstance(value, ts.NamedCollectionType)
-        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
-    )
-
-
-# TODO: Replace all occurrences of `apply_to_primitive_constituents` with this function,
-#   which also works with NamedCollections.
-tree_map_type = functools.partial(
-    utils.tree_map,
-    collection_type=ts.COLLECTION_TYPE_SPECS,
-    result_collection_constructor=_tree_map_type_constructor,
-)
+_tree_map_type_constructor = type_info._tree_map_type_constructor
+tree_map_type = type_info.tree_map_type
 
 named_collections_to_tuple_types = cast(
     Callable[..., ts.TupleType],
