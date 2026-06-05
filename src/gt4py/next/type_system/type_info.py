@@ -663,7 +663,8 @@ def return_type_field(
             new_dims.append(d)
         else:
             new_dims.extend(target_dims)
-    return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
+    # Canonical order so the deduced type matches the embedded `premap` output domain.
+    return ts.FieldType(dims=common.order_dimensions(new_dims), dtype=field_type.dtype)
 
 
 @return_type.register

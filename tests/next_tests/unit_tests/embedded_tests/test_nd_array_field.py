@@ -553,10 +553,12 @@ def test_premap_same_dim_multineighbor_with_extra_dim():
 
     result = c_field.premap(conn)
 
+    # canonical order: K (horizontal) before C2E2CO (local)
     assert result.domain == common.Domain(
-        dims=(C, C2E2CO, K), ranges=(UnitRange(0, NC), UnitRange(0, NN), UnitRange(0, NK))
+        dims=(C, K, C2E2CO), ranges=(UnitRange(0, NC), UnitRange(0, NK), UnitRange(0, NN))
     )
-    assert np.all(result.ndarray == c_field.ndarray[table])  # out[c, n, k] == f[table[c, n], k]
+    # out[c, k, n] == f[table[c, n], k]
+    assert np.all(result.ndarray == np.transpose(c_field.ndarray[table], (0, 2, 1)))
 
 
 def test_gather_premap_multiple_connectivities():
@@ -655,9 +657,10 @@ def test_gather_premap_reads_non_codomain_field_dim():
 
     result = f.premap(conn)
 
-    assert result.domain == common.Domain(dims=(L, B), ranges=(UnitRange(0, 2), UnitRange(0, NB)))
-    # out[l, b] = f[table[b, l], b]
-    assert np.all(result.ndarray == f.ndarray[table.T, np.arange(NB)[None, :]])
+    # canonical order: B (horizontal) before L (local)
+    assert result.domain == common.Domain(dims=(B, L), ranges=(UnitRange(0, NB), UnitRange(0, 2)))
+    # out[b, l] = f[table[b, l], b]
+    assert np.all(result.ndarray == f.ndarray[table, np.arange(NB)[:, None]])
 
 
 def test_gather_premap_shared_domain_dim():
@@ -713,9 +716,40 @@ def test_gather_premap_mix_introducing_and_preserving():
 
     result = f.premap(conn_a, conn_b)
 
-    assert result.domain == common.Domain(dims=(X, B), ranges=(UnitRange(0, 3), UnitRange(0, NB)))
-    # out[x, b] = f[ca[x], cb[b]]
-    assert np.all(result.ndarray == f.ndarray[ca[:, None], cb[None, :]])
+    # canonical order: B before X (both horizontal, ordered by name)
+    assert result.domain == common.Domain(dims=(B, X), ranges=(UnitRange(0, NB), UnitRange(0, 3)))
+    # out[b, x] = f[ca[x], cb[b]]
+    assert np.all(result.ndarray == f.ndarray[ca[None, :], cb[:, None]])
+
+
+def test_gather_premap_introduced_vertical_dim_canonicalized():
+    # Introduce a vertical dim (K) while a local dim (Band) survives: insertion gives the
+    # non-canonical (Cell, K, Band), the output must be canonical (Cell, Band, K).
+    PT = Dimension("PT")
+    Band = Dimension("Band", kind=DimensionKind.LOCAL)
+    Cell = Dimension("Cell")
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+
+    NPT, NBND, NC, NK = 4, 3, 5, 2
+    f = common._field(
+        np.arange(NPT * NBND).reshape(NPT, NBND).astype(float),
+        domain=common.Domain(dims=(PT, Band), ranges=(UnitRange(0, NPT), UnitRange(0, NBND))),
+    )
+    table = (np.arange(NC * NK).reshape(NC, NK)) % NPT  # (Cell, K) -> PT
+    conn = common._connectivity(
+        table,
+        domain=common.Domain(dims=(Cell, K), ranges=(UnitRange(0, NC), UnitRange(0, NK))),
+        codomain=PT,
+    )
+
+    result = f.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(Cell, Band, K), ranges=(UnitRange(0, NC), UnitRange(0, NBND), UnitRange(0, NK))
+    )
+    # out[c, b, k] = f[table[c, k], b]
+    expected = f.ndarray[table[:, None, :], np.arange(NBND)[None, :, None]]
+    assert np.all(result.ndarray == expected)
 
 
 def test_premap_chained_connectivities_raises():
