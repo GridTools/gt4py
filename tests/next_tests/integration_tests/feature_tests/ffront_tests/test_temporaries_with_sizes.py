@@ -5,12 +5,15 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import typing
+
 import pytest
 from numpy import int32
 
 from gt4py import next as gtx
 from gt4py.next import backend, common
 from gt4py.next.iterator.transforms import apply_common_transforms
+from gt4py.next.otf import recipes
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests import cases
@@ -30,11 +33,17 @@ from next_tests.toy_connectivity import Cell, Edge
 # see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture
 def exec_alloc_descriptor():
+    gtfn_workflow = typing.cast(
+        recipes.OTFCompileWorkflow,
+        run_gtfn.executor.step if run_gtfn.cached else run_gtfn.executor.step,
+    )
+    assert hasattr(gtfn_workflow.translation, "step")  # the translation stage is always cached
+    gtfn_workflow_translation = gtfn_workflow.translation.step
     return backend.Backend(
         name="run_gtfn_with_temporaries_and_sizes",
         transforms=backend.DEFAULT_TRANSFORMS,
-        executor=run_gtfn.executor.replace(
-            translation=run_gtfn.executor.translation.replace(
+        executor=gtfn_workflow.replace(
+            translation=gtfn_workflow_translation.replace(
                 symbolic_domain_sizes={
                     "Cell": "num_cells",
                     "Edge": "num_edges",

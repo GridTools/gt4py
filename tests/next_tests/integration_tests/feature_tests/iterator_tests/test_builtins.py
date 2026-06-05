@@ -50,6 +50,7 @@ from gt4py.next.iterator.builtins import (
     abs,
 )
 from gt4py.next.iterator.runtime import fendef, fundef, offset, set_at
+from gt4py.next.program_processors.codegens import gtfn
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
@@ -189,11 +190,8 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     inps = field_maker(*array_maker(*inputs))
     out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
-    gtfn_without_transforms = dataclasses.replace(
-        run_gtfn,
-        executor=run_gtfn.executor.replace(
-            translation=run_gtfn.executor.translation.replace(enable_itir_transforms=False),
-        ),  # avoid inlining the function
+    gtfn_without_transforms = gtfn.GTFNBackendFactory(
+        otf_workflow__bare_translation__enable_itir_transforms=False
     )
 
     fencil(builtin, out, *inps, processor=gtfn_without_transforms)
