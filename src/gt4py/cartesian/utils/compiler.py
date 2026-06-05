@@ -137,7 +137,7 @@ class GPUCompilerName(enum.Enum):
 class GPUConfiguration:
     name: GPUCompilerName
     """Name identifier of the compiler"""
-    gpu_compile_flags: str
+    gpu_compile_flags: list[str]
     """Compile flags for device code"""
     binary_path: str
     """Path to binaries for GPU compiler & tools"""
@@ -181,7 +181,7 @@ def gpu_configuration(optimization_level: str) -> GPUConfiguration:
 
     return GPUConfiguration(
         name=name,
-        gpu_compile_flags=" ".join(gpu_compile_flags).strip(),
+        gpu_compile_flags=gpu_compile_flags,
         binary_path=os.path.join(cuda_root, "bin"),
         include_path=os.path.join(cuda_root, "include"),
         library_path=library_path,
