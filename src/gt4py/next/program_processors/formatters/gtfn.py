@@ -16,12 +16,10 @@ from gt4py.next.program_processors.runners import gtfn
 
 @program_formatter.program_formatter
 def format_cpp(program: itir.Program, *args: Any, **kwargs: Any) -> str:
-    # TODO(tehrengruber): This is a little ugly. Revisit.
-    gtfn_translation = gtfn.GTFNBackendFactory(cached=False).executor.translation  # type: ignore[attr-defined]
-    assert hasattr(gtfn_translation, "step")  # the translation stage is always cached
-    assert isinstance(gtfn_translation.step, GTFNTranslationStep)
+    gtfn_translation = gtfn.GTFNCompileWorkflowFactory(cached_translation=False).translation
+    assert isinstance(gtfn_translation, GTFNTranslationStep)
     return gtfn_translation.generate_stencil_source(
         program,
-        offset_provider=kwargs.get("offset_provider", None),
+        offset_provider=kwargs.get("offset_provider", {}),
         column_axis=kwargs.get("column_axis", None),
     )

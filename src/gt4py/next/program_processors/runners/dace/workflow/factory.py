@@ -42,21 +42,28 @@ class DaCeWorkflowFactory(factory.Factory):
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
+
         bare_translation = factory.SubFactory(
             DaCeTranslationStepFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
         )
-
-    translation = factory.LazyAttribute(
-        lambda o: workflow.CachedStep(
-            o.bare_translation,
-            hash_function=stages.fingerprint_compilable_program,
-            cache=filecache.FileCache(
-                str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "translation_cache")
+        cached_translation = factory.Trait(
+            translation=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(
+                    o.bare_translation,
+                    hash_function=stages.fingerprint_compilable_program,
+                    cache=filecache.FileCache(
+                        str(
+                            cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME)
+                            / "translation_cache"
+                        )
+                    ),
+                )
             ),
         )
-    )
+
+    translation = factory.LazyAttribute(lambda o: o.bare_translation)
     bindings = factory.LazyAttribute(
         lambda o: functools.partial(
             bindings_step.bind_sdfg,

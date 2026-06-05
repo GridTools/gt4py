@@ -118,21 +118,24 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
+
         bare_translation = factory.SubFactory(
             gtfn_module.GTFNTranslationStepFactory,
             device_type=factory.SelfAttribute("..device_type"),
         )
-
-    translation = factory.LazyAttribute(
-        lambda o: workflow.CachedStep(
-            o.bare_translation,
-            hash_function=stages.fingerprint_compilable_program,
-            cache=filecache.FileCache(
-                str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
+        cached_translation = factory.Trait(
+            translation=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(
+                    o.bare_translation,
+                    hash_function=stages.fingerprint_compilable_program,
+                    cache=filecache.FileCache(
+                        str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
+                    ),
+                )
             ),
         )
-    )
 
+    translation = factory.LazyAttribute(lambda o: o.bare_translation)
     bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
         nanobind.bind_source
     )
@@ -168,7 +171,9 @@ class GTFNBackendFactory(factory.Factory):
         device_type = core_defs.DeviceType.CPU
         hash_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
-            GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
+            GTFNCompileWorkflowFactory,
+            cached_translation=True,
+            device_type=factory.SelfAttribute("..device_type"),
         )
 
     name = factory.LazyAttribute(

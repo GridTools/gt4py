@@ -52,6 +52,7 @@ class DaCeBackendFactory(factory.Factory):
         hash_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
             DaCeWorkflowFactory,
+            cached_translation=True,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
         )
