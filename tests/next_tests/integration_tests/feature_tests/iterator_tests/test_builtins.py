@@ -50,8 +50,7 @@ from gt4py.next.iterator.builtins import (
     abs,
 )
 from gt4py.next.iterator.runtime import fendef, fundef, offset, set_at
-from gt4py.next.program_processors.codegens import gtfn
-from gt4py.next.program_processors.runners.gtfn import run_gtfn
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 from next_tests.unit_tests.conftest import program_processor, run_processor
