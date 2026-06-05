@@ -37,9 +37,9 @@ from gt4py.next.program_processors.runners import dace as dace_backends
 # see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture(
     params=[
-        pytest.param(dace_backends.run_dace_cpu_cached, marks=pytest.mark.requires_dace),
+        pytest.param(dace_backends.run_dace_cpu, marks=pytest.mark.requires_dace),
         pytest.param(
-            dace_backends.run_dace_gpu_cached,
+            dace_backends.run_dace_gpu,
             marks=(pytest.mark.requires_gpu, pytest.mark.requires_dace),
         ),
     ]
