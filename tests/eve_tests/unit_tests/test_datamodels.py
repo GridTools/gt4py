@@ -282,6 +282,7 @@ def test_slots():
         as_int: int
         a_str: str
 
+    assert "__dict__" in dir(Model)
     assert "__slots__" not in Model.__dict__
 
     SlottedModel = datamodels.datamodel(Model, slots=True)
@@ -292,13 +293,20 @@ def test_slots():
     assert "__slots__" in SlottedModel.__dict__
     assert SlottedModel is not Model
 
-    DataModel = datamodels.datamodel(Model, slots=False)
+    class OtherModel:
+        as_int: int
+        a_str: str
+
+    assert "__dict__" in dir(OtherModel)
+    assert "__dicts__" not in OtherModel.__dict__
+
+    DataModel = datamodels.datamodel(OtherModel, slots=False)
     model = DataModel(33, "foo")
 
     assert (model.as_int, model.a_str) == (33, "foo")
     assert "__dict__" in dir(model)
     assert "__slots__" not in DataModel.__dict__
-    assert DataModel is Model
+    assert DataModel is OtherModel
 
 
 class TestConversion:
@@ -560,13 +568,11 @@ SAMPLE_TYPE_DATA: Final = [
         "int | float | str",
         [1, 3.0, "one"],
         [[1], [], 1j],
-        marks=pytest.mark.skipif(sys.version_info < (3, 10), reason="| union syntax not supported"),
     ),
     pytest.param(
         "typing.List[int|float]",
         [[1, 2.0], []],
         [1, 2.0, [1, "2.0"]],
-        marks=pytest.mark.skipif(sys.version_info < (3, 10), reason="| union syntax not supported"),
     ),
     ("typing.Optional[int]", [1, None], [[1], [], 1j]),
     (

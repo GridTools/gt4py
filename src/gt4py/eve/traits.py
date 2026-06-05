@@ -20,7 +20,8 @@ from .extended_typing import Any, Dict, Set, Type, no_type_check
 @concepts.register_annex_user("symtable", Dict[str, concepts.Node], shared=True)
 @datamodels.datamodel
 class SymbolTableTrait:
-    """Node trait adding an automatically created symbol table to the parent node.
+    """
+    Node trait adding an automatically created symbol table to the parent node.
 
     The actual symbol table dict will be stored in the `annex.symtable` attribute.
     To inject extra symbol definitions, add the nodes to a class attribute

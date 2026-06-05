@@ -76,7 +76,6 @@ class CachingStrategy(abc.ABC):
         ----------
         extra_cache_info:
             Additional info to be written
-
         """
         raise NotImplementedError
 
@@ -244,7 +243,7 @@ class JITCachingStrategy(CachingStrategy):
                 for k, v in self.builder.backend.extra_cache_info.items()
                 if k in self.builder.backend.extra_cache_validation_keys
             }
-            source = self.builder.module_path.read_text()
+            source = self.builder.module_path.read_text(encoding="utf-8")
             module_shash = gt_utils.shash(source)
 
             if validate_hash:
@@ -267,9 +266,7 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def cache_info(self) -> Dict[str, Any]:
-        if not self.cache_info_path:
-            return {}
-        if not self.cache_info_path.exists():
+        if not self.cache_info_path or not self.cache_info_path.exists():
             return {}
         return self._unpickle_cache_info_file(self.cache_info_path)
 
@@ -323,10 +320,10 @@ class JITCachingStrategy(CachingStrategy):
         if self.builder.backend.name == "dace:gpu":
             fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
 
-        # typeignore because attrclass StencilID has generated constructor
+        # ignore type because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
             self.builder.options.qualified_name,
-            gt_utils.shashed_id(gt_utils.shashed_id(fingerprint), self.options_id),
+            gt_utils.shashed_id(fingerprint, self.options_id),
         )
 
     @property
@@ -347,7 +344,7 @@ class JITCachingStrategy(CachingStrategy):
 
 class NoCachingStrategy(CachingStrategy):
     """
-    Apply no caching, useful for CLI.
+    Apply no caching.
 
     Instead of calculating paths and names based on a stencil fingerprint, use
     user input or by default the current working dir to output source and build files.

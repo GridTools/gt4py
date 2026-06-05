@@ -9,7 +9,7 @@
 from typing import Any, Generic, Literal, Optional, TypeVar, Union
 
 import gt4py.eve as eve
-from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
+from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts
@@ -84,6 +84,12 @@ class Constant(Expr):
 class Dict(Expr):
     keys_: list[Union[Name | Attribute]]
     values_: list[TupleExpr]
+
+    @datamodels.root_validator
+    @classmethod
+    def keys_values_length_validation(cls: type["Dict"], instance: "Dict") -> None:
+        if len(instance.keys_) != len(instance.values_):
+            raise ValueError("`Dict` must have same number of keys as values.")
 
 
 class Slice(Expr):

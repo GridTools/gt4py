@@ -8,88 +8,71 @@
 
 from __future__ import annotations
 
-import ctypes
+import functools
 from typing import Any, Sequence
 
-import dace
-from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
+import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, utils as gtx_utils
-from gt4py.next.otf import arguments, stages
-from gt4py.next.program_processors.runners.dace import (
-    sdfg_callable,
-    utils as gtx_dace_utils,
-    workflow as dace_worflow,
+from gt4py.next import common as gtx_common, config, utils as gtx_utils
+from gt4py.next.instrumentation import metrics
+from gt4py.next.otf import stages
+from gt4py.next.program_processors.runners.dace import sdfg_callable
+from gt4py.next.program_processors.runners.dace.workflow import (
+    common as gtx_wfdcommon,
+    compilation as gtx_wfdcompilation,
 )
 
 
 def convert_args(
-    inp: dace_worflow.compilation.CompiledDaceProgram,
+    fun: gtx_wfdcompilation.CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
-    use_field_canonical_representation: bool = False,
-) -> stages.CompiledProgram:
-    sdfg_program = inp.sdfg_program
-    sdfg = sdfg_program.sdfg
-    on_gpu = True if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM] else False
+) -> stages.ExecutableProgram:
+    # Retieve metrics level from GT4Py environment variable.
+    collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
+    collect_time_arg = np.array([1], dtype=np.float64)
+    # We use the callback function provided by the compiled program to update the SDFG arglist.
+    update_sdfg_call_args = functools.partial(
+        fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
+    )
 
     def decorated_program(
         *args: Any,
-        offset_provider: common.OffsetProvider,
+        offset_provider: gtx_common.OffsetProvider,
         out: Any = None,
-    ) -> None:
+    ) -> Any:
         if out is not None:
             args = (*args, out)
-        flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(tuple(args))
-        if inp.implicit_domain:
-            # generate implicit domain size arguments only if necessary
-            size_args = arguments.iter_size_args(args)
-            flat_size_args: Sequence[int] = gtx_utils.flatten_nested_tuple(tuple(size_args))
-            flat_args = (*flat_args, *flat_size_args)
 
-        if sdfg_program._lastargs:
-            kwargs = dict(zip(sdfg.arg_names, flat_args, strict=True))
-            kwargs.update(sdfg_callable.get_sdfg_conn_args(sdfg, offset_provider, on_gpu))
+        try:
+            # Not the first call.
+            #  We will only update the argument vector  for the normal call.
+            # NOTE: If this is the first time then we will generate an exception because
+            #   `fun.csdfg_args` is `None`
+            # TODO(phimuell, edopao): Think about refactor the code such that the update
+            #   of the argument vector is a Method of the `CompiledDaceProgram`.
+            update_sdfg_call_args(args, fun.csdfg_argv, offset_provider)  # type: ignore[arg-type]  # Will error out in first call.
 
-            use_fast_call = True
-            last_call_args = sdfg_program._lastargs[0]
-            # The scalar arguments should be overridden with the new value; for field arguments,
-            # the data pointer should remain the same otherwise fast_call cannot be used and
-            # the arguments list has to be reconstructed.
-            for i, (arg_name, arg_type) in enumerate(inp.sdfg_arglist):
-                if isinstance(arg_type, dace.data.Array):
-                    assert arg_name in kwargs, f"argument '{arg_name}' not found."
-                    data_ptr = get_array_interface_ptr(kwargs[arg_name], arg_type.storage)
-                    assert isinstance(last_call_args[i], ctypes.c_void_p)
-                    if last_call_args[i].value != data_ptr:
-                        use_fast_call = False
-                        break
-                else:
-                    assert isinstance(arg_type, dace.data.Scalar)
-                    assert isinstance(last_call_args[i], ctypes._SimpleCData)
-                    if arg_name in kwargs:
-                        # override the scalar value used in previous program call
-                        actype = arg_type.dtype.as_ctypes()
-                        last_call_args[i] = actype(kwargs[arg_name])
-                    else:
-                        # shape and strides of arrays are supposed not to change, and can therefore be omitted
-                        assert gtx_dace_utils.is_field_symbol(
-                            arg_name
-                        ), f"argument '{arg_name}' not found."
+        except TypeError:
+            # First call. Construct the initial argument vector of the `CompiledDaceProgram`.
+            assert fun.csdfg_argv is None and fun.csdfg_init_argv is None
+            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
+            this_call_args = sdfg_callable.get_sdfg_args(
+                fun.sdfg_program.sdfg,
+                offset_provider,
+                *flat_args,
+                filter_args=False,
+            )
+            this_call_args |= {
+                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
+                gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
+            }
+            fun.construct_arguments(**this_call_args)
 
-            if use_fast_call:
-                return inp.fast_call()
+        # Perform the call to the SDFG.
+        fun.fast_call()
 
-        sdfg_args = sdfg_callable.get_sdfg_args(
-            sdfg,
-            offset_provider,
-            *flat_args,
-            check_args=False,
-            on_gpu=on_gpu,
-        )
-
-        with dace.config.temporary_config():
-            dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-            return inp(**sdfg_args)
+        if collect_time:
+            metrics.add_sample_to_current_source(metrics.COMPUTE_METRIC, collect_time_arg[0].item())
 
     return decorated_program

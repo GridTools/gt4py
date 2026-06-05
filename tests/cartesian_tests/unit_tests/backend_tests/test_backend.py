@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import os
 from typing import Any, Dict, cast
 
 import numpy as np
@@ -115,14 +114,10 @@ def test_device_sync_option(backend_name, mode, device_sync):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
     builder.options.backend_opts["device_sync"] = device_sync
+    builder.build()
     args_data = make_args_data_from_gtir(builder.gtir_pipeline)
-    module_generator = backend_cls.MODULE_GENERATOR_CLASS()
-    source = module_generator(
-        args_data,
-        builder,
-        pyext_module_name=builder.module_name,
-        pyext_file_path=str(builder.module_path),
-    )
+    module_generator = backend_cls.MODULE_GENERATOR_CLASS(builder)
+    source = module_generator(args_data)
 
     if device_sync:
         assert "cupy.cuda.Device(0).synchronize()" in source
@@ -168,33 +163,9 @@ def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
         assert build_info["load_time"] > 0.0
 
 
-@pytest.mark.parametrize("backend_name", ["cuda"])
-def test_deprecation_gtc_cuda(backend_name: str):
-    # Default deprecation, raise an error
-    # Assumes that the GT4PY_GTC_ENABLE_CUDA env variable is not set or set to "0"
-    # Renders the "cuda" backend untestable
-    build_info: Dict[str, Any] = {}
-    builder = (
-        StencilBuilder(cast(StencilFunc, stencil_def))
-        .with_backend(backend_name)
-        .with_externals({"MODE": 2})
-        .with_options(
-            name=stencil_def.__name__,
-            module=stencil_def.__module__,
-            build_info=build_info,
-        )
-    )
-    with pytest.raises(NotImplementedError):
-        builder.build()
-
-
 def test_bad_backend_feedback():
     existing_backend = backend_from_name("numpy")
     assert existing_backend
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError, match="Backend .* is not registered. Valid options are: .*"):
         backend_from_name("xxxxx")
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])

@@ -38,7 +38,7 @@ class PropagateDeref(PreserveLocationVisitor, NodeTranslator):
 
     def visit_FunCall(self, node: ir.FunCall):
         if cpm.is_call_to(node, "deref") and cpm.is_let(node.args[0]):
-            fun: ir.Lambda = node.args[0].fun  # type: ignore[assignment]  # ensured by is_let
+            fun: ir.Lambda = node.args[0].fun
             args: list[ir.Expr] = node.args[0].args
             node = im.let(*zip(fun.params, args, strict=True))(im.deref(fun.expr))
         elif cpm.is_call_to(node, "deref") and cpm.is_call_to(node.args[0], "if_"):

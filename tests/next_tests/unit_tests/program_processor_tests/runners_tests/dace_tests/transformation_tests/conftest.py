@@ -26,4 +26,11 @@ def common_dace_config() -> Generator[None, None, None]:
     with dace.config.temporary_config():
         dace.Config.set("optimizer", "match_exception", value=True)
         dace.Config.set("compiler", "allow_view_arguments", value=True)
+
+        # If the cache is used, then only the name is considered. Thus in tests
+        #  that compile the SDFG multiple times, for example to check if the result
+        #  is the same after the transformation, will only compile the SDFG once.
+        #  Thus potential errors by the transformation are hidden.
+        dace.Config.set("compiler.use_cache", value=False)
+
         yield

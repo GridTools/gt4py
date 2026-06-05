@@ -27,7 +27,7 @@ Delete this comment and add a proper description of the changes contained in thi
 ## Requirements
 
 - [ ] All fixes and/or new features come with corresponding tests.
-- [ ] Important design decisions have been documented in the appropriate ADR inside the [docs/development/ADRs/](docs/development/ADRs/Index.md) folder.
+- [ ] Important design decisions have been documented in the appropriate ADR inside the [docs/development/ADRs/](docs/development/ADRs/README.md) folder.
 
 If this PR contains code authored by new contributors please make sure:
 

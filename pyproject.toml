@@ -2,29 +2,25 @@
 
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = ['setuptools>=70.0.0', 'wheel>=0.33.6', 'cython>=3.0.0']
+requires = ['cython>=3.0.0', 'setuptools>=77.0.3', 'versioningit>=3.1.1', 'wheel>=0.33.6']
 
 # -- Dependency groups --
 [dependency-groups]
-build = [
-  'bump-my-version>=0.16.0',
-  'cython>=3.0.0',
-  'pip>=22.1.1',
-  'setuptools>=70.0.0',
-  'wheel>=0.33.6'
-]
+build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=77.0.3', 'wheel>=0.33.6']
 dev = [
   {include-group = 'build'},
   {include-group = 'docs'},
   {include-group = 'frameworks'},
   {include-group = 'lint'},
+  {include-group = 'profiling'},
+  {include-group = 'scripts'},
   {include-group = 'test'},
   {include-group = 'typing'}
 ]
 docs = [
   'esbonio>=0.16.0',
   'jupytext>=1.14',
-  'matplotlib>=3.3',
+  'matplotlib>=3.9.0',
   'myst-parser>=4.0.0',
   'pygments>=2.7.3',
   'sphinx>=7.3.7',
@@ -33,18 +29,24 @@ docs = [
 ]
 frameworks = [
   # 3rd party frameworks with some interoperability with gt4py
-  'atlas4py>=0.35'
+  'atlas4py>=0.41'
 ]
 lint = [
   'pre-commit>=4.0.1',
   'ruff>=0.8.0',
-  'tach>=0.16.0'
+  'tach>=0.23.0',
+  'validate-pyproject-schema-store[all]>=2025.06.13'
 ]
+profiling = [
+  'nvtx>=0.2.14',
+  'viztracer>=1.1.1'
+]
+scripts = ["pyyaml>=6.0.1", "typer>=0.12.3", "packaging"]
 test = [
-  'coverage[toml]>=7.5.0',
+  'coverage[toml]>=7.6.1',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
-  'nox>=2024.10.9',
+  'nox>=2025.02.09',
   'pytest>=8.0.1',
   'pytest-benchmark>=5.0.0',
   'pytest-cache>=1.0',
@@ -61,6 +63,13 @@ typing = [
   'types-docutils>=0.21.0',
   'types-pytz>=2024.2.0'
 ]
+typing_exports = [
+  # to test typing with gt4py in downstream code
+  {include-group = "typing"},
+  'types-six>=1.17.0.20251009',  # can not let mypy auto-install types as that leads to unexpected stderr output (which means test failure)
+  'pytest-mypy-plugins>=4.0.0',  # pytest plugin for running mypy on code snippets
+  "xarray>=2024.1.0"  # one of the regression tests requires xarray
+]
 
 # -- Standard project description options (PEP 621) --
 [project]
@@ -70,11 +79,13 @@ classifiers = [
   'Environment :: Console',
   'Environment :: GPU :: NVIDIA CUDA',
   'Intended Audience :: Science/Research',
-  'License :: OSI Approved :: BSD License',
   'Operating System :: POSIX',
   'Programming Language :: Python',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
+  'Programming Language :: Python :: 3.13',
+  'Programming Language :: Python :: 3.14',
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
@@ -82,32 +93,35 @@ classifiers = [
 ]
 dependencies = [
   'attrs>=21.3',
-  'black>=22.3',
+  'array-api-compat>=1.13',
+  'black>=25.11',
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
   'cmake>=3.22',
-  'cytoolz>=0.12.1',
-  'deepdiff>=5.6.0',
+  'cytoolz>=1.0.1',
+  'dace>=2.0.0a3',
+  'deepdiff>=8.1.0',
   'devtools>=0.6',
-  'diskcache>=5.6.3',
-  'factory-boy>=3.3.0',
-  'filelock>=3.16.1',
+  'factory-boy>=3.3.3',
+  "filelock>=3.18.0",
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.8,==2.*',
+  'gridtools-cpp>=2.3.9,==2.*',
   'jinja2>=3.0.0',
   'lark>=1.1.2',
-  'mako>=1.1',
-  'nanobind>=1.4.0 ',
-  'ninja>=1.10',
-  'numpy>=1.23.3',
+  'mako>=1.3',
+  'nanobind>=1.9.0',
+  'ninja>=1.11',
+  'numpy>=2.0.0 ; python_version < "3.14"',
+  'numpy>=2.3.2 ; python_version >= "3.14"',  # first version with pre-built wheel for Python 3.14
   'packaging>=20.0',
-  'pybind11>=2.10.1',
-  'setuptools>=70.0.0',
+  'pybind11>=3.0.3',
+  'setuptools>=77.0.3',
   'tabulate>=0.8.10',
   'toolz>=0.12.1',
-  'typing-extensions>=4.11.0',
-  'xxhash>=1.4.4,<3.1.0'
+  'typing-extensions>=4.12.0',
+  'versioningit>=3.1.1',
+  'xxhash>=3.5.0'
 ]
 description = 'Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)'
 dynamic = ['version']
@@ -120,29 +134,36 @@ keywords = [
   'portable',
   'hpc'
 ]
-license = {text = 'BSD-3 License'}  # TODO: waiting for PEP 639 being implemented by setuptools (https://github.com/codecov/codecov-cli/issues/605)
+license = 'BSD-3-Clause'
+license-files = ['LICENSE']
 name = 'gt4py'
 readme = 'README.md'
-requires-python = '>=3.10, <3.12'
+# TODO(egparedes): remove the exclusions when possible
+# 3.13.10, 3.14.1 excluded due to bugs breaking dataclasses for Networkx
+# - https://github.com/networkx/networkx/issues/8362
+# - https://github.com/python/cpython/issues/142214
+requires-python = '>=3.10, <3.15, !=3.13.10, !=3.14.1'
 
 [project.optional-dependencies]
-# bundles
-all = ['gt4py[dace,formatting,jax,performance,testing]']
-# device-specific extras
-cuda11 = ['cupy-cuda11x>=12.0']
+cartesian = ['gt4py[jax,standard,testing]']
 cuda12 = ['cupy-cuda12x>=12.0']
-# features
-dace = ['dace>=1.0.0,<1.1.0']  # v1.x will contain breaking changes, see https://github.com/spcl/dace/milestone/4
-formatting = ['clang-format>=9.0']
-jax = ['jax>=0.4.26']
-jax-cuda12 = ['jax[cuda12_local]>=0.4.26', 'gt4py[cuda12]']
-performance = ['scipy>=1.9.2']
-rocm4_3 = ['cupy-rocm-4-3>=13.3.0']
-rocm5_0 = ['cupy-rocm-5-0>=13.3.0']
-testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
-
-[project.scripts]
-gtpyc = 'gt4py.cartesian.cli:gtpyc'
+cuda13 = ['cupy-cuda13x>=14.0']
+jax = [
+  'jax>=0.4.26 ; python_version < "3.14"',
+  'jax>=0.9.1 ; python_version >= "3.14"'  # first version with pre-built wheel for Python 3.14
+]
+jax-cuda12 = ['jax[cuda12-local]>=0.6.0', 'gt4py[cuda12]']
+jax-cuda13 = ['jax[cuda13-local]>=0.7.0; python_version >= "3.11"', 'gt4py[cuda13]']  # jax 0.7 not supported with Python 3.10
+next = ['gt4py[jax,standard,testing]']
+rocm6 = ['cupy>=13.4.1,<14.0']
+rocm7 = ['cupy-rocm-7-0>=14.0']
+standard = [
+  'clang-format>=18.1',
+  # TODO(edopao): we keep 'scipy>=1.14.1' only because of wheels compatibility with python 3.10
+  'scipy>=1.14.1 ; python_version < "3.11"',
+  'scipy>=1.16.1 ; python_version >= "3.11"'
+]
+testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
 [project.urls]
 Documentation = 'https://gridtools.github.io/gt4py'
@@ -150,27 +171,6 @@ Homepage = 'https://gridtools.github.io/'
 Repository = 'https://github.com/GridTools/gt4py'
 
 # ---- Other tools ----
-# -- bump-my-version --
-[tool.bumpversion]
-allow_dirty = false
-commit = false
-commit_args = ''
-current_version = '1.0.4'
-ignore_missing_version = false
-message = 'Bump version: {current_version} → {new_version}'
-parse = '(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<patch>\d+))?'
-regex = false
-replace = '{new_version}'
-search = '{current_version}'
-serialize = ['{major}.{minor}.{patch}']
-sign_tags = false
-tag = false
-tag_message = 'Bump version: {current_version} → {new_version}'
-tag_name = 'v{new_version}'
-
-[[tool.bumpversion.files]]
-filename = 'src/gt4py/__about__.py'
-
 # -- coverage --
 [tool.coverage]
 
@@ -197,18 +197,14 @@ source_pkgs = ['gt4py']
 # -- mypy  --
 [tool.mypy]
 disallow_incomplete_defs = true
-exclude = [
-  '^setup\.py$',
-  'build/.*$',
-  'ci/*.$',
-  'docs/.*$',
-  'tests/.*$'
-]
+disallow_untyped_defs = true
+exclude = ['^setup\.py$', 'build/.*$', 'ci/*.$', 'docs/.*$', 'tests/.*$']
 ignore_missing_imports = true
 implicit_optional = false
 implicit_reexport = false
 install_types = true
 namespace_packages = false
+plugins = ['gt4py.next.type_system.mypy_plugin']
 # pretty = true
 show_column_numbers = true
 show_error_codes = true
@@ -218,25 +214,21 @@ warn_unused_ignores = true
 
 # GT4Py configs
 [[tool.mypy.overrides]]
-allow_incomplete_defs = false
-allow_untyped_defs = false
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
 ignore_missing_imports = false
 module = 'gt4py.*'
 
 [[tool.mypy.overrides]]
 # The following ignore_errors are only temporary.
 # TODO: Fix errors and enable these settings.
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 follow_imports = 'silent'
 module = 'gt4py.cartesian.*'
 
 [[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.cartesian.backend.pyext_builder'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
+disable_error_code = "call-arg"
 module = 'gt4py.cartesian.frontend.nodes'
 
 [[tool.mypy.overrides]]
@@ -248,12 +240,8 @@ ignore_errors = true
 module = 'gt4py.cartesian.frontend.gtscript_frontend'
 
 [[tool.mypy.overrides]]
-ignore_errors = true
+disable_error_code = "call-arg"
 module = 'gt4py.cartesian.frontend.defir_to_gtir'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.cartesian.frontend.meta'
 
 [[tool.mypy.overrides]]
 module = 'gt4py.eve.extended_typing'
@@ -261,28 +249,31 @@ warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 # TODO: Make this false and fix errors
-allow_untyped_defs = true
+disallow_untyped_defs = false
 follow_imports = 'silent'
 module = 'gt4py.storage.*'
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-allow_incomplete_defs = true
-allow_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
 module = 'gt4py.next.iterator.*'
-
-[[tool.mypy.overrides]]
-allow_incomplete_defs = true
-allow_untyped_defs = true
-module = 'gt4py.next.program_processors.runners.dace_iterator.*'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.next.ffront.decorator'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+implicit_reexport = true
+# factory-boy is broken, see https://github.com/FactoryBoy/factory_boy/pull/1114
+module = "factory.*"
+
+[[tool.mypy.overrides]]
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
+ignore_errors = false
+module = "typing_tests.test_next_exports"
 
 # -- pytest --
 [tool.pytest]
@@ -293,6 +284,7 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
+  'requires_jax: tests that require `jax` package',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_can_deref: tests that require backend support for can_deref builtin function',
   'uses_composite_shifts: tests that use composite shifts in unstructured domain',
@@ -309,7 +301,6 @@ markers = [
   'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',
   'uses_scalar_in_domain_and_fo',
   'uses_scan: tests that uses scan',
-  'uses_scan_1d_field: that that uses scan on 1D vertical field',
   'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
   'uses_scan_in_stencil: tests that require backend support for scan in stencil',
   'uses_scan_without_field_args: tests that require calls to scan that do not have any fields as arguments',
@@ -319,6 +310,7 @@ markers = [
   'uses_sparse_fields_as_output: tests that require backend support for writing sparse fields',
   'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
   'uses_tuple_args: tests that require backend support for tuple arguments',
+  'uses_tuple_args_with_different_but_promotable_dims: test that requires backend support for tuple args with different but promotable dims',
   'uses_tuple_iterator: tests that require backend support to deref tuple iterators',
   'uses_tuple_returns: tests that require backend support for tuple results',
   'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields',
@@ -326,10 +318,18 @@ markers = [
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
   'uses_mesh_with_skip_values: tests that use a mesh with skip values',
+  'uses_concat_where: tests that use the concat_where builtin',
+  'embedded_concat_where_infinite_domain: tests with concat_where resulting in an infinite domain',
+  'embedded_concat_where_non_contiguous_domain: tests with concat_where on non-contiguous domains',
+  'uses_program_metrics: tests that require backend support for program metrics',
+  'uses_program_with_sliced_out_arguments: tests that use a sliced argument which is not supported for non-mutable arrays, e.g. JAX',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
+python_files = ['test_*.py', '*_test.py', 'benchmark_*.py']
+python_functions = ['test_*', 'benchmark_*']
 testpaths = 'tests'
+xfail_strict = true
 
 # -- ruff --
 [tool.ruff]
@@ -343,26 +343,49 @@ target-version = 'py310'
 docstring-code-format = true
 
 [tool.ruff.lint]
-# # Rules sets:
-# E: pycodestyle
-# F: Pyflakes
-# I: isort
-# B: flake8-bugbear
+# -- Rules set to be considered --
 # A: flake8-builtins
-# T10: flake8-debugger
+# B: flake8-bugbear
+# C4: flake8-comprehensions
+# CPY: flake8-copyright
+# D: pydocstyle
+# DOC: pydoclint
+# E: pycodestyle
 # ERA: eradicate
+# F: Pyflakes
+# FA100: future-rewritable-type-annotation
+# FBT: flake8-boolean-trap
+# FLY: flynt
+# I: isort
+# ICN: flake8-import-conventions
+# ISC: flake8-implicit-str-concat
+# N: pep8-naming
 # NPY: NumPy-specific rules
+# PERF: Perflint
+# PGH: pygrep-hooks
+# PTH: flake8-use-pathlib
+# Q: flake8-quotes
 # RUF: Ruff-specific rules
+# SIM: flake8-simplify
+# T10: flake8-debugger
+# TD: flake8-todos
+# UP: pyupgrade
+# YTT: flake8-2020
+exclude = ['docs/**', "examples/**", "tests/**"]
+explicit-preview-rules = true
+extend-select = ["F822"]  # TODO(egparedes): remove when not longer in preview
 ignore = [
   'E501',  # [line-too-long]
-  'B905'  # [zip-without-explicit-strict]  # TODO(egparedes): Reevaluate this rule
+  'B905',  # [zip-without-explicit-strict]  # TODO(egparedes): remove when possible
+  'TD003'  # [missing-todo-link]
 ]
-select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
+preview = true  # use only with explicit-preview-rules=true
+select = ['A', 'B', 'CPY', 'E', 'ERA', 'F', 'FA100', 'I', 'ISC', 'NPY', 'Q', 'RUF', 'T10', 'YTT']
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
 [tool.ruff.lint.flake8-builtins]
-builtins-allowed-modules = ['builtins']
+builtins-allowed-modules = ['builtins', 'typing']
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -370,6 +393,7 @@ combine-as-imports = true
 known-first-party = ['gt4py', '__externals__', '__gtscript__']
 known-third-party = [
   'attr',
+  'array-api-compat',
   'black',
   'boltons',
   'cached_property',
@@ -411,17 +435,14 @@ split-on-trailing-comma = false
 [tool.ruff.lint.mccabe]
 max-complexity = 15
 
-[tool.ruff.lint.per-file-ignores]
-'src/gt4py/cartesian/*' = ['RUF012']
-'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
-'src/gt4py/next/__init__.py' = ['F401']
-
 # -- setuptools build backend --
 [tool.setuptools]
 platforms = ['Linux', 'Mac']
 
-[tool.setuptools.dynamic]
-version = {attr = 'gt4py.__about__.__version__'}
+[tool.setuptools.cmdclass]
+# This is required for the `onbuild` versioningit hook
+build_py = "versioningit.cmdclass.build_py"
+sdist = "versioningit.cmdclass.sdist"
 
 [tool.setuptools.package-data]
 '*' = ['*.in', '*.txt']
@@ -434,17 +455,44 @@ find = {namespaces = false, where = ['src']}
 [tool.uv]
 conflicts = [
   [
-    {extra = 'cuda11'},
-    {extra = 'jax-cuda12'},
-    {extra = 'rocm4_3'},
-    {extra = 'rocm5_0'}
+    {extra = 'cuda12'},
+    {extra = 'jax-cuda13'},
+    {extra = 'rocm6'},
+    {extra = 'rocm7'}
   ]
 ]
+default-groups = ["dev"]
+required-version = ">=0.6.10"
 
 [[tool.uv.index]]
 explicit = true
 name = 'test.pypi'
-url = 'https://test.pypi.org/simple/'
+url = 'https://test.pypi.org/simple'
 
+[[tool.uv.index]]
+explicit = true
+name = 'gridtools'
+url = 'https://gridtools.github.io/pypi/'
+
+# Add the uv source below to pull dace from the gridtools index instead of PyPI:
+# dace = {index = "gridtools"}
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
+
+# -- versioningit --
+[tool.versioningit]
+default-version = "1.1.10+unknown.version.details"
+
+[tool.versioningit.format]
+dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty
+distance = "{base_version}.post{distance}+{rev}"  # Example: 1.2.3.post42+e174a1f
+distance-dirty = "{base_version}.post{distance}+{rev}.dirty"  # Example: 1.2.3.post42+e174a1f.dirty
+
+[tool.versioningit.onbuild]
+build-file = "gt4py/__about__.py"
+regex = "^\\s*on_build_version:\\s*Final\\s*=\\s*(?P<version>.*)"
+source-file = "src/gt4py/__about__.py"
+
+[tool.versioningit.vcs]
+describe-subst = "$Format:%(describe:tags,match=v*)$"
+method = "git-archive"

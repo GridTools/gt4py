@@ -8,10 +8,9 @@
 
 from __future__ import annotations
 
+import collections
 import dataclasses
-import functools
 import math
-import operator
 from typing import Callable, Iterable, TypeVar, Union, cast
 
 import gt4py.next.iterator.ir_utils.ir_makers as im
@@ -21,14 +20,25 @@ from gt4py.eve import (
     PreserveLocationVisitor,
     SymbolTableTrait,
     VisitorWithSymbolTableTrait,
+    utils as eve_utils,
 )
-from gt4py.eve.utils import UIDGenerator
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
+
+
+def _is_literal_expr(node: itir.Node) -> bool:
+    """Return if node is a `Literal` or a tuple thereof."""
+    if isinstance(node, itir.Literal):
+        return True
+    if cpm.is_call_to(node, "make_tuple") and all(_is_literal_expr(arg) for arg in node.args):
+        return True
+    if cpm.is_call_to(node, "tuple_get") and _is_literal_expr(node.args[1]):
+        return True
+    return False
 
 
 def _is_trivial_tuple_expr(node: itir.Expr):
@@ -79,16 +89,31 @@ class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
 
 
 def _is_collectable_expr(node: itir.Node) -> bool:
+    if _is_literal_expr(node):
+        # do not collect literal expressions
+        return False
     if isinstance(node, itir.FunCall):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
-        # do also not collect reduce nodes if they are left in the it at this point, this may lead to
+        # do also not collect reduce, map_ and neighbors nodes if they are left in the IR at this point, this may lead to
         #  conceptual problems (other parts of the tool chain rely on the arguments being present directly
         #  on the reduce FunCall node (connectivity deduction)), as well as problems with the imperative backend
-        #  backend (single pass eager depth first visit approach)
-        if isinstance(node.fun, itir.SymRef) and node.fun.id in ["lift", "shift", "reduce", "map_"]:
+        #  backend (single pass eager depth first visit approach), see also https://github.com/GridTools/gt4py/issues/1795
+        # do also not collect lifts or applied lifts as they become invisible to the lift inliner
+        #  otherwise
+        # do also not collect index nodes because otherwise the right hand side of SetAts becomes a let statement
+        #  instead of an as_fieldop
+        if cpm.is_call_to(
+            node, ("lift", "shift", "neighbors", "reduce", "map_", "index")
+        ) or cpm.is_applied_lift(node):
             return False
         return True
+    # do also not collect make_tuple(index) nodes because otherwise the right hand side of SetAts becomes a let statement
+    #  instead of an as_fieldop
+    if cpm.is_call_to(node, "make_tuple") and all(
+        cpm.is_call_to(arg, "index") for arg in node.args
+    ):
+        return False
     elif isinstance(node, itir.Lambda):
         return True
 
@@ -147,8 +172,15 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
         depth = kwargs.pop("depth")
         return super().generic_visit(node, depth=depth + 1, **kwargs)
 
-    def visit(self, node: itir.Node, **kwargs) -> None:  # type: ignore[override] # supertype accepts any node, but we want to be more specific here.
-        if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
+    def visit(self, node: itir.Node, is_let_form: bool = False, **kwargs) -> None:  # type: ignore[override] # supertype accepts any node, but we want to be more specific here.
+        # do not descent into un-applied lambda
+        can_collect_children = not isinstance(node, itir.Lambda) or is_let_form
+
+        if (
+            can_collect_children
+            and not isinstance(node, SymbolTableTrait)
+            and not _is_collectable_expr(node)
+        ):
             return super().visit(node, **kwargs)
 
         depth = kwargs["depth"]
@@ -156,48 +188,65 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
         collected_child_node_ids: set[int] = set()
         used_symbol_ids: set[int] = set()
 
-        # Special handling of `if_(condition, true_branch, false_branch)` like expressions that
-        # avoids extracting subexpressions unless they are used in either the condition or both
-        # branches.
-        if isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="if_"):
-            assert len(node.args) == 3
-            # collect subexpressions for all arguments to the `if_`
-            arg_states = [self.State() for _ in node.args]
-            for arg, state in zip(node.args, arg_states):
-                self.visit(arg, state=state, **{**kwargs, "depth": depth + 1})
+        if can_collect_children:
+            # Special handling of `if_(condition, true_branch, false_branch)` like expressions that
+            # avoids extracting subexpressions unless they are used in either the condition or both
+            # branches.
+            if cpm.is_call_to(node, "if_"):
+                assert len(node.args) == 3
+                # collect subexpressions for all arguments to the `if_`
+                arg_states = [self.State() for _ in node.args]
+                for arg, state in zip(node.args, arg_states):
+                    self.visit(arg, state=state, **(kwargs | {"depth": depth + 1}))
 
-            # remove all subexpressions that are not eligible for collection
-            #  (either they occur in the condition or in both branches)
-            eligible_subexprs = arg_states[0].subexprs.keys() | (
-                arg_states[1].subexprs.keys() & arg_states[2].subexprs.keys()
-            )
-            for arg_state in arg_states:
-                arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
+                # remove all subexpressions that are not eligible for collection
+                #  (either they occur in the condition or in both branches)
+                eligible_subexprs = arg_states[0].subexprs.keys() | (
+                    arg_states[1].subexprs.keys() & arg_states[2].subexprs.keys()
+                )
+                for arg_state in arg_states:
+                    arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
 
-            # merge the states of the three arguments
-            subexprs: dict[itir.Node, CollectSubexpressions.SubexpressionData] = {}
-            for state in arg_states:
-                for subexpr, data in state.subexprs.items():
-                    merged_data = subexprs.setdefault(subexpr, self.SubexpressionData())
-                    merged_data.subexprs.extend(data.subexprs)
-                    merged_data.max_depth = max(merged_data.max_depth, data.max_depth)
-            collected_child_node_ids = functools.reduce(
-                operator.or_, (state.collected_child_node_ids for state in arg_states)
-            )
-            used_symbol_ids = functools.reduce(
-                operator.or_, (state.used_symbol_ids for state in arg_states)
-            )
-            # propagate collected subexpressions to parent
-            for subexpr, data in subexprs.items():
-                parent_data = parent_state.subexprs.setdefault(subexpr, self.SubexpressionData())
-                parent_data.subexprs.extend(data.subexprs)
-                parent_data.max_depth = max(merged_data.max_depth, data.max_depth)
+                # merge the states of the three arguments
+                subexprs: dict[itir.Node, CollectSubexpressions.SubexpressionData] = (
+                    collections.defaultdict(self.SubexpressionData)
+                )
+                for state in arg_states:
+                    for subexpr, data in state.subexprs.items():
+                        merged_data = subexprs[subexpr]
+                        merged_data.subexprs.extend(data.subexprs)
+                        merged_data.max_depth = max(merged_data.max_depth, data.max_depth)
+                collected_child_node_ids = set.union(
+                    *(state.collected_child_node_ids for state in arg_states)
+                )
+                used_symbol_ids = set.union(*(state.used_symbol_ids for state in arg_states))
+                # propagate collected subexpressions to parent
+                for subexpr, data in subexprs.items():
+                    parent_data = parent_state.subexprs.setdefault(
+                        subexpr, self.SubexpressionData()
+                    )
+                    parent_data.subexprs.extend(data.subexprs)
+                    parent_data.max_depth = max(merged_data.max_depth, data.max_depth)
+            elif cpm.is_let(node):
+                new_state = self.State(
+                    parent_state.subexprs, collected_child_node_ids, used_symbol_ids
+                )
+                self.visit(
+                    node.fun, state=new_state, is_let_form=True, **(kwargs | {"depth": depth + 1})
+                )
+                for arg in node.args:
+                    self.visit(arg, state=new_state, **(kwargs | {"depth": depth + 1}))
+            else:
+                super().visit(
+                    node,
+                    state=self.State(
+                        parent_state.subexprs, collected_child_node_ids, used_symbol_ids
+                    ),
+                    **kwargs,
+                )
         else:
-            super().visit(
-                node,
-                state=self.State(parent_state.subexprs, collected_child_node_ids, used_symbol_ids),
-                **kwargs,
-            )
+            # we don't want to collect any expression, but still need to track all symbol refs
+            super().visit(node, state=self.State({}, set(), used_symbol_ids), **kwargs)
 
         if isinstance(node, SymbolTableTrait):
             # remove symbols used in child nodes if they are declared in the current node
@@ -230,7 +279,7 @@ class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait
 def extract_subexpression(
     node: itir.Expr,
     predicate: Callable[[itir.Expr, int], bool],
-    uid_generator: UIDGenerator,
+    prefixed_uids: eve_utils.SequentialIDGenerator,
     once_only: bool = False,
     deepest_expr_first: bool = False,
 ) -> tuple[itir.Expr, Union[dict[itir.Sym, itir.Expr], None], bool]:
@@ -257,17 +306,17 @@ def extract_subexpression(
     Examples:
         Default case for `(x+y) + ((x+y)+z)`:
 
-        >>> from gt4py.eve.utils import UIDGenerator
+        >>> from gt4py.eve.utils import SequentialIDGenerator
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
         >>> predicate = lambda subexpr, num_occurences: num_occurences > 1
         >>> new_expr, extracted_subexprs, _ = extract_subexpression(
-        ...     expr, predicate, UIDGenerator(prefix="_subexpr")
+        ...     expr, predicate, SequentialIDGenerator("_subexpr")
         ... )
         >>> print(new_expr)
-        _subexpr_1 + (_subexpr_1 + z)
+        _subexpr_0 + (_subexpr_0 + z)
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_1`: `x + y`
+        `_subexpr_0`: `x + y`
 
         The order of the extraction can be configured using `deepest_expr_first`. By default, the nodes
         closer to the root are eliminated first:
@@ -277,13 +326,16 @@ def extract_subexpression(
         ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
         ... )
         >>> new_expr, extracted_subexprs, ignored_children = extract_subexpression(
-        ...     expr, predicate, UIDGenerator(prefix="_subexpr"), deepest_expr_first=False
+        ...     expr,
+        ...     predicate,
+        ...     SequentialIDGenerator("_subexpr"),
+        ...     deepest_expr_first=False,
         ... )
         >>> print(new_expr)
-        _subexpr_1 + _subexpr_1
+        _subexpr_0 + _subexpr_0
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_1`: `x + y + (x + y)`
+        `_subexpr_0`: `x + y + (x + y)`
 
         Since `(x+y)` is a child of one of the expressions it is ignored:
 
@@ -299,15 +351,15 @@ def extract_subexpression(
         >>> new_expr, extracted_subexprs, _ = extract_subexpression(
         ...     expr,
         ...     predicate,
-        ...     UIDGenerator(prefix="_subexpr"),
+        ...     SequentialIDGenerator("_subexpr"),
         ...     once_only=True,
         ...     deepest_expr_first=True,
         ... )
         >>> print(new_expr)
-        _subexpr_1 + _subexpr_1 + (_subexpr_1 + _subexpr_1)
+        _subexpr_0 + _subexpr_0 + (_subexpr_0 + _subexpr_0)
         >>> for sym, subexpr in extracted_subexprs.items():
         ...     print(f"`{sym}`: `{subexpr}`")
-        `_subexpr_1`: `x + y`
+        `_subexpr_0`: `x + y`
 
         Note that this requires `once_only` to be set right now.
     """
@@ -361,7 +413,7 @@ def extract_subexpression(
         if not eligible_ids:
             continue
 
-        expr_id = uid_generator.sequential_id()
+        expr_id = next(prefixed_uids)
         extracted[itir.Sym(id=expr_id)] = expr
         expr_ref = itir.SymRef(id=expr_id)
         for id_ in eligible_ids:
@@ -388,8 +440,12 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         >>> x = itir.SymRef(id="x")
         >>> plus = lambda a, b: itir.FunCall(fun=itir.SymRef(id=("plus")), args=[a, b])
         >>> expr = plus(plus(x, x), plus(x, x))
-        >>> print(CommonSubexpressionElimination.apply(expr, within_stencil=True))
-        (λ(_cs_1) → _cs_1 + _cs_1)(x + x)
+        >>> print(
+        ...     CommonSubexpressionElimination.apply(
+        ...         expr, within_stencil=True, uids=utils.IDGeneratorPool()
+        ...     )
+        ... )
+        (λ(_cs_0) → _cs_0 + _cs_0)(x + x)
 
     The pass visits the tree top-down starting from the root node, e.g. an itir.Program.
     For each node we extract (eligible) subexpressions occuring more than once using
@@ -398,11 +454,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     top-down, extracted expressions always land up in the outermost scope they can appear in.
     """
 
-    # we use one UID generator per instance such that the generated ids are
-    # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_cs")
-    )
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     collect_all: bool = dataclasses.field(default=False)
 
@@ -412,21 +464,23 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         node: ProgramOrExpr,
         within_stencil: bool | None = None,
         offset_provider_type: common.OffsetProviderType | None = None,
+        *,
+        uids: utils.IDGeneratorPool,
     ) -> ProgramOrExpr:
         is_program = isinstance(node, itir.Program)
         if is_program:
             assert within_stencil is None
             within_stencil = False
         else:
-            assert (
-                within_stencil is not None
-            ), "The expression's context must be specified using `within_stencil`."
+            assert within_stencil is not None, (
+                "The expression's context must be specified using `within_stencil`."
+            )
 
         offset_provider_type = offset_provider_type or {}
         node = itir_type_inference.infer(
             node, offset_provider_type=offset_provider_type, allow_undeclared_symbols=not is_program
         )
-        return cls().visit(node, within_stencil=within_stencil)
+        return cls(uids=uids).visit(node, within_stencil=within_stencil)
 
     def generic_visit(self, node, **kwargs):
         if cpm.is_call_to(node, "as_fieldop"):
@@ -468,7 +522,9 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
                         return True
             return False
 
-        new_expr, extracted, ignored_children = extract_subexpression(node, predicate, self.uids)
+        new_expr, extracted, ignored_children = extract_subexpression(
+            node, predicate, self.uids["_cs"]
+        )
 
         if not extracted:
             return self.generic_visit(node, **kwargs)

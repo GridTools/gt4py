@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from . import attrib, meta, text
+from . import attrib, meta
 from .base import (
     NOTHING,
     BaseFrozen,
@@ -24,6 +24,7 @@ from .base import (
     is_iterable_of,
     is_mapping_of,
     jsonify,
+    listify,
     make_dir,
     make_local_dir,
     make_module_from_file,
@@ -34,14 +35,15 @@ from .base import (
     shash,
     shashed_id,
     slugify,
+    warn_experimental_feature,
 )
+from .field import Field
 
 
 __all__ = [  # noqa: RUF022 `__all__` is not sorted
     # Modules
     "attrib",
     "meta",
-    "text",
     # Objects
     "NOTHING",
     "BaseFrozen",
@@ -51,6 +53,7 @@ __all__ = [  # noqa: RUF022 `__all__` is not sorted
     "classmethod_to_function",
     "classproperty",
     "compose",
+    "Field",
     "flatten",
     "flatten_iter",
     "get_member",
@@ -59,6 +62,7 @@ __all__ = [  # noqa: RUF022 `__all__` is not sorted
     "is_iterable_of",
     "is_mapping_of",
     "jsonify",
+    "listify",
     "make_dir",
     "make_local_dir",
     "make_module_from_file",
@@ -69,4 +73,5 @@ __all__ = [  # noqa: RUF022 `__all__` is not sorted
     "shash",
     "shashed_id",
     "slugify",
+    "warn_experimental_feature",
 ]

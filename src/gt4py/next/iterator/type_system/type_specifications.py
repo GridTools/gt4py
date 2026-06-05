@@ -16,12 +16,8 @@ class NamedRangeType(ts.TypeSpec):
     dim: common.Dimension
 
 
-class DomainType(ts.DataType):
-    dims: list[common.Dimension] | Literal["unknown"]
-
-
 class OffsetLiteralType(ts.TypeSpec):
-    value: ts.ScalarType | common.Dimension
+    value: ts.ScalarType | str
 
 
 class IteratorType(ts.DataType, ts.CallableType):

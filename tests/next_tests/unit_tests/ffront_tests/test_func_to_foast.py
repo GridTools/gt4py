@@ -36,7 +36,17 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next import astype, broadcast, errors, float32, float64, int32, int64, where
+from gt4py.next import (
+    astype,
+    broadcast,
+    errors,
+    float32,
+    float64,
+    int32,
+    int64,
+    where,
+)
+from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -231,11 +241,11 @@ def test_conditional_wrong_arg_type():
     ) -> gtx.Field[[TDim], float64]:
         return where(mask, a, b)
 
-    msg = r"Could not promote scalars of different dtype \(not implemented\)."
-    with pytest.raises(errors.DSLError) as exc_info:
+    with pytest.raises(
+        errors.DSLError,
+        match="Field arguments to 'where' must be of same dtype, got 'float32' != 'float64'.",
+    ):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
-
-    assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
 def test_ternary_with_field_condition():
@@ -261,7 +271,7 @@ def test_adr13_wrong_return_type_annotation():
     def wrong_return_type_annotation() -> gtx.Field[[], float]:
         return 1.0
 
-    with pytest.raises(errors.DSLError, match=r"expected 'float.*'"):
+    with pytest.raises(errors.DSLError, match=r"got 'float.*'"):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
 
@@ -304,6 +314,7 @@ def test_closure_symbols():
     from gt4py.eve.utils import FrozenNamespace
 
     nonlocals = FrozenNamespace(float_value=2.3, np_value=np.float32(3.4))
+    nonlocals_unreferenced = "nonlocals_unreferenced"
 
     def operator_with_refs(inp: gtx.Field[[TDim], "float64"], inp2: gtx.Field[[TDim], "float32"]):
         a = inp + nonlocals.float_value
@@ -326,6 +337,40 @@ def test_closure_symbols():
                 P(
                     foast.Assign,
                     value=P(foast.BinOp, right=P(foast.Constant, value=nonlocals.np_value)),
+                ),
+                P(foast.Return),
+            ],
+        ),
+    )
+    assert pattern_node.match(parsed, raise_exception=True)
+
+    import enum
+
+    class NonLocals(gtx.float32, enum.Enum):
+        FOO = 2.3
+        BAR = 3.4
+
+    def operator_with_refs(inp2: gtx.Field[[TDim], "float32"]):
+        a = inp2 + NonLocals.FOO
+        b = inp2 + NonLocals.BAR
+        return a, b
+
+    parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
+    assert "nonlocals_unreferenced" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
+    assert "NonLocals" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
+
+    pattern_node = P(
+        foast.FunctionDefinition,
+        body=P(
+            foast.BlockStmt,
+            stmts=[
+                P(
+                    foast.Assign,
+                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.FOO.value)),
+                ),
+                P(
+                    foast.Assign,
+                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.BAR.value)),
                 ),
                 P(foast.Return),
             ],
@@ -368,3 +413,37 @@ def test_zero_dims_ternary():
     msg = r"Incompatible datatypes in operator '=='"
     with pytest.raises(errors.DSLError, match=msg):
         _ = FieldOperatorParser.apply_to_function(zero_dims_ternary)
+
+
+def test_domain_chained_comparison_failure():
+    def domain_comparison(a: gtx.Field[[TDim], float], b: gtx.Field[[TDim], float]):
+        return concat_where(0 < TDim < 42, a, b)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=r".*chain.*not.*allowed(?s:.)*\(0 < TDim\) & \(TDim < 42\).*",
+    ):
+        _ = FieldOperatorParser.apply_to_function(domain_comparison)
+
+
+def test_field_chained_comparison_failure():
+    def comparison(
+        cond: gtx.Field[[TDim], float], a: gtx.Field[[TDim], float], b: gtx.Field[[TDim], float]
+    ):
+        return where(0.0 < cond < 42.0, a, b)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=r".*chain.*not.*allowed(?s:.)*\(0.0 < cond\) & \(cond < 42.0\).*",
+    ):
+        _ = FieldOperatorParser.apply_to_function(comparison)
+
+
+def test_tuple_index_failure():
+    def tuple_index_failure(
+        a: tuple[gtx.Field[[TDim], float], gtx.Field[[TDim], float]], index: int
+    ) -> gtx.Field[[TDim], float]:
+        return a[index]
+
+    with pytest.raises(errors.DSLError, match=r"need .* literal"):
+        _ = FieldOperatorParser.apply_to_function(tuple_index_failure)

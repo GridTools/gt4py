@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Collection, Dict, Optional, Union
+from typing import Any, Collection, Dict, Final, Optional, Union
 
 import numpy as np
 
@@ -176,10 +176,14 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 NativeFunction.FLOOR: "std::floor",
                 NativeFunction.CEIL: "std::ceil",
                 NativeFunction.TRUNC: "std::trunc",
-                NativeFunction.ROUND: "std::round",
-                NativeFunction.INT: "int",
-                NativeFunction.F32: "float",
-                NativeFunction.F64: "double",
+                NativeFunction.INT32: "std::int32_t",
+                NativeFunction.INT64: "std::int64_t",
+                NativeFunction.FLOAT32: "float",
+                NativeFunction.FLOAT64: "double",
+                NativeFunction.ERF: "std::erf",
+                NativeFunction.ERFC: "std::erfc",
+                NativeFunction.ROUND: "std::nearbyint",
+                NativeFunction.ROUND_AWAY_FROM_ZERO: "std::round",
             }[func]
         except KeyError as error:
             raise NotImplementedError(
@@ -188,7 +192,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    DATA_TYPE_TO_CODE = {
+    DATA_TYPE_TO_CODE: Final[dict[DataType, str]] = {
         DataType.BOOL: "bool",
         DataType.INT8: "std::int8_t",
         DataType.INT16: "std::int16_t",
@@ -206,7 +210,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 f"Not implemented DataType '{dtype.name}' encountered."
             ) from error
 
-    UNARY_OPERATOR_TO_CODE = {
+    UNARY_OPERATOR_TO_CODE: Final[dict[UnaryOperator, str]] = {
         UnaryOperator.NOT: "!",
         UnaryOperator.NEG: "-",
         UnaryOperator.POS: "+",

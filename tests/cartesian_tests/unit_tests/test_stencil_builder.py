@@ -95,7 +95,7 @@ def test_usage_numpy_nocaching(tmp_path):
         .with_options(name="simple_stencil", module="")
     )
 
-    computation_src = builder.generate_computation()
+    computation_src = builder.backend.generate_computation()
     assert "computation.py" in computation_src
 
     builder.build()

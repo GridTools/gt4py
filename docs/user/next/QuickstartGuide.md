@@ -138,7 +138,7 @@ When writing complex applications, you have to decompose it into _field operator
 
 ### Operations on unstructured meshes
 
-This section introduces additional APIs through a slightly more elaborate application that performs a laplacian-like operation on an unstructured mesh. Within the context of this guide, we define the _pseudo-laplacian_ for a cell as the sum of the _edge differences_ around the cell. For example, the pseudo-laplacian for cell \#1, which is surrounded by edges \#7, \#8 and \#9, is expressed by the formula:
+This section introduces additional APIs through a slightly more elaborate application that performs a laplacian-like operation on an unstructured mesh. Within the context of this guide, we define the _pseudo-laplacian_ for a cell as the sum of the _edge differences_ around the cell. For example, the pseudo-laplacian for cell #1, which is surrounded by edges #7, #8 and #9, is expressed by the formula:
 
 $$\begin{aligned}\text{pseudolap}(cell_1) =\,& \text{edge_diff}_7 + \text{edge_diff}_8 + \text{edge_diff}_9 \end{aligned}$$.
 
@@ -172,7 +172,7 @@ CellDim = gtx.Dimension("Cell")
 EdgeDim = gtx.Dimension("Edge")
 ```
 
-You can express connectivity between elements (i.e. cells or edges) of the mesh using connectivity (a.k.a. adjacency or neighborhood) tables. The table below, `edge_to_cell_table`, has one row for every edge where it lists the indices of cells adjacent to that edge. For example, this table says that edge \#6 connects to cells \#0 and \#5. Similarly, `cell_to_edge_table` lists the edges that are neighbors to a particular cell.
+You can express connectivity between elements (i.e. cells or edges) of the mesh using connectivity (a.k.a. adjacency or neighborhood) tables. The table below, `edge_to_cell_table`, has one row for every edge where it lists the indices of cells adjacent to that edge. For example, this table says that edge #6 connects to cells #0 and #5. Similarly, `cell_to_edge_table` lists the edges that are neighbors to a particular cell.
 
 Note, however, that the tables are dense matrices, so if an edge has fewer than 2 neighbor cells, the remaining entries are filled with -1. You can also specify all kinds of connectivities like edge-to-edge, cell-to-edge or even cell-to-cell. The adjacency relationships don't have to be reciprocal, so it's possible for example that a cell lists an edge as its neighbour, but the edge does not list that particular cell.
 
@@ -388,10 +388,10 @@ C2E_offset_provider = gtx.as_connectivity([CellDim, C2EDim], codomain=EdgeDim, d
 
 **Weights of edge differences:**
 
-Revisiting the example from the beginning of the section, the equation of the pseudo-laplacian for cell \#1 is:
-$$\text{pseudolap}(cell_1) = -\text{edge_diff}_{0,1} + \text{edge_diff}_{1,2} + \text{edge_diff}_{1,3}$$
+Revisiting the example from the beginning of the section, the equation of the pseudo-laplacian for cell #1 is:
+\$$\text{pseudolap}(cell_1) = -\text{edge_diff}_{0,1} + \text{edge_diff}_{1,2} + \text{edge_diff}_{1,3}$\$
 
-Notice how $\text{edge_diff}_{0,1}$ is actually subtracted from the sum rather than added. This is because the edge to cell connectivity table lists cell \#1 as the second argument to the subtraction rather than the first, so the difference calculated on the edge will be the opposite sign for this particular cell. To fix this, a table that has three elements for every cell is needed, specifying the sign of the difference on the three adjacent edges. If you look for cell \#1 in the `edge_weights` table below, you can see that the sign is negative for the first edge difference and positive for the second and third, just like in the equation above.
+Notice how $\text{edge_diff}_{0,1}$ is actually subtracted from the sum rather than added. This is because the edge to cell connectivity table lists cell #1 as the second argument to the subtraction rather than the first, so the difference calculated on the edge will be the opposite sign for this particular cell. To fix this, a table that has three elements for every cell is needed, specifying the sign of the difference on the three adjacent edges. If you look for cell #1 in the `edge_weights` table below, you can see that the sign is negative for the first edge difference and positive for the second and third, just like in the equation above.
 
 +++
 

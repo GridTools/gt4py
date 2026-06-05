@@ -12,11 +12,10 @@ import dataclasses
 import enum
 import importlib
 from typing import Final
-
 import pytest
 
-from gt4py.next import allocators as next_allocators
-
+from gt4py.next.embedded import nd_array_field
+from gt4py.next import constructors
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -55,28 +54,25 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 @dataclasses.dataclass(frozen=True)
 class EmbeddedDummyBackend:
     name: str
-    allocator: next_allocators.FieldBufferAllocatorProtocol
+    allocator: constructors.Allocator
     executor: Final = None
 
 
-numpy_execution = EmbeddedDummyBackend(
-    "EmbeddedNumPy", next_allocators.StandardCPUFieldBufferAllocator()
-)
-cupy_execution = EmbeddedDummyBackend(
-    "EmbeddedCuPy", next_allocators.StandardGPUFieldBufferAllocator()
-)
+numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", nd_array_field.np)
+cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", nd_array_field.cp)
+jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", nd_array_field.jnp)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
+    JAX_NUMPY_EXECUTION = "next_tests.definitions.jax_numpy_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
     DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
     DACE_CPU_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_cpu_noopt"
-    DACE_GPU_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_gpu_noopt"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -111,12 +107,14 @@ USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
 USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
 USES_SCAN_NESTED = "uses_scan_nested"
 USES_SCAN_REQUIRING_PROJECTOR = "uses_scan_requiring_projector"
-USES_SCAN_1D_FIELD = "uses_scan_1d_field"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
 USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
 USES_STRIDED_NEIGHBOR_OFFSET = "uses_strided_neighbor_offset"
 USES_TUPLE_ARGS = "uses_tuple_args"
+USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS = (
+    "uses_tuple_args_with_different_but_promotable_dims"
+)
 USES_TUPLE_ITERATOR = "uses_tuple_iterator"
 USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
@@ -124,7 +122,12 @@ USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_MAX_OVER = "uses_max_over"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
+USES_PROGRAM_METRICS = "uses_program_metrics"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
+USES_CONCAT_WHERE = "uses_concat_where"
+EMBEDDED_CONCAT_WHERE_INFINITE_DOMAIN = "embedded_concat_where_infinite_domain"
+EMBEDDED_CONCAT_WHERE_NON_CONTIGUOUS_DOMAIN = "embedded_concat_where_non_contiguous_domain"
+USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS = "uses_program_with_sliced_out_arguments"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -135,11 +138,11 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
 )
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
-    (REQUIRES_ATLAS, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 # Markers to skip because of missing features in the domain inference
 DOMAIN_INFERENCE_SKIP_LIST = [
@@ -152,7 +155,6 @@ DACE_SKIP_TEST_LIST = (
         (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_COMPOSITE_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_LIFT, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_REDUCE_WITH_LAMBDA, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -160,17 +162,25 @@ DACE_SKIP_TEST_LIST = (
     ]
 )
 EMBEDDED_SKIP_LIST = [
-    (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
     (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
     (
         USES_SCAN_WITHOUT_FIELD_ARGS,
         XFAIL,
         UNSUPPORTED_MESSAGE,
     ),  # we can't extract the field type from scan args
+    (EMBEDDED_CONCAT_WHERE_INFINITE_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
+    (EMBEDDED_CONCAT_WHERE_NON_CONTIGUOUS_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
+]
+JAX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
+    (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
+    (USES_PROGRAM_METRICS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_CONCAT_WHERE, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+GTIR_EMBEDDED_SKIP_LIST = ROUNDTRIP_SKIP_LIST + []
 GTFN_SKIP_TEST_LIST = (
     COMMON_SKIP_TEST_LIST
     + DOMAIN_INFERENCE_SKIP_LIST
@@ -181,7 +191,6 @@ GTFN_SKIP_TEST_LIST = (
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         # max_over broken, see https://github.com/GridTools/gt4py/issues/1289
         (USES_MAX_OVER, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_SCAN_REQUIRING_PROJECTOR, XFAIL, UNSUPPORTED_MESSAGE),
     ]
 )
 
@@ -190,18 +199,10 @@ GTFN_SKIP_TEST_LIST = (
 BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.JAX_NUMPY_EXECUTION: JAX_EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
-    + [
-        # dace issue https://github.com/spcl/dace/issues/1773
-        (USES_SCAN_1D_FIELD, XFAIL, UNSUPPORTED_MESSAGE),
-    ],
+    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_GPU_NO_OPT: DACE_SKIP_TEST_LIST
-    + [
-        # dace issue https://github.com/spcl/dace/issues/1773
-        (USES_SCAN_1D_FIELD, XFAIL, UNSUPPORTED_MESSAGE),
-    ],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
@@ -221,5 +222,5 @@ BACKEND_SKIP_TEST_MATRIX = {
         (ALL, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, UNSUPPORTED_MESSAGE),
     ],
-    ProgramBackendId.GTIR_EMBEDDED: ROUNDTRIP_SKIP_LIST,
+    ProgramBackendId.GTIR_EMBEDDED: GTIR_EMBEDDED_SKIP_LIST,
 }

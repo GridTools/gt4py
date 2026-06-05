@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["Gt4py / Test"]
     types:
-    - completed
+      - completed
 
 jobs:
   upload:

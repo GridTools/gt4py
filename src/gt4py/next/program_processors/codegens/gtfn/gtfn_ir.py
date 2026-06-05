@@ -74,6 +74,7 @@ class ScanPassDefinition(Node, SymbolTableTrait):
     params: list[Sym]
     expr: Expr
     forward: bool
+    projector: Optional[Lambda]
 
 
 class TaggedValues(Node):
@@ -124,7 +125,13 @@ class SidComposite(Expr):
     ) -> None:
         if not all(
             isinstance(el, (SidFromScalar, SidComposite))
-            or _is_tuple_expr_of(lambda expr: isinstance(expr, (SymRef, Literal)), el)
+            or _is_tuple_expr_of(
+                lambda expr: (
+                    isinstance(expr, (SymRef, Literal))
+                    or (isinstance(expr, FunCall) and expr.fun == SymRef(id="index"))
+                ),
+                el,
+            )
             for el in value
         ):
             raise ValueError(
@@ -179,11 +186,13 @@ class StencilExecution(Stmt):
     ) -> None:
         for inp in inputs:
             if not _is_tuple_expr_of(
-                lambda expr: isinstance(expr, (SymRef, SidComposite, SidFromScalar))
-                or (
-                    isinstance(expr, FunCall)
-                    and isinstance(expr.fun, SymRef)
-                    and expr.fun.id == "index"
+                lambda expr: (
+                    isinstance(expr, (SymRef, SidComposite, SidFromScalar))
+                    or (
+                        isinstance(expr, FunCall)
+                        and isinstance(expr.fun, SymRef)
+                        and expr.fun.id == "index"
+                    )
                 ),
                 inp,
             ):
@@ -226,6 +235,7 @@ GTFN_BUILTINS = [
     "can_deref",
     "cartesian_domain",
     "unstructured_domain",
+    "get_domain_range",
     "named_range",
     "reduce",
     "index",

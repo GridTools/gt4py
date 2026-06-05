@@ -23,8 +23,7 @@ import textwrap
 from typing import Any, Optional
 
 from gt4py.eve import SourceLocation
-
-from . import formatting
+from gt4py.next.errors import formatting
 
 
 class GT4PyError(Exception):
@@ -87,12 +86,12 @@ class MissingArgumentError(DSLError):
         self.is_kwarg = is_kwarg
 
 
-class TypeError_(DSLError):
+class DSLTypeError(DSLError):
     def __init__(self, location: Optional[SourceLocation], message: str) -> None:
         super().__init__(location, message)
 
 
-class MissingParameterAnnotationError(TypeError_):
+class MissingParameterAnnotationError(DSLTypeError):
     param_name: str
 
     def __init__(self, location: Optional[SourceLocation], param_name: str) -> None:
@@ -100,7 +99,7 @@ class MissingParameterAnnotationError(TypeError_):
         self.param_name = param_name
 
 
-class InvalidParameterAnnotationError(TypeError_):
+class InvalidParameterAnnotationError(DSLTypeError):
     param_name: str
     annotated_type: Any
 
@@ -110,3 +109,13 @@ class InvalidParameterAnnotationError(TypeError_):
         )
         self.param_name = param_name
         self.annotated_type = type_
+
+
+class CompilationError(GT4PyError):
+    def __init__(self, compilation_error: str) -> None:
+        super().__init__(f"See attached compilation log.\n{compilation_error}")
+
+
+class EmbeddedExecutionError(GT4PyError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

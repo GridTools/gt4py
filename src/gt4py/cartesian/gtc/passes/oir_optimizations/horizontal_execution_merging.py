@@ -12,8 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.definitions import Extent
-
-from .utils import (
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
     AccessCollector,
     collect_symbol_names,
     compute_horizontal_block_extents,
@@ -344,6 +343,9 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
         if node.loop_order != common.LoopOrder.PARALLEL:
             return node
+        for section in node.sections:
+            if section.interval.has_runtime_access():
+                return node
         sections = self.visit(node.sections, **kwargs)
         accessed = AccessCollector.apply(sections).fields()
         return oir.VerticalLoop(

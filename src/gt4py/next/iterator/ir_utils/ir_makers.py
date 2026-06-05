@@ -7,12 +7,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Iterable, Optional, TypeAlias, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
+
+
+ExprLike: TypeAlias = Union[str, core_defs.Scalar, common.Dimension, itir.Expr]
 
 
 def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = None) -> itir.Sym:
@@ -38,7 +41,9 @@ def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = Non
 
 
 def ref(
-    ref_or_name: Union[str, itir.SymRef], type_: str | ts.TypeSpec | None = None
+    ref_or_name: Union[str, itir.SymRef],
+    type_: str | ts.TypeSpec | None = None,
+    annex: dict[str, Any] | None = None,
 ) -> itir.SymRef:
     """
     Convert to SymRef if necessary.
@@ -57,11 +62,16 @@ def ref(
     """
     if isinstance(ref_or_name, itir.SymRef):
         assert not type_
+        assert not annex
         return ref_or_name
-    return itir.SymRef(id=ref_or_name, type=ensure_type(type_))
+    ref = itir.SymRef(id=ref_or_name, type=ensure_type(type_))
+    if annex is not None:
+        for key, value in annex.items():
+            setattr(ref.annex, key, value)
+    return ref
 
 
-def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> itir.Expr:
+def ensure_expr(expr_like: ExprLike) -> itir.Expr:
     """
     Convert literals into a SymRef or Literal and let expressions pass unchanged.
 
@@ -76,14 +86,16 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
     OffsetLiteral(value='i')
     """
-    if isinstance(literal_or_expr, str):
-        return ref(literal_or_expr)
-    elif core_defs.is_scalar_type(literal_or_expr):
-        return literal_from_value(literal_or_expr)
-    elif literal_or_expr is None:
+    if isinstance(expr_like, str):
+        return ref(expr_like)
+    elif core_defs.is_scalar_type(expr_like):
+        return literal_from_value(expr_like)
+    elif expr_like is None:
         return itir.NoneLiteral()
-    assert isinstance(literal_or_expr, itir.Expr)
-    return literal_or_expr
+    elif isinstance(expr_like, common.Dimension):
+        return axis_literal(expr_like)
+    assert isinstance(expr_like, itir.Expr), expr_like
+    return expr_like
 
 
 def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.OffsetLiteral:
@@ -224,14 +236,22 @@ def make_tuple(*args):
     return call("make_tuple")(*args)
 
 
-def tuple_get(index: str | int, tuple_expr):
+def tuple_get(index: str | int | itir.Literal, tuple_expr):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
-    return call("tuple_get")(literal(str(index), builtins.INTEGER_INDEX_BUILTIN), tuple_expr)
+    if not isinstance(index, itir.Literal):
+        index = literal(str(index), builtins.INTEGER_INDEX_BUILTIN)
+    return call("tuple_get")(index, tuple_expr)
 
 
 def if_(cond, true_val, false_val):
     """Create a if_ FunCall, shorthand for ``call("if_")(expr)``."""
     return call("if_")(cond, true_val, false_val)
+
+
+def concat_where(cond, true_field, false_field):
+    """Create a concat_where FunCall, shorthand for ``call("concat_where")(expr)``."""
+
+    return call("concat_where")(cond, true_field, false_field)
 
 
 def lift(expr):
@@ -271,7 +291,7 @@ class let:
                 "Invalid arguments: expected a variable name and an init form or a list thereof."
             )
 
-    def __call__(self, form):
+    def __call__(self, form) -> itir.FunCall:
         return call(lambda_(*self.vars)(form))(*self.init_forms)
 
 
@@ -292,14 +312,17 @@ def shift(offset, value=None):
     if value is not None:
         if isinstance(value, int):
             value = ensure_offset(value)
-        elif isinstance(value, str):
-            value = ref(value)
+        if isinstance(value, itir.Literal) and value.type.kind in (
+            ts.ScalarKind.INT32,
+            ts.ScalarKind.INT64,
+        ):
+            value = itir.OffsetLiteral(value=int(value.value))
         args.append(value)
     return call(call("shift")(*args))
 
 
-def literal(value: str, typename: str) -> itir.Literal:
-    return itir.Literal(value=value, type=ensure_type(typename))
+def literal(value: str, type_: str | ts.TypeSpec) -> itir.Literal:
+    return itir.Literal(value=value, type=ensure_type(type_))
 
 
 def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
@@ -331,6 +354,20 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     return literal(str(val), typename)
 
 
+def literal_from_tuple_value(
+    val: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
+) -> itir.FunCall | itir.Literal:
+    """
+    Create a `make_tuple` with literals from a tuple of values.
+
+    >>> str(literal_from_tuple_value((1.0, (2.0, 3.0))))
+    '{1.0, {2.0, 3.0}}'
+    """
+    if isinstance(val, tuple):
+        return make_tuple(*(literal_from_tuple_value(v) for v in val))
+    return literal_from_value(val)
+
+
 def neighbors(offset, it):
     offset = ensure_offset(offset)
     return call("neighbors")(offset, it)
@@ -349,7 +386,7 @@ def lifted_neighbors(offset, it) -> itir.Expr:
 
 
 def as_fieldop_neighbors(
-    offset: str | itir.OffsetLiteral, it: str | itir.Expr, domain: Optional[itir.FunCall] = None
+    offset: str | itir.OffsetLiteral, field: str | itir.Expr, domain: Optional[itir.FunCall] = None
 ) -> itir.Expr:
     """
     Create a fieldop for neighbors call.
@@ -359,7 +396,21 @@ def as_fieldop_neighbors(
     >>> str(as_fieldop_neighbors("off", "a"))
     '(⇑(λ(it) → neighbors(offₒ, it)))(a)'
     """
-    return as_fieldop(lambda_("it")(neighbors(offset, "it")), domain)(it)
+    return as_fieldop(lambda_("it")(neighbors(offset, "it")), domain)(field)
+
+
+def as_fieldop_deref_list_get(
+    list_idx: str | itir.Expr, local_field: str | itir.Expr, domain: Optional[itir.FunCall] = None
+) -> itir.Expr:
+    """
+    Create a fieldop for list_get call.
+
+    Examples
+    --------
+    >>> str(as_fieldop_deref_list_get("idx", "lst"))
+    '(⇑(λ(it) → list_get(idx, ·it)))(lst)'
+    """
+    return as_fieldop(lambda_("it")(list_get(list_idx, deref("it"))), domain)(local_field)
 
 
 def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
@@ -402,41 +453,73 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges: dict[Union[common.Dimension, str], tuple[itir.Expr, itir.Expr]],
+    ranges_or_domain: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] | common.Domain,
 ) -> itir.FunCall:
     """
-    >>> str(
-    ...     domain(
-    ...         common.GridType.CARTESIAN,
-    ...         {
-    ...             common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL): (0, 10),
-    ...             common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL): (0, 20),
-    ...         },
-    ...     )
-    ... )
+    >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
+    >>> JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
+    >>> str(domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 20)}))
     'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
-    >>> str(domain(common.GridType.CARTESIAN, {"IDim": (0, 10), "JDim": (0, 20)}))
-    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
-    >>> str(domain(common.GridType.UNSTRUCTURED, {"IDim": (0, 10), "JDim": (0, 20)}))
+    >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
+    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
+    >>> ij_domain = common.domain({IDim: (0, 10), JDim: (0, 20)})
+    >>> str(domain(common.GridType.UNSTRUCTURED, ij_domain))
     'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
+    if isinstance(ranges_or_domain, common.Domain):
+        domain = ranges_or_domain
+        ranges = {d: (r.start, r.stop) for d, r in zip(domain.dims, domain.ranges)}
+    else:
+        assert isinstance(ranges_or_domain, dict)
+        ranges = ranges_or_domain
+
     if isinstance(grid_type, common.GridType):
         grid_type = f"{grid_type!s}_domain"
-    return call(grid_type)(
+    expr = call(grid_type)(
         *[
-            call("named_range")(
-                itir.AxisLiteral(value=d.value, kind=d.kind)
-                if isinstance(d, common.Dimension)
-                else itir.AxisLiteral(value=d),
+            named_range(
+                d,
                 r[0],
                 r[1],
             )
             for d, r in ranges.items()
         ]
     )
+    expr.type = ts.DomainType(dims=list(ranges.keys()))
+    return expr
 
 
-def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> call:
+def get_field_domain(
+    grid_type: Union[common.GridType, str],
+    field: str | itir.Expr,
+    dims: Iterable[common.Dimension] | None = None,
+) -> itir.Expr:
+    if isinstance(field, itir.Expr) and isinstance(field.type, ts.FieldType):
+        assert dims is None or all(d1 == d2 for d1, d2 in zip(field.type.dims, dims, strict=True))
+        dims = field.type.dims
+    else:
+        if dims is None:
+            raise ValueError("Field expression must be typed if 'dims' is not given.")
+
+    return domain(
+        grid_type,
+        {
+            dim: (
+                tuple_get(0, call("get_domain_range")(field, dim)),
+                tuple_get(1, call("get_domain_range")(field, dim)),
+            )
+            for dim in dims
+        },
+    )
+
+
+def named_range(
+    dim: itir.AxisLiteral | common.Dimension, start: itir.Expr, stop: itir.Expr
+) -> itir.FunCall:
+    return call("named_range")(dim, start, stop)
+
+
+def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> Callable:
     """
     Create an `as_fieldop` call.
 
@@ -445,7 +528,9 @@ def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> cal
     >>> str(as_fieldop(lambda_("it1", "it2")(plus(deref("it1"), deref("it2"))))("field1", "field2"))
     '(⇑(λ(it1, it2) → ·it1 + ·it2))(field1, field2)'
     """
-    return call(
+    from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
+
+    result = call(
         call("as_fieldop")(
             *(
                 (
@@ -457,6 +542,17 @@ def as_fieldop(expr: itir.Expr | str, domain: Optional[itir.Expr] = None) -> cal
             )
         )
     )
+
+    def _populate_domain_annex_wrapper(*args, **kwargs):
+        node = result(*args, **kwargs)
+        # note: if the domain is not a direct construction, e.g. because it is only a reference
+        # to a domain defined in a let, don't populate the annex, since we can not create a
+        # symbolic domain for it.
+        if domain and cpm.is_call_to(domain, ("cartesian_domain", "unstructured_domain")):
+            node.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
+        return node
+
+    return _populate_domain_annex_wrapper
 
 
 def op_as_fieldop(
@@ -486,6 +582,10 @@ def op_as_fieldop(
         return as_fieldop(lambda_(*args)(op(*[deref(arg) for arg in args])), domain)(*its)
 
     return _impl
+
+
+def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
+    return itir.AxisLiteral(value=dim.value, kind=dim.kind)
 
 
 def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
@@ -564,3 +664,8 @@ def cast_(expr, dtype: ts.ScalarType | str):
 def can_deref(expr):
     """Create a `can_deref` call."""
     return call("can_deref")(expr)
+
+
+def compose(a: itir.SymRef | itir.Lambda, b: itir.SymRef | itir.Lambda) -> itir.Lambda:
+    # TODO(havogt): `a`, `b` must not contain `SymRef(id="_comp")` for a `Sym` in a parent scope
+    return lambda_("__comp")(call(a)(call(b)("__comp")))

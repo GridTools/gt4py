@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import collections.abc
 import sys
-import timeit
 import types
 import typing
 
@@ -199,14 +198,9 @@ ACTUAL_TYPE_SAMPLES = [
     (list, type),
     (Tuple[int, float], type(Tuple[int, float])),
     (List[int], type(List[int])),
+    (tuple[int, float], types.GenericAlias),
+    (list[int], types.GenericAlias),
 ]
-if sys.version_info >= (3, 9):
-    ACTUAL_TYPE_SAMPLES.extend(
-        [
-            (tuple[int, float], types.GenericAlias),  # type: ignore[misc]   # ignore false positive bug: https://github.com/python/mypy/issues/11098
-            (list[int], types.GenericAlias),
-        ]
-    )
 
 
 @pytest.mark.parametrize(["instance", "expected"], ACTUAL_TYPE_SAMPLES)
@@ -214,76 +208,27 @@ def test_get_actual_type(instance, expected):
     assert xtyping.get_actual_type(instance) == expected
 
 
-class TestHashableTypings:
-    @pytest.mark.parametrize(
-        "x",
-        [
-            int,
-            float,
-            complex,
-            str,
-            tuple,
-            frozenset,
-            1,
-            -2.0,
-            "foo",
-            (),
-            (1, 3.0),
-            frozenset([1, 2, 3]),
-        ],
-    )
-    def test_is_value_hashable(self, x):
-        assert xtyping.is_value_hashable(x)
+def test_has_custom_hash_abc():
+    assert isinstance(4, xtyping.HasCustomHash)
+    assert isinstance(True, xtyping.HasCustomHash)
+    assert isinstance((), xtyping.HasCustomHash)
 
-    @pytest.mark.parametrize("x", [list(), {1, 2, 3}, dict()])
-    def test_is_not_value_hashable(self, x):
-        assert not xtyping.is_value_hashable(x)
+    class A:
+        def __hash__(self):
+            return 3
 
-    @pytest.mark.parametrize(
-        "t",
-        [
-            int,
-            str,
-            float,
-            tuple,
-            Tuple,
-            Tuple[int],
-            Tuple[int, ...],
-            Tuple[Tuple[int, ...], ...],
-            FrozenSet,
-            Type,
-            type(None),
-            None,
-        ],
-    )
-    def test_is_value_hashable_typing(self, t):
-        assert xtyping.is_value_hashable_typing(t)
+    assert isinstance(A(), xtyping.HasCustomHash)
 
-    @pytest.mark.parametrize(
-        "t", [dict, Dict, Dict[str, int], Sequence[int], List[str], Any, TypeVar("T")]
-    )
-    def test_is_not_value_hashable_type(self, t):
-        assert not xtyping.is_value_hashable_typing(t)
+    # PEP-683 Immortal objects have custom hash
+    assert isinstance(None, xtyping.HasCustomHash) == (sys.version_info >= (3, 12))
 
-    def test_has_custom_hash_abc(self):
-        assert isinstance(4, xtyping.HasCustomHash)
-        assert isinstance((), xtyping.HasCustomHash)
+    class B:
+        __hash__ = None
 
-        class A:
-            def __hash__(self):
-                return 3
+    assert not isinstance(B(), xtyping.HasCustomHash)
 
-        assert isinstance(A(), xtyping.HasCustomHash)
-
-        class B:
-            __hash__ = None
-
-        assert not isinstance(B(), xtyping.HasCustomHash)
-
-        assert not isinstance(None, xtyping.HasCustomHash)
-        assert not isinstance(object(), xtyping.HasCustomHash)
-        assert not isinstance(tuple, xtyping.HasCustomHash)
-        assert not isinstance(type, xtyping.HasCustomHash)
+    assert not isinstance(object(), xtyping.HasCustomHash)
+    assert not isinstance(type, xtyping.HasCustomHash)
 
 
 def test_is_protocol():
@@ -390,11 +335,7 @@ def test_eval_forward_ref():
             globalns={"Annotated": Annotated, "Callable": Callable},
             localns={"MissingRef": MissingRef},
         )
-    ) == Callable[[int], MissingRef] or (  # some patch versions of cpython3.9 show weird behaviors
-        sys.version_info >= (3, 9)
-        and sys.version_info < (3, 10)
-        and (ref == Callable[[Annotated[int, "Foo"]], MissingRef])
-    )
+    ) == Callable[[int], MissingRef]
 
     assert (
         xtyping.eval_forward_ref(

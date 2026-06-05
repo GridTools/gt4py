@@ -5,7 +5,7 @@ jupyter:
     text_representation:
       extension: .md
       format_name: markdown
-      format_version: "1.3"
+      format_version: '1.3'
       jupytext_version: 1.16.2
   kernelspec:
     display_name: Python 3 (ipykernel)
@@ -54,6 +54,7 @@ Where "Stage" describes any data structure, and where `StageA` contains all the 
 def simple_add_1(inp: int) -> int:
     return inp + 1
 
+
 simple_add_1(1)
 ```
 
@@ -70,9 +71,9 @@ inp(A: int) -->|simple_add_1| b(A + 1) -->|simple_add_1| c(A + 2) -->|simple_add
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
-manual_add_3 = gtx.otf.workflow.StepSequence.start(
-    simple_add_1
-).chain(simple_add_1).chain(simple_add_1)
+manual_add_3 = (
+    gtx.otf.workflow.StepSequence.start(simple_add_1).chain(simple_add_1).chain(simple_add_1)
+)
 
 manual_add_3(1)
 ```
@@ -125,10 +126,8 @@ class MathOp(gtx.otf.workflow.ChainableWorkflowMixin[int, int]):
     def mul(self, lhs: int, rhs: int) -> int:
         return lhs * rhs
 
-add_3_times_2 = (
-    MathOp("add", 3)
-    .chain(MathOp("mul", 2))
-)
+
+add_3_times_2 = MathOp("add", 3).chain(MathOp("mul", 2))
 add_3_times_2(1)
 ```
 
@@ -168,9 +167,10 @@ def debug_print(inp: int) -> int:
     print("cache miss!")
     return inp
 
+
 cached_calc = gtx.otf.workflow.CachedStep(
     step=debug_print.chain(add_3_times_2),
-    hash_function=lambda i: str(i)  # using ints as their own hash
+    hash_function=lambda i: str(i),  # using ints as their own hash
 )
 
 cached_calc(1)
@@ -202,6 +202,7 @@ def to_int(inp: str) -> int:
     assert isinstance(inp, str), "Can not work with 'int'!"  # yes, this is horribly contrived
     return int(inp)
 
+
 str_calc = to_int.chain(add_3_times_2)
 
 str_calc("1")
@@ -228,9 +229,11 @@ What to do? What we want is a to conditionally skip the first step, so we replac
 class OptionalStrToInt(SkippableStep[str | int, int]):
     step: Workflow[str, int]
 
-    def skip_condition(self, inp: str | int) -> bool:
-        ... # return True to skip (if we get an int) or False to run the conversion (str case)
-
+    def skip_condition(
+        self, inp: str | int
+    ) -> (
+        bool
+    ): ...  # return True to skip (if we get an int) or False to run the conversion (str case)
 ```
 
 ```mermaid
@@ -257,6 +260,7 @@ class OptionalStrToInt(gtx.otf.workflow.SkippableStep[str | int, int]):
             case _:
                 # optionally raise an error with good advice
                 return False
+
 
 strint_calc = OptionalStrToInt().chain(add_3_times_2)
 strint_calc(1) == strint_calc("1")
@@ -296,13 +300,17 @@ class StrToIntFactory(factory.Factory):
     class Params:
         default_step = to_int
         optional: bool = False
-        optional_or_not = factory.LazyAttribute(lambda o: OptionalStrToInt(step=o.default_step) if o.optional else o.default_step)
+        optional_or_not = factory.LazyAttribute(
+            lambda o: OptionalStrToInt(step=o.default_step) if o.optional else o.default_step
+        )
         cached = factory.Trait(
-            inner_step = factory.LazyAttribute(
+            inner_step=factory.LazyAttribute(
                 lambda o: gtx.otf.workflow.CachedStep(step=(o.optional_or_not), hash_function=str)
             )
         )
+
     inner_step = factory.LazyAttribute(lambda o: o.optional_or_not)
+
 
 cached = StrToIntFactory(cached=True)
 optional = StrToIntFactory(optional=True)
@@ -332,8 +340,7 @@ Imagine swapping out `sub_third` in `complicated_workflow` below (without copy p
 
 ```python
 complicated_workflow = (
-    start_step
-    .chain(first_sub_first.chain(first_sub_second).chain(first_sub_third))
+    start_step.chain(first_sub_first.chain(first_sub_second).chain(first_sub_third))
     .chain(second_sub_first.chain(second_sub_second))
     .chain(last)
 )
@@ -383,20 +390,13 @@ class ComplicatedWorkflow(gtx.otf.workflow.NamedStepSequence[A, F]):
     second_sub: Workflow[E, G]
     last: Workflow[G, F]
 
+
 complicated_workflow = ComplicatedWorkflow(
     start_step=start_step,
-    first_sub=FirstSub(
-        first=first_sub_first,
-        second=first_sub_second,
-        third=first_sub_third
-    ),
-    second_sub=SecondSub(
-        first=second_sub_first,
-        second=second_sub_second
-    ),
-    last=last
+    first_sub=FirstSub(first=first_sub_first, second=first_sub_second, third=first_sub_third),
+    second_sub=SecondSub(first=second_sub_first, second=second_sub_second),
+    last=last,
 )
-
 ```
 
 ```mermaid
@@ -449,10 +449,7 @@ Note that with all this there comes an extra feature: We can easily create varia
 CUSTOM_COLORS = {"blue": "#55aaff", "green": "#00ff00", "red": "#ff0000"}
 
 proc = StrProcess(
-    hexify_colors=HexifyColors(
-        color_scheme=CUSTOM_COLORS
-    ),
-    replace_tabs=spaces_to_tabs
+    hexify_colors=HexifyColors(color_scheme=CUSTOM_COLORS), replace_tabs=spaces_to_tabs
 )
 
 proc("""

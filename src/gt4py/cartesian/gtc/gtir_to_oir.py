@@ -10,7 +10,8 @@ from dataclasses import dataclass, field
 from typing import Any, List, Set, Union
 
 from gt4py import eve
-from gt4py.cartesian.gtc import gtir, oir, utils
+from gt4py.cartesian import utils
+from gt4py.cartesian.gtc import gtir, oir
 from gt4py.cartesian.gtc.common import CartesianOffset, DataType, UnaryOperator
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 
@@ -64,6 +65,9 @@ class GTIRToOIR(eve.NodeTranslator):
             dtype=node.dtype,
             loc=node.loc,
         )
+
+    def visit_AbsoluteKIndex(self, node: gtir.AbsoluteKIndex) -> oir.AbsoluteKIndex:
+        return oir.AbsoluteKIndex(k=self.visit(node.k))
 
     def visit_VariableKOffset(self, node: gtir.VariableKOffset) -> oir.VariableKOffset:
         return oir.VariableKOffset(k=self.visit(node.k))
@@ -126,7 +130,7 @@ class GTIRToOIR(eve.NodeTranslator):
         body = []
         for statement in node.body:
             oir_statement = self.visit(statement, **kwargs)
-            body.extend(utils.flatten_list(utils.listify(oir_statement)))
+            body.extend(utils.flatten(utils.listify(oir_statement)))
 
         return oir.HorizontalRestriction(mask=node.mask, body=body)
 
@@ -134,7 +138,7 @@ class GTIRToOIR(eve.NodeTranslator):
         body: List[oir.Stmt] = []
         for statement in node.body:
             oir_statement = self.visit(statement, **kwargs)
-            body.extend(utils.flatten_list(utils.listify(oir_statement)))
+            body.extend(utils.flatten(utils.listify(oir_statement)))
 
         condition: oir.Expr = self.visit(node.cond)
         return oir.While(cond=condition, body=body, loc=node.loc)
@@ -146,7 +150,7 @@ class GTIRToOIR(eve.NodeTranslator):
         body: List[oir.Stmt] = []
         for statement in node.body:
             oir_statement = self.visit(statement, **kwargs)
-            body.extend(utils.flatten_list(utils.listify(oir_statement)))
+            body.extend(utils.flatten(utils.listify(oir_statement)))
 
         return oir.For(
             index_name=node.index_name,
@@ -187,19 +191,25 @@ class GTIRToOIR(eve.NodeTranslator):
             loc=node.loc,
         )
 
-        body = utils.flatten_list(
+        body = utils.flatten(
             [self.visit(statement, ctx=ctx, **kwargs) for statement in node.true_branch.body]
         )
         statements.append(oir.MaskStmt(body=body, mask=condition, loc=node.loc))
 
         if node.false_branch:
             negated_condition = oir.UnaryOp(op=UnaryOperator.NOT, expr=condition, loc=node.loc)
-            body = utils.flatten_list(
+            body = utils.flatten(
                 [self.visit(statement, ctx=ctx, **kwargs) for statement in node.false_branch.body]
             )
             statements.append(oir.MaskStmt(body=body, mask=negated_condition, loc=node.loc))
 
         return statements
+
+    def visit_IteratorAccess(self, iterator_access: gtir.IteratorAccess) -> oir.IteratorAccess:
+        return oir.IteratorAccess(
+            name=oir.IteratorAccess.AxisName(iterator_access.name.value),
+            dtype=iterator_access.dtype,
+        )
 
     # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
     # This is not meant to be set in stone...
@@ -211,14 +221,14 @@ class GTIRToOIR(eve.NodeTranslator):
         **kwargs: Any,
     ) -> List[oir.MaskStmt]:
         condition = self.visit(node.cond)
-        body = utils.flatten_list(
+        body = utils.flatten(
             [self.visit(statement, ctx=ctx, **kwargs) for statement in node.true_branch.body]
         )
         statements = [oir.MaskStmt(body=body, mask=condition, loc=node.loc)]
 
         if node.false_branch:
             negated_condition = oir.UnaryOp(op=UnaryOperator.NOT, expr=condition, loc=node.loc)
-            body = utils.flatten_list(
+            body = utils.flatten(
                 [self.visit(statement, ctx=ctx, **kwargs) for statement in node.false_branch.body]
             )
             statements.append(oir.MaskStmt(body=body, mask=negated_condition, loc=node.loc))
@@ -234,7 +244,7 @@ class GTIRToOIR(eve.NodeTranslator):
         horizontal_executions: List[oir.HorizontalExecution] = []
         for statement in node.body:
             ctx.reset_local_scalars()
-            body = utils.flatten_list(utils.listify(self.visit(statement, ctx=ctx)))
+            body = utils.flatten(utils.listify(self.visit(statement, ctx=ctx)))
             horizontal_executions.append(
                 oir.HorizontalExecution(body=body, declarations=ctx.local_scalars)
             )

@@ -121,27 +121,30 @@ class TestNode:
         )
 
 
-class TestEqNonlocated:
-    def test_source_location(self):
-        node = definitions.make_simple_node_with_loc()
+def test_skipping_fields_node_pickler_skips_nested_fields_and_is_cached():
+    skipped_field_pickler = eve.concepts.skipping_fields_node_pickler("int_value")
+    assert skipped_field_pickler is eve.concepts.skipping_fields_node_pickler("int_value")
 
-        node_different_loc = copy.copy(node)
-        node_different_loc.loc = definitions.make_source_location()
-        assert node != node_different_loc
-        assert eve.concepts.eq_nonlocated(node, node_different_loc)
+    node_a = definitions.CompoundNode(
+        int_value=1,
+        location=definitions.make_location_node(fixed=True),
+        simple=definitions.make_simple_node(fixed=True),
+        simple_loc=definitions.make_simple_node_with_loc(fixed=True),
+        simple_opt=definitions.make_simple_node_with_optionals(fixed=True),
+        other_simple_opt=None,
+    )
+    node_b = copy.deepcopy(node_a)
 
-        node_different_value_and_loc = copy.copy(node_different_loc)
-        node_different_value_and_loc.str_value = definitions.make_str_value()
-        assert not eve.concepts.eq_nonlocated(node, node_different_value_and_loc)
+    node_b.int_value += 100
+    node_b.simple.int_value += 100
+    node_b.simple_loc.int_value += 100
+    node_b.simple_opt.int_value += 100
 
-    def test_source_location_group(self):
-        node = definitions.make_simple_node_with_loc()
+    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) == eve.utils.content_hash(
+        node_b, pickler=skipped_field_pickler
+    )
 
-        node_different_loc_group = copy.copy(node)
-        node_different_loc_group.loc = definitions.make_source_location_group()
-        assert node != node_different_loc_group
-        assert eve.concepts.eq_nonlocated(node, node_different_loc_group)
-
-        node_different_value_and_loc_group = copy.copy(node_different_loc_group)
-        node_different_value_and_loc_group.str_value = definitions.make_str_value()
-        assert not eve.concepts.eq_nonlocated(node, node_different_value_and_loc_group)
+    node_b.simple.str_value = "changed"
+    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) != eve.utils.content_hash(
+        node_b, pickler=skipped_field_pickler
+    )

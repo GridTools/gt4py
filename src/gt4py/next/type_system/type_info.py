@@ -24,8 +24,9 @@ from typing import (
 
 import numpy as np
 
-from gt4py.eve.utils import XIterable, xiter
+from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.next import common
+from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -95,18 +96,18 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
 @overload
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: Literal[False] = False
-) -> XIterable[ts.TypeSpec]: ...
+) -> utils.XIterable[ts.TypeSpec]: ...
 
 
 @overload
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: Literal[True]
-) -> XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
+) -> utils.XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
 
 
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: bool = False
-) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
+) -> utils.XIterable[ts.TypeSpec] | utils.XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
     """
     Return the primitive types contained in a composite type.
 
@@ -127,7 +128,10 @@ def primitive_constituents(
     def constituents_yielder(
         symbol_type: ts.TypeSpec, path: tuple[int, ...]
     ) -> Iterator[ts.TypeSpec] | Iterator[tuple[ts.TypeSpec, tuple[int, ...]]]:
-        if isinstance(symbol_type, ts.TupleType):
+        if isinstance(symbol_type, ts.COLLECTION_TYPE_SPECS):
+            symbol_type = cast(
+                ts.CollectionTypeSpec, symbol_type
+            )  # This shouldn't be needed after the previous isinstance() check
             for i, el_type in enumerate(symbol_type.types):
                 yield from constituents_yielder(el_type, (*path, i))
         else:
@@ -136,7 +140,7 @@ def primitive_constituents(
             else:
                 yield symbol_type
 
-    return xiter(constituents_yielder(symbol_type, ()))  # type: ignore[return-value] # why resolved to XIterable[object]?
+    return utils.xiter(constituents_yielder(symbol_type, ()))  # type: ignore[return-value] # why resolved to XIterable[object]?
 
 
 _R = TypeVar("_R", covariant=True)
@@ -177,6 +181,7 @@ def apply_to_primitive_constituents(
     """
     if isinstance(symbol_types[0], ts.TupleType):
         assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
+
         return tuple_constructor(
             *[
                 apply_to_primitive_constituents(
@@ -234,6 +239,8 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
+    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
+        return False
     return isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType) and dtype.kind in [
         ts.ScalarKind.FLOAT32,
         ts.ScalarKind.FLOAT64,
@@ -277,6 +284,8 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
     >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     True
     """
+    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
+        return False
     return is_integer(extract_dtype(symbol_type))
 
 
@@ -304,7 +313,8 @@ def is_number(symbol_type: ts.TypeSpec) -> bool:
 
 def is_logical(symbol_type: ts.TypeSpec) -> bool:
     return (
-        isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType)
+        isinstance(symbol_type, (ts.FieldType, ts.ScalarType))
+        and isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType)
         and dtype.kind is ts.ScalarKind.BOOL
     )
 
@@ -432,6 +442,82 @@ def contains_local_field(type_: ts.TypeSpec) -> bool:
     )
 
 
+# TODO(tehrengruber): This function has specializations on Iterator types, which are not part of
+#  the general / shared type system. This functionality should be moved to the iterator-only
+#  type system, but we need some sort of multiple dispatch for that.
+# TODO(tehrengruber): Should this have a direction like is_concretizable?
+def is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec) -> bool:
+    """
+    Predicate to determine if two types are compatible.
+
+    This function gracefully handles:
+     - iterators with unknown positions which are considered compatible to any other positions
+       of another iterator.
+     - iterators which are defined everywhere, i.e. empty defined dimensions
+    Beside that this function simply checks for equality of types.
+
+    >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    >>> IDim = common.Dimension(value="IDim")
+    >>> type_on_i_of_i_it = it_ts.IteratorType(
+    ...     position_dims=[IDim], defined_dims=[IDim], element_type=bool_type
+    ... )
+    >>> type_on_undefined_of_i_it = it_ts.IteratorType(
+    ...     position_dims="unknown", defined_dims=[IDim], element_type=bool_type
+    ... )
+    >>> is_compatible_type(type_on_i_of_i_it, type_on_undefined_of_i_it)
+    True
+
+    >>> JDim = common.Dimension(value="JDim")
+    >>> type_on_j_of_j_it = it_ts.IteratorType(
+    ...     position_dims=[JDim], defined_dims=[JDim], element_type=bool_type
+    ... )
+    >>> is_compatible_type(type_on_i_of_i_it, type_on_j_of_j_it)
+    False
+    """
+    is_compatible = True
+
+    if isinstance(type_a, it_ts.IteratorType) and isinstance(type_b, it_ts.IteratorType):
+        if not any(el_type.position_dims == "unknown" for el_type in [type_a, type_b]):
+            is_compatible &= type_a.position_dims == type_b.position_dims
+        if type_a.defined_dims and type_b.defined_dims:
+            is_compatible &= type_a.defined_dims == type_b.defined_dims
+        is_compatible &= type_a.element_type == type_b.element_type
+    elif isinstance(type_a, ts.TupleType) and isinstance(type_b, ts.TupleType):
+        if len(type_a.types) != len(type_b.types):
+            return False
+        for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
+            is_compatible &= is_compatible_type(el_type_a, el_type_b)
+    elif isinstance(type_a, ts.NamedCollectionType) and isinstance(type_b, ts.NamedCollectionType):
+        if type_a.keys != type_b.keys:
+            return False
+        if (
+            not any(
+                python_type is ts.ANY_PYTHON_TYPE_NAME
+                for python_type in [type_a.original_python_type, type_b.original_python_type]
+            )
+            and type_a.original_python_type != type_b.original_python_type
+        ):
+            return False
+        for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
+            is_compatible &= is_compatible_type(el_type_a, el_type_b)
+    elif isinstance(type_a, ts.FunctionType) and isinstance(type_b, ts.FunctionType):
+        for arg_a, arg_b in zip(type_a.pos_only_args, type_b.pos_only_args, strict=True):
+            is_compatible &= is_compatible_type(arg_a, arg_b)
+        for arg_a, arg_b in zip(
+            type_a.pos_or_kw_args.values(), type_b.pos_or_kw_args.values(), strict=True
+        ):
+            is_compatible &= is_compatible_type(arg_a, arg_b)
+        for arg_a, arg_b in zip(
+            type_a.kw_only_args.values(), type_b.kw_only_args.values(), strict=True
+        ):
+            is_compatible &= is_compatible_type(arg_a, arg_b)
+        is_compatible &= is_compatible_type(type_a.returns, type_b.returns)
+    else:
+        is_compatible &= is_concretizable(type_a, type_b)
+
+    return is_compatible
+
+
 def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     """
     Check if ``symbol_type`` can be concretized to ``to_type``.
@@ -503,12 +589,11 @@ def promote(
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
-    >>> promote(
+    >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype)
-    ... )  # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
+    ... )
+    >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
+    True
     """
     if not always_field and all(isinstance(type_, ts.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
@@ -534,7 +619,7 @@ def return_type(
     with_kwargs: dict[str, ts.TypeSpec],
 ) -> ts.TypeSpec:
     raise NotImplementedError(
-        f"Return type deduction of type " f"'{type(callable_type).__name__}' not implemented."
+        f"Return type deduction of type '{type(callable_type).__name__}' not implemented."
     )
 
 
@@ -581,9 +666,20 @@ def return_type_field(
     return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
 
 
+@return_type.register
+def return_type_constructor(
+    constructor_type: ts.ConstructorType,
+    *,
+    with_args: Sequence[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
+) -> ts.TypeSpec:
+    return constructor_type.definition.returns
+
+
 UNDEFINED_ARG = types.new_class("UNDEFINED_ARG")
 
 
+# TODO(egparedes): replace by `inspect.Signature.bind()`
 @functools.singledispatch
 def canonicalize_arguments(
     func_type: ts.CallableType,
@@ -591,8 +687,7 @@ def canonicalize_arguments(
     kwargs: dict,
     *,
     ignore_errors: bool = False,
-    use_signature_ordering: bool = False,
-) -> tuple[list, dict]:
+) -> tuple[tuple, dict]:
     raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
 
@@ -603,36 +698,57 @@ def canonicalize_function_arguments(
     kwargs: dict,
     *,
     ignore_errors: bool = False,
-    use_signature_ordering: bool = False,
-) -> tuple[list, dict]:
-    num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
-    cargs = [UNDEFINED_ARG] * max(num_pos_params, len(args))
-    ckwargs = {**kwargs}
-    for i, arg in enumerate(args):
-        cargs[i] = arg
-    for name in kwargs.keys():
+) -> tuple[tuple, dict]:
+    num_pos_only_args = len(func_type.pos_only_args)
+    num_pos_or_kw_args = len(func_type.pos_or_kw_args)
+    canonical_args = [*args] + (
+        [UNDEFINED_ARG] * max(num_pos_only_args + num_pos_or_kw_args - len(args), 0)
+    )
+    remaining_kwargs = {**kwargs}
+
+    pos_or_kw_args_names = [*func_type.pos_or_kw_args]
+    for name in kwargs:
         if name in func_type.pos_or_kw_args:
-            args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
-                name
-            )
-            if cargs[args_idx] is UNDEFINED_ARG:
-                cargs[args_idx] = ckwargs.pop(name)
+            args_idx = num_pos_only_args + pos_or_kw_args_names.index(name)
+            if canonical_args[args_idx] is UNDEFINED_ARG:
+                canonical_args[args_idx] = remaining_kwargs.pop(name)
             elif not ignore_errors:
-                raise AssertionError(
+                raise ValueError(
                     f"Error canonicalizing function arguments. Got multiple values for argument '{name}'."
                 )
 
-    a, b = set(func_type.kw_only_args.keys()), set(ckwargs.keys())
-    invalid_kw_args = (a - b) | (b - a)
-    if invalid_kw_args and (not ignore_errors or use_signature_ordering):
-        # this error can not be ignored as otherwise the invariant that no arguments are dropped
-        # is invalidated.
-        raise AssertionError(f"Invalid keyword arguments '{', '.join(invalid_kw_args)}'.")
+    missing_kw_args = func_type.kw_only_args.keys() - remaining_kwargs.keys()
+    invalid_kw_args = remaining_kwargs.keys() - func_type.kw_only_args.keys()
 
-    if use_signature_ordering:
-        ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args.keys() if k in ckwargs}
+    if not ignore_errors:
+        if missing_kw_args:
+            raise ValueError(f"Missing required keyword arguments: {[*missing_kw_args]}.")
+        if invalid_kw_args:
+            raise ValueError(f"Invalid keyword arguments: {[*invalid_kw_args]}.")
 
-    return list(cargs), ckwargs
+    # Sort remaining keyword arguments in the signature ordering,
+    # keeping the invalid ones at the end if 'ignore_errors' is True.
+    canonical_kwargs = {
+        k: remaining_kwargs[k] for k in func_type.kw_only_args if k in remaining_kwargs
+    } | {k: remaining_kwargs[k] for k in invalid_kw_args}
+
+    return tuple(canonical_args), canonical_kwargs
+
+
+@canonicalize_arguments.register(ts.ConstructorType)
+def canonicalize_constructor_arguments(
+    constructor_type: ts.ConstructorType,
+    args: tuple | list,
+    kwargs: dict,
+    *,
+    ignore_errors: bool = False,
+) -> tuple[tuple, dict]:
+    return canonicalize_arguments(
+        constructor_type.definition,
+        args,
+        kwargs,
+        ignore_errors=ignore_errors,
+    )
 
 
 def structural_function_signature_incompatibilities(
@@ -651,7 +767,7 @@ def structural_function_signature_incompatibilities(
     kwargs = {**kwargs}
 
     # check positional arguments
-    for name in {**kwargs}.keys():
+    for name in [*kwargs]:
         if name in func_type.pos_or_kw_args:
             args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
                 name
@@ -670,21 +786,23 @@ def structural_function_signature_incompatibilities(
             kwargs_msg = ""
         yield f"Function takes {num_pos_params} positional argument{'s' if num_pos_params != 1 else ''}, but {num_pos_args} {kwargs_msg}were given."
 
-    missing_positional_args = []
-    for i, arg_type in zip(
-        range(len(func_type.pos_only_args), num_pos_params),
-        func_type.pos_or_kw_args.keys(),
-    ):
-        if args[i] is UNDEFINED_ARG:
-            missing_positional_args.append(f"'{arg_type}'")
+    missing_positional_args = [
+        f"'{arg_type}'"
+        for arg, arg_type in zip(
+            args[len(func_type.pos_only_args) : num_pos_params],
+            func_type.pos_or_kw_args.keys(),
+        )
+        if arg is UNDEFINED_ARG
+    ]
+
     if missing_positional_args:
         yield f"Missing {len(missing_positional_args)} required positional argument{'s' if len(missing_positional_args) != 1 else ''}: {', '.join(missing_positional_args)}"
 
     # check for missing or extra keyword arguments
-    kw_a_m_b = set(func_type.kw_only_args.keys()) - set(kwargs.keys())
+    kw_a_m_b = func_type.kw_only_args.keys() - kwargs.keys()
     if len(kw_a_m_b) > 0:
         yield f"Missing required keyword argument{'s' if len(kw_a_m_b) != 1 else ''} '{', '.join(kw_a_m_b)}'."
-    kw_b_m_a = set(kwargs.keys()) - set(func_type.kw_only_args.keys())
+    kw_b_m_a = kwargs.keys() - func_type.kw_only_args.keys()
     if len(kw_b_m_a) > 0:
         yield f"Got unexpected keyword argument{'s' if len(kw_b_m_a) != 1 else ''} '{', '.join(kw_b_m_a)}'."
 
@@ -720,26 +838,26 @@ def function_signature_incompatibilities_func(
             yield from error_list
             return
 
-    num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
+    num_pos_only_args = len(func_type.pos_only_args)
+    num_pos_or_kw_args = len(func_type.pos_or_kw_args)
+    num_pos_params = num_pos_only_args + num_pos_or_kw_args
     assert len(args) >= num_pos_params
     for i, (a_arg, b_arg) in enumerate(
         zip(list(func_type.pos_only_args) + list(func_type.pos_or_kw_args.values()), args)
     ):
-        if (
-            b_arg is not UNDEFINED_ARG
-            and a_arg != b_arg
-            and not is_concretizable(a_arg, to_type=b_arg)
-        ):
-            if i < len(func_type.pos_only_args):
+        if b_arg is not UNDEFINED_ARG and a_arg != b_arg and not is_compatible_type(a_arg, b_arg):
+            if i < num_pos_only_args:
                 arg_repr = f"{_number_to_ordinal_number(i + 1)} argument"
             else:
-                arg_repr = f"argument '{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}'"
+                arg_repr = (
+                    f"argument '{list(func_type.pos_or_kw_args.keys())[i - num_pos_only_args]}'"
+                )
             yield f"Expected {arg_repr} to be of type '{a_arg}', got '{b_arg}'."
 
-    for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):
+    for kwarg in func_type.kw_only_args.keys() & kwargs.keys():
         if (a_kwarg := func_type.kw_only_args[kwarg]) != (
             b_kwarg := kwargs[kwarg]
-        ) and not is_concretizable(a_kwarg, to_type=b_kwarg):
+        ) and not is_compatible_type(a_kwarg, b_kwarg):
             yield f"Expected keyword argument '{kwarg}' to be of type '{func_type.kw_only_args[kwarg]}', got '{kwargs[kwarg]}'."
 
 
@@ -766,7 +884,6 @@ def function_signature_incompatibilities_field(
 
     source_dim = args[0].source  # type: ignore[attr-defined] # ensured by loop above
     target_dims = args[0].target  # type: ignore[attr-defined] # ensured by loop above
-    # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:
         yield (
@@ -777,6 +894,17 @@ def function_signature_incompatibilities_field(
         )
 
 
+@function_signature_incompatibilities.register
+def function_signature_incompatibilities_constructor(
+    constructor_type: ts.ConstructorType,
+    args: Sequence[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
+) -> Iterator[str]:
+    yield from function_signature_incompatibilities_func(constructor_type.definition, args, kwargs)
+
+
+# TODO(havogt): Consider inlining the usage of this function in the call sites
+# to get rid of the `raise_exception` case and because the error message here is possibly too specific.
 def accepts_args(
     callable_type: ts.CallableType,
     *,
@@ -812,8 +940,7 @@ def accepts_args(
 
     errors = function_signature_incompatibilities(callable_type, with_args, with_kwargs)
     if raise_exception:
-        error_list = list(errors)
-        if len(error_list) > 0:
+        if len(error_list := [*errors]) > 0:
             raise ValueError(
                 f"Invalid call to function of type '{callable_type}':\n"
                 + ("\n".join([f"  - {error}" for error in error_list]))
@@ -821,3 +948,12 @@ def accepts_args(
         return True
 
     return next(errors, None) is None
+
+
+def needs_value_extraction(
+    type_spec: ts.TypeSpec,
+) -> xtyping.TypeIs[ts.NamedCollectionType | ts.TupleType]:
+    return isinstance(type_spec, ts.NamedCollectionType) or (
+        isinstance(type_spec, ts.TupleType)
+        and any(needs_value_extraction(t) for t in type_spec.types)
+    )

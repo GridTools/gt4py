@@ -7,128 +7,103 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
-import pathlib
-import tempfile
-import warnings
-from typing import Any, Optional
+from typing import Any
 
-import diskcache
 import factory
-import filelock
+import numpy as np
 
 import gt4py._core.definitions as core_defs
-import gt4py.next.allocators as next_allocators
-from gt4py.next import backend, common, config
-from gt4py.next.otf import arguments, recipes, stages, workflow
+import gt4py.next.custom_layout_allocators as next_allocators
+from gt4py._core import filecache
+from gt4py.next import backend, common, config, field_utils
+from gt4py.next.embedded import nd_array_field
+from gt4py.next.instrumentation import metrics
+from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import compiler
+from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
 
-# TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
+    # Note: this function is on the hot path and needs to have minimal overhead.
+    if (origin := getattr(arg, "__gt_origin__", None)) is not None:
+        # `Field` is the most likely case, we use `__gt_origin__` as the property is needed anyway
+        # and (currently) uniquely identifies a `NDArrayField` (which is the only supported `Field`)
+        assert isinstance(arg, nd_array_field.NdArrayField)
+        return arg.ndarray, origin
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if isinstance(arg, common.Field):
-        arr = arg.ndarray
-        origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
-        return arr, origin
-    else:
-        return arg
+    if isinstance(arg, np.bool_):
+        # nanobind does not support implicit conversion of `np.bool` to `bool`
+        return bool(arg)
+    # TODO(havogt): if this function still appears in profiles,
+    # we should avoid going through the previous isinstance checks for detecting a scalar.
+    # E.g. functools.cache on the arg type, returning a function that does the conversion
+    return arg
 
 
 def convert_args(
-    inp: stages.ExtendedCompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
-) -> stages.CompiledProgram:
+    inp: stages.ExecutableProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+) -> stages.ExecutableProgram:
     def decorated_program(
         *args: Any,
         offset_provider: dict[str, common.Connectivity | common.Dimension],
         out: Any = None,
     ) -> None:
+        # Note: this function is on the hot path and needs to have minimal overhead.
         if out is not None:
             args = (*args, out)
-        converted_args = [convert_arg(arg) for arg in args]
+        converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
+
+        opt_kwargs: dict[str, Any] = {}
+        if collect_metrics := metrics.is_level_enabled(metrics.PERFORMANCE):
+            # If we are collecting metrics, we need to add the `exec_info` argument
+            # to the `inp` call, which will be used to collect performance metrics.
+            exec_info: dict[str, float] = {}
+            opt_kwargs["exec_info"] = exec_info
+
         # generate implicit domain size arguments only if necessary, using `iter_size_args()`
-        return inp(
+        inp(
             *converted_args,
-            *(arguments.iter_size_args(args) if inp.implicit_domain else ()),
             *conn_args,
+            **opt_kwargs,
         )
 
-    return decorated_program
-
-
-def _ensure_is_on_device(
-    connectivity_arg: core_defs.NDArrayObject, device: core_defs.DeviceType
-) -> core_defs.NDArrayObject:
-    if device in [core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]:
-        import cupy as cp
-
-        if not isinstance(connectivity_arg, cp.ndarray):
-            warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
-                stacklevel=2,
+        if collect_metrics:
+            metrics.add_sample_to_current_source(
+                metrics.COMPUTE_METRIC, exec_info["run_cpp_duration"]
             )
-            return cp.asarray(connectivity_arg)
-    return connectivity_arg
+
+    return decorated_program
 
 
 def extract_connectivity_args(
     offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
-    # note: the order here needs to agree with the order of the generated bindings
-    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = []
-    for name, conn in offset_provider.items():
-        if isinstance(conn, common.Connectivity):
-            if not common.is_neighbor_table(conn):
-                raise NotImplementedError(
-                    "Only 'NeighborTable' connectivities implemented at this point."
-                )
-            # copying to device here is a fallback for easy testing and might be removed later
-            conn_arg = _ensure_is_on_device(conn.ndarray, device)
-            args.append((conn_arg, tuple([0] * 2)))
-        elif isinstance(conn, common.Dimension):
-            pass
-        else:
-            raise AssertionError(
-                f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "
-                f"but got '{type(conn).__name__}'."
-            )
+    # Note: this function is on the hot path and needs to have minimal overhead.
+    zero_origin = (0, 0)
+    assert all(
+        hasattr(conn, "ndarray") or isinstance(conn, common.Dimension)
+        for conn in offset_provider.values()
+    )
+    # Note: the order here needs to agree with the order of the generated bindings.
+    # This is currently true only because when hashing offset provider dicts,
+    # the keys' order is taken into account. Any modification to the hashing
+    # of offset providers may break this assumption here.
+    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
+        (ndarray, zero_origin)
+        for conn in offset_provider.values()
+        if (ndarray := getattr(conn, "ndarray", None)) is not None
+    ]
+    assert all(
+        common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
+        for conn in offset_provider.values()
+        if hasattr(conn, "ndarray")
+    )
+
     return args
-
-
-class FileCache(diskcache.Cache):
-    """
-    This class extends `diskcache.Cache` to ensure the cache is properly
-    - opened when accessed by multiple processes using a file lock. This guards the creating of the
-    cache object, which has been reported to cause `sqlite3.OperationalError: database is locked`
-    errors and slow startup times when multiple processes access the cache concurrently. While this
-    issue occurred frequently and was observed to be fixed on distributed file systems, the lock
-    does not guarantee correct behavior in particular for accesses to the cache (beyond opening)
-    since the underlying SQLite database is unreliable when stored on an NFS based file system.
-    It does however ensure correctness of concurrent cache accesses on a local file system. See
-    #1745 for more details.
-    - closed upon deletion, i.e. it ensures that any resources associated with the cache are
-    properly released when the instance is garbage collected.
-    """
-
-    def __init__(self, directory: Optional[str | pathlib.Path] = None, **settings: Any) -> None:
-        if directory:
-            lock_dir = pathlib.Path(directory).parent
-        else:
-            lock_dir = pathlib.Path(tempfile.gettempdir())
-
-        lock = filelock.FileLock(lock_dir / "file_cache.lock")
-        with lock:
-            super().__init__(directory=directory, **settings)
-
-        self._init_complete = True
-
-    def __del__(self) -> None:
-        if getattr(self, "_init_complete", False):  # skip if `__init__` didn't finished
-            self.close()
 
 
 class GTFNCompileWorkflowFactory(factory.Factory):
@@ -137,10 +112,10 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
-        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(
+        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 
@@ -149,7 +124,9 @@ class GTFNCompileWorkflowFactory(factory.Factory):
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
                     hash_function=stages.fingerprint_compilable_program,
-                    cache=FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
+                    cache=filecache.FileCache(
+                        str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
+                    ),
                 )
             ),
         )
@@ -161,7 +138,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
 
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
         nanobind.bind_source
     )
     compilation = factory.SubFactory(
@@ -185,7 +162,7 @@ class GTFNBackendFactory(factory.Factory):
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=next_allocators.CUPY_DEVICE or core_defs.DeviceType.CUDA,
+            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
         cached = factory.Trait(
@@ -219,7 +196,9 @@ run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translati
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
-run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
+run_gtfn_gpu_cached = GTFNBackendFactory(
+    gpu=True, cached=True, otf_workflow__cached_translation=True
+)
 
 run_gtfn_no_transforms = GTFNBackendFactory(
     otf_workflow__bare_translation__enable_itir_transforms=False

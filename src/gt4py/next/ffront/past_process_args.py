@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Iterator, Sequence, TypeAlias
+from typing import Any, Iterator, Sequence
 
 from gt4py.next import common, errors
 from gt4py.next.ffront import (
@@ -18,27 +18,27 @@ from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-AOT_PRG: TypeAlias = toolchain.CompilableProgram[
-    ffront_stages.PastProgramDefinition, arguments.CompileTimeArgs
-]
-
-
-def transform_program_args(inp: AOT_PRG) -> AOT_PRG:
-    rewritten_args, size_args, kwargs = _process_args(
+def transform_program_args(
+    inp: ffront_stages.ConcretePASTProgramDef,
+) -> ffront_stages.ConcretePASTProgramDef:
+    rewritten_args, rewritten_kwargs = _process_args(
         past_node=inp.data.past_node, args=inp.args.args, kwargs=inp.args.kwargs
     )
-    return toolchain.CompilableProgram(
+    return toolchain.ConcreteArtifact(
         data=inp.data,
         args=arguments.CompileTimeArgs(
-            args=tuple((*rewritten_args, *(size_args))),
-            kwargs=kwargs,
+            args=rewritten_args,
+            kwargs=rewritten_kwargs,
             offset_provider=inp.args.offset_provider,
             column_axis=inp.args.column_axis,
+            argument_descriptor_contexts=inp.args.argument_descriptor_contexts,
         ),
     )
 
 
-def transform_program_args_factory(cached: bool = True) -> workflow.Workflow[AOT_PRG, AOT_PRG]:
+def transform_program_args_factory(
+    cached: bool = True,
+) -> workflow.Workflow[ffront_stages.ConcretePASTProgramDef, ffront_stages.ConcretePASTProgramDef]:
     wf = transform_program_args
     if cached:
         wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
@@ -62,46 +62,17 @@ def _validate_args(
 
 
 def _process_args(
-    past_node: past.Program, args: Sequence[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
-) -> tuple[tuple, tuple, dict[str, Any]]:
+    past_node: past.Program,
+    args: Sequence[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
+) -> tuple[tuple[ts.TypeSpec], dict[str, ts.TypeSpec]]:
     if not isinstance(past_node.type, ts_ffront.ProgramType):
         raise TypeError("Can not process arguments for PAST programs prior to type inference.")
 
+    args, kwargs = type_info.canonicalize_arguments(past_node.type, args, kwargs)
     _validate_args(past_node=past_node, arg_types=args, kwarg_types=kwargs)
 
-    args, kwargs = type_info.canonicalize_arguments(past_node.type, args, kwargs)
-
-    implicit_domain = any(
-        isinstance(stmt, past.Call) and "domain" not in stmt.kwargs for stmt in past_node.body
-    )
-
-    # extract size of all field arguments
-    size_args: list[ts.TypeSpec] = []
-    rewritten_args = list(args)
-    for param_idx, param in enumerate(past_node.params):
-        if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
-            # TODO(tehrengruber): Previously this function was called with the actual arguments
-            #  not their type. The check using the shape here is not functional anymore and
-            #  should instead be placed in a proper location.
-            ranges_and_dims = [*_field_constituents_range_and_dims(args[param_idx], param.type)]
-            # check that all non-scalar like constituents have the same shape and dimension, e.g.
-            # for `(scalar, (field1, field2))` the two fields need to have the same shape and
-            # dimension
-            if ranges_and_dims:
-                range_, dims = ranges_and_dims[0]
-                if not all(
-                    el_range == range_ and el_dims == dims
-                    for (el_range, el_dims) in ranges_and_dims
-                ):
-                    raise ValueError(
-                        "Constituents of composite arguments (e.g. the elements of a"
-                        " tuple) need to have the same shape and dimensions."
-                    )
-                index_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-                size_args.extend(
-                    range_ if range_ else [ts.TupleType(types=[index_type, index_type])] * len(dims)  # type: ignore[arg-type]  # shape is always empty
-                )
-    return tuple(rewritten_args), tuple(size_args), kwargs
+    return args, kwargs
 
 
 def _field_constituents_range_and_dims(

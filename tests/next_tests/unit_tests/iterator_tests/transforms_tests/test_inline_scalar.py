@@ -21,7 +21,10 @@ def program_factory(expr: itir.Expr) -> itir.Program:
     return itir.Program(
         id="testee",
         function_definitions=[],
-        params=[im.sym("out", ts.FieldType(dims=[TDim], dtype=int_type))],
+        params=[
+            im.sym("inp", ts.FieldType(dims=[TDim], dtype=int_type)),
+            im.sym("out", ts.FieldType(dims=[TDim], dtype=int_type)),
+        ],
         declarations=[],
         body=[
             itir.SetAt(
@@ -34,8 +37,8 @@ def program_factory(expr: itir.Expr) -> itir.Program:
 
 
 def test_simple():
-    testee = program_factory(im.let("a", 1)(im.op_as_fieldop("plus")("a", "a")))
-    expected = program_factory(im.op_as_fieldop("plus")(1, 1))
+    testee = program_factory(im.let("a", 1)(im.op_as_fieldop("plus")("inp", "a")))
+    expected = program_factory(im.op_as_fieldop("plus")("inp", 1))
     actual = inline_scalar.InlineScalar.apply(testee, offset_provider_type={})
     assert actual == expected
 

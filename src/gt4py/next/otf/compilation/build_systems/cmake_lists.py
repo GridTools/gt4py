@@ -45,12 +45,6 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         project({{project_name}})
 
         # Languages
-        if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-            set(CMAKE_CUDA_ARCHITECTURES 60)
-        endif()
-        if(NOT DEFINED CMAKE_HIP_ARCHITECTURES)
-            set(CMAKE_HIP_ARCHITECTURES gfx90a)
-        endif()
         {{"\\n".join(languages)}}
 
         # Paths
@@ -88,10 +82,16 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         #   Instead, design this to be extensible (refer to ADR-0016).
         match dep.name:
             case "nanobind":
+                import sys
+
                 import nanobind
 
-                py = "find_package(Python COMPONENTS Interpreter Development REQUIRED)"
-                nb = f"find_package(nanobind CONFIG REQUIRED PATHS {nanobind.cmake_dir()} NO_DEFAULT_PATHS)"
+                py = f"""
+                set(Python_EXECUTABLE {sys.executable})
+
+                find_package(Python COMPONENTS Interpreter Development REQUIRED)
+                """
+                nb = f'find_package(nanobind CONFIG REQUIRED HINTS "{nanobind.cmake_dir()}" NO_DEFAULT_PATH)'
                 return py + "\n" + nb
             case "gridtools_cpu" | "gridtools_gpu":
                 import gridtools_cpp

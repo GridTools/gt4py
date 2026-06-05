@@ -12,7 +12,7 @@ import types
 
 import numpy as np
 
-import gt4py.cartesian.utils as gt_utils
+from gt4py.cartesian import utils as gt_utils
 
 
 def copy_func(f, name=None):
@@ -38,9 +38,9 @@ def standardize_dtype_dict(dtypes):
     dtypes as 1-tuples)
     """
     assert isinstance(dtypes, collections.abc.Mapping)
-    assert all(
-        (isinstance(k, str) or gt_utils.is_iterable_of(k, str)) for k in dtypes.keys()
-    ), "Invalid key in 'dtypes'."
+    assert all((isinstance(k, str) or gt_utils.is_iterable_of(k, str)) for k in dtypes.keys()), (
+        "Invalid key in 'dtypes'."
+    )
     assert all(
         (
             isinstance(k, (type, np.dtype))

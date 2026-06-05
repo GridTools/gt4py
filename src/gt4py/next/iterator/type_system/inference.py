@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import collections.abc
 import copy
 import dataclasses
 import functools
@@ -18,7 +17,8 @@ from gt4py.eve import concepts
 from gt4py.eve.extended_typing import Any, Callable, Optional, TypeVar, Union
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_as_fieldop, is_call_to
+from gt4py.next.iterator.transforms import symbol_ref_utils, trace_shifts
 from gt4py.next.iterator.type_system import type_specifications as it_ts, type_synthesizer
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.type_system.type_info import primitive_constituents
@@ -32,66 +32,19 @@ def _is_representable_as_int(s: int | str) -> bool:
         return False
 
 
-def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
-    """
-    Predicate to determine if two types are compatible.
-
-    This function gracefully handles:
-     - iterators with unknown positions which are considered compatible to any other positions
-       of another iterator.
-     - iterators which are defined everywhere, i.e. empty defined dimensions
-    Beside that this function simply checks for equality of types.
-
-    >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
-    >>> IDim = common.Dimension(value="IDim")
-    >>> type_on_i_of_i_it = it_ts.IteratorType(
-    ...     position_dims=[IDim], defined_dims=[IDim], element_type=bool_type
-    ... )
-    >>> type_on_undefined_of_i_it = it_ts.IteratorType(
-    ...     position_dims="unknown", defined_dims=[IDim], element_type=bool_type
-    ... )
-    >>> _is_compatible_type(type_on_i_of_i_it, type_on_undefined_of_i_it)
-    True
-
-    >>> JDim = common.Dimension(value="JDim")
-    >>> type_on_j_of_j_it = it_ts.IteratorType(
-    ...     position_dims=[JDim], defined_dims=[JDim], element_type=bool_type
-    ... )
-    >>> _is_compatible_type(type_on_i_of_i_it, type_on_j_of_j_it)
-    False
-    """
-    is_compatible = True
-
-    if isinstance(type_a, it_ts.IteratorType) and isinstance(type_b, it_ts.IteratorType):
-        if not any(el_type.position_dims == "unknown" for el_type in [type_a, type_b]):
-            is_compatible &= type_a.position_dims == type_b.position_dims
-        if type_a.defined_dims and type_b.defined_dims:
-            is_compatible &= type_a.defined_dims == type_b.defined_dims
-        is_compatible &= type_a.element_type == type_b.element_type
-    elif isinstance(type_a, ts.TupleType) and isinstance(type_b, ts.TupleType):
-        for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
-            is_compatible &= _is_compatible_type(el_type_a, el_type_b)
-    elif isinstance(type_a, ts.FunctionType) and isinstance(type_b, ts.FunctionType):
-        for arg_a, arg_b in zip(type_a.pos_only_args, type_b.pos_only_args, strict=True):
-            is_compatible &= _is_compatible_type(arg_a, arg_b)
-        for arg_a, arg_b in zip(
-            type_a.pos_or_kw_args.values(), type_b.pos_or_kw_args.values(), strict=True
-        ):
-            is_compatible &= _is_compatible_type(arg_a, arg_b)
-        for arg_a, arg_b in zip(
-            type_a.kw_only_args.values(), type_b.kw_only_args.values(), strict=True
-        ):
-            is_compatible &= _is_compatible_type(arg_a, arg_b)
-        is_compatible &= _is_compatible_type(type_a.returns, type_b.returns)
-    else:
-        is_compatible &= type_info.is_concretizable(type_a, type_b)
-
-    return is_compatible
-
-
 def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
-    if node.type:
-        assert _is_compatible_type(node.type, type_), "Node already has a type which differs."
+    if node.type and not isinstance(type_, ts.DeferredType):
+        assert type_info.is_compatible_type(node.type, type_), (
+            f"Node {node!s} already has a type {node.type} which differs from {type_}."
+        )
+    # Also populate the type of the parameters of a lambda. That way the one can access the type
+    # of a parameter by a lookup in the symbol table. As long as `_set_node_type` is used
+    # exclusively, the information stays consistent with the types stored in the `FunctionType`
+    # of the lambda itself.
+    if isinstance(node, itir.Lambda):
+        assert isinstance(type_, ts.FunctionType)
+        for param, param_type in zip(node.params, type_.pos_only_args):
+            _set_node_type(param, param_type)
     node.type = type_
 
 
@@ -155,8 +108,8 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
 
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> square_func = im.lambda_("base")(im.call("power")("base", 2))
-    >>> square_func_type_synthesizer = type_synthesizer.TypeSynthesizer(
-    ...     type_synthesizer=lambda base: power(base, int_type)
+    >>> square_func_type_synthesizer = type_synthesizer.type_synthesizer(
+    ...     lambda base: power(base, int_type)
     ... )
     >>> square_func_type_synthesizer(float_type, offset_provider_type={})
     ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None)
@@ -229,13 +182,14 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         self,
         *args: type_synthesizer.TypeOrTypeSynthesizer,
         offset_provider_type: common.OffsetProviderType,
+        **kwargs,
     ) -> Union[ts.TypeSpec, ObservableTypeSynthesizer]:
-        assert all(
-            isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args
-        ), "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
+        assert all(isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args), (
+            "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
+        )
 
         return_type_or_synthesizer = self.type_synthesizer(
-            *args, offset_provider_type=offset_provider_type
+            *args, offset_provider_type=offset_provider_type, **kwargs
         )
 
         # return type is a typing rule by itself
@@ -252,39 +206,6 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
         on_inferred(self._infer_type_listener, return_type_or_synthesizer, *args)  # type: ignore[arg-type] # ensured by assert above
 
         return return_type_or_synthesizer
-
-
-def _get_dimensions_from_offset_provider(
-    offset_provider_type: common.OffsetProviderType,
-) -> dict[str, common.Dimension]:
-    dimensions: dict[str, common.Dimension] = {}
-    for offset_name, provider in offset_provider_type.items():
-        dimensions[offset_name] = common.Dimension(
-            value=offset_name, kind=common.DimensionKind.LOCAL
-        )
-        if isinstance(provider, common.Dimension):
-            dimensions[provider.value] = provider
-        elif isinstance(provider, common.NeighborConnectivityType):
-            dimensions[provider.source_dim.value] = provider.source_dim
-            dimensions[provider.codomain.value] = provider.codomain
-    return dimensions
-
-
-def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
-    def _get_dimensions(obj: Any):
-        if isinstance(obj, common.Dimension):
-            yield obj
-        elif isinstance(obj, ts.TypeSpec):
-            for field in obj.__datamodel_fields__.keys():
-                yield from _get_dimensions(getattr(obj, field))
-        elif isinstance(obj, collections.abc.Mapping):
-            for el in obj.values():
-                yield from _get_dimensions(el)
-        elif isinstance(obj, collections.abc.Iterable) and not isinstance(obj, str):
-            for el in obj:
-                yield from _get_dimensions(el)
-
-    return {dim.value: dim for dim in _get_dimensions(types)}
 
 
 def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
@@ -335,8 +256,6 @@ class ITIRTypeInference(eve.NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     offset_provider_type: Optional[common.OffsetProviderType]
-    #: Mapping from a dimension name to the actual dimension instance.
-    dimensions: Optional[dict[str, common.Dimension]]
     #: Allow sym refs to symbols that have not been declared. Mostly used in testing.
     allow_undeclared_symbols: bool
     #: Reinference-mode skipping already typed nodes.
@@ -369,7 +288,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         defined, as they are the starting point for type propagation.
 
         Design decisions:
-        - Lamba functions are monomorphic
+        - Lambda functions are monomorphic
         Builtin functions like ``plus`` are by design polymorphic and only their argument and return
         types are of importance in transformations. Lambda functions on the contrary also have a
         body on which we would like to run transformations. By choosing them to be monomorphic all
@@ -422,16 +341,6 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         instance = cls(
             offset_provider_type=offset_provider_type,
-            dimensions=(
-                _get_dimensions_from_offset_provider(offset_provider_type)
-                | _get_dimensions_from_types(
-                    node.pre_walk_values()
-                    .if_isinstance(itir.Node)
-                    .getattr("type")
-                    .if_is_not(None)
-                    .to_list()
-                )
-            ),
             allow_undeclared_symbols=allow_undeclared_symbols,
             reinfer=False,
         )
@@ -441,7 +350,9 @@ class ITIRTypeInference(eve.NodeTranslator):
         return node
 
     @classmethod
-    def apply_reinfer(cls, node: T) -> T:
+    def apply_reinfer(
+        cls, node: T, *, offset_provider_type: Optional[common.OffsetProviderType] = None
+    ) -> T:
         """
         Given a partially typed node infer the type of ``node`` and its sub-nodes.
 
@@ -453,12 +364,13 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         Arguments:
             node: The :class:`itir.Node` to infer the types of.
+            offset_provider_type: Offset provider dictionary.
         """
         if node.type:  # already inferred
             return node
 
         instance = cls(
-            offset_provider_type=None, dimensions=None, allow_undeclared_symbols=True, reinfer=True
+            offset_provider_type=offset_provider_type, allow_undeclared_symbols=True, reinfer=True
         )
         instance.visit(node, ctx=_INITIAL_CONTEXT)
         return node
@@ -475,7 +387,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         if isinstance(node, itir.Node):
             if isinstance(result, ts.TypeSpec):
                 if node.type and not isinstance(node.type, ts.DeferredType):
-                    assert _is_compatible_type(node.type, result)
+                    assert type_info.is_compatible_type(node.type, result)
                 node.type = result
             elif isinstance(result, ObservableTypeSynthesizer) or result is None:
                 pass
@@ -509,7 +421,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     def visit_Temporary(self, node: itir.Temporary, *, ctx) -> ts.FieldType | ts.TupleType:
         domain = self.visit(node.domain, ctx=ctx)
-        assert isinstance(domain, it_ts.DomainType)
+        assert isinstance(domain, ts.DomainType)
         assert domain.dims != "unknown"
         assert node.dtype
         return type_info.apply_to_primitive_constituents(
@@ -532,38 +444,27 @@ class ITIRTypeInference(eve.NodeTranslator):
             # the target can have fewer elements than the expr in which case the output from the
             # expression is simply discarded.
             expr_type = functools.reduce(
-                lambda tuple_type, i: tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
-                # `ts.DeferredType` only occurs for scans returning a tuple
-                if not isinstance(tuple_type, ts.DeferredType)
-                else ts.DeferredType(constraint=None),
+                lambda tuple_type, i: (
+                    tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
+                    # `ts.DeferredType` only occurs for scans returning a tuple
+                    if not isinstance(tuple_type, ts.DeferredType)
+                    else ts.DeferredType(constraint=None)
+                ),
                 path,
                 node.expr.type,
             )
             assert isinstance(target_type, (ts.FieldType, ts.DeferredType))
             assert isinstance(expr_type, (ts.FieldType, ts.DeferredType))
-            # TODO(tehrengruber): The lowering emits domains that always have the horizontal domain
-            #  first. Since the expr inherits the ordering from the domain this can lead to a mismatch
-            #  between the target and expr (e.g. when the target has dimension K, Vertex). We should
-            #  probably just change the behaviour of the lowering. Until then we do this more
-            #  complicated comparison.
             if isinstance(target_type, ts.FieldType) and isinstance(expr_type, ts.FieldType):
-                assert (
-                    set(expr_type.dims).issubset(set(target_type.dims))
-                    and target_type.dtype == expr_type.dtype
-                )
+                assert expr_type.dims == target_type.dims
+                assert target_type.dtype == expr_type.dtype
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs) -> ts.DimensionType:
         return ts.DimensionType(dim=common.Dimension(value=node.value, kind=node.kind))
 
     # TODO: revisit what we want to do with OffsetLiterals as we already have an Offset type in
     #  the frontend.
-    def visit_OffsetLiteral(
-        self, node: itir.OffsetLiteral, **kwargs
-    ) -> it_ts.OffsetLiteralType | ts.DeferredType:
-        # `self.dimensions` not available in re-inference mode. Skip since we don't care anyway.
-        if self.reinfer:
-            return ts.DeferredType(constraint=it_ts.OffsetLiteralType)
-
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> it_ts.OffsetLiteralType:
         if _is_representable_as_int(node.value):
             return it_ts.OffsetLiteralType(
                 value=ts.ScalarType(
@@ -571,13 +472,18 @@ class ITIRTypeInference(eve.NodeTranslator):
                 )
             )
         else:
-            assert isinstance(self.dimensions, dict)
-            assert isinstance(node.value, str) and node.value in self.dimensions
-            return it_ts.OffsetLiteralType(value=self.dimensions[node.value])
+            assert isinstance(node.value, str)
+            return it_ts.OffsetLiteralType(value=node.value)
 
     def visit_Literal(self, node: itir.Literal, **kwargs) -> ts.ScalarType:
         assert isinstance(node.type, ts.ScalarType)
         return node.type
+
+    def visit_InfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+
+    def visit_NegInfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
 
     def visit_SymRef(
         self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]
@@ -599,7 +505,7 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_Lambda(
         self, node: itir.Lambda | itir.FunctionDefinition, *, ctx: dict[str, ts.TypeSpec]
     ) -> type_synthesizer.TypeSynthesizer:
-        @type_synthesizer.TypeSynthesizer
+        @type_synthesizer.type_synthesizer(cache=True)
         def fun(*args):
             return self.visit(
                 node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args, strict=True)}
@@ -632,10 +538,22 @@ class ITIRTypeInference(eve.NodeTranslator):
             assert isinstance(tuple_.type, ts.TupleType)
             return tuple_.type.types[index]
 
+        # Additional information beyond what is given by the argument types
+        syntactic_info = {}
+        if is_applied_as_fieldop(node):
+            # Collect shifts and pass them as a kwarg to :func:`type_synthesizer.applied_as_fieldop`.
+            # The node is available here, but not within the `TypeSynthesizer`, so we handle it here.
+            stencil = node.fun.args[0]
+            referenced_fun_names = symbol_ref_utils.collect_symbol_refs(stencil)
+            syntactic_info["shift_sequences_per_param"] = (
+                trace_shifts.trace_stencil(stencil, num_args=len(node.args))
+                if not referenced_fun_names
+                else None
+            )
+
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
-
-        result = fun(*args, offset_provider_type=self.offset_provider_type)
+        result = fun(*args, **syntactic_info, offset_provider_type=self.offset_provider_type)
 
         if isinstance(result, ObservableTypeSynthesizer):
             assert not result.node
@@ -644,7 +562,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         return result
 
     def visit_Node(self, node: itir.Node, **kwargs):
-        raise NotImplementedError(f"No type rule for nodes of type " f"'{type(node).__name__}'.")
+        raise NotImplementedError(f"No type rule for nodes of type '{type(node).__name__}'.")
 
 
 infer = ITIRTypeInference.apply

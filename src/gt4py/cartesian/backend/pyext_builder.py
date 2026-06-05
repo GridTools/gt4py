@@ -11,14 +11,25 @@ import copy
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, cast, overload
+import threading
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypedDict, Union
 
 import pybind11
 import setuptools
 from setuptools import distutils
 from setuptools.command.build_ext import build_ext
 
+from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config
+
+
+_SETUPTOOLS_LOCK = threading.Lock()
+
+
+class SetuptoolsArgs(TypedDict):
+    name: str
+    ext_modules: list[setuptools.Extension]
+    script_args: list[str]
 
 
 def get_dace_module_path() -> Optional[str]:
@@ -45,30 +56,30 @@ def get_gt_pyext_build_opts(
     opt_level: Literal["0", "1", "2", "3", "s"] = "3",
     extra_opt_flags: str = "",
     add_profile_info: bool = False,
-    uses_openmp: bool = True,
     uses_cuda: bool = False,
-    gt_version: int = 1,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
-    include_dirs = [gt_config.build_settings["boost_include_path"]]
+    include_dirs: list[str] = []
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
+    is_rocm_gpu = core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
 
     if uses_cuda:
-        compute_capability = get_cuda_compute_capability()
-        cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
-        if not cuda_arch:
-            raise RuntimeError("CUDA architecture could not be determined")
-        if cuda_arch.startswith("sm_"):
-            cuda_arch = cuda_arch.replace("sm_", "")
-        if compute_capability and int(compute_capability) < int(cuda_arch):
-            raise RuntimeError(
-                f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
-            )
+        if is_rocm_gpu:
+            cuda_arch = gt_config.build_settings["cuda_arch"]
+        else:
+            compute_capability = get_cuda_compute_capability()
+            cuda_arch = gt_config.build_settings["cuda_arch"] or compute_capability
+            if not cuda_arch:
+                raise RuntimeError("CUDA architecture could not be determined")
+            if cuda_arch.startswith("sm_"):
+                cuda_arch = cuda_arch.replace("sm_", "")
+            if compute_capability and int(compute_capability) < int(cuda_arch):
+                raise RuntimeError(
+                    f"CUDA architecture {cuda_arch} exceeds compute capability {compute_capability}"
+                )
     else:
         cuda_arch = ""
 
     gt_include_path = gt_config.build_settings["gt_include_path"]
-
-    import os
 
     extra_compile_args = dict(
         cxx=[
@@ -80,30 +91,24 @@ def get_gt_pyext_build_opts(
             # because `char` is used to represent the `int8` type in GT4Py programs.
             "-fsigned-char",
             "-isystem{}".format(gt_include_path),
-            "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
-            "-DBOOST_PP_VARIADICS",
             *extra_compile_args_from_config["cxx"],
         ]
     )
     extra_compile_args["cuda"] = [
         "-std=c++17",
         "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
-        "-DBOOST_PP_VARIADICS",
-        "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
-        "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
         *extra_compile_args_from_config["cuda"],
     ]
-    if gt_config.GT4PY_USE_HIP:
+    if is_rocm_gpu:
         extra_compile_args["cuda"] += [
             "-isystem{}".format(gt_include_path),
-            "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
             "-fvisibility=hidden",
             "-fPIC",
+            *([f"--offload-arch={cuda_arch}"] if cuda_arch else []),
         ]
     else:
         extra_compile_args["cuda"] += [
             "-isystem={}".format(gt_include_path),
-            "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
             "-arch=sm_{}".format(cuda_arch),
             "--expt-relaxed-constexpr",
             "--compiler-options",
@@ -125,7 +130,7 @@ def get_gt_pyext_build_opts(
         extra_compile_args["cxx"].append(
             "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
         )
-        if gt_config.GT4PY_USE_HIP:
+        if is_rocm_gpu:
             extra_compile_args["cuda"].append(
                 "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
             )
@@ -153,49 +158,33 @@ def get_gt_pyext_build_opts(
             extra_link_args=extra_link_args,
         )
 
-    if uses_openmp:
-        cpp_flags = gt_config.build_settings["openmp_cppflags"]
-        if uses_cuda:
-            cuda_flags = []
-            for cpp_flag in cpp_flags:
-                if gt_config.GT4PY_USE_HIP:
-                    cuda_flags.extend([cpp_flag])
-                else:
-                    cuda_flags.extend(["--compiler-options", cpp_flag])
-            build_opts["extra_compile_args"]["cuda"].extend(cuda_flags)
-        elif cpp_flags:
-            build_opts["extra_compile_args"].extend(cpp_flags)
+    if gt_config.build_settings["openmp"]["use_openmp"] and not uses_cuda:
+        cpp_flags = gt_config.build_settings["openmp"]["cppflags"]
+        build_opts["extra_compile_args"].extend(cpp_flags)
 
-        ld_flags = gt_config.build_settings["openmp_ldflags"]
+        ld_flags = gt_config.build_settings["openmp"]["ldflags"]
         if ld_flags:
             build_opts["extra_link_args"].extend(ld_flags)
 
     return build_opts
 
 
-# The following tells mypy to accept unpacking kwargs
-@overload
-def build_pybind_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str
-) -> Tuple[str, str]: ...
+def setuptools_setup(*, build_ext_class: type[build_ext] | None, **kwargs) -> None:
+    """
+    Calls setuptools.setup() with 'cmdclass' set to 'build_ext_class'.
 
-
-@overload
-def build_pybind_ext(
-    name: str,
-    sources: list,
-    build_path: str,
-    target_path: str,
-    *,
-    include_dirs: Optional[List[str]] = None,
-    library_dirs: Optional[List[str]] = None,
-    libraries: Optional[List[str]] = None,
-    extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
-    extra_link_args: Optional[List[str]] = None,
-    build_ext_class: Optional[Type] = None,
-    verbose: bool = False,
-    clean: bool = False,
-) -> Tuple[str, str]: ...
+    This is a workaround because any config file that sets an element of
+    'cmdclass' will override (instead of extend) the 'cmdclass' dict passed
+    as argument to 'setuptools.setup()'.
+    """
+    with _SETUPTOOLS_LOCK:
+        old_setup_stop_after = setuptools.distutils.core._setup_stop_after
+        setuptools.distutils.core._setup_stop_after = "commandline"
+        dist = setuptools.setup(**kwargs)
+        if build_ext_class is not None:
+            dist.cmdclass.update({"build_ext": build_ext_class})
+        setuptools.distutils.core._setup_stop_after = old_setup_stop_after
+    setuptools.distutils.core.run_commands(dist)
 
 
 def build_pybind_ext(
@@ -239,7 +228,7 @@ def build_pybind_ext(
         extra_link_args=extra_link_args,
     )
 
-    setuptools_args = dict(
+    setuptools_args = SetuptoolsArgs(
         name=name,
         ext_modules=[py_extension],
         script_args=[
@@ -249,18 +238,15 @@ def build_pybind_ext(
             "--force",
         ],
     )
-    if build_ext_class is not None:
-        setuptools_args["cmdclass"] = {"build_ext": build_ext_class}
 
     if verbose:
-        script_args = cast(List[str], setuptools_args["script_args"])
-        script_args.append("-v")
-        setuptools.setup(**setuptools_args)
+        setuptools_args["script_args"].append("-v")
+        setuptools_setup(**setuptools_args, build_ext_class=build_ext_class)
     else:
         setuptools_args["script_args"].append("-q")
         io_out, io_err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(io_out), contextlib.redirect_stderr(io_err):
-            setuptools.setup(**setuptools_args)
+            setuptools_setup(**setuptools_args, build_ext_class=build_ext_class)
 
     # Copy extension in target path
     module_name = py_extension._full_name
@@ -282,14 +268,6 @@ def build_pybind_ext(
     return module_name, dest_path
 
 
-# The following tells mypy to accept unpacking kwargs
-@overload
-def build_pybind_cuda_ext(
-    name: str, sources: list, build_path: str, target_path: str, **kwargs: str
-) -> Tuple[str, str]:
-    pass
-
-
 def build_pybind_cuda_ext(
     name: str,
     sources: list,
@@ -309,7 +287,7 @@ def build_pybind_cuda_ext(
     library_dirs = library_dirs or []
     library_dirs = [*library_dirs, gt_config.build_settings["cuda_library_path"]]
     libraries = libraries or []
-    if gt_config.GT4PY_USE_HIP:
+    if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
         libraries = [*libraries, "hiprtc"]
     else:
         libraries = [*libraries, "cudart"]
@@ -363,7 +341,7 @@ class CUDABuildExtension(build_ext, object):
             cflags = copy.deepcopy(extra_postargs)
             try:
                 if os.path.splitext(src)[-1] == ".cu":
-                    if gt_config.GT4PY_USE_HIP:
+                    if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
                         cuda_exec = os.path.join(gt_config.build_settings["cuda_bin_path"], "hipcc")
                     else:
                         cuda_exec = os.path.join(gt_config.build_settings["cuda_bin_path"], "nvcc")

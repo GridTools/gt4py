@@ -28,6 +28,8 @@ dace = pytest.importorskip("dace")
 from gt4py.next.program_processors.runners import dace as dace_backends
 
 
+# Override the exec_alloc_descriptor with a custom Backend,
+# see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture(
     params=[
         pytest.param(dace_backends.run_dace_cpu, marks=pytest.mark.requires_dace),
@@ -36,53 +38,27 @@ from gt4py.next.program_processors.runners import dace as dace_backends
         ),
     ]
 )
-def gtir_dace_backend(request):
+def exec_alloc_descriptor(request):
     yield request.param
 
 
 @pytest.fixture
-def cartesian(request, gtir_dace_backend):
-    if gtir_dace_backend is None:
-        yield None
-
+def unstructured(request, exec_alloc_descriptor, mesh_descriptor):  # noqa: F811
     yield cases.Case(
-        backend=gtir_dace_backend,
-        offset_provider={
-            "Ioff": IDim,
-            "Joff": JDim,
-            "Koff": KDim,
-        },
-        default_sizes={IDim: 10, JDim: 10, KDim: 10},
-        grid_type=common.GridType.CARTESIAN,
-        allocator=gtir_dace_backend.allocator,
-    )
-
-
-@pytest.fixture
-def unstructured(request, gtir_dace_backend, mesh_descriptor):  # noqa: F811
-    if gtir_dace_backend is None:
-        yield None
-
-    yield cases.Case(
-        backend=gtir_dace_backend,
+        backend=exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
             Edge: mesh_descriptor.num_edges,
             Cell: mesh_descriptor.num_cells,
-            KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
-        allocator=gtir_dace_backend.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 
-@pytest.mark.skipif(dace is None, reason="DaCe not found")
 def test_halo_exchange_helper_attrs(unstructured):
     local_int = gtx.int
-
-    # TODO(edopao): add support for range symbols in field domain and re-enable this test
-    pytest.skip("Requires support for field domain range.")
 
     @gtx.field_operator(backend=unstructured.backend)
     def testee_op(

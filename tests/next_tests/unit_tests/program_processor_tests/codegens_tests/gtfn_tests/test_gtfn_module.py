@@ -8,20 +8,21 @@
 
 import copy
 
-import diskcache
+from gt4py._core import filecache
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import arguments, languages, stages
+from gt4py.next.otf import arguments, code_specs, stages, definitions
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_translation
+from gt4py.next import custom_layout_allocators as next_allocators
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case
+from next_tests.integration_tests.cases import cartesian_case, cartesian_case_no_backend
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     KDim,
     exec_alloc_descriptor,
@@ -74,37 +75,33 @@ def program_example():
 def test_codegen(program_example):
     fencil, parameters = program_example
     module = gtfn_module.translate_program_cpu(
-        stages.CompilableProgram(
+        definitions.CompilableProgramDef(
             data=fencil,
-            args=arguments.CompileTimeArgs.from_concrete_no_size(
-                *parameters, **{"offset_provider": {}}
-            ),
+            args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
         )
     )
     assert module.entry_point.name == fencil.id
     assert any(d.name == "gridtools_cpu" for d in module.library_deps)
-    assert module.language is languages.CPP
+    assert isinstance(module.code_spec, code_specs.CPPCodeSpec)
 
 
 def test_hash_and_diskcache(program_example, tmp_path):
     fencil, parameters = program_example
-    compilable_program = stages.CompilableProgram(
+    compilable_program = definitions.CompilableProgramDef(
         data=fencil,
-        args=arguments.CompileTimeArgs.from_concrete_no_size(
-            *parameters, **{"offset_provider": {}}
-        ),
+        args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
     hash = stages.fingerprint_compilable_program(compilable_program)
 
-    with diskcache.Cache(tmp_path) as cache:
-        cache[hash] = compilable_program
+    cache = filecache.FileCache(tmp_path)
+    cache[hash] = compilable_program
 
     # check content of cash file
-    with diskcache.Cache(tmp_path) as reopened_cache:
-        assert hash in reopened_cache
-        compilable_program_from_cache = reopened_cache[hash]
-        assert compilable_program == compilable_program_from_cache
-        del reopened_cache[hash]  # delete data
+    reopened_cache = filecache.FileCache(tmp_path)
+    assert hash in reopened_cache
+    compilable_program_from_cache = reopened_cache[hash]
+    assert compilable_program == compilable_program_from_cache
+    del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
     assert hash == stages.fingerprint_compilable_program(compilable_program)
@@ -132,11 +129,9 @@ def test_hash_and_diskcache(program_example, tmp_path):
 
 def test_gtfn_file_cache(program_example):
     fencil, parameters = program_example
-    compilable_program = stages.CompilableProgram(
+    compilable_program = definitions.CompilableProgramDef(
         data=fencil,
-        args=arguments.CompileTimeArgs.from_concrete_no_size(
-            *parameters, **{"offset_provider": {}}
-        ),
+        args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
     cached_gtfn_translation_step = gtfn.GTFNBackendFactory(
         gpu=False, cached=True, otf_workflow__cached_translation=True
@@ -164,12 +159,15 @@ def test_gtfn_file_cache(program_example):
 
 
 # TODO(egparedes): we should switch to use the cached backend by default and then remove this test
-def test_gtfn_file_cache_whole_workflow(cartesian_case):
-    if cartesian_case.backend != gtfn.run_gtfn:
-        pytest.skip("Skipping backend.")
+def test_gtfn_file_cache_whole_workflow(cartesian_case_no_backend):
+    cartesian_case = cartesian_case_no_backend
     cartesian_case.backend = gtfn.GTFNBackendFactory(
         gpu=False, cached=True, otf_workflow__cached_translation=True
     )
+    cartesian_case.allocator = next_allocators.StandardCPUFieldBufferAllocator()
+
+    assert cartesian_case.backend is not None
+    assert cartesian_case.allocator is not None
 
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:

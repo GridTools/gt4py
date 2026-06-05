@@ -9,12 +9,12 @@
 import dataclasses
 import inspect
 import typing
-from typing import ClassVar, List
+from typing import Callable, ClassVar, List
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import Node
+from gt4py.eve import Node, utils as eve_utils
 from gt4py.next import common, iterator
-from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator import builtins, ir as itir, runtime as iterator_runtime
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -31,6 +31,8 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 TRACING = "tracing"
+
+_tmp_id_generator = eve_utils.SequentialIDGenerator(prefix="tmp")
 
 
 def monkeypatch_method(cls):
@@ -98,7 +100,7 @@ def _s(id_):
 
 
 def trace_function_argument(arg):
-    if isinstance(arg, iterator.runtime.FundefDispatcher):
+    if isinstance(arg, iterator_runtime.FundefDispatcher):
         make_function_definition(arg.fun)
         return _s(arg.fun.__name__)
     return arg
@@ -146,7 +148,7 @@ def make_node(o):
             return lambdadef(o)
         if hasattr(o, "__code__") and o.__code__.co_flags & inspect.CO_NESTED:
             return lambdadef(o)
-    if isinstance(o, iterator.runtime.Offset):
+    if isinstance(o, iterator_runtime.Offset):
         return OffsetLiteral(value=o.value)
     if isinstance(o, core_defs.Scalar):
         return im.literal_from_value(o)
@@ -185,7 +187,7 @@ def make_function_definition(fun):
 
 
 class FundefTracer:
-    def __call__(self, fundef_dispatcher: iterator.runtime.FundefDispatcher):
+    def __call__(self, fundef_dispatcher: iterator_runtime.FundefDispatcher):
         def fun(*args):
             res = make_function_definition(fundef_dispatcher.fun)
             return res(*args)
@@ -196,12 +198,13 @@ class FundefTracer:
         return iterator.builtins.builtin_dispatch.key == TRACING
 
 
-iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
+iterator_runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
 class TracerContext:
     fundefs: ClassVar[List[FunctionDefinition]] = []
     body: ClassVar[List[itir.Stmt]] = []
+    declarations: ClassVar[List[itir.Temporary]] = []
 
     @classmethod
     def add_fundef(cls, fun):
@@ -212,21 +215,26 @@ class TracerContext:
     def add_stmt(cls, stmt):
         cls.body.append(stmt)
 
+    @classmethod
+    def add_declaration(cls, tmp):
+        cls.declarations.append(tmp)
+
     def __enter__(self):
         iterator.builtins.builtin_dispatch.push_key(TRACING)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
         type(self).body = []
+        type(self).declarations = []
         iterator.builtins.builtin_dispatch.pop_key()
 
 
-@iterator.runtime.set_at.register(TRACING)
+@iterator_runtime.set_at.register(TRACING)
 def set_at(expr: itir.Expr, domain: itir.Expr, target: itir.Expr) -> None:
     TracerContext.add_stmt(itir.SetAt(expr=expr, domain=domain, target=target))
 
 
-@iterator.runtime.if_stmt.register(TRACING)
+@iterator_runtime.if_stmt.register(TRACING)
 def if_stmt(
     cond: itir.Expr, true_branch_f: typing.Callable, false_branch_f: typing.Callable
 ) -> None:
@@ -245,6 +253,22 @@ def if_stmt(
     TracerContext.add_stmt(
         itir.IfStmt(cond=cond, true_branch=true_branch, false_branch=false_branch)
     )
+
+
+@iterator_runtime.temporary.register(TRACING)
+def temporary(
+    domain: itir.Expr,
+    dtype: Callable,  # the gt4py type builtin
+) -> itir.SymRef:
+    id_ = next(_tmp_id_generator)
+    TracerContext.add_declaration(
+        itir.Temporary(
+            id=id_,
+            domain=domain,
+            dtype=iterator_runtime._dtypebuiltin_to_ts(dtype),
+        )
+    )
+    return itir.SymRef(id=id_)
 
 
 def _contains_tuple_dtype_field(arg):
@@ -305,10 +329,11 @@ def trace_fencil_definition(fun: typing.Callable, args: typing.Iterable) -> itir
         params = _make_program_params(fun, args)
         trace_function_call(fun, args=(_s(param.id) for param in params))
 
-        return itir.Program(
+        prg = itir.Program(
             id=fun.__name__,
             function_definitions=TracerContext.fundefs,
             params=params,
-            declarations=[],  # TODO
+            declarations=TracerContext.declarations,
             body=TracerContext.body,
         )
+        return prg

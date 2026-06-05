@@ -16,10 +16,13 @@ from typing import TYPE_CHECKING, Callable, Optional, Union
 
 import devtools
 
+from gt4py._core import definitions as core_defs, types as core_types
 from gt4py.next import common, config
-from gt4py.next.iterator import builtins
+from gt4py.next.iterator import builtins, dispatcher
 from gt4py.next.iterator.builtins import BackendNotSelectedError, builtin_dispatch
+from gt4py.next.otf import arguments
 from gt4py.next.program_processors import program_formatter
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
 if TYPE_CHECKING:
@@ -86,8 +89,11 @@ class FendefDispatcher:
 
             if isinstance(backend, next_backend.Backend):
                 assert isinstance(backend, next_backend.Backend)
-                compiled_program = backend.jit(
-                    itir_node, *args, offset_provider=offset_provider, column_axis=column_axis
+                compiled_program = backend.compile(
+                    itir_node,
+                    arguments.CompileTimeArgs.from_concrete(
+                        *args, offset_provider=offset_provider, column_axis=column_axis
+                    ),
                 )
                 compiled_program(*args, offset_provider=offset_provider)
             elif isinstance(backend, program_formatter.ProgramFormatter):
@@ -214,5 +220,22 @@ def set_at(*args):
 
 
 @builtin_dispatch
+def get_domain_range(*args):
+    return BackendNotSelectedError()
+
+
+@builtin_dispatch
 def if_stmt(*args):
     return BackendNotSelectedError()
+
+
+@builtin_dispatch
+def temporary(*args):
+    return BackendNotSelectedError()
+
+
+def _dtypebuiltin_to_ts(dtype: callable) -> ts.ScalarType:
+    assert isinstance(dtype, dispatcher._fun_dispatcher)
+    dtype_name = dtype.fun.__name__
+    np_dtype = getattr(core_types, dtype_name)
+    return tt.from_dtype(core_defs.dtype(np_dtype))

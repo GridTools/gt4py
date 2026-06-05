@@ -12,7 +12,7 @@ import pytest
 import gt4py.next as gtx
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff, cartesian_case
+from next_tests.integration_tests.cases import IDim, JDim, Joff, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
 )
@@ -84,6 +84,7 @@ def skewedlap_ref(inp):
     return -4.0 * inp[1:-1, 1:-1] + inp[2:, 2:] + inp[2:, :-2] + inp[:-2, 2:] + inp[:-2, :-2]
 
 
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_ffront_lap(cartesian_case):
     in_field = cases.allocate(cartesian_case, lap_program, "in_field")()
     in_field = square(in_field)
@@ -99,6 +100,7 @@ def test_ffront_lap(cartesian_case):
     )
 
 
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_ffront_skewedlap(cartesian_case):
     in_field = cases.allocate(cartesian_case, skewedlap_program, "in_field")()
     in_field = square(in_field)
@@ -114,6 +116,7 @@ def test_ffront_skewedlap(cartesian_case):
     )
 
 
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_ffront_laplap(cartesian_case):
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     in_field = square(in_field)

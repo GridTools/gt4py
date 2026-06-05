@@ -151,10 +151,7 @@ Unchecked = xtyping.Annotated[_T, _UNCHECKED_TYPE_TAG]
 """Type hint marker to define fields that should NOT be type-checked at initialization."""
 
 
-if sys.version_info >= (3, 10):
-    _dataclass_opts: Final[dict[str, Any]] = {"slots": True}
-else:
-    _dataclass_opts: Final[Dict[str, Any]] = {}
+_dataclass_opts: Final[dict[str, Any]] = {"slots": True}
 
 
 @dataclasses.dataclass(**_dataclass_opts)
@@ -212,7 +209,7 @@ def field_type_validator_factory(
         else:
             simple_validator = factory(type_annotation, name, required=True)
             return ValidatorAdapter(
-                simple_validator, f"{getattr(simple_validator,'__name__', 'TypeValidator')}"
+                simple_validator, f"{getattr(simple_validator, '__name__', 'TypeValidator')}"
             )
 
     return _field_type_validator_factory
@@ -348,7 +345,7 @@ def datamodel(  # redefinition of unused symbol
             for all fields.
         generic: If ``True`` (default is ``False``) the class should be a ``Generic[]`` class,
             and the generated Data Model will support creation of new Data Model subclasses
-            when using concrete types as arguments of ``DataModelClass[some_concret_type]``.
+            when using concrete types as arguments of ``DataModelClass[some_concrete_type]``.
         type_validation_factory: Type validation factory used to build the field type validators.
             If ``None``, type validators will not be generators.
 
@@ -915,9 +912,9 @@ def _make_post_init(has_post_init: bool) -> Callable[[DataModel], None]:
     return __attrs_post_init__
 
 
-def _make_devtools_pretty() -> (
-    Callable[[DataModel, Callable[[Any], Any]], Generator[Any, None, None]]
-):
+def _make_devtools_pretty() -> Callable[
+    [DataModel, Callable[[Any], Any]], Generator[Any, None, None]
+]:
     def __pretty__(
         self: DataModel, fmt: Callable[[Any], Any], **kwargs: Any
     ) -> Generator[Any, None, None]:
@@ -1027,9 +1024,9 @@ def _make_datamodel(
     """
     mro_bases: Tuple[Type, ...] = cls.__mro__[1:]
 
-    if "__annotations__" not in cls.__dict__:
+    if "__annotations__" not in cls.__dict__ and "__annotate_func__" not in cls.__dict__:
         cls.__annotations__ = {}
-    annotations = cls.__dict__["__annotations__"]
+    annotations = cls.__annotations__
     resolved_annotations = xtyping.get_partial_type_hints(cls)
     annotations_with_extras = xtyping.get_partial_type_hints(cls, include_extras=True)
 
@@ -1172,11 +1169,11 @@ def _make_datamodel(
             generic = True
         else:
             # For any other subclass, add the proper __class_getitem__ method
-            if not issubclass(cls, (typing.Generic, xtyping.Generic)):  # type: ignore[arg-type]  # Generic is not considered a type
+            if not issubclass(cls, (typing.Generic, xtyping.Generic)):
                 raise TypeError(
                     f"'{cls.__name__}' cannot be converted to a GenericDataModel because it is not a generic class."
                 )
-            cls.__class_getitem__ = _make_data_model_class_getitem()  # type: ignore[attr-defined]  # adding new attribute
+            cls.__class_getitem__ = _make_data_model_class_getitem()  # type: ignore[method-assign,assignment]  # adding new attribute
 
     # TODO(egparedes): consider the use of the field_transformer hook available in attrs:
     #   https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification
@@ -1245,6 +1242,11 @@ def _make_datamodel(
     return new_cls
 
 
+class _DataModelGenericNameProperty:
+    def __get__(self, instance: Any, owner_class: type | None = None) -> str | None:
+        return owner_class.__name__.split("__")[0] if owner_class is not None else None
+
+
 @utils.optional_lru_cache(maxsize=None, typed=True)
 def _make_concrete_with_cache(
     datamodel_cls: Type[GenericDataModelT],
@@ -1255,9 +1257,12 @@ def _make_concrete_with_cache(
     if not is_generic_datamodel_class(datamodel_cls):
         raise TypeError(f"'{datamodel_cls.__name__}' is not a generic model class.")
     for t in type_args:
-        _accepted_types: tuple[type, ...] = (type, type(None), xtyping.StdGenericAliasType)
-        if sys.version_info >= (3, 10):
-            _accepted_types = (*_accepted_types, types.UnionType)
+        _accepted_types: tuple[type, ...] = (
+            type,
+            type(None),
+            xtyping.StdGenericAliasType,
+            types.UnionType,
+        )
         if not (
             isinstance(t, _accepted_types)
             or (getattr(type(t), "__module__", None) in ("typing", "typing_extensions"))
@@ -1309,6 +1314,9 @@ def _make_concrete_with_cache(
         **new_field_c_attrs,
     }
     concrete_cls = type(class_name, (datamodel_cls,), namespace)
+    concrete_cls.__datamodel_generic_name__ = (  # type: ignore[attr-defined]  # adding new attribute
+        _DataModelGenericNameProperty()
+    )
 
     # Update the tuple of generic parameters in the new class, in case
     # this is a partial concretization

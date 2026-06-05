@@ -32,6 +32,7 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
     """
     Remove all function declarations that are never called.
 
+    >>> from gt4py.next import common
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> fun1 = itir.FunctionDefinition(
     ...     id="fun1",
@@ -43,6 +44,7 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
     ...     params=[im.sym("a")],
     ...     expr=im.deref("a"),
     ... )
+    >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
     >>> program = itir.Program(
     ...     id="testee",
     ...     function_definitions=[fun1, fun2],
@@ -51,7 +53,7 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
     ...     body=[
     ...         itir.SetAt(
     ...             expr=im.call("fun1")("inp"),
-    ...             domain=im.domain("cartesian_domain", {"IDim": (0, 10)}),
+    ...             domain=im.domain("cartesian_domain", {IDim: (0, 10)}),
     ...             target=im.ref("out"),
     ...         )
     ...     ],

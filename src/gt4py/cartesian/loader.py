@@ -15,9 +15,9 @@ a high-level stencil function definition using a specific code generating backen
 from __future__ import annotations
 
 import types
-from typing import TYPE_CHECKING, Any, Dict, Type
+from typing import TYPE_CHECKING, Any
 
-from gt4py.cartesian import backend as gt_backend, frontend as gt_frontend
+from gt4py.cartesian import frontend as gt_frontend
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.cartesian.type_hints import StencilFunc
 
@@ -31,19 +31,13 @@ def load_stencil(
     frontend_name: str,
     backend_name: str,
     definition_func: StencilFunc,
-    externals: Dict[str, Any],
-    dtypes: Dict[Type, Type],
+    externals: dict[str, Any],
+    dtypes: dict[type, type],
     build_options: BuildOptions,
-) -> Type[StencilObject]:
+) -> type[StencilObject]:
     """Generate a new class object implementing the provided definition."""
     # Load components
-    backend_cls = gt_backend.from_name(backend_name)
-    if backend_cls is None:
-        raise ValueError(f"Unknown backend name ({backend_name})")
-
     frontend = gt_frontend.from_name(frontend_name)
-    if frontend is None:
-        raise ValueError(f"Invalid frontend name ({frontend_name})")
 
     builder = (
         StencilBuilder(
@@ -60,8 +54,8 @@ def gtscript_loader(
     definition_func: StencilFunc,
     backend: str,
     build_options: BuildOptions,
-    externals: Dict[str, Any],
-    dtypes: Dict[Type, Type],
+    externals: dict[str, Any],
+    dtypes: dict[type, type],
 ) -> StencilObject:
     if not isinstance(definition_func, types.FunctionType):
         raise ValueError("Invalid stencil definition object ({obj})".format(obj=definition_func))

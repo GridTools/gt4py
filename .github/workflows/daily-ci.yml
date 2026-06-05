@@ -2,18 +2,34 @@ name: Daily CI
 
 on:
   schedule:
-  - cron: '0 4 * * *'
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
   ## COMMENTED OUT: only for testing CI action changes.
   ## It only works for PRs to `main` branch from branches in the upstream gt4py repo.
   # pull_request:
   #   branches:
-  #   - main
+  #     - main
   ## END
 
 jobs:
+  # First job to read Python versions from .python-versions file
+  get-python-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      python-versions: ${{ steps.get-versions.outputs.python-versions }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # Use a deep clone to get all tags
+
+      - id: get-versions
+        uses: ./.github/actions/get-python-versions
+        with:
+          which: 'all'
+
   daily-ci:
+    needs: get-python-versions
     strategy:
       matrix:
         # dependencies-strategy -> The strategy that `uv lock` should use to select
@@ -21,83 +37,98 @@ jobs:
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["lowest-direct", "highest"]
         gt4py-module: ["cartesian", "eve", "next", "storage"]
-        os: ["ubuntu-latest"] #, "macos-latest"]
-        python-version: ["3.10", "3.11"]
+        os: ["ubuntu-latest", "macos-latest"]
+        python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'macos-latest' }}
-      shell: bash
-      run: brew install boost
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-    - name: Install C++ libraries
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-      shell: bash
-      run: sudo apt install libboost-dev
+      - name: Configure OpenMP for macos clang
+        if: ${{ matrix.os == 'macos-latest' }}
+        # Note that the compiler flag 'CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw'
+        # is only needed in cartesian dace backend. For next, a proper fix has been merged
+        # to dace main branch, see https://github.com/spcl/dace/pull/2084
+        run: |
+          gcc --version
+          echo "CC=gcc" >> $GITHUB_ENV
+          echo "CXX=g++" >> $GITHUB_ENV
+          brew install libomp
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix libomp)" >> $GITHUB_ENV
+          echo "CXXFLAGS=-Wno-missing-template-arg-list-after-template-kw" >> $GITHUB_ENV
+          echo "GT4PY_CARTESIAN_ENABLE_OPENMP=True" >> $GITHUB_ENV
+          echo "OPENMP_CPPFLAGS=-Xclang -fopenmp -Xclang -I$(brew --prefix libomp)/include" >> $GITHUB_ENV
+          echo "OPENMP_LDFLAGS=-Xclang -fopenmp $(brew --prefix libomp)/lib/libomp.dylib" >> $GITHUB_ENV
 
-    - name: Install uv and set the python version
-      uses: astral-sh/setup-uv@v5
-      with:
-        enable-cache: true
-        cache-dependency-glob: "uv.lock"
-        python-version: ${{ matrix.python-version }}
+      - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
+        env:
+          # Set uv options through env vars to ensure all commands (including nox) use the same settings
+          UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
+          UV_PYTHON_PREFERENCE: only-managed
+          # Uncomment to only collect tests without running them (used for debugging CI issues)
+          # PYTEST_ADDOPTS: "--collect-only"
+        run: |
+          # We run explicitly here the commands needed to update the lock
+          uv lock --upgrade
+          uv python upgrade ${{ matrix.python-version }}
+          # nox will create venvs using uv, which will grab the right options in the env vars
+          echo "Running '${{ matrix.gt4py-module }}' CPU tests for python ${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' resolution strategy"
+          # Add '-l' to debug which sessions are collected and run by nox
+          ./noxfile.py -p ${{ matrix.python-version }} -k 'test_${{ matrix.gt4py-module }} and cpu' 
 
-    - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
-      env:
-        NUM_PROCESSES: auto
-        UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
-      run: uv run nox -s 'test_${{ matrix.gt4py-module }}-${{ matrix.python-version }}' -t 'cpu'
-
-    - name: Notify slack
-      if: ${{ failure() }}
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: slackapi/slack-github-action@v1.23.0
-      with:
-        channel-id: ${{ vars.SLACK_BOT_CHANNEL }}  # Use SLACK_BOT_CHANNEL_TEST for testing
-        payload: |
-          {
-            "text": "Failed tests for ${{ github.workflow }} (dependencies-strategy=${{ matrix.dependencies-strategy }}, python=${{ matrix.python-version }}, component=${{ matrix.gt4py-module }}) [https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}].",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: **${{ matrix.gt4py-module }} (CPU)** for **Python-${{ matrix.python-version }}** with **'${{ matrix.dependencies-strategy }}' uv resolution strategy**.>"
+      - name: Notify slack
+        if: ${{ failure() && (github.event_name == 'schedule') }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: ${{ vars.SLACK_BOT_CHANNEL }} # Use SLACK_BOT_CHANNEL_TEST for testing
+          payload: |
+            {
+              "text": "Failed tests for ${{ github.workflow }} (dependencies-strategy=${{ matrix.dependencies-strategy }}, python=${{ matrix.python-version }}, component=${{ matrix.gt4py-module }}) [https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}].",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Failed tests: <https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: ${{ matrix.gt4py-module }} (CPU) for Python-${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' uv resolution strategy.>"
+                  }
                 }
-              }
-            ]
-          }
+              ]
+            }
 
   weekly-reminder:
     runs-on: ubuntu-latest
     steps:
-    - id: get_day_of_the_week
-      name: Get day of the week
-      run: echo "day_of_week=$(date +'%u')" >> $GITHUB_OUTPUT
+      - id: get_day_of_the_week
+        name: Get day of the week
+        run: echo "day_of_week=$(date +'%u')" >> $GITHUB_OUTPUT
 
-    - name: Weekly notification
-      if: ${{ env.DAY_OF_WEEK == 1 }}
-      env:
-        DAY_OF_WEEK: ${{ steps.get_day_of_the_week.outputs.day_of_week }}
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: slackapi/slack-github-action@v1.23.0
-      with:
-        channel-id: ${{ vars.SLACK_BOT_CHANNEL }}  # Use SLACK_BOT_CHANNEL_TEST for testing
-        payload: |
-          {
-            "text": "Weekly reminder to check the latest runs of the GT4Py Daily CI workflow at the GitHub Actions dashboard [https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml].",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "Weekly reminder to check the latest runs of the <https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml|GT4Py Daily CI> workflow at the GitHub Actions dashboard."
+      - name: Weekly notification
+        if: ${{ (env.DAY_OF_WEEK == 1) && (github.event_name == 'schedule') }}
+        env:
+          DAY_OF_WEEK: ${{ steps.get_day_of_the_week.outputs.day_of_week }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: ${{ vars.SLACK_BOT_CHANNEL }} # Use SLACK_BOT_CHANNEL_TEST for testing
+          payload: |
+            {
+              "text": "Weekly reminder to check the latest runs of the GT4Py Daily CI workflow at the GitHub Actions dashboard [https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml].",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Weekly reminder to check the latest runs of the <https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml|GT4Py Daily CI> workflow at the GitHub Actions dashboard."
+                  }
                 }
-              }
-            ]
-          }
+              ]
+            }

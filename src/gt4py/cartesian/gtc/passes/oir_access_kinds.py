@@ -9,15 +9,15 @@
 import collections
 from typing import Any, Dict
 
+from gt4py import eve
 from gt4py.cartesian.definitions import AccessKind
-from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.passes.horizontal_masks import mask_overlap_with_extent
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
-from gt4py.eve.visitors import NodeVisitor
 
 
-class AccessKindComputer(NodeVisitor):
+class AccessKindComputer(eve.NodeVisitor):
     def _visit_Access(
         self, name, *, access: Dict[str, AccessKind], kind: AccessKind, **kwargs: Any
     ) -> None:
@@ -61,6 +61,9 @@ class AccessKindComputer(NodeVisitor):
         block_extents = compute_horizontal_block_extents(node)
         self.generic_visit(node, access=access, block_extents=block_extents)
         return access
+
+    def visit_RuntimeAxisBound(self, axis_bound: common.RuntimeAxisBound, **kwargs: Any) -> None:
+        self.visit(axis_bound.offset, kind=AccessKind.READ, **kwargs)
 
 
 def compute_access_kinds(stencil: oir.Stencil) -> Dict[str, AccessKind]:

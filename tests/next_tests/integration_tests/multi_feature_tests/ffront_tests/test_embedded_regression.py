@@ -84,9 +84,6 @@ def test_missing_arg_field_operator(cartesian_case):
     with pytest.raises(errors.MissingArgumentError, match="'out'"):
         _ = copy(a, offset_provider={})
 
-    with pytest.raises(errors.MissingArgumentError, match="'offset_provider'"):
-        _ = copy(a, out=a)
-
 
 def test_missing_arg_scan_operator(cartesian_case):
     """Test that calling a scan_operator without required args raises an error."""
@@ -99,9 +96,6 @@ def test_missing_arg_scan_operator(cartesian_case):
 
     with pytest.raises(errors.MissingArgumentError, match="'out'"):
         _ = sum(a, offset_provider={})
-
-    with pytest.raises(errors.MissingArgumentError, match="'offset_provider'"):
-        _ = sum(a, out=a)
 
 
 def test_missing_arg_program(cartesian_case):
@@ -121,11 +115,3 @@ def test_missing_arg_program(cartesian_case):
             copy(a)
 
         _ = copy_program(a, offset_provider={})
-
-    with pytest.raises(TypeError, match="'offset_provider'"):
-
-        @gtx.program(backend=cartesian_case.backend)
-        def copy_program(a: IField, b: IField) -> IField:
-            copy(a, out=b)
-
-        _ = copy_program(a)

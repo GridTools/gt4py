@@ -211,9 +211,10 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
 
         # Compute the padding required in the contiguous dimension to get aligned blocks
         dims_layout = [layout_map.index(i) for i in range(len(shape))]
-        padded_shape_lst = list(shape)
+        # Convert shape size to same data type (note that `np.int16` can overflow)
+        padded_shape_lst = [np.int32(x) for x in shape]
         if ndim > 0:
-            padded_shape_lst[dims_layout[-1]] = (
+            padded_shape_lst[dims_layout[-1]] = (  # type: ignore[call-overload]
                 math.ceil(shape[dims_layout[-1]] / items_per_aligned_block)
                 * items_per_aligned_block
             )
@@ -241,7 +242,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         aligned_index_offset = (
             (
                 items_per_aligned_block
-                * (int(math.ceil(aligned_index[dims_layout[-1]] / items_per_aligned_block)))
+                * (math.ceil(aligned_index[dims_layout[-1]] / items_per_aligned_block))
                 - aligned_index[dims_layout[-1]]
             )
             * item_size
@@ -296,7 +297,8 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         pass
 
 
-@dataclasses.dataclass
+# TODO(egparedes): remove this workaround once we drop support for old CuPy versions not implementing Data Array API
+@dataclasses.dataclass(frozen=True)
 class ArrayUtils:
     array_ns: types.ModuleType
     empty: Callable[..., _NDBuffer]
@@ -307,7 +309,7 @@ class ArrayUtils:
 numpy_array_utils = ArrayUtils(
     array_ns=np,
     empty=np.empty,
-    byte_bounds=np.byte_bounds if hasattr(np, "byte_bounds") else np.lib.array_utils.byte_bounds,  # type: ignore  # noqa: NPY201
+    byte_bounds=np.lib.array_utils.byte_bounds,  # type: ignore
     as_strided=np.lib.stride_tricks.as_strided,  # type: ignore[arg-type]  # as_strided signature is just a sketch
 )
 

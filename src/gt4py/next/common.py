@@ -14,13 +14,14 @@ import dataclasses
 import enum
 import functools
 import math
+import sys
 import types
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils
+from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -31,6 +32,7 @@ from gt4py.eve.extended_typing import (
     Literal,
     NamedTuple,
     Never,
+    NoReturn,
     Optional,
     ParamSpec,
     Protocol,
@@ -48,6 +50,7 @@ from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
+DimT_co = TypeVar("DimT_co", bound="Dimension", covariant=True)
 ShapeTs = TypeVarTuple("ShapeTs")
 
 
@@ -69,6 +72,11 @@ class DimensionKind(StrEnum):
         return self.value
 
 
+_DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
+
+_IMPLICIT_OFFSET_PREFIX: Final[str] = "_Off"
+
+
 def dimension_to_implicit_offset(dim: str) -> str:
     """
     Return name of offset implicitly defined by a dimension.
@@ -80,7 +88,7 @@ def dimension_to_implicit_offset(dim: str) -> str:
     without having to explicitly define an offset for ``TDim``. This function defines the respective
     naming convention.
     """
-    return f"_{dim}Off"
+    return f"{_IMPLICIT_OFFSET_PREFIX}{dim}"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -95,16 +103,73 @@ class Dimension:
         return NamedIndex(self, val)
 
     def __add__(self, offset: int) -> Connectivity:
-        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
-        from gt4py.next.ffront import fbuiltins
-
-        assert isinstance(self.value, str)
-        return fbuiltins.FieldOffset(
-            dimension_to_implicit_offset(self.value), source=self, target=(self,)
-        )[offset]
+        return CartesianConnectivity(self, offset)
 
     def __sub__(self, offset: int) -> Connectivity:
         return self + (-offset)
+
+    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+
+    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+
+    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+
+    def __le__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__eq__` which returns `bool`.
+    def __eq__(self, value: Dimension) -> bool: ...
+    @overload
+    def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value == value.value
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            int_value = cast(core_defs.IntegralScalar, value)
+            return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
+        # This will fallback to default identity comparison if reflection also returns `NotImplemented`,
+        # which does identity comparison, see https://docs.python.org/3/reference/datamodel.html#object.__eq__.
+        return NotImplemented
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__ne__` which returns `bool`.
+    def __ne__(self, value: Dimension) -> bool: ...
+    @overload
+    def __ne__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value != value.value
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            raise NotImplementedError(
+                "'Dimension.__ne__' with an integer value produces two disjoint domains, "
+                "which is not supported. Use 'concat_where(dim < value, ...) "
+                "concat_where(dim > value, ...)' to express the condition, see ADR 22."
+            )
+        return NotImplemented
+
+
+if TYPE_CHECKING:
+    # These exist as on-the fly replacements for Dimension instances
+    # (which are not types) during typechecking (with mypy). We can
+    # track up to four distinct dimensions at a time, everything beyond
+    # becomes AnyDim
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimA(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimB(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimC(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimD(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _AnyDim(Dimension): ...
 
 
 class Infinity(enum.Enum):
@@ -497,6 +562,36 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
+    def __or__(self, other: Domain) -> Domain:
+        """
+        Union of `Domain`s, currently limited to 1D overlapping or adjacent domains.
+
+        Raises `NotImplementedError` for multidimensional domains or disjoint 1D domains.
+        See ADR 22.
+        """
+        if self.ndim > 1 or other.ndim > 1:
+            raise NotImplementedError(
+                "Union of multidimensional domains is not supported, see ADR 22."
+            )
+        if self.ndim == 0:
+            return other
+        if other.ndim == 0:
+            return self
+        if self.dims[0] != other.dims[0]:
+            raise NotImplementedError(
+                f"Union of 1D domains with different dimensions '{self.dims[0]}' and '{other.dims[0]}' is not supported."
+            )
+        first, second = sorted((self, other), key=lambda x: x.ranges[0].start)
+        if first.ranges[0].stop >= second.ranges[0].start:
+            return Domain(
+                dims=(self.dims[0],),
+                ranges=(UnitRange(first.ranges[0].start, second.ranges[0].stop),),
+            )
+        raise NotImplementedError(
+            f"Union of disjoint domains '{first}' and '{second}' is not supported. "
+            f"Use nested 'concat_where' to express non-contiguous conditions, see ADR 22."
+        )
+
     @functools.cached_property
     def slice_at(self) -> utils.IndexerCallable[slice, Domain]:
         """
@@ -574,6 +669,12 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
 
         return Domain(dims=dims, ranges=ranges)
 
+    def __getstate__(self) -> dict[str, Any]:
+        state = self.__dict__.copy()
+        # remove cached property
+        state.pop("slice_at", None)
+        return state
+
 
 FiniteDomain: TypeAlias = Domain[FiniteUnitRange]
 
@@ -636,7 +737,7 @@ if TYPE_CHECKING:
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
     class GTBuiltInFuncDispatcher(Protocol):
-        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]: ...
+        def __call__(self, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]: ...
 
 
 # TODO(havogt): we need to describe when this interface should be used instead of the `Field` protocol.
@@ -686,18 +787,22 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __str__(self) -> str:
         return f"⟨{self.domain!s} → {self.dtype}⟩"
 
+    def __bool__(self) -> NoReturn:
+        raise TypeError(
+            "The truth value of a Field is ambiguous. For one element Fields use '.as_scalar()'."
+        )
+
     @abc.abstractmethod
     def asnumpy(self) -> np.ndarray: ...
+
+    @abc.abstractmethod
+    def as_scalar(self) -> core_defs.ScalarT: ...
 
     @abc.abstractmethod
     def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
-
-    @abc.abstractmethod
-    def as_scalar(self) -> core_defs.ScalarT: ...
-
     # Operators
     @abc.abstractmethod
     def __call__(
@@ -761,6 +866,18 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
+    def __lt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __le__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __gt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __ge__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
     def __and__(self, other: Field | core_defs.ScalarT) -> Field:
         """Only defined for `Field` of value type `bool`."""
 
@@ -779,38 +896,85 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
-class ConnectivityKind(enum.Flag):
-    """
-    Describes the kind of connectivity field.
+#: Type alias for primitive numeric values (i.e. scalars or fields).
+NumericValue: TypeAlias = core_defs.Scalar | Field
+NumericValueT = TypeVar("NumericValueT", bound=NumericValue)
+NUMERIC_VALUE_TYPES: Final[tuple[type[NumericValue], ...]] = xtyping.get_represented_types(
+    NumericValue
+)
 
-    - `ALTER_DIMS`: change the dimensions of the data field domain.
-    - `ALTER_STRUCT`: transform structured of the data inside the field (non-compact transformation).
+#: Type alias for any kind primitive value understood by GT4Py DSL.
+PrimitiveValue: TypeAlias = NumericValue  # For now, only numeric values, in the future it could include functions, enums, ...
+PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_represented_types(
+    PrimitiveValue
+)
 
-    | Dims \ Struct |    No                    |    Yes                   |
-    | ------------- | ------------------------ | ------------------------ |
-    |   No          | Translation (I -> I)     | Reshuffling (I x K -> K) |
-    |   Yes         | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
 
-    """
+@dataclasses.dataclass(frozen=True)
+class BufferInfo:
+    """Holds information about a buffer in memory."""
 
-    ALTER_DIMS = enum.auto()
-    ALTER_STRUCT = enum.auto()
-
-    @classmethod
-    def translation(cls) -> ConnectivityKind:
-        return cls(0)
-
-    @classmethod
-    def relocation(cls) -> ConnectivityKind:
-        return cls.ALTER_DIMS
-
-    @classmethod
-    def reshuffling(cls) -> ConnectivityKind:
-        return cls.ALTER_STRUCT
+    data_ptr: int
+    ndim: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    byte_strides: tuple[int, ...]
+    device: core_defs.Device
 
     @classmethod
-    def remapping(cls) -> ConnectivityKind:
-        return cls.ALTER_DIMS | cls.ALTER_STRUCT
+    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
+        # TODO(egparedes): Implement this function using __dlpack__ and ctypes.
+        #   The current implementation is messy and only works for numpy and cupy.
+        try:
+            array_ns = ndarray.__array_namespace__()  # type: ignore[attr-defined]
+        except AttributeError:
+            array_ns = sys.modules[ndarray.__class__.__module__]
+
+        array_byte_bounds_func = (
+            getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
+        )
+
+        data_ptr = array_byte_bounds_func(ndarray)[0]
+        ndim = ndarray.ndim
+        shape = ndarray.shape
+        byte_strides = ndarray.strides
+        elem_strides = tuple(s // ndarray.dtype.itemsize for s in byte_strides)
+
+        try:
+            device = core_defs.from_dlpack_device(ndarray.__dlpack_device__())  # type: ignore[attr-defined]
+        except AttributeError as err:
+            ns = ndarray.__class__.__module__
+            if ns.startswith("numpy"):
+                device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+            elif ns.startswith("cupy"):
+                device = core_defs.Device(core_defs.CUPY_DEVICE_TYPE, ndarray.device.id)  # type: ignore[attr-defined]
+            else:
+                raise RuntimeError(f"Unsupported ndarray type '{type(ndarray)}'") from err
+
+        return BufferInfo(
+            data_ptr=data_ptr,
+            ndim=ndim,
+            shape=shape,
+            elem_strides=elem_strides,
+            byte_strides=byte_strides,
+            device=device,
+        )
+
+    @functools.cached_property
+    def hash_key(self) -> int:
+        return hash(
+            (
+                self.data_ptr,
+                self.ndim,
+                self.shape,
+                self.elem_strides,
+                self.byte_strides,
+                self.device,
+            )
+        )
+
+    def __hash__(self) -> int:
+        return self.hash_key
 
 
 @dataclasses.dataclass(frozen=True)
@@ -840,11 +1004,10 @@ class NeighborConnectivityType(ConnectivityType):
 
 
 @runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but then it breaks in other places
-class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
+class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_co]):
     @property
     @abc.abstractmethod
-    def codomain(self) -> DimT:
+    def codomain(self) -> DimT_co:
         """
         The `codomain` is the set of all indices in a certain `Dimension`.
 
@@ -856,7 +1019,7 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]
         """
 
     def __gt_type__(self) -> ConnectivityType:
-        if is_neighbor_connectivity(self):
+        if is_neighbor_table(self):
             return NeighborConnectivityType(
                 domain=self.domain.dims,
                 codomain=self.codomain,
@@ -871,10 +1034,6 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]
                 dtype=self.dtype,
                 skip_value=self.skip_value,
             )
-
-    @property
-    def kind(self) -> ConnectivityKind:
-        return ConnectivityKind.remapping()
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
@@ -902,34 +1061,46 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __lt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __le__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __gt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __ge__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __and__(self, other: Field | core_defs.IntegralScalar) -> Never:
@@ -940,6 +1111,28 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]
 
     def __xor__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
+
+
+class GatherConnectivity(Connectivity[DimsT, DimT_co]):
+    """A `Connectivity` whose `premap` rearranges data via advanced indexing (a gather).
+
+    The defining contract is that the index map is materializable as an integer index table via
+    `ndarray` (table-backed today; in principle a function evaluated over the domain). The gather
+    algorithm (`embedded.nd_array_field._gather_premap`) is responsible for laying that table out
+    over the output domain. Affine connectivities (cartesian shifts / relocations) are *not*
+    `GatherConnectivity`: their `premap` is a compact domain relabel that moves no data and has no
+    `ndarray`. The affine-vs-gather distinction has no structural witness (an affine connectivity
+    still has an `ndarray` attribute, it just raises), so it is a nominal type, not a `Protocol`.
+    """
+
+    # TODO(havogt): This is a bare annotation, not an `@abc.abstractmethod`, on purpose. Making it
+    #  abstract would force `NdArrayConnectivityField` abstract too: with `GatherConnectivity` ahead
+    #  of `NdArrayField` in the MRO, the abstract `ndarray` shadows `NdArrayField`'s concrete one.
+    #  Reordering the bases would fix that but then `NdArrayField`'s arithmetic operators would
+    #  shadow `Connectivity`'s raising stubs (connectivities would start accepting `+` etc.). A bare
+    #  annotation documents the contract for type checkers with no runtime effect.
+    #  See also the TODO on `Field.ndarray`: ideally `ndarray` would not live on the abstract base.
+    ndarray: core_defs.NDArrayObject
 
 
 # Utility function to construct a `Field` from different buffer representations.
@@ -969,12 +1162,19 @@ def _connectivity(
     raise NotImplementedError
 
 
-class NeighborConnectivity(Connectivity, Protocol):
+class NeighborTable(Connectivity, Protocol):
     # TODO(havogt): work towards encoding this properly in the type
     def __gt_type__(self) -> NeighborConnectivityType: ...
 
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        # Note that this property is currently already there from inheriting from `Field`,
+        # however this seems wrong, therefore we explicitly introduce it here (or it should come
+        # implicitly from the `NdArrayConnectivityField` protocol).
+        ...
 
-def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
+
+def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
     if not isinstance(obj, Connectivity):
         return False
     domain_dims = obj.domain.dims
@@ -985,31 +1185,77 @@ def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
     )
 
 
-class NeighborTable(
-    NeighborConnectivity, Protocol
-):  # TODO(havogt): try to express by inheriting from NdArrayConnectivityField (but this would require a protocol to move it out of `embedded.nd_array_field`)
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        # Note that this property is currently already there from inheriting from `Field`,
-        # however this seems wrong, therefore we explicitly introduce it here (or it should come
-        # implicitly from the `NdArrayConnectivityField` protocol).
-        ...
-
-
-def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
-    return is_neighbor_connectivity(obj) and hasattr(obj, "ndarray")
-
-
-OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
+OffsetProviderElem: TypeAlias = Dimension | NeighborTable
 OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
+# Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
+# use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
 
 
-def offset_provider_to_type(offset_provider: OffsetProvider) -> OffsetProviderType:
+def is_offset_provider(obj: Any) -> TypeGuard[OffsetProvider]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderElem) for el in obj.values())
+
+
+def is_offset_provider_type(obj: Any) -> TypeGuard[OffsetProviderType]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderTypeElem) for el in obj.values())
+
+
+def offset_provider_to_type(
+    offset_provider: OffsetProvider | OffsetProviderType,
+) -> OffsetProviderType:
     return {
         k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
     }
+
+
+def _get_dimension_name_from_implicit_offset(offset: str) -> str:
+    assert offset.startswith(_IMPLICIT_OFFSET_PREFIX)
+    return offset[len(_IMPLICIT_OFFSET_PREFIX) :]
+
+
+def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
+    """
+    Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
+
+    Note: This function handles implicit offsets. All accesses of `OffsetProvider` or
+    `OffsetProviderType` should go through this function.
+    """
+    # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
+    if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
+        return Dimension(value=_get_dimension_name_from_implicit_offset(offset_tag))
+    if offset_tag not in offset_provider:
+        raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
+    return offset_provider[offset_tag]  # TODO return a valid dimension
+
+
+get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
+
+
+def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
+    """Determine if offset provider has an element for the given offset tag."""
+    try:
+        get_offset(offset_provider, offset_tag)  # type: ignore[arg-type]  # implementation is shared with `get_offset_type`, no need to duplicate the function
+    except KeyError:
+        return False
+    return True
+
+
+def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
+    """
+    Compute hash of an offset provider on the tuples of key and value id.
+
+    This function is unsafe since it uses the `id` of the values in the
+    offset provider, which could generate different hashes for two
+    offset providers that are semantically equal. It additionally relies
+    on the ordering of the items in the mapping, which could also lead to
+    different hashes for semantically equal offset providers.
+    """
+    return hash(tuple((k, id(v)) for k, v in offset_provider.items()))
 
 
 DomainDimT = TypeVar("DomainDimT", bound="Dimension")
@@ -1052,7 +1298,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
-        return core_defs.Int32DType()  # type: ignore[return-value]
+        return core_defs.Int32DType()
 
     # This is a workaround to make this class concrete, since `codomain` is an
     # abstract property of the `Connectivity` Protocol.
@@ -1065,14 +1311,6 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     @property
     def skip_value(self) -> None:
         return None
-
-    @functools.cached_property
-    def kind(self) -> ConnectivityKind:
-        return (
-            ConnectivityKind.translation()
-            if self.domain_dim == self.codomain
-            else ConnectivityKind.relocation()
-        )
 
     @classmethod
     def for_translation(
@@ -1117,84 +1355,56 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
+def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
+    """Find the canonical ordering of the dimensions in `dims`."""
+    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
+        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
+    return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
+
+
+def check_dims(dims: Sequence[Dimension]) -> None:
+    if dims != order_dimensions(dims):
+        raise ValueError(
+            f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, order_dimensions(dims)))}'."
+        )
+
+
 def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     """
-    Find a unique ordering of multiple (individually ordered) lists of dimensions.
+    Find an ordering of multiple lists of dimensions.
 
-    The resulting list of dimensions contains all dimensions of the arguments
-    in the order they originally appear. If no unique order exists or a
-    contradicting order is found an exception is raised.
-
-    A modified version (ensuring uniqueness of the order) of
-    `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
-    is used to topologically sort the arguments.
+    The resulting list contains all unique dimensions from the input lists,
+    sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `LOCAL` < `VERTICAL`) and then
+    lexicographically by `Dimension.value`.
 
     Examples:
         >>> from gt4py.next.common import Dimension
-        >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
-        >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
+        >>> I = Dimension("I", DimensionKind.HORIZONTAL)
+        >>> J = Dimension("J", DimensionKind.HORIZONTAL)
+        >>> K = Dimension("K", DimensionKind.VERTICAL)
+        >>> E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+        >>> E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
+        >>> promote_dims([J, K], [I, K]) == [I, J, K]
         True
-
-        >>> promote_dims([I, J], [K])  # doctest: +ELLIPSIS
+        >>> promote_dims([K, J], [I, K])
         Traceback (most recent call last):
         ...
-        ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
-
-        >>> promote_dims([I, J], [J, I])  # doctest: +ELLIPSIS
+        ValueError: Dimensions 'K[vertical], J[horizontal]' are not ordered correctly, expected 'J[horizontal], K[vertical]'.
+        >>> promote_dims([I, K], [J, E2V]) == [I, J, E2V, K]
+        True
+        >>> promote_dims([I, E2C], [E2V, K])
         Traceback (most recent call last):
         ...
-        ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
+        ValueError: There are more than one dimension with DimensionKind 'LOCAL'.
     """
-    # build a graph with the vertices being dimensions and edges representing
-    #  the order between two dimensions. The graph is encoded as a dictionary
-    #  mapping dimensions to their predecessors, i.e. a dictionary containing
-    #  adjacency lists. Since graphlib.TopologicalSorter uses predecessors
-    #  (contrary to successors) we also use this directionality here.
-    graph: dict[Dimension, set[Dimension]] = {}
+
     for dims in dims_list:
-        if len(dims) == 0:
-            continue
-        # create a vertex for each dimension
-        for dim in dims:
-            graph.setdefault(dim, set())
-        # add edges
-        predecessor = dims[0]
-        for dim in dims[1:]:
-            graph[dim].add(predecessor)
-            predecessor = dim
+        check_dims(list(dims))
+    unique_dims = {dim for dims in dims_list for dim in dims}
 
-    # modified version of Kahn's algorithm
-    topologically_sorted_list: list[Dimension] = []
-
-    # compute in-degree for each vertex
-    in_degree = {v: 0 for v in graph.keys()}
-    for v1 in graph:
-        for v2 in graph[v1]:
-            in_degree[v2] += 1
-
-    # process vertices with in-degree == 0
-    # TODO(tehrengruber): avoid recomputation of zero_in_degree_vertex_list
-    while zero_in_degree_vertex_list := [v for v, d in in_degree.items() if d == 0]:
-        if len(zero_in_degree_vertex_list) != 1:
-            raise ValueError(
-                f"Dimensions can not be promoted. Could not determine "
-                f"order of the following dimensions: "
-                f"{', '.join((dim.value for dim in zero_in_degree_vertex_list))}."
-            )
-        v = zero_in_degree_vertex_list[0]
-        del in_degree[v]
-        topologically_sorted_list.insert(0, v)
-        # update in-degree
-        for predecessor in graph[v]:
-            in_degree[predecessor] -= 1
-
-    if len(in_degree.items()) > 0:
-        raise ValueError(
-            f"Dimensions can not be promoted. The following dimensions "
-            f"appear in contradicting order: {', '.join((dim.value for dim in in_degree.keys()))}."
-        )
-
-    return topologically_sorted_list
+    promoted_dims = order_dimensions(unique_dims)
+    check_dims(promoted_dims)
+    return promoted_dims
 
 
 class FieldBuiltinFuncRegistry:

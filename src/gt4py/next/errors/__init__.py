@@ -8,9 +8,11 @@
 
 """Contains the exception classes and other utilities for error handling."""
 
-from . import excepthook  # noqa: F401 [unused-import]
+from . import excepthook  # Necessary for replacing the sys.excepthook # noqa: F401 [unused-import]
 from .exceptions import (
+    CompilationError,
     DSLError,
+    DSLTypeError,
     InvalidParameterAnnotationError,
     MissingArgumentError,
     MissingAttributeError,
@@ -21,7 +23,9 @@ from .exceptions import (
 
 
 __all__ = [
+    "CompilationError",
     "DSLError",
+    "DSLTypeError",
     "InvalidParameterAnnotationError",
     "MissingArgumentError",
     "MissingAttributeError",

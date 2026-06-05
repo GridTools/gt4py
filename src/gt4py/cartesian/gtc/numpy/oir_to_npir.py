@@ -5,16 +5,16 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common, oir, utils
+from gt4py.cartesian import utils
+from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.numpy import npir
+from gt4py.cartesian.gtc.numpy.npir import AxisName, KMaskFieldAccess
 from gt4py.cartesian.gtc.passes.horizontal_masks import compute_relative_mask
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_extents
-
-from . import npir
 
 
 class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
@@ -49,6 +49,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return npir.TemporaryDecl(
             name=node.name,
             dtype=node.dtype,
+            dimensions=node.dimensions,
             data_dims=node.data_dims,
             offset=offset,
             padding=padding,
@@ -80,6 +81,24 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_ForIndex(self, node: oir.ForIndex, **kwargs: Any) -> npir.ForIndex:
         return npir.ForIndex(name=node.name, dtype=node.dtype)
+
+    def visit_AbsoluteKIndex(self, node: oir.AbsoluteKIndex, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            "Absolute K indexation (e.g. `field.at(...)`) is an experimental feature and not yet implemented for the `numpy` backend."
+        )
+
+    def visit_IteratorAccess(self, node: oir.IteratorAccess, **kwargs: Any) -> KMaskFieldAccess:
+        if node.name != AxisName.K:
+            raise ValueError(f"Axis {node.name} cannot be accessed, only K.")
+        return KMaskFieldAccess()
+
+    def visit_RuntimeAxisBound(self, node: common.RuntimeAxisBound, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            "Runtime interval bounds (e.g. `with interval(0, field)`) is an experimental feature and not implemented for the `numpy` backend."
+        )
+
+    def visit_AxisBound(self, node: common.AxisBound, **kwargs: Any) -> common.AxisBound:
+        return node
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
         i_offset, j_offset, k_offset = self.visit(node.offset, **kwargs)
@@ -138,7 +157,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if mask:
             mask_expr = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=mask_expr)
 
-        return utils.flatten_list(self.visit(node.body, mask=mask_expr, **kwargs))
+        return utils.flatten(self.visit(node.body, mask=mask_expr, **kwargs))
 
     def visit_AssignStmt(
         self,
@@ -167,8 +186,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             cond_expr = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond_expr)
 
         return npir.While(
-            cond=cond_expr,
-            body=utils.flatten_list(self.visit(node.body, mask=cond_expr, **kwargs)),
+            cond=cond_expr, body=utils.flatten(self.visit(node.body, mask=cond_expr, **kwargs))
         )
 
     def visit_For(self, node: oir.For, **kwargs: Any) -> npir.For:
@@ -177,7 +195,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             iter_start=node.iter_start,
             iter_stop=node.iter_stop,
             iter_step=node.iter_step,
-            body=utils.flatten_list(self.visit(node.body, **kwargs)),
+            body=utils.flatten(self.visit(node.body, **kwargs)),
         )
 
     def visit_HorizontalRestriction(
@@ -189,7 +207,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         horizontal_mask = npir.HorizontalMask(i=mask[0], j=mask[1])
 
-        return utils.flatten_list(self.visit(node.body, horizontal_mask=horizontal_mask, **kwargs))
+        return utils.flatten(self.visit(node.body, horizontal_mask=horizontal_mask, **kwargs))
 
     # --- Control Flow ---
     def visit_HorizontalExecution(
@@ -204,7 +222,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         else:
             extent = Extent.zeros(ndims=2)
 
-        stmts = utils.flatten_list(self.visit(node.body, extent=extent, **kwargs))
+        stmts = utils.flatten(self.visit(node.body, extent=extent, **kwargs))
         return npir.HorizontalBlock(
             body=stmts,
             extent=extent,
@@ -220,8 +238,8 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> npir.VerticalPass:
         return npir.VerticalPass(
             body=self.visit(node.horizontal_executions, **kwargs),
-            lower=node.interval.start,
-            upper=node.interval.end,
+            lower=self.visit(node.interval.start, **kwargs),
+            upper=self.visit(node.interval.end, **kwargs),
             direction=loop_order,
         )
 
@@ -244,7 +262,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self.visit(decl, field_extents=field_extents, **kwargs) for decl in node.declarations
         ]
 
-        vertical_passes = utils.flatten_list(
+        vertical_passes = utils.flatten(
             self.visit(node.vertical_loops, block_extents=block_extents, **kwargs)
         )
 

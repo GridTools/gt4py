@@ -309,41 +309,41 @@ def test_fill_to_local_k_caches_basic_forward():
 
     assert len(vertical_loop.sections) == 2, "number of vertical sections has changed"
 
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 2
-    ), "no or too many fill stmts introduced?"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong fill destination"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo"
-    ), "wrong fill source"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 2, (
+        "no or too many fill stmts introduced?"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong fill destination"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo", (
+        "wrong fill source"
+    )
     assert (
         vertical_loop.sections[0].horizontal_executions[0].body[0].left.offset.k
         == vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k
         == 1
     ), "wrong fill offset"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == 1
-    ), "wrong offset in cache access"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 1
-    ), "too many fill stmts introduced?"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == 0
-    ), "wrong offset in cache access"
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == 1, (
+        "wrong offset in cache access"
+    )
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 1, (
+        "too many fill stmts introduced?"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == 0, (
+        "wrong offset in cache access"
+    )
 
 
 def test_fill_to_local_k_caches_basic_backward():
@@ -384,41 +384,41 @@ def test_fill_to_local_k_caches_basic_backward():
 
     assert len(vertical_loop.sections) == 2, "number of vertical sections has changed"
 
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 2
-    ), "no or too many fill stmts introduced?"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong fill destination"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo"
-    ), "wrong fill source"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 2, (
+        "no or too many fill stmts introduced?"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong fill destination"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo", (
+        "wrong fill source"
+    )
     assert (
         vertical_loop.sections[0].horizontal_executions[0].body[0].left.offset.k
         == vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k
         == -1
     ), "wrong fill offset"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == -1
-    ), "wrong offset in cache access"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 1
-    ), "too many fill stmts introduced?"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == 0
-    ), "wrong offset in cache access"
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == -1, (
+        "wrong offset in cache access"
+    )
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 1, (
+        "too many fill stmts introduced?"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == 0, (
+        "wrong offset in cache access"
+    )
 
 
 def test_fill_to_local_k_caches_section_splitting_forward():
@@ -477,15 +477,15 @@ def test_fill_to_local_k_caches_section_splitting_forward():
         == -1
         and vertical_loop.sections[2].interval.end.offset == 0
     ), "wrong interval offsets in split sections"
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 4
-    ), "wrong number of fill stmts"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 3
-    ), "wrong number of fill stmts"
-    assert (
-        len(vertical_loop.sections[2].horizontal_executions[0].body) == 1
-    ), "wrong number of fill stmts"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 4, (
+        "wrong number of fill stmts"
+    )
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 3, (
+        "wrong number of fill stmts"
+    )
+    assert len(vertical_loop.sections[2].horizontal_executions[0].body) == 1, (
+        "wrong number of fill stmts"
+    )
 
 
 def test_fill_to_local_k_caches_section_splitting_backward():
@@ -541,15 +541,15 @@ def test_fill_to_local_k_caches_section_splitting_backward():
         == 1
         and vertical_loop.sections[2].interval.start.offset == 0
     ), "wrong interval offsets in split sections"
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 4
-    ), "wrong number of fill stmts"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 3
-    ), "wrong number of fill stmts"
-    assert (
-        len(vertical_loop.sections[2].horizontal_executions[0].body) == 1
-    ), "wrong number of fill stmts"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 4, (
+        "wrong number of fill stmts"
+    )
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 3, (
+        "wrong number of fill stmts"
+    )
+    assert len(vertical_loop.sections[2].horizontal_executions[0].body) == 1, (
+        "wrong number of fill stmts"
+    )
 
 
 def test_flush_to_local_k_caches_basic():
@@ -590,50 +590,50 @@ def test_flush_to_local_k_caches_basic():
 
     assert len(vertical_loop.sections) == 2, "number of vertical sections has changed"
 
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 2
-    ), "no or too many flush stmts introduced?"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k == 0
-    ), "wrong offset in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == "foo"
-    ), "wrong flush source"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name
-    ), "wrong flush destination"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 2, (
+        "no or too many flush stmts introduced?"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k == 0, (
+        "wrong offset in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == "foo", (
+        "wrong flush source"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name, (
+        "wrong flush destination"
+    )
     assert (
         vertical_loop.sections[0].horizontal_executions[0].body[1].left.offset.k
         == vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k
         == 0
     ), "wrong flush offset"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 2
-    ), "no or too many flush stmts introduced?"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == -1
-    ), "wrong offset in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[1].left.name == "foo"
-    ), "wrong flush source"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[1].right.name == cache_name
-    ), "wrong flush destination"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[1].right.offset.k == 0
-    ), "wrong flush offset"
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 2, (
+        "no or too many flush stmts introduced?"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == -1, (
+        "wrong offset in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[1].left.name == "foo", (
+        "wrong flush source"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[1].right.name == cache_name, (
+        "wrong flush destination"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[1].right.offset.k == 0, (
+        "wrong flush offset"
+    )
 
 
 def test_fill_flush_to_local_k_caches_basic_forward():

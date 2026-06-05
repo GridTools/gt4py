@@ -16,6 +16,7 @@ depends_on = [
 [[modules]]
 path = "gt4py.cartesian"
 depends_on = [
+    { path = "gt4py._core" },
     { path = "gt4py.eve" },
     { path = "gt4py.storage" },
 ]
@@ -36,6 +37,5 @@ depends_on = [
 path = "gt4py.storage"
 depends_on = [
     { path = "gt4py._core" },
-    { path = "gt4py.cartesian" },  # for backward-compatibility the cartesian allocators are in `gt4py.storage`
     { path = "gt4py.eve" },
 ]

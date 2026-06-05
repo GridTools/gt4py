@@ -21,7 +21,7 @@ from . import util
 
 
 def _mk_distributed_buffer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("distributed_buffer_sdfg"))
+    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("distributed_buffer_sdfg"))
 
     for name in ["a", "b", "tmp"]:
         sdfg.add_array(name, shape=(10, 10), dtype=dace.float64, transient=False)
@@ -84,7 +84,9 @@ def test_distributed_buffer_remover():
 
 
 def _make_distributed_buffer_global_memory_data_race_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_race"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("distributed_buffer_global_memory_data_race")
+    )
     arr_names = ["a", "b", "t"]
     for name in arr_names:
         sdfg.add_array(
@@ -133,10 +135,12 @@ def test_distributed_buffer_global_memory_data_race():
     assert state2.number_of_nodes() == 2
 
 
-def _make_distributed_buffer_global_memory_data_race_sdfg2() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]
-):
-    sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_race2_sdfg"))
+def _make_distributed_buffer_global_memory_data_race_sdfg2() -> tuple[
+    dace.SDFG, dace.SDFGState, dace.SDFGState
+]:
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("distributed_buffer_global_memory_data_race2_sdfg")
+    )
     arr_names = ["a", "b", "t"]
     for name in arr_names:
         sdfg.add_array(
@@ -189,7 +193,9 @@ def test_distributed_buffer_global_memory_data_race2():
 
 
 def _make_distributed_buffer_global_memory_data_no_rance() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_no_rance_sdfg"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("distributed_buffer_global_memory_data_no_rance_sdfg")
+    )
     arr_names = ["a", "t"]
     for name in arr_names:
         sdfg.add_array(
@@ -235,7 +241,11 @@ def test_distributed_buffer_global_memory_data_no_rance():
 
 
 def _make_distributed_buffer_global_memory_data_no_rance2() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_no_rance2_sdfg"))
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name(
+            "distributed_buffer_global_memory_data_no_rance2_sdfg"
+        )
+    )
     arr_names = ["a", "t"]
     for name in arr_names:
         sdfg.add_array(
@@ -288,10 +298,12 @@ def test_distributed_buffer_global_memory_data_no_rance2():
     assert state2.number_of_nodes() == 0
 
 
-def _make_distributed_buffer_non_sink_temporary_sdfg() -> (
-    tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]
-):
-    sdfg = dace.SDFG(util.unique_name("distributed_buffer_non_sink_temporary_sdfg"))
+def _make_distributed_buffer_non_sink_temporary_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace.SDFGState
+]:
+    sdfg = dace.SDFG(
+        gtx_transformations.utils.unique_name("distributed_buffer_non_sink_temporary_sdfg")
+    )
     state = sdfg.add_state(is_start_block=True)
     wb_state = sdfg.add_state_after(state)
 
@@ -343,6 +355,47 @@ def test_distributed_buffer_non_sink_temporary():
     assert wb_state.number_of_nodes() == 4
 
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
-    sdfg.view()
     assert res[sdfg]["DistributedBufferRelocator"][wb_state] == {"t1", "t2"}
     assert wb_state.number_of_nodes() == 0
+
+
+def _make_distributed_buffer_conditional_block_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
+    sdfg = dace.SDFG("distributed_buffer_conditional_block_sdfg")
+
+    for name in ["a", "b", "c", "t"]:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=False,
+        )
+    sdfg.arrays["t"].transient = True
+    sdfg.add_symbol("cond", dace.bool_)
+
+    # create states inside the nested SDFG for the if-branches
+    if_region = dace.sdfg.state.ConditionalBlock("if")
+    sdfg.add_node(if_region)
+    entry_state = sdfg.add_state("entry", is_start_block=True)
+    sdfg.add_edge(entry_state, if_region, dace.InterstateEdge())
+
+    then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=sdfg)
+    tstate = then_body.add_state("true_branch", is_start_block=True)
+    tstate.add_nedge(tstate.add_access("a"), tstate.add_access("t"), dace.Memlet("a[0:10]"))
+    if_region.add_branch(dace.sdfg.state.CodeBlock("cond"), then_body)
+
+    else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=sdfg)
+    fstate = else_body.add_state("false_branch", is_start_block=True)
+    fstate.add_nedge(fstate.add_access("b"), fstate.add_access("t"), dace.Memlet("b[0:10]"))
+    if_region.add_branch(dace.sdfg.state.CodeBlock("not (cond)"), else_body)
+
+    wb_state = sdfg.add_state_after(if_region)
+    wb_state.add_nedge(wb_state.add_access("t"), wb_state.add_access("c"), dace.Memlet("t[0:10]"))
+    sdfg.validate()
+    return sdfg, wb_state
+
+
+def test_distributed_buffer_conditional_block():
+    sdfg, wb_state = _make_distributed_buffer_conditional_block_sdfg()
+
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+    assert res[sdfg]["DistributedBufferRelocator"][wb_state] == {"t"}

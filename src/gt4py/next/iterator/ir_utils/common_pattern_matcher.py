@@ -7,63 +7,24 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from collections.abc import Iterable
-from typing import Any, TypeGuard
+from typing import Any, Generic, List, TypeAlias, TypeGuard, TypeVar
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
-def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
-    """Match expressions of the form `lift(λ(...) → ...)(...)`."""
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and isinstance(arg.fun.fun, itir.SymRef)
-        and arg.fun.fun.id == "lift"
-    )
+_Fun = TypeVar("_Fun", bound=itir.Expr)
 
 
-def is_applied_map(arg: itir.Node) -> TypeGuard[itir.FunCall]:
-    """Match expressions of the form `map(λ(...) → ...)(...)`."""
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and isinstance(arg.fun.fun, itir.SymRef)
-        and arg.fun.fun.id == "map_"
-    )
+class _FunCallTo(itir.FunCall, Generic[_Fun]):
+    fun: _Fun
+    args: List[itir.Expr]
 
 
-def is_applied_reduce(arg: itir.Node) -> TypeGuard[itir.FunCall]:
-    """Match expressions of the form `reduce(λ(...) → ...)(...)`."""
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and isinstance(arg.fun.fun, itir.SymRef)
-        and arg.fun.fun.id == "reduce"
-    )
+_FunCallToSymRef: TypeAlias = _FunCallTo[itir.SymRef]
 
 
-def is_applied_shift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
-    """Match expressions of the form `shift(λ(...) → ...)(...)`."""
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and isinstance(arg.fun.fun, itir.SymRef)
-        and arg.fun.fun.id == "shift"
-    )
-
-
-def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[itir.FunCall]:
-    """Match expressions of the form `as_fieldop(stencil)(*args)`."""
-    return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
-
-
-def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:
-    """Match expression of the form `(λ(...) → ...)(...)`."""
-    return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
-
-
-def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[itir.FunCall]:
+def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[_FunCallToSymRef]:
     """
     Match call expression to a given function.
 
@@ -81,18 +42,77 @@ def is_call_to(node: Any, fun: str | Iterable[str]) -> TypeGuard[itir.FunCall]:
     True
     """
     assert not isinstance(fun, itir.Node)  # to avoid accidentally passing the fun as first argument
-    if isinstance(fun, (list, tuple, set, Iterable)) and not isinstance(fun, str):
+    if isinstance(fun, str):
+        return (
+            isinstance(node, itir.FunCall)
+            and isinstance(node.fun, itir.SymRef)
+            and node.fun.id == fun
+        )
+    else:
         return any((is_call_to(node, f) for f in fun))
+
+
+_FunCallToFunCallToRef: TypeAlias = _FunCallTo[_FunCallToSymRef]
+
+
+def is_applied_lift(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
+    """Match expressions of the form `lift(λ(...) → ...)(...)`."""
     return (
-        isinstance(node, itir.FunCall) and isinstance(node.fun, itir.SymRef) and node.fun.id == fun
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
+        and arg.fun.fun.id == "lift"
     )
 
 
-def is_ref_to(node, ref: str):
+def is_applied_map(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
+    """Match expressions of the form `map(λ(...) → ...)(...)`."""
+    return (
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
+        and arg.fun.fun.id == "map_"
+    )
+
+
+def is_applied_reduce(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
+    """Match expressions of the form `reduce(λ(...) → ...)(...)`."""
+    return (
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
+        and arg.fun.fun.id == "reduce"
+    )
+
+
+def is_applied_shift(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
+    """Match expressions of the form `shift(λ(...) → ...)(...)`."""
+    return (
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
+        and arg.fun.fun.id == "shift"
+    )
+
+
+def is_applied_as_fieldop(arg: itir.Node) -> TypeGuard[_FunCallToFunCallToRef]:
+    """Match expressions of the form `as_fieldop(stencil)(*args)`."""
+    return isinstance(arg, itir.FunCall) and is_call_to(arg.fun, "as_fieldop")
+
+
+_FunCallToLambda: TypeAlias = _FunCallTo[itir.Lambda]
+
+
+def is_let(node: itir.Node) -> TypeGuard[_FunCallToLambda]:
+    """Match expression of the form `(λ(...) → ...)(...)`."""
+    return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
+
+
+def is_ref_to(node, ref: str) -> TypeGuard[itir.SymRef]:
     return isinstance(node, itir.SymRef) and node.id == ref
 
 
-def is_identity_as_fieldop(node: itir.Expr):
+def is_identity_as_fieldop(node: itir.Expr) -> TypeGuard[_FunCallToFunCallToRef]:
     """
     Match field operators implementing element-wise copy of a field argument,
     that is expressions of the form `as_fieldop(stencil)(*args)`
@@ -107,7 +127,7 @@ def is_identity_as_fieldop(node: itir.Expr):
     """
     if not is_applied_as_fieldop(node):
         return False
-    stencil = node.fun.args[0]  # type: ignore[attr-defined]
+    stencil = node.fun.args[0]
     if (
         isinstance(stencil, itir.Lambda)
         and len(stencil.params) == 1

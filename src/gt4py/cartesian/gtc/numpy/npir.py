@@ -40,7 +40,6 @@ class ScalarDecl(Decl):
     """Scalar per grid point.
 
     Used for API scalar parameters. Local scalars never have data_dims.
-
     """
 
     pass
@@ -50,7 +49,6 @@ class LocalScalarDecl(Decl):
     """Scalar per grid point.
 
     Used for API scalar parameters. Local scalars never have data_dims.
-
     """
 
     pass
@@ -70,12 +68,14 @@ class TemporaryDecl(Decl):
 
     Parameters
     ----------
+    data_dims: Data dimensions sizes (static)
+    dimensions: Mask which cartesian dimensions are present
     offset: Origin of the temporary field.
     padding: Buffer added to compute domain as field size.
-
     """
 
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    dimensions: Tuple[bool, bool, bool]
     offset: Tuple[int, int]
     padding: Tuple[int, int]
 
@@ -120,6 +120,10 @@ class VarKOffset(common.VariableKOffset[Expr]):
 
 class ForIndex(common.ForIndex, Expr):
     pass
+
+
+class KMaskFieldAccess(Expr):
+    dtype = common.DataType.INT64
 
 
 class FieldSlice(VectorLValue):

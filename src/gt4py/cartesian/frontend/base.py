@@ -9,26 +9,12 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any
 
 from gt4py.cartesian import utils as gt_utils
-from gt4py.cartesian.definitions import BuildOptions, StencilID
+from gt4py.cartesian.definitions import BuildOptions
 from gt4py.cartesian.gtc import gtir
-from gt4py.cartesian.type_hints import AnnotatedStencilFunc, StencilFunc
-
-
-REGISTRY = gt_utils.Registry()
-AnyStencilFunc = Union[StencilFunc, AnnotatedStencilFunc]
-
-
-def from_name(name: str) -> Optional[Type[Frontend]]:
-    """Return frontend by name."""
-    return REGISTRY.get(name, None)
-
-
-def register(frontend_cls: Type[Frontend]) -> None:
-    """Register a new frontend."""
-    return REGISTRY.register(frontend_cls.name, frontend_cls)
+from gt4py.cartesian.type_hints import AnnotatedStencilFunc, AnyStencilFunc
 
 
 class Frontend(abc.ABC):
@@ -37,42 +23,11 @@ class Frontend(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def get_stencil_id(
-        cls,
-        qualified_name: str,
-        definition: AnyStencilFunc,
-        externals: Dict[str, Any],
-        options_id: str,
-    ) -> StencilID:
-        """
-        Create a StencilID object that contains a unique hash for the stencil.
-
-        Notes
-        -----
-        This method seems to no longer be used through StencilBuilder.
-
-        Returns
-        -------
-        StencilID:
-            An object that contains the qualified name and unique hash.
-
-        Raises
-        ------
-        GTSyntaxError
-            If there is a parsing error.
-
-        TypeError
-            If there is a error resolving external types.
-        """
-        pass
-
-    @classmethod
-    @abc.abstractmethod
     def generate(
         cls,
         definition: AnyStencilFunc,
-        externals: Dict[str, Any],
-        dtypes: Dict[Type, Type],
+        externals: dict[str, Any],
+        dtypes: dict[type, type],
         options: BuildOptions,
         backend_name: str,
     ) -> gtir.Stencil:
@@ -95,7 +50,7 @@ class Frontend(abc.ABC):
     @classmethod
     @abc.abstractmethod
     def prepare_stencil_definition(
-        cls, definition: AnyStencilFunc, externals: Dict[str, Any]
+        cls, definition: AnyStencilFunc, externals: dict[str, Any]
     ) -> AnnotatedStencilFunc:
         """
         Annotate the stencil function if not already done so.
@@ -109,3 +64,21 @@ class Frontend(abc.ABC):
             If there is a error resolving external types.
         """
         pass
+
+
+REGISTRY = gt_utils.Registry[type[Frontend]]()
+
+
+def from_name(name: str) -> type[Frontend]:
+    """Return frontend by name."""
+    frontend_cls = REGISTRY.get(name, None)
+    if frontend_cls is None:
+        raise ValueError(
+            f"Frontend '{name} is not registered. Valid options are: {REGISTRY.names}."
+        )
+    return frontend_cls
+
+
+def register(frontend_cls: type[Frontend]) -> type[Frontend]:
+    """Register a new frontend."""
+    return REGISTRY.register(frontend_cls.name, frontend_cls)

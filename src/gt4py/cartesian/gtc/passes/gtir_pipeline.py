@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Callable, Dict, Optional, Sequence, Tuple
+from typing import Callable, ClassVar, Dict, Optional, Sequence, Tuple
 
 from gt4py.cartesian.definitions import StencilID
 from gt4py.cartesian.gtc import gtir
@@ -28,7 +28,8 @@ class GtirPipeline:
     May only call existing passes and may not contain any pass logic itself.
     """
 
-    _cache: Dict[Tuple[StencilID, Tuple[PASS_T, ...]], gtir.Stencil] = {}
+    # Cache pipelines across all instances
+    _cache: ClassVar[Dict[Tuple[StencilID, Tuple[PASS_T, ...]], gtir.Stencil]] = {}
 
     def __init__(self, node: gtir.Stencil, stencil_id: StencilID):
         self.gtir = node

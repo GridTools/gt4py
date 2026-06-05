@@ -10,6 +10,7 @@ import collections
 import enum
 import numbers
 import operator
+from typing import Final
 
 from gt4py.cartesian.gtc.utils import filter_mask, interpolate_mask
 
@@ -24,7 +25,7 @@ class CartesianSpace:
         def __str__(self) -> str:
             return self.name
 
-    names = [ax.name for ax in Axis]
+    names: Final[list[str]] = [ax.name for ax in Axis]
     ndim = len(names)
 
 
