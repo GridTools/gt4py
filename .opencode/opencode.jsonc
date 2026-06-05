@@ -10,9 +10,7 @@
   // read-only planning sessions.
   "default_agent": "build",
 
-  // Permission policy — mirrors the allow/deny lists in
-  // .claude/settings.json. OpenCode has no commit/PR attribution switch,
-  // so the "no Co-Authored-By / Generated with …" rule lives in AGENTS.md.
+  // Permission policy — mirrors the allow/deny lists in .claude/settings.json.
   "permission": {
     "bash": {
       "uv *": "allow",

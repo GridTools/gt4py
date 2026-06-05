@@ -1,8 +1,7 @@
 # gt4py.next — Agent Instructions
 
-Scoped guidance for `src/gt4py/next/` and its tests in `tests/next_tests/`.
-Read the [root `AGENTS.md`](../../../AGENTS.md) first; this file only adds
-what is specific to `next`.
+Conventions specific to `src/gt4py/next/` and `tests/next_tests/`, layered on
+the repo-wide [root `AGENTS.md`](../../../AGENTS.md).
 
 `gt4py.next` is the **experimental, not backward-compatible** successor to
 `gt4py.cartesian`, targeting both Cartesian and unstructured / mesh grids. A

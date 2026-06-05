@@ -7,9 +7,8 @@ not backward-compatible; supports both Cartesian and unstructured / mesh
 grids) — built on the `gt4py.eve` IR framework, with GridTools, DaCe, and
 pure-Python backends.
 
-The closest `AGENTS.md` to the file you edit wins. When working under
-`src/gt4py/next/` or `tests/next_tests/`, also read
-[`src/gt4py/next/AGENTS.md`](src/gt4py/next/AGENTS.md).
+Editing under `src/gt4py/next/` or `tests/next_tests/`? Those carry extra
+conventions in [`src/gt4py/next/AGENTS.md`](src/gt4py/next/AGENTS.md).
 
 ## Stack
 
@@ -81,8 +80,6 @@ If a command above is wrong for your environment, fix `pyproject.toml`,
 
 ## Don't
 
-- Don't add `Co-Authored-By`, `Generated with …`, or similar attribution
-  trailers to commits or PR descriptions.
 - Don't edit anything under a `generated/` directory — it's overwritten by
   the codegen pipeline.
 - Don't add a runtime dependency (`pyproject.toml` `dependencies =`)
