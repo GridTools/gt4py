@@ -3,9 +3,8 @@
 Conventions specific to `src/gt4py/next/` and `tests/next_tests/`, layered on
 the repo-wide [root `AGENTS.md`](../../../AGENTS.md).
 
-`gt4py.next` is the successor to `gt4py.cartesian`, targeting both Cartesian
-and unstructured / mesh grids. A program is lowered through a fixed
-toolchain:
+`gt4py.next` is the successor to `gt4py.cartesian`, targeting both structured
+and unstructured grids. A program is lowered through a fixed toolchain:
 
 ```
 field operators / programs (ffront)

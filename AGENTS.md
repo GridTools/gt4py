@@ -1,10 +1,12 @@
 # GT4Py — Agent Instructions
 
-GT4Py is the GridTools toolchain for performance-portable weather and climate
-DSLs. It exposes two embedded Python DSLs — `gt4py.cartesian` (stencil
-programming on Cartesian grids) and `gt4py.next` (supports both Cartesian and
-unstructured / mesh grids) — built on the `gt4py.eve` IR framework, with
-GridTools, DaCe, and pure-Python backends.
+GT4Py is a Python library for performance-portable weather and climate
+computations using the GridTools framework. It exposes two embedded
+Python DSLs: `gt4py.cartesian` (stencil programming on structured Cartesian
+grids) and `gt4py.next` (supports both structured and unstructured meshes).
+The toolchain infrastructure is defined in the internal `gt4py.eve` IR framework,
+and the implementation relies on GridTools, DaCe, or pure-Python backends
+dispatching operation to standard Python array libraries.
 
 Editing under `src/gt4py/next/` or `tests/next_tests/`? Those carry extra
 conventions in [`src/gt4py/next/AGENTS.md`](src/gt4py/next/AGENTS.md).
