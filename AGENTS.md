@@ -77,8 +77,6 @@ If a command above is wrong for your environment, fix `pyproject.toml`,
 
 ## Don't
 
-- Don't edit anything under a `generated/` directory — it's overwritten by
-  the codegen pipeline.
 - Don't add a runtime dependency (`pyproject.toml` `dependencies =`)
   without an ADR if it affects architecture or supported platforms.
 - Don't run destructive Git on shared branches: `push --force`,

@@ -21,10 +21,12 @@ field operators / programs (ffront)
   `Domain`, `UnitRange`, `Connectivity`, `GridType`.
 - `ffront/` — the declarative frontend: `@field_operator`, `@program`,
   `@scan_operator`, `fbuiltins`, and lowering to FOAST/PAST.
-- `iterator/` — Iterator IR (ITIR/GTIR), its transforms, and embedded
-  execution of the IR.
-- `embedded/` — pure-Python field execution (NumPy / CuPy / JAX); the
-  debugging path and the `roundtrip` reference semantics.
+- `iterator/` — Iterator IR (ITIR/GTIR) and its transforms.
+  `iterator/embedded.py` runs the lowered IR directly and is what the
+  `roundtrip` backend targets.
+- `embedded/` — field-level embedded execution: field operators evaluated
+  directly on NumPy / CuPy / JAX-backed `Field`s, without lowering to the IR.
+  Distinct from `iterator/embedded.py`, which runs one level lower.
 - `otf/` — on-the-fly compilation toolchain (workflow steps, caching,
   argument descriptors).
 - `program_processors/runners/` — the backends: `gtfn` (GridTools C++),
@@ -42,6 +44,10 @@ field operators / programs (ffront)
   `@field_operator` / `@program`, captured into FOAST/PAST — not executed as
   written) and **embedded** (executed directly on fields). Be explicit about
   which you are changing.
+- Backends write generated program code to a build cache, never the source
+  tree: `.gt4py_cache/` in the working directory (persistent mode) or a
+  temporary dir (session mode, the default); see `config.py`
+  (`GT4PY_BUILD_CACHE_DIR`, `GT4PY_BUILD_CACHE_LIFETIME`).
 - Significant design decisions are in
   [`docs/development/ADRs/next/`](../../../docs/development/ADRs/next/). Start
   with `0001` (frontend design), `0011`/`0012` (OTF), `0019`
