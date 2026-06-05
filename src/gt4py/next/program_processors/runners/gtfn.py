@@ -175,9 +175,7 @@ class GTFNBackendFactory(factory.Factory):
         lambda o: f"run_gtfn_{o.name_device}{o.name_cached}{o.name_postfix}"
     )
 
-    executor = factory.LazyAttribute(
-        lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
-    )
+    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
 

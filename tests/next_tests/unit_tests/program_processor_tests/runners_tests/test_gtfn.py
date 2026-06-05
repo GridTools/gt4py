@@ -34,8 +34,10 @@ def test_backend_factory_trait_device():
     assert cpu_version.name == "run_gtfn_cpu"
     assert gpu_version.name == "run_gtfn_gpu"
 
-    assert cpu_version.executor.translation.device_type is core_defs.DeviceType.CPU
-    assert gpu_version.executor.translation.device_type is core_defs.DeviceType.CUDA
+    assert isinstance(cpu_version.executor.translation, workflow.CachedStep)
+    assert cpu_version.executor.translation.step.device_type is core_defs.DeviceType.CPU
+    assert isinstance(gpu_version.executor.translation, workflow.CachedStep)
+    assert gpu_version.executor.translation.step.device_type is core_defs.DeviceType.CUDA
 
     assert cpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CPU
     assert gpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CUDA
