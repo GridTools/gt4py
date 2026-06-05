@@ -27,6 +27,14 @@ def test_domain_deduction_cartesian():
 def test_domain_deduction_unstructured():
     assert _deduce_grid_type(None, {UnstructuredOffset}) == gtx.GridType.UNSTRUCTURED
     assert _deduce_grid_type(None, {LocalDim}) == gtx.GridType.UNSTRUCTURED
+    # source and target share `.value` but differ in `.kind` -> not Cartesian
+    HDim = gtx.Dimension("X", kind=gtx.DimensionKind.HORIZONTAL)
+    VDim = gtx.Dimension("X", kind=gtx.DimensionKind.VERTICAL)
+    CrossKindOffset = gtx.FieldOffset("CrossKind", source=HDim, target=(VDim,))
+    assert _deduce_grid_type(None, {CrossKindOffset}) == gtx.GridType.UNSTRUCTURED
+    # LOCAL self-loop is unstructured
+    LocalSelfOffset = gtx.FieldOffset("LocalSelf", source=LocalDim, target=(LocalDim,))
+    assert _deduce_grid_type(None, {LocalSelfOffset}) == gtx.GridType.UNSTRUCTURED
 
 
 def test_domain_complies_with_request_cartesian():
