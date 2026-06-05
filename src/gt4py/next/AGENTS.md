@@ -14,6 +14,10 @@ field operators / programs (ffront)
   → backend               program_processors/runners/  (gtfn, dace, roundtrip)
 ```
 
+The diagram is the **compiled** path; **embedded** execution is the
+alternative — `embedded/` runs field operators directly on `Field`s without
+lowering to the IR (see the module map).
+
 ## Module map (capabilities, not paths)
 
 - `common` / `common.py` — the core data model: `Field`, `Dimension`,
