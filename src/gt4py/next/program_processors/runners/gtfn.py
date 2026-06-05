@@ -157,45 +157,33 @@ class GTFNBackendFactory(factory.Factory):
 
     class Params:
         name_device = "cpu"
-        name_cached = ""
-        name_temps = ""
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
-        cached = factory.Trait(
-            executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
-            ),
-            name_cached="_cached",
-        )
         device_type = core_defs.DeviceType.CPU
         hash_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
-            GTFNCompileWorkflowFactory,
-            cached_translation=factory.SelfAttribute("..cached"),
-            device_type=factory.SelfAttribute("..device_type"),
+            GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
         )
 
-    name = factory.LazyAttribute(
-        lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
-    )
+    name = factory.LazyAttribute(lambda o: f"run_gtfn_{o.name_device}{o.name_postfix}")
 
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
+    executor = factory.LazyAttribute(
+        lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
+    )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
 
 
-run_gtfn = GTFNBackendFactory(cached=True)
+run_gtfn = GTFNBackendFactory(otf_workflow__cached_translation=True)
 
 run_gtfn_imperative = GTFNBackendFactory(
-    cached=True, name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
+    name_postfix="_imperative",
+    otf_workflow__cached_translation=True,
+    otf_workflow__translation__use_imperative_backend=True,
 )
 
-run_gtfn_gpu = GTFNBackendFactory(cached=True, gpu=True)
-
-run_gtfn_no_transforms = GTFNBackendFactory(
-    cached=True, otf_workflow__bare_translation__enable_itir_transforms=False
-)
+run_gtfn_gpu = GTFNBackendFactory(gpu=True, otf_workflow__cached_translation=True)

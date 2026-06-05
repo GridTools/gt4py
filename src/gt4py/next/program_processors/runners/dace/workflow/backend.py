@@ -35,18 +35,11 @@ class DaCeBackendFactory(factory.Factory):
 
     class Params:
         name_device = "cpu"
-        name_cached = ""
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
             name_device="gpu",
-        )
-        cached = factory.Trait(
-            executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
-            ),
-            name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
         hash_function = stages.compilation_hash
@@ -57,11 +50,11 @@ class DaCeBackendFactory(factory.Factory):
         )
         auto_optimize = factory.Trait(name_postfix="_opt")
 
-    name = factory.LazyAttribute(
-        lambda o: f"run_dace_{o.name_device}{o.name_cached}{o.name_postfix}"
-    )
+    name = factory.LazyAttribute(lambda o: f"run_dace_{o.name_device}{o.name_postfix}")
 
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
+    executor = factory.LazyAttribute(
+        lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
+    )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
 
@@ -81,7 +74,6 @@ def make_dace_backend(
 
     Args:
         gpu: Enable GPU transformations and code generation.
-        cached: Cache the lowered SDFG as a JSON file and the compiled programs.
         auto_optimize: Enable the SDFG auto-optimize pipeline.
         async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
             of GPU kernel execution with the Python driver code.
@@ -125,9 +117,8 @@ def make_dace_backend(
 
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
-        cached=cached,
         auto_optimize=auto_optimize,
-        otf_workflow__cached_translation=cached,
+        otf_workflow__cached_translation=True,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
@@ -139,26 +130,22 @@ def make_dace_backend(
 
 run_dace_cpu = make_dace_backend(
     gpu=False,
-    cached=True,
     auto_optimize=True,
     async_sdfg_call=False,
 )
 run_dace_cpu_noopt = make_dace_backend(
     gpu=False,
-    cached=True,
     auto_optimize=False,
     async_sdfg_call=False,
 )
 
 run_dace_gpu = make_dace_backend(
     gpu=True,
-    cached=True,
     auto_optimize=True,
     async_sdfg_call=True,
 )
 run_dace_gpu_noopt = make_dace_backend(
     gpu=True,
-    cached=True,
     auto_optimize=False,
     async_sdfg_call=True,
 )

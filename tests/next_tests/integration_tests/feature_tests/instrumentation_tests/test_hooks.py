@@ -21,7 +21,7 @@ from gt4py.next.instrumentation import gpu_profiler, hooks
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
 
-    BACKENDS = [None, gtfn_cpu, dace_backends.run_dace_cpu_cached]
+    BACKENDS = [None, gtfn_cpu, dace_backends.run_dace_cpu]
 except ImportError:
     BACKENDS = [None, gtfn_cpu]
 
