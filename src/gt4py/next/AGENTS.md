@@ -4,7 +4,10 @@ Conventions specific to `src/gt4py/next/` and `tests/next_tests/`, layered on
 the repo-wide [root `AGENTS.md`](../../../AGENTS.md).
 
 `gt4py.next` is the successor to `gt4py.cartesian`, targeting both structured
-and unstructured grids. A program is lowered through a fixed toolchain:
+and unstructured grids. Field operators and programs run in one of two modes:
+**embedded** — executed directly in Python on `Field`s (backed by NumPy /
+CuPy / JAX), with no lowering to the IR — or **compiled**, lowered through a
+fixed toolchain to a backend:
 
 ```
 field operators / programs (ffront)
@@ -13,10 +16,6 @@ field operators / programs (ffront)
   → OTF program source    otf/
   → backend               program_processors/runners/  (gtfn, dace, roundtrip)
 ```
-
-The diagram is the **compiled** path; **embedded** execution is the
-alternative — `embedded/` runs field operators directly on `Field`s without
-lowering to the IR (see the module map).
 
 ## Module map (capabilities, not paths)
 
