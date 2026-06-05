@@ -78,12 +78,15 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         compile_workflow = typing.cast(
             recipes.OTFCompileWorkflow,
-            self.backend.executor.step if self.backend.cached else self.backend.executor,  # type: ignore[attr-defined]
+            self.backend.executor
+            if not hasattr(self.backend.executor, "step")
+            else self.backend.executor.step,
         )  # We know which backend we are using, but we don't know if the compile workflow is cached.
-        assert hasattr(
-            compile_workflow.translation, "step"
-        )  # the translation stage is always cached
-        compile_workflow_translation = compile_workflow.translation.step
+        compile_workflow_translation = (
+            compile_workflow.translation
+            if not hasattr(compile_workflow.translation, "step")
+            else compile_workflow.translation.step
+        )  # Same for the translation stage, which could be a `CachedStep` depending on backend configuration.
         # TODO(ricoh): switch 'disable_itir_transforms=True' because we ran them separately previously
         # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
         # the other parts of the workaround when possible.

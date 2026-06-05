@@ -8,6 +8,7 @@
 
 """Test the bindings stage of the dace backend workflow."""
 
+import dataclasses
 import functools
 import numpy as np
 import pytest
@@ -298,10 +299,12 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     backend = dace_runner.make_dace_backend(
         gpu=False,
         cached=False,
-        auto_optimize=True,
         use_metrics=use_metrics,
         use_zero_origin=use_zero_origin,
     )
+    backend = dataclasses.replace(
+        backend, executor=backend.executor.replace(translation=backend.executor.translation.step)
+    )  # TODO(epaone): remove this line when the workflow stage cache is fixed (PR#2609)
     monkeypatch.setattr(
         dace_workflow.compilation.DaCeCompiler,
         "__call__",
@@ -354,10 +357,12 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     backend = dace_runner.make_dace_backend(
         gpu=False,
         cached=False,
-        auto_optimize=True,
         use_metrics=use_metrics,
         use_zero_origin=use_zero_origin,
     )
+    backend = dataclasses.replace(
+        backend, executor=backend.executor.replace(translation=backend.executor.translation.step)
+    )  # TODO(epaone): remove this line when the workflow stage cache is fixed (PR#2609)
     monkeypatch.setattr(
         dace_workflow.compilation.DaCeCompiler,
         "__call__",

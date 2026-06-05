@@ -119,10 +119,6 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 
-        bare_translation = factory.SubFactory(
-            gtfn_module.GTFNTranslationStepFactory,
-            device_type=factory.SelfAttribute("..device_type"),
-        )
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
@@ -133,6 +129,11 @@ class GTFNCompileWorkflowFactory(factory.Factory):
                     ),
                 )
             ),
+        )
+
+        bare_translation = factory.SubFactory(
+            gtfn_module.GTFNTranslationStepFactory,
+            device_type=factory.SelfAttribute("..device_type"),
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)

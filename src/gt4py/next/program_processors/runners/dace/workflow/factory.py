@@ -43,11 +43,6 @@ class DaCeWorkflowFactory(factory.Factory):
             lambda: config.CMAKE_BUILD_TYPE
         )
 
-        bare_translation = factory.SubFactory(
-            DaCeTranslationStepFactory,
-            device_type=factory.SelfAttribute("..device_type"),
-            auto_optimize=factory.SelfAttribute("..auto_optimize"),
-        )
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
@@ -61,6 +56,12 @@ class DaCeWorkflowFactory(factory.Factory):
                     ),
                 )
             ),
+        )
+
+        bare_translation = factory.SubFactory(
+            DaCeTranslationStepFactory,
+            device_type=factory.SelfAttribute("..device_type"),
+            auto_optimize=factory.SelfAttribute("..auto_optimize"),
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
