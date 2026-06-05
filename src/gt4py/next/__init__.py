@@ -93,10 +93,7 @@ from .ffront.fbuiltins import (
     where,
 )
 from .otf.compiled_program import wait_for_compilation
-from .program_processors.runners.gtfn import (
-    run_gtfn_cached as gtfn_cpu,
-    run_gtfn_gpu_cached as gtfn_gpu,
-)
+from .program_processors.runners.gtfn import run_gtfn as gtfn_cpu, run_gtfn_gpu as gtfn_gpu
 from .program_processors.runners.roundtrip import default as itir_python
 
 

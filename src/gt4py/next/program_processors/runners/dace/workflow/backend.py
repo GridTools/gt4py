@@ -139,38 +139,26 @@ def make_dace_backend(
 
 run_dace_cpu = make_dace_backend(
     gpu=False,
-    cached=False,
+    cached=True,
     auto_optimize=True,
     async_sdfg_call=False,
 )
 run_dace_cpu_noopt = make_dace_backend(
     gpu=False,
-    cached=False,
-    auto_optimize=False,
-    async_sdfg_call=False,
-)
-run_dace_cpu_cached = make_dace_backend(
-    gpu=False,
     cached=True,
-    auto_optimize=True,
+    auto_optimize=False,
     async_sdfg_call=False,
 )
 
 run_dace_gpu = make_dace_backend(
     gpu=True,
-    cached=False,
+    cached=True,
     auto_optimize=True,
     async_sdfg_call=True,
 )
 run_dace_gpu_noopt = make_dace_backend(
     gpu=True,
-    cached=False,
-    auto_optimize=False,
-    async_sdfg_call=True,
-)
-run_dace_gpu_cached = make_dace_backend(
-    gpu=True,
     cached=True,
-    auto_optimize=True,
+    auto_optimize=False,
     async_sdfg_call=True,
 )

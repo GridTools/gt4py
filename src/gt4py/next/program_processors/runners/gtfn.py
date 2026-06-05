@@ -174,7 +174,9 @@ class GTFNBackendFactory(factory.Factory):
         device_type = core_defs.DeviceType.CPU
         hash_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
-            GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
+            GTFNCompileWorkflowFactory,
+            cached_translation=factory.SelfAttribute("..cached"),
+            device_type=factory.SelfAttribute("..device_type"),
         )
 
     name = factory.LazyAttribute(
@@ -186,20 +188,14 @@ class GTFNBackendFactory(factory.Factory):
     transforms = backend.DEFAULT_TRANSFORMS
 
 
-run_gtfn = GTFNBackendFactory()
+run_gtfn = GTFNBackendFactory(cached=True)
 
 run_gtfn_imperative = GTFNBackendFactory(
-    name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
+    cached=True, name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
 )
 
-run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
-
-run_gtfn_gpu = GTFNBackendFactory(gpu=True)
-
-run_gtfn_gpu_cached = GTFNBackendFactory(
-    gpu=True, cached=True, otf_workflow__cached_translation=True
-)
+run_gtfn_gpu = GTFNBackendFactory(cached=True, gpu=True)
 
 run_gtfn_no_transforms = GTFNBackendFactory(
-    otf_workflow__bare_translation__enable_itir_transforms=False
+    cached=True, otf_workflow__bare_translation__enable_itir_transforms=False
 )
