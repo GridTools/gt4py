@@ -1,11 +1,10 @@
 # GT4Py — Agent Instructions
 
 GT4Py is the GridTools toolchain for performance-portable weather and climate
-DSLs. It exposes two embedded Python DSLs — `gt4py.cartesian` (**stable**,
-stencil programming on Cartesian grids) and `gt4py.next` (**experimental**,
-not backward-compatible; supports both Cartesian and unstructured / mesh
-grids) — built on the `gt4py.eve` IR framework, with GridTools, DaCe, and
-pure-Python backends.
+DSLs. It exposes two embedded Python DSLs — `gt4py.cartesian` (stencil
+programming on Cartesian grids) and `gt4py.next` (supports both Cartesian and
+unstructured / mesh grids) — built on the `gt4py.eve` IR framework, with
+GridTools, DaCe, and pure-Python backends.
 
 Editing under `src/gt4py/next/` or `tests/next_tests/`? Those carry extra
 conventions in [`src/gt4py/next/AGENTS.md`](src/gt4py/next/AGENTS.md).
@@ -17,8 +16,8 @@ conventions in [`src/gt4py/next/AGENTS.md`](src/gt4py/next/AGENTS.md).
   through `uv`, never bare `pip` / `python`.
 - Test runner: **`nox`** (sessions in `noxfile.py`).
 - QA: **`pre-commit`** (config in `.pre-commit-config.yaml`) — runs `ruff`
-  (lint + format), `mypy`, `tach` (subpackage import enforcement), license
-  header insertion, markdown/TOML/YAML formatters, and `uv lock` validation.
+  (lint + format), `mypy`, `tach` (import-boundary enforcement), plus file
+  formatters and license-header insertion.
 - Build backend: `setuptools.build_meta`; `cython` is the only compiled
   build-time extension. The C++/CUDA/DaCe code that backends emit is
   JIT-compiled at runtime, not at install (see `pyproject.toml`).
@@ -32,8 +31,8 @@ conventions in [`src/gt4py/next/AGENTS.md`](src/gt4py/next/AGENTS.md).
 - `uv run mypy src/` — type check (mypy runs on `src/` only).
 - `uv run tach check` — enforce the subpackage import DAG.
 - `uv run nox --list` — see all test sessions.
-- `uv run nox -s "test_<subpackage>-<py>(...)"` — run one suite, e.g.
-  `test_cartesian`, `test_next`, `test_eve`, `test_storage`, `test_package`.
+- `uv run nox -s "test_<subpackage>-<py>(...)"` — run one suite (names from
+  `nox --list`), e.g. `test_next`.
 - `uv run pytest <path>` — targeted unit runs during development.
 
 If a command above is wrong for your environment, fix `pyproject.toml`,
@@ -55,9 +54,7 @@ If a command above is wrong for your environment, fix `pyproject.toml`,
   [`docs/development/`](docs/development/).
 - User-facing docs: [`docs/user/cartesian/`](docs/user/cartesian/) and
   [`docs/user/next/`](docs/user/next/).
-- Subpackage dependency DAG (enforced in CI): [`tach.toml`](tach.toml) —
-  `eve → _core → storage → {cartesian, next}` (a layer may not import a
-  higher one).
+- Subpackage dependency DAG (enforced in CI): [`tach.toml`](tach.toml).
 - Project metadata, dependency groups, ruff / mypy / coverage / pytest
   config: [`pyproject.toml`](pyproject.toml).
 - License header to prepend to new source files: [`HEADER.txt`](HEADER.txt)
