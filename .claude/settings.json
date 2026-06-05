@@ -21,5 +21,9 @@
       "Bash(git reset --hard origin:*)",
       "Bash(rm -rf:*)"
     ]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
   }
 }

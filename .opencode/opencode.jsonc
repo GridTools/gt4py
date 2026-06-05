@@ -1,0 +1,38 @@
+// OpenCode configuration. See https://opencode.ai/docs/config/
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // AGENTS.md is the canonical, tool-agnostic instruction file (CLAUDE.md
+  // only imports it). Keep agent guidance there, not here.
+  "instructions": ["AGENTS.md"],
+
+  // `build` is the full-access primary agent; switch to `plan` for
+  // read-only planning sessions.
+  "default_agent": "build",
+
+  // Permission policy — mirrors the allow/deny lists in
+  // .claude/settings.json. OpenCode has no commit/PR attribution switch,
+  // so the "no Co-Authored-By / Generated with …" rule lives in AGENTS.md.
+  "permission": {
+    "bash": {
+      "uv *": "allow",
+      "nox *": "allow",
+      "pre-commit *": "allow",
+      "pytest *": "allow",
+      "ruff *": "allow",
+      "mypy *": "allow",
+      "tach *": "allow",
+      "git status": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git show*": "allow",
+      "rg *": "allow",
+      "ls *": "allow",
+      "find *": "allow",
+      "git push --force*": "deny",
+      "git reset --hard origin*": "deny",
+      "rm -rf*": "deny",
+      "*": "ask"
+    }
+  }
+}
