@@ -198,6 +198,61 @@ def test_merge_dispatchers_validation_errors():
         merge_dispatchers(dispatcher, lambda _: "not-a-dispatcher")
 
 
+def test_get_fully_qualified_name():
+    import json
+
+    from gt4py.eve.utils import get_fully_qualified_name
+
+    # Built-in type and a regular function: "<module>.<qualname>".
+    assert get_fully_qualified_name(dict) == "builtins.dict"
+    assert get_fully_qualified_name(json.dumps) == "json.dumps"
+
+    # Nested objects use the dotted __qualname__.
+    class Outer:
+        class Inner: ...
+
+    assert get_fully_qualified_name(Outer.Inner).endswith(".Outer.Inner")
+
+    # Modules are identified by their import name only (no qualname).
+    assert get_fully_qualified_name(json) == "json"
+
+
+def test_pickle_reducer_factory_fast_path():
+    from gt4py.eve.utils import pickle_reducer_factory
+
+    class Foo:
+        def __init__(self):
+            self.a = 1
+
+    # Defaults reproduce the standard reduce tuple: (type, (), __dict__).
+    assert pickle_reducer_factory()(Foo()) == (Foo, (), {"a": 1})
+
+    # Each component can be overridden.
+    reducer = pickle_reducer_factory(
+        get_new=lambda obj: list,
+        get_new_args=lambda obj: ((1, 2), {"k": 3}),
+        get_state=lambda obj: "state",
+    )
+    assert reducer("ignored") == (list, ((1, 2), {"k": 3}), "state")
+
+
+def test_pickle_reducer_factory_full_path():
+    from gt4py.eve.utils import pickle_reducer_factory
+
+    # Providing any of seq_iter/map_iter/set_state switches to the 6-tuple form;
+    # the unspecified ones default to callables returning `None`.
+    reducer = pickle_reducer_factory(
+        get_new=lambda obj: dict,
+        get_state=lambda obj: None,
+        map_iter=lambda obj: iter([("x", 1)]),
+    )
+    new, new_args, state, seq_iter, map_iter, set_state = reducer("ignored")
+
+    assert (new, new_args, state) == (dict, (), None)
+    assert seq_iter is None and set_state is None
+    assert list(map_iter) == [("x", 1)]
+
+
 class ModelClass(eve.datamodels.DataModel):
     data: Any
 

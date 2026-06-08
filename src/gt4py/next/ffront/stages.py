@@ -38,6 +38,11 @@ from gt4py.next.otf import arguments, toolchain
 class BaseStage(utils.MetadataBasedPicklingMixin): ...
 
 
+_base_reducer_fn = eve_utils.merge_dispatchers(
+    utils.StableContainerPickler.reducer_override, foast.semantic_pickler.reducer_override
+)
+
+
 class _SemanticPickler(eve_utils.PurePickler):
     """
     Create a custom pickler for the BaseStage `fingerprinter` that handles
@@ -46,10 +51,10 @@ class _SemanticPickler(eve_utils.PurePickler):
     which are expected to be pure functions without complicated closures.
     """
 
-    # This reducer deals with DSL definitions functions inside any ffront Stage.
-    _ffront_stage_reducer_fn = eve_utils.merge_dispatchers(
-        utils.StableContainerPickler.reducer_override,
-        foast.semantic_pickler.reducer_override,
+    # This is the final reducer override for the pickler, which merges the custom
+    # function reducer above with the standard stable container reducer.
+    _sorting_reducer_override_fn = eve_utils.merge_dispatchers(
+        _base_reducer_fn,
         eve_utils.singledispatcher(
             default=lambda obj: NotImplemented,
             implementations={
@@ -59,19 +64,6 @@ class _SemanticPickler(eve_utils.PurePickler):
                         source_utils.get_closure_vars_from_function(f),
                     )
                 ),
-            },
-        ),
-    )
-
-    # This is the final reducer override for the pickler, which merges the custom
-    # function reducer above with the standard stable container reducer.
-    _sorting_reducer_override_fn = eve_utils.merge_dispatchers(
-        utils.StableContainerPickler.reducer_override,
-        foast.semantic_pickler.reducer_override,
-        eve_utils.singledispatcher(
-            default=lambda obj: NotImplemented,
-            implementations={
-                BaseStage: _ffront_stage_reducer_fn,
             },
         ),
     )

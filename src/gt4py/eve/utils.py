@@ -241,7 +241,7 @@ def get_fully_qualified_name(obj: type | types.FunctionType | types.ModuleType) 
     """
     if isinstance(obj, types.ModuleType):
         return obj.__name__
-    return f"{obj.__module__}:{obj.__qualname__}"
+    return f"{obj.__module__}.{obj.__qualname__}"
 
 
 _P = ParamSpec("_P")

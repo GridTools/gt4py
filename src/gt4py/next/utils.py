@@ -157,7 +157,9 @@ def _stable_container_sort_key(obj: Any) -> Any:
 # We use eval to avoid infinite recursive reducer calls for types
 _custom_reducer_by_reference = eve_utils.pickle_reducer_factory(
     get_new=lambda obj: eval,
-    get_new_args=lambda obj: (eve_utils.get_fully_qualified_name(obj),),
+    get_new_args=lambda obj: (
+        f"__import__('pkgutil').resolve_name('{eve_utils.get_fully_qualified_name(obj)}')",
+    ),
     get_state=lambda obj: None,
 )
 
