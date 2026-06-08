@@ -172,7 +172,7 @@ def test_field_operator_name_shadows_builtin():
     def power(inp: gtx.Field[[TDim], "float64"]):
         return inp
 
-    with pytest.raises(errors.DSLError, match="reserved gt4py.next builtin"):
+    with pytest.raises(errors.DSLError, match="reserved GT4Py builtin"):
         _ = FieldOperatorParser.apply_to_function(power)
 
 
@@ -180,7 +180,7 @@ def test_field_operator_name_shadows_experimental_builtin():
     def concat_where(inp: gtx.Field[[TDim], "float64"]):
         return inp
 
-    with pytest.raises(errors.DSLError, match="reserved gt4py.next builtin"):
+    with pytest.raises(errors.DSLError, match="reserved GT4Py builtin"):
         _ = FieldOperatorParser.apply_to_function(concat_where)
 
 

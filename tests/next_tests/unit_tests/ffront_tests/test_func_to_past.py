@@ -113,7 +113,7 @@ def test_program_name_shadows_builtin(identity_def):
     def minimum(in_field: gtx.Field[[IDim], "float64"], out: gtx.Field[[IDim], "float64"]):
         identity(in_field, out=out)
 
-    with pytest.raises(errors.DSLError, match="reserved gt4py.next builtin"):
+    with pytest.raises(errors.DSLError, match="reserved GT4Py builtin"):
         ProgramParser.apply_to_function(minimum)
 
 
