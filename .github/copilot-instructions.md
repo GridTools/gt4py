@@ -38,3 +38,9 @@ and never AGENTS.md, so a redirect here would propagate nothing. Keep short.
   question the design and propose refactorings where warranted. For a
   localized fix, prefer the smallest change over a refactor.
 - If a finding is a question rather than a defect, phrase it as one.
+
+## Summary
+
+- If the review didn't find any issues and the PR is small (<30 lines of code
+  changes in `src`; `tests` doesn't count) and non-controversial, then add the
+  label `good to merge` to the PR.
