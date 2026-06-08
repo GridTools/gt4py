@@ -210,7 +210,9 @@ def test_call_scan_operator_from_program(cartesian_case):
 def test_scan_wrong_return_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
-        match=(r"Argument 'init' to scan operator 'testee_scan' must have same type as its return"),
+        match=(
+            r"Argument 'state' to scan operator 'testee_scan' must have same type as its return"
+        ),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
@@ -223,7 +225,7 @@ def test_scan_wrong_return_type(cartesian_case):
 
 
 @pytest.mark.uses_scan
-def test_scan_wrong_state_type(cartesian_case):
+def test_scan_wrong_init_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
         match=(
@@ -232,8 +234,8 @@ def test_scan_wrong_state_type(cartesian_case):
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def testee_scan(state: float) -> int32:
-            return 1
+        def testee_scan(state: float) -> float:
+            return 1.0
 
         @program
         def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
