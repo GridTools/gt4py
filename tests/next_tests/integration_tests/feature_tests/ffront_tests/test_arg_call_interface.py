@@ -242,6 +242,18 @@ def test_scan_wrong_init_type(cartesian_case):
             testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
 
 
+@pytest.mark.uses_scan
+def test_scan_without_carry(cartesian_case):
+    with pytest.raises(
+        errors.DSLError,
+        match=r"Scan operator 'testee_scan' must have at least one argument",
+    ):
+
+        @scan_operator(axis=KDim, forward=True, init=0)
+        def testee_scan() -> float:
+            return 1.0
+
+
 @pytest.fixture
 def bound_args_testee():
     @field_operator

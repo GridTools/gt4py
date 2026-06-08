@@ -249,6 +249,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
+        if not new_def_type.pos_or_kw_args:
+            raise errors.DSLError(
+                node.location,
+                f"Scan operator '{node.id}' must have at least one argument (the carry).",
+            )
         carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
         carry_type = new_def_type.pos_or_kw_args[carry_arg_name]
         if carry_type != new_def_type.returns:
