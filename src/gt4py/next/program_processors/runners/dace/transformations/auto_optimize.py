@@ -19,7 +19,7 @@ from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import (
     library_nodes as gtx_library_nodes,
     transformations as gtx_transformations,
@@ -234,6 +234,7 @@ def gt_auto_optimize(
             Something along the line "Fuse if operational intensity goes up, but
             not if we have too much internal space (register pressure).
     """
+    uids = gtx_utils.IDGeneratorPool()
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
 
@@ -333,6 +334,7 @@ def gt_auto_optimize(
             scan_loop_unrolling_factor=scan_loop_unrolling_factor,
             fuse_tasklets=fuse_tasklets,
             validate_all=validate_all,
+            uids=uids,
         )
 
         # Configure the Maps:
@@ -690,6 +692,7 @@ def _gt_auto_process_dataflow_inside_maps(
     scan_loop_unrolling_factor: int,
     fuse_tasklets: bool,
     validate_all: bool,
+    uids: gtx_utils.IDGeneratorPool,
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
 
@@ -762,7 +765,7 @@ def _gt_auto_process_dataflow_inside_maps(
     # Make sure that this runs before MoveDataflowIntoIfBody because atm it doesn't handle
     # NestedSDFGs inside the ConditionalBlocks it fuses.
     sdfg.apply_transformations_repeated(
-        gtx_transformations.FuseHorizontalConditionBlocks(),
+        gtx_transformations.FuseHorizontalConditionBlocks(uids=uids),
         validate=False,
         validate_all=validate_all,
     )

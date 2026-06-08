@@ -1207,7 +1207,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a3"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/GridTools/dace?branch=dev-sorted_sets#5a9cf3764df4fa3465786609a9c3de785e4f35a4" }
 dependencies = [
     { name = "astunparse" },
     { name = "dill" },
@@ -1216,6 +1216,7 @@ dependencies = [
     { name = "networkx", version = "3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
     { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "ordered-set" },
     { name = "packaging" },
     { name = "ply" },
     { name = "pyreadline", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
@@ -1223,7 +1224,6 @@ dependencies = [
     { name = "sympy" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c3/f8/2401889078017475ce1293af212b76cfdb8a5771ece179851d441ef363f3/dace-2.0.0a3.tar.gz", hash = "sha256:94cbaac4b1f4ef312d24f4151b0905a0e6292a9cfdf9c8b643dabdb2e95b02fa", size = 6005767, upload-time = "2026-05-11T14:49:16.021Z" }
 
 [[package]]
 name = "debugpy"
@@ -1663,6 +1663,7 @@ dependencies = [
     { name = "ninja" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
     { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "ordered-set" },
     { name = "packaging" },
     { name = "pybind11" },
     { name = "setuptools" },
@@ -1858,7 +1859,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", specifier = ">=2.0.0a3" },
+    { name = "dace", git = "https://github.com/GridTools/dace?branch=dev-sorted_sets" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "factory-boy", specifier = ">=3.3.3" },
@@ -1881,6 +1882,7 @@ requires-dist = [
     { name = "ninja", specifier = ">=1.11" },
     { name = "numpy", marker = "python_full_version < '3.14'", specifier = ">=2.0.0" },
     { name = "numpy", marker = "python_full_version >= '3.14'", specifier = ">=2.3.2" },
+    { name = "ordered-set", specifier = ">=4.0.0" },
     { name = "packaging", specifier = ">=20.0" },
     { name = "pybind11", specifier = ">=3.0.3" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
@@ -3653,6 +3655,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/8c/b9/2ac072041e899a52f20cf9510850ff58295003aa75525e58343591b0cbfb/opt_einsum-3.4.0.tar.gz", hash = "sha256:96ca72f1b886d148241348783498194c577fa30a8faac108586b14f1ba4473ac", size = 63004, upload-time = "2024-09-26T14:33:24.483Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl", hash = "sha256:69bb92469f86a1565195ece4ac0323943e83477171b91d24c35afe028a90d7cd", size = 71932, upload-time = "2024-09-26T14:33:23.039Z" },
+]
+
+[[package]]
+name = "ordered-set"
+version = "4.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/ca/bfac8bc689799bcca4157e0e0ced07e70ce125193fc2e166d2e685b7e2fe/ordered-set-4.1.0.tar.gz", hash = "sha256:694a8e44c87657c59292ede72891eb91d34131f6531463aab3009191c77364a8", size = 12826, upload-time = "2022-01-26T14:38:56.6Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/55/af02708f230eb77084a299d7b08175cff006dea4f2721074b92cdb0296c0/ordered_set-4.1.0-py3-none-any.whl", hash = "sha256:046e1132c71fcf3330438a539928932caf51ddbc582496833e23de611de14562", size = 7634, upload-time = "2022-01-26T14:38:48.677Z" },
 ]
 
 [[package]]

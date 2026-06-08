@@ -113,7 +113,8 @@ dependencies = [
   'nanobind>=1.9.0',
   'ninja>=1.11',
   'numpy>=2.0.0 ; python_version < "3.14"',
-  'numpy>=2.3.2 ; python_version >= "3.14"',  # first version with pre-built wheel for Python 3.14
+  'numpy>=2.3.2 ; python_version >= "3.14"',
+  'ordered-set>=4.0.0',  # first version with pre-built wheel for Python 3.14
   'packaging>=20.0',
   'pybind11>=3.0.3',
   'setuptools>=77.0.3',
@@ -478,6 +479,7 @@ url = 'https://gridtools.github.io/pypi/'
 # dace = {index = "gridtools"}
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
+dace = {git = "https://github.com/GridTools/dace", branch = "dev-sorted_sets"}
 
 # -- versioningit --
 [tool.versioningit]

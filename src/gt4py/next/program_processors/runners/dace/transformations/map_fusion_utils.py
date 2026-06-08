@@ -15,6 +15,7 @@ from typing import Optional
 import dace
 from dace import subsets as dace_subsets
 from dace.sdfg import nodes as dace_nodes
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace.transformations import (
     splitting_tools as gtx_dace_split,
@@ -78,8 +79,8 @@ def copy_map_graph(
         elif isinstance(node, dace_nodes.NestedSDFG):
             node_ = graph.add_nested_sdfg(
                 sdfg=copy.deepcopy(node.sdfg),
-                inputs=set(node.in_connectors.keys()),
-                outputs=set(node.out_connectors.keys()),
+                inputs={k: None for k in node.in_connectors.keys()},
+                outputs={k: None for k in node.out_connectors.keys()},
                 symbol_mapping=node.symbol_mapping.copy(),
                 debuginfo=copy.copy(node.debuginfo),
             )
@@ -202,8 +203,8 @@ def split_overlapping_map_range(
         Two lists, each containing the ranges corresponding to the splitted range
         for the first and the second map, respectively.
     """
-    first_map_params = set(first_map.params)
-    second_map_params = set(second_map.params)
+    first_map_params = OrderedSet(first_map.params)
+    second_map_params = OrderedSet(second_map.params)
     if first_map_params != second_map_params:
         return None
 

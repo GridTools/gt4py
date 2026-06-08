@@ -13,6 +13,7 @@ from typing import Any, Iterable, Optional, Sequence, Union
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -678,7 +679,7 @@ def _perform_node_split(
     sdfg: dace.SDFG,
     node_to_split: dace_nodes.AccessNode,
     new_access_nodes: dict[dace_sbs.Subset, dace_nodes.AccessNode],
-    assignment: dict[dace_sbs.Subset, set[EdgeConnectionSpec]],
+    assignment: dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]],
     allow_to_bypass_nodes: bool,
     already_reconfigured_nodes: set[tuple[dace_nodes.Node, str]],
 ) -> None:
@@ -858,7 +859,7 @@ def _perform_node_split_with_bypass_impl(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     node_to_split: dace_nodes.AccessNode,
-    edges_to_relocate: set[EdgeConnectionSpec],
+    edges_to_relocate: OrderedSet[EdgeConnectionSpec],
     already_reconfigured_nodes: set[tuple[dace_nodes.Node, str]],
 ) -> list[dace_graph.MultiConnectorEdge]:
     """Performs the splitting but the edge might go directly to the consumer."""
@@ -1049,14 +1050,14 @@ def _generate_data_descriptors_for_split(
 def _compute_assignement_for_split(
     edge_descriptions: Sequence[EdgeConnectionSpec],
     split_description: Sequence[dace_sbs.Subset],
-) -> dict[dace_sbs.Subset, set[EdgeConnectionSpec]]:
+) -> dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]]:
     """For every subset, that defines a split find the set of edges that belongs into it.
 
     Note that it might happens that some splits have zero assigned edges.
     """
     assert all(split is not None for split in split_description)
-    assignment: dict[dace_sbs.Subset, set[EdgeConnectionSpec]] = {
-        split: set() for split in split_description
+    assignment: dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]] = {
+        split: OrderedSet() for split in split_description
     }
 
     for edge_description in edge_descriptions:
