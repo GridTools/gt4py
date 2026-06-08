@@ -1206,8 +1206,8 @@ wheels = [
 
 [[package]]
 name = "dace"
-version = "2.3.13"
-source = { git = "https://github.com/philip-paul-mueller/dace?branch=phimuell__new-gpu-codegen-dev#b93199c1bf287d836abd211bf7ea81e34128b06d" }
+version = "2.3.14"
+source = { git = "https://github.com/philip-paul-mueller/dace?branch=phimuell__new-gpu-codegen-dev#b218a529cda99cc7dd11d0efdc8658081ecbb2cf" }
 dependencies = [
     { name = "astunparse" },
     { name = "dill" },
