@@ -155,7 +155,7 @@ def function_signature_incompatibilities_fieldop(
 
 def _tree_map_type_constructor_drop_python_type(
     value: ts.CollectionTypeSpecT,
-    elems: Iterable[ts.DataType],
+    elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
 ) -> ts.CollectionTypeSpecT:
     result = type_info.tree_map_type_constructor(value, elems)
     if isinstance(value, ts.NamedCollectionType):

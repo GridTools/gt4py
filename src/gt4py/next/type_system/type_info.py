@@ -138,7 +138,7 @@ _C = TypeVar("_C")
 
 def tree_map_type_constructor(
     value: ts.CollectionTypeSpecT,
-    elems: Iterable[ts.DataType],
+    elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
 ) -> ts.CollectionTypeSpecT:
     return (
         ts.NamedCollectionType(
