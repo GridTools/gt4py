@@ -17,7 +17,7 @@ from typing import Any, Callable, Generic, Protocol, TypeVar
 from typing_extensions import Self
 
 from gt4py.eve.extended_typing import OpaqueMutableMapping
-from gt4py.next import utils
+from gt4py.next import config, utils
 
 
 StartT = TypeVar("StartT")
@@ -274,7 +274,9 @@ class CachedStep(
         return result
 
     def cache_key(self, inp: StartT) -> str:
-        return utils.stable_fingerprinter((self, self.key_function(inp)))
+        return utils.stable_fingerprinter(
+            (config.BUILD_CACHE_VERSION_ID, self, self.key_function(inp))
+        )
 
 
 @dataclasses.dataclass(frozen=True)

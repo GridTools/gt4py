@@ -82,6 +82,18 @@ BUILD_CACHE_DIR: pathlib.Path = (
 )
 
 
+def _get_build_cache_version_id() -> str:
+    return __import__("gt4py").__version__
+
+
+#: Version ID for the build cache. It should only be overridden by gt4py
+#: developers or advanced users when making changes requiring forced
+#: compatibility with previously cached builds.
+BUILD_CACHE_VERSION_ID: str = (
+    os.environ.get("BUILD_CACHE_VERSION_ID") or _get_build_cache_version_id()
+)
+
+
 #: Whether generated code projects should be kept around between runs.
 #: - SESSION: generated code projects get destroyed when the interpreter shuts down
 #: - PERSISTENT: generated code projects are written to BUILD_CACHE_DIR and persist between runs
