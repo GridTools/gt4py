@@ -248,15 +248,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
-        carry_type = next(iter(new_def_type.pos_or_kw_args.values()))
-        if new_init.type != new_def_type.returns:
+        if not new_def_type.pos_or_kw_args:
             raise errors.DSLError(
                 node.location,
-                f"Argument 'init' to scan operator '{node.id}' must have same type as its return: "
-                f"expected '{new_def_type.returns}', got '{new_init.type}'.",
+                f"Scan operator '{node.id}' must have at least one argument (the carry).",
+            )
+        carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
+        carry_type = new_def_type.pos_or_kw_args[carry_arg_name]
+        if carry_type != new_def_type.returns:
+            raise errors.DSLError(
+                node.location,
+                f"Argument '{carry_arg_name}' to scan operator '{node.id}' must have same type as its return: "
+                f"expected '{new_def_type.returns}', got '{carry_type}'.",
             )
         elif new_init.type != carry_type:
-            carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
             raise errors.DSLError(
                 node.location,
                 f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument: "
