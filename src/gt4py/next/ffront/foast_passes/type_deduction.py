@@ -18,7 +18,6 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental,
     fbuiltins,
-    type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes import utils as foast_utils
@@ -871,10 +870,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         new_type = new_type_constructor.type.definition.returns
 
-        return_type = type_info.apply_to_primitive_constituents(
-            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind),
-            value.type,
-        )
+        return_type = type_info.tree_map_type(
+            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind)
+        )(value.type)
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(
@@ -934,7 +932,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         # replace all primitive constituents by the same type, `ts.DeferredType()` for convenience,
         # to capture the structure of the two branches
-        extract_structure = ti_ffront.tree_map_type(lambda x: ts.DeferredType(constraint=None))
+        extract_structure = type_info.tree_map_type(lambda x: ts.DeferredType(constraint=None))
         tb_structure = extract_structure(true_branch)
         fb_structure = extract_structure(false_branch)
 
@@ -948,7 +946,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 ),
             )
 
-        @ti_ffront.tree_map_type
+        @type_info.tree_map_type
         def deduce_return_type(
             tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
         ) -> ts.FieldType:
@@ -962,7 +960,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
             return return_type
 
-        return deduce_return_type(true_branch, false_branch)  # type: ignore[return-value]
+        return deduce_return_type(true_branch, false_branch)
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         mask_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)

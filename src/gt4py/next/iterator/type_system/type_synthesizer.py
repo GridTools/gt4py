@@ -382,9 +382,7 @@ def _convert_as_fieldop_input_to_iterator(
     Convert a field operation input into an iterator type, preserving its dimensions and data type.
     """
     input_dims = _collect_and_check_dimensions(input_)
-    element_type: ts.DataType = type_info.apply_to_primitive_constituents(
-        type_info.extract_dtype, input_
-    )
+    element_type: ts.DataType = type_info.tree_map_type(type_info.extract_dtype)(input_)
 
     return it_ts.IteratorType(
         position_dims=domain.dims, defined_dims=input_dims, element_type=element_type
@@ -436,9 +434,7 @@ def _canonicalize_nb_fields(
             )
         case ts.FieldType():
             input_dims = _collect_and_check_dimensions(input_)
-            element_type: ts.DataType = type_info.apply_to_primitive_constituents(
-                type_info.extract_dtype, input_
-            )
+            element_type: ts.DataType = type_info.tree_map_type(type_info.extract_dtype)(input_)
             defined_dims = []
             neighbor_dim = None
             for dim in input_dims:
@@ -535,7 +531,7 @@ def as_fieldop(
         # For each stencil parameter all locations it is `deref`ed on
         #  see :func:`gt4py.next.iterator.transforms.trace_stencil`.
         shift_sequences_per_param: list[set[tuple[itir.OffsetLiteral, ...]]] | None,
-    ) -> ts.FieldType | ts.DeferredType:
+    ) -> ts.FieldType | ts.TupleType | ts.DeferredType:
         if any(
             isinstance(el, ts.DeferredType)
             for f in fields
@@ -578,13 +574,11 @@ def as_fieldop(
 
         assert isinstance(stencil_return, ts.DataType)
 
-        return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(
-                dims=domain.dims,
-                dtype=el_type,
-            ),
-            stencil_return,
-        )
+        result = type_info.tree_map_type(
+            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
+        )(stencil_return)
+        assert isinstance(result, (ts.FieldType, ts.TupleType))
+        return result
 
     return applied_as_fieldop
 
