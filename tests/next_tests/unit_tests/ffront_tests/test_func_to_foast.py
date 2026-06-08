@@ -158,14 +158,30 @@ def test_clashing_annotated_assignment():
 
 
 def test_binary_pow():
-    def power(inp: gtx.Field[[TDim], "float64"]):
+    def pow_op(inp: gtx.Field[[TDim], "float64"]):
         return inp**3
 
-    parsed = FieldOperatorParser.apply_to_function(power)
+    parsed = FieldOperatorParser.apply_to_function(pow_op)
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
+
+
+def test_field_operator_name_shadows_builtin():
+    def power(inp: gtx.Field[[TDim], "float64"]):
+        return inp
+
+    with pytest.raises(errors.DSLError, match="reserved gt4py.next builtin"):
+        _ = FieldOperatorParser.apply_to_function(power)
+
+
+def test_field_operator_name_shadows_experimental_builtin():
+    def concat_where(inp: gtx.Field[[TDim], "float64"]):
+        return inp
+
+    with pytest.raises(errors.DSLError, match="reserved gt4py.next builtin"):
+        _ = FieldOperatorParser.apply_to_function(concat_where)
 
 
 def test_binary_mod():
