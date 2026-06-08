@@ -766,8 +766,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         nsdfg_node = outer_ctx.state.add_nested_sdfg(
             inner_ctx.sdfg,
-            inputs=input_memlets.keys(),
-            outputs=lambda_outputs,
+            inputs={key: None for key in sorted(input_memlets.keys())},
+            outputs={key: None for key in sorted(lambda_outputs)},
             symbol_mapping=nsdfg_symbols_mapping,
             debuginfo=gtir_to_sdfg_utils.debug_info(node, default=outer_ctx.sdfg.debuginfo),
         )

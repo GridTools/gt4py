@@ -1000,8 +1000,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg_symbols_mapping["__cond"] = condition_value.value
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
-            inputs=sorted(used_connectivities | input_memlets.keys()),
-            outputs=sorted(outputs),
+            inputs={key: None for key in sorted(used_connectivities | input_memlets.keys())},
+            outputs={key: None for key in sorted(outputs)},
             symbol_mapping=nsdfg_symbols_mapping,
         )
 
