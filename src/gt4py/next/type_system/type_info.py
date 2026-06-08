@@ -8,7 +8,7 @@
 
 import functools
 import types
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any, Literal, Sequence, Type, TypeGuard, TypeVar, cast, overload
 
 import numpy as np
@@ -138,7 +138,7 @@ _C = TypeVar("_C")
 
 def _tree_map_type_constructor(
     value: ts.CollectionTypeSpecT,
-    elems: xtyping.NestedTuple[ts.DataType],
+    elems: Iterable[ts.DataType],
 ) -> ts.CollectionTypeSpecT:
     return (
         ts.NamedCollectionType(

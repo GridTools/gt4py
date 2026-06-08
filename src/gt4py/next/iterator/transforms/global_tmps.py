@@ -169,7 +169,7 @@ def _transform_by_pattern(
     if extracted_fields:
         tmp_stmts: list[itir.Stmt] = []
 
-        into_tuple = lambda _, elts: tuple(elts)  # noqa: E731
+        as_tuple = lambda _, elts: tuple(elts)  # noqa: E731
 
         # for each extracted expression generate:
         #  - one or more `Temporary` declarations (depending on whether the expression is a field
@@ -179,13 +179,13 @@ def _transform_by_pattern(
             assert isinstance(tmp_expr.type, ts.TypeSpec)
             tmp_names: str | tuple[str | tuple, ...] = type_info.tree_map_type(
                 lambda x: next(uids["__tmp"]),
-                result_collection_constructor=into_tuple,
+                result_collection_constructor=as_tuple,
             )(tmp_expr.type)
             tmp_dtypes: (
                 ts.ScalarType | ts.ListType | tuple[ts.ScalarType | ts.ListType | tuple, ...]
             ) = type_info.tree_map_type(
                 type_info.extract_dtype,
-                result_collection_constructor=into_tuple,
+                result_collection_constructor=as_tuple,
             )(tmp_expr.type)
 
             tmp_domains: SymbolicDomain | tuple[SymbolicDomain | tuple, ...] = tmp_expr.annex.domain
@@ -216,7 +216,7 @@ def _transform_by_pattern(
             # `tmp_domains` might not have this structure because domain inference was not able to infer the tuple structure.
             tmp_domains = type_info.tree_map_type(
                 get_domain,
-                result_collection_constructor=into_tuple,
+                result_collection_constructor=as_tuple,
                 with_path_arg=True,
             )(tmp_expr.type)
 

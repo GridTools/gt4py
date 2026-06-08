@@ -18,7 +18,6 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental,
     fbuiltins,
-    type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes import utils as foast_utils
@@ -933,7 +932,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         # replace all primitive constituents by the same type, `ts.DeferredType()` for convenience,
         # to capture the structure of the two branches
-        extract_structure = ti_ffront.tree_map_type(lambda x: ts.DeferredType(constraint=None))
+        extract_structure = type_info.tree_map_type(lambda x: ts.DeferredType(constraint=None))
         tb_structure = extract_structure(true_branch)
         fb_structure = extract_structure(false_branch)
 
@@ -947,7 +946,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 ),
             )
 
-        @ti_ffront.tree_map_type
+        @type_info.tree_map_type
         def deduce_return_type(
             tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
         ) -> ts.FieldType:
