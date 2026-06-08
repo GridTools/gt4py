@@ -119,6 +119,72 @@ def test_skipping_fields_node_fingerprinter_skips_nested_fields_and_is_cached():
     assert fingerprinter(node_a) != fingerprinter(node_b)
 
 
+def test_skipping_fields_node_fingerprinter_returns_pickler_when_requested():
+    fingerprinter, pickler = utils.skipping_fields_node_fingerprinter(
+        "int_value", return_pickler=True
+    )
+    assert callable(fingerprinter)
+    assert isinstance(pickler, type) and issubclass(pickler, pickle.Pickler)
+    assert pickler.skipped_fields == {"int_value"}
+
+    # Without `return_pickler` only the fingerprinter callable is returned.
+    assert callable(utils.skipping_fields_node_fingerprinter("int_value"))
+
+
+class TestStableFingerprinter:
+    def test_returns_stable_string(self):
+        fingerprint = utils.stable_fingerprinter({"a": 1})
+        assert isinstance(fingerprint, str)
+        assert fingerprint == utils.stable_fingerprinter({"a": 1})
+
+    def test_dicts_are_order_independent(self):
+        assert utils.stable_fingerprinter({"a": 1, "b": 2}) == utils.stable_fingerprinter(
+            {"b": 2, "a": 1}
+        )
+
+    def test_sets_are_order_independent(self):
+        assert utils.stable_fingerprinter({1, 2, 3}) == utils.stable_fingerprinter({3, 2, 1})
+
+    def test_distinguishes_different_content(self):
+        assert utils.stable_fingerprinter({"a": 1}) != utils.stable_fingerprinter({"a": 2})
+
+    def test_dicts_keyed_by_types_are_order_independent(self):
+        # Dicts keyed by types occur in compile-time metadata (e.g. argument descriptors).
+        assert utils.stable_fingerprinter({int: 1, str: 2}) == utils.stable_fingerprinter(
+            {str: 2, int: 1}
+        )
+
+    def test_types_are_fingerprinted_by_reference(self):
+        # Regression for the `type` reducer that used to recurse infinitely: types nested in
+        # containers must be fingerprinted by reference, deterministically and distinctly.
+        assert utils.stable_fingerprinter({"t": int}) == utils.stable_fingerprinter({"t": int})
+        assert utils.stable_fingerprinter({"t": int}) != utils.stable_fingerprinter({"t": str})
+
+    def test_functions_are_fingerprinted_by_reference(self):
+        def foo() -> None: ...
+
+        def bar() -> None: ...
+
+        assert utils.stable_fingerprinter({"f": foo}) == utils.stable_fingerprinter({"f": foo})
+        assert utils.stable_fingerprinter({"f": foo}) != utils.stable_fingerprinter({"f": bar})
+
+    def test_modules_are_fingerprinted_by_reference(self):
+        import os
+        import sys
+
+        # Modules are unpicklable by the pure-Python pickler unless reduced by reference.
+        assert utils.stable_fingerprinter({"m": os}) == utils.stable_fingerprinter({"m": os})
+        assert utils.stable_fingerprinter({"m": os}) != utils.stable_fingerprinter({"m": sys})
+
+    def test_does_not_recurse_on_nested_types_modules_and_functions(self):
+        import os
+
+        # Regression: fingerprinting a built-in container holding types/modules/functions
+        # used to raise RecursionError (and later TypeError); it must just produce a hash.
+        payload = {"types": [int, str], "module": os, "nested": {float: ("x",)}}
+        assert isinstance(utils.stable_fingerprinter(payload), str)
+
+
 def test_tree_map_default():
     @utils.tree_map
     def testee(x):

@@ -154,6 +154,14 @@ def _stable_container_sort_key(obj: Any) -> Any:
     return obj
 
 
+# We use eval to avoid infinite recursive reducer calls for types
+_custom_reducer_by_reference = eve_utils.pickle_reducer_factory(
+    get_new=lambda obj: eval,
+    get_new_args=lambda obj: (eve_utils.get_fully_qualified_name(obj),),
+    get_state=lambda obj: None,
+)
+
+
 class _StableContainerPickler(eve_utils.PurePickler):
     _sorting_reducer_override = eve_utils.singledispatcher(
         default=lambda obj: NotImplemented,
@@ -171,9 +179,9 @@ class _StableContainerPickler(eve_utils.PurePickler):
             set: eve_utils.pickle_reducer_factory(
                 get_state=lambda obj: tuple(sorted(obj, key=_stable_container_sort_key)),
             ),
-            type: eve_utils.pickle_reducer_factory(
-                get_state=lambda obj: eve_utils.get_fully_qualified_name(obj)
-            ),
+            type: _custom_reducer_by_reference,
+            types.FunctionType: _custom_reducer_by_reference,
+            types.ModuleType: _custom_reducer_by_reference,
         },
     )
     reducer_override = staticmethod(_sorting_reducer_override)
