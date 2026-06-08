@@ -17,7 +17,6 @@ import gt4py.eve as eve
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
-    experimental,
     fbuiltins,
     field_operator_ast as foast,
     source_utils,
@@ -152,7 +151,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     Error at [2, 5] in ...func_to_foast.FieldOperatorParser[...]>)
     """
 
-    reserved_names = fbuiltins.BUILTIN_NAMES + experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
+    reserved_names = fbuiltins.ALL_BUILTIN_NAMES
 
     @classmethod
     def _preprocess_definition_ast(cls, ast: ast.AST) -> ast.AST:

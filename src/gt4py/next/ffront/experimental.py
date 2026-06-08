@@ -47,6 +47,3 @@ def concat_where(
         NonContiguousDomain: If the resulting domain has interior gaps.
     """
     raise NotImplementedError()
-
-
-EXPERIMENTAL_FUN_BUILTIN_NAMES = ["as_offset", "concat_where"]

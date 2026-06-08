@@ -15,7 +15,6 @@ from gt4py.eve.extended_typing import Never, cast
 from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
-    experimental as experimental_builtins,
     fbuiltins,
     field_operator_ast as foast,
     foast_introspection,
@@ -351,7 +350,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         elif isinstance(node.func, foast.Name) and node.func.id in fbuiltins.MATH_BUILTIN_NAMES:
             return self._visit_math_built_in(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in (
-            fbuiltins.FUN_BUILTIN_NAMES + experimental_builtins.EXPERIMENTAL_FUN_BUILTIN_NAMES
+            fbuiltins.FUN_BUILTIN_NAMES + fbuiltins.EXPERIMENTAL_FUN_BUILTIN_NAMES
         ):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)

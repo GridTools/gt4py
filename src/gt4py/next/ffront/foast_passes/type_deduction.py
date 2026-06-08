@@ -16,7 +16,6 @@ from gt4py.next import errors
 from gt4py.next.common import Dimension, DimensionKind, promote_dims
 from gt4py.next.ffront import (
     dialect_ast_enums,
-    experimental,
     fbuiltins,
     type_info as ti_ffront,
     type_specifications as ts_ffront,
@@ -747,7 +746,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             and not type_info.is_concrete(return_type)
             and isinstance(new_func, foast.Name)
             and new_func.id
-            in (fbuiltins.FUN_BUILTIN_NAMES + experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES)
+            in (fbuiltins.FUN_BUILTIN_NAMES + fbuiltins.EXPERIMENTAL_FUN_BUILTIN_NAMES)
         ):
             visitor = getattr(self, f"_visit_{new_func.id}")
             return visitor(new_node, **kwargs)
