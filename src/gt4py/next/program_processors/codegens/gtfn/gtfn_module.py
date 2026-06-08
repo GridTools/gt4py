@@ -20,6 +20,7 @@ from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import misc as ir_utils_misc
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
@@ -100,10 +101,16 @@ class GTFNTranslationStep(
         return parameters, arg_exprs
 
     def _process_connectivity_args(
-        self, offset_provider_type: common.OffsetProviderType
+        self, offset_provider_type: common.OffsetProviderType, grid_type: common.GridType
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
+
+        # A cartesian program never uses connectivities, but the offset provider may still contain
+        # them (e.g. when shared across multiple programs). They are declared as parameters (to keep
+        # the runtime call signature stable) but passed through the bindings without building a SID,
+        # since the generated program neither defines their dimension tags nor accesses them.
+        is_cartesian = grid_type != common.GridType.UNSTRUCTURED
 
         for name, connectivity_type in offset_provider_type.items():
             if isinstance(connectivity_type, common.NeighborConnectivityType):
@@ -120,8 +127,12 @@ class GTFNTranslationStep(
                             dims=list(connectivity_type.domain),
                             dtype=type_translation.from_dtype(connectivity_type.dtype),
                         ),
+                        pass_through=is_cartesian,
                     )
                 )
+
+                if is_cartesian:
+                    continue
 
                 # connectivity argument expression
                 nbtbl = (
@@ -213,7 +224,7 @@ class GTFNTranslationStep(
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset
         #  provider)
         connectivity_parameters, connectivity_args_expr = self._process_connectivity_args(
-            inp.args.offset_provider_type
+            inp.args.offset_provider_type, ir_utils_misc.grid_type_from_program(program)
         )
 
         # combine into a format that is aligned with what the backend expects

@@ -169,7 +169,11 @@ def _collect_offset_definitions(
         elif isinstance(
             connectivity_type := dim_or_connectivity_type, common.NeighborConnectivityType
         ):
-            assert grid_type == common.GridType.UNSTRUCTURED
+            if grid_type != common.GridType.UNSTRUCTURED:
+                # A cartesian program never uses connectivities (using one would make it
+                # unstructured), but the offset provider may still contain them, e.g. when shared
+                # across multiple programs. Such connectivities are ignored.
+                continue
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
             if offset_name != connectivity_type.neighbor_dim.value:
                 offset_definitions[connectivity_type.neighbor_dim.value] = TagDefinition(
