@@ -136,7 +136,7 @@ _T = TypeVar("_T")
 _C = TypeVar("_C")
 
 
-def _tree_map_type_constructor(
+def tree_map_type_constructor(
     value: ts.CollectionTypeSpecT,
     elems: Iterable[ts.DataType],
 ) -> ts.CollectionTypeSpecT:
@@ -168,7 +168,7 @@ def tree_map_type(
 def tree_map_type(
     fun: Callable[..., _T],
     *,
-    result_collection_constructor: Callable[..., Any] = _tree_map_type_constructor,
+    result_collection_constructor: Callable[..., Any] = tree_map_type_constructor,
     with_path_arg: bool = False,
     unpack: bool = False,
 ) -> Callable[..., Any]:

@@ -157,7 +157,7 @@ def _tree_map_type_constructor_drop_python_type(
     value: ts.CollectionTypeSpecT,
     elems: Iterable[ts.DataType],
 ) -> ts.CollectionTypeSpecT:
-    result = type_info._tree_map_type_constructor(value, elems)
+    result = type_info.tree_map_type_constructor(value, elems)
     if isinstance(value, ts.NamedCollectionType):
         result = datamodels.evolve(result, original_python_type=ts.ANY_PYTHON_TYPE_NAME)
     return result
