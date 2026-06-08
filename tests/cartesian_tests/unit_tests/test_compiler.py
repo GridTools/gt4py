@@ -41,11 +41,15 @@ def extra_cuda_args(request) -> Generator[Any, None, None]:
 def test_gpu_configuration(optimization_level: str) -> None:
     config = gpu_configuration(optimization_level)
 
-    assert isinstance(config.gpu_compile_flags, str)
+    assert isinstance(config.gpu_compile_flags, list)
+    for flag in config.gpu_compile_flags:
+        assert len(flag) > 0
+        assert flag.strip() == flag
 
     if optimization_level == "0":
         assert "-fmad=false" in config.gpu_compile_flags
 
     extra_args = os.environ.get("GT4PY_CARTESIAN_EXTRA_CUDA_COMPILE_ARGS", "").split(" ")
     for arg in extra_args:
-        assert arg in config.gpu_compile_flags
+        if len(arg.strip()) > 0:
+            assert arg in config.gpu_compile_flags
