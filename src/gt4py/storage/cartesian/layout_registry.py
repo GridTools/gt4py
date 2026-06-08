@@ -67,6 +67,15 @@ register(
     ),
 )
 register(
+    "dace:gpu_IJK",
+    LayoutInfo(
+        alignment=32,
+        device="gpu",
+        layout_map=layout_maker_factory((0, 1, 2)),
+        is_optimal_layout=layout_checker_factory(layout_maker_factory((0, 1, 2))),
+    ),
+)
+register(
     "debug",
     LayoutInfo(
         alignment=1,
