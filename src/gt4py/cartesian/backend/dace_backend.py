@@ -397,8 +397,20 @@ class SDFGManager:
             flipper = passes.SwapHorizontalMaps()
             flipper.visit(stree)
 
+        K_loop_pushed_down = False  # To keep code clean we bookeep operation
         if layout[2] != 0:
+            K_loop_pushed_down = True
             flipper = passes.PushVerticalMapDown()
+            flipper.visit(stree)
+
+        # Re-order sequential K to maximize parallelism when targeting parallel
+        # backend and hardware options
+        is_threaded = "OMP_NUM_THREADS" in os.environ and os.environ["OMP_NUM_THREADS"] != 1
+        if not K_loop_pushed_down and (
+            self.builder.backend.storage_info["device"] == "gpu"
+            or (self.builder.backend.storage_info["device"] == "cpu" and is_threaded)
+        ):
+            flipper = passes.PushVerticalMapDown(forscope_only=True)
             flipper.visit(stree)
 
         # Create SDFG
