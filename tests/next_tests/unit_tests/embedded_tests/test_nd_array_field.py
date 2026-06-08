@@ -889,6 +889,42 @@ def test_as_offset_introduces_dimension():
     assert np.all(result.ndarray == f.ndarray[np.arange(10)[:, None] + off_arr])
 
 
+def test_as_offset_nonzero_origin():
+    # Field and offset over a domain that does not start at 0: indices must be shifted by the domain start.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    dom = common.Domain(dims=(I,), ranges=(UnitRange(2, 12),))
+    f = common._field(np.arange(10).astype(float), domain=dom)
+    off_arr = np.asarray([1, 0, -1, 0, 1, 0, -1, 0, 1, 0], dtype=int)
+    off = common._field(off_arr, domain=dom)
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == dom
+    assert np.all(result.ndarray == f.ndarray[np.arange(10) + off_arr])
+
+
+def test_as_offset_2d_shift_second_axis():
+    # Shift along J (the non-leading axis) by a per-(i, j) offset, leave I: out[i, j] == f[i, j + off[i, j]].
+    I = Dimension("I")
+    J = Dimension("J")
+    Joff = fbuiltins.FieldOffset("Joff", source=J, target=(J,))
+
+    NI, NJ = 3, 4
+    dom = common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ)))
+    f = common._field(np.arange(NI * NJ).reshape(NI, NJ).astype(float), domain=dom)
+    off_arr = np.asarray([[1, 1, 0, -1], [0, 0, 1, -1], [1, -1, 0, 0]], dtype=int)
+    off = common._field(off_arr, domain=dom)
+
+    result = f.premap(as_offset(Joff, off))
+
+    assert result.domain == dom
+    i = np.arange(NI)[:, None]
+    j = np.arange(NJ)[None, :]
+    assert np.all(result.ndarray == f.ndarray[i, j + off_arr])
+
+
 def test_as_offset_non_cartesian_offset_raises():
     # `as_offset` only supports Cartesian (self-shift) offsets: single target equal to source.
     I = Dimension("I")
