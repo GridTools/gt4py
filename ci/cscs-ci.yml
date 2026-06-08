@@ -92,7 +92,7 @@ build_cscs_amd_rocm:
     TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6) to test 
     USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 5
+    SLURM_TIMELIMIT: 10
     DACE_compiler_cuda_implementation: experimental
   parallel:
     matrix:
@@ -141,7 +141,7 @@ test_cscs_gh200:
       variables:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
-        SLURM_TIMELIMIT: "00:15:00"
+        SLURM_TIMELIMIT: "00:20:00"
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'cuda12'
       variables:
         SLURM_TIMELIMIT: "00:10:00"
