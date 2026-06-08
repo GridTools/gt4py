@@ -22,7 +22,6 @@ import operator
 import pickle
 import pprint
 import re
-import sys
 import types
 import typing
 
@@ -735,18 +734,6 @@ def pickle_reducer_factory(
             )
 
     return reducer
-
-
-def custom_module_pickle_reduce(m: types.ModuleType) -> tuple:
-    """
-    Pickle a module by name reference, consistent with standard pickle behavior.
-
-    Handles ``types.ModuleType`` explicitly: the C-extension pickler has an internal fast path
-    for modules, but the pure Python pickler does not, causing ``TypeError: cannot pickle
-    'module' object`` when modules appear in fingerprinted data. We mimic the C-extension
-    behavior by serializing modules by reference (their name in ``sys.modules``).
-    """
-    return (sys.modules.__getitem__, (m.__name__,))
 
 
 def content_hash(

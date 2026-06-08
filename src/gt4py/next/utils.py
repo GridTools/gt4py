@@ -154,7 +154,8 @@ def _stable_container_sort_key(obj: Any) -> Any:
     return obj
 
 
-# We use eval to avoid infinite recursive reducer calls for types
+# We use `eval` ('builtin_function_or_method') to avoid infinite recursive
+# reducer calls caused by types or functions.
 _custom_reducer_by_reference = eve_utils.pickle_reducer_factory(
     get_new=lambda obj: eval,
     get_new_args=lambda obj: (
