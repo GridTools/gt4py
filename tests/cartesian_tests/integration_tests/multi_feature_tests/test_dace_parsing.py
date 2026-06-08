@@ -97,7 +97,7 @@ def test_ij_field(decorator, backend):
         origin=(0, 0),
     )
 
-    value = 42.0
+    value = np.float32(42.0)
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object_2(stencil_out, stencil_scalar):
