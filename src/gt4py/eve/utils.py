@@ -644,9 +644,21 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
 
 
 def singledispatcher(
-    default: Callable[P, T],
-    implementations: dict[type, Callable[[Any], Any]],
+    default: Callable[P, T] | None = None, *, implementations: dict[type, Callable[[Any], Any]]
 ) -> xtyping.SingleDispatchCallable[P, T]:
+    if default is None:
+        if object not in implementations:
+            raise ValueError("A default implementation for 'object' must be provided.")
+        default = cast(Callable[P, T], implementations[object])
+    else:
+        if not callable(default):
+            raise ValueError(f"Default implementation must be callable, got '{default}'.")
+        if object in implementations:
+            raise ValueError(
+                "Default implementation for 'object' is already provided in 'implementations'."
+            )
+
+    assert callable(default)  # for mypy
     result = functools.singledispatch(default)
     for cls, func in implementations.items():
         result.register(cls)(func)
@@ -662,7 +674,7 @@ def merge_dispatchers(
     The resulting dispatcher will have the union of the registered
     implementations of the input dispatchers. If `default` is provided
     it will be used as the default implementation for the merged
-    dispatcher, otherwise the default implementation of the first
+    dispatcher, otherwise the default implementation of the last
     dispatcher will be used.
     """
     if not dispatchers:
@@ -676,7 +688,10 @@ def merge_dispatchers(
             )
         merged_registry.update(d.registry)
 
-    return singledispatcher(default or dispatchers[0].registry[object], merged_registry)
+    if default is not None:
+        merged_registry.pop(object, None)  # remove default implementation from registry if present
+
+    return singledispatcher(default, implementations=merged_registry)
 
 
 PurePickler: TypeAlias = pickle._Pickler
