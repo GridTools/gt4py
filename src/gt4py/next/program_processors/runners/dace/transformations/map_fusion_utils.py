@@ -15,7 +15,6 @@ from typing import Optional
 import dace
 from dace import subsets as dace_subsets
 from dace.sdfg import nodes as dace_nodes
-from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace.transformations import (
     splitting_tools as gtx_dace_split,
@@ -203,8 +202,8 @@ def split_overlapping_map_range(
         Two lists, each containing the ranges corresponding to the splitted range
         for the first and the second map, respectively.
     """
-    first_map_params = OrderedSet(first_map.params)
-    second_map_params = OrderedSet(second_map.params)
+    first_map_params = set(first_map.params)
+    second_map_params = set(second_map.params)
     if first_map_params != second_map_params:
         return None
 
@@ -225,7 +224,7 @@ def split_overlapping_map_range(
 
     first_map_splitted_dict = {}
     second_map_splitted_dict = {}
-    for param in first_map_params:
+    for param in sorted(first_map_params):
         first_map_range = first_map_dict[param]
         second_map_range = second_map_dict[param]
         if (step := first_map_range[2]) != second_map_range[2]:
