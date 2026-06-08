@@ -41,6 +41,8 @@ def extra_cuda_args(request) -> Generator[Any, None, None]:
 def test_gpu_configuration(optimization_level: str) -> None:
     config = gpu_configuration(optimization_level)
 
+    assert isinstance(config.gpu_compile_flags, str)
+
     if optimization_level == "0":
         assert "-fmad=false" in config.gpu_compile_flags
 
