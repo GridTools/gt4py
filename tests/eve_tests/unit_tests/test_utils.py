@@ -116,6 +116,52 @@ def test_singledispatcher():
     assert dispatcher.registry.keys() == {object, Base, Derived}
 
 
+def test_merge_dispatchers_merges_registries_and_uses_first_default():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    class A:
+        pass
+
+    class B:
+        pass
+
+    d1 = singledispatcher(lambda _: "first-default", {A: lambda _: "a"})
+    d2 = singledispatcher(lambda _: "second-default", {B: lambda _: "b"})
+
+    merged = merge_dispatchers(d1, d2)
+
+    assert merged("x") == "first-default"
+    assert merged(A()) == "a"
+    assert merged(B()) == "b"
+    assert merged.registry.keys() == {object, A, B}
+
+
+def test_merge_dispatchers_uses_explicit_default_and_last_registration_wins():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    class A:
+        pass
+
+    d1 = singledispatcher(lambda _: "default-1", {A: lambda _: "a-1"})
+    d2 = singledispatcher(lambda _: "default-2", {A: lambda _: "a-2"})
+
+    merged = merge_dispatchers(d1, d2, default=lambda _: "custom-default")
+
+    assert merged("x") == "custom-default"
+    assert merged(A()) == "a-2"
+
+
+def test_merge_dispatchers_validation_errors():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    with pytest.raises(ValueError, match="At least one dispatcher"):
+        merge_dispatchers()
+
+    dispatcher = singledispatcher(lambda _: "default", {})
+    with pytest.raises(TypeError, match="single-dispatch callables"):
+        merge_dispatchers(dispatcher, lambda _: "not-a-dispatcher")
+
+
 class ModelClass(eve.datamodels.DataModel):
     data: Any
 

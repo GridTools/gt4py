@@ -23,43 +23,74 @@ dialects contain `AST`.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import types
 import typing
-from typing import Any, Optional, TypeVar
+from typing import Any, Optional, TypeVar, cast
 
+from gt4py.eve import utils as eve_utils
 from gt4py.next import common, utils
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.otf import arguments, toolchain
 
 
-# Create a custom pickler for the BaseStage `fingerprinter` that handles
-# `types.FunctionType` by using its source code and closure variables.
-# This should be enough for the use case of GT4Py DSL definitions,
-# which are expected to be pure functions without complicated closures.
-semantic_fingerprinter = utils.CustomPicklingFingerprinter.from_reducers(
-    foast.semantic_fingerprinter,
-    utils.stable_fingerprinter,
-    {
-        types.FunctionType: lambda f: (
-            tuple,
-            (),
-            (
-                source_utils.make_source_definition_from_function(f),
-                source_utils.get_closure_vars_from_function(f),
-            ),
+@dataclasses.dataclass(frozen=True)
+class BaseStage(utils.MetadataBasedPicklingMixin): ...
+
+
+class _SemanticPickler(eve_utils.PurePickler):
+    """
+    Create a custom pickler for the BaseStage `fingerprinter` that handles
+    `types.FunctionType` by using its source code and closure variables.
+    This should be enough for the use case of GT4Py DSL definitions,
+    which are expected to be pure functions without complicated closures.
+    """
+
+    # This reducer deals with DSL definitions functions inside any ffront Stage.
+    _ffront_stage_reducer_fn = eve_utils.merge_dispatchers(
+        utils.StableContainerPickler.reducer_override,
+        foast.semantic_pickler.reducer_override,
+        eve_utils.singledispatcher(
+            default=lambda obj: NotImplemented,
+            implementations={
+                types.FunctionType: eve_utils.pickle_reducer_factory(
+                    get_state=lambda f: (
+                        source_utils.make_source_definition_from_function(f),
+                        source_utils.get_closure_vars_from_function(f),
+                    )
+                ),
+            },
         ),
-        # NOTE: classes used as closure variables (e.g. locally-defined `enum`s)
-        # that are not picklable by reference are handled by the `type` reducer
-        # inherited from `utils.stable_fingerprinter`.
-    },
-)
+    )
+
+    # This is the final reducer override for the pickler, which merges the custom
+    # function reducer above with the standard stable container reducer.
+    _sorting_reducer_override_fn = eve_utils.merge_dispatchers(
+        utils.StableContainerPickler.reducer_override,
+        foast.semantic_pickler.reducer_override,
+        eve_utils.singledispatcher(
+            default=lambda obj: NotImplemented,
+            implementations={
+                BaseStage: _ffront_stage_reducer_fn,
+            },
+        ),
+    )
+
+    reducer_override = staticmethod(_sorting_reducer_override_fn)
+
+
+SemanticPickler = cast(type[utils.SingleDispatchPickler], _SemanticPickler)
+
+
+semantic_fingerprinter = functools.partial(eve_utils.content_hash, pickler_type=SemanticPickler)
+
 
 #: Public alias for semantic_fingerprinter.
 fingerprinter = semantic_fingerprinter
 
 
 @dataclasses.dataclass(frozen=True)
-class DSLFieldOperatorDef(utils.MetadataBasedPicklingMixin):
+class DSLFieldOperatorDef(BaseStage):
     definition: types.FunctionType
     node_class: type[foast.OperatorNode] = foast.FieldOperator
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -73,7 +104,7 @@ ConcreteDSLFieldOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 
 @dataclasses.dataclass(frozen=True)
-class FOASTOperatorDef(utils.MetadataBasedPicklingMixin):
+class FOASTOperatorDef(BaseStage):
     foast_node: foast.OperatorNode
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
@@ -87,7 +118,7 @@ ConcreteFOASTOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 
 @dataclasses.dataclass(frozen=True)
-class DSLProgramDef(utils.MetadataBasedPicklingMixin):
+class DSLProgramDef(BaseStage):
     definition: types.FunctionType
     grid_type: Optional[common.GridType] = None
     debug: bool = False
@@ -99,7 +130,7 @@ ConcreteDSLProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
 
 
 @dataclasses.dataclass(frozen=True)
-class PASTProgramDef(utils.MetadataBasedPicklingMixin):
+class PASTProgramDef(BaseStage):
     past_node: past.Program
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None

@@ -20,7 +20,6 @@ import io
 import itertools
 import operator
 import pickle
-import pkgutil
 import pprint
 import re
 import sys
@@ -62,6 +61,7 @@ from .extended_typing import (
     Set,
     Tuple,
     Type,
+    TypeAlias,
     TypeVar,
     Union,
     cast,
@@ -230,6 +230,18 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
 
     """
     return lambda obj: getitem_(obj, key, default=default)
+
+
+def get_fully_qualified_name(obj: type | types.FunctionType | types.ModuleType) -> str:
+    """
+    Get the fully qualified name of an object.
+
+    This is useful for creating unique identifiers for objects that can be used
+    in fingerprinting or other identification scenarios.
+    """
+    if isinstance(obj, types.ModuleType):
+        return obj.__name__
+    return f"{obj.__module__}:{obj.__qualname__}"
 
 
 _P = ParamSpec("_P")
@@ -641,6 +653,75 @@ def singledispatcher(
     return cast(xtyping.SingleDispatchCallable[P, T], result)
 
 
+def merge_dispatchers(
+    *dispatchers: xtyping.SingleDispatchCallable[P, T], default: Callable[P, T] | None = None
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Merge multiple single-dispatch callables into one.
+
+    The resulting dispatcher will have the union of the registered
+    implementations of the input dispatchers. If `default` is provided
+    it will be used as the default implementation for the merged
+    dispatcher, otherwise the default implementation of the first
+    dispatcher will be used.
+    """
+    if not dispatchers:
+        raise ValueError("At least one dispatcher must be provided.")
+
+    merged_registry = {}
+    for d in dispatchers:
+        if not xtyping.is_single_dispatch_callable(d):
+            raise TypeError(
+                f"Expected only single-dispatch callables, got '{d}' of type '{type(d)}'"
+            )
+        merged_registry.update(d.registry)
+
+    return singledispatcher(default or dispatchers[0].registry[object], merged_registry)
+
+
+PurePickler: TypeAlias = pickle._Pickler
+
+
+def pickle_reducer_factory(
+    get_new: Callable[[T], Callable[..., T]] = type,
+    get_new_args: Callable[[T], tuple | tuple[tuple, dict[str, Any]]] = lambda obj: (),
+    get_state: Callable[[T], Any] = lambda obj: obj.__dict__,
+    seq_iter: Callable[[T], Iterable[Any] | None] | None = None,
+    map_iter: Callable[[T], Iterable[tuple[str, Any]] | None] | None = None,
+    set_state: Callable[[T], Callable[[T, Any], None] | None] | None = None,
+) -> Callable[[T], tuple]:
+
+    if seq_iter is map_iter is set_state is None:
+        # Fast path for the common case where only get_new, get_new_args and get_state are used
+        def reducer(obj: T) -> tuple:
+            return (get_new(obj), get_new_args(obj), get_state(obj))
+
+    else:
+
+        def make_none(_) -> None:
+            return None
+
+        seq_iter = seq_iter or make_none
+        map_iter = map_iter or make_none
+        set_state = set_state or make_none
+
+        assert seq_iter is not None  # for mypy
+        assert map_iter is not None  # for mypy
+        assert set_state is not None  # for mypy
+
+        def reducer(obj: T) -> tuple:
+            return (
+                get_new(obj),
+                get_new_args(obj),
+                get_state(obj),
+                seq_iter(obj),
+                map_iter(obj),
+                set_state(obj),
+            )
+
+    return reducer
+
+
 def custom_module_pickle_reduce(m: types.ModuleType) -> tuple:
     """
     Pickle a module by name reference, consistent with standard pickle behavior.
@@ -651,43 +732,6 @@ def custom_module_pickle_reduce(m: types.ModuleType) -> tuple:
     behavior by serializing modules by reference (their name in ``sys.modules``).
     """
     return (sys.modules.__getitem__, (m.__name__,))
-
-
-def custom_pickle_reduce_by_reference(obj: type | types.FunctionType | types.ModuleType) -> tuple:
-    """
-    Pickle an object by reference, consistent with standard pickle behavior.
-
-    Handles objects that are pickled by reference in the C-extension pickler
-    (e.g. locally-defined `enum`s or `unittest.mock.Mock`) but not in the
-    pure Python pickler, such as classes and functions.
-    """
-    return (pkgutil.resolve_name, (f"{obj.__module__}:{obj.__qualname__}",))
-
-
-def custom_overridden_pickler(
-    reducer_override: Callable[[Any], tuple | types.NotImplementedType],
-    *,
-    name: str | None = None,
-    override_builtin_types: bool = False,
-) -> type[pickle.Pickler]:
-    """
-    Create a custom pickler class using the provided function as reducer override.
-    """
-    if override_builtin_types:
-        # The public Pickler (implemented in C) shortcuts some built-in types for performance.
-        # If we want to override built-in types, we need to the _Pickler pure-Python
-        # implementation.
-        base_pickler_class = cast(type[pickle.Pickler], pickle._Pickler)
-    else:
-        base_pickler_class = pickle.Pickler
-
-    pickler_cls = type(
-        name or f"CustomReducePickler_{name or id(reducer_override)}",
-        (base_pickler_class,),
-        {"reducer_override": staticmethod(reducer_override)},
-    )
-
-    return pickler_cls
 
 
 def content_hash(

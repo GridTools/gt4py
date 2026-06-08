@@ -225,6 +225,7 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 
+@runtime_checkable
 class SingleDispatchCallable(Protocol[_P, _T]):
     registry: Mapping[Any, Callable[_P, _T]]
 

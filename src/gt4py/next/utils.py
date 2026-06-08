@@ -15,12 +15,12 @@ import inspect
 import itertools
 import pickle
 import types
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import (
-    TYPE_CHECKING,
     Any,
     ClassVar,
     Final,
+    Literal,
     Optional,
     ParamSpec,
     Sequence,
@@ -143,141 +143,97 @@ class MetadataBasedPicklingMixin:
 Fingerprinter: TypeAlias = Callable[[Any], str]
 
 
-def _pass_through_pickler(instance: Any) -> types.NotImplementedType:
-    """
-    A pickler that doesn't do any transformation and just returns the instance as is.
-
-    This can be used as a base for custom picklers that want to handle only specific types
-    and delegate the rest to the default pickling behavior.
-    """
-    return NotImplemented
-
-
-@dataclasses.dataclass(frozen=True)
-class CustomPicklingFingerprinter:
-    """
-    The fingerprint should be a stable hash string representing the state of the object.
-
-    Since it uses `functools.singledispatch` for the implementation of the
-    reducer override, the custom reducers are used for the types in the keys
-    AND any of its subclasses. This explicitly deviates from the behavior of
-    the `dispatch_table` dict, to allow easy pickle customization of entire class
-    hierarchies.
-
-    """
-
-    reduce_dispatcher: xtyping.SingleDispatchCallable[[Any], tuple | types.NotImplementedType]
-    name: str = dataclasses.field(default="CustomPicklingFingerprinter", kw_only=True)
-
-    if TYPE_CHECKING:
-
-        @property
-        def pickler_type(self) -> type[pickle.Pickler]: ...
-
-    @classmethod
-    def from_reducers(
-        cls,
-        *args: CustomPicklingFingerprinter
-        | Mapping[type, Callable[[Any], tuple | types.NotImplementedType]],
-        name: str | None = None,
-    ) -> CustomPicklingFingerprinter:
-        """Alternative constructor to create a PickleFingerprinter from a dict of reducers."""
-
-        impls: dict[type, Callable[[Any], tuple | types.NotImplementedType]] = {}
-        for arg in args:
-            if isinstance(arg, CustomPicklingFingerprinter):
-                arg = arg.reduce_dispatcher.registry
-            if not isinstance(arg, Mapping):
-                raise TypeError(
-                    f"Expected only CustomPicklingFingerprinter instances or mappings of reducers, "
-                    f"got '{arg}' of type '{type(arg)}'"
-                )
-
-            impls.update(arg)
-
-        reduce_dispatcher = cast(
-            xtyping.SingleDispatchCallable[[Any], tuple | types.NotImplementedType],
-            eve_utils.singledispatcher(_pass_through_pickler, impls),
-        )
-        return (
-            cls(reduce_dispatcher=reduce_dispatcher, name=name)
-            if name
-            else cls(reduce_dispatcher=reduce_dispatcher)
-        )
-
-    def __post_init__(self) -> None:
-        registered_types = set(self.reduce_dispatcher.registry.keys())
-        override_builtin_types = bool({dict, set, list, tuple} & registered_types)
-        if override_builtin_types and types.ModuleType not in registered_types:
-            # The pure-Python pickler required to override built-in types cannot
-            # deal with modules out of the box, so unless the caller already
-            # provided a custom reducer for modules, we need to register a custom
-            # reducer equivalent to the one in the standard implementation.
-            self.reduce_dispatcher.register(types.ModuleType, eve_utils.custom_module_pickle_reduce)
-        pickler_type = eve_utils.custom_overridden_pickler(
-            self.reduce_dispatcher, name=self.name, override_builtin_types=override_builtin_types
-        )
-        object.__setattr__(
-            self,
-            "pickler_type",
-            pickler_type,
-        )
-
-    def __call__(self, instance: Any) -> str:
-        """Fingerprint the given object."""
-        return eve_utils.content_hash(instance, pickler_type=self.pickler_type)
+class SingleDispatchPickler(pickle.Pickler):
+    reducer_override: xtyping.SingleDispatchCallable[Any, tuple]
 
 
 def _stable_container_sort_key(obj: Any) -> Any:
     """Return a deterministic sort key for container elements/keys."""
     if isinstance(obj, (type, types.FunctionType, types.ModuleType)):
-        return eve_utils.custom_pickle_reduce_by_reference(obj)
+        return eve_utils.get_fully_qualified_name(obj)
     return obj
 
+
+class _StableContainerPickler(eve_utils.PurePickler):
+    _sorting_reducer_override = eve_utils.singledispatcher(
+        default=lambda obj: NotImplemented,
+        implementations={
+            dict: eve_utils.pickle_reducer_factory(
+                get_state=lambda obj: (
+                    tuple(
+                        (k, v)
+                        for k, v in sorted(
+                            obj.items(), key=lambda kv: _stable_container_sort_key(kv[0])
+                        )
+                    ),
+                )
+            ),
+            set: eve_utils.pickle_reducer_factory(
+                get_state=lambda obj: tuple(sorted(obj, key=_stable_container_sort_key)),
+            ),
+            type: eve_utils.pickle_reducer_factory(
+                get_state=lambda obj: eve_utils.get_fully_qualified_name(obj)
+            ),
+        },
+    )
+    reducer_override = staticmethod(_sorting_reducer_override)
+
+
+StableContainerPickler = cast(type[SingleDispatchPickler], _StableContainerPickler)
 
 #: Default fingerprinting function for GT4Py objects.
 #: Uses sorting for dicts and sets to ensure deterministic output regardless
 #: of insertion order.
-stable_fingerprinter = CustomPicklingFingerprinter.from_reducers(
-    {
-        dict: lambda obj: (
-            obj.__class__,
-            (),
-            tuple(
-                (k, v)
-                for k, v in sorted(obj.items(), key=lambda kv: _stable_container_sort_key(kv[0]))
-            ),
-        ),
-        set: lambda obj: (
-            obj.__class__,
-            (),
-            tuple(sorted(obj, key=_stable_container_sort_key)),
-        ),
-        type: eve_utils.custom_pickle_reduce_by_reference,
-    },
-    name="SortingSetsFingerprinter",
+stable_fingerprinter = functools.partial(
+    eve_utils.content_hash, pickler_type=StableContainerPickler
 )
 
 
+@overload
+def skipping_fields_node_fingerprinter(
+    *skipped_fields: str, return_pickler: Literal[False]
+) -> Fingerprinter: ...
+
+
+@overload
+def skipping_fields_node_fingerprinter(
+    *skipped_fields: str, return_pickler: Literal[True]
+) -> tuple[Fingerprinter, pickle.Pickler]: ...
+
+
 @functools.cache
-def skipping_fields_node_fingerprinter(*skipped_fields: str) -> CustomPicklingFingerprinter:
+def skipping_fields_node_fingerprinter(
+    *skipped_fields: str, return_pickler: bool = False
+) -> Fingerprinter | tuple[Fingerprinter, pickle.Pickler]:
     """
     Return a `CustomPicklingFingerprinter` that fingerprints a node while skipping fields.
 
-    The provided field names are ignored on the node itself and recursively on all child nodes.
+    The provided field names are ignored on recursively on all nodes.
     """
     skipped_fields_set = set(skipped_fields)
 
-    return CustomPicklingFingerprinter.from_reducers(
-        {
-            concepts.Node: lambda obj: (
-                obj.__class__,
-                (),
-                tuple((k, v) for k, v in obj.iter_children_items() if k not in skipped_fields_set),
+    reducer_single_dispatch = eve_utils.singledispatcher(
+        default=lambda obj: NotImplemented,
+        implementations={
+            concepts.Node: eve_utils.pickle_reducer_factory(
+                get_state=lambda obj: tuple(
+                    (k, v) for k, v in obj.iter_children_items() if k not in skipped_fields_set
+                )
             ),
         },
-        name=f"SkippingFieldsNodeFingerprinter__{', '.join(skipped_fields)}",
     )
+
+    class SkippingFieldsNodePickler(pickle.Pickler):
+        """Custom pickler that ignores the "location" attribute of `eve.Node`s."""
+
+        skipped_fields: ClassVar[set[str]] = skipped_fields_set
+        reducer_override = staticmethod(reducer_single_dispatch)
+
+    fingerprinter = functools.partial(
+        eve_utils.content_hash, pickler_type=SkippingFieldsNodePickler
+    )
+
+    return (fingerprinter, SkippingFieldsNodePickler) if return_pickler else fingerprinter
 
 
 class RecursionGuard:
