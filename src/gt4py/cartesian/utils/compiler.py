@@ -83,7 +83,7 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
     # Defaults
     name = CxxCompilerName.DEFAULT
     open_mp_flags = "-fopenmp"
-    cxx_flags = []
+    cxx_flags: list[str] = []
     enable_openmp = True
 
     # FMA is deactivated by default when running -O0
@@ -169,15 +169,13 @@ def gpu_configuration(optimization_level: str) -> GPUConfiguration:
         library_path = os.path.join(cuda_root, "lib64")
 
     # Default arguments for GPU source code
-    gpu_compile_flags_default = ""
+    gpu_compile_flags: list[str] = []
     if optimization_level == "0":
         # When running -O0 we deactivate FMA
-        gpu_compile_flags_default = "-fmad=false"
+        gpu_compile_flags.append("-fmad=false")
 
-    extra_cuda_compile_args = os.environ.get(
-        "GT4PY_CARTESIAN_EXTRA_CUDA_COMPILE_ARGS", gpu_compile_flags_default
-    )
-    gpu_compile_flags = extra_cuda_compile_args.split(" ") if extra_cuda_compile_args else []
+    extra_cuda_compile_args = os.environ.get("GT4PY_CARTESIAN_EXTRA_CUDA_COMPILE_ARGS", "")
+    gpu_compile_flags.extend(extra_cuda_compile_args.split(" "))
 
     return GPUConfiguration(
         name=name,
