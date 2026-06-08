@@ -28,6 +28,7 @@ from dace.transformation import (
     passes as dace_passes,
 )
 
+from gt4py.next import utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
@@ -932,13 +933,16 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
     tasklet = dace_transformation.PatternNode(dace_nodes.Tasklet)
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
+    uids = dace_properties.Property(dtype=gtx_utils.IDGeneratorPool)
 
     def __init__(
         self,
         *args: Any,
+        uids: gtx_utils.IDGeneratorPool,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        self.uids = uids
 
     @classmethod
     def expressions(cls) -> Any:
@@ -1007,7 +1011,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         # This is the tasklet that we will put inside the map, note we have to do it
         #  this way to avoid some name clash stuff.
         inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
-            name=f"{tasklet.label}__clone_{dace_nodes._get_next_node_id()}",  # TODO: use another global counter
+            name=next(self.uids[f"{tasklet.label}__clone"]),
             outputs=tasklet.out_connectors.keys(),
             inputs=set(),
             code=tasklet.code,
@@ -1032,9 +1036,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
 
         # Now we will reroute the edges went through the inner map, through the
         #  inner access node instead.
-        for (
-            old_inner_edge
-        ) in list(  # TODO(tehrengruber): Why all these list comprehensions everywhere?
+        for old_inner_edge in list(
             graph.out_edges_by_connector(map_entry, "OUT_" + connector_name)
         ):
             # We now modify the downstream data. This is because we no longer refer
