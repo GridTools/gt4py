@@ -41,6 +41,6 @@ and never AGENTS.md, so a redirect here would propagate nothing. Keep short.
 
 ## Summary
 
-- If the review didn't find any issues and the PR is small (\<30 lines of code
-  changes in `src`; `tests` doesn't count) and non-controversial, then add the
+- If the review didn't find any issues and the PR is small (<30 lines of code
+  changes in `src`; test changes don't count) and non-controversial, then add the
   label `good to merge` to the PR.
