@@ -920,9 +920,26 @@ class DaceCPU_KJI(BaseDaceBackend):
 
 @register
 class DaceGPUBackend(BaseDaceBackend):
-    """DaCe python backend using gt4py.cartesian.gtc."""
+    """GPU DaCe python with an optimal KJI loop layout"""
 
     name = "dace:gpu"
+    languages: ClassVar[dict] = {"computation": "cuda", "bindings": ["python"]}
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
+    MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
+    options: ClassVar[GTBackendOptions] = {
+        **BaseGTBackend.GT_BACKEND_OPTS,
+        "device_sync": {"versioning": True, "type": bool},
+    }
+
+    def generate_extension(self) -> None:
+        return self.make_extension(uses_cuda=True)
+
+
+@register
+class DaceGPUBackendIJK(BaseDaceBackend):
+    """GPU DaCe python with an optimal IJK loop layout"""
+
+    name = "dace:gpu_IJK"
     languages: ClassVar[dict] = {"computation": "cuda", "bindings": ["python"]}
     storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
