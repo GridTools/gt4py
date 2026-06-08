@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from gt4py.eve import SymbolRef
+import os
 import pytest
 
 # Skip this module when we collecting tests and "dace" is not installed as a dependency.
@@ -57,6 +59,14 @@ def copy_forward_stencil(
 ):
     with computation(FORWARD), interval(...):
         out_field = in_field
+
+
+def copy_forward_stencil_2(
+    in_field: Field[float],  # type: ignore
+    out_field: Field[float],  # type: ignore
+):
+    with computation(FORWARD), interval(...):
+        out_field = in_field * 2
 
 
 def test_default_schedule_is_KJI():
@@ -139,6 +149,17 @@ def test_dace_cpu_KJI_loop_structure():
     assert len(loop_indices[0]) == 1 and loop_indices[0][0].startswith("__k_")
     assert loop_indices[1] == ["__j", "__i"]
 
+    # Testing sequential loop, two cases:
+    #  - non-parallel target (CPU w/ no threading) will respect layout
+    #  - parallel target (GPU or CPU w/ threading) will push the sequential loop in the parallel kernel
+
+    old_omp_num_threads = (
+        "" if "OMP_NUM_THREADS" not in os.environ else os.environ["OMP_NUM_THREADS"]
+    )
+
+    # Case #2 - sequential K is outside map
+    os.environ["OMP_NUM_THREADS"] = "1"
+
     builder = StencilBuilder(copy_forward_stencil, backend="dace:cpu_KJI")
     manager = SDFGManager(builder)
 
@@ -153,3 +174,33 @@ def test_dace_cpu_KJI_loop_structure():
     assert [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)] == [
         ["__j", "__i"]
     ]
+
+    # Case #2 - sequential K is inside map
+    os.environ["OMP_NUM_THREADS"] = "2"
+
+    builder = StencilBuilder(copy_forward_stencil_2, backend="dace:cpu_KJI")
+    manager = SDFGManager(builder)
+
+    sdfg = manager.sdfg_via_schedule_tree()
+    assert len(list(sdfg.states())) == 1, "expect one state"
+    state = sdfg.states()[0]
+
+    # Expect a Map for IJ outside
+    map_entry_nodes = [node for node in state.nodes() if isinstance(node, nodes.MapEntry)]
+    assert len(map_entry_nodes) == 1, "expect one MapEntry node"
+    assert map_entry_nodes[0].map.params == ["__j", "__i"]
+
+    # Expect LoopRegion for K inside map
+    nsdfg_nodes = [node for node in state.nodes() if isinstance(node, nodes.NestedSDFG)]
+    assert len(nsdfg_nodes) == 1
+    for_nested_nodes = nsdfg_nodes[0].sdfg.nodes()
+    assert len(for_nested_nodes) == 1
+    loop_region = for_nested_nodes[0]
+    assert isinstance(loop_region, LoopRegion)
+    assert loop_region.loop_variable.startswith("__k")
+
+    # Restore env
+    if old_omp_num_threads != "":
+        os.environ["OMP_NUM_THREADS"] = old_omp_num_threads
+    else:
+        del os.environ["OMP_NUM_THREADS"]
