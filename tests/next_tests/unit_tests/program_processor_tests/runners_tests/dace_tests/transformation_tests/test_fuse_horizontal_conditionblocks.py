@@ -10,8 +10,8 @@ import pytest
 
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
-from dace.transformation.passes import analysis as dace_analysis
 
+from gt4py.next import utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
@@ -210,7 +210,7 @@ def _make_map_with_conditional_blocks(
     return sdfg
 
 
-def test_fuse_horizontal_condition_blocks():
+def test_fuse_horizontal_condition_blocks(uids: gtx_utils.IDGeneratorPool):
     sdfg = _make_map_with_conditional_blocks()
 
     conditional_blocks = [
@@ -222,7 +222,7 @@ def test_fuse_horizontal_condition_blocks():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     sdfg.apply_transformations_repeated(
-        gtx_transformations.FuseHorizontalConditionBlocks(),
+        gtx_transformations.FuseHorizontalConditionBlocks(uids=uids),
         validate=True,
         validate_all=True,
     )
@@ -240,7 +240,7 @@ def test_fuse_horizontal_condition_blocks():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-def test_fuse_horizontal_condition_blocks_single_false():
+def test_fuse_horizontal_condition_blocks_single_false(uids: gtx_utils.IDGeneratorPool):
     """
     Test that the transformation can fuse conditional blocks even if one of them does not have a false branch.
     """
@@ -255,7 +255,7 @@ def test_fuse_horizontal_condition_blocks_single_false():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     sdfg.apply_transformations_repeated(
-        gtx_transformations.FuseHorizontalConditionBlocks(),
+        gtx_transformations.FuseHorizontalConditionBlocks(uids=uids),
         validate=True,
         validate_all=True,
     )
@@ -281,7 +281,7 @@ def test_fuse_horizontal_condition_blocks_single_false():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-def test_fuse_horizontal_condition_blocks_else_branch():
+def test_fuse_horizontal_condition_blocks_else_branch(uids: gtx_utils.IDGeneratorPool):
     """
     Test that the transformation can fuse conditional blocks
     that instead of a `(not __cond)` condition have an `else` (`None`) condition.
@@ -297,7 +297,7 @@ def test_fuse_horizontal_condition_blocks_else_branch():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     sdfg.apply_transformations_repeated(
-        gtx_transformations.FuseHorizontalConditionBlocks(),
+        gtx_transformations.FuseHorizontalConditionBlocks(uids=uids),
         validate=True,
         validate_all=True,
     )
