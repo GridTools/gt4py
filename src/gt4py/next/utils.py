@@ -201,22 +201,22 @@ stable_fingerprinter = functools.partial(
 
 @overload
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_pickler: Literal[False]
+    *skipped_fields: str, return_pickler: Literal[False] = False
 ) -> Fingerprinter: ...
 
 
 @overload
 def skipping_fields_node_fingerprinter(
     *skipped_fields: str, return_pickler: Literal[True]
-) -> tuple[Fingerprinter, pickle.Pickler]: ...
+) -> tuple[Fingerprinter, type[pickle.Pickler]]: ...
 
 
 @functools.cache
 def skipping_fields_node_fingerprinter(
     *skipped_fields: str, return_pickler: bool = False
-) -> Fingerprinter | tuple[Fingerprinter, pickle.Pickler]:
+) -> Fingerprinter | tuple[Fingerprinter, type[pickle.Pickler]]:
     """
-    Return a `CustomPicklingFingerprinter` that fingerprints a node while skipping fields.
+    Return a fingerprinter that fingerprints a node while skipping fields.
 
     The provided field names are ignored on recursively on all nodes.
     """

@@ -680,7 +680,7 @@ def merge_dispatchers(
     if not dispatchers:
         raise ValueError("At least one dispatcher must be provided.")
 
-    merged_registry = {}
+    merged_registry: dict[Any, Any] = {}
     for d in dispatchers:
         if not xtyping.is_single_dispatch_callable(d):
             raise TypeError(
@@ -713,7 +713,7 @@ def pickle_reducer_factory(
 
     else:
 
-        def make_none(_) -> None:
+        def make_none(_: Any) -> None:
             return None
 
         seq_iter = seq_iter or make_none

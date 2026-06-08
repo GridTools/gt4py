@@ -28,7 +28,7 @@ import types
 import typing
 from typing import Any, Optional, TypeVar, cast
 
-from gt4py.eve import utils as eve_utils
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import common, utils
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.otf import arguments, toolchain
@@ -38,7 +38,7 @@ from gt4py.next.otf import arguments, toolchain
 class BaseStage(utils.MetadataBasedPicklingMixin): ...
 
 
-_base_reducer_fn = eve_utils.merge_dispatchers(
+_base_reducer_fn: xtyping.SingleDispatchCallable[Any, Any] = eve_utils.merge_dispatchers(
     utils.StableContainerPickler.reducer_override, foast.semantic_pickler.reducer_override
 )
 
@@ -53,19 +53,21 @@ class _SemanticPickler(eve_utils.PurePickler):
 
     # This is the final reducer override for the pickler, which merges the custom
     # function reducer above with the standard stable container reducer.
-    _sorting_reducer_override_fn = eve_utils.merge_dispatchers(
-        _base_reducer_fn,
-        eve_utils.singledispatcher(
-            default=lambda obj: NotImplemented,
-            implementations={
-                types.FunctionType: eve_utils.pickle_reducer_factory(
-                    get_state=lambda f: (
-                        source_utils.make_source_definition_from_function(f),
-                        source_utils.get_closure_vars_from_function(f),
-                    )
-                ),
-            },
-        ),
+    _sorting_reducer_override_fn: xtyping.SingleDispatchCallable[Any, Any] = (
+        eve_utils.merge_dispatchers(
+            _base_reducer_fn,
+            eve_utils.singledispatcher(
+                default=lambda obj: NotImplemented,
+                implementations={
+                    types.FunctionType: eve_utils.pickle_reducer_factory(
+                        get_state=lambda f: (
+                            source_utils.make_source_definition_from_function(f),
+                            source_utils.get_closure_vars_from_function(f),
+                        )
+                    ),
+                },
+            ),
+        )
     )
 
     reducer_override = staticmethod(_sorting_reducer_override_fn)
