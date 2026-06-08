@@ -8,6 +8,8 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
+from __future__ import annotations
+
 import uuid
 from typing import Optional, Sequence, TypeVar, Union
 

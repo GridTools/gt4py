@@ -113,8 +113,8 @@ dependencies = [
   'nanobind>=1.9.0',
   'ninja>=1.11',
   'numpy>=2.0.0 ; python_version < "3.14"',
-  'numpy>=2.3.2 ; python_version >= "3.14"',
-  'ordered-set>=4.0.0',  # first version with pre-built wheel for Python 3.14
+  'numpy>=2.3.2 ; python_version >= "3.14"',  # first version with pre-built wheel for Python 3.14
+  'ordered-set>=4.1.0',
   'packaging>=20.0',
   'pybind11>=3.0.3',
   'setuptools>=77.0.3',

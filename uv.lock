@@ -1882,7 +1882,7 @@ requires-dist = [
     { name = "ninja", specifier = ">=1.11" },
     { name = "numpy", marker = "python_full_version < '3.14'", specifier = ">=2.0.0" },
     { name = "numpy", marker = "python_full_version >= '3.14'", specifier = ">=2.3.2" },
-    { name = "ordered-set", specifier = ">=4.0.0" },
+    { name = "ordered-set", specifier = ">=4.1.0" },
     { name = "packaging", specifier = ">=20.0" },
     { name = "pybind11", specifier = ">=3.0.3" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
