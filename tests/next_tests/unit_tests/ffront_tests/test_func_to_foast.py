@@ -132,6 +132,15 @@ def test_invalid_assign_to_expr():
         _ = FieldOperatorParser.apply_to_function(invalid_assign_to_expr)
 
 
+def test_declaration_without_assignment():
+    def empty_assign() -> float:
+        x: float
+        return 1.0
+
+    with pytest.raises(errors.DSLError, match=r"without assignment"):
+        _ = FieldOperatorParser.apply_to_function(empty_assign)
+
+
 def test_temp_assignment():
     def copy_field(inp: gtx.Field[[TDim], "float64"]):
         tmp = inp

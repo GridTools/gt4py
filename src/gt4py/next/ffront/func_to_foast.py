@@ -291,6 +291,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if not isinstance(node.target, ast.Name):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
 
+        if node.value is None:
+            raise errors.DSLError(
+                self.get_location(node), "Variable declaration without assignment is not allowed."
+            )
+
         if node.annotation is not None:
             assert isinstance(node.annotation, ast.Constant) and isinstance(
                 node.annotation.value, str
@@ -306,7 +311,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             target=foast.Symbol[ts.FieldType](
                 id=node.target.id, location=self.get_location(node.target), type=target_type
             ),
-            value=self.visit(node.value) if node.value else None,
+            value=self.visit(node.value),
             location=self.get_location(node),
         )
 
