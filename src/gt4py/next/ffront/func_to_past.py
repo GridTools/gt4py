@@ -17,6 +17,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
+    experimental,
     fbuiltins,
     program_ast as past,
     source_utils,
@@ -98,7 +99,7 @@ def adapted_func_to_past_factory(
 class ProgramParser(DialectParser[past.Program]):
     """Parse program definition from Python source code into PAST."""
 
-    reserved_names = fbuiltins.ALL_BUILTIN_NAMES
+    reserved_names = fbuiltins.BUILTIN_NAMES + experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
 
     @classmethod
     def _postprocess_dialect_ast(

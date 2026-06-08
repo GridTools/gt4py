@@ -436,11 +436,6 @@ assert all(isinstance(globals()[f], BuiltInFunction) for f in FUN_BUILTIN_NAMES)
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
-# Implementations of the experimental builtins live in `experimental.py`.
-EXPERIMENTAL_FUN_BUILTIN_NAMES = ["as_offset", "concat_where"]
-
-ALL_BUILTIN_NAMES = BUILTIN_NAMES + EXPERIMENTAL_FUN_BUILTIN_NAMES
-
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
 
 should_export = (set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"}
