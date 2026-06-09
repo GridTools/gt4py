@@ -17,6 +17,7 @@ import gt4py.eve as eve
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
+    experimental,
     fbuiltins,
     field_operator_ast as foast,
     source_utils,
@@ -151,6 +152,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     Error at [2, 5] in ...func_to_foast.FieldOperatorParser[...]>)
     """
 
+    reserved_names = fbuiltins.BUILTIN_NAMES + experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
+
     @classmethod
     def _preprocess_definition_ast(cls, ast: ast.AST) -> ast.AST:
         ast = StringifyAnnotationsPass.apply(ast)
@@ -187,6 +190,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs: Any) -> foast.FunctionDefinition:
         loc = self.get_location(node)
+        self._check_not_a_reserved_name(node.name, loc)
         closure_var_symbols: list[foast.Symbol] = []
         for name in self.closure_vars.keys():
             try:
@@ -291,6 +295,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if not isinstance(node.target, ast.Name):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
 
+        if node.value is None:
+            raise errors.DSLError(
+                self.get_location(node), "Variable declaration without assignment is not allowed."
+            )
+
         if node.annotation is not None:
             assert isinstance(node.annotation, ast.Constant) and isinstance(
                 node.annotation.value, str
@@ -306,7 +315,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             target=foast.Symbol[ts.FieldType](
                 id=node.target.id, location=self.get_location(node.target), type=target_type
             ),
-            value=self.visit(node.value) if node.value else None,
+            value=self.visit(node.value),
             location=self.get_location(node),
         )
 

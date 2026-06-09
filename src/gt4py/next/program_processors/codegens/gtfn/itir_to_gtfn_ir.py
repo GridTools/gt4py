@@ -235,7 +235,7 @@ def _process_elements(
     obj: Expr,
     type_: ts.TypeSpec,
     *,
-    tuple_constructor: Callable[..., Expr] = lambda _, *elements: FunCall(
+    tuple_constructor: Callable[..., Expr] = lambda _, elements: FunCall(
         fun=SymRef(id="make_tuple"), args=list(elements)
     ),
 ) -> Expr:
@@ -264,13 +264,11 @@ def _process_elements(
         )
         return process_func(el, el_type)
 
-    result = type_info.apply_to_primitive_constituents(
+    return type_info.tree_map_type(
         _gen_constituent_expr,
-        type_,
+        result_collection_constructor=tuple_constructor,
         with_path_arg=True,
-        tuple_constructor=tuple_constructor,
-    )
-    return result
+    )(type_)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -523,7 +521,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             check_el_type,
             lowered_output,
             node.type,
-            tuple_constructor=lambda *elements: SidComposite(values=list(elements)),
+            tuple_constructor=lambda _, elements: SidComposite(values=list(elements)),
         )
 
         assert isinstance(lowered_output_as_sid, (SidComposite, SymRef))
@@ -615,7 +613,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 convert_el_to_sid,
                 lowered_input,
                 input_.type,
-                tuple_constructor=lambda *elements: SidComposite(values=list(elements)),
+                tuple_constructor=lambda _, elements: SidComposite(values=list(elements)),
             )
 
             lowered_inputs.append(lowered_input_as_sid)

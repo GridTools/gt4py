@@ -7,38 +7,16 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import functools
 import inspect
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any, Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve import datamodels
-from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common, utils
 from gt4py.next.ffront.type_specifications import ProgramType
 from gt4py.next.type_system import type_info
 
-
-def _tree_map_type_constructor(
-    value: ts.CollectionTypeSpecT,
-    elems: NestedTuple[ts.DataType],
-) -> ts.CollectionTypeSpecT:
-    return (
-        ts.NamedCollectionType(
-            keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
-        )
-        if isinstance(value, ts.NamedCollectionType)
-        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
-    )
-
-
-# TODO: Replace all occurrences of `apply_to_primitive_constituents` with this function,
-#   which also works with NamedCollections.
-tree_map_type = functools.partial(
-    utils.tree_map,
-    collection_type=ts.COLLECTION_TYPE_SPECS,
-    result_collection_constructor=_tree_map_type_constructor,
-)
 
 named_collections_to_tuple_types = cast(
     Callable[..., ts.TupleType],
@@ -83,7 +61,7 @@ def promote_zero_dims(
                     raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
-        res = tree_map_type(_as_field, with_path_arg=True)(arg)
+        res = type_info.tree_map_type(_as_field, with_path_arg=True)(arg)
         assert isinstance(res, ts.TypeSpec)
         return res
 
@@ -177,9 +155,9 @@ def function_signature_incompatibilities_fieldop(
 
 def _tree_map_type_constructor_drop_python_type(
     value: ts.CollectionTypeSpecT,
-    elems: NestedTuple[ts.DataType],
+    elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
 ) -> ts.CollectionTypeSpecT:
-    result = _tree_map_type_constructor(value, elems)
+    result = type_info.tree_map_type_constructor(value, elems)
     if isinstance(value, ts.NamedCollectionType):
         result = datamodels.evolve(result, original_python_type=ts.ANY_PYTHON_TYPE_NAME)
     return result
@@ -226,7 +204,7 @@ def _scan_param_promotion(
     # the original python type in NamedCollections as we want to be able to express compatibility
     # between named collections of scalars and their structurally equivalent collection of fields.
     # Once we support generic named collections, this special case will disappear.
-    res = tree_map_type(
+    res = type_info.tree_map_type(
         _as_field,
         result_collection_constructor=_tree_map_type_constructor_drop_python_type,
         with_path_arg=True,
@@ -348,7 +326,9 @@ def return_type_scanop(
     )
     return cast(
         ts.TypeSpec,
-        tree_map_type(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(carry_dtype),
+        type_info.tree_map_type(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(
+            carry_dtype
+        ),
     )
 
 
@@ -385,7 +365,7 @@ def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.
             )
         )
     elif isinstance(callable_type, ts_ffront.ScanOperatorType):
-        as_deferred_type_with_same_structure = tree_map_type(
+        as_deferred_type_with_same_structure = type_info.tree_map_type(
             lambda _: ts.DeferredType(constraint=None)
         )
         scan_pass_type = callable_type.definition

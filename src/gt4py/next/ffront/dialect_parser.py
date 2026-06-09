@@ -10,7 +10,7 @@ import ast
 import textwrap
 import typing
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, ClassVar, Collection
 
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.extended_typing import Any, Generic, TypeVar
@@ -52,6 +52,8 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     source_definition: SourceDefinition
     closure_vars: dict[str, Any]
     annotations: dict[str, Any]
+
+    reserved_names: ClassVar[Collection[str]] = ()  # e.g. for dialect builtins
 
     @classmethod
     def apply(
@@ -98,6 +100,14 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         loc = self.get_location(node)
         feature = f"{type(node).__module__}.{type(node).__qualname__}"
         raise errors.UnsupportedPythonFeatureError(loc, feature)
+
+    def _check_not_a_reserved_name(self, name: str, location: SourceLocation) -> None:
+        if name in self.reserved_names:
+            raise errors.DSLError(
+                location,
+                f"Name '{name}' is a reserved GT4Py builtin and cannot be used as the "
+                f"name of a function. Please choose a different name.",
+            )
 
     def get_location(self, node: ast.AST) -> SourceLocation:
         file = self.source_definition.filename
