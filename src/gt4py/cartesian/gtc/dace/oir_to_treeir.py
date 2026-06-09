@@ -350,7 +350,6 @@ class OIRToTreeIR(eve.NodeVisitor):
                         param,
                         field_without_mask_extents[param.name],
                         k_bound,
-                        symbols,
                     ),
                     strides=get_dace_strides(param, symbols),
                     storage=DEFAULT_STORAGE_TYPE[self._device_type],
@@ -374,7 +373,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             # than persistent will yield issues with memory leaks.
             containers[field.name] = data.Array(
                 dtype=utils.data_type_to_dace_typeclass(field.dtype),
-                shape=get_dace_shape(field, field_extent, k_bound, symbols),
+                shape=get_dace_shape(field, field_extent, k_bound),
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,
@@ -532,7 +531,6 @@ def get_dace_shape(
     field: oir.FieldDecl,
     extent: definitions.Extent,
     k_bound: tuple[int, int],
-    symbols: tir.SymbolDict,
 ) -> list[symbolic.symbol]:
     shape = []
     for index, axis in enumerate(tir.Axis.dims_3d()):
