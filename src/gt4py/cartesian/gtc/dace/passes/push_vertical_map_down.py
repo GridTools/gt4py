@@ -43,7 +43,7 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
             // computation here (2)
     """
 
-    def __init__(self, forscope_only: bool = False) -> None:
+    def __init__(self, *, forscope_only: bool = False) -> None:
         self._forscope_only = forscope_only
 
     def _push_K_loop_in_IJ(self, node: tn.MapScope | tn.ForScope):
