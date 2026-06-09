@@ -645,6 +645,35 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
 def singledispatcher(
     default: Callable[P, T] | None = None, *, implementations: dict[type, Callable[[Any], Any]]
 ) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Create a single-dispatch callable from a default and a registry of implementations.
+
+    This is a thin wrapper around :func:`functools.singledispatch` that allows
+    constructing a dispatcher from an existing mapping rather than decorating
+    individual functions.
+
+    Args:
+        default: The default implementation used when no type-specific handler
+            is found. If ``None``, the implementation registered for ``object``
+            in `implementations` is used as the default.
+        implementations: A mapping from types to their registered handler
+            functions. If `default` is ``None``, ``object`` must be present.
+
+    Returns:
+        A single-dispatch callable with the registered implementations.
+
+    Examples:
+        >>> def default_impl(x: Any) -> str:
+        ...     return f"default: {x}"
+        >>> def int_impl(x: int) -> str:
+        ...     return f"int: {x}"
+        >>> dispatch = singledispatcher(default_impl, implementations={int: int_impl})
+        >>> dispatch(3.14)
+        'default: 3.14'
+        >>> dispatch(42)
+        'int: 42'
+
+    """
     if default is None:
         if object not in implementations:
             raise ValueError("A default implementation for 'object' must be provided.")
@@ -736,6 +765,12 @@ def pickle_reducer_factory(
     return reducer
 
 
+#: Pickle protocol pinned for `content_hash` so the serialized byte stream (and
+#: therefore the resulting hash) is reproducible across Python versions,
+#: regardless of changes to `pickle.DEFAULT_PROTOCOL`.
+_CONTENT_HASH_PICKLE_PROTOCOL: int = 5
+
+
 def content_hash(
     *args: Any,
     hash_algorithm: xtyping.HashlibAlgorithm | None = None,
@@ -745,8 +780,10 @@ def content_hash(
 
     It provides a customizable hash function for any kind of data.
     Unlike the builtin `hash` function, it is stable (same hash value across
-    interpreter reboots) and it does not use hash customizations on user
-    classes (it uses `pickle` internally to get a byte stream).
+    interpreter reboots and Python versions) and it does not use hash
+    customizations on user classes (it uses `pickle` internally to get a byte
+    stream). The pickle protocol is pinned (:data:`CONTENT_HASH_PICKLE_PROTOCOL`)
+    so the byte stream does not depend on the running Python's default protocol.
 
     Arguments:
         hash_algorithm: object implementing the `hash algorithm` interface
@@ -758,7 +795,7 @@ def content_hash(
     assert hash_algorithm is not None
 
     buf = io.BytesIO()
-    pickler_type(buf).dump(args)
+    pickler_type(buf, protocol=_CONTENT_HASH_PICKLE_PROTOCOL).dump(args)
 
     hash_algorithm.update(buf.getvalue())
     result = hash_algorithm.hexdigest()

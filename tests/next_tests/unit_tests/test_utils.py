@@ -131,6 +131,12 @@ def test_skipping_fields_node_fingerprinter_returns_pickler_when_requested():
     assert callable(utils.skipping_fields_node_fingerprinter("int_value"))
 
 
+def _module_level_func_a() -> None: ...
+
+
+def _module_level_func_b() -> None: ...
+
+
 class TestStableFingerprinter:
     def test_returns_stable_string(self):
         fingerprint = utils.stable_fingerprinter({"a": 1})
@@ -161,12 +167,31 @@ class TestStableFingerprinter:
         assert utils.stable_fingerprinter({"t": int}) != utils.stable_fingerprinter({"t": str})
 
     def test_functions_are_fingerprinted_by_reference(self):
-        def foo() -> None: ...
-
-        def bar() -> None: ...
-
+        # Importable, module-level functions are identified by their qualified name.
+        foo = _module_level_func_a
+        bar = _module_level_func_b
         assert utils.stable_fingerprinter({"f": foo}) == utils.stable_fingerprinter({"f": foo})
         assert utils.stable_fingerprinter({"f": foo}) != utils.stable_fingerprinter({"f": bar})
+
+    def test_non_importable_callables_raise(self):
+        # Locally defined and anonymous callables can share a qualified name with
+        # distinct objects (e.g. each call of a factory produces a new closure named
+        # `...<locals>.inner`, and every lambda is named `<lambda>`), so reducing
+        # them by reference would silently collide. They must raise instead.
+        def local_func() -> None: ...  # qualified name contains `<locals>`
+
+        def make_closure(n: int):
+            def inner() -> int:  # distinct objects, identical qualified name
+                return n
+
+            return inner
+
+        # Two distinct closures that would otherwise collide by reference.
+        assert make_closure(1) is not make_closure(2)
+
+        for non_importable in (local_func, lambda: None, make_closure(1)):
+            with pytest.raises(TypeError, match="Non-importable"):
+                utils.stable_fingerprinter({"f": non_importable})
 
     def test_modules_are_fingerprinted_by_reference(self):
         import os

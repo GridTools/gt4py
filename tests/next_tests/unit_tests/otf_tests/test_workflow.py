@@ -109,6 +109,7 @@ def test_fingerprint_is_stable_for_calls():
 def test_fingerprint_is_stable_for_dicts():
     d1 = {"b": 2, "a": 1}
     d2 = {"a": 1, "b": 2}
+    assert utils.stable_fingerprinter(d1) == utils.stable_fingerprinter(d2)
 
     # Dicts keyed by types occur in compile-time metadata (e.g. argument descriptors).
     d3 = {int: 1, str: 2}

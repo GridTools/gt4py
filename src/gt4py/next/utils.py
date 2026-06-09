@@ -154,12 +154,31 @@ def _stable_container_sort_key(obj: Any) -> Any:
     return obj
 
 
+def _reference_by_fully_qualified_name(obj: Any) -> str:
+    """
+    Return the qualified name of `obj`, rejecting non-importable (local) objects.
+
+    Objects identified by their fully qualified name (import path) can only be
+    properly fingerprinted if they are importable, module-level objects, whose
+    qualified name uniquely identifies them. This functiona rejects locally defined
+    objects: anything with ``<locals>`` in itsqualified name (closures, nested functions,
+    classes defined inside a function) and anonymous ``<lambda>`` callables.
+    """
+    fqn = eve_utils.get_fully_qualified_name(obj)
+    if "<locals>" in fqn or "<lambda>" in fqn:
+        raise TypeError(
+            "Non-importable objecs (e.g. locally defined or anonymous callables) cannot be "
+            "safely referenced since they share identical qualified names."
+        )
+    return fqn
+
+
 # We use `eval` ('builtin_function_or_method') to avoid infinite recursive
 # reducer calls caused by types or functions.
 _custom_reducer_by_reference = eve_utils.pickle_reducer_factory(
     get_new=lambda obj: eval,
     get_new_args=lambda obj: (
-        f"__import__('pkgutil').resolve_name('{eve_utils.get_fully_qualified_name(obj)}')",
+        f"__import__('pkgutil').resolve_name('{_reference_by_fully_qualified_name(obj)}')",
     ),
     get_state=lambda obj: None,
 )
