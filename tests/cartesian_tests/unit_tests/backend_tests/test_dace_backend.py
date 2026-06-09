@@ -157,6 +157,9 @@ def test_dace_cpu_kfirst_loop_structure():
 
 
 def test_dace_cpu_KJI_loop_structure():
+    """
+    Testing that non-parallel target (e.g. CPU without threading) will respect layout.
+    """
     with OMPNumThreads(1):
         builder = StencilBuilder(copy_stencil, backend="dace:cpu_KJI")
         manager = SDFGManager(builder)
@@ -187,6 +190,10 @@ def test_dace_cpu_KJI_loop_structure():
 
 
 def test_dace_cpu_KJI_loop_structure_parallel():
+    """
+    Testing that parallel target (e.g. GPU or CPU with threading) will push the sequential
+    loop inside the parallel kernel.
+    """
     with OMPNumThreads(2):
         builder = StencilBuilder(copy_forward_stencil_2, backend="dace:cpu_KJI")
         manager = SDFGManager(builder)
