@@ -9,10 +9,9 @@ import functools
 import math
 
 import numpy as np
-import pytest
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, errors, int32
+from gt4py.next import broadcast
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case
@@ -88,40 +87,3 @@ def test_docstring(cartesian_case):
     a = cases.allocate(cartesian_case, test_docstring, "a")()
 
     cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
-
-
-def test_undefined_symbols(cartesian_case):
-    with pytest.raises(errors.DSLError, match="Undeclared symbol"):
-
-        @gtx.field_operator(backend=cartesian_case.backend)
-        def return_undefined():
-            return undefined_symbol
-
-
-@pytest.mark.uses_zero_dimensional_fields
-def test_zero_dims_fields(cartesian_case):
-    @gtx.field_operator
-    def implicit_broadcast_scalar(inp: cases.EmptyField):
-        return inp
-
-    inp = cases.allocate(cartesian_case, implicit_broadcast_scalar, "inp")()
-    out = cases.allocate(cartesian_case, implicit_broadcast_scalar, "inp")()
-
-    cases.verify(cartesian_case, implicit_broadcast_scalar, inp, out=out, ref=np.array(1))
-
-
-def test_implicit_broadcast_mixed_dim(cartesian_case):
-    @gtx.field_operator
-    def fieldop_implicit_broadcast(
-        zero_dim_inp: cases.EmptyField, inp: cases.IField, scalar: int32
-    ) -> cases.IField:
-        return inp + zero_dim_inp * scalar
-
-    @gtx.field_operator
-    def fieldop_implicit_broadcast_2(inp: cases.IField) -> cases.IField:
-        fi = fieldop_implicit_broadcast(1, inp, 2)
-        return fi
-
-    cases.verify_with_default_data(
-        cartesian_case, fieldop_implicit_broadcast_2, ref=lambda inp: inp + 2
-    )

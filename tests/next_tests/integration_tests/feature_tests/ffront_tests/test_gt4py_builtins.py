@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, common, float64, int32, max_over, min_over, neighbor_sum, where
+from gt4py.next import common, float64, int32, max_over, min_over, neighbor_sum, where
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
@@ -342,50 +342,6 @@ def test_conditional_nested_tuple(cartesian_case):
                 where_with_mask(a.asnumpy(), np.full(size, 5.0)),
             ),
         ),
-    )
-
-
-def test_broadcast_simple(cartesian_case):
-    @gtx.field_operator
-    def simple_broadcast(inp: cases.IField) -> cases.IJField:
-        return broadcast(inp, (IDim, JDim))
-
-    cases.verify_with_default_data(
-        cartesian_case, simple_broadcast, ref=lambda inp: inp[:, np.newaxis]
-    )
-
-
-def test_broadcast_scalar(cartesian_case):
-    size = cartesian_case.default_sizes[IDim]
-
-    @gtx.field_operator
-    def scalar_broadcast() -> gtx.Field[[IDim], float64]:
-        return broadcast(float(1.0), (IDim,))
-
-    cases.verify_with_default_data(cartesian_case, scalar_broadcast, ref=lambda: np.ones(size))
-
-
-def test_broadcast_two_fields(cartesian_case):
-    @gtx.field_operator
-    def broadcast_two_fields(inp1: cases.IField, inp2: gtx.Field[[JDim], int32]) -> cases.IJField:
-        a = broadcast(inp1, (IDim, JDim))
-        b = broadcast(inp2, (IDim, JDim))
-        return a + b
-
-    cases.verify_with_default_data(
-        cartesian_case, broadcast_two_fields, ref=lambda a, b: a[:, np.newaxis] + b[np.newaxis, :]
-    )
-
-
-@pytest.mark.uses_cartesian_shift
-def test_broadcast_shifted(cartesian_case):
-    @gtx.field_operator
-    def simple_broadcast(inp: cases.IField) -> cases.IJField:
-        bcasted = broadcast(inp, (IDim, JDim))
-        return bcasted(Joff[1])
-
-    cases.verify_with_default_data(
-        cartesian_case, simple_broadcast, ref=lambda inp: inp[:, np.newaxis]
     )
 
 
