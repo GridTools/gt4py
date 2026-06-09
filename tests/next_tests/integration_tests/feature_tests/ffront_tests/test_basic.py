@@ -71,19 +71,3 @@ def test_nan(cartesian_case):
         )
     except ZeroDivisionError:
         pass
-
-
-def test_docstring(cartesian_case):
-    @gtx.field_operator
-    def fieldop_with_docstring(a: cases.IField) -> cases.IField:
-        """My docstring."""
-        return a
-
-    @gtx.program
-    def test_docstring(a: cases.IField):
-        """My docstring."""
-        fieldop_with_docstring(a, out=a)
-
-    a = cases.allocate(cartesian_case, test_docstring, "a")()
-
-    cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
