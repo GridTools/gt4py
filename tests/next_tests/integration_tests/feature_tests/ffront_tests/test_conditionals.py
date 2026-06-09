@@ -6,9 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import numpy as np
 import pytest
 
-from gt4py.next import Field, errors, field_operator, float64
+import gt4py.next as gtx
+from gt4py.next import Field, broadcast, errors, field_operator, float64, int32
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -349,3 +351,48 @@ def test_if_inconsistent_types():
             else:
                 result = 2.0
             return result
+
+
+@pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
+def test_ternary_operator(cartesian_case, left, right):
+    @gtx.field_operator
+    def testee(a: cases.IField, b: cases.IField, left: int32, right: int32) -> cases.IField:
+        return a if left < right else b
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(cartesian_case, testee, a, b, left, right, out=out, ref=(a if left < right else b))
+
+    @gtx.field_operator
+    def testee(left: int32, right: int32) -> cases.IField:
+        return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
+
+    e = a if left < right else b
+    cases.verify(
+        cartesian_case,
+        testee,
+        left,
+        right,
+        out=out,
+        ref=(np.full(e.shape, 3) if left > right else np.full(e.shape, 4)),
+    )
+
+
+@pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
+@pytest.mark.uses_tuple_returns
+def test_ternary_operator_tuple(cartesian_case, left, right):
+    @gtx.field_operator
+    def testee(
+        a: cases.IField, b: cases.IField, left: int32, right: int32
+    ) -> tuple[cases.IField, cases.IField]:
+        return (a, b) if left < right else (b, a)
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case, testee, a, b, left, right, out=out, ref=((a, b) if left < right else (b, a))
+    )
