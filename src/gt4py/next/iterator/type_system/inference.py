@@ -424,10 +424,11 @@ class ITIRTypeInference(eve.NodeTranslator):
         assert isinstance(domain, ts.DomainType)
         assert domain.dims != "unknown"
         assert node.dtype
-        return type_info.apply_to_primitive_constituents(
-            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),
-            node.dtype,
+        result = type_info.tree_map_type(lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype))(
+            node.dtype
         )
+        assert isinstance(result, (ts.FieldType, ts.TupleType))
+        return result
 
     def visit_IfStmt(self, node: itir.IfStmt, *, ctx) -> None:
         cond = self.visit(node.cond, ctx=ctx)
