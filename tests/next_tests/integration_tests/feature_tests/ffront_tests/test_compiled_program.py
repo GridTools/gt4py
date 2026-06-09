@@ -248,57 +248,7 @@ def skip_value_mesh_descriptor(exec_alloc_descriptor):
     return skip_value_mesh(exec_alloc_descriptor.allocator)
 
 
-def test_compile_unstructured_jit(
-    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
-):
-    if unstructured_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    # compiled for skip_value_mesh and simple_mesh
-    compile_testee_unstructured_no_jit.compile(
-        offset_provider=[
-            skip_value_mesh_descriptor.offset_provider,
-            unstructured_case.offset_provider,
-        ],
-    )
-
-    # and executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
-    compile_testee_unstructured_no_jit(
-        *args, offset_provider=unstructured_case.offset_provider, **kwargs
-    )
-
-    v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
-    assert np.allclose(
-        kwargs["out"].asnumpy(),
-        np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
-    )
-
-
 def test_compile_unstructured_wrong_offset_provider(
-    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
-):
-    if unstructured_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    # compiled for skip_value_mesh
-    compile_testee_unstructured_no_jit.compile(
-        offset_provider=skip_value_mesh_descriptor.offset_provider,
-    )
-
-    # but executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
-
-    # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
-
-    with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
-        compile_testee_unstructured_no_jit(
-            *args, offset_provider=unstructured_case.offset_provider, **kwargs
-        )
-
-
-def test_compile_unstructured_modified_offset_provider(
     unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:

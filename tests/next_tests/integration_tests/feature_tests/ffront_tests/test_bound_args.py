@@ -54,4 +54,4 @@ def test_with_bound_args_order_args(cartesian_case):
 
     prog_bounds = program_args.with_bound_args(condition=True)
     prog_bounds(a=a, scalar=int32(1), out=out, offset_provider={})
-    np.allclose(out.asnumpy(), a.asnumpy() + int32(1))
+    assert np.allclose(out.asnumpy(), a.asnumpy() + int32(1))
