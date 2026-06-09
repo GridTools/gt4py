@@ -71,7 +71,7 @@ def _unstructured_translate_range_statically(
     """
     assert common.is_offset_provider(offset_provider)
     connectivity = offset_provider[tag]
-    assert common.is_neighbor_connectivity(connectivity)
+    assert common.is_neighbor_table(connectivity)
     skip_value = connectivity.skip_value
 
     # fold & convert expr into actual integers

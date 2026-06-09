@@ -18,7 +18,6 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental,
     fbuiltins,
-    type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes import utils as foast_utils
@@ -249,15 +248,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
-        carry_type = next(iter(new_def_type.pos_or_kw_args.values()))
-        if new_init.type != new_def_type.returns:
+        if not new_def_type.pos_or_kw_args:
             raise errors.DSLError(
                 node.location,
-                f"Argument 'init' to scan operator '{node.id}' must have same type as its return: "
-                f"expected '{new_def_type.returns}', got '{new_init.type}'.",
+                f"Scan operator '{node.id}' must have at least one argument (the carry).",
+            )
+        carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
+        carry_type = new_def_type.pos_or_kw_args[carry_arg_name]
+        if carry_type != new_def_type.returns:
+            raise errors.DSLError(
+                node.location,
+                f"Argument '{carry_arg_name}' to scan operator '{node.id}' must have same type as its return: "
+                f"expected '{new_def_type.returns}', got '{carry_type}'.",
             )
         elif new_init.type != carry_type:
-            carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
             raise errors.DSLError(
                 node.location,
                 f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument: "
@@ -871,10 +875,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         new_type = new_type_constructor.type.definition.returns
 
-        return_type = type_info.apply_to_primitive_constituents(
-            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind),
-            value.type,
-        )
+        return_type = type_info.tree_map_type(
+            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind)
+        )(value.type)
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(
@@ -890,6 +893,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         arg_1 = node.args[1].type
         assert isinstance(arg_0, ts.OffsetType)
         assert isinstance(arg_1, ts.FieldType)
+        if not fbuiltins.is_cartesian_offset(arg_0):
+            target_dims = ", ".join(d.value for d in arg_0.target)
+            raise errors.DSLError(
+                node.location,
+                f"'as_offset' is only supported for Cartesian offsets "
+                f"(single target dimension equal to source dimension); "
+                f"got source '{arg_0.source.value}' and target ({target_dims}).",
+            )
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
                 node.location,
@@ -926,7 +937,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         # replace all primitive constituents by the same type, `ts.DeferredType()` for convenience,
         # to capture the structure of the two branches
-        extract_structure = ti_ffront.tree_map_type(lambda x: ts.DeferredType(constraint=None))
+        extract_structure = type_info.tree_map_type(lambda x: ts.DeferredType(constraint=None))
         tb_structure = extract_structure(true_branch)
         fb_structure = extract_structure(false_branch)
 
@@ -940,7 +951,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 ),
             )
 
-        @ti_ffront.tree_map_type
+        @type_info.tree_map_type
         def deduce_return_type(
             tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
         ) -> ts.FieldType:
@@ -954,7 +965,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
             return return_type
 
-        return deduce_return_type(true_branch, false_branch)  # type: ignore[return-value]
+        return deduce_return_type(true_branch, false_branch)
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         mask_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)

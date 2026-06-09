@@ -107,6 +107,16 @@ def test_undefined_field_program(identity_def):
         ProgramParser.apply_to_function(undefined_field_program)
 
 
+def test_program_name_shadows_builtin(identity_def):
+    identity = gtx.field_operator(identity_def)
+
+    def minimum(in_field: gtx.Field[[IDim], "float64"], out: gtx.Field[[IDim], "float64"]):
+        identity(in_field, out=out)
+
+    with pytest.raises(errors.DSLError, match="reserved GT4Py builtin"):
+        ProgramParser.apply_to_function(minimum)
+
+
 def test_copy_restrict_parsing(copy_restrict_program_def):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
 

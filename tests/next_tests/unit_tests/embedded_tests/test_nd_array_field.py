@@ -16,10 +16,19 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, constructors
-from gt4py.next.common import Dimension, Domain, Field, NamedIndex, NamedRange, UnitRange
+from gt4py.next.common import (
+    Dimension,
+    DimensionKind,
+    Domain,
+    Field,
+    NamedIndex,
+    NamedRange,
+    UnitRange,
+)
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
+from gt4py.next.ffront.experimental import as_offset
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
@@ -438,64 +447,508 @@ def test_remapping_premap():
     assert np.all(result.ndarray == expected.ndarray)
 
 
-def test_identity_connectivity():
-    D0 = Dimension("D0")
-    D1 = Dimension("D1")
-    D2 = Dimension("D2")
+def test_remapping_premap_multineighbor():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
 
-    domain = common.Domain(
-        dims=(D0, D1, D2),
-        ranges=(common.UnitRange(0, 3), common.UnitRange(0, 4), common.UnitRange(0, 5)),
+    V_START, V_STOP = 2, 7
+    v_field = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
     )
-    codomains = [D0, D1, D2]
+    table = np.asarray([[2, 3], [3, 4], [4, 5]], dtype=int)  # (E, E2V) -> V
+    e2v_conn = common._connectivity(
+        table,
+        domain=common.Domain(dims=(E, E2V), ranges=(UnitRange(0, 3), UnitRange(0, 2))),
+        codomain=V,
+    )
 
-    expected = {
-        D0: nd_array_field.NumPyArrayConnectivityField.from_array(
-            np.array(
-                [
-                    [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
-                    [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
-                    [[2, 2, 2, 2, 2], [2, 2, 2, 2, 2], [2, 2, 2, 2, 2], [2, 2, 2, 2, 2]],
-                ],
-                dtype=int,
-            ),
-            codomain=D0,
-            domain=domain,
-        ),
-        D1: nd_array_field.NumPyArrayConnectivityField.from_array(
-            np.array(
-                [
-                    [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
-                    [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
-                    [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
-                ],
-                dtype=int,
-            ),
-            codomain=D1,
-            domain=domain,
-        ),
-        D2: nd_array_field.NumPyArrayConnectivityField.from_array(
-            np.array(
-                [
-                    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
-                    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
-                    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
-                ],
-                dtype=int,
-            ),
-            codomain=D2,
-            domain=domain,
-        ),
-    }
+    result = v_field.premap(e2v_conn)
+    expected = common._field(
+        -0.1 * table,  # v_field[v] == -0.1 * v
+        domain=common.Domain(dims=(E, E2V), ranges=(UnitRange(0, 3), UnitRange(0, 2))),
+    )
 
-    for codomain in codomains:
-        result = nd_array_field._identity_connectivity(
-            domain, codomain, cls=nd_array_field.NumPyArrayConnectivityField
-        )
-        assert result.codomain == expected[codomain].codomain
-        assert result.domain == expected[codomain].domain
-        assert result.dtype == expected[codomain].dtype
-        assert np.all(result.ndarray == expected[codomain].ndarray)
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_remapping_premap_same_dim():
+    V = Dimension("V")
+
+    V_START, V_STOP = 2, 7
+    v_field = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    v2v_conn = common._connectivity(
+        np.roll(np.arange(V_START, V_STOP), 1),
+        domain=common.Domain(dims=(V,), ranges=[UnitRange(V_START, V_STOP)]),
+        codomain=V,
+    )
+
+    result = v_field.premap(v2v_conn)
+    expected = common._field(
+        -0.1 * np.roll(np.arange(V_START, V_STOP), 1),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_remapping_premap_same_dim_multineighbor():
+    # Regression for #1583: source dim == target dim with a LOCAL neighbor dim (C2E2CO shape).
+    V = Dimension("V")
+    V2V = Dimension("V2V", kind=DimensionKind.LOCAL)
+
+    V_START, V_STOP = 2, 7
+    v_field = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    v2v_conn = common._connectivity(
+        np.stack(
+            [np.roll(np.arange(V_START, V_STOP), 1), np.roll(np.arange(V_START, V_STOP), -1)],
+            axis=1,
+        ),
+        domain=common.Domain(dims=(V, V2V), ranges=[UnitRange(V_START, V_STOP), UnitRange(0, 2)]),
+        codomain=V,
+    )
+
+    result = v_field.premap(v2v_conn)
+    expected = common._field(
+        np.stack(
+            [
+                -0.1 * np.roll(np.arange(V_START, V_STOP), 1),
+                -0.1 * np.roll(np.arange(V_START, V_STOP), -1),
+            ],
+            axis=1,
+        ),
+        domain=common.Domain(dims=(V, V2V), ranges=(UnitRange(V_START, V_STOP), UnitRange(0, 2))),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_premap_same_dim_multineighbor_with_extra_dim():
+    # The actual #1583 bug shape: C2E2CO on a field with an extra (kept) dimension.
+    C = Dimension("C")
+    K = Dimension("K")
+    C2E2CO = Dimension("C2E2CO", kind=DimensionKind.LOCAL)
+
+    NC, NK, NN = 5, 3, 4
+    c_field = common._field(
+        np.arange(NC * NK).reshape(NC, NK).astype(float),
+        domain=common.Domain(dims=(C, K), ranges=(UnitRange(0, NC), UnitRange(0, NK))),
+    )
+    table = (np.arange(NC)[:, None] + np.arange(NN)[None, :]) % NC  # (C, C2E2CO) -> C
+    conn = common._connectivity(
+        table,
+        domain=common.Domain(dims=(C, C2E2CO), ranges=(UnitRange(0, NC), UnitRange(0, NN))),
+        codomain=C,
+    )
+
+    result = c_field.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(C, C2E2CO, K), ranges=(UnitRange(0, NC), UnitRange(0, NN), UnitRange(0, NK))
+    )
+    assert np.all(result.ndarray == c_field.ndarray[table])  # out[c, n, k] == f[table[c, n], k]
+
+
+def test_gather_premap_multiple_connectivities():
+    # Multiple gather connectivities introducing new dims in a single premap (was unsupported).
+    A = Dimension("A")
+    B = Dimension("B")
+    X = Dimension("X")
+    Y = Dimension("Y")
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    ca = np.asarray([2, 0, 1], dtype=int)  # (X,) -> A
+    cb = np.asarray([1, 2, 3, 0], dtype=int)  # (Y,) -> B
+    conn_a = common._connectivity(
+        ca, domain=common.Domain(dims=(X,), ranges=(UnitRange(0, NA),)), codomain=A
+    )
+    conn_b = common._connectivity(
+        cb, domain=common.Domain(dims=(Y,), ranges=(UnitRange(0, NB),)), codomain=B
+    )
+
+    result = f.premap(conn_a, conn_b)
+
+    assert result.domain == common.Domain(dims=(X, Y), ranges=(UnitRange(0, NA), UnitRange(0, NB)))
+    assert np.all(result.ndarray == f.ndarray[np.ix_(ca, cb)])  # out[x, y] == f[ca[x], cb[y]]
+
+
+def test_gather_premap_reshuffle_multiple_connectivities():
+    # Simultaneous multi-axis reshuffle (the multi-axis `as_offset` shape): codomains stay in their
+    # own domains, so out[i, j] = f[ci[i, j], cj[i, j]] (not a sequential composition).
+    I = Dimension("I")
+    J = Dimension("J")
+
+    NI, NJ = 3, 4
+    f = common._field(
+        np.arange(NI * NJ).reshape(NI, NJ).astype(float),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ))),
+    )
+    ci = np.asarray([[1, 2, 0, 1], [2, 0, 1, 2], [0, 1, 2, 0]], dtype=int)  # (I, J) -> I
+    cj = np.asarray([[3, 0, 1, 2], [0, 1, 2, 3], [1, 2, 3, 0]], dtype=int)  # (I, J) -> J
+    dom = common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ)))
+    conn_i = common._connectivity(ci, domain=dom, codomain=I)
+    conn_j = common._connectivity(cj, domain=dom, codomain=J)
+
+    result = f.premap(conn_i, conn_j)
+
+    assert result.domain == dom
+    assert np.all(result.ndarray == f.ndarray[ci, cj])
+
+
+def test_gather_premap_two_connectivities_same_new_dim():
+    # Two connectivities introducing the *same* new dim -> diagonal gather out[x] = f[ca[x], cb[x]].
+    A = Dimension("A")
+    B = Dimension("B")
+    X = Dimension("X")
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    ca = np.asarray([2, 0, 1], dtype=int)
+    cb = np.asarray([1, 3, 0], dtype=int)
+    conn_a = common._connectivity(
+        ca, domain=common.Domain(dims=(X,), ranges=(UnitRange(0, 3),)), codomain=A
+    )
+    conn_b = common._connectivity(
+        cb, domain=common.Domain(dims=(X,), ranges=(UnitRange(0, 3),)), codomain=B
+    )
+
+    result = f.premap(conn_a, conn_b)
+
+    assert result.domain == common.Domain(dims=(X,), ranges=(UnitRange(0, 3),))
+    assert np.all(result.ndarray == f.ndarray[ca, cb])
+
+
+def test_gather_premap_reads_non_codomain_field_dim():
+    # A connectivity that reads a field dim (B) other than its codomain (A): B is shared/narrowed.
+    A = Dimension("A")
+    B = Dimension("B")
+    L = Dimension("L", kind=DimensionKind.LOCAL)
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    table = np.asarray([[2, 0], [0, 1], [1, 2], [2, 0]], dtype=int)  # (B, L) -> A
+    conn = common._connectivity(
+        table,
+        domain=common.Domain(dims=(B, L), ranges=(UnitRange(0, NB), UnitRange(0, 2))),
+        codomain=A,
+    )
+
+    result = f.premap(conn)
+
+    assert result.domain == common.Domain(dims=(L, B), ranges=(UnitRange(0, 2), UnitRange(0, NB)))
+    # out[l, b] = f[table[b, l], b]
+    assert np.all(result.ndarray == f.ndarray[table.T, np.arange(NB)[None, :]])
+
+
+def test_gather_premap_shared_domain_dim():
+    # Two connectivities sharing a non-codomain domain dim (S): S is intersected and kept once.
+    A = Dimension("A")
+    B = Dimension("B")
+    S = Dimension("S")
+    T = Dimension("T")
+    U = Dimension("U")
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    c1 = np.asarray([[2, 0, 1], [1, 2, 0]], dtype=int)  # (S, T) -> A
+    c2 = np.asarray([[1, 3], [0, 2]], dtype=int)  # (S, U) -> B
+    conn_a = common._connectivity(
+        c1, domain=common.Domain(dims=(S, T), ranges=(UnitRange(0, 2), UnitRange(0, 3))), codomain=A
+    )
+    conn_b = common._connectivity(
+        c2, domain=common.Domain(dims=(S, U), ranges=(UnitRange(0, 2), UnitRange(0, 2))), codomain=B
+    )
+
+    result = f.premap(conn_a, conn_b)
+
+    assert result.domain == common.Domain(
+        dims=(S, T, U), ranges=(UnitRange(0, 2), UnitRange(0, 3), UnitRange(0, 2))
+    )
+    # out[s, t, u] = f[c1[s, t], c2[s, u]]
+    assert np.all(result.ndarray == f.ndarray[c1[:, :, None], c2[:, None, :]])
+
+
+def test_gather_premap_mix_introducing_and_preserving():
+    # One connectivity introduces a dim (X), another reshuffles a dim in place (B): allowed together.
+    A = Dimension("A")
+    B = Dimension("B")
+    X = Dimension("X")
+
+    NA, NB = 3, 4
+    f = common._field(
+        np.arange(NA * NB).reshape(NA, NB).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, NA), UnitRange(0, NB))),
+    )
+    ca = np.asarray([2, 0, 1], dtype=int)  # (X,) -> A  (introduces X)
+    cb = np.asarray([1, 2, 3, 0], dtype=int)  # (B,) -> B  (reshuffle)
+    conn_a = common._connectivity(
+        ca, domain=common.Domain(dims=(X,), ranges=(UnitRange(0, 3),)), codomain=A
+    )
+    conn_b = common._connectivity(
+        cb, domain=common.Domain(dims=(B,), ranges=(UnitRange(0, NB),)), codomain=B
+    )
+
+    result = f.premap(conn_a, conn_b)
+
+    assert result.domain == common.Domain(dims=(X, B), ranges=(UnitRange(0, 3), UnitRange(0, NB)))
+    # out[x, b] = f[ca[x], cb[b]]
+    assert np.all(result.ndarray == f.ndarray[ca[:, None], cb[None, :]])
+
+
+def test_premap_chained_connectivities_raises():
+    # One connectivity reads a dim (B) that another remaps -> unsupported chained composition.
+    A = Dimension("A")
+    B = Dimension("B")
+    L = Dimension("L", kind=DimensionKind.LOCAL)
+    M = Dimension("M")
+
+    f = common._field(
+        np.arange(12).reshape(3, 4).astype(float),
+        domain=common.Domain(dims=(A, B), ranges=(UnitRange(0, 3), UnitRange(0, 4))),
+    )
+    c1 = common._connectivity(  # (B, L) -> A  (reads B)
+        np.asarray([[2, 0], [0, 1], [1, 2], [2, 0]], dtype=int),
+        domain=common.Domain(dims=(B, L), ranges=(UnitRange(0, 4), UnitRange(0, 2))),
+        codomain=A,
+    )
+    c2 = common._connectivity(  # (M,) -> B  (remaps B)
+        np.asarray([2, 0, 1], dtype=int),
+        domain=common.Domain(dims=(M,), ranges=(UnitRange(0, 3),)),
+        codomain=B,
+    )
+
+    with pytest.raises(ValueError, match="replaces"):
+        f.premap(c1, c2)
+
+
+def test_premap_non_contiguous_inverse_image_raises():
+    # A connectivity whose in-range indices are not a contiguous block cannot yield a contiguous domain.
+    V = Dimension("V")
+    E = Dimension("E")
+
+    f = common._field(
+        np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
+    )
+    conn = common._connectivity(
+        np.asarray([0, 1, 99, 3, 4], dtype=int),  # value 99 (out of range) sits in the interior
+        domain=common.Domain(dims=(E,), ranges=(UnitRange(0, 5),)),
+        codomain=V,
+    )
+
+    with pytest.raises(ValueError, match="non-contiguous"):
+        f.premap(conn)
+
+
+def test_premap_disjoint_inverse_image_raises():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    f = common._field(
+        np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
+    )
+    conn = common._connectivity(
+        np.arange(100, 105, dtype=int),
+        domain=common.Domain(dims=(E,), ranges=(UnitRange(0, 5),)),
+        codomain=V,
+    )
+
+    with pytest.raises(ValueError, match="empty"):
+        f.premap(conn)
+
+
+def test_as_offset_1d():
+    # Dynamic per-point shift along I: out[i] == f[i + off[i]], full domain when all shifts in-bounds.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    f = common._field(
+        np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+    off_arr = np.asarray([1, 0, -1, 0, 1, 0, -1, 0, 1, 0], dtype=int)
+    off = common._field(off_arr, domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),)))
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    assert np.all(result.ndarray == f.ndarray[np.arange(10) + off_arr])
+
+
+def test_as_offset_narrow_offset_dtype_no_wrap():
+    # An int8 offset field over a domain larger than 128 must not wrap into the index table.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    N = 200
+    f = common._field(
+        np.arange(N).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, N),))
+    )
+    off_arr = np.zeros(N, dtype=np.int8)
+    off = common._field(off_arr, domain=common.Domain(dims=(I,), ranges=(UnitRange(0, N),)))
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == common.Domain(dims=(I,), ranges=(UnitRange(0, N),))
+    assert np.all(result.ndarray == f.ndarray)
+
+
+def test_as_offset_2d_shift_one_keep_other():
+    # Shift along I by a per-(i, j) offset, leave J: out[i, j] == f[i + off[i, j], j].
+    I = Dimension("I")
+    J = Dimension("J")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    NI, NJ = 4, 3
+    dom = common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ)))
+    f = common._field(np.arange(NI * NJ).reshape(NI, NJ).astype(float), domain=dom)
+    off_arr = np.asarray([[1, 1, 0], [0, 0, 1], [1, -1, 0], [-1, 0, -1]], dtype=int)
+    off = common._field(off_arr, domain=dom)
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == dom
+    i = np.arange(NI)[:, None]
+    j = np.arange(NJ)[None, :]
+    assert np.all(result.ndarray == f.ndarray[i + off_arr, j])
+
+
+def test_as_offset_boundary_narrows_domain():
+    # A uniform out-of-bounds shift narrows the result to the contiguous in-range sub-domain.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    f = common._field(
+        np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+    off = common._field(
+        np.full(10, -1, dtype=int), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == common.Domain(dims=(I,), ranges=(UnitRange(1, 10),))
+    assert np.all(result.ndarray == f.ndarray[0:9])  # out[i] == f[i - 1]
+
+
+def test_as_offset_scattered_oob_raises():
+    # An out-of-bounds shift in the interior cannot yield a contiguous domain.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    f = common._field(
+        np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+    off = common._field(
+        np.asarray([0, 0, 0, 99, 0, 0, 0, 0, 0, 0], dtype=int),
+        domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),)),
+    )
+
+    with pytest.raises(ValueError, match="non-contiguous"):
+        f.premap(as_offset(Ioff, off))
+
+
+def test_as_offset_introduces_dimension():
+    # `off` carries a dim the field lacks: the result gains it, out[i, j] == f[i + off[i, j]].
+    I = Dimension("I")
+    J = Dimension("J")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    f = common._field(
+        np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
+    )
+    off_arr = np.tile(np.asarray([1, 0, -1, 0, 1, 0, -1, 0, 1, 0], dtype=int)[:, None], (1, 3))
+    off = common._field(
+        off_arr, domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange(0, 3)))
+    )
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == common.Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange(0, 3)))
+    assert np.all(result.ndarray == f.ndarray[np.arange(10)[:, None] + off_arr])
+
+
+def test_as_offset_nonzero_origin():
+    # Field and offset over a domain that does not start at 0: indices must be shifted by the domain start.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    dom = common.Domain(dims=(I,), ranges=(UnitRange(2, 12),))
+    f = common._field(np.arange(10).astype(float), domain=dom)
+    off_arr = np.asarray([1, 0, -1, 0, 1, 0, -1, 0, 1, 0], dtype=int)
+    off = common._field(off_arr, domain=dom)
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == dom
+    assert np.all(result.ndarray == f.ndarray[np.arange(10) + off_arr])
+
+
+def test_as_offset_2d_shift_second_axis():
+    # Shift along J (the non-leading axis) by a per-(i, j) offset, leave I: out[i, j] == f[i, j + off[i, j]].
+    I = Dimension("I")
+    J = Dimension("J")
+    Joff = fbuiltins.FieldOffset("Joff", source=J, target=(J,))
+
+    NI, NJ = 3, 4
+    dom = common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ)))
+    f = common._field(np.arange(NI * NJ).reshape(NI, NJ).astype(float), domain=dom)
+    off_arr = np.asarray([[1, 1, 0, -1], [0, 0, 1, -1], [1, -1, 0, 0]], dtype=int)
+    off = common._field(off_arr, domain=dom)
+
+    result = f.premap(as_offset(Joff, off))
+
+    assert result.domain == dom
+    i = np.arange(NI)[:, None]
+    j = np.arange(NJ)[None, :]
+    assert np.all(result.ndarray == f.ndarray[i, j + off_arr])
+
+
+def test_as_offset_non_cartesian_offset_raises():
+    # `as_offset` only supports Cartesian (self-shift) offsets: single target equal to source.
+    I = Dimension("I")
+    J = Dimension("J")
+    Vertex = Dimension("Vertex", kind=DimensionKind.HORIZONTAL)
+    Edge = Dimension("Edge", kind=DimensionKind.HORIZONTAL)
+    V2EDim = Dimension("V2EDim", kind=DimensionKind.LOCAL)
+
+    off_I = common._field(
+        np.zeros(3, dtype=int), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 3),))
+    )
+    off_V = common._field(
+        np.zeros(3, dtype=int), domain=common.Domain(dims=(Vertex,), ranges=(UnitRange(0, 3),))
+    )
+
+    # 2-element target (neighbor offset)
+    V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+    with pytest.raises(ValueError, match="Cartesian"):
+        as_offset(V2E, off_V)
+
+    # 1-element target but source != target[0] (cross-dim)
+    IfromJ = fbuiltins.FieldOffset("IfromJ", source=I, target=(J,))
+    with pytest.raises(ValueError, match="Cartesian"):
+        as_offset(IfromJ, off_I)
 
 
 @pytest.mark.parametrize(
@@ -993,10 +1446,10 @@ def test_connectivity_field_inverse_image_2d_domain():
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(1, 3))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(2, 3))
 
 
@@ -1016,10 +1469,10 @@ def test_connectivity_field_inverse_image_non_contiguous():
     result = e2v_conn.inverse_image(UnitRange(V_START, 5))
     assert result[0] == (E, UnitRange(V_START, 5))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         e2v_conn.inverse_image(UnitRange(V_START, 6))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         e2v_conn.inverse_image(UnitRange(V_START, V_STOP))
 
 
@@ -1073,10 +1526,10 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(1, 3))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(2, 3))
 
 
@@ -1104,91 +1557,44 @@ def test_hyperslice(index_array, expected):
 
 @pytest.mark.uses_concat_where
 @pytest.mark.parametrize(
-    "mask_data, true_data, false_data, expected",
+    "cond, true_data, false_data, expected",
     [
+        (D0 == 0, ([0, 0], None), ([1, 1], None), ([0, 1], None)),
+        (D0 == -1, ([0, 0], {D0: (-1, 1)}), ([1, 1], {D0: (0, 2)}), ([0, 1, 1], {D0: (-1, 2)})),
+        (D0 < 0, ([0, 0], {D0: (-2, 0)}), ([1, 1], {D0: (0, 2)}), ([0, 0, 1, 1], {D0: (-2, 2)})),
+        (D0 == 1, ([0, 0, 0], None), ([1, 1, 1], None), ([1, 0, 1], None)),
+        # non-contiguous domain
+        (D0 <= 0, ([0, 0], {D0: (-2, 0)}), ([1, 1], {D0: (0, 2)}), None),
+        # empty result domain
         (
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], None),
-            ([6, 7, 8, 9, 10], None),
-            ([1, 7, 3, 9, 5], None),
-        ),
-        (
-            ([True, False, True, False], None),
-            ([1, 2, 3, 4, 5], {D0: (-2, 3)}),
-            ([6, 7, 8, 9], {D0: (1, 5)}),
-            ([3, 6, 5, 8], {D0: (0, 4)}),
-        ),
-        (
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], {D0: (-2, 3)}),
-            ([6, 7, 8, 9, 10], {D0: (1, 6)}),
-            ([3, 6, 5, 8], {D0: (0, 4)}),
-        ),
-        (
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], {D0: (-2, 3)}),
-            ([6, 7, 8, 9, 10], {D0: (2, 7)}),
-            None,
-        ),
-        (
-            # empty result domain
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], {D0: (-5, 0)}),
-            ([6, 7, 8, 9, 10], {D0: (5, 10)}),
+            D0 < 0,
+            ([0, 0], {D0: (0, 2)}),
+            ([1, 1], {D0: (-2, 0)}),
             ([], {D0: (0, 0)}),
         ),
-        (
-            ([True, False, True, False, True], None),
-            ([1, 2, 3, 4, 5], {D0: (-4, 1)}),
-            ([6, 7, 8, 9, 10], {D0: (5, 10)}),
-            ([5], {D0: (0, 1)}),
-        ),
-        (
-            # broadcasting true_field
-            ([True, False, True, False, True], {D0: 5}),
-            ([1, 2, 3, 4, 5], {D0: 5}),
-            ([[6, 11], [7, 12], [8, 13], [9, 14], [10, 15]], {D0: 5, D1: 2}),
-            ([[1, 1], [7, 12], [3, 3], [9, 14], [5, 5]], {D0: 5, D1: 2}),
-        ),
-        (
-            ([True, False, True, False, True], None),
-            (42, None),
-            ([6, 7, 8, 9, 10], None),
-            ([42, 7, 42, 9, 42], None),
-        ),
-        (
-            # parts of mask_ranges are concatenated
-            ([True, True, False, False], None),
-            ([1, 2], {D0: (1, 3)}),
-            ([3, 4], {D0: (1, 3)}),
-            ([1, 4], {D0: (1, 3)}),
-        ),
-        (
-            # parts of mask_ranges are concatenated and yield non-contiguous domain
-            ([True, False, True, False], None),
-            ([1, 2], {D0: (0, 2)}),
-            ([3, 4], {D0: (2, 4)}),
-            None,
+        # broadcasting from scalar (needs infinite domain support)
+        pytest.param(
+            D0 == 0,
+            ([0, 0], None),
+            (1, None),
+            ([0, 1], None),
+            marks=[
+                pytest.mark.embedded_concat_where_infinite_domain,
+                pytest.mark.xfail(reason="requires infinite domain support"),
+            ],
         ),
     ],
 )
 def test_concat_where(
     nd_array_implementation,
-    mask_data: tuple[list[bool], Optional[common.DomainLike]],
+    cond: common.Domain,
     true_data: tuple[list[int], Optional[common.DomainLike]],
     false_data: tuple[list[int], Optional[common.DomainLike]],
     expected: Optional[tuple[list[int], Optional[common.DomainLike]]],
 ):
-    mask_lst, mask_domain = mask_data
     true_lst, true_domain = true_data
     false_lst, false_domain = false_data
 
-    mask_field = _make_field_or_scalar(
-        mask_lst,
-        nd_array_implementation=nd_array_implementation,
-        domain=common.domain(mask_domain) if mask_domain is not None else None,
-        dtype=bool,
-    )
     true_field = _make_field_or_scalar(
         true_lst,
         nd_array_implementation=nd_array_implementation,
@@ -1204,7 +1610,7 @@ def test_concat_where(
 
     if expected is None:
         with pytest.raises(embedded_exceptions.NonContiguousDomain):
-            nd_array_field._concat_where(mask_field, true_field, false_field)
+            nd_array_field._concat_where(cond, true_field, false_field)
     else:
         expected_lst, expected_domain_like = expected
         expected_array = np.asarray(expected_lst)
@@ -1214,7 +1620,141 @@ def test_concat_where(
             else _make_default_domain(expected_array.shape)
         )
 
-        result = nd_array_field._concat_where(mask_field, true_field, false_field)
+        result = nd_array_field._concat_where(cond, true_field, false_field)
 
         assert expected_domain == result.domain
+        np.testing.assert_allclose(result.asnumpy(), expected_array)
+
+
+@pytest.mark.parametrize(
+    "domain, expected",
+    [
+        # finite domain → two complement regions (left and right of the domain)
+        (
+            common.Domain(dims=(D0,), ranges=(UnitRange(2, 5),)),
+            (
+                common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 2),)),
+                common.Domain(dims=(D0,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),
+            ),
+        ),
+        # single-point domain
+        (
+            D0 == 3,
+            (
+                common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 3),)),
+                common.Domain(dims=(D0,), ranges=(UnitRange(4, common.Infinity.POSITIVE),)),
+            ),
+        ),
+        # open on the left (D0 < 5) → only a right complement
+        (
+            common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)),
+            (common.Domain(dims=(D0,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),),
+        ),
+        # open on the right (D0 >= 5) → only a left complement
+        (
+            common.Domain(dims=(D0,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),
+            (common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)),),
+        ),
+        # full line (both infinite) → empty complement
+        (
+            common.Domain(
+                dims=(D0,),
+                ranges=(UnitRange(common.Infinity.NEGATIVE, common.Infinity.POSITIVE),),
+            ),
+            (),
+        ),
+        # empty domain → complement is the full line
+        (
+            common.Domain(dims=(D0,), ranges=(UnitRange(3, 3),)),
+            (common.Domain(dims=(D0,), ranges=(UnitRange.infinite(),)),),
+        ),
+    ],
+)
+def test_invert_domain(domain, expected):
+    result = nd_array_field._invert_domain(domain)
+    assert result == expected
+
+
+@pytest.mark.uses_concat_where
+@pytest.mark.parametrize(
+    "fields_data, dim, expected_data, expect_error",
+    [
+        # two adjacent fields, already ordered
+        (
+            [([1, 2], {D0: (0, 2)}), ([3, 4], {D0: (2, 4)})],
+            D0,
+            ([1, 2, 3, 4], {D0: (0, 4)}),
+            None,
+        ),
+        # two adjacent fields, reverse order → _concat sorts them
+        (
+            [([3, 4], {D0: (2, 4)}), ([1, 2], {D0: (0, 2)})],
+            D0,
+            ([1, 2, 3, 4], {D0: (0, 4)}),
+            None,
+        ),
+        # three fields
+        (
+            [([1], {D0: (0, 1)}), ([2], {D0: (1, 2)}), ([3], {D0: (2, 3)})],
+            D0,
+            ([1, 2, 3], {D0: (0, 3)}),
+            None,
+        ),
+        # single field (trivial concat)
+        (
+            [([10, 20, 30], {D0: (5, 8)})],
+            D0,
+            ([10, 20, 30], {D0: (5, 8)}),
+            None,
+        ),
+        # gap between fields → NonContiguousDomain
+        (
+            [([1, 2], {D0: (0, 2)}), ([3, 4], {D0: (3, 5)})],
+            D0,
+            None,
+            embedded_exceptions.NonContiguousDomain,
+        ),
+        # overlapping fields → ValueError
+        (
+            [([1, 2, 3], {D0: (0, 3)}), ([4, 5, 6], {D0: (2, 5)})],
+            D0,
+            None,
+            ValueError,
+        ),
+        # three fields: first two overlap, third is disjoint from both
+        (
+            [
+                ([1, 2], {D0: (0, 2)}),
+                ([3, 4], {D0: (1, 3)}),
+                ([5, 6], {D0: (10, 12)}),
+            ],
+            D0,
+            None,
+            ValueError,
+        ),
+        # negative domain indices
+        (
+            [([1, 2], {D0: (-3, -1)}), ([3], {D0: (-1, 0)})],
+            D0,
+            ([1, 2, 3], {D0: (-3, 0)}),
+            None,
+        ),
+    ],
+)
+def test_concat(fields_data, dim, expected_data, expect_error):
+    fields = [
+        common._field(np.asarray(data, dtype=np.int32), domain=common.domain(domain))
+        for data, domain in fields_data
+    ]
+
+    if expect_error is not None:
+        with pytest.raises(expect_error):
+            nd_array_field._concat(*fields, dim=dim)
+    else:
+        expected_array = np.asarray(expected_data[0], dtype=np.int32)
+        expected_domain = common.domain(expected_data[1])
+
+        result = nd_array_field._concat(*fields, dim=dim)
+
+        assert result.domain == expected_domain
         np.testing.assert_allclose(result.asnumpy(), expected_array)
