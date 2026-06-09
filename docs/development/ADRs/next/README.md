@@ -17,6 +17,7 @@ Writing a new ADR is simple:
 ### General architecture #general
 
 - [0005 - Extending Iterator IR](0005-Extending_Iterator_IR.md)
+- [0023 - Fingerprinting and Custom Picklers](0023-Fingerprinting-and-Custom-Picklers.md)
 
 ### Frontend and Parsing #frontend
 
