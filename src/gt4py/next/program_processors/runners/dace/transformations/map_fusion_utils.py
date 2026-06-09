@@ -78,8 +78,8 @@ def copy_map_graph(
         elif isinstance(node, dace_nodes.NestedSDFG):
             node_ = graph.add_nested_sdfg(
                 sdfg=copy.deepcopy(node.sdfg),
-                inputs={k: None for k in node.in_connectors.keys()},
-                outputs={k: None for k in node.out_connectors.keys()},
+                inputs={k: None for k in sorted(node.in_connectors.keys())},
+                outputs={k: None for k in sorted(node.out_connectors.keys())},
                 symbol_mapping=node.symbol_mapping.copy(),
                 debuginfo=copy.copy(node.debuginfo),
             )
