@@ -14,7 +14,7 @@ from gt4py import next as gtx
 from gt4py.next import int32
 from gt4py.next.ffront.fbuiltins import where, broadcast
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
 )
 

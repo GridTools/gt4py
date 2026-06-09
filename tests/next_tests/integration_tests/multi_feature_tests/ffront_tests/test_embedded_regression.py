@@ -14,7 +14,7 @@ from gt4py.next import errors
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IField, cartesian_case  # noqa: F401 [unused-import]
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
+from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-import]
     KDim,
     exec_alloc_descriptor,
 )

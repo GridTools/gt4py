@@ -25,7 +25,7 @@ from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.type_system import type_specifications as ts
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     Cell,
     Edge,
     IDim,

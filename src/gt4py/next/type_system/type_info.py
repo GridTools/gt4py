@@ -8,24 +8,13 @@
 
 import functools
 import types
-from collections.abc import Callable, Iterator
-from typing import (
-    Any,
-    Generic,
-    Literal,
-    Protocol,
-    Sequence,
-    Type,
-    TypeGuard,
-    TypeVar,
-    cast,
-    overload,
-)
+from collections.abc import Callable, Iterable, Iterator
+from typing import Any, Literal, Sequence, Type, TypeGuard, TypeVar, cast, overload
 
 import numpy as np
 
 from gt4py.eve import extended_typing as xtyping, utils
-from gt4py.next import common
+from gt4py.next import common, utils as next_utils
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
 
@@ -143,63 +132,53 @@ def primitive_constituents(
     return utils.xiter(constituents_yielder(symbol_type, ()))  # type: ignore[return-value] # why resolved to XIterable[object]?
 
 
-_R = TypeVar("_R", covariant=True)
 _T = TypeVar("_T")
+_C = TypeVar("_C")
 
 
-class TupleConstructorType(Protocol, Generic[_R]):
-    def __call__(self, *args: Any) -> _R: ...
-
-
-def apply_to_primitive_constituents(
-    fun: Callable[..., _T],
-    *symbol_types: ts.TypeSpec,
-    with_path_arg: bool = False,
-    tuple_constructor: TupleConstructorType[_R] = lambda *elements: ts.TupleType(types=[*elements]),  # type: ignore[assignment] # probably related to https://github.com/python/mypy/issues/10854
-    _path: tuple[int, ...] = (),
-) -> _T | _R:
-    """
-    Apply function to all primitive constituents of a type.
-
-    >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    >>> tuple_type = ts.TupleType(types=[int_type, int_type])
-    >>> print(
-    ...     apply_to_primitive_constituents(
-    ...         lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type),
-    ...         tuple_type,
-    ...     )
-    ... )
-    tuple[Field[[], int64], Field[[], int64]]
-
-    >>> apply_to_primitive_constituents(
-    ...     lambda primitive_type, path: (path, primitive_type),
-    ...     tuple_type,
-    ...     with_path_arg=True,
-    ...     tuple_constructor=lambda *elements: dict(elements),
-    ... )
-    {(0,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None)}
-    """
-    if isinstance(symbol_types[0], ts.TupleType):
-        assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
-
-        return tuple_constructor(
-            *[
-                apply_to_primitive_constituents(
-                    fun,
-                    *el_types,
-                    _path=(*_path, i),
-                    with_path_arg=with_path_arg,
-                    tuple_constructor=tuple_constructor,
-                )
-                for i, el_types in enumerate(
-                    zip(*(symbol_type.types for symbol_type in symbol_types))  # type: ignore[attr-defined]  # ensured by assert above
-                )
-            ]
+def tree_map_type_constructor(
+    value: ts.CollectionTypeSpecT,
+    elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
+) -> ts.CollectionTypeSpecT:
+    return (
+        ts.NamedCollectionType(
+            keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
         )
-    if with_path_arg:
-        return fun(*symbol_types, path=_path)
-    else:
-        return fun(*symbol_types)
+        if isinstance(value, ts.NamedCollectionType)
+        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
+    )
+
+
+@overload
+def tree_map_type(
+    fun: Callable[..., _T], *, with_path_arg: bool = ..., unpack: bool = ...
+) -> Callable[..., _T | ts.CollectionTypeSpec]: ...
+
+
+@overload
+def tree_map_type(
+    fun: Callable[..., _T],
+    *,
+    result_collection_constructor: Callable[..., _C],
+    with_path_arg: bool = ...,
+    unpack: bool = ...,
+) -> Callable[..., _T | _C]: ...
+
+
+def tree_map_type(
+    fun: Callable[..., _T],
+    *,
+    result_collection_constructor: Callable[..., Any] = tree_map_type_constructor,
+    with_path_arg: bool = False,
+    unpack: bool = False,
+) -> Callable[..., Any]:
+    return next_utils.tree_map(
+        fun,
+        collection_type=ts.COLLECTION_TYPE_SPECS,
+        result_collection_constructor=result_collection_constructor,
+        with_path_arg=with_path_arg,
+        unpack=unpack,
+    )
 
 
 def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:

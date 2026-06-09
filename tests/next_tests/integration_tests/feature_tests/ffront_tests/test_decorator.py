@@ -18,7 +18,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next import common as gtx_common
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
     simple_cartesian_grid,
 )
@@ -122,3 +122,19 @@ def test_offset_provider_cache(cartesian_case):
         testee(*args_3, offset_provider=cartesian_case.offset_provider, **kwargs_3)
         mock_offset_provider_to_type.assert_not_called()
         mock_offset_provider_to_type.reset_mock()
+
+
+def test_docstring(cartesian_case):
+    @gtx.field_operator
+    def fieldop_with_docstring(a: cases.IField) -> cases.IField:
+        """My docstring."""
+        return a
+
+    @gtx.program
+    def test_docstring(a: cases.IField):
+        """My docstring."""
+        fieldop_with_docstring(a, out=a)
+
+    a = cases.allocate(cartesian_case, test_docstring, "a")()
+
+    cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)

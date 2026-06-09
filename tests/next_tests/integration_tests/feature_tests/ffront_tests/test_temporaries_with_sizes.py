@@ -20,7 +20,7 @@ from next_tests.integration_tests.cases import (
     KDim,
     Vertex,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     mesh_descriptor,
 )
 from next_tests.toy_connectivity import Cell, Edge

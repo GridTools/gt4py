@@ -164,7 +164,7 @@ def fuse_as_fieldop(
                 assert isinstance(arg.type, ts.TypeSpec)
 
                 assert not isinstance(
-                    type_info.apply_to_primitive_constituents(type_info.extract_dtype, arg.type),
+                    type_info.tree_map_type(type_info.extract_dtype)(arg.type),
                     ts.ListType,
                 )
             new_args = _merge_arguments(new_args, {stencil_param.id: arg})
@@ -215,7 +215,7 @@ def _arg_inline_predicate(node: itir.Expr, shifts: set[tuple[itir.OffsetLiteral,
         # applied fieldop with list return type must always be inlined as no backend supports this
         type_inference.reinfer(node)
         assert isinstance(node.type, ts.TypeSpec)
-        dtype = type_info.apply_to_primitive_constituents(type_info.extract_dtype, node.type)
+        dtype = type_info.tree_map_type(type_info.extract_dtype)(node.type)
         if isinstance(dtype, ts.ListType):
             return True
         # only accessed at the center location
