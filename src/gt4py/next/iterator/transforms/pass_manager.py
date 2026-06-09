@@ -138,6 +138,7 @@ def apply_common_transforms(
     unroll_reduce=False,
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
+    transform_concat_where_to_as_fieldop=True,
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
@@ -186,7 +187,8 @@ def apply_common_transforms(
     ir = prune_empty_concat_where.prune_empty_concat_where(ir)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
 
-    ir = concat_where.transform_to_as_fieldop(ir)
+    if transform_concat_where_to_as_fieldop:
+        ir = concat_where.transform_to_as_fieldop(ir)
 
     for _ in range(10):
         inlined = ir
@@ -256,6 +258,12 @@ def apply_common_transforms(
 
     ir = InlineLambdas.apply(
         ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
+    )
+
+    ir = infer_domain.infer_program(
+        ir,
+        offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
     )
 
     assert isinstance(ir, itir.Program)

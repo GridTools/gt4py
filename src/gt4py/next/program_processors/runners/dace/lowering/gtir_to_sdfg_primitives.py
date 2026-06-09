@@ -9,11 +9,13 @@
 from __future__ import annotations
 
 import abc
+from collections import Counter
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
 
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import (
@@ -73,16 +75,18 @@ def _parse_fieldop_arg(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     domain: gtir_domain.FieldopDomain,
-) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
+) -> MaybeNestedInTuple[gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr]:
     """
     Helper method to visit an expression passed as argument to a field operator
     and create the local view for the field argument.
     """
     arg = sdfg_builder.visit(node, ctx=ctx)
 
-    if not isinstance(arg, gtir_to_sdfg_types.FieldopData):
-        raise ValueError("Expected a field, found a tuple of fields.")
-    return arg.get_local_view(domain, ctx.sdfg)
+    if isinstance(arg, gtir_to_sdfg_types.FieldopData):
+        return arg.get_local_view(domain, ctx.sdfg)
+    else:
+        # handle tuples of fields
+        return gtx_utils.tree_map(lambda targ: targ.get_local_view(domain, ctx.sdfg))(arg)
 
 
 def _create_field_operator_impl(
@@ -92,6 +96,7 @@ def _create_field_operator_impl(
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace_nodes.MapExit,
+    output_consumer_count: dict[dace_nodes.AccessNode, int],
 ) -> gtir_to_sdfg_types.FieldopData:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -163,8 +168,11 @@ def _create_field_operator_impl(
         )
     field_node = ctx.state.add_access(field_name)
 
-    # and here the edge writing the dataflow result data through the map exit node
-    output_edge.connect(map_exit, field_node, field_subset)
+    # and here the edge writing the dataflow result data through the map exit node.
+    # Note that we cannot remove the output data access node only if this is used
+    #  for mutiple fields in a return tuple.
+    allow_removal_of_last_node = output_consumer_count[output_edge.result.dc_node] == 1
+    output_edge.connect(map_exit, field_node, field_subset, allow_removal_of_last_node)
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
@@ -174,10 +182,10 @@ def _create_field_operator_impl(
 def _create_field_operator(
     ctx: gtir_to_sdfg.SubgraphContext,
     domain: gtir_domain.FieldopDomain,
-    node_type: ts.FieldType,
+    node_type: ts.FieldType | ts.TupleType,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
-    output_edge: gtir_dataflow.DataflowOutputEdge,
+    output_tree: MaybeNestedInTuple[gtir_dataflow.DataflowOutputEdge],
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
     Helper method to build the output of a field operator.
@@ -188,11 +196,11 @@ def _create_field_operator(
         node_type: The GT4Py type of the IR node that produces this field.
         sdfg_builder: The object used to build the map scope in the provided SDFG.
         input_edges: List of edges to pass input data into the dataflow.
-        output_edge: Edge corresponding to the dataflow output.
+        output_tree: A tree representation of the dataflow output data.
 
     Returns:
-        The descriptor of the field operator result, which is a single field defined
-        on the domain of the field operator.
+        The descriptor of the field operator result, which can be either a single
+        field or a tuple fields.
     """
 
     if len(domain) == 0:
@@ -214,7 +222,26 @@ def _create_field_operator(
     for edge in input_edges:
         edge.connect(map_entry)
 
-    return _create_field_operator_impl(ctx, sdfg_builder, domain, output_edge, node_type, map_exit)
+    # The same output node could be used for multiple fields in case of tuple return.
+    # In this case, the output access node cannot be removed.
+    consumer_count = Counter(
+        oedge.result.dc_node
+        for oedge in gtx_utils.flatten_nested_tuple((output_tree,))
+        if oedge is not None
+    )
+    if isinstance(node_type, ts.FieldType):
+        assert isinstance(output_tree, gtir_dataflow.DataflowOutputEdge)
+        return _create_field_operator_impl(
+            ctx, sdfg_builder, domain, output_tree, node_type, map_exit, consumer_count
+        )
+    else:
+        # handle tuples of fields
+        output_symbol_tree = gtir_to_sdfg_utils.make_symbol_tree("x", node_type)
+        return gtx_utils.tree_map(
+            lambda output_edge, output_sym: _create_field_operator_impl(
+                ctx, sdfg_builder, domain, output_edge, output_sym.type, map_exit, consumer_count
+            )
+        )(output_tree, output_symbol_tree)
 
 
 def translate_as_fieldop(
@@ -246,9 +273,6 @@ def translate_as_fieldop(
     if cpm.is_call_to(fieldop_expr, "scan"):
         return translate_scan(node, ctx, sdfg_builder)
 
-    if not isinstance(node.type, ts.FieldType):
-        raise NotImplementedError("Unexpected 'as_fieldop' with tuple output in SDFG lowering.")
-
     # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
     field_domain = gtir_domain.get_field_domain(
@@ -258,11 +282,13 @@ def translate_as_fieldop(
     if cpm.is_ref_to(fieldop_expr, "deref"):
         arg_type = node.args[0].type
         assert isinstance(arg_type, (ts.FieldType, ts.ScalarType))
-        if isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims:
+        if (
+            isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims  # type: ignore[union-attr]
+        ):
             # Special usage of 'deref' as argument to fieldop expression, to broadcast
             # the input value (a scalar or a field slice) on the output domain.
             stencil_expr = im.lambda_("a")(im.deref("a"))
-            stencil_expr.expr.type = node.type.dtype
+            stencil_expr.expr.type = node.type.dtype  # type: ignore[union-attr]
         else:
             # Special usage of 'deref' with field argument, to access the field
             # on the given domain. It copies a subset of the source field.
@@ -282,13 +308,12 @@ def translate_as_fieldop(
     fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, field_domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    input_edges, output_edge = gtir_dataflow.translate_lambda_to_dataflow(
+    input_edges, output_edges = gtir_dataflow.translate_lambda_to_dataflow(
         ctx.sdfg, ctx.state, sdfg_builder, stencil_expr, fieldop_args
     )
-    assert isinstance(output_edge, gtir_dataflow.DataflowOutputEdge)
 
     return _create_field_operator(
-        ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
+        ctx, field_domain, node.type, sdfg_builder, input_edges, output_edges
     )
 
 

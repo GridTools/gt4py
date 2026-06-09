@@ -69,6 +69,7 @@ class DaCeBackendFactory(factory.Factory):
 def make_dace_backend(
     gpu: bool,
     cached: bool = True,
+    apply_common_transform: bool = False,
     auto_optimize: bool = True,
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
@@ -82,6 +83,8 @@ def make_dace_backend(
     Args:
         gpu: Enable GPU transformations and code generation.
         cached: Cache the lowered SDFG as a JSON file and the compiled programs.
+        apply_common_transform: Whether to apply the GTIR common transform before
+            lowering to SDFG.
         auto_optimize: Enable the SDFG auto-optimize pipeline.
         async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
             of GPU kernel execution with the Python driver code.
@@ -128,6 +131,7 @@ def make_dace_backend(
         cached=cached,
         auto_optimize=auto_optimize,
         otf_workflow__cached_translation=cached,
+        otf_workflow__bare_translation__apply_common_transform=apply_common_transform,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
@@ -173,4 +177,19 @@ run_dace_gpu_cached = make_dace_backend(
     cached=True,
     auto_optimize=True,
     async_sdfg_call=True,
+)
+
+run_dace_cpu_gt = make_dace_backend(
+    gpu=False,
+    cached=False,
+    apply_common_transform=True,
+    auto_optimize=True,
+    async_sdfg_call=False,
+)
+run_dace_cpu_gt_noopt = make_dace_backend(
+    gpu=False,
+    cached=False,
+    apply_common_transform=True,
+    auto_optimize=False,
+    async_sdfg_call=False,
 )
