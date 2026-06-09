@@ -800,10 +800,7 @@ class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
 
     def definition(field_in, field_out, index):
         with computation(PARALLEL), interval(1, None):
-            field_out[0, 0, 0] = (
-                field_in[0, 0, index]  # noqa: F841 [unused-variable]
-                + field_in[0, 0, -2]
-            )
+            field_out[0, 0, 0] = field_in[0, 0, index] + field_in[0, 0, -2]
 
     def validation(field_in, field_out, index, *, domain, origin):
         idx = 1 + (np.arange(domain[-1]) + index)[1:]
