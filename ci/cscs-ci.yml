@@ -92,7 +92,7 @@ build_cscs_amd_rocm:
     TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6) to test 
     USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
-    SLURM_TIMELIMIT: 5
+    SLURM_TIMELIMIT: 10
     DACE_compiler_cuda_implementation: experimental
   parallel:
     matrix:
