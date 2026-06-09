@@ -28,6 +28,10 @@ def format_source(source_code_spec: code_specs.SourceCodeSpec, source: str) -> s
 class Parameter:
     name: str
     type_: ts.TypeSpec
+    # If set, the parameter is accepted by the generated wrapper (to keep the call signature
+    # stable) but forwarded to the callee without constructing a buffer SID, i.e. the program
+    # does not actually access it.
+    pass_through: bool = False
 
 
 @dataclasses.dataclass(frozen=True)

@@ -274,7 +274,7 @@ def create_bindings(
                 expr=FunctionCall(
                     target=program_source.entry_point,
                     args=[
-                        make_argument(param.name, param.type_)
+                        param.name if param.pass_through else make_argument(param.name, param.type_)
                         for param in program_source.entry_point.parameters
                     ],
                 )

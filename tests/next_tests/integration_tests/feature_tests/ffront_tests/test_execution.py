@@ -64,6 +64,33 @@ def test_copy(cartesian_case):
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
+def test_unused_connectivity_in_offset_provider(cartesian_case):
+    # A program may be called with an offset provider that contains connectivities it does not
+    # use (e.g. a single offset provider shared across many programs). The connectivity must be
+    # accepted even though the program has a cartesian grid type. See GH #863.
+    @gtx.field_operator
+    def testee(a: cases.IFloatField) -> cases.IFloatField:
+        return a
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    unused_conn = gtx.as_connectivity(
+        [Vertex, V2EDim],
+        codomain=Edge,
+        data=np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int64),
+        allocator=cartesian_case.allocator,
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        a,
+        out=out,
+        offset_provider={"V2E": unused_conn},
+        ref=a.asnumpy(),
+    )
+
+
 @pytest.mark.uses_tuple_returns
 def test_multicopy(cartesian_case):
     @gtx.field_operator
