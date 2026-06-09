@@ -37,7 +37,7 @@ def _make_if_block(
     b2_type: dace.typeclass = dace.float64,
     output_type: dace.typeclass = dace.float64,
 ) -> dace_nodes.NestedSDFG:
-    inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
+    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
     for name in {b1_name, b2_name, cond_name, output_name}:
@@ -47,7 +47,7 @@ def _make_if_block(
             transient=False,
         )
 
-    if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
+    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
@@ -91,7 +91,7 @@ def _make_if_block_with_different_number_of_outputs_in_branches(
     output1_type: dace.typeclass = dace.float64,
     output2_type: dace.typeclass = dace.float64,
 ) -> dace_nodes.NestedSDFG:
-    inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
+    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {
         b1_name: b1_type,
@@ -108,7 +108,7 @@ def _make_if_block_with_different_number_of_outputs_in_branches(
             transient=False,
         )
 
-    if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
+    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
@@ -158,7 +158,7 @@ def _make_if_block_with_two_args(
     b4_type: dace.typeclass = dace.float64,
     output_type: dace.typeclass = dace.float64,
 ) -> dace_nodes.NestedSDFG:
-    inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
+    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {
         b1_name: b1_type,
@@ -176,7 +176,7 @@ def _make_if_block_with_two_args(
             transient=False,
         )
 
-    if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
+    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
@@ -264,7 +264,7 @@ def test_if_mover_independent_branches():
         d = b
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("independent_branches"))
+    sdfg = dace.SDFG(util.unique_name("independent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -375,7 +375,7 @@ def test_if_mover_independent_branches():
 
 
 def test_if_mover_invalid_if_block():
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("invalid"))
+    sdfg = dace.SDFG(util.unique_name("invalid"))
     state = sdfg.add_state(is_start_block=True)
 
     input_names = ["a", "b", "c", "d"]
@@ -484,7 +484,7 @@ def test_if_mover_dependent_branch_1():
         d = b
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -625,7 +625,7 @@ def test_if_mover_dependent_branch_2():
         d = b1
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches_2"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches_2"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -725,7 +725,7 @@ def test_if_mover_dependent_branch_3():
     Very similar test to `test_if_mover_dependent_branch_1()`, but the common data
     is an AccessNode outside the Map.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     gnames = ["a", "b", "c", "d", "cond"]
@@ -831,7 +831,7 @@ def test_if_mover_dependent_branch_4():
         f = s
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1010,7 +1010,7 @@ def test_if_mover_dependent_branch_5():
         f = s
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1199,7 +1199,7 @@ def test_if_mover_dependent_branch_6():
         e = e1
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_"))
     state = sdfg.add_state(is_start_block=True)
 
     gnames = ["a", "b", "c", "d", "e", "cond"]
@@ -1353,7 +1353,7 @@ def test_if_mover_no_ops():
     ```
     I.e. there is no gain from moving something inside the body.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_no_ops"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_no_ops"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1413,7 +1413,7 @@ def test_if_mover_one_branch_is_nothing():
     I.e. in one case something can be moved in but there is nothing to move for the
     other branch.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_one_branch_is_nothing"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_one_branch_is_nothing"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1503,7 +1503,7 @@ def test_if_mover_chain():
     e = aa if cc else bb
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_chain_of_blocks"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_chain_of_blocks"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1617,7 +1617,7 @@ def test_if_mover_chain():
 
 
 def test_if_mover_symbolic_tasklet():
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_symbols_in_tasklets"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_symbols_in_tasklets"))
     state = sdfg.add_state(is_start_block=True)
 
     for i in [1, 2]:
@@ -1732,7 +1732,7 @@ def test_if_mover_access_node_between():
     e = aa if cc else bb
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_chain_of_blocks"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_chain_of_blocks"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1878,7 +1878,7 @@ def test_if_mover_symbol_aliasing():
     however, with different meanings. Thus the relocation will lead to invalid
     behaviour and should be rejected.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_symbol_alias"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_symbol_alias"))
     state = sdfg.add_state(is_start_block=True)
 
     scalar_names = ["cond", "a1", "b2"]
@@ -2001,7 +2001,7 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
         )
         fstate.add_edge(f_tasklet, "__out", fstate.add_access("out"), None, dace.Memlet("out[0]"))
 
-        if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
+        if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
         sdfg.add_node(if_region, is_start_block=True)
         if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
         if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}"), else_body)
@@ -2014,7 +2014,7 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
         iter_name: str,
         outer_slice_variable: bool,
     ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.NestedSDFG]:
-        sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_slicing"))
+        sdfg = dace.SDFG(util.unique_name("if_mover_slicing"))
         state = sdfg.add_state(is_start_block=True)
 
         # Inputs
@@ -2175,7 +2175,7 @@ def test_if_mover_symbol_clashes_with_inner_data():
     must detect this conflict via ``_check_for_data_and_symbol_conflicts`` and
     refuse to apply.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("symbol_data_clash"))
+    sdfg = dace.SDFG(util.unique_name("symbol_data_clash"))
     state = sdfg.add_state(is_start_block=True)
 
     # `my_var` is a symbol in the outer SDFG, not a data container.
@@ -2301,7 +2301,7 @@ def test_if_mover_two_accessnodes_same_outer_data():
       ``elif outer_data in fully_mapped_in_data`` branch and hits
       ``assert (outer_data, branch_state) not in rename_map`` → crash.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("two_accessnodes_same_outer_data"))
+    sdfg = dace.SDFG(util.unique_name("two_accessnodes_same_outer_data"))
     state = sdfg.add_state(is_start_block=True)
 
     # Outer arrays

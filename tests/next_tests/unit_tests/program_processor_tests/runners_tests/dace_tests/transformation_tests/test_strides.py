@@ -23,7 +23,7 @@ from . import util
 
 def _make_strides_propagation_level3_sdfg() -> dace.SDFG:
     """Generates the level 3 SDFG (nested-nested) SDFG for `test_strides_propagation()`."""
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("level3"))
+    sdfg = dace.SDFG(util.unique_name("level3"))
     state = sdfg.add_state(is_start_block=True)
     names = ["a3", "c3"]
 
@@ -56,7 +56,7 @@ def _make_strides_propagation_level2_sdfg() -> tuple[dace.SDFG, dace_nodes.Neste
     The function returns the level 2 SDFG and the NestedSDFG node that contains
     the level 3 SDFG.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("level2"))
+    sdfg = dace.SDFG(util.unique_name("level2"))
     state = sdfg.add_state(is_start_block=True)
     names = ["a2", "a2_alias", "b2", "c2"]
 
@@ -123,7 +123,7 @@ def _make_strides_propagation_level1_sdfg() -> tuple[
         - The NestedSDFG node that contains the lebel 3 SDFG (member of the level 2 SDFG).
     """
 
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("level1"))
+    sdfg = dace.SDFG(util.unique_name("level1"))
     state = sdfg.add_state(is_start_block=True)
     names = ["a1", "b1", "c1"]
 
@@ -236,9 +236,7 @@ def test_strides_propagation():
 
 
 def _make_strides_propagation_dependent_symbol_nsdfg() -> dace.SDFG:
-    sdfg = dace.SDFG(
-        gtx_transformations.utils.unique_name("strides_propagation_dependent_symbol_nsdfg")
-    )
+    sdfg = dace.SDFG(util.unique_name("strides_propagation_dependent_symbol_nsdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     array_names = ["a2", "b2"]
@@ -266,9 +264,7 @@ def _make_strides_propagation_dependent_symbol_nsdfg() -> dace.SDFG:
 
 
 def _make_strides_propagation_dependent_symbol_sdfg() -> tuple[dace.SDFG, dace_nodes.NestedSDFG]:
-    sdfg_level1 = dace.SDFG(
-        gtx_transformations.utils.unique_name("strides_propagation_dependent_symbol_sdfg")
-    )
+    sdfg_level1 = dace.SDFG(util.unique_name("strides_propagation_dependent_symbol_sdfg"))
     state = sdfg_level1.add_state(is_start_block=True)
 
     array_names = ["a1", "b1"]
@@ -347,9 +343,7 @@ def test_strides_propagation_symbolic_expression():
 
 
 def _make_strides_propagation_shared_symbols_nsdfg() -> dace.SDFG:
-    sdfg = dace.SDFG(
-        gtx_transformations.utils.unique_name("strides_propagation_shared_symbols_nsdfg")
-    )
+    sdfg = dace.SDFG(util.unique_name("strides_propagation_shared_symbols_nsdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     # NOTE: Both arrays have the same symbols used for strides.
@@ -383,9 +377,7 @@ def _make_strides_propagation_shared_symbols_nsdfg() -> dace.SDFG:
 
 
 def _make_strides_propagation_shared_symbols_sdfg() -> tuple[dace.SDFG, dace_nodes.NestedSDFG]:
-    sdfg_level1 = dace.SDFG(
-        gtx_transformations.utils.unique_name("strides_propagation_shared_symbols_sdfg")
-    )
+    sdfg_level1 = dace.SDFG(util.unique_name("strides_propagation_shared_symbols_sdfg"))
     state = sdfg_level1.add_state(is_start_block=True)
 
     # NOTE: Both arrays use the same symbols as strides.
@@ -477,9 +469,7 @@ def test_strides_propagation_shared_symbols_sdfg():
 
 
 def _make_strides_propagation_stride_1_nsdfg() -> dace.SDFG:
-    sdfg_level1 = dace.SDFG(
-        gtx_transformations.utils.unique_name("strides_propagation_stride_1_nsdfg")
-    )
+    sdfg_level1 = dace.SDFG(util.unique_name("strides_propagation_stride_1_nsdfg"))
     state = sdfg_level1.add_state(is_start_block=True)
 
     a_stride_sym = dace.symbol("a_stride", dtype=dace.uint32)
@@ -508,7 +498,7 @@ def _make_strides_propagation_stride_1_nsdfg() -> dace.SDFG:
 
 
 def _make_strides_propagation_stride_1_sdfg() -> tuple[dace.SDFG, dace_nodes.NestedSDFG]:
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("strides_propagation_stride_1_sdfg"))
+    sdfg = dace.SDFG(util.unique_name("strides_propagation_stride_1_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     a_stride_sym = dace.symbol("a_stride", dtype=dace.uint32)
