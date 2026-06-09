@@ -53,6 +53,7 @@ def test_fold_shifts(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=a.ndarray[1:] + b.ndarray[2:])
 
 
+@pytest.mark.uses_cartesian_shift
 @pytest.mark.uses_dynamic_offsets
 def test_offset_field(cartesian_case):
     ref = np.full(

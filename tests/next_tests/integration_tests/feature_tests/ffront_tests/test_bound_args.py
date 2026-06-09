@@ -24,6 +24,7 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 
+@pytest.mark.uses_if_stmts
 def test_with_bound_args(cartesian_case):
     @gtx.field_operator
     def fieldop_bound_args(a: cases.IField, scalar: int32, condition: bool) -> cases.IField:

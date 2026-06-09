@@ -17,7 +17,7 @@ from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-@pytest.mark.uses_index_fields
+@pytest.mark.uses_cartesian_shift
 @pytest.mark.uses_scan_in_stencil
 def test_scan_in_stencil(program_processor):
     # FIXME[#1582](tehrengruber): Remove test after scan is reworked.

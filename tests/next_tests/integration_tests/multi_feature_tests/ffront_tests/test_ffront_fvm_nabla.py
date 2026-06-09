@@ -75,6 +75,7 @@ def pnabla(
     return compute_pnabla(pp, S_M[0], sign, vol), compute_pnabla(pp, S_M[1], sign, vol)
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.requires_atlas
 def test_ffront_compute_zavgS(exec_alloc_descriptor):
     _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor)
@@ -96,6 +97,8 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
     assert_close(388241977.58389181, np.max(zavgS.asnumpy()))
 
 
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_tuple_returns
 @pytest.mark.requires_atlas
 def test_ffront_nabla(exec_alloc_descriptor):
     _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor)

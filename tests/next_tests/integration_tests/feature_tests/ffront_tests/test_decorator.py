@@ -157,6 +157,7 @@ def test_default_backend_is_respected_field_operator(cartesian_case):
         _ = copy(a, out=a, offset_provider={})
 
 
+@pytest.mark.uses_scan
 def test_default_backend_is_respected_scan_operator(cartesian_case):
     """Test that manually calling the scan operator without setting the backend raises an error."""
 

@@ -135,6 +135,7 @@ def test_neighbor_sum(unstructured_case_3d, fop):
 
 
 @pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_cartesian_shift
 def test_reduction_execution_with_offset(unstructured_case_3d):
     EKField: TypeAlias = gtx.Field[[Edge, KDim], np.int32]
     VKField: TypeAlias = gtx.Field[[Vertex, KDim], np.int32]
@@ -525,6 +526,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 def test_local_index_premapped_field(request, unstructured_case):
     if request.node.get_closest_marker(pytest.mark.uses_mesh_with_skip_values.name):
         pytest.skip("This test only works with non-skip value meshes.")

@@ -74,6 +74,7 @@ def test_zero_dims_fields(cartesian_case):
     cases.verify(cartesian_case, implicit_broadcast_scalar, inp, out=out, ref=np.array(1))
 
 
+@pytest.mark.uses_zero_dimensional_fields
 def test_implicit_broadcast_mixed_dim(cartesian_case):
     @gtx.field_operator
     def fieldop_implicit_broadcast(

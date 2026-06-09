@@ -224,6 +224,7 @@ def test_direct_fo_call_with_domain_arg(cartesian_case):
 
 
 @pytest.mark.uses_origin
+@pytest.mark.uses_tuple_returns
 def test_direct_fo_call_with_domain_arg_tuple_return(cartesian_case):
     @field_operator
     def testee(inp: IField) -> tuple[IField, IField]:

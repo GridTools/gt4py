@@ -49,6 +49,7 @@ def test_scalar_scan(cartesian_case):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_args
 def test_tuple_scalar_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
@@ -72,7 +73,7 @@ def test_tuple_scalar_scan(cartesian_case):
 
 @pytest.mark.uses_cartesian_shift
 @pytest.mark.uses_scan
-@pytest.mark.uses_index_fields
+@pytest.mark.uses_scan_in_field_operator
 def test_scalar_scan_vertical_offset(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, inp: float) -> float:
@@ -99,6 +100,7 @@ def test_scalar_scan_vertical_offset(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
 def test_scan_unused_parameter(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, inp: float, unused: float) -> float:
@@ -148,6 +150,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_scan_nested
+@pytest.mark.uses_scan_in_field_operator
 def test_solve_triag(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
@@ -272,6 +275,8 @@ def test_scan_nested_tuple_input(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_args
 def test_scan_different_domain_in_tuple(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
@@ -311,6 +316,8 @@ def test_scan_different_domain_in_tuple(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_args
 def test_scan_tuple_field_scalar_mixed(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
