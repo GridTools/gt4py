@@ -233,8 +233,6 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
         comparison=lambda ref, a: np.allclose(ref[:, 1:], a[:, 1:]),
     )
 
-    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:].asnumpy())
-
 
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_program_with_sliced_out_arguments
