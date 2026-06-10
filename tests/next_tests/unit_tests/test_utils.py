@@ -116,8 +116,8 @@ class TestReduceObject:
         depth = utils.reduce_object(
             [[1, [2]], 3],
             decompose=self._decompose,
-            leaf_alg=lambda leaf: 0,
-            node_alg=lambda node, child_depths: 1 + max(child_depths, default=0),
+            atom_reducer=lambda atom: 0,
+            composite_reducer=lambda composite, child_depths: 1 + max(child_depths, default=0),
         )
         assert depth == 3
 
@@ -126,30 +126,38 @@ class TestReduceObject:
         # reduced results of its children, in child order.
         visited = []
 
-        def leaf_alg(leaf):
-            visited.append(leaf.value)
-            return leaf.value
+        def atom_reducer(atom):
+            visited.append(atom.value)
+            return atom.value
 
-        def node_alg(node, child_results):
+        def composite_reducer(composite, child_results):
             result = list(child_results)
             visited.append(result)
             return result
 
         utils.reduce_object(
-            [1, [2, 3]], decompose=self._decompose, leaf_alg=leaf_alg, node_alg=node_alg
+            [1, [2, 3]],
+            decompose=self._decompose,
+            atom_reducer=atom_reducer,
+            composite_reducer=composite_reducer,
         )
         assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
 
     def test_empty_containers_are_nodes(self):
         # Zero-children nodes must not corrupt the result bookkeeping.
-        def leaf_alg(leaf: utils.DecompositionAtom) -> tuple:
-            return (leaf.value,)
+        def atom_reducer(atom: utils.DecompositionAtom) -> tuple:
+            return (atom.value,)
 
-        def node_alg(node: utils.ObjectDecomposition, child_results: list[tuple]) -> tuple:
-            return (node.metadata, *child_results)
+        def composite_reducer(
+            composite: utils.ObjectDecomposition, child_results: list[tuple]
+        ) -> tuple:
+            return (composite.metadata, *child_results)
 
         result = utils.reduce_object(
-            [[], ()], decompose=self._decompose, leaf_alg=leaf_alg, node_alg=node_alg
+            [[], ()],
+            decompose=self._decompose,
+            atom_reducer=atom_reducer,
+            composite_reducer=composite_reducer,
         )
         assert result == (list, (list,), (tuple,))
 
@@ -160,8 +168,8 @@ class TestReduceObject:
         depth = utils.reduce_object(
             deeply_nested,
             decompose=self._decompose,
-            leaf_alg=lambda leaf: 0,
-            node_alg=lambda node, child_depths: 1 + max(child_depths, default=0),
+            atom_reducer=lambda atom: 0,
+            composite_reducer=lambda composite, child_depths: 1 + max(child_depths, default=0),
         )
         assert depth == 100_001  # 100_000 wrappers + the innermost empty tuple node
 
@@ -176,8 +184,8 @@ class TestReduceObject:
         utils.reduce_object(
             [shared, shared],
             decompose=decompose,
-            leaf_alg=lambda leaf: 0,
-            node_alg=lambda node, child_results: 0,
+            atom_reducer=lambda atom: 0,
+            composite_reducer=lambda composite, child_results: 0,
         )
         assert sum(1 for obj in decompose_calls if obj is shared) == 1
 
@@ -185,32 +193,32 @@ class TestReduceObject:
         utils.reduce_object(
             [shared, shared],
             decompose=decompose,
-            leaf_alg=lambda leaf: 0,
-            node_alg=lambda node, child_results: 0,
+            atom_reducer=lambda atom: 0,
+            composite_reducer=lambda composite, child_results: 0,
             memoize=False,
         )
         assert sum(1 for obj in decompose_calls if obj is shared) == 2
 
-    def test_cycles_raise_without_cycle_alg(self):
+    def test_cycles_raise_without_cycle_reducer(self):
         cyclic: list = [1]
         cyclic.append(cyclic)
         with pytest.raises(ValueError, match="Cycle detected"):
             utils.reduce_object(
                 cyclic,
                 decompose=self._decompose,
-                leaf_alg=lambda leaf: 0,
-                node_alg=lambda node, child_results: 0,
+                atom_reducer=lambda atom: 0,
+                composite_reducer=lambda composite, child_results: 0,
             )
 
-    def test_cycles_are_reduced_via_cycle_alg(self):
+    def test_cycles_are_reduced_via_cycle_reducer(self):
         cyclic: list = [1]
         cyclic.append(cyclic)
         rendered = utils.reduce_object(
             cyclic,
             decompose=self._decompose,
-            leaf_alg=lambda leaf: str(leaf.value),
-            node_alg=lambda node, child_results: f"[{','.join(child_results)}]",
-            cycle_alg=lambda relative_depth: f"<up:{relative_depth}>",
+            atom_reducer=lambda atom: str(atom.value),
+            composite_reducer=lambda composite, child_results: f"[{','.join(child_results)}]",
+            cycle_reducer=lambda relative_depth: f"<up:{relative_depth}>",
         )
         assert rendered == "[1,<up:1>]"
 

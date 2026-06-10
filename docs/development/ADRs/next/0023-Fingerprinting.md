@@ -77,8 +77,9 @@ trees — keeping three concerns explicitly separate:
 2. **Traversal scheme** (*in which order are objects visited?*): `reduce_object`,
    a generic iterative post-order fold with result memoization and cycle
    support, reusable with any result type.
-3. **Reduction logic** (*how do results combine?*): the fingerprint *algebras*,
-   which reduce leaves to digests and combine child digests into node digests.
+3. **Reduction logic** (*how do results combine?*): the fingerprint *reducers*
+   (the algebras of the catamorphism), which reduce atoms to digests and
+   combine child digests into composite digests.
 
 ### Layer 1: one-level decomposition
 
@@ -117,20 +118,20 @@ object's MRO via `functools.singledispatch`). The default rules are:
 
 ### Layer 2: the traversal scheme (`reduce_object`)
 
-`reduce_object(obj, *, decompose, leaf_alg, node_alg, cycle_alg, memoize)` reduces
+`reduce_object(obj, *, decompose, atom_reducer, composite_reducer, cycle_reducer, memoize)` reduces
 an object bottom-up over its one-level decompositions. The fold is
 **iterative** (explicit two-phase work stack), so deeply nested inputs —
 lowered IR trees routinely exceed the recursion limit budget of any recursive
 scheme — cannot raise `RecursionError`. Results are memoized by object
 identity, which makes shared subgraphs cheap, and self-referential structures
-are reduced through `cycle_alg` as back references by relative depth (results
+are reduced through `cycle_reducer` as back references by relative depth (results
 under a cycle target are never memoized, as they are context-dependent).
 The driver is carrier-agnostic — nothing in it knows about hashing — so it can
 serve other bottom-up reductions over arbitrary objects.
 
-### Layer 3: the digest algebras
+### Layer 3: the digest reducers
 
-The fingerprint algebras reduce a `DecompositionAtom` to
+The fingerprint reducers reduce a `DecompositionAtom` to
 `xxh64("leaf" + value)`, combine an `ObjectDecomposition` with its child
 digests into `xxh64("node" + metadata + digests)` — sorting the child digests
 first when the node is unordered — and encode cyclic back references by their
@@ -279,7 +280,7 @@ What becomes harder / the trade-offs:
 ### Build the catamorphism on `optree` pytrees instead of our own driver
 
 The layering of this design (one-level decomposition / generic fold /
-algebras) deliberately mirrors how a fingerprinter would be written over
+reducers) deliberately mirrors how a fingerprinter would be written over
 [`optree`](https://github.com/metaopt/optree)'s `tree_flatten_one_level`, with
 `DecompositionAtom`/`ObjectDecomposition` playing the role of the pytree
 registry entries. Using `optree` itself was evaluated and rejected:

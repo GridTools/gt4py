@@ -103,9 +103,9 @@ def reduce_object(
     obj: Any,
     *,
     decompose: ObjectDecomposer,
-    leaf_alg: AtomReducer[_R],
-    node_alg: CompositeReducer[_R],
-    cycle_alg: Optional[CycleReducer[_R]] = None,
+    atom_reducer: AtomReducer[_R],
+    composite_reducer: CompositeReducer[_R],
+    cycle_reducer: Optional[CycleReducer[_R]] = None,
     memoize: bool = True,
 ) -> _R:
     """
@@ -114,30 +114,31 @@ def reduce_object(
     The traversal scheme is fixed: an iterative post-order walk over the
     one-level decompositions produced by `decompose`, so the structure depth
     is bounded neither by the Python recursion limit nor (on Python <= 3.10)
-    by the C stack. The reduction logic is supplied as algebras: `leaf_alg`
-    reduces a :class:`DecompositionAtom` to a result, and `node_alg` combines
-    an :class:`ObjectDecomposition` with the already-reduced results of its
+    by the C stack. The reduction logic is supplied as reducers (the algebras
+    of the catamorphism): `atom_reducer` reduces a :class:`DecompositionAtom`
+    to a result, and `composite_reducer` combines an
+    :class:`ObjectDecomposition` with the already-reduced results of its
     children.
 
     Keyword Args:
         decompose: Per-object one-level decomposition into a
             :class:`DecompositionAtom` or an :class:`ObjectDecomposition`.
-        leaf_alg: Reduction of a decomposed terminal object.
-        node_alg: Combination of a decomposed non-terminal object with the
+        atom_reducer: Reduction of a decomposed terminal object.
+        composite_reducer: Combination of a decomposed non-terminal object with the
             results of its children (in child order).
-        cycle_alg: Reduction of a cyclic reference, receiving the relative
+        cycle_reducer: Reduction of a cyclic reference, receiving the relative
             depth (in currently open nodes) from the reference back up to its
             target. If `None`, cycles raise :class:`ValueError`. Results
             computed below a cycle target embed context-dependent back
             references and are therefore never memoized.
         memoize: Reuse the result of already-reduced subobjects (matched by
             identity), so shared substructure is reduced only once. Requires
-            pure algebras: results must depend only on the decomposition, not
+            pure reducers: results must depend only on the decomposition, not
             on where the object appears.
 
     Examples:
-        Computing the depth of a nested structure (children are reduced
-        before their parents, so the node algebra only sees child depths):
+        Computing the depth of a nested structure (children are reduced before
+        their parents, so the composite reducer only sees child depths):
 
         >>> def decompose(obj):
         ...     if isinstance(obj, (list, tuple)):
@@ -146,8 +147,8 @@ def reduce_object(
         >>> reduce_object(
         ...     [[1, [2]], 3],
         ...     decompose=decompose,
-        ...     leaf_alg=lambda leaf: 0,
-        ...     node_alg=lambda node, child_depths: 1 + max(child_depths, default=0),
+        ...     atom_reducer=lambda atom: 0,
+        ...     composite_reducer=lambda composite, child_depths: 1 + max(child_depths, default=0),
         ... )
         3
     """
@@ -172,17 +173,17 @@ def reduce_object(
             if (depth := open_nodes.get(current_id)) is not None:
                 # Cyclic reference: reduce to a back reference by relative
                 # depth, which is independent of memory addresses.
-                if cycle_alg is None:
+                if cycle_reducer is None:
                     raise ValueError(
                         f"Cycle detected on an object of type '{type(current).__name__}' "
-                        "and no 'cycle_alg' was provided."
+                        "and no 'cycle_reducer' was provided."
                     )
-                results.append(cycle_alg(len(open_nodes) - depth))
+                results.append(cycle_reducer(len(open_nodes) - depth))
                 taint_depth = min(taint_depth, depth)
                 continue
             decomposed = decompose(current)
             if isinstance(decomposed, DecompositionAtom):
-                result = leaf_alg(decomposed)
+                result = atom_reducer(decomposed)
                 if memoize:
                     memo[current_id] = result
                     keep_alive.append(current)
@@ -196,7 +197,7 @@ def reduce_object(
             num_children = len(decomposed.children)
             child_results = results[len(results) - num_children :]
             del results[len(results) - num_children :]
-            result = node_alg(decomposed, child_results)
+            result = composite_reducer(decomposed, child_results)
             depth = open_nodes.pop(id(current))
             if depth <= taint_depth:
                 if memoize:
@@ -212,7 +213,7 @@ def reduce_object(
     return results[0]
 
 
-# -- Fingerprinting: digest algebras over a per-type decomposition registry --
+# -- Fingerprinting: digest reducers over a per-type decomposition registry --
 Fingerprinter: TypeAlias = Callable[[Any], str]
 
 #: Pickle protocol used when decomposing unknown objects via `__reduce_ex__`.
@@ -384,28 +385,28 @@ def _decompose_fallback(obj: Any) -> DecompositionAtom | ObjectDecomposition:
     )
 
 
-def _fingerprint_leaf_alg(leaf: DecompositionAtom) -> str:
+def _fingerprint_atom_reducer(atom: DecompositionAtom) -> str:
     """Reduce a decomposed terminal object to its digest."""
-    return xxhash.xxh64(b"leaf\0" + leaf.value).hexdigest()
+    return xxhash.xxh64(b"leaf\0" + atom.value).hexdigest()
 
 
-def _fingerprint_node_alg(node: ObjectDecomposition, child_digests: list[str]) -> str:
-    """Combine the digests of a node's children into the node's digest."""
-    if not node.ordered:
+def _fingerprint_composite_reducer(composite: ObjectDecomposition, child_digests: list[str]) -> str:
+    """Combine the digests of a decomposed object's children into its digest."""
+    if not composite.ordered:
         # Sorting the child *digests* canonicalizes order-insensitive containers
         # without requiring the children themselves to be orderable.
         child_digests = sorted(child_digests)
     hasher = xxhash.xxh64(b"node\0")
-    hasher.update(node.metadata)
+    hasher.update(composite.metadata)
     hasher.update(b"\0")
     for digest in child_digests:  # fixed-length digests, unambiguous concatenation
         hasher.update(digest.encode("ascii"))
     return hasher.hexdigest()
 
 
-def _fingerprint_cycle_alg(relative_depth: int) -> str:
+def _fingerprint_cycle_reducer(relative_depth: int) -> str:
     """Reduce a cyclic back reference to a digest of its relative depth."""
-    return _fingerprint_leaf_alg(DecompositionAtom(b"cycle\0" + str(relative_depth).encode()))
+    return _fingerprint_atom_reducer(DecompositionAtom(b"cycle\0" + str(relative_depth).encode()))
 
 
 def make_fingerprinter(
@@ -414,7 +415,7 @@ def make_fingerprinter(
     """
     Create a fingerprinting function, optionally with customized per-type handling.
 
-    A fingerprinter is :func:`reduce_object` instantiated with digest algebras
+    A fingerprinter is :func:`reduce_object` instantiated with digest reducers
     (xxhash64 with domain separation) over a per-type decomposition registry.
     A handler decomposes an object into a :class:`DecompositionAtom` or an
     :class:`ObjectDecomposition` whose `value` / `metadata` are byte tags
@@ -434,9 +435,9 @@ def make_fingerprinter(
         return reduce_object(
             obj,
             decompose=decompose,
-            leaf_alg=_fingerprint_leaf_alg,
-            node_alg=_fingerprint_node_alg,
-            cycle_alg=_fingerprint_cycle_alg,
+            atom_reducer=_fingerprint_atom_reducer,
+            composite_reducer=_fingerprint_composite_reducer,
+            cycle_reducer=_fingerprint_cycle_reducer,
         )
 
     return fingerprinter
