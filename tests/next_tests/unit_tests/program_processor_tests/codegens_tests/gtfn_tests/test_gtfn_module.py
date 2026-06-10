@@ -23,7 +23,7 @@ from gt4py.next import custom_layout_allocators as next_allocators
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, cartesian_case_no_backend
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     KDim,
     exec_alloc_descriptor,
 )

@@ -32,13 +32,12 @@ from next_tests.integration_tests.cases import (
     JField,
     KField,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
     mesh_descriptor,
 )
 
 KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
-pytestmark = pytest.mark.uses_cartesian_shift
 
 
 @gtx.field_operator
@@ -89,6 +88,7 @@ def prog_orig(
     fop_original(a, b, out=(out_b, out_a), domain={IDim: (0, i_size)})
 
 
+@pytest.mark.uses_tuple_returns
 def test_program_orig(cartesian_case):
     a = cases.allocate(cartesian_case, prog_orig, "a")()
     b = cases.allocate(cartesian_case, prog_orig, "b")()
@@ -118,6 +118,7 @@ def prog_no_domain(
     fop_original(a, b, out=(out_b, out_a))
 
 
+@pytest.mark.uses_tuple_returns
 def test_program_no_domain(cartesian_case):
     a = cases.allocate(cartesian_case, prog_no_domain, "a")()
     b = cases.allocate(cartesian_case, prog_no_domain, "b")()
@@ -151,6 +152,7 @@ def prog_no_domain_different_fields(
     fop_different_fields(a, b, out=(out_b, out_a))
 
 
+@pytest.mark.uses_tuple_returns
 def test_program_no_domain_different_fields(
     cartesian_case,
 ):
@@ -185,6 +187,7 @@ def prog(
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_program(cartesian_case):
     a = cases.allocate(cartesian_case, prog, "a")()
     b = cases.allocate(cartesian_case, prog, "b")()
@@ -220,6 +223,7 @@ def prog_slicing(
 
 
 @pytest.mark.uses_program_with_sliced_out_arguments
+@pytest.mark.uses_tuple_returns
 def test_program_slicing(cartesian_case):
     a = cases.allocate(cartesian_case, prog, "a")()
     b = cases.allocate(cartesian_case, prog, "b")()
@@ -253,6 +257,7 @@ def prog_out_as_tuple(
     fop_different_fields(a, b, out=out, domain=({JDim: (0, j_size)}, {IDim: (0, i_size)}))
 
 
+@pytest.mark.uses_tuple_returns
 def test_program_out_as_tuple(
     cartesian_case,
 ):
@@ -296,6 +301,7 @@ def prog_out_as_tuple_different_sizes(
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_program_out_as_tuple_different_sizes(
     cartesian_case,
 ):
@@ -365,6 +371,7 @@ def prog_nested_tuples(
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_program_nested_tuples(
     cartesian_case,
 ):
@@ -432,6 +439,7 @@ def prog_double_nested_tuples(
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_program_double_nested_tuples(
     cartesian_case,
 ):
@@ -482,6 +490,7 @@ def prog_two_vertical_dims(
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_program_two_vertical_dims(cartesian_case):
     a = cases.allocate(cartesian_case, prog_two_vertical_dims, "a")()
     b = cases.allocate(cartesian_case, prog_two_vertical_dims, "b")()
@@ -518,6 +527,8 @@ def prog_unstructured(
     fop_shift_e2c(a, out=(out_a_shifted, out_a), domain=({Cell: (0, c_size)}, {Edge: (0, e_size)}))
 
 
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
 def test_program_unstructured(unstructured_case):
     a = cases.allocate(unstructured_case, prog_unstructured, "a")()
     out_a = cases.allocate(unstructured_case, prog_unstructured, "out_a")()
@@ -565,6 +576,8 @@ def prog_temporary(
     )
 
 
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
 def test_program_temporary(unstructured_case):
     restrict_edge = (4, -2)
     restrict_cell = (3, -1)
@@ -607,6 +620,7 @@ def test_program_temporary(unstructured_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_direct_fo_orig(cartesian_case):
     a = cases.allocate(cartesian_case, fop_original, "a")()
     b = cases.allocate(cartesian_case, fop_original, "b")()
@@ -623,6 +637,7 @@ def test_direct_fo_orig(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_direct_fo_nested(cartesian_case):
     a = cases.allocate(cartesian_case, fop_nested_tuples, "a")()
     b = cases.allocate(cartesian_case, fop_nested_tuples, "b")()
@@ -647,6 +662,7 @@ def test_direct_fo_nested(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_direct_fo(cartesian_case):
     a = cases.allocate(cartesian_case, fop_different_fields, "a")()
     b = cases.allocate(cartesian_case, fop_different_fields, "b")()
@@ -666,6 +682,7 @@ def test_direct_fo(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_direct_fo_nested_no_domain(cartesian_case):
     a = cases.allocate(cartesian_case, fop_nested_tuples, "a")()
     b = cases.allocate(cartesian_case, fop_nested_tuples, "b")()
