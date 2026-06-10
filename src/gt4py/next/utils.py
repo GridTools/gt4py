@@ -64,6 +64,11 @@ class AtomicContent:
 
     value: Any
 
+    @classmethod
+    def from_typed_value(cls, type_: type, /, payload: bytes = b"") -> AtomicContent:
+        """Builder with a domain-separation tag and optional payload."""
+        return cls(_class_tag(type_) + b"\0" + payload)
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class CompositeContent:
@@ -85,6 +90,228 @@ class CompositeContent:
 
 #: Extracts one level of content from an object.
 Extractor: TypeAlias = Callable[[Any], AtomicContent | CompositeContent]
+
+
+def _resolves_as_global(obj: Any) -> bool:
+    """Return whether resolving ``<module>.<qualname>`` through `sys.modules` yields `obj` itself."""
+    if isinstance(obj, types.ModuleType):
+        return sys.modules.get(obj.__name__) is obj
+    module = getattr(obj, "__module__", None)
+    qualname = getattr(obj, "__qualname__", None) or getattr(obj, "__name__", None)
+    if not module or not qualname:
+        return False
+    target: Any = sys.modules.get(module, None)
+    for part in qualname.split("."):
+        if (target := getattr(target, part, None)) is None:
+            return False
+    return target is obj
+
+
+def _reference_by_fully_qualified_name(obj: Any) -> str:
+    """
+    Return the qualified name of `obj`, rejecting non-importable objects.
+
+    Objects identified by their fully qualified name (import path) can only be
+    properly fingerprinted if they are importable, module-level objects, whose
+    qualified name uniquely identifies them. Anything with ``<locals>`` in its
+    qualified name (closures, nested functions, classes defined inside a
+    function) and anonymous ``<lambda>`` callables are rejected by a cheap
+    string check; additionally, the name is resolved through `sys.modules` and
+    required to yield `obj` itself, which also rejects shadowed, reassigned or
+    deleted names whose qualified name no longer identifies the object.
+    """
+    fqn = eve_utils.get_fully_qualified_name(obj)
+    if "<locals>" in fqn or "<lambda>" in fqn or not _resolves_as_global(obj):
+        raise TypeError(
+            f"Objects which are not importable under their qualified name ('{fqn}') -- e.g. "
+            "locally defined or anonymous callables, shadowed or reassigned globals -- cannot "
+            "be safely referenced since the name does not uniquely identify them."
+        )
+    return fqn
+
+
+@functools.cache
+def _cached_class_tag(cls: type) -> bytes:
+    return eve_utils.get_fully_qualified_name(cls).encode()
+
+
+# The `functools.cache` wrapper erases the parameter types (`*args: Hashable`),
+# making mypy reject `type[Any]` arguments at call sites; re-typing it restores
+# the actual signature.
+_class_tag: Final[Callable[[type], bytes]] = _cached_class_tag
+
+
+def _extract_by_reference(obj: Any) -> AtomicContent:
+    return AtomicContent(b"ref\0" + _reference_by_fully_qualified_name(obj).encode())
+
+
+def _extract_dict(obj: dict) -> CompositeContent:
+    # `collections.OrderedDict` equality is order-sensitive, so its fingerprint
+    # must be too; plain `dict` (and other subclasses) compare order-insensitively.
+    ordered = isinstance(obj, collections.OrderedDict)
+    return CompositeContent(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
+
+
+def _extract_default_dict(obj: collections.defaultdict) -> CompositeContent:
+    # The `default_factory` is part of the observable behavior of a `defaultdict`,
+    # so it participates in the fingerprint; the items child keeps the
+    # order-insensitivity of plain `dict`s.
+    return CompositeContent(_class_tag(type(obj)), (obj.default_factory, dict(obj)))
+
+
+def _extract_enum_class(obj: type[enum.Enum]) -> CompositeContent:
+    # Enum classes are extracted by content (their members) instead of by
+    # reference: they are commonly defined locally (non-importable), and their
+    # semantic content is exactly the member set.
+    return CompositeContent(
+        b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
+        tuple((member.name, member.value) for member in obj),
+    )
+
+
+def _extract_enum_member(obj: enum.Enum) -> CompositeContent:
+    # The member's class is included by content (see `_extract_enum_class`),
+    # so members of distinct but identically named (e.g. local) enum classes
+    # cannot collide.
+    return CompositeContent(b"enum_member", (type(obj), obj.name, obj.value))
+
+
+# `enum.Enum` alone is not enough: for mixin-based enums (`IntEnum`, `IntFlag`,
+# `StrEnum`, ...) the value-type base precedes `Enum` in the MRO and would win
+# the dispatch.
+_ENUM_MEMBER_BASES: Final[tuple[type, ...]] = tuple(
+    base
+    for base in (enum.Enum, enum.IntEnum, enum.IntFlag, enum.Flag, getattr(enum, "StrEnum", None))
+    if base is not None
+)
+
+
+_BUILTIN_EXTRACTORS: Final[dict[type, Extractor]] = {
+    **{base: _extract_enum_member for base in _ENUM_MEMBER_BASES},
+    enum.EnumMeta: _extract_enum_class,
+    type(None): lambda obj: AtomicContent.from_typed_value(type(None)),
+    bool: lambda obj: AtomicContent.from_typed_value(bool, b"1" if obj else b"0"),
+    int: lambda obj: AtomicContent.from_typed_value(type(obj), str(int(obj)).encode()),
+    float: lambda obj: AtomicContent.from_typed_value(type(obj), struct.pack(">d", obj)),
+    complex: lambda obj: AtomicContent.from_typed_value(
+        type(obj), struct.pack(">dd", obj.real, obj.imag)
+    ),
+    str: lambda obj: AtomicContent.from_typed_value(
+        type(obj), obj.encode("utf-8", "surrogatepass")
+    ),
+    bytes: lambda obj: AtomicContent.from_typed_value(type(obj), bytes(obj)),
+    bytearray: lambda obj: AtomicContent.from_typed_value(type(obj), bytes(obj)),
+    tuple: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
+    list: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
+    dict: _extract_dict,
+    collections.defaultdict: _extract_default_dict,
+    set: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
+    frozenset: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
+    type: _extract_by_reference,
+    types.FunctionType: _extract_by_reference,
+    types.BuiltinFunctionType: _extract_by_reference,
+    types.ModuleType: _extract_by_reference,
+}
+
+#: Pickle protocol used when extracting the content of unknown objects via
+#: `__reduce_ex__`. Pinned so the extracted content (and therefore the
+#: fingerprint) does not depend on the running Python's default protocol.
+_EXTRACT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
+
+
+def _extract_fallback(obj: Any) -> AtomicContent | CompositeContent:
+    cls = type(obj)
+    if dataclasses.is_dataclass(cls) or datamodels.is_datamodel(cls):
+        fields: Iterable[Any] = (
+            dataclasses.fields(cls)
+            if dataclasses.is_dataclass(cls)
+            else datamodels.get_fields(cls).values()
+        )
+        return CompositeContent(
+            b"fields\0" + _class_tag(cls),
+            tuple(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
+        )
+
+    try:
+        # Like `pickle.Pickler`, give precedence to reducers registered in
+        # `copyreg.dispatch_table` (e.g. NumPy registers one for `ufunc`s,
+        # whose direct `__reduce_ex__` raises).
+        if (dispatched_reducer := copyreg.dispatch_table.get(cls)) is not None:
+            reduced = dispatched_reducer(obj)
+        else:
+            reduced = obj.__reduce_ex__(_EXTRACT_PICKLE_REDUCE_PROTOCOL)
+    except Exception as error:
+        raise TypeError(f"Cannot fingerprint object of type '{cls.__name__}'.") from error
+    if isinstance(reduced, str):
+        # `__reduce__` may return a bare name to be looked up in the object's module.
+        return AtomicContent(b"global\0" + f"{getattr(obj, '__module__', '')}:{reduced}".encode())
+    constructor, constructor_args, *rest = reduced
+    state = rest[0] if len(rest) > 0 else None
+    list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
+    dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
+    custom_setstate = rest[3] if len(rest) > 3 else None
+    return CompositeContent(
+        b"reduce", (constructor, constructor_args, state, list_items, dict_items, custom_setstate)
+    )
+
+
+def make_extractor(
+    overrides: Optional[Mapping[type, Extractor]] = None,
+) -> Extractor:
+    """
+    Create a content extractor, optionally with customized per-type extraction.
+
+    The returned extractor produces the content of an object as an
+    :class:`AtomicContent` or a :class:`CompositeContent` whose `value` /
+    `metadata` are byte tags (a domain-separation tag, optionally followed by
+    a payload). Per-type extractors are dispatched on the object's MRO;
+    `overrides` take precedence over the default rules. The content of objects
+    without a matching extractor is extracted from their fields (dataclasses
+    and datamodels, honoring ``gt4py_metadata(fingerprint=False)`` field
+    metadata) or via the standard ``__reduce_ex__`` protocol.
+    """
+    return eve_utils.singledispatcher(
+        _extract_fallback,
+        implementations={**_BUILTIN_EXTRACTORS, **(overrides or {})},
+    )
+
+
+#: Default content extractor for GT4Py objects, built from the default
+#: per-type extraction rules (see :func:`make_extractor`).
+extract: Final[Extractor] = make_extractor()
+
+# -- Fingerprinting: digest reducers over a per-type extractor registry --
+Fingerprinter: TypeAlias = Callable[[Any], str]
+
+
+def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
+    gt4py_meta = metadata.get(GT4PY_CLASS_METADATA_NS, None)
+    return not gt4py_meta or gt4py_meta.get("fingerprint", True)
+
+
+def _fingerprint_atomic_reducer(atom: AtomicContent) -> str:
+    """Reduce the content of a terminal object to its digest."""
+    return xxhash.xxh64(b"leaf\0" + atom.value).hexdigest()
+
+
+def _fingerprint_composite_reducer(composite: CompositeContent, child_digests: list[str]) -> str:
+    """Combine the digests of an object's children into the object's digest."""
+    if not composite.ordered:
+        # Sorting the child *digests* canonicalizes order-insensitive containers
+        # without requiring the children themselves to be orderable.
+        child_digests = sorted(child_digests)
+    hasher = xxhash.xxh64(b"node\0")
+    hasher.update(composite.metadata)
+    hasher.update(b"\0")
+    for digest in child_digests:  # fixed-length digests, unambiguous concatenation
+        hasher.update(digest.encode("ascii"))
+    return hasher.hexdigest()
+
+
+def _fingerprint_cycle_reducer(relative_depth: int) -> str:
+    """Reduce a cyclic back reference to a digest of its relative depth."""
+    return _fingerprint_atomic_reducer(AtomicContent(b"cycle\0" + str(relative_depth).encode()))
+
 
 #: Reduces the content of a terminal object to a result.
 AtomicReducer: TypeAlias = Callable[[AtomicContent], _R]
@@ -211,228 +438,6 @@ def reduce_object(
 
     assert len(results) == 1
     return results[0]
-
-
-# -- Fingerprinting: digest reducers over a per-type extractor registry --
-Fingerprinter: TypeAlias = Callable[[Any], str]
-
-#: Pickle protocol used when extracting the content of unknown objects via
-#: `__reduce_ex__`. Pinned so the extracted content (and therefore the
-#: fingerprint) does not depend on the running Python's default protocol.
-_EXTRACT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
-
-
-def _resolves_as_global(obj: Any) -> bool:
-    """Return whether resolving ``<module>.<qualname>`` through `sys.modules` yields `obj` itself."""
-    if isinstance(obj, types.ModuleType):
-        return sys.modules.get(obj.__name__) is obj
-    module = getattr(obj, "__module__", None)
-    qualname = getattr(obj, "__qualname__", None) or getattr(obj, "__name__", None)
-    if not module or not qualname:
-        return False
-    target: Any = sys.modules.get(module, None)
-    for part in qualname.split("."):
-        if (target := getattr(target, part, None)) is None:
-            return False
-    return target is obj
-
-
-def _reference_by_fully_qualified_name(obj: Any) -> str:
-    """
-    Return the qualified name of `obj`, rejecting non-importable objects.
-
-    Objects identified by their fully qualified name (import path) can only be
-    properly fingerprinted if they are importable, module-level objects, whose
-    qualified name uniquely identifies them. Anything with ``<locals>`` in its
-    qualified name (closures, nested functions, classes defined inside a
-    function) and anonymous ``<lambda>`` callables are rejected by a cheap
-    string check; additionally, the name is resolved through `sys.modules` and
-    required to yield `obj` itself, which also rejects shadowed, reassigned or
-    deleted names whose qualified name no longer identifies the object.
-    """
-    fqn = eve_utils.get_fully_qualified_name(obj)
-    if "<locals>" in fqn or "<lambda>" in fqn or not _resolves_as_global(obj):
-        raise TypeError(
-            f"Objects which are not importable under their qualified name ('{fqn}') -- e.g. "
-            "locally defined or anonymous callables, shadowed or reassigned globals -- cannot "
-            "be safely referenced since the name does not uniquely identify them."
-        )
-    return fqn
-
-
-@functools.cache
-def _cached_class_tag(cls: type) -> bytes:
-    return eve_utils.get_fully_qualified_name(cls).encode()
-
-
-# The `functools.cache` wrapper erases the parameter types (`*args: Hashable`),
-# making mypy reject `type[Any]` arguments at call sites; re-typing it restores
-# the actual signature.
-_class_tag: Final[Callable[[type], bytes]] = _cached_class_tag
-
-
-def _leaf(tag: bytes, payload: bytes = b"") -> AtomicContent:
-    return AtomicContent(tag + b"\0" + payload)
-
-
-def _extract_by_reference(obj: Any) -> AtomicContent:
-    return _leaf(b"ref", _reference_by_fully_qualified_name(obj).encode())
-
-
-def _extract_dict(obj: dict) -> CompositeContent:
-    # `collections.OrderedDict` equality is order-sensitive, so its fingerprint
-    # must be too; plain `dict` (and other subclasses) compare order-insensitively.
-    ordered = isinstance(obj, collections.OrderedDict)
-    return CompositeContent(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
-
-
-def _extract_default_dict(obj: collections.defaultdict) -> CompositeContent:
-    # The `default_factory` is part of the observable behavior of a `defaultdict`,
-    # so it participates in the fingerprint; the items child keeps the
-    # order-insensitivity of plain `dict`s.
-    return CompositeContent(_class_tag(type(obj)), (obj.default_factory, dict(obj)))
-
-
-def _extract_enum_class(obj: type[enum.Enum]) -> CompositeContent:
-    # Enum classes are extracted by content (their members) instead of by
-    # reference: they are commonly defined locally (non-importable), and their
-    # semantic content is exactly the member set.
-    return CompositeContent(
-        b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
-        tuple((member.name, member.value) for member in obj),
-    )
-
-
-def _extract_enum_member(obj: enum.Enum) -> CompositeContent:
-    # The member's class is included by content (see `_extract_enum_class`),
-    # so members of distinct but identically named (e.g. local) enum classes
-    # cannot collide.
-    return CompositeContent(b"enum_member", (type(obj), obj.name, obj.value))
-
-
-# `enum.Enum` alone is not enough: for mixin-based enums (`IntEnum`, `IntFlag`,
-# `StrEnum`, ...) the value-type base precedes `Enum` in the MRO and would win
-# the dispatch.
-_ENUM_MEMBER_BASES: Final[tuple[type, ...]] = tuple(
-    base
-    for base in (enum.Enum, enum.IntEnum, enum.IntFlag, enum.Flag, getattr(enum, "StrEnum", None))
-    if base is not None
-)
-
-
-_BASE_FINGERPRINT_EXTRACTORS: Final[dict[type, Extractor]] = {
-    **{base: _extract_enum_member for base in _ENUM_MEMBER_BASES},
-    enum.EnumMeta: _extract_enum_class,
-    type(None): lambda obj: _leaf(b"builtins.NoneType"),
-    bool: lambda obj: _leaf(b"builtins.bool", b"1" if obj else b"0"),
-    int: lambda obj: _leaf(_class_tag(type(obj)), str(int(obj)).encode()),
-    float: lambda obj: _leaf(_class_tag(type(obj)), struct.pack(">d", obj)),
-    complex: lambda obj: _leaf(_class_tag(type(obj)), struct.pack(">dd", obj.real, obj.imag)),
-    str: lambda obj: _leaf(_class_tag(type(obj)), obj.encode("utf-8", "surrogatepass")),
-    bytes: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
-    bytearray: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
-    tuple: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
-    list: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
-    dict: _extract_dict,
-    collections.defaultdict: _extract_default_dict,
-    set: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
-    frozenset: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
-    type: _extract_by_reference,
-    types.FunctionType: _extract_by_reference,
-    types.BuiltinFunctionType: _extract_by_reference,
-    types.ModuleType: _extract_by_reference,
-}
-
-
-def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
-    gt4py_meta = metadata.get(GT4PY_CLASS_METADATA_NS, None)
-    return not gt4py_meta or gt4py_meta.get("fingerprint", True)
-
-
-def _extract_fallback(obj: Any) -> AtomicContent | CompositeContent:
-    cls = type(obj)
-    if dataclasses.is_dataclass(cls) or datamodels.is_datamodel(cls):
-        fields: Iterable[Any] = (
-            dataclasses.fields(cls)
-            if dataclasses.is_dataclass(cls)
-            else datamodels.get_fields(cls).values()
-        )
-        return CompositeContent(
-            b"fields\0" + _class_tag(cls),
-            tuple(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
-        )
-
-    try:
-        # Like `pickle.Pickler`, give precedence to reducers registered in
-        # `copyreg.dispatch_table` (e.g. NumPy registers one for `ufunc`s,
-        # whose direct `__reduce_ex__` raises).
-        if (dispatched_reducer := copyreg.dispatch_table.get(cls)) is not None:
-            reduced = dispatched_reducer(obj)
-        else:
-            reduced = obj.__reduce_ex__(_EXTRACT_PICKLE_REDUCE_PROTOCOL)
-    except Exception as error:
-        raise TypeError(f"Cannot fingerprint object of type '{cls.__name__}'.") from error
-    if isinstance(reduced, str):
-        # `__reduce__` may return a bare name to be looked up in the object's module.
-        return _leaf(b"global", f"{getattr(obj, '__module__', '')}:{reduced}".encode())
-    constructor, constructor_args, *rest = reduced
-    state = rest[0] if len(rest) > 0 else None
-    list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
-    dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
-    custom_setstate = rest[3] if len(rest) > 3 else None
-    return CompositeContent(
-        b"reduce", (constructor, constructor_args, state, list_items, dict_items, custom_setstate)
-    )
-
-
-def _fingerprint_atomic_reducer(atom: AtomicContent) -> str:
-    """Reduce the content of a terminal object to its digest."""
-    return xxhash.xxh64(b"leaf\0" + atom.value).hexdigest()
-
-
-def _fingerprint_composite_reducer(composite: CompositeContent, child_digests: list[str]) -> str:
-    """Combine the digests of an object's children into the object's digest."""
-    if not composite.ordered:
-        # Sorting the child *digests* canonicalizes order-insensitive containers
-        # without requiring the children themselves to be orderable.
-        child_digests = sorted(child_digests)
-    hasher = xxhash.xxh64(b"node\0")
-    hasher.update(composite.metadata)
-    hasher.update(b"\0")
-    for digest in child_digests:  # fixed-length digests, unambiguous concatenation
-        hasher.update(digest.encode("ascii"))
-    return hasher.hexdigest()
-
-
-def _fingerprint_cycle_reducer(relative_depth: int) -> str:
-    """Reduce a cyclic back reference to a digest of its relative depth."""
-    return _fingerprint_atomic_reducer(AtomicContent(b"cycle\0" + str(relative_depth).encode()))
-
-
-def make_extractor(
-    overrides: Optional[Mapping[type, Extractor]] = None,
-) -> Extractor:
-    """
-    Create a content extractor, optionally with customized per-type extraction.
-
-    The returned extractor produces the content of an object as an
-    :class:`AtomicContent` or a :class:`CompositeContent` whose `value` /
-    `metadata` are byte tags (a domain-separation tag, optionally followed by
-    a payload). Per-type extractors are dispatched on the object's MRO;
-    `overrides` take precedence over the default rules. The content of objects
-    without a matching extractor is extracted from their fields (dataclasses
-    and datamodels, honoring ``gt4py_metadata(fingerprint=False)`` field
-    metadata) or via the standard ``__reduce_ex__`` protocol.
-    """
-    return eve_utils.singledispatcher(
-        _extract_fallback,
-        implementations={**_BASE_FINGERPRINT_EXTRACTORS, **(overrides or {})},
-    )
-
-
-#: Default content extractor for GT4Py objects, built from the default
-#: per-type extraction rules (see :func:`make_extractor`).
-extract: Final[Extractor] = make_extractor()
 
 
 def make_fingerprinter(extractor: Extractor = extract) -> Fingerprinter:
