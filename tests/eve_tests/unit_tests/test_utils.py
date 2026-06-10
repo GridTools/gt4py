@@ -244,7 +244,7 @@ def test_pickle_reducer_factory_full_path():
     reducer = pickle_reducer_factory(
         get_new=lambda obj: dict,
         get_state=lambda obj: None,
-        map_iter=lambda obj: iter([("x", 1)]),
+        get_map_iter=lambda obj: iter([("x", 1)]),
     )
     new, new_args, state, seq_iter, map_iter, set_state = reducer("ignored")
 

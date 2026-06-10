@@ -725,49 +725,49 @@ def merge_dispatchers(
 PurePickler: TypeAlias = pickle._Pickler
 
 
+def make_none(_: Any) -> None:
+    return None
+
+
 def pickle_reducer_factory(
     get_new: Callable[[T], Callable[..., T]] = type,
     get_new_args: Callable[[T], tuple | tuple[tuple, dict[str, Any]]] = lambda obj: (),
     get_state: Callable[[T], Any] = lambda obj: obj.__dict__,
-    seq_iter: Callable[[T], Iterable[Any] | None] | None = None,
-    map_iter: Callable[[T], Iterable[tuple[str, Any]] | None] | None = None,
-    set_state: Callable[[T], Callable[[T, Any], None] | None] | None = None,
+    get_seq_iter: Callable[[T], Iterable[Any] | None] | None = None,
+    get_map_iter: Callable[[T], Iterable[tuple[str, Any]] | None] | None = None,
+    get_set_state: Callable[[T], Callable[[T, Any], None] | None] | None = None,
 ) -> Callable[[T], tuple]:
 
-    if seq_iter is map_iter is set_state is None:
+    if get_seq_iter is get_map_iter is get_set_state is None:
         # Fast path for the common case where only get_new, get_new_args and get_state are used
         def reducer(obj: T) -> tuple:
             return (get_new(obj), get_new_args(obj), get_state(obj))
 
     else:
+        get_seq_iter = get_seq_iter or make_none
+        get_map_iter = get_map_iter or make_none
+        get_set_state = get_set_state or make_none
 
-        def make_none(_: Any) -> None:
-            return None
-
-        seq_iter = seq_iter or make_none
-        map_iter = map_iter or make_none
-        set_state = set_state or make_none
-
-        assert seq_iter is not None  # for mypy
-        assert map_iter is not None  # for mypy
-        assert set_state is not None  # for mypy
+        assert get_seq_iter is not None  # for mypy
+        assert get_map_iter is not None  # for mypy
+        assert get_set_state is not None  # for mypy
 
         def reducer(obj: T) -> tuple:
             return (
                 get_new(obj),
                 get_new_args(obj),
                 get_state(obj),
-                seq_iter(obj),
-                map_iter(obj),
-                set_state(obj),
+                get_seq_iter(obj),
+                get_map_iter(obj),
+                get_set_state(obj),
             )
 
     return reducer
 
 
-#: Pickle protocol pinned for `content_hash` so the serialized byte stream (and
-#: therefore the resulting hash) is reproducible across Python versions,
-#: regardless of changes to `pickle.DEFAULT_PROTOCOL`.
+# Pickle protocol pinned for `content_hash` so the serialized byte stream (and
+# therefore the resulting hash) is reproducible across Python versions,
+# regardless of changes to `pickle.DEFAULT_PROTOCOL`.
 _CONTENT_HASH_PICKLE_PROTOCOL: int = 5
 
 
