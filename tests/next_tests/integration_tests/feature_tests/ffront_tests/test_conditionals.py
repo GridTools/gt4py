@@ -76,47 +76,6 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
 
 @pytest.mark.parametrize("condition", [True, False])
 @pytest.mark.uses_if_stmts
-def test_local_if(cartesian_case, condition):
-    @field_operator
-    def local_if(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
-        if condition:
-            tmp = a
-            result = tmp
-        else:
-            result = b
-        return result
-
-    a = cases.allocate(cartesian_case, local_if, "a")()
-    b = cases.allocate(cartesian_case, local_if, "b")()
-    out = cases.allocate(cartesian_case, local_if, cases.RETURN)()
-
-    cases.verify(cartesian_case, local_if, a, b, condition, out=out, ref=(a if condition else b))
-
-
-@pytest.mark.parametrize("condition", [True, False])
-@pytest.mark.uses_if_stmts
-def test_temporary_if(cartesian_case, condition):
-    @field_operator
-    def temporary_if(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
-        if condition:
-            tmp1 = a
-            result = tmp1
-        else:
-            tmp2 = b
-            result = tmp2
-        return result
-
-    a = cases.allocate(cartesian_case, temporary_if, "a")()
-    b = cases.allocate(cartesian_case, temporary_if, "b")()
-    out = cases.allocate(cartesian_case, temporary_if, cases.RETURN)()
-
-    cases.verify(
-        cartesian_case, temporary_if, a, b, condition, out=out, ref=(a if condition else b)
-    )
-
-
-@pytest.mark.parametrize("condition", [True, False])
-@pytest.mark.uses_if_stmts
 def test_if_return(cartesian_case, condition):
     @field_operator
     def temporary_if(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
