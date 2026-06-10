@@ -13,7 +13,7 @@ from gt4py.next import int32
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
     mesh_descriptor,
 )
@@ -54,4 +54,4 @@ def test_with_bound_args_order_args(cartesian_case):
 
     prog_bounds = program_args.with_bound_args(condition=True)
     prog_bounds(a=a, scalar=int32(1), out=out, offset_provider={})
-    np.allclose(out.asnumpy(), a.asnumpy() + int32(1))
+    assert np.allclose(out.asnumpy(), a.asnumpy() + int32(1))

@@ -15,7 +15,7 @@ from gt4py.next import common as gtx_common, custom_layout_allocators as gtx_all
 from gt4py._core import definitions as core_defs
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, unstructured_case  # noqa: F401
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     E2V,
     E2VDim,
     Edge,
