@@ -19,8 +19,17 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import ClassVar, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
-from gt4py.next import common, utils
+from gt4py.eve.extended_typing import (
+    Any,
+    ClassVar,
+    Never,
+    Optional,
+    ParamSpec,
+    TypeAlias,
+    TypeVar,
+    cast,
+)
+from gt4py.next import common
 from gt4py.next.embedded import (
     common as embedded_common,
     context as embedded_context,
@@ -98,7 +107,6 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 class NdArrayField(
     common.MutableField[common.DimsT, core_defs.ScalarT],
     common.FieldBuiltinFuncRegistry,
-    utils.MetadataBasedPicklingMixin,
 ):
     """
     Shared field implementation for NumPy-like fields.
@@ -113,6 +121,11 @@ class NdArrayField(
     _ndarray: core_defs.NDArrayObject
 
     array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
+
+    def __getstate__(self) -> dict[str, Any]:
+        # Serialize only the dataclass fields, excluding cached properties
+        # stored in `__dict__` (which may not be picklable).
+        return {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
 
     @classmethod
     def from_array(

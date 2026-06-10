@@ -23,60 +23,44 @@ dialects contain `AST`.
 from __future__ import annotations
 
 import dataclasses
-import functools
 import types
 import typing
-from typing import Any, Optional, TypeVar, cast
+from typing import Any, Optional, TypeVar
 
-from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import common, utils
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.otf import arguments, toolchain
 
 
 @dataclasses.dataclass(frozen=True)
-class BaseStage(utils.MetadataBasedPicklingMixin): ...
+class BaseStage: ...
 
 
-_base_reducer_fn: xtyping.SingleDispatchCallable[Any, Any] = eve_utils.merge_dispatchers(
-    utils.StableContainerPickler.reducer_override, foast.semantic_pickler.reducer_override
-)
-
-
-class _SemanticPickler(eve_utils.PurePickler):
+def _decompose_definition_function(func: types.FunctionType) -> utils.FingerprintComposite:
     """
-    Create a custom pickler for the BaseStage `fingerprinter` that handles
-    `types.FunctionType` by using its source code and closure variables.
-    This should be enough for the use case of GT4Py DSL definitions,
-    which are expected to be pure functions without complicated closures.
-    """
+    Decompose a Python function into its source code and closure variables.
 
-    # This is the final reducer override for the pickler, which merges the custom
-    # function reducer above with the standard stable container reducer.
-    _sorting_reducer_override_fn: xtyping.SingleDispatchCallable[Any, Any] = (
-        eve_utils.merge_dispatchers(
-            _base_reducer_fn,
-            eve_utils.singledispatcher(
-                default=lambda obj: NotImplemented,
-                implementations={
-                    types.FunctionType: eve_utils.pickle_reducer_factory(
-                        get_state=lambda f: (
-                            source_utils.make_source_definition_from_function(f),
-                            source_utils.get_closure_vars_from_function(f),
-                        )
-                    ),
-                },
-            ),
-        )
+    This should be enough for the use case of GT4Py DSL definitions, which are
+    expected to be pure functions without complicated closures.
+    """
+    return utils.FingerprintComposite(
+        b"definition_function",
+        (
+            source_utils.make_source_definition_from_function(func),
+            source_utils.get_closure_vars_from_function(func),
+        ),
     )
 
-    reducer_override = staticmethod(_sorting_reducer_override_fn)
 
-
-SemanticPickler = cast(type[utils.SingleDispatchPickler], _SemanticPickler)
-
-
-semantic_fingerprinter = functools.partial(eve_utils.content_hash, pickler_type=SemanticPickler)
+#: Fingerprinter for the frontend stages: skips source locations on AST nodes
+#: and fingerprints DSL definition functions by their source code and closure
+#: variables (instead of by qualified name).
+semantic_fingerprinter: utils.Fingerprinter = utils.make_fingerprinter(
+    {
+        **foast.semantic_fingerprint_handlers,
+        types.FunctionType: _decompose_definition_function,
+    }
+)
 
 
 #: Public alias for semantic_fingerprinter.

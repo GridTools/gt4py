@@ -95,7 +95,6 @@ class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co
 class NamedStepSequence(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.MetadataBasedPicklingMixin,
 ):
     """
     Workflow with linear succession of named steps.
@@ -164,7 +163,6 @@ class NamedStepSequence(
 class MultiWorkflow(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.MetadataBasedPicklingMixin,
 ):
     """A flexible workflow, where the sequence of steps depends on the input type."""
 
@@ -182,7 +180,6 @@ class MultiWorkflow(
 @dataclasses.dataclass(frozen=True)
 class StepSequence(
     ChainableWorkflowMixin[StartT, EndT],
-    utils.MetadataBasedPicklingMixin,
 ):
     """
     Composable workflow of single input callables.
@@ -226,7 +223,6 @@ class StepSequence(
 class CachedStep(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.MetadataBasedPicklingMixin,
     Generic[StartT, EndT, HashT],
 ):
     """
@@ -234,8 +230,8 @@ class CachedStep(
 
     The cache key combines a fingerprint of the step itself (so that changes to
     the step invalidate the cache) with the value returned by ``key_function``
-    for the given input. Because the step is fingerprinted via pickling, it must
-    be picklable (e.g. a module-level function, not a lambda or closure).
+    for the given input. Functions referenced by the step are fingerprinted by
+    qualified name, so they must be module-level (not lambdas or closures).
 
     Examples:
     ---------
@@ -258,10 +254,10 @@ class CachedStep(
 
     step: Workflow[StartT, EndT]
     key_function: Callable[[StartT], HashT] = dataclasses.field(
-        metadata=utils.gt4py_metadata(pickle=False)
+        metadata=utils.gt4py_metadata(fingerprint=False)
     )
     cache: OpaqueMutableMapping[str, EndT] = dataclasses.field(
-        repr=False, default_factory=dict, metadata=utils.gt4py_metadata(pickle=False)
+        repr=False, default_factory=dict, metadata=utils.gt4py_metadata(fingerprint=False)
     )
 
     def __call__(self, inp: StartT) -> EndT:
@@ -283,7 +279,6 @@ class CachedStep(
 class SkippableStep(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    utils.MetadataBasedPicklingMixin,
 ):
     step: Workflow[StartT, EndT]
 

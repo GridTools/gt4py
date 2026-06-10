@@ -15,7 +15,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, utils
+from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import code_specs, definitions, stages, workflow
@@ -345,7 +345,6 @@ class DaCeTranslator(
         stages.ProgramSource[code_specs.SDFGCodeSpec],
     ],
     definitions.TranslationStep[code_specs.SDFGCodeSpec],
-    utils.MetadataBasedPicklingMixin,
 ):
     device_type: core_defs.DeviceType
     auto_optimize: bool
