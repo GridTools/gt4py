@@ -785,6 +785,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             return
         assert self._memlet_to_promote is not None
 
+        # Create a dictionary that has as keys the important data of the memlet we want to promote
+        # and as value the temporary AccessNode that we created for this memlet, so that we can reuse
+        # the same AccessNode if we have multiple memlets with the same important data to promote.
+        new_access_nodes_for_promoted_memlets = dict()
+        # List of edges that we need to delete after the promotion, since they are duplicates of other
+        # edges that we created during the promotion.
+        duplicate_edges_to_delete = []
+
         for in_edge in self._memlet_to_promote:
             if isinstance(in_edge.dst, dace_nodes.AccessNode):
                 raise NotImplementedError(
@@ -848,26 +856,44 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             ), (
                 "After removing the independent dimensions there should be at least one dimension smaller than the outer map."
             )
-            promoted_name, promoted_desc = sdfg.add_temp_transient(
-                shape=promoted_accessnode_shape,
-                dtype=sdfg.arrays[in_edge.data.data].dtype,
-            )
-            promoted_anode = state.add_access(promoted_name)
+            tmp_access_node_exists = (
+                in_edge.data.data,
+                in_edge.data.subset,
+                in_edge.data.other_subset,
+            ) in new_access_nodes_for_promoted_memlets
+            if not tmp_access_node_exists:
+                promoted_name, promoted_desc = sdfg.add_temp_transient(
+                    shape=promoted_accessnode_shape,
+                    dtype=sdfg.arrays[in_edge.data.data].dtype,
+                )
+                promoted_anode = state.add_access(promoted_name)
+                new_access_nodes_for_promoted_memlets[
+                    (in_edge.data.data, in_edge.data.subset, in_edge.data.other_subset)
+                ] = (promoted_anode, promoted_name, promoted_desc)
+            else:
+                promoted_anode, promoted_name, promoted_desc = (
+                    new_access_nodes_for_promoted_memlets[
+                        (in_edge.data.data, in_edge.data.subset, in_edge.data.other_subset)
+                    ]
+                )
             original_dst_of_in_edge = in_edge.dst
             original_dst_conn_of_in_edge = in_edge.dst_conn
             original_dst_other_subset_of_in_edge = in_edge.data.other_subset
-            # Redirect the memlet to the temporary AccessNode
-            dace_helpers.redirect_edge(
-                state=state,
-                edge=in_edge,
-                new_dst=promoted_anode,
-                new_dst_conn=None,
-                new_memlet=dace.Memlet(
-                    data=in_edge.data.data,
-                    subset=in_edge.data.subset,
-                    other_subset=dace_subsets.Range.from_array(sdfg.arrays[promoted_name]),
-                ),
-            )
+            if tmp_access_node_exists:
+                duplicate_edges_to_delete.append(in_edge)
+            else:
+                # Redirect the memlet to the temporary AccessNode
+                dace_helpers.redirect_edge(
+                    state=state,
+                    edge=in_edge,
+                    new_dst=promoted_anode,
+                    new_dst_conn=None,
+                    new_memlet=dace.Memlet(
+                        data=in_edge.data.data,
+                        subset=in_edge.data.subset,
+                        other_subset=dace_subsets.Range.from_array(sdfg.arrays[promoted_name]),
+                    ),
+                )
 
             # Create a new memlet from the temporary AccessNode to the original destination
             state.add_edge(
@@ -905,6 +931,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                             )
 
             self._independent_nodes.add(promoted_anode)
+
+        for edge_to_delete in duplicate_edges_to_delete:
+            state.remove_edge(edge_to_delete)
 
     def _rewire_map_scope(
         self,

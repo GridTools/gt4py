@@ -1629,6 +1629,8 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
     sdfg.add_scalar("ttt", dtype=dace.float64, transient=True)
     sdfg.add_scalar("tttt", dtype=dace.float64, transient=True)
     sdfg.add_scalar("ttttt", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("tttttt", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("ttttttt", dtype=dace.float64, transient=True)
     sdfg.add_scalar("inc2_tmp", dtype=dace.float64, transient=True)
 
     A, B, C, T, t, S = (state.add_access(name) for name in "ABCTtS")
@@ -1640,6 +1642,8 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
     ttt = state.add_access("ttt")
     tttt = state.add_access("tttt")
     ttttt = state.add_access("ttttt")
+    tttttt = state.add_access("tttttt")
+    ttttttt = state.add_access("ttttttt")
     inc2_tmp = state.add_access("inc2_tmp")
 
     # Note that creating `T` as an array is not useful at all, a scalar would be
@@ -1671,6 +1675,20 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
         inputs={"__in", "__gt_conn_dummy", "__koffset"},
         outputs={"__out"},
         code="__out = __in[(__gt_conn_dummy - 0), (-0) + __koffset]",
+    )
+
+    indirectaccesstletkoffset_B = state.add_tasklet(
+        "indirect_access_tlet_ikoffset_B",
+        inputs={"__in", "__gt_conn_dummy", "__koffset"},
+        outputs={"__out"},
+        code="__out = __in[(__gt_conn_dummy - 0), (-0) + __koffset]",
+    )
+
+    sum_tlet = state.add_tasklet(
+        "sum_tlet",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
     )
 
     dtletB = state.add_tasklet(
@@ -1775,9 +1793,28 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
         "__koffset",
         dace.Memlet("ikoffset[__i1]"),
     )
+    state.add_edge(me, "OUT_B", indirectaccesstletkoffset_B, "__in", dace.Memlet("B[0:40, 0:8]"))
+    state.add_edge(
+        me,
+        "OUT_gt_conn_dummy",
+        indirectaccesstletkoffset_B,
+        "__gt_conn_dummy",
+        dace.Memlet("gt_conn_dummy[__i0, 1]"),
+    )
+    state.add_edge(
+        me,
+        "OUT_ikoffset",
+        indirectaccesstletkoffset_B,
+        "__koffset",
+        dace.Memlet("ikoffset[__i1]"),
+    )
     me.add_scope_connectors("ikoffset")
     state.add_edge(indirectaccesstletkoffset, "__out", ttttt, None, dace.Memlet("ttttt[0]"))
-    state.add_edge(ttttt, None, dtlet, "__in5", dace.Memlet("ttttt[0]"))
+    state.add_edge(indirectaccesstletkoffset_B, "__out", tttttt, None, dace.Memlet("tttttt[0]"))
+    state.add_edge(ttttt, None, sum_tlet, "__in1", dace.Memlet("ttttt[0]"))
+    state.add_edge(tttttt, None, sum_tlet, "__in2", dace.Memlet("tttttt[0]"))
+    state.add_edge(sum_tlet, "__out", ttttttt, None, dace.Memlet("ttttttt[0]"))
+    state.add_edge(ttttttt, None, dtlet, "__in5", dace.Memlet("ttttttt[0]"))
 
     sdfg.validate()
 
@@ -1791,8 +1828,8 @@ def _make_loop_blocking_sdfg_with_everything() -> tuple[
         (True, False, 0),
         (False, True, 0),
         (False, False, 0),
-        (True, True, 6),
-        (False, True, 6),
+        (True, True, 7),
+        (False, True, 7),
     ],
 )
 def test_loop_blocking_sdfg_with_everything(
@@ -1816,9 +1853,9 @@ def test_loop_blocking_sdfg_with_everything(
         validate=True,
         validate_all=True,
     )
-    assert count == (1 if (independent_node_threshold <= 5 or not require_independent_nodes) else 0)
+    assert count == (1 if (independent_node_threshold <= 6 or not require_independent_nodes) else 0)
 
-    assert state.out_degree(me) == 10
+    assert state.out_degree(me) == 12 if count >= 1 and promote_independent_memlets else 13
 
     me_tasklet_out_edges = [
         edge for edge in state.out_edges(me) if isinstance(edge.dst, dace_nodes.Tasklet)
@@ -1843,7 +1880,7 @@ def test_loop_blocking_sdfg_with_everything(
         assert next(iter(me_tasklet_out_edges)).data.data == "S"
         assert len(me_access_node_out_edges) == 0
     else:
-        assert len(me_tasklet_out_edges) == 7
+        assert len(me_tasklet_out_edges) == 10
         assert len(me_access_node_out_edges) == 0
 
     new_scope_of_inner_map = state.scope_dict()[ime]
