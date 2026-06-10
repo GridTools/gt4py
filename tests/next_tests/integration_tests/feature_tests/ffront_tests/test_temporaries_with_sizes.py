@@ -63,6 +63,7 @@ def testee():
 
 
 # @pytest.mark.parametrize("exec_alloc_descriptor", [run_gtfn_with_temporaries_and_symbolic_sizes])
+@pytest.mark.uses_unstructured_shift
 def test_verification(testee, exec_alloc_descriptor, mesh_descriptor):
     unstructured_case = Case(
         exec_alloc_descriptor,

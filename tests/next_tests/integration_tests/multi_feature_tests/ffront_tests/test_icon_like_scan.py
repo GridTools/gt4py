@@ -23,7 +23,11 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 
-pytestmark = [pytest.mark.uses_unstructured_shift, pytest.mark.uses_scan]
+pytestmark = [
+    pytest.mark.uses_scan,
+    pytest.mark.uses_cartesian_shift,
+    pytest.mark.uses_scan_in_field_operator,
+]
 
 
 Cell = gtx.Dimension("Cell")

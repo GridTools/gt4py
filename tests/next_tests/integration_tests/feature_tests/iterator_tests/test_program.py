@@ -88,6 +88,7 @@ def index_program_shift(out, size):
 
 
 @pytest.mark.uses_index_fields
+@pytest.mark.uses_cartesian_shift
 def test_index_builtin_shift(program_processor):
     program_processor, validate = program_processor
 

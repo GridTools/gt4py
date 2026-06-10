@@ -6,12 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import functools
 import numpy as np
 from typing import Tuple
 import pytest
-from next_tests.integration_tests.cases import IDim, JDim, KDim, Koff, cartesian_case
+from next_tests.integration_tests.cases import IDim, Ioff, JDim, KDim, Koff, cartesian_case
 from gt4py import next as gtx
-from gt4py.next import int32
+from gt4py.next import float64, int32
 from gt4py.next.ffront.fbuiltins import where, broadcast
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases_utils import (
@@ -109,4 +110,122 @@ def test_with_tuples(cartesian_case):
         *boundaries,
         out=out,
         ref=(refs[0], (refs[1], refs[2])),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+def test_conditional_nested_tuple(cartesian_case):
+    @gtx.field_operator
+    def conditional_nested_tuple(
+        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
+    ) -> tuple[
+        tuple[cases.IFloatField, cases.IFloatField], tuple[cases.IFloatField, cases.IFloatField]
+    ]:
+        return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
+
+    size = cartesian_case.default_sizes[IDim]
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=size))
+    a = cases.allocate(cartesian_case, conditional_nested_tuple, "a")()
+    b = cases.allocate(cartesian_case, conditional_nested_tuple, "b")()
+
+    where_with_mask = functools.partial(np.where, mask.asnumpy())
+
+    cases.verify(
+        cartesian_case,
+        conditional_nested_tuple,
+        mask,
+        a,
+        b,
+        out=cases.allocate(cartesian_case, conditional_nested_tuple, cases.RETURN)(),
+        ref=(
+            (
+                where_with_mask(a.asnumpy(), np.full(size, 5.0)),
+                where_with_mask(b.asnumpy(), np.full(size, 7.0)),
+            ),
+            (
+                where_with_mask(b.asnumpy(), np.full(size, 7.0)),
+                where_with_mask(a.asnumpy(), np.full(size, 5.0)),
+            ),
+        ),
+    )
+
+
+def test_conditional(cartesian_case):
+    @gtx.field_operator
+    def conditional(
+        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
+    ) -> cases.IFloatField:
+        return where(mask, a, b)
+
+    size = cartesian_case.default_sizes[IDim]
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    a = cases.allocate(cartesian_case, conditional, "a")()
+    b = cases.allocate(cartesian_case, conditional, "b")()
+    out = cases.allocate(cartesian_case, conditional, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case,
+        conditional,
+        mask,
+        a,
+        b,
+        out=out,
+        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy()),
+    )
+
+
+def test_conditional_promotion(cartesian_case):
+    @gtx.field_operator
+    def conditional_promotion(mask: cases.IBoolField, a: cases.IFloatField) -> cases.IFloatField:
+        return where(mask, a, 10.0)
+
+    size = cartesian_case.default_sizes[IDim]
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    a = cases.allocate(cartesian_case, conditional_promotion, "a")()
+    out = cases.allocate(cartesian_case, conditional_promotion, cases.RETURN)()
+    ref = np.where(mask.asnumpy(), a.asnumpy(), 10.0)
+
+    cases.verify(cartesian_case, conditional_promotion, mask, a, out=out, ref=ref)
+
+
+def test_conditional_compareop(cartesian_case):
+    @gtx.field_operator
+    def conditional_promotion(a: cases.IFloatField) -> cases.IFloatField:
+        return where(a != a, a, 10.0)
+
+    cases.verify_with_default_data(
+        cartesian_case, conditional_promotion, ref=lambda a: np.where(a != a, a, 10.0)
+    )
+
+
+@pytest.mark.uses_cartesian_shift
+def test_conditional_shifted(cartesian_case):
+    @gtx.field_operator
+    def conditional_shifted(
+        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
+    ) -> gtx.Field[[IDim], float64]:
+        tmp = where(mask, a, b)
+        return tmp(Ioff[1])
+
+    @gtx.program
+    def conditional_program(
+        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField, out: cases.IFloatField
+    ):
+        conditional_shifted(mask, a, b, out=out)
+
+    size = cartesian_case.default_sizes[IDim] + 1
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    a = cases.allocate(cartesian_case, conditional_program, "a").extend({IDim: (0, 1)})()
+    b = cases.allocate(cartesian_case, conditional_program, "b").extend({IDim: (0, 1)})()
+    out = cases.allocate(cartesian_case, conditional_shifted, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case,
+        conditional_program,
+        mask,
+        a,
+        b,
+        out,
+        inout=out,
+        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy())[1:],
     )

@@ -121,6 +121,7 @@ def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.xfail(reason="Iterator of tuple approach in lowering does not allow this.")
 def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     @gtx.field_operator
@@ -134,6 +135,7 @@ def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_nested_tuple_return(cartesian_case):
     @gtx.field_operator
     def pack_tuple(

@@ -11,7 +11,8 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import float64, int32
+from gt4py.next import errors, float64, int32
+from gt4py.next.ffront.decorator import program, scan_operator
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -48,6 +49,7 @@ def test_scalar_scan(cartesian_case):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_args
 def test_tuple_scalar_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
@@ -71,7 +73,7 @@ def test_tuple_scalar_scan(cartesian_case):
 
 @pytest.mark.uses_cartesian_shift
 @pytest.mark.uses_scan
-@pytest.mark.uses_index_fields
+@pytest.mark.uses_scan_in_field_operator
 def test_scalar_scan_vertical_offset(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, inp: float) -> float:
@@ -98,6 +100,7 @@ def test_scalar_scan_vertical_offset(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
 def test_scan_unused_parameter(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, inp: float, unused: float) -> float:
@@ -147,6 +150,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_scan_nested
+@pytest.mark.uses_scan_in_field_operator
 def test_solve_triag(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
@@ -271,6 +275,8 @@ def test_scan_nested_tuple_input(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_args
 def test_scan_different_domain_in_tuple(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
@@ -310,6 +316,8 @@ def test_scan_different_domain_in_tuple(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_args
 def test_scan_tuple_field_scalar_mixed(cartesian_case):
     init = 1.0
     i_size = cartesian_case.default_sizes[IDim]
@@ -338,3 +346,51 @@ def test_scan_tuple_field_scalar_mixed(cartesian_case):
         return scan_op((inp1, inp2))
 
     cases.verify(cartesian_case, foo, 1.0, inp2, out=out, ref=expected)
+
+
+@pytest.mark.uses_scan
+def test_scan_wrong_return_type(cartesian_case):
+    with pytest.raises(
+        errors.DSLError,
+        match=(
+            r"Argument 'state' to scan operator 'testee_scan' must have same type as its return"
+        ),
+    ):
+
+        @scan_operator(axis=KDim, forward=True, init=0)
+        def testee_scan(state: int32) -> float:
+            return 1.0
+
+        @program
+        def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
+            testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
+
+
+@pytest.mark.uses_scan
+def test_scan_wrong_init_type(cartesian_case):
+    with pytest.raises(
+        errors.DSLError,
+        match=(
+            r"Argument 'init' to scan operator 'testee_scan' must have same type as 'state' argument"
+        ),
+    ):
+
+        @scan_operator(axis=KDim, forward=True, init=0)
+        def testee_scan(state: float) -> float:
+            return 1.0
+
+        @program
+        def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
+            testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
+
+
+@pytest.mark.uses_scan
+def test_scan_without_carry(cartesian_case):
+    with pytest.raises(
+        errors.DSLError,
+        match=r"Scan operator 'testee_scan' must have at least one argument",
+    ):
+
+        @scan_operator(axis=KDim, forward=True, init=0)
+        def testee_scan() -> float:
+            return 1.0

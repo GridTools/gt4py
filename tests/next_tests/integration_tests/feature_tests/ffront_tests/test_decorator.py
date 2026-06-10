@@ -17,7 +17,7 @@ from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next import common as gtx_common
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case
+from next_tests.integration_tests.cases import IField, KDim, cartesian_case
 from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
     simple_cartesian_grid,
@@ -138,3 +138,56 @@ def test_docstring(cartesian_case):
     a = cases.allocate(cartesian_case, test_docstring, "a")()
 
     cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
+
+
+def test_default_backend_is_respected_field_operator(cartesian_case):
+    """Test that manually calling the field operator without setting the backend raises an error."""
+
+    # Important not to set the backend here!
+    @gtx.field_operator
+    def copy(a: IField) -> IField:
+        return a
+
+    a = cases.allocate(cartesian_case, copy, "a")()
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # Calling this should fail if the default backend is respected
+        # due to `exec_alloc_descriptor` fixture (dependency of `cartesian_case`)
+        # setting the default backend to something invalid.
+        _ = copy(a, out=a, offset_provider={})
+
+
+@pytest.mark.uses_scan
+def test_default_backend_is_respected_scan_operator(cartesian_case):
+    """Test that manually calling the scan operator without setting the backend raises an error."""
+
+    # Important not to set the backend here!
+    @gtx.scan_operator(axis=KDim, init=0.0, forward=True)
+    def sum(state: float, a: float) -> float:
+        return state + a
+
+    a = gtx.ones({KDim: 10}, allocator=cartesian_case.allocator)
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # see comment in field_operator test
+        _ = sum(a, out=a, offset_provider={})
+
+
+def test_default_backend_is_respected_program(cartesian_case):
+    """Test that manually calling the program without setting the backend raises an error."""
+
+    @gtx.field_operator
+    def copy(a: IField) -> IField:
+        return a
+
+    # Important not to set the backend here!
+    @gtx.program
+    def copy_program(a: IField, b: IField) -> IField:
+        copy(a, out=b)
+
+    a = cases.allocate(cartesian_case, copy_program, "a")()
+    b = cases.allocate(cartesian_case, copy_program, "b")()
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # see comment in field_operator test
+        _ = copy_program(a, b, offset_provider={})

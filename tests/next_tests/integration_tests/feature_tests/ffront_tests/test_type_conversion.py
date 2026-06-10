@@ -44,6 +44,7 @@ def test_astype_int(cartesian_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 def test_astype_int_local_field(unstructured_case):
     @gtx.field_operator
     def testee(a: gtx.Field[[Vertex], np.float64]) -> gtx.Field[[Edge], int64]:
