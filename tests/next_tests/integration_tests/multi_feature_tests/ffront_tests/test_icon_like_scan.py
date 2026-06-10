@@ -18,12 +18,16 @@ from gt4py.next import common
 from next_tests import definitions as test_definitions
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import Cell, KDim, Koff
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
 )
 
 
-pytestmark = [pytest.mark.uses_unstructured_shift, pytest.mark.uses_scan]
+pytestmark = [
+    pytest.mark.uses_scan,
+    pytest.mark.uses_cartesian_shift,
+    pytest.mark.uses_scan_in_field_operator,
+]
 
 
 Cell = gtx.Dimension("Cell")
@@ -228,8 +232,6 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
         inout=test_setup.z_q_out,
         comparison=lambda ref, a: np.allclose(ref[:, 1:], a[:, 1:]),
     )
-
-    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:].asnumpy())
 
 
 @pytest.mark.uses_tuple_returns

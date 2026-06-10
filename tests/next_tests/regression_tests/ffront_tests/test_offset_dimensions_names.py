@@ -13,7 +13,7 @@ from gt4py.next import Dims, Field, common, constructors
 
 from next_tests import definitions as test_defs
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
+from next_tests.integration_tests import cases_utils
 
 
 V = gtx.Dimension("V")
@@ -25,7 +25,7 @@ Off = gtx.FieldOffset("Off", source=E, target=(V, Neigh))
 @pytest.fixture
 def case():
     exec_alloc_descriptor = test_defs.ProgramBackendId.GTFN_CPU.load()
-    mesh = ffront_test_utils.simple_mesh(exec_alloc_descriptor.allocator)
+    mesh = cases_utils.simple_mesh(exec_alloc_descriptor.allocator)
     v2e_arr = mesh.offset_provider["V2E"].ndarray
     return cases.Case(
         exec_alloc_descriptor,

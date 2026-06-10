@@ -34,7 +34,7 @@ from gt4py.next import (
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
 )
 
