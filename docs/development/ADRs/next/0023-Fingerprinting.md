@@ -66,20 +66,27 @@ The drivers for a redesign were therefore:
 
 ## Decision
 
-We standardize on a **structural fingerprinter**: a single iterative,
-post-order traversal of the object graph that hashes content bottom-up,
-Merkle-tree style. Each object contributes either a **leaf** (a raw byte
-payload) or a **composite** (a tag plus children, whose digests are combined —
-sorted first if the container is unordered). The implementation lives in
-`gt4py.next.utils`.
+We standardize on a **structural fingerprinter**: a content hash of the object
+graph computed bottom-up, Merkle-tree style. The implementation (in
+`gt4py.next.utils`) is layered as a **catamorphism** — a generalized fold over
+trees — keeping three concerns explicitly separate:
 
-### Core: decomposition + bottom-up hashing
+1. **Decomposition** (*what is the one-level structure of an object?*): a
+   per-type registry of handlers, each peeling off exactly one level into a
+   `TreeLeaf` or a `TreeNode`.
+2. **Traversal scheme** (*in which order are objects visited?*): `tree_cata`,
+   a generic iterative post-order fold with result memoization and cycle
+   support, reusable with any result type.
+3. **Reduction logic** (*how do results combine?*): the fingerprint *algebras*,
+   which reduce leaves to digests and combine child digests into node digests.
+
+### Layer 1: one-level decomposition
 
 A *fingerprint handler* decomposes an object into its contribution:
 
 ```python
-FingerprintLeaf(payload: bytes)                              # terminal
-FingerprintComposite(tag: bytes, children: tuple, ordered)   # recurse into children
+TreeLeaf(value: bytes)                                # terminal
+TreeNode(metadata: bytes, children: tuple, ordered)   # recurse into children
 ```
 
 `make_fingerprinter(extra_handlers)` builds a fingerprinting function from the
@@ -88,31 +95,48 @@ object's MRO via `functools.singledispatch`). The default rules are:
 
 - **Primitives** (`int`, `float`, `str`, `bytes`, ...) — leaves tagged with
   their concrete class, so `True`, `1` and `1.0` do not collide.
-- **`tuple`/`list`** — ordered composites.
-- **`dict`/`set`/`frozenset`** — *unordered* composites: the digests of the
+- **`tuple`/`list`** — ordered nodes.
+- **`dict`/`set`/`frozenset`** — *unordered* nodes: the digests of the
   items are sorted before combining, so insertion order (and
   `PYTHONHASHSEED`-dependent set iteration order) never leaks into the
   fingerprint. Because the *digests* are sorted — not the values — keys do not
   need to be orderable or even comparable (`Dimension`-keyed dicts just work).
-  `collections.OrderedDict`, whose equality is order-sensitive, stays ordered.
+  `collections.OrderedDict`, whose equality is order-sensitive, stays ordered;
+  `collections.defaultdict` additionally contributes its `default_factory`.
 - **`type` / functions / modules** — leaves containing the fully qualified
-  name: identified **by reference**, not by value. Non-importable callables
-  (lambdas, local closures), whose qualified names are ambiguous, are rejected
-  with a `TypeError` instead of silently colliding.
-- **Dataclasses and datamodels** — composites of class + field values, honoring
+  name: identified **by reference**, not by value. The name is resolved through
+  `sys.modules` and must yield the object itself; non-importable callables
+  (lambdas, local closures), whose qualified names are ambiguous, as well as
+  shadowed or reassigned globals, are rejected with a `TypeError` instead of
+  silently colliding.
+- **Dataclasses and datamodels** — nodes of class + field values, honoring
   the field metadata opt-out (below).
 - **Everything else** — decomposed via the standard `__reduce_ex__` protocol
   (with a pinned protocol version), which covers e.g. NumPy arrays by content
   without any special-casing.
 
-The traversal is **iterative** (explicit work stack), so deeply nested inputs —
+### Layer 2: the traversal scheme (`tree_cata`)
+
+`tree_cata(obj, *, decompose, leaf_alg, node_alg, cycle_alg, memoize)` reduces
+an object bottom-up over its one-level decompositions. The fold is
+**iterative** (explicit two-phase work stack), so deeply nested inputs —
 lowered IR trees routinely exceed the recursion limit budget of any recursive
-scheme — cannot raise `RecursionError`. Digests are memoized by object
-identity, which makes shared subgraphs cheap *and* keeps the fingerprint a pure
-function of value: a graph that shares a sub-object and a graph with an equal
-copy fingerprint identically. Self-referential structures (e.g. module-level
-recursive functions appearing in their own closure variables) are handled with
-relative back references.
+scheme — cannot raise `RecursionError`. Results are memoized by object
+identity, which makes shared subgraphs cheap, and self-referential structures
+are reduced through `cycle_alg` as back references by relative depth (results
+under a cycle target are never memoized, as they are context-dependent).
+The driver is carrier-agnostic — nothing in it knows about hashing — so it can
+serve other bottom-up reductions over arbitrary objects.
+
+### Layer 3: the digest algebras
+
+The fingerprint algebras reduce a `TreeLeaf` to
+`xxh64("leaf" + value)`, combine a `TreeNode` with its child digests into
+`xxh64("node" + metadata + digests)` — sorting the child digests first when the
+node is unordered — and encode cyclic back references by their relative depth.
+Together with the identity-based memoization this keeps the fingerprint a pure
+function of *value*: a graph that shares a sub-object and a graph with an
+equal copy fingerprint identically.
 
 ### Selecting fields: declarative metadata
 
@@ -206,7 +230,11 @@ What becomes harder / the trade-offs:
   (skip `location`/`type`, decompose functions by source) are chosen
   conservatively for this reason.
 - Objects identified by reference must be importable (module-level); lambdas
-  and local closures in fingerprinted positions are a hard error.
+  and local closures in fingerprinted positions are a hard error. Structurally
+  fingerprinting local functions (code object + defaults + closure cells) would
+  lift the restriction and is a possible follow-up, but it is only stable per
+  CPython version and the loud failure is preferred until a real use case
+  appears.
 
 ## Alternatives considered
 
@@ -247,6 +275,30 @@ What becomes harder / the trade-offs:
   composable per-type customization, the `__reduce_ex__` protocol as a
   universal fallback) without hashing a serialization format.
 
+### Build the catamorphism on `optree` pytrees instead of our own driver
+
+The layering of this design (one-level decomposition / generic fold /
+algebras) deliberately mirrors how a fingerprinter would be written over
+[`optree`](https://github.com/metaopt/optree)'s `tree_flatten_one_level`, with
+`TreeLeaf`/`TreeNode` playing the role of the pytree registry entries. Using
+`optree` itself was evaluated and rejected:
+
+- Good, because the pytree registry and the one-level decomposition of builtin
+  containers come for free, and the vocabulary (leaves, nodes, `is_leaf`,
+  namespaces) is established in the array ecosystem.
+- Bad, because its registry is looked up by **exact type** (no MRO dispatch),
+  so a single handler cannot cover an entire hierarchy like `eve.Node`
+  (~100+ concrete IR node classes would each need registration, per
+  skipped-field-set namespace), whereas `functools.singledispatch` gives us
+  that for free.
+- Bad, because `tree_flatten_one_level` is implemented in Python (a registry
+  lookup plus a Python `flatten_func` call), so a node-by-node fold cannot
+  benefit from `optree`'s C++ bulk traversal — which is also depth-capped
+  (`MAX_RECURSION_DEPTH = 1000`) and has no memoization or cycle support, as
+  pytrees are acyclic by definition.
+- Bad, because it would add a compiled (pybind11) runtime dependency for what
+  our own driver covers in well under a hundred lines of standard library code.
+
 ### `pickle`'s `dispatch_table` instead of single-dispatch handlers
 
 - Good, because it is the documented pickle extension point.
@@ -264,7 +316,7 @@ What becomes harder / the trade-offs:
 
 ## References
 
-- `src/gt4py/next/utils.py` — `FingerprintLeaf`, `FingerprintComposite`,
+- `src/gt4py/next/utils.py` — `TreeLeaf`, `TreeNode`, `tree_cata`,
   `make_fingerprinter`, `stable_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
