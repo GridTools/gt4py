@@ -92,6 +92,9 @@ AtomReducer: TypeAlias = Callable[[DecompositionAtom], _R]
 #: Combines a decomposed non-terminal object with the results of its children.
 CompositeReducer: TypeAlias = Callable[[ObjectDecomposition, list[_R]], _R]
 
+#: Reduces a cyclic reference, given the relative depth back up to its target.
+CycleReducer: TypeAlias = Callable[[int], _R]
+
 _VISIT: Final[int] = 0
 _COMBINE: Final[int] = 1
 
@@ -102,7 +105,7 @@ def reduce_object(
     decompose: ObjectDecomposer,
     leaf_alg: AtomReducer[_R],
     node_alg: CompositeReducer[_R],
-    cycle_alg: Optional[Callable[[int], _R]] = None,
+    cycle_alg: Optional[CycleReducer[_R]] = None,
     memoize: bool = True,
 ) -> _R:
     """
