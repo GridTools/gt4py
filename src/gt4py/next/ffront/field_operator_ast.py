@@ -20,8 +20,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 #: Generate an unique fingerprint for `eve.Node`s ignoring its "location" attribute.
-semantic_fingerprinter, semantic_fingerprint_handlers = utils.skipping_fields_node_fingerprinter(
-    "location", return_handlers=True
+semantic_fingerprinter, semantic_fingerprint_extractors = utils.skipping_fields_node_fingerprinter(
+    "location", return_extractors=True
 )
 
 

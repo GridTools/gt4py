@@ -56,10 +56,12 @@ def _extract_definition_function(func: types.FunctionType) -> utils.CompositeCon
 #: and fingerprints DSL definition functions by their source code and closure
 #: variables (instead of by qualified name).
 semantic_fingerprinter: utils.Fingerprinter = utils.make_fingerprinter(
-    {
-        **foast.semantic_fingerprint_handlers,
-        types.FunctionType: _extract_definition_function,
-    }
+    utils.make_extractor(
+        {
+            **foast.semantic_fingerprint_extractors,
+            types.FunctionType: _extract_definition_function,
+        }
+    )
 )
 
 

@@ -15,11 +15,11 @@ collection of ad-hoc, per-class fingerprinting routines that were hard to keep
 consistent and stable across interpreter runs, we decided to build a single
 general **structural fingerprinting** mechanism — an iterative Merkle-style
 content hash over the object graph — customized through per-type
-**fingerprint handlers** and declarative **field metadata**. We considered
+**content extractors** and declarative **field metadata**. We considered
 keeping the bespoke `fingerprint()` methods and the
 `add_content_to_fingerprint` single-dispatch visitor, as well as hashing a
 pickle byte stream produced by custom picklers, and accept that objects fed to
-a fingerprinter must either match a handler, be a dataclass/datamodel, or
+a fingerprinter must either match an extractor, be a dataclass/datamodel, or
 support the standard `__reduce_ex__` protocol.
 
 ## Context
@@ -72,7 +72,7 @@ graph computed bottom-up, Merkle-tree style. The implementation (in
 trees — keeping three concerns explicitly separate:
 
 1. **Content extraction** (*what is the one-level content of an object?*): a
-   per-type registry of handlers (*extractors*), each peeling off exactly one
+   per-type registry of *extractors*, each peeling off exactly one
    level into an `AtomicContent` or a `CompositeContent`.
 2. **Traversal scheme** (*in which order are objects visited?*): `reduce_object`,
    a generic iterative post-order fold with result memoization and cycle
@@ -83,16 +83,18 @@ trees — keeping three concerns explicitly separate:
 
 ### Layer 1: one-level content extraction
 
-A *fingerprint handler* extracts the content of an object:
+A *fingerprint extractor* produces the content of an object:
 
 ```python
 AtomicContent(value: bytes)                                  # terminal
 CompositeContent(metadata: bytes, children: tuple, ordered)   # recurse into children
 ```
 
-`make_fingerprinter(extra_handlers)` builds a fingerprinting function from the
-default handler registry plus optional per-type overrides (dispatched on the
-object's MRO via `functools.singledispatch`). The default rules are:
+`make_extractor(overrides)` builds an `Extractor` from the default per-type
+registry plus optional overrides (dispatched on the object's MRO via
+`functools.singledispatch`); the module-level `extract` is the default
+extractor, and `make_fingerprinter(extractor)` turns any such extractor into a
+fingerprinting function. The default extraction rules are:
 
 - **Primitives** (`int`, `float`, `str`, `bytes`, ...) — leaves tagged with
   their concrete class, so `True`, `1` and `1.0` do not collide.
@@ -163,31 +165,33 @@ declarative, per-class opt-out read directly from the field definitions; it
 does **not** alter how the class pickles, so fingerprinting and real
 serialization stay independent concerns.
 
-### Customizing per type: composing handlers
+### Customizing per type: composing extractors
 
 Subsystems describe only the *deltas* they need on top of the shared default
 rules:
 
-- `stable_fingerprinter` — the default fingerprinter (no extra handlers); used
+- `stable_fingerprinter` — the default fingerprinter (default extractor); used
   by the OTF build caches.
 - `skipping_fields_node_fingerprinter("location", "type", ...)` — a cached
-  factory returning a fingerprinter (and optionally its handler registry) for
+  factory returning a fingerprinter (and optionally its extractor overrides) for
   `eve.Node`s that recursively skips the named child fields. The iterator/GTIR
   `semantic_fingerprinter` skips `location` and `type` (types are filled in
   later by inference and must not change identity); the FOAST
   `semantic_fingerprinter` skips `location`.
-- The ffront stages `semantic_fingerprinter` composes the FOAST node handlers
-  with a `types.FunctionType` handler that extracts a DSL definition function
+- The ffront stages `semantic_fingerprinter` composes the FOAST node extractors
+  with a `types.FunctionType` extractor that extracts a DSL definition function
   into its **source code + closure variables** rather than identifying it by
   reference — which is what makes two textually identical field operators
   fingerprint equal, and recompiles when a referenced helper changes:
 
 ```python
 semantic_fingerprinter = utils.make_fingerprinter(
-    {
-        **foast.semantic_fingerprint_handlers,
-        types.FunctionType: _extract_definition_function,
-    }
+    utils.make_extractor(
+        {
+            **foast.semantic_fingerprint_extractors,
+            types.FunctionType: _extract_definition_function,
+        }
+    )
 )
 ```
 
@@ -216,7 +220,7 @@ What becomes easier:
 - One fingerprinting mechanism is reused everywhere; adding a new
   cached/compared type usually means nothing at all (dataclasses, datamodels
   and reducible objects are covered by default), marking non-semantic fields
-  `fingerprint=False`, or registering one handler.
+  `fingerprint=False`, or registering one extractor.
 - Fingerprints are stable across processes, tolerant of dict/set ordering and
   of object-graph sharing, and robust against arbitrarily deep inputs.
 - Fingerprinting no longer interferes with real pickling: classes keep their
@@ -227,7 +231,7 @@ What becomes harder / the trade-offs:
 
 - The traversal logic is our own (~200 lines) rather than delegated to
   `pickle`; it has to be maintained and its determinism guarded by tests.
-- Correctness of caching depends on handlers being faithful: a handler that
+- Correctness of caching depends on extractors being faithful: an extractor that
   drops semantically relevant content can cause false cache hits. The defaults
   (skip `location`/`type`, extract functions by source) are chosen
   conservatively for this reason.
@@ -289,7 +293,7 @@ registry entries. Using `optree` itself was evaluated and rejected:
   containers come for free, and the vocabulary (leaves, nodes, `is_leaf`,
   namespaces) is established in the array ecosystem.
 - Bad, because its registry is looked up by **exact type** (no MRO dispatch),
-  so a single handler cannot cover an entire hierarchy like `eve.Node`
+  so a single extractor cannot cover an entire hierarchy like `eve.Node`
   (~100+ concrete IR node classes would each need registration, per
   skipped-field-set namespace), whereas `functools.singledispatch` gives us
   that for free.
@@ -301,10 +305,10 @@ registry entries. Using `optree` itself was evaluated and rejected:
 - Bad, because it would add a compiled (pybind11) runtime dependency for what
   our own driver covers in well under a hundred lines of standard library code.
 
-### `pickle`'s `dispatch_table` instead of single-dispatch handlers
+### `pickle`'s `dispatch_table` instead of single-dispatch extractors
 
 - Good, because it is the documented pickle extension point.
-- Bad, because it matches on exact type only; we explicitly want a handler to
+- Bad, because it matches on exact type only; we explicitly want an extractor to
   apply to an entire class hierarchy (e.g. all `eve.Node` subclasses), which
   single dispatch gives us for free.
 
@@ -313,13 +317,14 @@ registry entries. Using `optree` itself was evaluated and rejected:
 - Good, because it handles many container types out of the box.
 - Bad, because we need fine control over per-field inclusion and over
   by-reference vs. by-value handling of functions/types, which is awkward to
-  express through an external hasher; our own handlers keep the control local
+  express through an external hasher; our own extractors keep the control local
   and composable. (`deepdiff` remains available in `eve.utils` for diffing.)
 
 ## References
 
 - `src/gt4py/next/utils.py` — `AtomicContent`, `CompositeContent`,
-  `reduce_object`, `make_fingerprinter`, `stable_fingerprinter`,
+  `reduce_object`, `make_extractor`, `extract`, `make_fingerprinter`,
+  `stable_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
 - `src/gt4py/next/otf/workflow.py` — `CachedStep.cache_key`.

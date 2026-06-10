@@ -219,7 +219,7 @@ Fingerprinter: TypeAlias = Callable[[Any], str]
 #: Pickle protocol used when extracting the content of unknown objects via
 #: `__reduce_ex__`. Pinned so the extracted content (and therefore the
 #: fingerprint) does not depend on the running Python's default protocol.
-_FINGERPRINT_REDUCE_PROTOCOL: Final[int] = 2
+_EXTRACT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
 
 
 def _resolves_as_global(obj: Any) -> bool:
@@ -369,7 +369,7 @@ def _extract_fallback(obj: Any) -> AtomicContent | CompositeContent:
         if (dispatched_reducer := copyreg.dispatch_table.get(cls)) is not None:
             reduced = dispatched_reducer(obj)
         else:
-            reduced = obj.__reduce_ex__(_FINGERPRINT_REDUCE_PROTOCOL)
+            reduced = obj.__reduce_ex__(_EXTRACT_PICKLE_REDUCE_PROTOCOL)
     except Exception as error:
         raise TypeError(f"Cannot fingerprint object of type '{cls.__name__}'.") from error
     if isinstance(reduced, str):
@@ -409,32 +409,46 @@ def _fingerprint_cycle_reducer(relative_depth: int) -> str:
     return _fingerprint_atomic_reducer(AtomicContent(b"cycle\0" + str(relative_depth).encode()))
 
 
-def make_fingerprinter(
-    extra_handlers: Optional[Mapping[type, Extractor]] = None,
-) -> Fingerprinter:
+def make_extractor(
+    overrides: Optional[Mapping[type, Extractor]] = None,
+) -> Extractor:
     """
-    Create a fingerprinting function, optionally with customized per-type handling.
+    Create a content extractor, optionally with customized per-type extraction.
+
+    The returned extractor produces the content of an object as an
+    :class:`AtomicContent` or a :class:`CompositeContent` whose `value` /
+    `metadata` are byte tags (a domain-separation tag, optionally followed by
+    a payload). Per-type extractors are dispatched on the object's MRO;
+    `overrides` take precedence over the default rules. The content of objects
+    without a matching extractor is extracted from their fields (dataclasses
+    and datamodels, honoring ``gt4py_metadata(fingerprint=False)`` field
+    metadata) or via the standard ``__reduce_ex__`` protocol.
+    """
+    return eve_utils.singledispatcher(
+        _extract_fallback,
+        implementations={**_BASE_FINGERPRINT_EXTRACTORS, **(overrides or {})},
+    )
+
+
+#: Default content extractor for GT4Py objects, built from the default
+#: per-type extraction rules (see :func:`make_extractor`).
+extract: Final[Extractor] = make_extractor()
+
+
+def make_fingerprinter(extractor: Extractor = extract) -> Fingerprinter:
+    """
+    Create a fingerprinting function, optionally with a customized extractor.
 
     A fingerprinter is :func:`reduce_object` instantiated with digest reducers
-    (xxhash64 with domain separation) over a per-type extractor registry.
-    A handler extracts the content of an object as an :class:`AtomicContent`
-    or a :class:`CompositeContent` whose `value` / `metadata` are byte tags
-    (a domain-separation tag, optionally followed by a payload). Handlers are
-    dispatched on the object's MRO; `extra_handlers` take precedence over the
-    default rules. The content of objects without a matching handler is
-    extracted from their fields (dataclasses and datamodels, honoring
-    ``gt4py_metadata(fingerprint=False)`` field metadata) or via the standard
-    ``__reduce_ex__`` protocol.
+    (xxhash64 with domain separation) over a content extractor, which must
+    produce byte tags as `value` / `metadata`; use :func:`make_extractor` to
+    customize the default per-type extraction rules.
     """
-    extract = eve_utils.singledispatcher(
-        _extract_fallback,
-        implementations={**_BASE_FINGERPRINT_EXTRACTORS, **(extra_handlers or {})},
-    )
 
     def fingerprinter(obj: Any) -> str:
         return reduce_object(
             obj,
-            extract=extract,
+            extract=extractor,
             atomic_reducer=_fingerprint_atomic_reducer,
             composite_reducer=_fingerprint_composite_reducer,
             cycle_reducer=_fingerprint_cycle_reducer,
@@ -450,8 +464,8 @@ def make_fingerprinter(
 stable_fingerprinter: Fingerprinter = make_fingerprinter()
 
 
-def _make_skipping_fields_node_handler(skipped_fields: frozenset[str]) -> Extractor:
-    def handler(node: concepts.Node) -> CompositeContent:
+def _make_skipping_fields_node_extractor(skipped_fields: frozenset[str]) -> Extractor:
+    def node_extractor(node: concepts.Node) -> CompositeContent:
         return CompositeContent(
             b"fields\0" + _class_tag(type(node)),
             tuple(
@@ -461,38 +475,39 @@ def _make_skipping_fields_node_handler(skipped_fields: frozenset[str]) -> Extrac
             ),
         )
 
-    return handler
+    return node_extractor
 
 
 @overload
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_handlers: Literal[False] = False
+    *skipped_fields: str, return_extractors: Literal[False] = False
 ) -> Fingerprinter: ...
 
 
 @overload
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_handlers: Literal[True]
+    *skipped_fields: str, return_extractors: Literal[True]
 ) -> tuple[Fingerprinter, dict[type, Extractor]]: ...
 
 
 @functools.cache
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_handlers: bool = False
+    *skipped_fields: str, return_extractors: bool = False
 ) -> Fingerprinter | tuple[Fingerprinter, dict[type, Extractor]]:
     """
     Return a fingerprinter that fingerprints a node while skipping fields.
 
     The provided field names are ignored recursively on all nodes. With
-    `return_handlers=True`, additionally return the handler registry so it can
-    be composed into another fingerprinter via :func:`make_fingerprinter`.
+    `return_extractors=True`, additionally return the per-type extractor
+    overrides so they can be composed into another extractor via
+    :func:`make_extractor`.
     """
-    handlers: dict[type, Extractor] = {
-        concepts.Node: _make_skipping_fields_node_handler(frozenset(skipped_fields))
+    extractors: dict[type, Extractor] = {
+        concepts.Node: _make_skipping_fields_node_extractor(frozenset(skipped_fields))
     }
-    fingerprinter = make_fingerprinter(handlers)
+    fingerprinter = make_fingerprinter(make_extractor(extractors))
 
-    return (fingerprinter, handlers) if return_handlers else fingerprinter
+    return (fingerprinter, extractors) if return_extractors else fingerprinter
 
 
 class RecursionGuard:

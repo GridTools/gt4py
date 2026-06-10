@@ -89,19 +89,29 @@ def test_skipping_fields_node_fingerprinter_skips_nested_fields_and_is_cached():
     assert fingerprinter(node_a) != fingerprinter(node_b)
 
 
-def test_skipping_fields_node_fingerprinter_returns_handlers_when_requested():
+def test_skipping_fields_node_fingerprinter_returns_extractors_when_requested():
     from gt4py.eve import concepts
 
-    fingerprinter, handlers = utils.skipping_fields_node_fingerprinter(
-        "int_value", return_handlers=True
+    fingerprinter, extractors = utils.skipping_fields_node_fingerprinter(
+        "int_value", return_extractors=True
     )
     assert callable(fingerprinter)
-    # The handlers can be composed into another fingerprinter.
-    assert set(handlers) == {concepts.Node}
-    assert callable(utils.make_fingerprinter(handlers))
+    # The extractor overrides can be composed into another extractor.
+    assert set(extractors) == {concepts.Node}
+    assert callable(utils.make_fingerprinter(utils.make_extractor(extractors)))
 
-    # Without `return_handlers` only the fingerprinter callable is returned.
+    # Without `return_extractors` only the fingerprinter callable is returned.
     assert callable(utils.skipping_fields_node_fingerprinter("int_value"))
+
+
+def test_default_extractor():
+    # The public default extractor classifies objects into atomic and
+    # composite content...
+    assert isinstance(utils.extract(1), utils.AtomicContent)
+    assert isinstance(utils.extract((1, 2)), utils.CompositeContent)
+    # ... and is the extractor `make_fingerprinter` uses by default.
+    payload = {"a": (1, 2)}
+    assert utils.make_fingerprinter(utils.extract)(payload) == utils.stable_fingerprinter(payload)
 
 
 class TestReduceObject:
