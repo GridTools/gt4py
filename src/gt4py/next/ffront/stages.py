@@ -36,14 +36,14 @@ from gt4py.next.otf import arguments, toolchain
 class BaseStage: ...
 
 
-def _decompose_definition_function(func: types.FunctionType) -> utils.ObjectDecomposition:
+def _extract_definition_function(func: types.FunctionType) -> utils.CompositeContent:
     """
-    Decompose a Python function into its source code and closure variables.
+    Extract the content of a Python function: its source code and closure variables.
 
     This should be enough for the use case of GT4Py DSL definitions, which are
     expected to be pure functions without complicated closures.
     """
-    return utils.ObjectDecomposition(
+    return utils.CompositeContent(
         b"definition_function",
         (
             source_utils.make_source_definition_from_function(func),
@@ -58,7 +58,7 @@ def _decompose_definition_function(func: types.FunctionType) -> utils.ObjectDeco
 semantic_fingerprinter: utils.Fingerprinter = utils.make_fingerprinter(
     {
         **foast.semantic_fingerprint_handlers,
-        types.FunctionType: _decompose_definition_function,
+        types.FunctionType: _extract_definition_function,
     }
 )
 

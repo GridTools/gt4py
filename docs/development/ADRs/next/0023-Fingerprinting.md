@@ -71,9 +71,9 @@ graph computed bottom-up, Merkle-tree style. The implementation (in
 `gt4py.next.utils`) is layered as a **catamorphism** — a generalized fold over
 trees — keeping three concerns explicitly separate:
 
-1. **Decomposition** (*what is the one-level structure of an object?*): a
-   per-type registry of handlers, each peeling off exactly one level into a
-   `DecompositionAtom` or an `ObjectDecomposition`.
+1. **Content extraction** (*what is the one-level content of an object?*): a
+   per-type registry of handlers (*extractors*), each peeling off exactly one
+   level into an `AtomicContent` or a `CompositeContent`.
 2. **Traversal scheme** (*in which order are objects visited?*): `reduce_object`,
    a generic iterative post-order fold with result memoization and cycle
    support, reusable with any result type.
@@ -81,13 +81,13 @@ trees — keeping three concerns explicitly separate:
    (the algebras of the catamorphism), which reduce atoms to digests and
    combine child digests into composite digests.
 
-### Layer 1: one-level decomposition
+### Layer 1: one-level content extraction
 
-A *fingerprint handler* decomposes an object into its contribution:
+A *fingerprint handler* extracts the content of an object:
 
 ```python
-DecompositionAtom(value: bytes)                                  # terminal
-ObjectDecomposition(metadata: bytes, children: tuple, ordered)   # recurse into children
+AtomicContent(value: bytes)                                  # terminal
+CompositeContent(metadata: bytes, children: tuple, ordered)   # recurse into children
 ```
 
 `make_fingerprinter(extra_handlers)` builds a fingerprinting function from the
@@ -112,14 +112,14 @@ object's MRO via `functools.singledispatch`). The default rules are:
   silently colliding.
 - **Dataclasses and datamodels** — nodes of class + field values, honoring
   the field metadata opt-out (below).
-- **Everything else** — decomposed via the standard `__reduce_ex__` protocol
+- **Everything else** — extracted via the standard `__reduce_ex__` protocol
   (with a pinned protocol version), which covers e.g. NumPy arrays by content
   without any special-casing.
 
 ### Layer 2: the traversal scheme (`reduce_object`)
 
-`reduce_object(obj, *, decompose, atom_reducer, composite_reducer, cycle_reducer, memoize)` reduces
-an object bottom-up over its one-level decompositions. The fold is
+`reduce_object(obj, *, extract, atomic_reducer, composite_reducer, cycle_reducer, memoize)` reduces
+an object bottom-up over its one-level contents. The fold is
 **iterative** (explicit two-phase work stack), so deeply nested inputs —
 lowered IR trees routinely exceed the recursion limit budget of any recursive
 scheme — cannot raise `RecursionError`. Results are memoized by object
@@ -131,8 +131,8 @@ serve other bottom-up reductions over arbitrary objects.
 
 ### Layer 3: the digest reducers
 
-The fingerprint reducers reduce a `DecompositionAtom` to
-`xxh64("leaf" + value)`, combine an `ObjectDecomposition` with its child
+The fingerprint reducers reduce an `AtomicContent` to
+`xxh64("leaf" + value)`, combine a `CompositeContent` with its child
 digests into `xxh64("node" + metadata + digests)` — sorting the child digests
 first when the node is unordered — and encode cyclic back references by their
 relative depth.
@@ -177,7 +177,7 @@ rules:
   later by inference and must not change identity); the FOAST
   `semantic_fingerprinter` skips `location`.
 - The ffront stages `semantic_fingerprinter` composes the FOAST node handlers
-  with a `types.FunctionType` handler that decomposes a DSL definition function
+  with a `types.FunctionType` handler that extracts a DSL definition function
   into its **source code + closure variables** rather than identifying it by
   reference — which is what makes two textually identical field operators
   fingerprint equal, and recompiles when a referenced helper changes:
@@ -186,7 +186,7 @@ rules:
 semantic_fingerprinter = utils.make_fingerprinter(
     {
         **foast.semantic_fingerprint_handlers,
-        types.FunctionType: _decompose_definition_function,
+        types.FunctionType: _extract_definition_function,
     }
 )
 ```
@@ -200,7 +200,7 @@ def cache_key(self, inp):
     return utils.stable_fingerprinter((config.BUILD_CACHE_VERSION_ID, self, self.key_function(inp)))
 ```
 
-- `self` is the step, decomposed by fields, so changing the step configuration
+- `self` is the step, content by fields, so changing the step configuration
   invalidates the cache. Functions referenced by the step are identified by
   qualified name, so they must be module-level (not lambdas or local closures).
 - `self.key_function(inp)` contributes the input's identity.
@@ -229,7 +229,7 @@ What becomes harder / the trade-offs:
   `pickle`; it has to be maintained and its determinism guarded by tests.
 - Correctness of caching depends on handlers being faithful: a handler that
   drops semantically relevant content can cause false cache hits. The defaults
-  (skip `location`/`type`, decompose functions by source) are chosen
+  (skip `location`/`type`, extract functions by source) are chosen
   conservatively for this reason.
 - Objects identified by reference must be importable (module-level); lambdas
   and local closures in fingerprinted positions are a hard error. Structurally
@@ -279,13 +279,13 @@ What becomes harder / the trade-offs:
 
 ### Build the catamorphism on `optree` pytrees instead of our own driver
 
-The layering of this design (one-level decomposition / generic fold /
+The layering of this design (one-level content extraction / generic fold /
 reducers) deliberately mirrors how a fingerprinter would be written over
 [`optree`](https://github.com/metaopt/optree)'s `tree_flatten_one_level`, with
-`DecompositionAtom`/`ObjectDecomposition` playing the role of the pytree
+`AtomicContent`/`CompositeContent` playing the role of the pytree
 registry entries. Using `optree` itself was evaluated and rejected:
 
-- Good, because the pytree registry and the one-level decomposition of builtin
+- Good, because the pytree registry and the one-level extraction of builtin
   containers come for free, and the vocabulary (leaves, nodes, `is_leaf`,
   namespaces) is established in the array ecosystem.
 - Bad, because its registry is looked up by **exact type** (no MRO dispatch),
@@ -318,7 +318,7 @@ registry entries. Using `optree` itself was evaluated and rejected:
 
 ## References
 
-- `src/gt4py/next/utils.py` — `DecompositionAtom`, `ObjectDecomposition`,
+- `src/gt4py/next/utils.py` — `AtomicContent`, `CompositeContent`,
   `reduce_object`, `make_fingerprinter`, `stable_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.

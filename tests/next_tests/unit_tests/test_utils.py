@@ -106,17 +106,17 @@ def test_skipping_fields_node_fingerprinter_returns_handlers_when_requested():
 
 class TestReduceObject:
     @staticmethod
-    def _decompose(obj):
+    def _extract(obj):
         if isinstance(obj, (list, tuple)):
-            return utils.ObjectDecomposition(metadata=type(obj), children=tuple(obj))
-        return utils.DecompositionAtom(obj)
+            return utils.CompositeContent(metadata=type(obj), children=tuple(obj))
+        return utils.AtomicContent(obj)
 
     def test_carrier_type_is_generic(self):
         # The reduction result can be of any type, e.g. the structure depth.
         depth = utils.reduce_object(
             [[1, [2]], 3],
-            decompose=self._decompose,
-            atom_reducer=lambda atom: 0,
+            extract=self._extract,
+            atomic_reducer=lambda atom: 0,
             composite_reducer=lambda composite, child_depths: 1 + max(child_depths, default=0),
         )
         assert depth == 3
@@ -126,7 +126,7 @@ class TestReduceObject:
         # reduced results of its children, in child order.
         visited = []
 
-        def atom_reducer(atom):
+        def atomic_reducer(atom):
             visited.append(atom.value)
             return atom.value
 
@@ -137,26 +137,26 @@ class TestReduceObject:
 
         utils.reduce_object(
             [1, [2, 3]],
-            decompose=self._decompose,
-            atom_reducer=atom_reducer,
+            extract=self._extract,
+            atomic_reducer=atomic_reducer,
             composite_reducer=composite_reducer,
         )
         assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
 
     def test_empty_containers_are_nodes(self):
         # Zero-children nodes must not corrupt the result bookkeeping.
-        def atom_reducer(atom: utils.DecompositionAtom) -> tuple:
+        def atomic_reducer(atom: utils.AtomicContent) -> tuple:
             return (atom.value,)
 
         def composite_reducer(
-            composite: utils.ObjectDecomposition, child_results: list[tuple]
+            composite: utils.CompositeContent, child_results: list[tuple]
         ) -> tuple:
             return (composite.metadata, *child_results)
 
         result = utils.reduce_object(
             [[], ()],
-            decompose=self._decompose,
-            atom_reducer=atom_reducer,
+            extract=self._extract,
+            atomic_reducer=atomic_reducer,
             composite_reducer=composite_reducer,
         )
         assert result == (list, (list,), (tuple,))
@@ -167,37 +167,37 @@ class TestReduceObject:
             deeply_nested = (deeply_nested,)
         depth = utils.reduce_object(
             deeply_nested,
-            decompose=self._decompose,
-            atom_reducer=lambda atom: 0,
+            extract=self._extract,
+            atomic_reducer=lambda atom: 0,
             composite_reducer=lambda composite, child_depths: 1 + max(child_depths, default=0),
         )
         assert depth == 100_001  # 100_000 wrappers + the innermost empty tuple node
 
     def test_memoization_reduces_shared_subobjects_once(self):
-        decompose_calls = []
+        extract_calls = []
 
-        def decompose(obj):
-            decompose_calls.append(obj)
-            return self._decompose(obj)
+        def extract(obj):
+            extract_calls.append(obj)
+            return self._extract(obj)
 
         shared = [1, 2]
         utils.reduce_object(
             [shared, shared],
-            decompose=decompose,
-            atom_reducer=lambda atom: 0,
+            extract=extract,
+            atomic_reducer=lambda atom: 0,
             composite_reducer=lambda composite, child_results: 0,
         )
-        assert sum(1 for obj in decompose_calls if obj is shared) == 1
+        assert sum(1 for obj in extract_calls if obj is shared) == 1
 
-        decompose_calls.clear()
+        extract_calls.clear()
         utils.reduce_object(
             [shared, shared],
-            decompose=decompose,
-            atom_reducer=lambda atom: 0,
+            extract=extract,
+            atomic_reducer=lambda atom: 0,
             composite_reducer=lambda composite, child_results: 0,
             memoize=False,
         )
-        assert sum(1 for obj in decompose_calls if obj is shared) == 2
+        assert sum(1 for obj in extract_calls if obj is shared) == 2
 
     def test_cycles_raise_without_cycle_reducer(self):
         cyclic: list = [1]
@@ -205,8 +205,8 @@ class TestReduceObject:
         with pytest.raises(ValueError, match="Cycle detected"):
             utils.reduce_object(
                 cyclic,
-                decompose=self._decompose,
-                atom_reducer=lambda atom: 0,
+                extract=self._extract,
+                atomic_reducer=lambda atom: 0,
                 composite_reducer=lambda composite, child_results: 0,
             )
 
@@ -215,8 +215,8 @@ class TestReduceObject:
         cyclic.append(cyclic)
         rendered = utils.reduce_object(
             cyclic,
-            decompose=self._decompose,
-            atom_reducer=lambda atom: str(atom.value),
+            extract=self._extract,
+            atomic_reducer=lambda atom: str(atom.value),
             composite_reducer=lambda composite, child_results: f"[{','.join(child_results)}]",
             cycle_reducer=lambda relative_depth: f"<up:{relative_depth}>",
         )

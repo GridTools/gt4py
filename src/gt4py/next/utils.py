@@ -59,16 +59,16 @@ _R = TypeVar("_R")
 
 # -- Generic bottom-up tree reduction (catamorphism) --
 @dataclasses.dataclass(frozen=True, slots=True)
-class DecompositionAtom:
-    """One-level decomposition of a terminal object: an opaque value, no children."""
+class AtomicContent:
+    """One-level content of a terminal object: an opaque value, no children."""
 
     value: Any
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class ObjectDecomposition:
+class CompositeContent:
     """
-    One-level decomposition of a non-terminal object.
+    One-level content of a non-terminal object.
 
     `metadata` carries whatever node-level information the reduction needs
     (e.g. a type tag), and `children` are the sub-objects to be reduced before
@@ -83,14 +83,14 @@ class ObjectDecomposition:
     ordered: bool = True
 
 
-#: Decomposes an object into one level of tree structure.
-ObjectDecomposer: TypeAlias = Callable[[Any], DecompositionAtom | ObjectDecomposition]
+#: Extracts one level of content from an object.
+Extractor: TypeAlias = Callable[[Any], AtomicContent | CompositeContent]
 
-#: Reduces a decomposed terminal object to a result.
-AtomReducer: TypeAlias = Callable[[DecompositionAtom], _R]
+#: Reduces the content of a terminal object to a result.
+AtomicReducer: TypeAlias = Callable[[AtomicContent], _R]
 
-#: Combines a decomposed non-terminal object with the results of its children.
-CompositeReducer: TypeAlias = Callable[[ObjectDecomposition, list[_R]], _R]
+#: Combines the content of a non-terminal object with the results of its children.
+CompositeReducer: TypeAlias = Callable[[CompositeContent, list[_R]], _R]
 
 #: Reduces a cyclic reference, given the relative depth back up to its target.
 CycleReducer: TypeAlias = Callable[[int], _R]
@@ -102,8 +102,8 @@ _COMBINE: Final[int] = 1
 def reduce_object(
     obj: Any,
     *,
-    decompose: ObjectDecomposer,
-    atom_reducer: AtomReducer[_R],
+    extract: Extractor,
+    atomic_reducer: AtomicReducer[_R],
     composite_reducer: CompositeReducer[_R],
     cycle_reducer: Optional[CycleReducer[_R]] = None,
     memoize: bool = True,
@@ -112,20 +112,20 @@ def reduce_object(
     Reduce an object bottom-up using a catamorphism (a generalized fold over trees).
 
     The traversal scheme is fixed: an iterative post-order walk over the
-    one-level decompositions produced by `decompose`, so the structure depth
+    one-level contents produced by `extract`, so the structure depth
     is bounded neither by the Python recursion limit nor (on Python <= 3.10)
     by the C stack. The reduction logic is supplied as reducers (the algebras
-    of the catamorphism): `atom_reducer` reduces a :class:`DecompositionAtom`
-    to a result, and `composite_reducer` combines an
-    :class:`ObjectDecomposition` with the already-reduced results of its
+    of the catamorphism): `atomic_reducer` reduces an :class:`AtomicContent`
+    to a result, and `composite_reducer` combines a
+    :class:`CompositeContent` with the already-reduced results of its
     children.
 
     Keyword Args:
-        decompose: Per-object one-level decomposition into a
-            :class:`DecompositionAtom` or an :class:`ObjectDecomposition`.
-        atom_reducer: Reduction of a decomposed terminal object.
-        composite_reducer: Combination of a decomposed non-terminal object with the
-            results of its children (in child order).
+        extract: Per-object extraction of one level of content, as an
+            :class:`AtomicContent` or a :class:`CompositeContent`.
+        atomic_reducer: Reduction of the content of a terminal object.
+        composite_reducer: Combination of the content of a non-terminal object
+            with the results of its children (in child order).
         cycle_reducer: Reduction of a cyclic reference, receiving the relative
             depth (in currently open nodes) from the reference back up to its
             target. If `None`, cycles raise :class:`ValueError`. Results
@@ -133,21 +133,21 @@ def reduce_object(
             references and are therefore never memoized.
         memoize: Reuse the result of already-reduced subobjects (matched by
             identity), so shared substructure is reduced only once. Requires
-            pure reducers: results must depend only on the decomposition, not
-            on where the object appears.
+            pure reducers: results must depend only on the extracted content,
+            not on where the object appears.
 
     Examples:
         Computing the depth of a nested structure (children are reduced before
         their parents, so the composite reducer only sees child depths):
 
-        >>> def decompose(obj):
+        >>> def extract(obj):
         ...     if isinstance(obj, (list, tuple)):
-        ...         return ObjectDecomposition(metadata=None, children=tuple(obj))
-        ...     return DecompositionAtom(obj)
+        ...         return CompositeContent(metadata=None, children=tuple(obj))
+        ...     return AtomicContent(obj)
         >>> reduce_object(
         ...     [[1, [2]], 3],
-        ...     decompose=decompose,
-        ...     atom_reducer=lambda atom: 0,
+        ...     extract=extract,
+        ...     atomic_reducer=lambda atom: 0,
         ...     composite_reducer=lambda composite, child_depths: 1 + max(child_depths, default=0),
         ... )
         3
@@ -181,23 +181,23 @@ def reduce_object(
                 results.append(cycle_reducer(len(open_nodes) - depth))
                 taint_depth = min(taint_depth, depth)
                 continue
-            decomposed = decompose(current)
-            if isinstance(decomposed, DecompositionAtom):
-                result = atom_reducer(decomposed)
+            content = extract(current)
+            if isinstance(content, AtomicContent):
+                result = atomic_reducer(content)
                 if memoize:
                     memo[current_id] = result
                     keep_alive.append(current)
                 results.append(result)
             else:
                 open_nodes[current_id] = len(open_nodes)
-                work.append((_COMBINE, (current, decomposed)))
-                work.extend((_VISIT, child) for child in reversed(decomposed.children))
+                work.append((_COMBINE, (current, content)))
+                work.extend((_VISIT, child) for child in reversed(content.children))
         else:
-            current, decomposed = payload
-            num_children = len(decomposed.children)
+            current, content = payload
+            num_children = len(content.children)
             child_results = results[len(results) - num_children :]
             del results[len(results) - num_children :]
-            result = composite_reducer(decomposed, child_results)
+            result = composite_reducer(content, child_results)
             depth = open_nodes.pop(id(current))
             if depth <= taint_depth:
                 if memoize:
@@ -213,12 +213,12 @@ def reduce_object(
     return results[0]
 
 
-# -- Fingerprinting: digest reducers over a per-type decomposition registry --
+# -- Fingerprinting: digest reducers over a per-type extractor registry --
 Fingerprinter: TypeAlias = Callable[[Any], str]
 
-#: Pickle protocol used when decomposing unknown objects via `__reduce_ex__`.
-#: Pinned so the decomposition (and therefore the fingerprint) does not depend
-#: on the running Python's default protocol.
+#: Pickle protocol used when extracting the content of unknown objects via
+#: `__reduce_ex__`. Pinned so the extracted content (and therefore the
+#: fingerprint) does not depend on the running Python's default protocol.
 _FINGERPRINT_REDUCE_PROTOCOL: Final[int] = 2
 
 
@@ -271,43 +271,43 @@ def _cached_class_tag(cls: type) -> bytes:
 _class_tag: Final[Callable[[type], bytes]] = _cached_class_tag
 
 
-def _leaf(tag: bytes, payload: bytes = b"") -> DecompositionAtom:
-    return DecompositionAtom(tag + b"\0" + payload)
+def _leaf(tag: bytes, payload: bytes = b"") -> AtomicContent:
+    return AtomicContent(tag + b"\0" + payload)
 
 
-def _decompose_by_reference(obj: Any) -> DecompositionAtom:
+def _extract_by_reference(obj: Any) -> AtomicContent:
     return _leaf(b"ref", _reference_by_fully_qualified_name(obj).encode())
 
 
-def _decompose_dict(obj: dict) -> ObjectDecomposition:
+def _extract_dict(obj: dict) -> CompositeContent:
     # `collections.OrderedDict` equality is order-sensitive, so its fingerprint
     # must be too; plain `dict` (and other subclasses) compare order-insensitively.
     ordered = isinstance(obj, collections.OrderedDict)
-    return ObjectDecomposition(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
+    return CompositeContent(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
 
 
-def _decompose_default_dict(obj: collections.defaultdict) -> ObjectDecomposition:
+def _extract_default_dict(obj: collections.defaultdict) -> CompositeContent:
     # The `default_factory` is part of the observable behavior of a `defaultdict`,
     # so it participates in the fingerprint; the items child keeps the
     # order-insensitivity of plain `dict`s.
-    return ObjectDecomposition(_class_tag(type(obj)), (obj.default_factory, dict(obj)))
+    return CompositeContent(_class_tag(type(obj)), (obj.default_factory, dict(obj)))
 
 
-def _decompose_enum_class(obj: type[enum.Enum]) -> ObjectDecomposition:
-    # Enum classes are decomposed by content (their members) instead of by
+def _extract_enum_class(obj: type[enum.Enum]) -> CompositeContent:
+    # Enum classes are extracted by content (their members) instead of by
     # reference: they are commonly defined locally (non-importable), and their
     # semantic content is exactly the member set.
-    return ObjectDecomposition(
+    return CompositeContent(
         b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
         tuple((member.name, member.value) for member in obj),
     )
 
 
-def _decompose_enum_member(obj: enum.Enum) -> ObjectDecomposition:
-    # The member's class is included by content (see `_decompose_enum_class`),
+def _extract_enum_member(obj: enum.Enum) -> CompositeContent:
+    # The member's class is included by content (see `_extract_enum_class`),
     # so members of distinct but identically named (e.g. local) enum classes
     # cannot collide.
-    return ObjectDecomposition(b"enum_member", (type(obj), obj.name, obj.value))
+    return CompositeContent(b"enum_member", (type(obj), obj.name, obj.value))
 
 
 # `enum.Enum` alone is not enough: for mixin-based enums (`IntEnum`, `IntFlag`,
@@ -320,9 +320,9 @@ _ENUM_MEMBER_BASES: Final[tuple[type, ...]] = tuple(
 )
 
 
-_BASE_FINGERPRINT_DECOMPOSERS: Final[dict[type, ObjectDecomposer]] = {
-    **{base: _decompose_enum_member for base in _ENUM_MEMBER_BASES},
-    enum.EnumMeta: _decompose_enum_class,
+_BASE_FINGERPRINT_EXTRACTORS: Final[dict[type, Extractor]] = {
+    **{base: _extract_enum_member for base in _ENUM_MEMBER_BASES},
+    enum.EnumMeta: _extract_enum_class,
     type(None): lambda obj: _leaf(b"builtins.NoneType"),
     bool: lambda obj: _leaf(b"builtins.bool", b"1" if obj else b"0"),
     int: lambda obj: _leaf(_class_tag(type(obj)), str(int(obj)).encode()),
@@ -331,16 +331,16 @@ _BASE_FINGERPRINT_DECOMPOSERS: Final[dict[type, ObjectDecomposer]] = {
     str: lambda obj: _leaf(_class_tag(type(obj)), obj.encode("utf-8", "surrogatepass")),
     bytes: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
     bytearray: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
-    tuple: lambda obj: ObjectDecomposition(_class_tag(type(obj)), tuple(obj)),
-    list: lambda obj: ObjectDecomposition(_class_tag(type(obj)), tuple(obj)),
-    dict: _decompose_dict,
-    collections.defaultdict: _decompose_default_dict,
-    set: lambda obj: ObjectDecomposition(_class_tag(type(obj)), tuple(obj), ordered=False),
-    frozenset: lambda obj: ObjectDecomposition(_class_tag(type(obj)), tuple(obj), ordered=False),
-    type: _decompose_by_reference,
-    types.FunctionType: _decompose_by_reference,
-    types.BuiltinFunctionType: _decompose_by_reference,
-    types.ModuleType: _decompose_by_reference,
+    tuple: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
+    list: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
+    dict: _extract_dict,
+    collections.defaultdict: _extract_default_dict,
+    set: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
+    frozenset: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
+    type: _extract_by_reference,
+    types.FunctionType: _extract_by_reference,
+    types.BuiltinFunctionType: _extract_by_reference,
+    types.ModuleType: _extract_by_reference,
 }
 
 
@@ -349,7 +349,7 @@ def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
     return not gt4py_meta or gt4py_meta.get("fingerprint", True)
 
 
-def _decompose_fallback(obj: Any) -> DecompositionAtom | ObjectDecomposition:
+def _extract_fallback(obj: Any) -> AtomicContent | CompositeContent:
     cls = type(obj)
     if dataclasses.is_dataclass(cls) or datamodels.is_datamodel(cls):
         fields: Iterable[Any] = (
@@ -357,7 +357,7 @@ def _decompose_fallback(obj: Any) -> DecompositionAtom | ObjectDecomposition:
             if dataclasses.is_dataclass(cls)
             else datamodels.get_fields(cls).values()
         )
-        return ObjectDecomposition(
+        return CompositeContent(
             b"fields\0" + _class_tag(cls),
             tuple(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
         )
@@ -380,18 +380,18 @@ def _decompose_fallback(obj: Any) -> DecompositionAtom | ObjectDecomposition:
     list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
     dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
     custom_setstate = rest[3] if len(rest) > 3 else None
-    return ObjectDecomposition(
+    return CompositeContent(
         b"reduce", (constructor, constructor_args, state, list_items, dict_items, custom_setstate)
     )
 
 
-def _fingerprint_atom_reducer(atom: DecompositionAtom) -> str:
-    """Reduce a decomposed terminal object to its digest."""
+def _fingerprint_atomic_reducer(atom: AtomicContent) -> str:
+    """Reduce the content of a terminal object to its digest."""
     return xxhash.xxh64(b"leaf\0" + atom.value).hexdigest()
 
 
-def _fingerprint_composite_reducer(composite: ObjectDecomposition, child_digests: list[str]) -> str:
-    """Combine the digests of a decomposed object's children into its digest."""
+def _fingerprint_composite_reducer(composite: CompositeContent, child_digests: list[str]) -> str:
+    """Combine the digests of an object's children into the object's digest."""
     if not composite.ordered:
         # Sorting the child *digests* canonicalizes order-insensitive containers
         # without requiring the children themselves to be orderable.
@@ -406,36 +406,36 @@ def _fingerprint_composite_reducer(composite: ObjectDecomposition, child_digests
 
 def _fingerprint_cycle_reducer(relative_depth: int) -> str:
     """Reduce a cyclic back reference to a digest of its relative depth."""
-    return _fingerprint_atom_reducer(DecompositionAtom(b"cycle\0" + str(relative_depth).encode()))
+    return _fingerprint_atomic_reducer(AtomicContent(b"cycle\0" + str(relative_depth).encode()))
 
 
 def make_fingerprinter(
-    extra_handlers: Optional[Mapping[type, ObjectDecomposer]] = None,
+    extra_handlers: Optional[Mapping[type, Extractor]] = None,
 ) -> Fingerprinter:
     """
     Create a fingerprinting function, optionally with customized per-type handling.
 
     A fingerprinter is :func:`reduce_object` instantiated with digest reducers
-    (xxhash64 with domain separation) over a per-type decomposition registry.
-    A handler decomposes an object into a :class:`DecompositionAtom` or an
-    :class:`ObjectDecomposition` whose `value` / `metadata` are byte tags
+    (xxhash64 with domain separation) over a per-type extractor registry.
+    A handler extracts the content of an object as an :class:`AtomicContent`
+    or a :class:`CompositeContent` whose `value` / `metadata` are byte tags
     (a domain-separation tag, optionally followed by a payload). Handlers are
     dispatched on the object's MRO; `extra_handlers` take precedence over the
-    default rules. Objects without a matching handler are decomposed by their
-    fields (dataclasses and datamodels, honoring
+    default rules. The content of objects without a matching handler is
+    extracted from their fields (dataclasses and datamodels, honoring
     ``gt4py_metadata(fingerprint=False)`` field metadata) or via the standard
     ``__reduce_ex__`` protocol.
     """
-    decompose = eve_utils.singledispatcher(
-        _decompose_fallback,
-        implementations={**_BASE_FINGERPRINT_DECOMPOSERS, **(extra_handlers or {})},
+    extract = eve_utils.singledispatcher(
+        _extract_fallback,
+        implementations={**_BASE_FINGERPRINT_EXTRACTORS, **(extra_handlers or {})},
     )
 
     def fingerprinter(obj: Any) -> str:
         return reduce_object(
             obj,
-            decompose=decompose,
-            atom_reducer=_fingerprint_atom_reducer,
+            extract=extract,
+            atomic_reducer=_fingerprint_atomic_reducer,
             composite_reducer=_fingerprint_composite_reducer,
             cycle_reducer=_fingerprint_cycle_reducer,
         )
@@ -450,9 +450,9 @@ def make_fingerprinter(
 stable_fingerprinter: Fingerprinter = make_fingerprinter()
 
 
-def _make_skipping_fields_node_handler(skipped_fields: frozenset[str]) -> ObjectDecomposer:
-    def handler(node: concepts.Node) -> ObjectDecomposition:
-        return ObjectDecomposition(
+def _make_skipping_fields_node_handler(skipped_fields: frozenset[str]) -> Extractor:
+    def handler(node: concepts.Node) -> CompositeContent:
+        return CompositeContent(
             b"fields\0" + _class_tag(type(node)),
             tuple(
                 (name, child)
@@ -473,13 +473,13 @@ def skipping_fields_node_fingerprinter(
 @overload
 def skipping_fields_node_fingerprinter(
     *skipped_fields: str, return_handlers: Literal[True]
-) -> tuple[Fingerprinter, dict[type, ObjectDecomposer]]: ...
+) -> tuple[Fingerprinter, dict[type, Extractor]]: ...
 
 
 @functools.cache
 def skipping_fields_node_fingerprinter(
     *skipped_fields: str, return_handlers: bool = False
-) -> Fingerprinter | tuple[Fingerprinter, dict[type, ObjectDecomposer]]:
+) -> Fingerprinter | tuple[Fingerprinter, dict[type, Extractor]]:
     """
     Return a fingerprinter that fingerprints a node while skipping fields.
 
@@ -487,7 +487,7 @@ def skipping_fields_node_fingerprinter(
     `return_handlers=True`, additionally return the handler registry so it can
     be composed into another fingerprinter via :func:`make_fingerprinter`.
     """
-    handlers: dict[type, ObjectDecomposer] = {
+    handlers: dict[type, Extractor] = {
         concepts.Node: _make_skipping_fields_node_handler(frozenset(skipped_fields))
     }
     fingerprinter = make_fingerprinter(handlers)
