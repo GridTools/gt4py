@@ -78,9 +78,10 @@ Next tests run across a **backend matrix** (embedded NumPy/CuPy/JAX, `gtfn`,
   safe to add) — see the note next to that matrix in `definitions.py`.
 - Layout: `unit_tests/` (per-module, backend-free), `feature_tests/` (one DSL
   feature across the matrix), `multi_feature_tests/` (end-to-end programs).
-  Place a test in the file for the feature it is the *subject* of; a feature it
-  merely uses as a vehicle is recorded as a marker, not a reason to move it (so
-  `pytest -m uses_<feature>` finds it regardless of which file it lives in).
+  Place a test in the file for the feature it is the *subject* of (see
+  `CODING_GUIDELINES.md` §Testing); a feature it merely uses as a vehicle is
+  recorded as a marker, not a reason to move it (so `pytest -m uses_<feature>`
+  finds it regardless of which file it lives in).
 - Run with `uv run pytest tests/next_tests/ -x -q`; matrix-level confidence
   comes from `uv run nox -s "test_next-<py>(...)"`. GPU and `dace` sessions
   may be unavailable locally and will skip.

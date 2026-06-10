@@ -188,12 +188,14 @@ Temporarily it may be allowed to split unit tests for a module into multiple `te
 
 Temporarily, tests for testing utilities can be placed next to the module containing them, with the name `test_util_<module>.py`. This should be taken as a hint that the tested utils should be moved into the library.
 
+Place each test in the file for the feature it is the *subject* of (the behaviour whose regression it would catch); a feature it merely uses as a vehicle is recorded via a test marker where the subpackage provides them, not by moving the test.
+
 #### Integration Tests Utils
 
 Integrations tests come with their own utilities, found in `cases.py`, for better test automation and simplification:
 
 - Predefined field type annotations, e.g. `IJKField = Field[[IDim, JDim, KDim], np.int64]`.
-- Test fixtures: `cartesian_case` for structured, e.g. `IDim` x `JDim`; `unstructured_case`, e.g. `EdgeDim`.
+- Test fixtures: `cartesian_case` for structured, e.g. `IDim` x `JDim`; `unstructured_case`, e.g. `EdgeDim`. The fixtures themselves (`exec_alloc_descriptor`, `mesh_descriptor`, grid descriptors and the dimension/offset aliases) live in the sibling `cases_utils.py`.
 - Parameter allocations for objects, derived directly from the decorator's function definition:
   ```
      input_param = cases.allocate(case_fixture, decorator_name, "input_label")()
