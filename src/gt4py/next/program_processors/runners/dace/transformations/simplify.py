@@ -933,7 +933,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
     tasklet = dace_transformation.PatternNode(dace_nodes.Tasklet)
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
-    uids = dace_properties.Property(dtype=gtx_utils.IDGeneratorPool)
+    _uids: gtx_utils.IDGeneratorPool
 
     def __init__(
         self,
@@ -942,7 +942,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.uids = uids
+        self._uids = uids
 
     @classmethod
     def expressions(cls) -> Any:
@@ -1011,7 +1011,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         # This is the tasklet that we will put inside the map, note we have to do it
         #  this way to avoid some name clash stuff.
         inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
-            name=next(self.uids[f"{tasklet.label}__clone"]),
+            name=next(self._uids[f"{tasklet.label}__clone"]),
             outputs=tasklet.out_connectors.keys(),
             inputs=set(),
             code=tasklet.code,

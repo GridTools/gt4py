@@ -51,11 +51,11 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
     conditional_access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     nsdfg_a = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
     nsdfg_b = dace_transformation.PatternNode(dace_nodes.NestedSDFG)
-    uids = dace_properties.Property(dtype=gtx_utils.IDGeneratorPool)
+    _uids: gtx_utils.IDGeneratorPool
 
     def __init__(self, *args: Any, uids: gtx_utils.IDGeneratorPool, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.uids = uids
+        self._uids = uids
 
     # The fusion of the two conditional blocks can happen in any order. To avoid any indeterminism distinguish which one is the fused and which one is the extended conditional block which will include the fused one.
     @staticmethod
@@ -299,7 +299,7 @@ class FuseHorizontalConditionBlocks(dace_transformation.SingleStateTransformatio
         for data_name, data_desc in fused_conditional_block.sdfg.arrays.items():
             if data_name == "__cond":
                 continue
-            new_data_name = next(self.uids[f"{data_name}_cb_fusion"])
+            new_data_name = next(self._uids[f"{data_name}_from_cb_fusion"])
             data_desc_renamed = copy.deepcopy(data_desc)
             second_arrays_rename_map[data_name] = (
                 nested_sdfg_of_extended_conditional_block.sdfg.add_datadesc(

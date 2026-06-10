@@ -224,8 +224,7 @@ def split_overlapping_map_range(
 
     first_map_splitted_dict = {}
     second_map_splitted_dict = {}
-    for param in sorted(first_map_params):
-        first_map_range = first_map_dict[param]
+    for param, first_map_range in first_map_dict.items():
         second_map_range = second_map_dict[param]
         if (step := first_map_range[2]) != second_map_range[2]:
             # we do not support splitting of map range when the range step is different
