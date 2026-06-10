@@ -8,14 +8,15 @@
 
 from __future__ import annotations
 
-import copyreg
+import collections
 import dataclasses
+import enum
 import functools
 import inspect
 import itertools
-import pickle
+import struct
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from typing import (
     Any,
     ClassVar,
@@ -31,127 +32,57 @@ from typing import (
     overload,
 )
 
-from gt4py.eve import concepts, datamodels, extended_typing as xtyping, utils as eve_utils
+import xxhash
+
+from gt4py.eve import concepts, datamodels, utils as eve_utils
 
 
 GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
 
 
 def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
-    """Helper function to store dataclass/datamodel field metadata within a GT4Py namespace."""
+    """
+    Helper function to store dataclass/datamodel field metadata within a GT4Py namespace.
+
+    Individual fields can opt out of fingerprinting with
+    `foo = field(..., metadata=gt4py_metadata(fingerprint=False))`.
+    """
     return {GT4PY_CLASS_METADATA_NS: kwargs}
-
-
-_StandardPickleState = None | dict[str, Any] | tuple[dict[str, Any] | None, dict[str, Any]]
-_StandardGetStateMethod: TypeAlias = Callable[[object], _StandardPickleState]
-_StandardSetStateMethod: TypeAlias = Callable[[object, _StandardPickleState], None]
-
-
-@functools.cache
-def _get_metadata_based_state_getstate(cls: type) -> _StandardGetStateMethod:
-    """
-    Helper function to make class-specific `__getstate__` method following the standard implementation.
-    """
-    if not isinstance(cls, type) or not (
-        (is_dataclass := dataclasses.is_dataclass(cls)) or datamodels.is_datamodel(cls)
-    ):
-        raise TypeError(f"Expected a dataclass or datamodel type, got '{cls}'")
-
-    if is_dataclass:
-        field_metadata = {
-            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
-            for field in dataclasses.fields(cls)
-        }
-    else:
-        field_metadata = {
-            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
-            for field in datamodels.get_fields(cls).values()
-        }
-
-    # To gather all slots we need to traverse the whole MRO not just the class itself.
-    # We reuse the implementation of `copyreg._slotnames` to avoid code duplication and
-    # potential bugs, even if it is not (unfortunately) part of the module's public API.
-    class_slots = copyreg._slotnames(cls)  # type: ignore[attr-defined] # copyreg._slotnames is not recognized
-
-    has_slots = len(class_slots) > 0
-    has_dict = any("__dict__" in c.__dict__ for c in cls.__mro__)
-
-    dict_names = []
-    slot_names = []
-    for name, metadata in field_metadata.items():
-        if metadata and not metadata.get("pickle", True):
-            continue
-        if name in class_slots:
-            slot_names.append(name)
-        else:
-            dict_names.append(name)
-
-    # Comply with the default implementation of object.__getstate__() / object.__setstate__(state)
-    if not (has_slots or has_dict):
-        # for class instances without __dict__ nor __slots__: state = None.
-        def __getstate__(self: object) -> _StandardPickleState:
-            return None
-
-    elif not has_slots:
-        # for class instances with __dict__ and no __slots__: state = self.__dict__.
-        def __getstate__(self: object) -> _StandardPickleState:
-            return {name: getattr(self, name) for name in dict_names}
-
-    elif not has_dict:
-        # for class instances with __slots__ and no __dict__: state = (None, {slot.name: slot.value for all slots}).
-        def __getstate__(self: object) -> _StandardPickleState:
-            return (None, {name: getattr(self, name) for name in slot_names})
-
-    else:
-        # for class instances with __dict__ and __slots__: state = (self.__dict__, {slot.name: slot.value for all slots}).
-        def __getstate__(self: object) -> _StandardPickleState:
-            return (
-                {name: getattr(self, name) for name in dict_names},
-                {name: getattr(self, name) for name in slot_names},
-            )
-
-    return __getstate__
-
-
-class MetadataBasedPicklingMixin:
-    """
-    Mixin for adding metadata-based pickling to dataclass-like objects.
-
-    It uses the class field information to select only instance fields which
-    are not marked with `pickle=False` in the 'GT4PY_META' metadata namespace.
-    Individual fields can therefore opt out of pickling.
-    For example: `foo = field(..., metadata=gt4py_metadata(pickle=False))`.
-    """
-
-    __slots__ = ()  # to avoid creation of __dict__ when not needed
-
-    def __getstate__(self) -> _StandardPickleState:
-        """
-        Get the state of the object for pickling.
-
-        It returns the same kind of arguments as the default `__getstate__`
-        implementation, used by `pickle` (as documented in `object.__getstate__`,
-        check: https://devdocs.io/python~3.14/library/pickle#object.__getstate__)
-        """
-        return _get_metadata_based_state_getstate(type(self))(self)  # type: ignore[arg-type]  # type(self) should be hashable
-
-    # Note: we don't implement `__setstate__` as the output of our custom
-    #  `__getstate__` implementation should be compatible with the default
-    #  implementation.
 
 
 Fingerprinter: TypeAlias = Callable[[Any], str]
 
 
-class SingleDispatchPickler(pickle.Pickler):
-    reducer_override: xtyping.SingleDispatchCallable[Any, tuple]
+@dataclasses.dataclass(frozen=True, slots=True)
+class FingerprintLeaf:
+    """Terminal contribution of an object to a fingerprint: a raw byte payload."""
+
+    payload: bytes
 
 
-def _stable_container_sort_key(obj: Any) -> Any:
-    """Return a deterministic sort key for container elements/keys."""
-    if isinstance(obj, (type, types.FunctionType, types.ModuleType)):
-        return eve_utils.get_fully_qualified_name(obj)
-    return obj
+@dataclasses.dataclass(frozen=True, slots=True)
+class FingerprintComposite:
+    """
+    Non-terminal contribution of an object to a fingerprint.
+
+    The children are fingerprinted recursively and their digests combined with
+    `tag`. If `ordered` is `False`, the child digests are sorted before being
+    combined, which makes the result independent of the iteration order of the
+    children (used for `dict` and `set`, whose equality is order-insensitive).
+    """
+
+    tag: bytes
+    children: tuple[Any, ...]
+    ordered: bool = True
+
+
+#: Decomposes an object into its contribution to a fingerprint.
+FingerprintHandler: TypeAlias = Callable[[Any], FingerprintLeaf | FingerprintComposite]
+
+#: Pickle protocol used when decomposing unknown objects via `__reduce_ex__`.
+#: Pinned so the decomposition (and therefore the fingerprint) does not depend
+#: on the running Python's default protocol.
+_FINGERPRINT_REDUCE_PROTOCOL: Final[int] = 2
 
 
 def _reference_by_fully_qualified_name(obj: Any) -> str:
@@ -160,110 +91,279 @@ def _reference_by_fully_qualified_name(obj: Any) -> str:
 
     Objects identified by their fully qualified name (import path) can only be
     properly fingerprinted if they are importable, module-level objects, whose
-    qualified name uniquely identifies them. This functiona rejects locally defined
-    objects: anything with ``<locals>`` in itsqualified name (closures, nested functions,
-    classes defined inside a function) and anonymous ``<lambda>`` callables.
+    qualified name uniquely identifies them. This function rejects locally defined
+    objects: anything with ``<locals>`` in its qualified name (closures, nested
+    functions, classes defined inside a function) and anonymous ``<lambda>``
+    callables.
     """
     fqn = eve_utils.get_fully_qualified_name(obj)
     if "<locals>" in fqn or "<lambda>" in fqn:
         raise TypeError(
-            "Non-importable objecs (e.g. locally defined or anonymous callables) cannot be "
+            "Non-importable objects (e.g. locally defined or anonymous callables) cannot be "
             "safely referenced since they share identical qualified names."
         )
     return fqn
 
 
-# We use `eval` ('builtin_function_or_method') to avoid infinite recursive
-# reducer calls caused by types or functions.
-_custom_reducer_by_reference = eve_utils.pickle_reducer_factory(
-    get_new=lambda obj: eval,
-    get_new_args=lambda obj: (
-        f"__import__('pkgutil').resolve_name('{_reference_by_fully_qualified_name(obj)}')",
-    ),
-    get_state=lambda obj: None,
-)
+_class_tag_cache: dict[type, bytes] = {}
 
 
-class _StableContainerPickler(eve_utils.PurePickler):
-    _sorting_reducer_override = eve_utils.singledispatcher(
-        default=lambda obj: NotImplemented,
-        implementations={
-            dict: eve_utils.pickle_reducer_factory(
-                get_state=lambda obj: (
-                    tuple(
-                        (k, v)
-                        for k, v in sorted(
-                            obj.items(), key=lambda kv: _stable_container_sort_key(kv[0])
-                        )
-                    ),
-                )
-            ),
-            set: eve_utils.pickle_reducer_factory(
-                get_state=lambda obj: tuple(sorted(obj, key=_stable_container_sort_key)),
-            ),
-            type: _custom_reducer_by_reference,
-            types.FunctionType: _custom_reducer_by_reference,
-            types.ModuleType: _custom_reducer_by_reference,
-        },
+def _class_tag(cls: type) -> bytes:
+    if (tag := _class_tag_cache.get(cls)) is None:
+        tag = _class_tag_cache[cls] = eve_utils.get_fully_qualified_name(cls).encode()
+    return tag
+
+
+def _leaf(tag: bytes, payload: bytes = b"") -> FingerprintLeaf:
+    return FingerprintLeaf(tag + b"\0" + payload)
+
+
+def _decompose_by_reference(obj: Any) -> FingerprintLeaf:
+    return _leaf(b"ref", _reference_by_fully_qualified_name(obj).encode())
+
+
+def _decompose_dict(obj: dict) -> FingerprintComposite:
+    # `collections.OrderedDict` equality is order-sensitive, so its fingerprint
+    # must be too; plain `dict` (and other subclasses) compare order-insensitively.
+    ordered = isinstance(obj, collections.OrderedDict)
+    return FingerprintComposite(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
+
+
+def _decompose_enum_class(obj: type[enum.Enum]) -> FingerprintComposite:
+    # Enum classes are decomposed by content (their members) instead of by
+    # reference: they are commonly defined locally (non-importable), and their
+    # semantic content is exactly the member set.
+    return FingerprintComposite(
+        b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
+        tuple((member.name, member.value) for member in obj),
     )
-    reducer_override = staticmethod(_sorting_reducer_override)
 
 
-StableContainerPickler = cast(type[SingleDispatchPickler], _StableContainerPickler)
+def _decompose_enum_member(obj: enum.Enum) -> FingerprintComposite:
+    # The member's class is included by content (see `_decompose_enum_class`),
+    # so members of distinct but identically named (e.g. local) enum classes
+    # cannot collide.
+    return FingerprintComposite(b"enum_member", (type(obj), obj.name, obj.value))
 
-#: Default fingerprinting function for GT4Py objects.
-#: Uses sorting for dicts and sets to ensure deterministic output regardless
-#: of insertion order.
-stable_fingerprinter = functools.partial(
-    eve_utils.content_hash, pickler_type=StableContainerPickler
+
+# `enum.Enum` alone is not enough: for mixin-based enums (`IntEnum`, `IntFlag`,
+# `StrEnum`, ...) the value-type base precedes `Enum` in the MRO and would win
+# the dispatch.
+_ENUM_MEMBER_BASES: Final[tuple[type, ...]] = tuple(
+    base
+    for base in (enum.Enum, enum.IntEnum, enum.IntFlag, enum.Flag, getattr(enum, "StrEnum", None))
+    if base is not None
 )
+
+
+_BASE_FINGERPRINT_HANDLERS: Final[dict[type, FingerprintHandler]] = {
+    **{base: _decompose_enum_member for base in _ENUM_MEMBER_BASES},
+    enum.EnumMeta: _decompose_enum_class,
+    type(None): lambda obj: _leaf(b"builtins.NoneType"),
+    bool: lambda obj: _leaf(b"builtins.bool", b"1" if obj else b"0"),
+    int: lambda obj: _leaf(_class_tag(type(obj)), str(int(obj)).encode()),
+    float: lambda obj: _leaf(_class_tag(type(obj)), struct.pack(">d", obj)),
+    complex: lambda obj: _leaf(_class_tag(type(obj)), struct.pack(">dd", obj.real, obj.imag)),
+    str: lambda obj: _leaf(_class_tag(type(obj)), obj.encode("utf-8", "surrogatepass")),
+    bytes: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
+    bytearray: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
+    tuple: lambda obj: FingerprintComposite(_class_tag(type(obj)), tuple(obj)),
+    list: lambda obj: FingerprintComposite(_class_tag(type(obj)), tuple(obj)),
+    dict: _decompose_dict,
+    set: lambda obj: FingerprintComposite(_class_tag(type(obj)), tuple(obj), ordered=False),
+    frozenset: lambda obj: FingerprintComposite(_class_tag(type(obj)), tuple(obj), ordered=False),
+    type: _decompose_by_reference,
+    types.FunctionType: _decompose_by_reference,
+    types.BuiltinFunctionType: _decompose_by_reference,
+    types.ModuleType: _decompose_by_reference,
+}
+
+
+def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
+    gt4py_meta = metadata.get(GT4PY_CLASS_METADATA_NS, None)
+    return not gt4py_meta or gt4py_meta.get("fingerprint", True)
+
+
+def _decompose_fallback(obj: Any) -> FingerprintLeaf | FingerprintComposite:
+    cls = type(obj)
+    if dataclasses.is_dataclass(cls) or datamodels.is_datamodel(cls):
+        fields: Iterable[Any] = (
+            dataclasses.fields(cls)
+            if dataclasses.is_dataclass(cls)
+            else datamodels.get_fields(cls).values()
+        )
+        return FingerprintComposite(
+            b"fields\0" + _class_tag(cls),
+            tuple(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
+        )
+
+    try:
+        reduced = obj.__reduce_ex__(_FINGERPRINT_REDUCE_PROTOCOL)
+    except Exception as error:
+        raise TypeError(f"Cannot fingerprint object of type '{cls.__name__}'.") from error
+    if isinstance(reduced, str):
+        # `__reduce__` may return a bare name to be looked up in the object's module.
+        return _leaf(b"global", f"{getattr(obj, '__module__', '')}:{reduced}".encode())
+    constructor, constructor_args, *rest = reduced
+    state = rest[0] if len(rest) > 0 else None
+    list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
+    dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
+    custom_setstate = rest[3] if len(rest) > 3 else None
+    return FingerprintComposite(
+        b"reduce", (constructor, constructor_args, state, list_items, dict_items, custom_setstate)
+    )
+
+
+def _leaf_digest(payload: bytes) -> str:
+    return xxhash.xxh64(b"leaf\0" + payload).hexdigest()
+
+
+def _combine_digests(tag: bytes, child_digests: list[str]) -> str:
+    hasher = xxhash.xxh64(b"node\0")
+    hasher.update(tag)
+    hasher.update(b"\0")
+    for digest in child_digests:  # fixed-length digests, unambiguous concatenation
+        hasher.update(digest.encode("ascii"))
+    return hasher.hexdigest()
+
+
+_VISIT: Final[int] = 0
+_COMBINE: Final[int] = 1
+
+
+def _compute_fingerprint(obj: Any, decompose: FingerprintHandler) -> str:
+    # Iterative post-order traversal, so the structure depth is bounded neither
+    # by the Python recursion limit nor (on Python <= 3.10) by the C stack.
+    memo: dict[int, str] = {}
+    keep_alive: list[Any] = []  # ensures the `id()`s used as memo keys stay valid
+    open_nodes: dict[int, int] = {}  # id -> depth among currently open (in-progress) nodes
+    # Smallest open-node depth targeted by a cyclic back reference: digests of
+    # nodes opened below it embed context-dependent back references and must
+    # not be memoized.
+    taint_depth: float = float("inf")
+
+    work: list[tuple[int, Any]] = [(_VISIT, obj)]
+    digests: list[str] = []
+    while work:
+        action, payload = work.pop()
+        if action == _VISIT:
+            current = payload
+            current_id = id(current)
+            if (cached := memo.get(current_id)) is not None:
+                digests.append(cached)
+                continue
+            if (depth := open_nodes.get(current_id)) is not None:
+                # Cyclic reference: contribute a back reference by relative depth,
+                # which is independent of memory addresses.
+                digests.append(_leaf_digest(b"cycle\0" + str(len(open_nodes) - depth).encode()))
+                taint_depth = min(taint_depth, depth)
+                continue
+            decomposed = decompose(current)
+            if isinstance(decomposed, FingerprintLeaf):
+                digest = _leaf_digest(decomposed.payload)
+                memo[current_id] = digest
+                keep_alive.append(current)
+                digests.append(digest)
+            else:
+                open_nodes[current_id] = len(open_nodes)
+                work.append((_COMBINE, (current, decomposed)))
+                work.extend((_VISIT, child) for child in reversed(decomposed.children))
+        else:
+            current, decomposed = payload
+            num_children = len(decomposed.children)
+            child_digests = digests[len(digests) - num_children :]
+            del digests[len(digests) - num_children :]
+            if not decomposed.ordered:
+                child_digests.sort()
+            digest = _combine_digests(decomposed.tag, child_digests)
+            depth = open_nodes.pop(id(current))
+            if depth <= taint_depth:
+                memo[id(current)] = digest
+                keep_alive.append(current)
+                if depth == taint_depth:
+                    # The target of all pending back references is complete; its
+                    # digest is self-contained again.
+                    taint_depth = float("inf")
+            digests.append(digest)
+
+    assert len(digests) == 1
+    return digests[0]
+
+
+def make_fingerprinter(
+    extra_handlers: Optional[Mapping[type, FingerprintHandler]] = None,
+) -> Fingerprinter:
+    """
+    Create a fingerprinting function, optionally with customized per-type handling.
+
+    A handler decomposes an object into a :class:`FingerprintLeaf` or a
+    :class:`FingerprintComposite`. Handlers are dispatched on the object's MRO;
+    `extra_handlers` take precedence over the default rules. Objects without a
+    matching handler are decomposed by their fields (dataclasses and
+    datamodels, honoring ``gt4py_metadata(fingerprint=False)`` field metadata)
+    or via the standard ``__reduce_ex__`` protocol.
+    """
+    decompose = eve_utils.singledispatcher(
+        _decompose_fallback,
+        implementations={**_BASE_FINGERPRINT_HANDLERS, **(extra_handlers or {})},
+    )
+
+    def fingerprinter(obj: Any) -> str:
+        return _compute_fingerprint(obj, decompose)
+
+    return fingerprinter
+
+
+#: Default fingerprinting function for GT4Py objects: deterministic across
+#: processes (dict and set contributions are canonicalized by sorting the
+#: fingerprints of their items) and identifying types, functions and modules
+#: by their qualified name.
+stable_fingerprinter: Fingerprinter = make_fingerprinter()
+
+
+def _make_skipping_fields_node_handler(skipped_fields: frozenset[str]) -> FingerprintHandler:
+    def handler(node: concepts.Node) -> FingerprintComposite:
+        return FingerprintComposite(
+            b"fields\0" + _class_tag(type(node)),
+            tuple(
+                (name, child)
+                for name, child in node.iter_children_items()
+                if name not in skipped_fields
+            ),
+        )
+
+    return handler
 
 
 @overload
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_pickler: Literal[False] = False
+    *skipped_fields: str, return_handlers: Literal[False] = False
 ) -> Fingerprinter: ...
 
 
 @overload
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_pickler: Literal[True]
-) -> tuple[Fingerprinter, type[pickle.Pickler]]: ...
+    *skipped_fields: str, return_handlers: Literal[True]
+) -> tuple[Fingerprinter, dict[type, FingerprintHandler]]: ...
 
 
 @functools.cache
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_pickler: bool = False
-) -> Fingerprinter | tuple[Fingerprinter, type[pickle.Pickler]]:
+    *skipped_fields: str, return_handlers: bool = False
+) -> Fingerprinter | tuple[Fingerprinter, dict[type, FingerprintHandler]]:
     """
     Return a fingerprinter that fingerprints a node while skipping fields.
 
-    The provided field names are ignored on recursively on all nodes.
+    The provided field names are ignored recursively on all nodes. With
+    `return_handlers=True`, additionally return the handler registry so it can
+    be composed into another fingerprinter via :func:`make_fingerprinter`.
     """
-    skipped_fields_set = set(skipped_fields)
+    handlers: dict[type, FingerprintHandler] = {
+        concepts.Node: _make_skipping_fields_node_handler(frozenset(skipped_fields))
+    }
+    fingerprinter = make_fingerprinter(handlers)
 
-    reducer_single_dispatch = eve_utils.singledispatcher(
-        default=lambda obj: NotImplemented,
-        implementations={
-            concepts.Node: eve_utils.pickle_reducer_factory(
-                get_state=lambda obj: tuple(
-                    (k, v) for k, v in obj.iter_children_items() if k not in skipped_fields_set
-                )
-            ),
-        },
-    )
-
-    class SkippingFieldsNodePickler(pickle.Pickler):
-        """Custom pickler that ignores the "location" attribute of `eve.Node`s."""
-
-        skipped_fields: ClassVar[set[str]] = skipped_fields_set
-        reducer_override = staticmethod(reducer_single_dispatch)
-
-    fingerprinter = functools.partial(
-        eve_utils.content_hash, pickler_type=SkippingFieldsNodePickler
-    )
-
-    return (fingerprinter, SkippingFieldsNodePickler) if return_pickler else fingerprinter
+    return (fingerprinter, handlers) if return_handlers else fingerprinter
 
 
 class RecursionGuard:

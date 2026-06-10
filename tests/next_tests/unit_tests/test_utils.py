@@ -9,7 +9,6 @@
 import copy
 import dataclasses
 import inspect
-import pickle
 import pytest
 
 from gt4py.eve import datamodels
@@ -18,80 +17,51 @@ from gt4py.next import utils
 from eve_tests import definitions
 
 
-# Module-level classes so pickle can resolve them by qualified name.
 @dataclasses.dataclass
-class _DataclassModel(utils.MetadataBasedPicklingMixin):
+class _DataclassModel:
     value: int
-    transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+    transient: str = dataclasses.field(
+        default="skip", metadata=utils.gt4py_metadata(fingerprint=False)
+    )
 
 
 @dataclasses.dataclass(slots=True)
-class _SlottedDataclassModel(utils.MetadataBasedPicklingMixin):
+class _SlottedDataclassModel:
     value: int
-    transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+    transient: str = dataclasses.field(
+        default="skip", metadata=utils.gt4py_metadata(fingerprint=False)
+    )
 
 
 @datamodels.datamodel(slots=False)
-class _DatamodelModel(utils.MetadataBasedPicklingMixin):
+class _DatamodelModel:
     value: int
-    transient: str = datamodels.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+    transient: str = datamodels.field(
+        default="skip", metadata=utils.gt4py_metadata(fingerprint=False)
+    )
 
 
-@dataclasses.dataclass
-class _EmptyDataclassModel(utils.MetadataBasedPicklingMixin):
-    pass
-
-
-@dataclasses.dataclass(slots=True)
-class _EmptySlottedDataclassModel(utils.MetadataBasedPicklingMixin):
-    pass
-
-
-@datamodels.datamodel(slots=False)
-class _EmptyDatamodelModel(utils.MetadataBasedPicklingMixin):
-    pass
-
-
-class TestMetadataBasedPickling:
-    def test_get_metadata_based_getstate_rejects_non_dataclass_like_type(self):
-        with pytest.raises(TypeError, match="Expected a dataclass or datamodel type"):
-            utils._get_metadata_based_state_getstate(object)
+class TestFingerprintFieldMetadata:
+    @pytest.mark.parametrize(
+        "model_class", [_DataclassModel, _SlottedDataclassModel, _DatamodelModel]
+    )
+    def test_fields_marked_fingerprint_false_do_not_affect_fingerprint(self, model_class):
+        assert utils.stable_fingerprinter(model_class(1, "foo")) == utils.stable_fingerprinter(
+            model_class(1, "bar")
+        )
 
     @pytest.mark.parametrize(
-        "instance,expected_state",
-        [
-            (_DataclassModel(1, "foo"), {"value": 1}),
-            (_SlottedDataclassModel(1, "foo"), (None, {"value": 1})),
-            (_DatamodelModel(1, "foo"), {"value": 1}),
-            (_EmptyDataclassModel(), {}),
-            (_EmptySlottedDataclassModel(), None),
-            (_EmptyDatamodelModel(), {}),
-        ],
+        "model_class", [_DataclassModel, _SlottedDataclassModel, _DatamodelModel]
     )
-    def test_get_metadata_based_getstate(self, instance, expected_state):
-        cls = type(instance)
-        getstate = utils._get_metadata_based_state_getstate(cls)
-        assert getstate is utils._get_metadata_based_state_getstate(cls)  # cached
+    def test_other_fields_affect_fingerprint(self, model_class):
+        assert utils.stable_fingerprinter(model_class(1, "foo")) != utils.stable_fingerprinter(
+            model_class(2, "foo")
+        )
 
-        assert getstate(instance) == expected_state
-
-    @pytest.mark.parametrize(
-        "instance,expected_fields",
-        [
-            (_DataclassModel(42, "skip"), {"value": 42}),
-            (_SlottedDataclassModel(42, "skip"), {"value": 42}),
-            (_DatamodelModel(42, "skip"), {"value": 42}),
-            (_EmptyDataclassModel(), {}),
-            (_EmptySlottedDataclassModel(), {}),
-            (_EmptyDatamodelModel(), {}),
-        ],
-    )
-    def test_pickle_roundtrip(self, instance, expected_fields):
-        obj = instance
-        restored = pickle.loads(pickle.dumps(obj))
-
-        for field_name, expected_value in expected_fields.items():
-            assert getattr(restored, field_name) == expected_value
+    def test_different_classes_with_equal_fields_differ(self):
+        assert utils.stable_fingerprinter(_DataclassModel(1)) != utils.stable_fingerprinter(
+            _SlottedDataclassModel(1)
+        )
 
 
 def test_skipping_fields_node_fingerprinter_skips_nested_fields_and_is_cached():
@@ -119,15 +89,18 @@ def test_skipping_fields_node_fingerprinter_skips_nested_fields_and_is_cached():
     assert fingerprinter(node_a) != fingerprinter(node_b)
 
 
-def test_skipping_fields_node_fingerprinter_returns_pickler_when_requested():
-    fingerprinter, pickler = utils.skipping_fields_node_fingerprinter(
-        "int_value", return_pickler=True
+def test_skipping_fields_node_fingerprinter_returns_handlers_when_requested():
+    from gt4py.eve import concepts
+
+    fingerprinter, handlers = utils.skipping_fields_node_fingerprinter(
+        "int_value", return_handlers=True
     )
     assert callable(fingerprinter)
-    assert isinstance(pickler, type) and issubclass(pickler, pickle.Pickler)
-    assert pickler.skipped_fields == {"int_value"}
+    # The handlers can be composed into another fingerprinter.
+    assert set(handlers) == {concepts.Node}
+    assert callable(utils.make_fingerprinter(handlers))
 
-    # Without `return_pickler` only the fingerprinter callable is returned.
+    # Without `return_handlers` only the fingerprinter callable is returned.
     assert callable(utils.skipping_fields_node_fingerprinter("int_value"))
 
 
@@ -208,6 +181,96 @@ class TestStableFingerprinter:
         # used to raise RecursionError (and later TypeError); it must just produce a hash.
         payload = {"types": [int, str], "module": os, "nested": {float: ("x",)}}
         assert isinstance(utils.stable_fingerprinter(payload), str)
+
+    def test_deep_structures_do_not_hit_the_recursion_limit(self):
+        # Regression: lowered IR trees (and other inputs) can nest far deeper than
+        # the Python recursion limit allows for recursive traversals.
+        deeply_nested: tuple = ()
+        for _ in range(100_000):
+            deeply_nested = (deeply_nested,)
+        assert isinstance(utils.stable_fingerprinter(deeply_nested), str)
+
+        nested_dicts: dict = {}
+        for _ in range(10_000):
+            nested_dicts = {"k": nested_dicts}
+        assert isinstance(utils.stable_fingerprinter(nested_dicts), str)
+
+    def test_dicts_with_unorderable_keys_are_order_independent(self):
+        from gt4py.next import common
+
+        # `Dimension`s (and other dataclasses without `__lt__`) occur as dict keys
+        # e.g. in user closure variables.
+        i, j = common.Dimension("I"), common.Dimension("J")
+        assert utils.stable_fingerprinter({i: 1, j: 2}) == utils.stable_fingerprinter({j: 2, i: 1})
+        assert utils.stable_fingerprinter({i: 1, j: 2}) != utils.stable_fingerprinter({i: 2, j: 1})
+
+    def test_fingerprint_is_a_function_of_value_not_identity(self):
+        # Shared sub-objects and equal copies must produce the same fingerprint.
+        d = {"a": 1}
+        assert utils.stable_fingerprinter((d, d)) == utils.stable_fingerprinter((d, dict(d)))
+
+    def test_ordered_dicts_are_order_sensitive(self):
+        import collections
+
+        # Unlike `dict`, `collections.OrderedDict` equality is order-sensitive,
+        # so differently ordered instances must not collide.
+        od1 = collections.OrderedDict([("a", 1), ("b", 2)])
+        od2 = collections.OrderedDict([("b", 2), ("a", 1)])
+        assert od1 != od2
+        assert utils.stable_fingerprinter(od1) != utils.stable_fingerprinter(od2)
+
+    def test_distinguishes_equal_values_of_different_types(self):
+        assert utils.stable_fingerprinter(True) != utils.stable_fingerprinter(1)
+        assert utils.stable_fingerprinter(1) != utils.stable_fingerprinter(1.0)
+        assert utils.stable_fingerprinter((1, 2)) != utils.stable_fingerprinter([1, 2])
+        assert utils.stable_fingerprinter("1") != utils.stable_fingerprinter(b"1")
+
+    def test_self_referential_structures_are_supported(self):
+        # E.g. module-level recursive functions appear in their own closure variables.
+        cyclic_a: dict = {"value": 1}
+        cyclic_a["self"] = cyclic_a
+        cyclic_b: dict = {"value": 1}
+        cyclic_b["self"] = cyclic_b
+        assert utils.stable_fingerprinter(cyclic_a) == utils.stable_fingerprinter(cyclic_b)
+
+        cyclic_c: dict = {"value": 2}
+        cyclic_c["self"] = cyclic_c
+        assert utils.stable_fingerprinter(cyclic_a) != utils.stable_fingerprinter(cyclic_c)
+
+    def test_enums_are_fingerprinted_by_content(self):
+        import enum
+
+        # Enum classes (commonly defined locally, e.g. as DSL constants) are
+        # fingerprinted by their member content, not by reference.
+        def make_enum(pi):
+            class Constants(enum.Enum):
+                PI = pi
+                E = 2.718
+
+            return Constants
+
+        c1, c2, c3 = make_enum(3.142), make_enum(3.142), make_enum(3.0)
+        assert utils.stable_fingerprinter(c1) == utils.stable_fingerprinter(c2)
+        assert utils.stable_fingerprinter(c1) != utils.stable_fingerprinter(c3)
+        assert utils.stable_fingerprinter(c1.PI) == utils.stable_fingerprinter(c2.PI)
+        assert utils.stable_fingerprinter(c1.PI) != utils.stable_fingerprinter(c3.PI)
+
+        # Mixin-based enums dispatch to the enum handler, not the value type.
+        class Device(enum.IntEnum):
+            CPU = 0
+            GPU = 1
+
+        assert utils.stable_fingerprinter(Device.CPU) != utils.stable_fingerprinter(0)
+        assert utils.stable_fingerprinter(Device.CPU) != utils.stable_fingerprinter(Device.GPU)
+
+    def test_ndarray_content_is_fingerprinted(self):
+        import numpy as np
+
+        a = np.array([[1, 2], [3, 4]], dtype=np.int32)
+        b = np.array([[1, 2], [3, 4]], dtype=np.int32)
+        assert utils.stable_fingerprinter(a) == utils.stable_fingerprinter(b)
+        assert utils.stable_fingerprinter(a) != utils.stable_fingerprinter(a.T)
+        assert utils.stable_fingerprinter(a) != utils.stable_fingerprinter(a.astype(np.int64))
 
 
 def test_tree_map_default():

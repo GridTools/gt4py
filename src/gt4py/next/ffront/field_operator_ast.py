@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeAlias, TypeVar, Union, cast
+from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
 from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
@@ -20,10 +20,9 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 #: Generate an unique fingerprint for `eve.Node`s ignoring its "location" attribute.
-semantic_fingerprinter, _semantic_pickler = utils.skipping_fields_node_fingerprinter(
-    "location", return_pickler=True
+semantic_fingerprinter, semantic_fingerprint_handlers = utils.skipping_fields_node_fingerprinter(
+    "location", return_handlers=True
 )
-semantic_pickler = cast(utils.SingleDispatchPickler, _semantic_pickler)
 
 
 class LocatedNode(Node):

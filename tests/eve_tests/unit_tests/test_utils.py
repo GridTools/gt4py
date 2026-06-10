@@ -151,53 +151,6 @@ def test_singledispatcher_validation_errors():
         singledispatcher(lambda _: "default", implementations={object: lambda _: "obj"})
 
 
-def test_merge_dispatchers_merges_registries_and_uses_last_default():
-    from gt4py.eve.utils import merge_dispatchers, singledispatcher
-
-    class A:
-        pass
-
-    class B:
-        pass
-
-    d1 = singledispatcher(lambda _: "first-default", implementations={A: lambda _: "a"})
-    d2 = singledispatcher(lambda _: "second-default", implementations={B: lambda _: "b"})
-
-    merged = merge_dispatchers(d1, d2)
-
-    # Without an explicit default, the default of the *last* dispatcher is used.
-    assert merged("x") == "second-default"
-    assert merged(A()) == "a"
-    assert merged(B()) == "b"
-    assert merged.registry.keys() == {object, A, B}
-
-
-def test_merge_dispatchers_uses_explicit_default_and_last_registration_wins():
-    from gt4py.eve.utils import merge_dispatchers, singledispatcher
-
-    class A:
-        pass
-
-    d1 = singledispatcher(lambda _: "default-1", implementations={A: lambda _: "a-1"})
-    d2 = singledispatcher(lambda _: "default-2", implementations={A: lambda _: "a-2"})
-
-    merged = merge_dispatchers(d1, d2, default=lambda _: "custom-default")
-
-    assert merged("x") == "custom-default"
-    assert merged(A()) == "a-2"
-
-
-def test_merge_dispatchers_validation_errors():
-    from gt4py.eve.utils import merge_dispatchers, singledispatcher
-
-    with pytest.raises(ValueError, match="At least one dispatcher"):
-        merge_dispatchers()
-
-    dispatcher = singledispatcher(lambda _: "default", implementations={})
-    with pytest.raises(TypeError, match="single-dispatch callables"):
-        merge_dispatchers(dispatcher, lambda _: "not-a-dispatcher")
-
-
 def test_get_fully_qualified_name():
     import json
 
@@ -215,42 +168,6 @@ def test_get_fully_qualified_name():
 
     # Modules are identified by their import name only (no qualname).
     assert get_fully_qualified_name(json) == "json"
-
-
-def test_pickle_reducer_factory_fast_path():
-    from gt4py.eve.utils import pickle_reducer_factory
-
-    class Foo:
-        def __init__(self):
-            self.a = 1
-
-    # Defaults reproduce the standard reduce tuple: (type, (), __dict__).
-    assert pickle_reducer_factory()(Foo()) == (Foo, (), {"a": 1})
-
-    # Each component can be overridden.
-    reducer = pickle_reducer_factory(
-        get_new=lambda obj: list,
-        get_new_args=lambda obj: ((1, 2), {"k": 3}),
-        get_state=lambda obj: "state",
-    )
-    assert reducer("ignored") == (list, ((1, 2), {"k": 3}), "state")
-
-
-def test_pickle_reducer_factory_full_path():
-    from gt4py.eve.utils import pickle_reducer_factory
-
-    # Providing any of seq_iter/map_iter/set_state switches to the 6-tuple form;
-    # the unspecified ones default to callables returning `None`.
-    reducer = pickle_reducer_factory(
-        get_new=lambda obj: dict,
-        get_state=lambda obj: None,
-        map_iter=lambda obj: iter([("x", 1)]),
-    )
-    new, new_args, state, seq_iter, map_iter, set_state = reducer("ignored")
-
-    assert (new, new_args, state) == (dict, (), None)
-    assert seq_iter is None and set_state is None
-    assert list(map_iter) == [("x", 1)]
 
 
 class ModelClass(eve.datamodels.DataModel):

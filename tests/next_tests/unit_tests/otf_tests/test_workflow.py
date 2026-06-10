@@ -126,12 +126,7 @@ def test_fingerprint_differs_for_different_objects():
 
 
 def test_fingerprint_handles_modules():
-    """Modules are unpicklable by default; the fingerprinter must serialize them by reference.
-
-    The fingerprinter overrides built-in container types and therefore uses the pure-Python
-    pickler, which (unlike the C extension) has no fast path for modules. The fingerprinter
-    registers a module reducer so that data containing module references can still be hashed.
-    """
+    """Data containing module references must still be hashable (by qualified name)."""
     import os
     import sys
 

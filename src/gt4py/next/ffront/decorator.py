@@ -83,9 +83,7 @@ def embedded_program_call_context(
 
 
 @dataclasses.dataclass(frozen=True)
-class _CompilableGTEntryPointMixin(
-    utils.MetadataBasedPicklingMixin, Generic[ffront_stages.DSLDefinitionT]
-):
+class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     """
     Mixing used by program and program-like objects.
 

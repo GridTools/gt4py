@@ -140,7 +140,7 @@ ArgStaticDescriptorsContextsByType: TypeAlias = Mapping[
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileTimeArgs(utils.MetadataBasedPicklingMixin):
+class CompileTimeArgs:
     """Compile-time standins for arguments to a GTX program to be used in ahead-of-time compilation."""
 
     args: tuple[ts.TypeSpec, ...]

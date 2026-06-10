@@ -12,7 +12,6 @@ import dataclasses
 from collections.abc import Callable
 from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
 
-from gt4py.next import utils
 from gt4py.next.otf import code_specs
 from gt4py.next.otf.binding import interface
 
@@ -22,7 +21,7 @@ TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramSource(utils.MetadataBasedPicklingMixin, Generic[CodeSpecT]):
+class ProgramSource(Generic[CodeSpecT]):
     """
     Standalone source code translated from an IR along with information relevant for OTF compilation.
 
@@ -39,7 +38,7 @@ class ProgramSource(utils.MetadataBasedPicklingMixin, Generic[CodeSpecT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class BindingSource(utils.MetadataBasedPicklingMixin, Generic[CodeSpecT, TargetCodeSpecT]):
+class BindingSource(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Companion source code for translated program source code.
 
@@ -55,7 +54,7 @@ class BindingSource(utils.MetadataBasedPicklingMixin, Generic[CodeSpecT, TargetC
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableProject(utils.MetadataBasedPicklingMixin, Generic[CodeSpecT, TargetCodeSpecT]):
+class CompilableProject(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
