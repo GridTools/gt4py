@@ -104,6 +104,117 @@ def test_skipping_fields_node_fingerprinter_returns_handlers_when_requested():
     assert callable(utils.skipping_fields_node_fingerprinter("int_value"))
 
 
+class TestTreeCata:
+    @staticmethod
+    def _decompose(obj):
+        if isinstance(obj, (list, tuple)):
+            return utils.TreeNode(metadata=type(obj), children=tuple(obj))
+        return utils.TreeLeaf(obj)
+
+    def test_carrier_type_is_generic(self):
+        # The reduction result can be of any type, e.g. the structure depth.
+        depth = utils.tree_cata(
+            [[1, [2]], 3],
+            decompose=self._decompose,
+            leaf_alg=lambda leaf: 0,
+            node_alg=lambda node, child_depths: 1 + max(child_depths, default=0),
+        )
+        assert depth == 3
+
+    def test_children_are_reduced_before_parents(self):
+        # Post-order traversal: the node algebra must always see the already
+        # reduced results of its children, in child order.
+        visited = []
+
+        def leaf_alg(leaf):
+            visited.append(leaf.value)
+            return leaf.value
+
+        def node_alg(node, child_results):
+            result = list(child_results)
+            visited.append(result)
+            return result
+
+        utils.tree_cata(
+            [1, [2, 3]], decompose=self._decompose, leaf_alg=leaf_alg, node_alg=node_alg
+        )
+        assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
+
+    def test_empty_containers_are_nodes(self):
+        # Zero-children nodes must not corrupt the result bookkeeping.
+        def leaf_alg(leaf: utils.TreeLeaf) -> tuple:
+            return (leaf.value,)
+
+        def node_alg(node: utils.TreeNode, child_results: list[tuple]) -> tuple:
+            return (node.metadata, *child_results)
+
+        result = utils.tree_cata(
+            [[], ()], decompose=self._decompose, leaf_alg=leaf_alg, node_alg=node_alg
+        )
+        assert result == (list, (list,), (tuple,))
+
+    def test_deep_structures_do_not_hit_the_recursion_limit(self):
+        deeply_nested: tuple = ()
+        for _ in range(100_000):
+            deeply_nested = (deeply_nested,)
+        depth = utils.tree_cata(
+            deeply_nested,
+            decompose=self._decompose,
+            leaf_alg=lambda leaf: 0,
+            node_alg=lambda node, child_depths: 1 + max(child_depths, default=0),
+        )
+        assert depth == 100_001  # 100_000 wrappers + the innermost empty tuple node
+
+    def test_memoization_reduces_shared_subobjects_once(self):
+        decompose_calls = []
+
+        def decompose(obj):
+            decompose_calls.append(obj)
+            return self._decompose(obj)
+
+        shared = [1, 2]
+        utils.tree_cata(
+            [shared, shared],
+            decompose=decompose,
+            leaf_alg=lambda leaf: 0,
+            node_alg=lambda node, child_results: 0,
+        )
+        assert sum(1 for obj in decompose_calls if obj is shared) == 1
+
+        decompose_calls.clear()
+        utils.tree_cata(
+            [shared, shared],
+            decompose=decompose,
+            leaf_alg=lambda leaf: 0,
+            node_alg=lambda node, child_results: 0,
+            memoize=False,
+        )
+        assert sum(1 for obj in decompose_calls if obj is shared) == 2
+
+    def test_cycles_raise_without_cycle_alg(self):
+        cyclic: list = [1]
+        cyclic.append(cyclic)
+        with pytest.raises(ValueError, match="Cycle detected"):
+            utils.tree_cata(
+                cyclic,
+                decompose=self._decompose,
+                leaf_alg=lambda leaf: 0,
+                node_alg=lambda node, child_results: 0,
+            )
+
+    def test_cycles_are_reduced_via_cycle_alg(self):
+        cyclic: list = [1]
+        cyclic.append(cyclic)
+        rendered = utils.tree_cata(
+            cyclic,
+            decompose=self._decompose,
+            leaf_alg=lambda leaf: str(leaf.value),
+            node_alg=lambda node, child_results: f"[{','.join(child_results)}]",
+            cycle_alg=lambda relative_depth: f"<up:{relative_depth}>",
+        )
+        assert rendered == "[1,<up:1>]"
+
+
 def _module_level_func_a() -> None: ...
 
 
@@ -166,6 +277,16 @@ class TestStableFingerprinter:
             with pytest.raises(TypeError, match="not importable"):
                 utils.stable_fingerprinter({"f": non_importable})
 
+    def test_shadowed_globals_raise(self, monkeypatch):
+        import sys
+
+        # An object whose qualified name no longer resolves to itself (e.g. after
+        # being redefined interactively) cannot be safely identified by that name.
+        original = _module_level_func_a
+        monkeypatch.setattr(sys.modules[__name__], "_module_level_func_a", _module_level_func_b)
+        with pytest.raises(TypeError, match="not importable"):
+            utils.stable_fingerprinter({"f": original})
+
     def test_modules_are_fingerprinted_by_reference(self):
         import os
         import sys
@@ -218,6 +339,24 @@ class TestStableFingerprinter:
         od2 = collections.OrderedDict([("b", 2), ("a", 1)])
         assert od1 != od2
         assert utils.stable_fingerprinter(od1) != utils.stable_fingerprinter(od2)
+
+    def test_defaultdict_factories_are_fingerprinted(self):
+        import collections
+
+        # The `default_factory` is part of a `defaultdict`'s observable behavior.
+        dd_int = collections.defaultdict(int, {"a": 1})
+        assert utils.stable_fingerprinter(dd_int) == utils.stable_fingerprinter(
+            collections.defaultdict(int, {"a": 1})
+        )
+        assert utils.stable_fingerprinter(dd_int) != utils.stable_fingerprinter(
+            collections.defaultdict(list, {"a": 1})
+        )
+        # A `defaultdict` is also distinguished from a plain `dict` with equal items.
+        assert utils.stable_fingerprinter(dd_int) != utils.stable_fingerprinter({"a": 1})
+        # The items contribution remains order-insensitive.
+        assert utils.stable_fingerprinter(
+            collections.defaultdict(int, {"a": 1, "b": 2})
+        ) == utils.stable_fingerprinter(collections.defaultdict(int, {"b": 2, "a": 1}))
 
     def test_distinguishes_equal_values_of_different_types(self):
         assert utils.stable_fingerprinter(True) != utils.stable_fingerprinter(1)
