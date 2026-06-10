@@ -15,6 +15,7 @@ import functools
 import inspect
 import itertools
 import struct
+import sys
 import types
 from collections.abc import Callable, Iterable, Mapping
 from typing import (
@@ -213,22 +214,40 @@ FingerprintHandler: TypeAlias = TreeDecomposer
 _FINGERPRINT_REDUCE_PROTOCOL: Final[int] = 2
 
 
+def _resolves_as_global(obj: Any) -> bool:
+    """Return whether resolving ``<module>.<qualname>`` through `sys.modules` yields `obj` itself."""
+    if isinstance(obj, types.ModuleType):
+        return sys.modules.get(obj.__name__) is obj
+    module = getattr(obj, "__module__", None)
+    qualname = getattr(obj, "__qualname__", None) or getattr(obj, "__name__", None)
+    if not module or not qualname:
+        return False
+    target: Any = sys.modules.get(module, None)
+    for part in qualname.split("."):
+        if (target := getattr(target, part, None)) is None:
+            return False
+    return target is obj
+
+
 def _reference_by_fully_qualified_name(obj: Any) -> str:
     """
-    Return the qualified name of `obj`, rejecting non-importable (local) objects.
+    Return the qualified name of `obj`, rejecting non-importable objects.
 
     Objects identified by their fully qualified name (import path) can only be
     properly fingerprinted if they are importable, module-level objects, whose
-    qualified name uniquely identifies them. This function rejects locally defined
-    objects: anything with ``<locals>`` in its qualified name (closures, nested
-    functions, classes defined inside a function) and anonymous ``<lambda>``
-    callables.
+    qualified name uniquely identifies them. Anything with ``<locals>`` in its
+    qualified name (closures, nested functions, classes defined inside a
+    function) and anonymous ``<lambda>`` callables are rejected by a cheap
+    string check; additionally, the name is resolved through `sys.modules` and
+    required to yield `obj` itself, which also rejects shadowed, reassigned or
+    deleted names whose qualified name no longer identifies the object.
     """
     fqn = eve_utils.get_fully_qualified_name(obj)
-    if "<locals>" in fqn or "<lambda>" in fqn:
+    if "<locals>" in fqn or "<lambda>" in fqn or not _resolves_as_global(obj):
         raise TypeError(
-            "Non-importable objects (e.g. locally defined or anonymous callables) cannot be "
-            "safely referenced since they share identical qualified names."
+            f"Objects which are not importable under their qualified name ('{fqn}') -- e.g. "
+            "locally defined or anonymous callables, shadowed or reassigned globals -- cannot "
+            "be safely referenced since the name does not uniquely identify them."
         )
     return fqn
 
@@ -255,6 +274,13 @@ def _decompose_dict(obj: dict) -> TreeNode:
     # must be too; plain `dict` (and other subclasses) compare order-insensitively.
     ordered = isinstance(obj, collections.OrderedDict)
     return TreeNode(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
+
+
+def _decompose_default_dict(obj: collections.defaultdict) -> TreeNode:
+    # The `default_factory` is part of the observable behavior of a `defaultdict`,
+    # so it participates in the fingerprint; the items child keeps the
+    # order-insensitivity of plain `dict`s.
+    return TreeNode(_class_tag(type(obj)), (obj.default_factory, dict(obj)))
 
 
 def _decompose_enum_class(obj: type[enum.Enum]) -> TreeNode:
@@ -298,6 +324,7 @@ _BASE_FINGERPRINT_HANDLERS: Final[dict[type, FingerprintHandler]] = {
     tuple: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj)),
     list: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj)),
     dict: _decompose_dict,
+    collections.defaultdict: _decompose_default_dict,
     set: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj), ordered=False),
     frozenset: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj), ordered=False),
     type: _decompose_by_reference,

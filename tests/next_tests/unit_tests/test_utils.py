@@ -163,7 +163,7 @@ class TestStableFingerprinter:
         assert make_closure(1) is not make_closure(2)
 
         for non_importable in (local_func, lambda: None, make_closure(1)):
-            with pytest.raises(TypeError, match="Non-importable"):
+            with pytest.raises(TypeError, match="not importable"):
                 utils.stable_fingerprinter({"f": non_importable})
 
     def test_modules_are_fingerprinted_by_reference(self):
