@@ -108,8 +108,8 @@ class TestTreeCata:
     @staticmethod
     def _decompose(obj):
         if isinstance(obj, (list, tuple)):
-            return utils.TreeNode(metadata=type(obj), children=tuple(obj))
-        return utils.TreeLeaf(obj)
+            return utils.ObjectDecomposition(metadata=type(obj), children=tuple(obj))
+        return utils.DecompositionAtom(obj)
 
     def test_carrier_type_is_generic(self):
         # The reduction result can be of any type, e.g. the structure depth.
@@ -142,10 +142,10 @@ class TestTreeCata:
 
     def test_empty_containers_are_nodes(self):
         # Zero-children nodes must not corrupt the result bookkeeping.
-        def leaf_alg(leaf: utils.TreeLeaf) -> tuple:
+        def leaf_alg(leaf: utils.DecompositionAtom) -> tuple:
             return (leaf.value,)
 
-        def node_alg(node: utils.TreeNode, child_results: list[tuple]) -> tuple:
+        def node_alg(node: utils.ObjectDecomposition, child_results: list[tuple]) -> tuple:
             return (node.metadata, *child_results)
 
         result = utils.tree_cata(

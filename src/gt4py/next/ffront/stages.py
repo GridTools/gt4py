@@ -36,14 +36,14 @@ from gt4py.next.otf import arguments, toolchain
 class BaseStage: ...
 
 
-def _decompose_definition_function(func: types.FunctionType) -> utils.TreeNode:
+def _decompose_definition_function(func: types.FunctionType) -> utils.ObjectDecomposition:
     """
     Decompose a Python function into its source code and closure variables.
 
     This should be enough for the use case of GT4Py DSL definitions, which are
     expected to be pure functions without complicated closures.
     """
-    return utils.TreeNode(
+    return utils.ObjectDecomposition(
         b"definition_function",
         (
             source_utils.make_source_definition_from_function(func),

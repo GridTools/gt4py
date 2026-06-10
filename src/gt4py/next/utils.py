@@ -59,14 +59,14 @@ _R = TypeVar("_R")
 
 # -- Generic bottom-up tree reduction (catamorphism) --
 @dataclasses.dataclass(frozen=True, slots=True)
-class TreeLeaf:
+class DecompositionAtom:
     """One-level decomposition of a terminal object: an opaque value, no children."""
 
     value: Any
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class TreeNode:
+class ObjectDecomposition:
     """
     One-level decomposition of a non-terminal object.
 
@@ -84,7 +84,7 @@ class TreeNode:
 
 
 #: Decomposes an object into one level of tree structure.
-TreeDecomposer: TypeAlias = Callable[[Any], TreeLeaf | TreeNode]
+ObjectDecomposer: TypeAlias = Callable[[Any], DecompositionAtom | ObjectDecomposition]
 
 _VISIT: Final[int] = 0
 _COMBINE: Final[int] = 1
@@ -93,9 +93,9 @@ _COMBINE: Final[int] = 1
 def tree_cata(
     obj: Any,
     *,
-    decompose: TreeDecomposer,
-    leaf_alg: Callable[[TreeLeaf], _R],
-    node_alg: Callable[[TreeNode, list[_R]], _R],
+    decompose: ObjectDecomposer,
+    leaf_alg: Callable[[DecompositionAtom], _R],
+    node_alg: Callable[[ObjectDecomposition, list[_R]], _R],
     cycle_alg: Optional[Callable[[int], _R]] = None,
     memoize: bool = True,
 ) -> _R:
@@ -106,12 +106,13 @@ def tree_cata(
     one-level decompositions produced by `decompose`, so the structure depth
     is bounded neither by the Python recursion limit nor (on Python <= 3.10)
     by the C stack. The reduction logic is supplied as algebras: `leaf_alg`
-    reduces a :class:`TreeLeaf` to a result, and `node_alg` combines a
-    :class:`TreeNode` with the already-reduced results of its children.
+    reduces a :class:`DecompositionAtom` to a result, and `node_alg` combines
+    an :class:`ObjectDecomposition` with the already-reduced results of its
+    children.
 
     Keyword Args:
-        decompose: Per-object one-level decomposition into a :class:`TreeLeaf`
-            or a :class:`TreeNode`.
+        decompose: Per-object one-level decomposition into a
+            :class:`DecompositionAtom` or an :class:`ObjectDecomposition`.
         leaf_alg: Reduction of a decomposed terminal object.
         node_alg: Combination of a decomposed non-terminal object with the
             results of its children (in child order).
@@ -131,8 +132,8 @@ def tree_cata(
 
         >>> def decompose(obj):
         ...     if isinstance(obj, (list, tuple)):
-        ...         return TreeNode(metadata=None, children=tuple(obj))
-        ...     return TreeLeaf(obj)
+        ...         return ObjectDecomposition(metadata=None, children=tuple(obj))
+        ...     return DecompositionAtom(obj)
         >>> tree_cata(
         ...     [[1, [2]], 3],
         ...     decompose=decompose,
@@ -171,7 +172,7 @@ def tree_cata(
                 taint_depth = min(taint_depth, depth)
                 continue
             decomposed = decompose(current)
-            if isinstance(decomposed, TreeLeaf):
+            if isinstance(decomposed, DecompositionAtom):
                 result = leaf_alg(decomposed)
                 if memoize:
                     memo[current_id] = result
@@ -204,10 +205,6 @@ def tree_cata(
 
 # -- Fingerprinting: digest algebras over a per-type decomposition registry --
 Fingerprinter: TypeAlias = Callable[[Any], str]
-
-#: Decomposer used for fingerprinting: `TreeLeaf.value` and `TreeNode.metadata`
-#: must be `bytes` (a domain-separation tag, optionally followed by a payload).
-FingerprintHandler: TypeAlias = TreeDecomposer
 
 #: Pickle protocol used when decomposing unknown objects via `__reduce_ex__`.
 #: Pinned so the decomposition (and therefore the fingerprint) does not depend
@@ -253,52 +250,54 @@ def _reference_by_fully_qualified_name(obj: Any) -> str:
     return fqn
 
 
-_class_tag_cache: dict[type, bytes] = {}
+@functools.cache
+def _cached_class_tag(cls: type) -> bytes:
+    return eve_utils.get_fully_qualified_name(cls).encode()
 
 
-def _class_tag(cls: type) -> bytes:
-    if (tag := _class_tag_cache.get(cls)) is None:
-        tag = _class_tag_cache[cls] = eve_utils.get_fully_qualified_name(cls).encode()
-    return tag
+# The `functools.cache` wrapper erases the parameter types (`*args: Hashable`),
+# making mypy reject `type[Any]` arguments at call sites; re-typing it restores
+# the actual signature.
+_class_tag: Final[Callable[[type], bytes]] = _cached_class_tag
 
 
-def _leaf(tag: bytes, payload: bytes = b"") -> TreeLeaf:
-    return TreeLeaf(tag + b"\0" + payload)
+def _leaf(tag: bytes, payload: bytes = b"") -> DecompositionAtom:
+    return DecompositionAtom(tag + b"\0" + payload)
 
 
-def _decompose_by_reference(obj: Any) -> TreeLeaf:
+def _decompose_by_reference(obj: Any) -> DecompositionAtom:
     return _leaf(b"ref", _reference_by_fully_qualified_name(obj).encode())
 
 
-def _decompose_dict(obj: dict) -> TreeNode:
+def _decompose_dict(obj: dict) -> ObjectDecomposition:
     # `collections.OrderedDict` equality is order-sensitive, so its fingerprint
     # must be too; plain `dict` (and other subclasses) compare order-insensitively.
     ordered = isinstance(obj, collections.OrderedDict)
-    return TreeNode(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
+    return ObjectDecomposition(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
 
 
-def _decompose_default_dict(obj: collections.defaultdict) -> TreeNode:
+def _decompose_default_dict(obj: collections.defaultdict) -> ObjectDecomposition:
     # The `default_factory` is part of the observable behavior of a `defaultdict`,
     # so it participates in the fingerprint; the items child keeps the
     # order-insensitivity of plain `dict`s.
-    return TreeNode(_class_tag(type(obj)), (obj.default_factory, dict(obj)))
+    return ObjectDecomposition(_class_tag(type(obj)), (obj.default_factory, dict(obj)))
 
 
-def _decompose_enum_class(obj: type[enum.Enum]) -> TreeNode:
+def _decompose_enum_class(obj: type[enum.Enum]) -> ObjectDecomposition:
     # Enum classes are decomposed by content (their members) instead of by
     # reference: they are commonly defined locally (non-importable), and their
     # semantic content is exactly the member set.
-    return TreeNode(
+    return ObjectDecomposition(
         b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
         tuple((member.name, member.value) for member in obj),
     )
 
 
-def _decompose_enum_member(obj: enum.Enum) -> TreeNode:
+def _decompose_enum_member(obj: enum.Enum) -> ObjectDecomposition:
     # The member's class is included by content (see `_decompose_enum_class`),
     # so members of distinct but identically named (e.g. local) enum classes
     # cannot collide.
-    return TreeNode(b"enum_member", (type(obj), obj.name, obj.value))
+    return ObjectDecomposition(b"enum_member", (type(obj), obj.name, obj.value))
 
 
 # `enum.Enum` alone is not enough: for mixin-based enums (`IntEnum`, `IntFlag`,
@@ -311,7 +310,7 @@ _ENUM_MEMBER_BASES: Final[tuple[type, ...]] = tuple(
 )
 
 
-_BASE_FINGERPRINT_HANDLERS: Final[dict[type, FingerprintHandler]] = {
+_BASE_FINGERPRINT_DECOMPOSERS: Final[dict[type, ObjectDecomposer]] = {
     **{base: _decompose_enum_member for base in _ENUM_MEMBER_BASES},
     enum.EnumMeta: _decompose_enum_class,
     type(None): lambda obj: _leaf(b"builtins.NoneType"),
@@ -322,12 +321,12 @@ _BASE_FINGERPRINT_HANDLERS: Final[dict[type, FingerprintHandler]] = {
     str: lambda obj: _leaf(_class_tag(type(obj)), obj.encode("utf-8", "surrogatepass")),
     bytes: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
     bytearray: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
-    tuple: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj)),
-    list: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj)),
+    tuple: lambda obj: ObjectDecomposition(_class_tag(type(obj)), tuple(obj)),
+    list: lambda obj: ObjectDecomposition(_class_tag(type(obj)), tuple(obj)),
     dict: _decompose_dict,
     collections.defaultdict: _decompose_default_dict,
-    set: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj), ordered=False),
-    frozenset: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj), ordered=False),
+    set: lambda obj: ObjectDecomposition(_class_tag(type(obj)), tuple(obj), ordered=False),
+    frozenset: lambda obj: ObjectDecomposition(_class_tag(type(obj)), tuple(obj), ordered=False),
     type: _decompose_by_reference,
     types.FunctionType: _decompose_by_reference,
     types.BuiltinFunctionType: _decompose_by_reference,
@@ -340,7 +339,7 @@ def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
     return not gt4py_meta or gt4py_meta.get("fingerprint", True)
 
 
-def _decompose_fallback(obj: Any) -> TreeLeaf | TreeNode:
+def _decompose_fallback(obj: Any) -> DecompositionAtom | ObjectDecomposition:
     cls = type(obj)
     if dataclasses.is_dataclass(cls) or datamodels.is_datamodel(cls):
         fields: Iterable[Any] = (
@@ -348,7 +347,7 @@ def _decompose_fallback(obj: Any) -> TreeLeaf | TreeNode:
             if dataclasses.is_dataclass(cls)
             else datamodels.get_fields(cls).values()
         )
-        return TreeNode(
+        return ObjectDecomposition(
             b"fields\0" + _class_tag(cls),
             tuple(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
         )
@@ -371,17 +370,17 @@ def _decompose_fallback(obj: Any) -> TreeLeaf | TreeNode:
     list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
     dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
     custom_setstate = rest[3] if len(rest) > 3 else None
-    return TreeNode(
+    return ObjectDecomposition(
         b"reduce", (constructor, constructor_args, state, list_items, dict_items, custom_setstate)
     )
 
 
-def _fingerprint_leaf_alg(leaf: TreeLeaf) -> str:
+def _fingerprint_leaf_alg(leaf: DecompositionAtom) -> str:
     """Reduce a decomposed terminal object to its digest."""
     return xxhash.xxh64(b"leaf\0" + leaf.value).hexdigest()
 
 
-def _fingerprint_node_alg(node: TreeNode, child_digests: list[str]) -> str:
+def _fingerprint_node_alg(node: ObjectDecomposition, child_digests: list[str]) -> str:
     """Combine the digests of a node's children into the node's digest."""
     if not node.ordered:
         # Sorting the child *digests* canonicalizes order-insensitive containers
@@ -397,19 +396,20 @@ def _fingerprint_node_alg(node: TreeNode, child_digests: list[str]) -> str:
 
 def _fingerprint_cycle_alg(relative_depth: int) -> str:
     """Reduce a cyclic back reference to a digest of its relative depth."""
-    return _fingerprint_leaf_alg(TreeLeaf(b"cycle\0" + str(relative_depth).encode()))
+    return _fingerprint_leaf_alg(DecompositionAtom(b"cycle\0" + str(relative_depth).encode()))
 
 
 def make_fingerprinter(
-    extra_handlers: Optional[Mapping[type, FingerprintHandler]] = None,
+    extra_handlers: Optional[Mapping[type, ObjectDecomposer]] = None,
 ) -> Fingerprinter:
     """
     Create a fingerprinting function, optionally with customized per-type handling.
 
     A fingerprinter is :func:`tree_cata` instantiated with digest algebras
     (xxhash64 with domain separation) over a per-type decomposition registry.
-    A handler decomposes an object into a :class:`TreeLeaf` or a
-    :class:`TreeNode` whose `value` / `metadata` are byte tags. Handlers are
+    A handler decomposes an object into a :class:`DecompositionAtom` or an
+    :class:`ObjectDecomposition` whose `value` / `metadata` are byte tags
+    (a domain-separation tag, optionally followed by a payload). Handlers are
     dispatched on the object's MRO; `extra_handlers` take precedence over the
     default rules. Objects without a matching handler are decomposed by their
     fields (dataclasses and datamodels, honoring
@@ -418,7 +418,7 @@ def make_fingerprinter(
     """
     decompose = eve_utils.singledispatcher(
         _decompose_fallback,
-        implementations={**_BASE_FINGERPRINT_HANDLERS, **(extra_handlers or {})},
+        implementations={**_BASE_FINGERPRINT_DECOMPOSERS, **(extra_handlers or {})},
     )
 
     def fingerprinter(obj: Any) -> str:
@@ -440,9 +440,9 @@ def make_fingerprinter(
 stable_fingerprinter: Fingerprinter = make_fingerprinter()
 
 
-def _make_skipping_fields_node_handler(skipped_fields: frozenset[str]) -> FingerprintHandler:
-    def handler(node: concepts.Node) -> TreeNode:
-        return TreeNode(
+def _make_skipping_fields_node_handler(skipped_fields: frozenset[str]) -> ObjectDecomposer:
+    def handler(node: concepts.Node) -> ObjectDecomposition:
+        return ObjectDecomposition(
             b"fields\0" + _class_tag(type(node)),
             tuple(
                 (name, child)
@@ -463,13 +463,13 @@ def skipping_fields_node_fingerprinter(
 @overload
 def skipping_fields_node_fingerprinter(
     *skipped_fields: str, return_handlers: Literal[True]
-) -> tuple[Fingerprinter, dict[type, FingerprintHandler]]: ...
+) -> tuple[Fingerprinter, dict[type, ObjectDecomposer]]: ...
 
 
 @functools.cache
 def skipping_fields_node_fingerprinter(
     *skipped_fields: str, return_handlers: bool = False
-) -> Fingerprinter | tuple[Fingerprinter, dict[type, FingerprintHandler]]:
+) -> Fingerprinter | tuple[Fingerprinter, dict[type, ObjectDecomposer]]:
     """
     Return a fingerprinter that fingerprints a node while skipping fields.
 
@@ -477,7 +477,7 @@ def skipping_fields_node_fingerprinter(
     `return_handlers=True`, additionally return the handler registry so it can
     be composed into another fingerprinter via :func:`make_fingerprinter`.
     """
-    handlers: dict[type, FingerprintHandler] = {
+    handlers: dict[type, ObjectDecomposer] = {
         concepts.Node: _make_skipping_fields_node_handler(frozenset(skipped_fields))
     }
     fingerprinter = make_fingerprinter(handlers)

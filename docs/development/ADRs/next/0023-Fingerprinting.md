@@ -73,7 +73,7 @@ trees — keeping three concerns explicitly separate:
 
 1. **Decomposition** (*what is the one-level structure of an object?*): a
    per-type registry of handlers, each peeling off exactly one level into a
-   `TreeLeaf` or a `TreeNode`.
+   `DecompositionAtom` or an `ObjectDecomposition`.
 2. **Traversal scheme** (*in which order are objects visited?*): `tree_cata`,
    a generic iterative post-order fold with result memoization and cycle
    support, reusable with any result type.
@@ -85,8 +85,8 @@ trees — keeping three concerns explicitly separate:
 A *fingerprint handler* decomposes an object into its contribution:
 
 ```python
-TreeLeaf(value: bytes)                                # terminal
-TreeNode(metadata: bytes, children: tuple, ordered)   # recurse into children
+DecompositionAtom(value: bytes)                                  # terminal
+ObjectDecomposition(metadata: bytes, children: tuple, ordered)   # recurse into children
 ```
 
 `make_fingerprinter(extra_handlers)` builds a fingerprinting function from the
@@ -130,10 +130,11 @@ serve other bottom-up reductions over arbitrary objects.
 
 ### Layer 3: the digest algebras
 
-The fingerprint algebras reduce a `TreeLeaf` to
-`xxh64("leaf" + value)`, combine a `TreeNode` with its child digests into
-`xxh64("node" + metadata + digests)` — sorting the child digests first when the
-node is unordered — and encode cyclic back references by their relative depth.
+The fingerprint algebras reduce a `DecompositionAtom` to
+`xxh64("leaf" + value)`, combine an `ObjectDecomposition` with its child
+digests into `xxh64("node" + metadata + digests)` — sorting the child digests
+first when the node is unordered — and encode cyclic back references by their
+relative depth.
 Together with the identity-based memoization this keeps the fingerprint a pure
 function of *value*: a graph that shares a sub-object and a graph with an
 equal copy fingerprint identically.
@@ -280,8 +281,8 @@ What becomes harder / the trade-offs:
 The layering of this design (one-level decomposition / generic fold /
 algebras) deliberately mirrors how a fingerprinter would be written over
 [`optree`](https://github.com/metaopt/optree)'s `tree_flatten_one_level`, with
-`TreeLeaf`/`TreeNode` playing the role of the pytree registry entries. Using
-`optree` itself was evaluated and rejected:
+`DecompositionAtom`/`ObjectDecomposition` playing the role of the pytree
+registry entries. Using `optree` itself was evaluated and rejected:
 
 - Good, because the pytree registry and the one-level decomposition of builtin
   containers come for free, and the vocabulary (leaves, nodes, `is_leaf`,
@@ -316,8 +317,8 @@ algebras) deliberately mirrors how a fingerprinter would be written over
 
 ## References
 
-- `src/gt4py/next/utils.py` — `TreeLeaf`, `TreeNode`, `tree_cata`,
-  `make_fingerprinter`, `stable_fingerprinter`,
+- `src/gt4py/next/utils.py` — `DecompositionAtom`, `ObjectDecomposition`,
+  `tree_cata`, `make_fingerprinter`, `stable_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
 - `src/gt4py/next/otf/workflow.py` — `CachedStep.cache_key`.
