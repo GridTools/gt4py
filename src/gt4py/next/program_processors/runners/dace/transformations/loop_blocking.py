@@ -192,6 +192,16 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # Require that there are more iteration than the blocking size.
         # TODO(phimuell): Synchronize this with the GPU block size since it also
         #   plays into it.
+        # TODO(iomaganaris): Maybe a good idea is to set a minimum number of remaining grid size
+        #                    after blocking, to make sure that we launch a large enough grid for
+        #                    latency hiding. i.e. if the K dimension is 80 we want to allow blocking
+        #                    with block size up to 8 so the grid size corresponding to K is 10.
+        #                    Another option is having the blocking size as the maximum blocking size.
+        #                    Instead of hard coding it we can allow the blocking size to be LOOP_LENGTH
+        #                    as long as grid_size[block_var_idx]/LOOP_LENGTH is larger than some threshold.
+        #                    For example: if we want to have grid_size[block_var_idx] > 5, block_var_range = 35
+        #                    and block_size = 8, then the blocking_size should be lowered to 7 instead of disabling
+        #                    the transformation.
         if (map_range_size[block_var_idx] <= self.blocking_size) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
             return False
 
