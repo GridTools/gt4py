@@ -143,7 +143,6 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
-@pytest.mark.uses_program_with_sliced_out_arguments
 @pytest.mark.uses_tuple_returns
 def test_domain_tuple(cartesian_case):
     @gtx.field_operator
