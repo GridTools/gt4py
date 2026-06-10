@@ -94,8 +94,6 @@ def test_scalar_scan_vertical_offset(cartesian_case):
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize), np.arange(start=3, stop=ksize + 3, step=1).astype(float64))
 
-    cases.run(cartesian_case, testee, inp, out=out)
-
     cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
 
 
