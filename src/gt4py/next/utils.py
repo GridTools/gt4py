@@ -86,6 +86,12 @@ class ObjectDecomposition:
 #: Decomposes an object into one level of tree structure.
 ObjectDecomposer: TypeAlias = Callable[[Any], DecompositionAtom | ObjectDecomposition]
 
+#: Reduces a decomposed terminal object to a result.
+AtomReducer: TypeAlias = Callable[[DecompositionAtom], _R]
+
+#: Combines a decomposed non-terminal object with the results of its children.
+CompositeReducer: TypeAlias = Callable[[ObjectDecomposition, list[_R]], _R]
+
 _VISIT: Final[int] = 0
 _COMBINE: Final[int] = 1
 
@@ -94,8 +100,8 @@ def reduce_object(
     obj: Any,
     *,
     decompose: ObjectDecomposer,
-    leaf_alg: Callable[[DecompositionAtom], _R],
-    node_alg: Callable[[ObjectDecomposition, list[_R]], _R],
+    leaf_alg: AtomReducer[_R],
+    node_alg: CompositeReducer[_R],
     cycle_alg: Optional[Callable[[int], _R]] = None,
     memoize: bool = True,
 ) -> _R:
