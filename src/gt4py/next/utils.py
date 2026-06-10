@@ -90,7 +90,7 @@ _VISIT: Final[int] = 0
 _COMBINE: Final[int] = 1
 
 
-def tree_cata(
+def reduce_object(
     obj: Any,
     *,
     decompose: ObjectDecomposer,
@@ -134,7 +134,7 @@ def tree_cata(
         ...     if isinstance(obj, (list, tuple)):
         ...         return ObjectDecomposition(metadata=None, children=tuple(obj))
         ...     return DecompositionAtom(obj)
-        >>> tree_cata(
+        >>> reduce_object(
         ...     [[1, [2]], 3],
         ...     decompose=decompose,
         ...     leaf_alg=lambda leaf: 0,
@@ -405,7 +405,7 @@ def make_fingerprinter(
     """
     Create a fingerprinting function, optionally with customized per-type handling.
 
-    A fingerprinter is :func:`tree_cata` instantiated with digest algebras
+    A fingerprinter is :func:`reduce_object` instantiated with digest algebras
     (xxhash64 with domain separation) over a per-type decomposition registry.
     A handler decomposes an object into a :class:`DecompositionAtom` or an
     :class:`ObjectDecomposition` whose `value` / `metadata` are byte tags
@@ -422,7 +422,7 @@ def make_fingerprinter(
     )
 
     def fingerprinter(obj: Any) -> str:
-        return tree_cata(
+        return reduce_object(
             obj,
             decompose=decompose,
             leaf_alg=_fingerprint_leaf_alg,

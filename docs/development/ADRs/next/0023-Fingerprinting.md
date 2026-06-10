@@ -74,7 +74,7 @@ trees — keeping three concerns explicitly separate:
 1. **Decomposition** (*what is the one-level structure of an object?*): a
    per-type registry of handlers, each peeling off exactly one level into a
    `DecompositionAtom` or an `ObjectDecomposition`.
-2. **Traversal scheme** (*in which order are objects visited?*): `tree_cata`,
+2. **Traversal scheme** (*in which order are objects visited?*): `reduce_object`,
    a generic iterative post-order fold with result memoization and cycle
    support, reusable with any result type.
 3. **Reduction logic** (*how do results combine?*): the fingerprint *algebras*,
@@ -115,9 +115,9 @@ object's MRO via `functools.singledispatch`). The default rules are:
   (with a pinned protocol version), which covers e.g. NumPy arrays by content
   without any special-casing.
 
-### Layer 2: the traversal scheme (`tree_cata`)
+### Layer 2: the traversal scheme (`reduce_object`)
 
-`tree_cata(obj, *, decompose, leaf_alg, node_alg, cycle_alg, memoize)` reduces
+`reduce_object(obj, *, decompose, leaf_alg, node_alg, cycle_alg, memoize)` reduces
 an object bottom-up over its one-level decompositions. The fold is
 **iterative** (explicit two-phase work stack), so deeply nested inputs —
 lowered IR trees routinely exceed the recursion limit budget of any recursive
@@ -318,7 +318,7 @@ registry entries. Using `optree` itself was evaluated and rejected:
 ## References
 
 - `src/gt4py/next/utils.py` — `DecompositionAtom`, `ObjectDecomposition`,
-  `tree_cata`, `make_fingerprinter`, `stable_fingerprinter`,
+  `reduce_object`, `make_fingerprinter`, `stable_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
 - `src/gt4py/next/otf/workflow.py` — `CachedStep.cache_key`.

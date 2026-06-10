@@ -104,7 +104,7 @@ def test_skipping_fields_node_fingerprinter_returns_handlers_when_requested():
     assert callable(utils.skipping_fields_node_fingerprinter("int_value"))
 
 
-class TestTreeCata:
+class TestReduceObject:
     @staticmethod
     def _decompose(obj):
         if isinstance(obj, (list, tuple)):
@@ -113,7 +113,7 @@ class TestTreeCata:
 
     def test_carrier_type_is_generic(self):
         # The reduction result can be of any type, e.g. the structure depth.
-        depth = utils.tree_cata(
+        depth = utils.reduce_object(
             [[1, [2]], 3],
             decompose=self._decompose,
             leaf_alg=lambda leaf: 0,
@@ -135,7 +135,7 @@ class TestTreeCata:
             visited.append(result)
             return result
 
-        utils.tree_cata(
+        utils.reduce_object(
             [1, [2, 3]], decompose=self._decompose, leaf_alg=leaf_alg, node_alg=node_alg
         )
         assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
@@ -148,7 +148,7 @@ class TestTreeCata:
         def node_alg(node: utils.ObjectDecomposition, child_results: list[tuple]) -> tuple:
             return (node.metadata, *child_results)
 
-        result = utils.tree_cata(
+        result = utils.reduce_object(
             [[], ()], decompose=self._decompose, leaf_alg=leaf_alg, node_alg=node_alg
         )
         assert result == (list, (list,), (tuple,))
@@ -157,7 +157,7 @@ class TestTreeCata:
         deeply_nested: tuple = ()
         for _ in range(100_000):
             deeply_nested = (deeply_nested,)
-        depth = utils.tree_cata(
+        depth = utils.reduce_object(
             deeply_nested,
             decompose=self._decompose,
             leaf_alg=lambda leaf: 0,
@@ -173,7 +173,7 @@ class TestTreeCata:
             return self._decompose(obj)
 
         shared = [1, 2]
-        utils.tree_cata(
+        utils.reduce_object(
             [shared, shared],
             decompose=decompose,
             leaf_alg=lambda leaf: 0,
@@ -182,7 +182,7 @@ class TestTreeCata:
         assert sum(1 for obj in decompose_calls if obj is shared) == 1
 
         decompose_calls.clear()
-        utils.tree_cata(
+        utils.reduce_object(
             [shared, shared],
             decompose=decompose,
             leaf_alg=lambda leaf: 0,
@@ -195,7 +195,7 @@ class TestTreeCata:
         cyclic: list = [1]
         cyclic.append(cyclic)
         with pytest.raises(ValueError, match="Cycle detected"):
-            utils.tree_cata(
+            utils.reduce_object(
                 cyclic,
                 decompose=self._decompose,
                 leaf_alg=lambda leaf: 0,
@@ -205,7 +205,7 @@ class TestTreeCata:
     def test_cycles_are_reduced_via_cycle_alg(self):
         cyclic: list = [1]
         cyclic.append(cyclic)
-        rendered = utils.tree_cata(
+        rendered = utils.reduce_object(
             cyclic,
             decompose=self._decompose,
             leaf_alg=lambda leaf: str(leaf.value),
