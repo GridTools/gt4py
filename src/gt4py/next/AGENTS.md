@@ -66,13 +66,21 @@ Next tests run across a **backend matrix** (embedded NumPy/CuPy/JAX, `gtfn`,
   `tests/next_tests/integration_tests/cases.py`: the `cartesian_case` /
   `unstructured_case` fixtures supply a backend + allocator; build inputs
   with `cases.allocate(...)` and check with `cases.verify` /
-  `cases.verify_with_default_data`.
+  `cases.verify_with_default_data`. The shared fixtures themselves
+  (`exec_alloc_descriptor`, `mesh_descriptor`, grid descriptors, dimension /
+  offset aliases) live next to it in `integration_tests/cases_utils.py`.
 - If a test exercises a feature some backend can't handle, mark it with the
   matching `USES_*` / `CHECKS_SPECIFIC_ERROR` marker from `definitions.py`
   and add that marker to the backend's skip list — do **not** silently drop
-  the backend. A new feature marker must be added to both places.
+  the backend. A new feature marker must be added to both places. Markers also
+  serve as a queryable feature index (`pytest -m uses_<feature>`); only markers
+  in `BACKEND_SKIP_TEST_MATRIX` affect execution (the rest are index-only and
+  safe to add) — see the note next to that matrix in `definitions.py`.
 - Layout: `unit_tests/` (per-module, backend-free), `feature_tests/` (one DSL
   feature across the matrix), `multi_feature_tests/` (end-to-end programs).
+  Place a test in the file for the feature it is the *subject* of; a feature it
+  merely uses as a vehicle is recorded as a marker, not a reason to move it (so
+  `pytest -m uses_<feature>` finds it regardless of which file it lives in).
 - Run with `uv run pytest tests/next_tests/ -x -q`; matrix-level confidence
   comes from `uv run nox -s "test_next-<py>(...)"`. GPU and `dace` sessions
   may be unavailable locally and will skip.

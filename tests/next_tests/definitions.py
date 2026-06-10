@@ -136,6 +136,15 @@ BINDINGS_UNSUPPORTED_MESSAGE = "'{marker}' not supported by '{backend}' bindings
 REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
     "We cannot unroll a reduction on a sparse field only (not clear if it is legal ITIR)"
 )
+# Index-only vs. consequential markers:
+# A `uses_*` marker only affects execution if it appears in one of the skip lists below (and thus
+# in `BACKEND_SKIP_TEST_MATRIX`); such a marker is "consequential" -- it applies the listed
+# SKIP/XFAIL on the matching backends. A marker referenced nowhere here is "index-only": it has no
+# runtime effect and is purely a queryable feature tag (`pytest -m uses_<feature>`), hence always
+# safe to add. Because `xfail_strict` is enabled, adding a consequential marker to a test that
+# currently PASSES on a listed backend turns it into an unexpected pass (xpass) and FAILS -- so add
+# a consequential marker only once the test genuinely fails on that backend, and validate per-backend.
+
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),

@@ -160,7 +160,7 @@ Each test suite should follow the following structure:
   __init__.py  # each subpackage test should be a python package
   integration_tests/
     __init__.py
-    feature_test/
+    feature_tests/
       __init__.py
       <starting_end>_tests/
         __init__.py
