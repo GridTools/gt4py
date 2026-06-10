@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import collections
+import copyreg
 import dataclasses
 import enum
 import functools
@@ -353,7 +354,13 @@ def _decompose_fallback(obj: Any) -> TreeLeaf | TreeNode:
         )
 
     try:
-        reduced = obj.__reduce_ex__(_FINGERPRINT_REDUCE_PROTOCOL)
+        # Like `pickle.Pickler`, give precedence to reducers registered in
+        # `copyreg.dispatch_table` (e.g. NumPy registers one for `ufunc`s,
+        # whose direct `__reduce_ex__` raises).
+        if (dispatched_reducer := copyreg.dispatch_table.get(cls)) is not None:
+            reduced = dispatched_reducer(obj)
+        else:
+            reduced = obj.__reduce_ex__(_FINGERPRINT_REDUCE_PROTOCOL)
     except Exception as error:
         raise TypeError(f"Cannot fingerprint object of type '{cls.__name__}'.") from error
     if isinstance(reduced, str):

@@ -411,6 +411,14 @@ class TestStableFingerprinter:
         assert utils.stable_fingerprinter(a) != utils.stable_fingerprinter(a.T)
         assert utils.stable_fingerprinter(a) != utils.stable_fingerprinter(a.astype(np.int64))
 
+    def test_copyreg_dispatch_table_reducers_are_honored(self):
+        import numpy as np
+
+        # NumPy ufuncs (e.g. in DSL closure variables) only pickle through their
+        # `copyreg.dispatch_table` reducer; their direct `__reduce_ex__` raises.
+        assert utils.stable_fingerprinter(np.cbrt) == utils.stable_fingerprinter(np.cbrt)
+        assert utils.stable_fingerprinter(np.cbrt) != utils.stable_fingerprinter(np.sqrt)
+
 
 def test_tree_map_default():
     @utils.tree_map
