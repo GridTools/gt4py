@@ -50,34 +50,162 @@ def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
     return {GT4PY_CLASS_METADATA_NS: kwargs}
 
 
-Fingerprinter: TypeAlias = Callable[[Any], str]
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+# -- Generic bottom-up tree reduction (catamorphism) --
+@dataclasses.dataclass(frozen=True, slots=True)
+class TreeLeaf:
+    """One-level decomposition of a terminal object: an opaque value, no children."""
+
+    value: Any
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class FingerprintLeaf:
-    """Terminal contribution of an object to a fingerprint: a raw byte payload."""
-
-    payload: bytes
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class FingerprintComposite:
+class TreeNode:
     """
-    Non-terminal contribution of an object to a fingerprint.
+    One-level decomposition of a non-terminal object.
 
-    The children are fingerprinted recursively and their digests combined with
-    `tag`. If `ordered` is `False`, the child digests are sorted before being
-    combined, which makes the result independent of the iteration order of the
-    children (used for `dict` and `set`, whose equality is order-insensitive).
+    `metadata` carries whatever node-level information the reduction needs
+    (e.g. a type tag), and `children` are the sub-objects to be reduced before
+    this node. `ordered` declares whether the order of the children is
+    semantically meaningful; order-insensitive reductions (e.g. for `dict` and
+    `set`, whose equality ignores iteration order) may use it to canonicalize
+    the combination of the child results.
     """
 
-    tag: bytes
+    metadata: Any
     children: tuple[Any, ...]
     ordered: bool = True
 
 
-#: Decomposes an object into its contribution to a fingerprint.
-FingerprintHandler: TypeAlias = Callable[[Any], FingerprintLeaf | FingerprintComposite]
+#: Decomposes an object into one level of tree structure.
+TreeDecomposer: TypeAlias = Callable[[Any], TreeLeaf | TreeNode]
+
+_VISIT: Final[int] = 0
+_COMBINE: Final[int] = 1
+
+
+def tree_cata(
+    obj: Any,
+    *,
+    decompose: TreeDecomposer,
+    leaf_alg: Callable[[TreeLeaf], _R],
+    node_alg: Callable[[TreeNode, list[_R]], _R],
+    cycle_alg: Optional[Callable[[int], _R]] = None,
+    memoize: bool = True,
+) -> _R:
+    """
+    Reduce an object bottom-up using a catamorphism (a generalized fold over trees).
+
+    The traversal scheme is fixed: an iterative post-order walk over the
+    one-level decompositions produced by `decompose`, so the structure depth
+    is bounded neither by the Python recursion limit nor (on Python <= 3.10)
+    by the C stack. The reduction logic is supplied as algebras: `leaf_alg`
+    reduces a :class:`TreeLeaf` to a result, and `node_alg` combines a
+    :class:`TreeNode` with the already-reduced results of its children.
+
+    Keyword Args:
+        decompose: Per-object one-level decomposition into a :class:`TreeLeaf`
+            or a :class:`TreeNode`.
+        leaf_alg: Reduction of a decomposed terminal object.
+        node_alg: Combination of a decomposed non-terminal object with the
+            results of its children (in child order).
+        cycle_alg: Reduction of a cyclic reference, receiving the relative
+            depth (in currently open nodes) from the reference back up to its
+            target. If `None`, cycles raise :class:`ValueError`. Results
+            computed below a cycle target embed context-dependent back
+            references and are therefore never memoized.
+        memoize: Reuse the result of already-reduced subobjects (matched by
+            identity), so shared substructure is reduced only once. Requires
+            pure algebras: results must depend only on the decomposition, not
+            on where the object appears.
+
+    Examples:
+        Computing the depth of a nested structure (children are reduced
+        before their parents, so the node algebra only sees child depths):
+
+        >>> def decompose(obj):
+        ...     if isinstance(obj, (list, tuple)):
+        ...         return TreeNode(metadata=None, children=tuple(obj))
+        ...     return TreeLeaf(obj)
+        >>> tree_cata(
+        ...     [[1, [2]], 3],
+        ...     decompose=decompose,
+        ...     leaf_alg=lambda leaf: 0,
+        ...     node_alg=lambda node, child_depths: 1 + max(child_depths, default=0),
+        ... )
+        3
+    """
+    memo: dict[int, _R] = {}
+    keep_alive: list[Any] = []  # ensures the `id()`s used as memo keys stay valid
+    open_nodes: dict[int, int] = {}  # id -> depth among currently open (in-progress) nodes
+    # Smallest open-node depth targeted by a cyclic back reference: results of
+    # nodes opened below it embed context-dependent back references and must
+    # not be memoized.
+    taint_depth: float = float("inf")
+
+    work: list[tuple[int, Any]] = [(_VISIT, obj)]
+    results: list[_R] = []
+    while work:
+        action, payload = work.pop()
+        if action == _VISIT:
+            current = payload
+            current_id = id(current)
+            if memoize and current_id in memo:
+                results.append(memo[current_id])
+                continue
+            if (depth := open_nodes.get(current_id)) is not None:
+                # Cyclic reference: reduce to a back reference by relative
+                # depth, which is independent of memory addresses.
+                if cycle_alg is None:
+                    raise ValueError(
+                        f"Cycle detected on an object of type '{type(current).__name__}' "
+                        "and no 'cycle_alg' was provided."
+                    )
+                results.append(cycle_alg(len(open_nodes) - depth))
+                taint_depth = min(taint_depth, depth)
+                continue
+            decomposed = decompose(current)
+            if isinstance(decomposed, TreeLeaf):
+                result = leaf_alg(decomposed)
+                if memoize:
+                    memo[current_id] = result
+                    keep_alive.append(current)
+                results.append(result)
+            else:
+                open_nodes[current_id] = len(open_nodes)
+                work.append((_COMBINE, (current, decomposed)))
+                work.extend((_VISIT, child) for child in reversed(decomposed.children))
+        else:
+            current, decomposed = payload
+            num_children = len(decomposed.children)
+            child_results = results[len(results) - num_children :]
+            del results[len(results) - num_children :]
+            result = node_alg(decomposed, child_results)
+            depth = open_nodes.pop(id(current))
+            if depth <= taint_depth:
+                if memoize:
+                    memo[id(current)] = result
+                    keep_alive.append(current)
+                if depth == taint_depth:
+                    # The target of all pending back references is complete;
+                    # its result is self-contained again.
+                    taint_depth = float("inf")
+            results.append(result)
+
+    assert len(results) == 1
+    return results[0]
+
+
+# -- Fingerprinting: digest algebras over a per-type decomposition registry --
+Fingerprinter: TypeAlias = Callable[[Any], str]
+
+#: Decomposer used for fingerprinting: `TreeLeaf.value` and `TreeNode.metadata`
+#: must be `bytes` (a domain-separation tag, optionally followed by a payload).
+FingerprintHandler: TypeAlias = TreeDecomposer
 
 #: Pickle protocol used when decomposing unknown objects via `__reduce_ex__`.
 #: Pinned so the decomposition (and therefore the fingerprint) does not depend
@@ -114,36 +242,36 @@ def _class_tag(cls: type) -> bytes:
     return tag
 
 
-def _leaf(tag: bytes, payload: bytes = b"") -> FingerprintLeaf:
-    return FingerprintLeaf(tag + b"\0" + payload)
+def _leaf(tag: bytes, payload: bytes = b"") -> TreeLeaf:
+    return TreeLeaf(tag + b"\0" + payload)
 
 
-def _decompose_by_reference(obj: Any) -> FingerprintLeaf:
+def _decompose_by_reference(obj: Any) -> TreeLeaf:
     return _leaf(b"ref", _reference_by_fully_qualified_name(obj).encode())
 
 
-def _decompose_dict(obj: dict) -> FingerprintComposite:
+def _decompose_dict(obj: dict) -> TreeNode:
     # `collections.OrderedDict` equality is order-sensitive, so its fingerprint
     # must be too; plain `dict` (and other subclasses) compare order-insensitively.
     ordered = isinstance(obj, collections.OrderedDict)
-    return FingerprintComposite(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
+    return TreeNode(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
 
 
-def _decompose_enum_class(obj: type[enum.Enum]) -> FingerprintComposite:
+def _decompose_enum_class(obj: type[enum.Enum]) -> TreeNode:
     # Enum classes are decomposed by content (their members) instead of by
     # reference: they are commonly defined locally (non-importable), and their
     # semantic content is exactly the member set.
-    return FingerprintComposite(
+    return TreeNode(
         b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
         tuple((member.name, member.value) for member in obj),
     )
 
 
-def _decompose_enum_member(obj: enum.Enum) -> FingerprintComposite:
+def _decompose_enum_member(obj: enum.Enum) -> TreeNode:
     # The member's class is included by content (see `_decompose_enum_class`),
     # so members of distinct but identically named (e.g. local) enum classes
     # cannot collide.
-    return FingerprintComposite(b"enum_member", (type(obj), obj.name, obj.value))
+    return TreeNode(b"enum_member", (type(obj), obj.name, obj.value))
 
 
 # `enum.Enum` alone is not enough: for mixin-based enums (`IntEnum`, `IntFlag`,
@@ -167,11 +295,11 @@ _BASE_FINGERPRINT_HANDLERS: Final[dict[type, FingerprintHandler]] = {
     str: lambda obj: _leaf(_class_tag(type(obj)), obj.encode("utf-8", "surrogatepass")),
     bytes: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
     bytearray: lambda obj: _leaf(_class_tag(type(obj)), bytes(obj)),
-    tuple: lambda obj: FingerprintComposite(_class_tag(type(obj)), tuple(obj)),
-    list: lambda obj: FingerprintComposite(_class_tag(type(obj)), tuple(obj)),
+    tuple: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj)),
+    list: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj)),
     dict: _decompose_dict,
-    set: lambda obj: FingerprintComposite(_class_tag(type(obj)), tuple(obj), ordered=False),
-    frozenset: lambda obj: FingerprintComposite(_class_tag(type(obj)), tuple(obj), ordered=False),
+    set: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj), ordered=False),
+    frozenset: lambda obj: TreeNode(_class_tag(type(obj)), tuple(obj), ordered=False),
     type: _decompose_by_reference,
     types.FunctionType: _decompose_by_reference,
     types.BuiltinFunctionType: _decompose_by_reference,
@@ -184,7 +312,7 @@ def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
     return not gt4py_meta or gt4py_meta.get("fingerprint", True)
 
 
-def _decompose_fallback(obj: Any) -> FingerprintLeaf | FingerprintComposite:
+def _decompose_fallback(obj: Any) -> TreeLeaf | TreeNode:
     cls = type(obj)
     if dataclasses.is_dataclass(cls) or datamodels.is_datamodel(cls):
         fields: Iterable[Any] = (
@@ -192,7 +320,7 @@ def _decompose_fallback(obj: Any) -> FingerprintLeaf | FingerprintComposite:
             if dataclasses.is_dataclass(cls)
             else datamodels.get_fields(cls).values()
         )
-        return FingerprintComposite(
+        return TreeNode(
             b"fields\0" + _class_tag(cls),
             tuple(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
         )
@@ -209,85 +337,33 @@ def _decompose_fallback(obj: Any) -> FingerprintLeaf | FingerprintComposite:
     list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
     dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
     custom_setstate = rest[3] if len(rest) > 3 else None
-    return FingerprintComposite(
+    return TreeNode(
         b"reduce", (constructor, constructor_args, state, list_items, dict_items, custom_setstate)
     )
 
 
-def _leaf_digest(payload: bytes) -> str:
-    return xxhash.xxh64(b"leaf\0" + payload).hexdigest()
+def _fingerprint_leaf_alg(leaf: TreeLeaf) -> str:
+    """Reduce a decomposed terminal object to its digest."""
+    return xxhash.xxh64(b"leaf\0" + leaf.value).hexdigest()
 
 
-def _combine_digests(tag: bytes, child_digests: list[str]) -> str:
+def _fingerprint_node_alg(node: TreeNode, child_digests: list[str]) -> str:
+    """Combine the digests of a node's children into the node's digest."""
+    if not node.ordered:
+        # Sorting the child *digests* canonicalizes order-insensitive containers
+        # without requiring the children themselves to be orderable.
+        child_digests = sorted(child_digests)
     hasher = xxhash.xxh64(b"node\0")
-    hasher.update(tag)
+    hasher.update(node.metadata)
     hasher.update(b"\0")
     for digest in child_digests:  # fixed-length digests, unambiguous concatenation
         hasher.update(digest.encode("ascii"))
     return hasher.hexdigest()
 
 
-_VISIT: Final[int] = 0
-_COMBINE: Final[int] = 1
-
-
-def _compute_fingerprint(obj: Any, decompose: FingerprintHandler) -> str:
-    # Iterative post-order traversal, so the structure depth is bounded neither
-    # by the Python recursion limit nor (on Python <= 3.10) by the C stack.
-    memo: dict[int, str] = {}
-    keep_alive: list[Any] = []  # ensures the `id()`s used as memo keys stay valid
-    open_nodes: dict[int, int] = {}  # id -> depth among currently open (in-progress) nodes
-    # Smallest open-node depth targeted by a cyclic back reference: digests of
-    # nodes opened below it embed context-dependent back references and must
-    # not be memoized.
-    taint_depth: float = float("inf")
-
-    work: list[tuple[int, Any]] = [(_VISIT, obj)]
-    digests: list[str] = []
-    while work:
-        action, payload = work.pop()
-        if action == _VISIT:
-            current = payload
-            current_id = id(current)
-            if (cached := memo.get(current_id)) is not None:
-                digests.append(cached)
-                continue
-            if (depth := open_nodes.get(current_id)) is not None:
-                # Cyclic reference: contribute a back reference by relative depth,
-                # which is independent of memory addresses.
-                digests.append(_leaf_digest(b"cycle\0" + str(len(open_nodes) - depth).encode()))
-                taint_depth = min(taint_depth, depth)
-                continue
-            decomposed = decompose(current)
-            if isinstance(decomposed, FingerprintLeaf):
-                digest = _leaf_digest(decomposed.payload)
-                memo[current_id] = digest
-                keep_alive.append(current)
-                digests.append(digest)
-            else:
-                open_nodes[current_id] = len(open_nodes)
-                work.append((_COMBINE, (current, decomposed)))
-                work.extend((_VISIT, child) for child in reversed(decomposed.children))
-        else:
-            current, decomposed = payload
-            num_children = len(decomposed.children)
-            child_digests = digests[len(digests) - num_children :]
-            del digests[len(digests) - num_children :]
-            if not decomposed.ordered:
-                child_digests.sort()
-            digest = _combine_digests(decomposed.tag, child_digests)
-            depth = open_nodes.pop(id(current))
-            if depth <= taint_depth:
-                memo[id(current)] = digest
-                keep_alive.append(current)
-                if depth == taint_depth:
-                    # The target of all pending back references is complete; its
-                    # digest is self-contained again.
-                    taint_depth = float("inf")
-            digests.append(digest)
-
-    assert len(digests) == 1
-    return digests[0]
+def _fingerprint_cycle_alg(relative_depth: int) -> str:
+    """Reduce a cyclic back reference to a digest of its relative depth."""
+    return _fingerprint_leaf_alg(TreeLeaf(b"cycle\0" + str(relative_depth).encode()))
 
 
 def make_fingerprinter(
@@ -296,12 +372,15 @@ def make_fingerprinter(
     """
     Create a fingerprinting function, optionally with customized per-type handling.
 
-    A handler decomposes an object into a :class:`FingerprintLeaf` or a
-    :class:`FingerprintComposite`. Handlers are dispatched on the object's MRO;
-    `extra_handlers` take precedence over the default rules. Objects without a
-    matching handler are decomposed by their fields (dataclasses and
-    datamodels, honoring ``gt4py_metadata(fingerprint=False)`` field metadata)
-    or via the standard ``__reduce_ex__`` protocol.
+    A fingerprinter is :func:`tree_cata` instantiated with digest algebras
+    (xxhash64 with domain separation) over a per-type decomposition registry.
+    A handler decomposes an object into a :class:`TreeLeaf` or a
+    :class:`TreeNode` whose `value` / `metadata` are byte tags. Handlers are
+    dispatched on the object's MRO; `extra_handlers` take precedence over the
+    default rules. Objects without a matching handler are decomposed by their
+    fields (dataclasses and datamodels, honoring
+    ``gt4py_metadata(fingerprint=False)`` field metadata) or via the standard
+    ``__reduce_ex__`` protocol.
     """
     decompose = eve_utils.singledispatcher(
         _decompose_fallback,
@@ -309,7 +388,13 @@ def make_fingerprinter(
     )
 
     def fingerprinter(obj: Any) -> str:
-        return _compute_fingerprint(obj, decompose)
+        return tree_cata(
+            obj,
+            decompose=decompose,
+            leaf_alg=_fingerprint_leaf_alg,
+            node_alg=_fingerprint_node_alg,
+            cycle_alg=_fingerprint_cycle_alg,
+        )
 
     return fingerprinter
 
@@ -322,8 +407,8 @@ stable_fingerprinter: Fingerprinter = make_fingerprinter()
 
 
 def _make_skipping_fields_node_handler(skipped_fields: frozenset[str]) -> FingerprintHandler:
-    def handler(node: concepts.Node) -> FingerprintComposite:
-        return FingerprintComposite(
+    def handler(node: concepts.Node) -> TreeNode:
+        return TreeNode(
             b"fields\0" + _class_tag(type(node)),
             tuple(
                 (name, child)
@@ -400,11 +485,6 @@ class RecursionGuard:
 
     def __exit__(self, *exc: Any) -> None:
         self.guarded_objects.remove(id(self.obj))
-
-
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
 
 
 def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
