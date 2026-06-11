@@ -89,45 +89,47 @@ def test_skipping_fields_node_fingerprinter_skips_nested_fields_and_is_cached():
     assert fingerprinter(node_a) != fingerprinter(node_b)
 
 
-def test_skipping_fields_node_fingerprinter_returns_extractors_when_requested():
+def test_skipping_fields_node_fingerprinter_returns_deconstructors_when_requested():
     from gt4py.eve import concepts
 
-    fingerprinter, extractors = utils.skipping_fields_node_fingerprinter(
-        "int_value", return_extractors=True
+    fingerprinter, deconstructors = utils.skipping_fields_node_fingerprinter(
+        "int_value", return_deconstructors=True
     )
     assert callable(fingerprinter)
-    # The extractor overrides can be composed into another extractor.
-    assert set(extractors) == {concepts.Node}
-    assert callable(utils.make_fingerprinter(utils.make_extractor(extractors)))
+    # The deconstructor overrides can be composed into another deconstructor.
+    assert set(deconstructors) == {concepts.Node}
+    assert callable(utils.make_fingerprinter(utils.make_deconstructor(deconstructors)))
 
-    # Without `return_extractors` only the fingerprinter callable is returned.
+    # Without `return_deconstructors` only the fingerprinter callable is returned.
     assert callable(utils.skipping_fields_node_fingerprinter("int_value"))
 
 
-def test_default_extractor():
-    # The public default extractor classifies objects into atomic and
-    # composite content...
-    assert isinstance(utils.extract(1), utils.AtomicContent)
-    assert isinstance(utils.extract((1, 2)), utils.CompositeContent)
-    # ... and is the extractor `make_fingerprinter` uses by default.
+def test_default_deconstructor():
+    # The public default deconstructor classifies objects into empty and
+    # composite deconstructions...
+    assert isinstance(utils.deconstruct(1), utils.EmptyDeconstruction)
+    assert isinstance(utils.deconstruct((1, 2)), utils.Deconstruction)
+    # ... and is the deconstructor `make_fingerprinter` uses by default.
     payload = {"a": (1, 2)}
-    assert utils.make_fingerprinter(utils.extract)(payload) == utils.stable_fingerprinter(payload)
+    assert utils.make_fingerprinter(utils.deconstruct)(payload) == utils.stable_fingerprinter(
+        payload
+    )
 
 
 class TestReduceObject:
     @staticmethod
-    def _extract(obj):
+    def _deconstruct(obj):
         if isinstance(obj, (list, tuple)):
-            return utils.CompositeContent(metadata=type(obj), children=tuple(obj))
-        return utils.AtomicContent(obj)
+            return utils.Deconstruction(state=type(obj), children=tuple(obj))
+        return utils.EmptyDeconstruction(obj)
 
     def test_carrier_type_is_generic(self):
         # The reduction result can be of any type, e.g. the structure depth.
         depth = utils.reduce_object(
             [[1, [2]], 3],
-            extract=self._extract,
-            atomic_reducer=lambda atom: 0,
-            composite_reducer=lambda composite, child_depths: 1 + max(child_depths, default=0),
+            deconstruct=self._deconstruct,
+            collapser=lambda empty: 0,
+            composite_collapser=lambda composite, child_depths: 1 + max(child_depths, default=0),
         )
         assert depth == 3
 
@@ -136,38 +138,38 @@ class TestReduceObject:
         # reduced results of its children, in child order.
         visited = []
 
-        def atomic_reducer(atom):
-            visited.append(atom.value)
-            return atom.value
+        def collapser(empty):
+            visited.append(empty.state)
+            return empty.state
 
-        def composite_reducer(composite, child_results):
+        def composite_collapser(composite, child_results):
             result = list(child_results)
             visited.append(result)
             return result
 
         utils.reduce_object(
             [1, [2, 3]],
-            extract=self._extract,
-            atomic_reducer=atomic_reducer,
-            composite_reducer=composite_reducer,
+            deconstruct=self._deconstruct,
+            collapser=collapser,
+            composite_collapser=composite_collapser,
         )
         assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
 
     def test_empty_containers_are_nodes(self):
         # Zero-children nodes must not corrupt the result bookkeeping.
-        def atomic_reducer(atom: utils.AtomicContent) -> tuple:
-            return (atom.value,)
+        def collapser(empty: utils.EmptyDeconstruction) -> tuple:
+            return (empty.state,)
 
-        def composite_reducer(
-            composite: utils.CompositeContent, child_results: list[tuple]
+        def composite_collapser(
+            composite: utils.Deconstruction, child_results: list[tuple]
         ) -> tuple:
-            return (composite.metadata, *child_results)
+            return (composite.state, *child_results)
 
         result = utils.reduce_object(
             [[], ()],
-            extract=self._extract,
-            atomic_reducer=atomic_reducer,
-            composite_reducer=composite_reducer,
+            deconstruct=self._deconstruct,
+            collapser=collapser,
+            composite_collapser=composite_collapser,
         )
         assert result == (list, (list,), (tuple,))
 
@@ -177,60 +179,68 @@ class TestReduceObject:
             deeply_nested = (deeply_nested,)
         depth = utils.reduce_object(
             deeply_nested,
-            extract=self._extract,
-            atomic_reducer=lambda atom: 0,
-            composite_reducer=lambda composite, child_depths: 1 + max(child_depths, default=0),
+            deconstruct=self._deconstruct,
+            collapser=lambda empty: 0,
+            composite_collapser=lambda composite, child_depths: 1 + max(child_depths, default=0),
         )
         assert depth == 100_001  # 100_000 wrappers + the innermost empty tuple node
 
     def test_memoization_reduces_shared_subobjects_once(self):
-        extract_calls = []
+        deconstruct_calls = []
 
-        def extract(obj):
-            extract_calls.append(obj)
-            return self._extract(obj)
+        def deconstruct(obj):
+            deconstruct_calls.append(obj)
+            return self._deconstruct(obj)
 
         shared = [1, 2]
         utils.reduce_object(
             [shared, shared],
-            extract=extract,
-            atomic_reducer=lambda atom: 0,
-            composite_reducer=lambda composite, child_results: 0,
+            deconstruct=deconstruct,
+            collapser=lambda empty: 0,
+            composite_collapser=lambda composite, child_results: 0,
         )
-        assert sum(1 for obj in extract_calls if obj is shared) == 1
+        assert sum(1 for obj in deconstruct_calls if obj is shared) == 1
 
-        extract_calls.clear()
+        deconstruct_calls.clear()
         utils.reduce_object(
             [shared, shared],
-            extract=extract,
-            atomic_reducer=lambda atom: 0,
-            composite_reducer=lambda composite, child_results: 0,
+            deconstruct=deconstruct,
+            collapser=lambda empty: 0,
+            composite_collapser=lambda composite, child_results: 0,
             memoize=False,
         )
-        assert sum(1 for obj in extract_calls if obj is shared) == 2
+        assert sum(1 for obj in deconstruct_calls if obj is shared) == 2
 
-    def test_cycles_raise_without_cycle_reducer(self):
+    def test_cycles_raise_by_default(self):
         cyclic: list = [1]
         cyclic.append(cyclic)
         with pytest.raises(ValueError, match="Cycle detected"):
             utils.reduce_object(
                 cyclic,
-                extract=self._extract,
-                atomic_reducer=lambda atom: 0,
-                composite_reducer=lambda composite, child_results: 0,
+                deconstruct=self._deconstruct,
+                collapser=lambda empty: 0,
+                composite_collapser=lambda composite, child_results: 0,
             )
 
-    def test_cycles_are_reduced_via_cycle_reducer(self):
+    def test_cycles_are_collapsed_as_back_references_when_allowed(self):
         cyclic: list = [1]
         cyclic.append(cyclic)
-        rendered = utils.reduce_object(
+        collapsed_states: list = []
+
+        def collapser(empty: utils.EmptyDeconstruction) -> int:
+            collapsed_states.append(empty.state)
+            return 0
+
+        result = utils.reduce_object(
             cyclic,
-            extract=self._extract,
-            atomic_reducer=lambda atom: str(atom.value),
-            composite_reducer=lambda composite, child_results: f"[{','.join(child_results)}]",
-            cycle_reducer=lambda relative_depth: f"<up:{relative_depth}>",
+            deconstruct=self._deconstruct,
+            collapser=collapser,
+            composite_collapser=lambda composite, child_results: 1 + sum(child_results),
+            allow_cycles=True,
         )
-        assert rendered == "[1,<up:1>]"
+        assert result == 1
+        # The back reference encodes the relative depth up to its target.
+        assert collapsed_states == [1, b"cycle\x001"]
 
 
 def _module_level_func_a() -> None: ...

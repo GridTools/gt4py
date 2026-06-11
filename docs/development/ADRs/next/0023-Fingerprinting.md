@@ -15,11 +15,11 @@ collection of ad-hoc, per-class fingerprinting routines that were hard to keep
 consistent and stable across interpreter runs, we decided to build a single
 general **structural fingerprinting** mechanism — an iterative Merkle-style
 content hash over the object graph — customized through per-type
-**content extractors** and declarative **field metadata**. We considered
+**deconstructors** and declarative **field metadata**. We considered
 keeping the bespoke `fingerprint()` methods and the
 `add_content_to_fingerprint` single-dispatch visitor, as well as hashing a
 pickle byte stream produced by custom picklers, and accept that objects fed to
-a fingerprinter must either match an extractor, be a dataclass/datamodel, or
+a fingerprinter must either match a deconstructor, be a dataclass/datamodel, or
 support the standard `__reduce_ex__` protocol.
 
 ## Context
@@ -71,30 +71,31 @@ graph computed bottom-up, Merkle-tree style. The implementation (in
 `gt4py.next.utils`) is layered as a **catamorphism** — a generalized fold over
 trees — keeping three concerns explicitly separate:
 
-1. **Content extraction** (*what is the one-level content of an object?*): a
-   per-type registry of *extractors*, each peeling off exactly one
-   level into an `AtomicContent` or a `CompositeContent`.
+1. **Deconstruction** (*what is the one-level structure of an object?*): a
+   per-type registry of *deconstructors*, each peeling off exactly one
+   level into an `EmptyDeconstruction` or a `Deconstruction`.
 2. **Traversal scheme** (*in which order are objects visited?*): `reduce_object`,
    a generic iterative post-order fold with result memoization and cycle
    support, reusable with any result type.
-3. **Reduction logic** (*how do results combine?*): the fingerprint *reducers*
-   (the algebras of the catamorphism), which reduce atoms to digests and
-   combine child digests into composite digests.
+3. **Reduction logic** (*how do results combine?*): the fingerprint
+   *collapsers* (the algebras of the catamorphism), which collapse empty
+   deconstructions to digests and combine child digests into composite
+   digests.
 
-### Layer 1: one-level content extraction
+### Layer 1: one-level deconstruction
 
-A *fingerprint extractor* produces the content of an object:
+A *fingerprint deconstructor* produces one level of an object:
 
 ```python
-AtomicContent(value: bytes)                                  # terminal
-CompositeContent(metadata: bytes, children: tuple, ordered)   # recurse into children
+EmptyDeconstruction(state: bytes)                       # terminal
+Deconstruction(state: bytes, children: tuple, ordered)  # recurse into children
 ```
 
-`make_extractor(overrides)` builds an `Extractor` from the default per-type
+`make_deconstructor(overrides)` builds a `Deconstructor` from the default per-type
 registry plus optional overrides (dispatched on the object's MRO via
-`functools.singledispatch`); the module-level `extract` is the default
-extractor, and `make_fingerprinter(extractor)` turns any such extractor into a
-fingerprinting function. The default extraction rules are:
+`functools.singledispatch`); the module-level `deconstruct` is the default
+deconstructor, and `make_fingerprinter(deconstructor)` turns any such deconstructor into a
+fingerprinting function. The default deconstruction rules are:
 
 - **Primitives** (`int`, `float`, `str`, `bytes`, ...) — leaves tagged with
   their concrete class, so `True`, `1` and `1.0` do not collide.
@@ -114,28 +115,29 @@ fingerprinting function. The default extraction rules are:
   silently colliding.
 - **Dataclasses and datamodels** — nodes of class + field values, honoring
   the field metadata opt-out (below).
-- **Everything else** — extracted via the standard `__reduce_ex__` protocol
+- **Everything else** — deconstructed via the standard `__reduce_ex__` protocol
   (with a pinned protocol version), which covers e.g. NumPy arrays by content
   without any special-casing.
 
 ### Layer 2: the traversal scheme (`reduce_object`)
 
-`reduce_object(obj, *, extract, atomic_reducer, composite_reducer, cycle_reducer, memoize)` reduces
-an object bottom-up over its one-level contents. The fold is
+`reduce_object(obj, *, deconstruct, collapser, composite_collapser, allow_cycles, memoize)`
+reduces an object bottom-up over its one-level deconstructions. The fold is
 **iterative** (explicit two-phase work stack), so deeply nested inputs —
 lowered IR trees routinely exceed the recursion limit budget of any recursive
 scheme — cannot raise `RecursionError`. Results are memoized by object
 identity, which makes shared subgraphs cheap, and self-referential structures
-are reduced through `cycle_reducer` as back references by relative depth (results
-under a cycle target are never memoized, as they are context-dependent).
+are collapsed (with `allow_cycles=True`) as back references by relative depth
+(results under a cycle target are never memoized, as they are
+context-dependent).
 The driver is carrier-agnostic — nothing in it knows about hashing — so it can
 serve other bottom-up reductions over arbitrary objects.
 
-### Layer 3: the digest reducers
+### Layer 3: the digest collapsers
 
-The fingerprint reducers reduce an `AtomicContent` to
-`xxh64("leaf" + value)`, combine a `CompositeContent` with its child
-digests into `xxh64("node" + metadata + digests)` — sorting the child digests
+The fingerprint collapsers collapse an `EmptyDeconstruction` to
+`xxh64("leaf" + state)`, combine a `Deconstruction` with its child
+digests into `xxh64("node" + state + digests)` — sorting the child digests
 first when the node is unordered — and encode cyclic back references by their
 relative depth.
 Together with the identity-based memoization this keeps the fingerprint a pure
@@ -165,31 +167,31 @@ declarative, per-class opt-out read directly from the field definitions; it
 does **not** alter how the class pickles, so fingerprinting and real
 serialization stay independent concerns.
 
-### Customizing per type: composing extractors
+### Customizing per type: composing deconstructors
 
 Subsystems describe only the *deltas* they need on top of the shared default
 rules:
 
-- `stable_fingerprinter` — the default fingerprinter (default extractor); used
+- `stable_fingerprinter` — the default fingerprinter (default deconstructor); used
   by the OTF build caches.
 - `skipping_fields_node_fingerprinter("location", "type", ...)` — a cached
-  factory returning a fingerprinter (and optionally its extractor overrides) for
+  factory returning a fingerprinter (and optionally its deconstructor overrides) for
   `eve.Node`s that recursively skips the named child fields. The iterator/GTIR
   `semantic_fingerprinter` skips `location` and `type` (types are filled in
   later by inference and must not change identity); the FOAST
   `semantic_fingerprinter` skips `location`.
-- The ffront stages `semantic_fingerprinter` composes the FOAST node extractors
-  with a `types.FunctionType` extractor that extracts a DSL definition function
+- The ffront stages `semantic_fingerprinter` composes the FOAST node deconstructors
+  with a `types.FunctionType` deconstructor that deconstructs a DSL definition function
   into its **source code + closure variables** rather than identifying it by
   reference — which is what makes two textually identical field operators
   fingerprint equal, and recompiles when a referenced helper changes:
 
 ```python
 semantic_fingerprinter = utils.make_fingerprinter(
-    utils.make_extractor(
+    utils.make_deconstructor(
         {
-            **foast.semantic_fingerprint_extractors,
-            types.FunctionType: _extract_definition_function,
+            **foast.semantic_fingerprint_deconstructors,
+            types.FunctionType: _deconstruct_definition_function,
         }
     )
 )
@@ -220,7 +222,7 @@ What becomes easier:
 - One fingerprinting mechanism is reused everywhere; adding a new
   cached/compared type usually means nothing at all (dataclasses, datamodels
   and reducible objects are covered by default), marking non-semantic fields
-  `fingerprint=False`, or registering one extractor.
+  `fingerprint=False`, or registering one deconstructor.
 - Fingerprints are stable across processes, tolerant of dict/set ordering and
   of object-graph sharing, and robust against arbitrarily deep inputs.
 - Fingerprinting no longer interferes with real pickling: classes keep their
@@ -231,9 +233,9 @@ What becomes harder / the trade-offs:
 
 - The traversal logic is our own (~200 lines) rather than delegated to
   `pickle`; it has to be maintained and its determinism guarded by tests.
-- Correctness of caching depends on extractors being faithful: an extractor that
+- Correctness of caching depends on deconstructors being faithful: a deconstructor that
   drops semantically relevant content can cause false cache hits. The defaults
-  (skip `location`/`type`, extract functions by source) are chosen
+  (skip `location`/`type`, deconstruct functions by source) are chosen
   conservatively for this reason.
 - Objects identified by reference must be importable (module-level); lambdas
   and local closures in fingerprinted positions are a hard error. Structurally
@@ -283,17 +285,17 @@ What becomes harder / the trade-offs:
 
 ### Build the catamorphism on `optree` pytrees instead of our own driver
 
-The layering of this design (one-level content extraction / generic fold /
-reducers) deliberately mirrors how a fingerprinter would be written over
+The layering of this design (one-level deconstruction / generic fold /
+collapsers) deliberately mirrors how a fingerprinter would be written over
 [`optree`](https://github.com/metaopt/optree)'s `tree_flatten_one_level`, with
-`AtomicContent`/`CompositeContent` playing the role of the pytree
+`EmptyDeconstruction`/`Deconstruction` playing the role of the pytree
 registry entries. Using `optree` itself was evaluated and rejected:
 
-- Good, because the pytree registry and the one-level extraction of builtin
+- Good, because the pytree registry and the one-level deconstruction of builtin
   containers come for free, and the vocabulary (leaves, nodes, `is_leaf`,
   namespaces) is established in the array ecosystem.
 - Bad, because its registry is looked up by **exact type** (no MRO dispatch),
-  so a single extractor cannot cover an entire hierarchy like `eve.Node`
+  so a single deconstructor cannot cover an entire hierarchy like `eve.Node`
   (~100+ concrete IR node classes would each need registration, per
   skipped-field-set namespace), whereas `functools.singledispatch` gives us
   that for free.
@@ -305,10 +307,10 @@ registry entries. Using `optree` itself was evaluated and rejected:
 - Bad, because it would add a compiled (pybind11) runtime dependency for what
   our own driver covers in well under a hundred lines of standard library code.
 
-### `pickle`'s `dispatch_table` instead of single-dispatch extractors
+### `pickle`'s `dispatch_table` instead of single-dispatch deconstructors
 
 - Good, because it is the documented pickle extension point.
-- Bad, because it matches on exact type only; we explicitly want an extractor to
+- Bad, because it matches on exact type only; we explicitly want a deconstructor to
   apply to an entire class hierarchy (e.g. all `eve.Node` subclasses), which
   single dispatch gives us for free.
 
@@ -317,13 +319,13 @@ registry entries. Using `optree` itself was evaluated and rejected:
 - Good, because it handles many container types out of the box.
 - Bad, because we need fine control over per-field inclusion and over
   by-reference vs. by-value handling of functions/types, which is awkward to
-  express through an external hasher; our own extractors keep the control local
+  express through an external hasher; our own deconstructors keep the control local
   and composable. (`deepdiff` remains available in `eve.utils` for diffing.)
 
 ## References
 
-- `src/gt4py/next/utils.py` — `AtomicContent`, `CompositeContent`,
-  `reduce_object`, `make_extractor`, `extract`, `make_fingerprinter`,
+- `src/gt4py/next/utils.py` — `EmptyDeconstruction`, `Deconstruction`,
+  `reduce_object`, `make_deconstructor`, `deconstruct`, `make_fingerprinter`,
   `stable_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.

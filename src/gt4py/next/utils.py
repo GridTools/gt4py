@@ -59,28 +59,28 @@ _R = TypeVar("_R")
 
 # -- Generic bottom-up tree reduction (catamorphism) --
 @dataclasses.dataclass(frozen=True, slots=True)
-class AtomicContent:
-    """One-level content of a terminal object: an opaque value, no children."""
+class EmptyDeconstruction:
+    """One-level deconstruction of a terminal object: an opaque state, no children."""
 
-    value: Any
+    state: Any
 
     @classmethod
-    def from_typed_value(cls, type_: type, /, payload: bytes = b"") -> AtomicContent:
+    def from_typed_value(cls, type_: type, /, payload: bytes = b"") -> EmptyDeconstruction:
         """Builder with a domain-separation tag and optional payload."""
         return cls(_class_tag(type_) + b"\0" + payload)
 
     @classmethod
-    def from_reference(cls, obj: Any) -> AtomicContent:
+    def from_reference(cls, obj: Any) -> EmptyDeconstruction:
         """Builder for objects identified by their fully qualified name."""
         return cls(b"ref\0" + _reference_by_fully_qualified_name(obj).encode())
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class CompositeContent:
+class Deconstruction:
     """
-    One-level content of a non-terminal object.
+    One-level deconstruction of a non-terminal object.
 
-    `metadata` carries whatever node-level information the reduction needs
+    `state` carries whatever node-level information the reduction needs
     (e.g. a type tag), and `children` are the sub-objects to be reduced before
     this node. `ordered` declares whether the order of the children is
     semantically meaningful; order-insensitive reductions (e.g. for `dict` and
@@ -88,13 +88,13 @@ class CompositeContent:
     the combination of the child results.
     """
 
-    metadata: Any
+    state: Any
     children: tuple[Any, ...]
     ordered: bool = True
 
 
-#: Extracts one level of content from an object.
-Extractor: TypeAlias = Callable[[Any], AtomicContent | CompositeContent]
+#: Deconstructs one level of an object.
+Deconstructor: TypeAlias = Callable[[Any], EmptyDeconstruction | Deconstruction]
 
 
 def _resolves_as_global(obj: Any) -> bool:
@@ -140,66 +140,62 @@ def _cached_class_tag(cls: type) -> bytes:
     return eve_utils.get_fully_qualified_name(cls).encode()
 
 
-# The `functools.cache` wrapper erases the parameter types (`*args: Hashable`),
-# making mypy reject `type[Any]` arguments at call sites; re-typing it restores
-# the actual signature.
-_class_tag: Final[Callable[[type], bytes]] = _cached_class_tag
+_class_tag: Final[Callable[[type], bytes]] = _cached_class_tag  # for mypy
 
 
-# `enum.Enum` alone is not enough: for mixin-based enums (`IntEnum`, `IntFlag`,
-# `StrEnum`, ...) the value-type base precedes `Enum` in the MRO and would win
-# the dispatch.
-_ENUM_MEMBER_BASES: Final[tuple[type, ...]] = tuple(
-    base
-    for base in (enum.Enum, enum.IntEnum, enum.IntFlag, enum.Flag, getattr(enum, "StrEnum", None))
-    if base is not None
-)
-
-
-_BUILTIN_EXTRACTORS: Final[dict[type, Extractor]] = {
+_BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     **{
-        base: (lambda obj: CompositeContent(b"enum_member", (type(obj), obj.name, obj.value)))
-        for base in _ENUM_MEMBER_BASES
+        # for mixin-based enums (`IntEnum`, `IntFlag`, `StrEnum`, ...) the value-type base
+        # precedes `Enum` in the MRO and would win the dispatch.
+        base: (lambda obj: Deconstruction(b"enum_member", (type(obj), obj.name, obj.value)))
+        for base in (
+            enum.Enum,
+            enum.IntEnum,
+            enum.IntFlag,
+            enum.Flag,
+            getattr(enum, "StrEnum", None),
+        )
+        if base is not None
     },
-    enum.EnumMeta: lambda obj: CompositeContent(
+    enum.EnumMeta: lambda obj: Deconstruction(
         b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
         tuple((member.name, member.value) for member in obj),
     ),
-    type(None): lambda obj: AtomicContent.from_typed_value(type(None)),
-    bool: lambda obj: AtomicContent.from_typed_value(bool, b"1" if obj else b"0"),
-    int: lambda obj: AtomicContent.from_typed_value(type(obj), str(int(obj)).encode()),
-    float: lambda obj: AtomicContent.from_typed_value(type(obj), struct.pack(">d", obj)),
-    complex: lambda obj: AtomicContent.from_typed_value(
+    type(None): lambda obj: EmptyDeconstruction.from_typed_value(type(None)),
+    bool: lambda obj: EmptyDeconstruction.from_typed_value(bool, b"1" if obj else b"0"),
+    int: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), str(int(obj)).encode()),
+    float: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), struct.pack(">d", obj)),
+    complex: lambda obj: EmptyDeconstruction.from_typed_value(
         type(obj), struct.pack(">dd", obj.real, obj.imag)
     ),
-    str: lambda obj: AtomicContent.from_typed_value(
+    str: lambda obj: EmptyDeconstruction.from_typed_value(
         type(obj), obj.encode("utf-8", "surrogatepass")
     ),
-    bytes: lambda obj: AtomicContent.from_typed_value(type(obj), bytes(obj)),
-    bytearray: lambda obj: AtomicContent.from_typed_value(type(obj), bytes(obj)),
-    tuple: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
-    list: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
-    dict: lambda obj: CompositeContent(
+    bytes: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
+    bytearray: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
+    tuple: lambda obj: Deconstruction(_class_tag(type(obj)), tuple(obj)),
+    list: lambda obj: Deconstruction(_class_tag(type(obj)), tuple(obj)),
+    dict: lambda obj: Deconstruction(
         _class_tag(type(obj)), tuple(obj.items()), ordered=isinstance(obj, collections.OrderedDict)
     ),
-    collections.defaultdict: lambda obj: CompositeContent(
+    collections.defaultdict: lambda obj: Deconstruction(
         _class_tag(type(obj)), (obj.default_factory, dict(obj))
     ),
-    set: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
-    frozenset: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
-    type: AtomicContent.from_reference,
-    types.FunctionType: AtomicContent.from_reference,
-    types.BuiltinFunctionType: AtomicContent.from_reference,
-    types.ModuleType: AtomicContent.from_reference,
+    set: lambda obj: Deconstruction(_class_tag(type(obj)), tuple(obj), ordered=False),
+    frozenset: lambda obj: Deconstruction(_class_tag(type(obj)), tuple(obj), ordered=False),
+    type: EmptyDeconstruction.from_reference,
+    types.FunctionType: EmptyDeconstruction.from_reference,
+    types.BuiltinFunctionType: EmptyDeconstruction.from_reference,
+    types.ModuleType: EmptyDeconstruction.from_reference,
 }
 
-#: Pickle protocol used when extracting the content of unknown objects via
-#: `__reduce_ex__`. Pinned so the extracted content (and therefore the
+#: Pickle protocol used when deconstructing unknown objects via
+#: `__reduce_ex__`. Pinned so the deconstruction (and therefore the
 #: fingerprint) does not depend on the running Python's default protocol.
-_EXTRACT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
+_DECONSTRUCT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
 
 
-def _extract_fallback(obj: Any) -> AtomicContent | CompositeContent:
+def _deconstruct(obj: Any) -> EmptyDeconstruction | Deconstruction:
     cls = type(obj)
     if dataclasses.is_dataclass(cls) or datamodels.is_datamodel(cls):
         fields: Iterable[Any] = (
@@ -207,7 +203,7 @@ def _extract_fallback(obj: Any) -> AtomicContent | CompositeContent:
             if dataclasses.is_dataclass(cls)
             else datamodels.get_fields(cls).values()
         )
-        return CompositeContent(
+        return Deconstruction(
             b"fields\0" + _class_tag(cls),
             tuple(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
         )
@@ -219,48 +215,50 @@ def _extract_fallback(obj: Any) -> AtomicContent | CompositeContent:
         if (dispatched_reducer := copyreg.dispatch_table.get(cls)) is not None:
             reduced = dispatched_reducer(obj)
         else:
-            reduced = obj.__reduce_ex__(_EXTRACT_PICKLE_REDUCE_PROTOCOL)
+            reduced = obj.__reduce_ex__(_DECONSTRUCT_PICKLE_REDUCE_PROTOCOL)
     except Exception as error:
         raise TypeError(f"Cannot fingerprint object of type '{cls.__name__}'.") from error
     if isinstance(reduced, str):
         # `__reduce__` may return a bare name to be looked up in the object's module.
-        return AtomicContent(b"global\0" + f"{getattr(obj, '__module__', '')}:{reduced}".encode())
+        return EmptyDeconstruction(
+            b"global\0" + f"{getattr(obj, '__module__', '')}:{reduced}".encode()
+        )
     constructor, constructor_args, *rest = reduced
     state = rest[0] if len(rest) > 0 else None
     list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
     dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
     custom_setstate = rest[3] if len(rest) > 3 else None
-    return CompositeContent(
+    return Deconstruction(
         b"reduce", (constructor, constructor_args, state, list_items, dict_items, custom_setstate)
     )
 
 
-def make_extractor(
-    overrides: Optional[Mapping[type, Extractor]] = None,
-) -> Extractor:
+def make_deconstructor(
+    overrides: Optional[Mapping[type, Deconstructor]] = None,
+) -> Deconstructor:
     """
-    Create a content extractor, optionally with customized per-type extraction.
+    Create a deconstructor, optionally with customized per-type deconstruction.
 
-    The returned extractor produces the content of an object as an
-    :class:`AtomicContent` or a :class:`CompositeContent` whose `value` /
-    `metadata` are byte tags (a domain-separation tag, optionally followed by
-    a payload). Per-type extractors are dispatched on the object's MRO;
-    `overrides` take precedence over the default rules. The content of objects
-    without a matching extractor is extracted from their fields (dataclasses
-    and datamodels, honoring ``gt4py_metadata(fingerprint=False)`` field
-    metadata) or via the standard ``__reduce_ex__`` protocol.
+    The returned deconstructor produces one level of an object as an
+    :class:`EmptyDeconstruction` or a :class:`Deconstruction` whose `state`
+    is a byte tag (a domain-separation tag, optionally followed by a payload).
+    Per-type deconstructors are dispatched on the object's MRO; `overrides`
+    take precedence over the default rules. Objects without a matching
+    deconstructor are deconstructed through their fields (dataclasses and
+    datamodels, honoring ``gt4py_metadata(fingerprint=False)`` field metadata)
+    or via the standard ``__reduce_ex__`` protocol.
     """
     return eve_utils.singledispatcher(
-        _extract_fallback,
-        implementations={**_BUILTIN_EXTRACTORS, **(overrides or {})},
+        _deconstruct,
+        implementations={**_BUILTIN_DECONSTRUCTORS, **(overrides or {})},
     )
 
 
-#: Default content extractor for GT4Py objects, built from the default
-#: per-type extraction rules (see :func:`make_extractor`).
-extract: Final[Extractor] = make_extractor()
+#: Default deconstructor for GT4Py objects, built from the default per-type
+#: deconstruction rules (see :func:`make_deconstructor`).
+deconstruct: Final[Deconstructor] = make_deconstructor()
 
-# -- Fingerprinting: digest reducers over a per-type extractor registry --
+# -- Fingerprinting: digest collapsers over a per-type deconstructor registry --
 Fingerprinter: TypeAlias = Callable[[Any], str]
 
 
@@ -269,38 +267,31 @@ def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
     return not gt4py_meta or gt4py_meta.get("fingerprint", True)
 
 
-def _fingerprint_atomic_reducer(atom: AtomicContent) -> str:
-    """Reduce the content of a terminal object to its digest."""
-    return xxhash.xxh64(b"leaf\0" + atom.value).hexdigest()
+def _fingerprint_collapser(empty: EmptyDeconstruction) -> str:
+    """Collapse the deconstruction of a terminal object into its digest."""
+    return xxhash.xxh64(b"leaf\0" + empty.state).hexdigest()
 
 
-def _fingerprint_composite_reducer(composite: CompositeContent, child_digests: list[str]) -> str:
+def _fingerprint_composite_collapser(composite: Deconstruction, child_digests: list[str]) -> str:
     """Combine the digests of an object's children into the object's digest."""
     if not composite.ordered:
         # Sorting the child *digests* canonicalizes order-insensitive containers
         # without requiring the children themselves to be orderable.
         child_digests = sorted(child_digests)
     hasher = xxhash.xxh64(b"node\0")
-    hasher.update(composite.metadata)
+    hasher.update(composite.state)
     hasher.update(b"\0")
     for digest in child_digests:  # fixed-length digests, unambiguous concatenation
         hasher.update(digest.encode("ascii"))
     return hasher.hexdigest()
 
 
-def _fingerprint_cycle_reducer(relative_depth: int) -> str:
-    """Reduce a cyclic back reference to a digest of its relative depth."""
-    return _fingerprint_atomic_reducer(AtomicContent(b"cycle\0" + str(relative_depth).encode()))
+#: Collapses the deconstruction of a terminal object into a result.
+Collapser: TypeAlias = Callable[[EmptyDeconstruction], _R]
 
-
-#: Reduces the content of a terminal object to a result.
-AtomicReducer: TypeAlias = Callable[[AtomicContent], _R]
-
-#: Combines the content of a non-terminal object with the results of its children.
-CompositeReducer: TypeAlias = Callable[[CompositeContent, list[_R]], _R]
-
-#: Reduces a cyclic reference, given the relative depth back up to its target.
-CycleReducer: TypeAlias = Callable[[int], _R]
+#: Collapses the deconstruction of a non-terminal object and the results of
+#: its children into a result.
+CompositeCollapser: TypeAlias = Callable[[Deconstruction, list[_R]], _R]
 
 _VISIT: Final[int] = 0
 _COMBINE: Final[int] = 1
@@ -309,53 +300,57 @@ _COMBINE: Final[int] = 1
 def reduce_object(
     obj: Any,
     *,
-    extract: Extractor,
-    atomic_reducer: AtomicReducer[_R],
-    composite_reducer: CompositeReducer[_R],
-    cycle_reducer: Optional[CycleReducer[_R]] = None,
+    deconstruct: Deconstructor,
+    collapser: Collapser[_R],
+    composite_collapser: CompositeCollapser[_R],
+    allow_cycles: bool = False,
     memoize: bool = True,
 ) -> _R:
     """
     Reduce an object bottom-up using a catamorphism (a generalized fold over trees).
 
     The traversal scheme is fixed: an iterative post-order walk over the
-    one-level contents produced by `extract`, so the structure depth
+    one-level deconstructions produced by `deconstruct`, so the structure depth
     is bounded neither by the Python recursion limit nor (on Python <= 3.10)
-    by the C stack. The reduction logic is supplied as reducers (the algebras
-    of the catamorphism): `atomic_reducer` reduces an :class:`AtomicContent`
-    to a result, and `composite_reducer` combines a
-    :class:`CompositeContent` with the already-reduced results of its
-    children.
+    by the C stack. The reduction logic is supplied as collapsers (the
+    algebras of the catamorphism): `collapser` collapses an
+    :class:`EmptyDeconstruction` into a result, and `composite_collapser`
+    collapses a :class:`Deconstruction` together with the already-collapsed
+    results of its children.
 
     Keyword Args:
-        extract: Per-object extraction of one level of content, as an
-            :class:`AtomicContent` or a :class:`CompositeContent`.
-        atomic_reducer: Reduction of the content of a terminal object.
-        composite_reducer: Combination of the content of a non-terminal object
-            with the results of its children (in child order).
-        cycle_reducer: Reduction of a cyclic reference, receiving the relative
-            depth (in currently open nodes) from the reference back up to its
-            target. If `None`, cycles raise :class:`ValueError`. Results
+        deconstruct: Per-object deconstruction of one level of structure, as an
+            :class:`EmptyDeconstruction` or a :class:`Deconstruction`.
+        collapser: Collapse of the deconstruction of a terminal object.
+        composite_collapser: Collapse of the deconstruction of a non-terminal
+            object with the results of its children (in child order).
+        allow_cycles: Whether to allow cyclic references in the object graph.
+            If allowed, a cyclic reference is collapsed as an
+            :class:`EmptyDeconstruction` whose state encodes the relative
+            depth (in currently open nodes) back up to its target; results
             computed below a cycle target embed context-dependent back
-            references and are therefore never memoized.
+            references and are therefore never memoized. If not allowed,
+            cycles raise :class:`ValueError`.
         memoize: Reuse the result of already-reduced subobjects (matched by
             identity), so shared substructure is reduced only once. Requires
-            pure reducers: results must depend only on the extracted content,
+            pure collapsers: results must depend only on the deconstruction,
             not on where the object appears.
 
     Examples:
         Computing the depth of a nested structure (children are reduced before
-        their parents, so the composite reducer only sees child depths):
+        their parents, so the composite collapser only sees child depths):
 
-        >>> def extract(obj):
+        >>> def deconstruct(obj):
         ...     if isinstance(obj, (list, tuple)):
-        ...         return CompositeContent(metadata=None, children=tuple(obj))
-        ...     return AtomicContent(obj)
+        ...         return Deconstruction(state=None, children=tuple(obj))
+        ...     return EmptyDeconstruction(obj)
         >>> reduce_object(
         ...     [[1, [2]], 3],
-        ...     extract=extract,
-        ...     atomic_reducer=lambda atom: 0,
-        ...     composite_reducer=lambda composite, child_depths: 1 + max(child_depths, default=0),
+        ...     deconstruct=deconstruct,
+        ...     collapser=lambda empty: 0,
+        ...     composite_collapser=lambda composite, child_depths: (
+        ...         1 + max(child_depths, default=0)
+        ...     ),
         ... )
         3
     """
@@ -374,38 +369,48 @@ def reduce_object(
         if action == _VISIT:
             current = payload
             current_id = id(current)
+
             if memoize and current_id in memo:
                 results.append(memo[current_id])
                 continue
+
             if (depth := open_nodes.get(current_id)) is not None:
                 # Cyclic reference: reduce to a back reference by relative
                 # depth, which is independent of memory addresses.
-                if cycle_reducer is None:
-                    raise ValueError(
-                        f"Cycle detected on an object of type '{type(current).__name__}' "
-                        "and no 'cycle_reducer' was provided."
+                if allow_cycles:
+                    relative_depth = len(open_nodes) - depth
+                    result = collapser(
+                        EmptyDeconstruction(b"cycle\0" + str(relative_depth).encode())
                     )
-                results.append(cycle_reducer(len(open_nodes) - depth))
-                taint_depth = min(taint_depth, depth)
-                continue
-            content = extract(current)
-            if isinstance(content, AtomicContent):
-                result = atomic_reducer(content)
+                    results.append(result)
+                    taint_depth = min(taint_depth, depth)
+                    continue
+
+                raise ValueError(
+                    f"Cycle detected on an object of type '{type(current).__name__}' "
+                    "and cycles are not allowed."
+                )
+
+            deconstruction = deconstruct(current)
+            if isinstance(deconstruction, EmptyDeconstruction):
+                result = collapser(deconstruction)
                 if memoize:
                     memo[current_id] = result
                     keep_alive.append(current)
                 results.append(result)
             else:
                 open_nodes[current_id] = len(open_nodes)
-                work.append((_COMBINE, (current, content)))
-                work.extend((_VISIT, child) for child in reversed(content.children))
+                work.append((_COMBINE, (current, deconstruction)))
+                work.extend((_VISIT, child) for child in reversed(deconstruction.children))
+
         else:
-            current, content = payload
-            num_children = len(content.children)
+            current, deconstruction = payload
+            num_children = len(deconstruction.children)
             child_results = results[len(results) - num_children :]
             del results[len(results) - num_children :]
-            result = composite_reducer(content, child_results)
+            result = composite_collapser(deconstruction, child_results)
             depth = open_nodes.pop(id(current))
+
             if depth <= taint_depth:
                 if memoize:
                     memo[id(current)] = result
@@ -414,29 +419,30 @@ def reduce_object(
                     # The target of all pending back references is complete;
                     # its result is self-contained again.
                     taint_depth = float("inf")
+
             results.append(result)
 
     assert len(results) == 1
     return results[0]
 
 
-def make_fingerprinter(extractor: Extractor = extract) -> Fingerprinter:
+def make_fingerprinter(deconstructor: Deconstructor = deconstruct) -> Fingerprinter:
     """
-    Create a fingerprinting function, optionally with a customized extractor.
+    Create a fingerprinting function, optionally with a customized deconstructor.
 
-    A fingerprinter is :func:`reduce_object` instantiated with digest reducers
-    (xxhash64 with domain separation) over a content extractor, which must
-    produce byte tags as `value` / `metadata`; use :func:`make_extractor` to
-    customize the default per-type extraction rules.
+    A fingerprinter is :func:`reduce_object` instantiated with digest
+    collapsers (xxhash64 with domain separation) over a deconstructor, which
+    must produce byte tags as `state`; use :func:`make_deconstructor` to
+    customize the default per-type deconstruction rules.
     """
 
     def fingerprinter(obj: Any) -> str:
         return reduce_object(
             obj,
-            extract=extractor,
-            atomic_reducer=_fingerprint_atomic_reducer,
-            composite_reducer=_fingerprint_composite_reducer,
-            cycle_reducer=_fingerprint_cycle_reducer,
+            deconstruct=deconstructor,
+            collapser=_fingerprint_collapser,
+            composite_collapser=_fingerprint_composite_collapser,
+            allow_cycles=True,
         )
 
     return fingerprinter
@@ -449,9 +455,9 @@ def make_fingerprinter(extractor: Extractor = extract) -> Fingerprinter:
 stable_fingerprinter: Fingerprinter = make_fingerprinter()
 
 
-def _make_skipping_fields_node_extractor(skipped_fields: frozenset[str]) -> Extractor:
-    def node_extractor(node: concepts.Node) -> CompositeContent:
-        return CompositeContent(
+def _make_skipping_fields_node_deconstructor(skipped_fields: frozenset[str]) -> Deconstructor:
+    def node_deconstructor(node: concepts.Node) -> Deconstruction:
+        return Deconstruction(
             b"fields\0" + _class_tag(type(node)),
             tuple(
                 (name, child)
@@ -460,39 +466,39 @@ def _make_skipping_fields_node_extractor(skipped_fields: frozenset[str]) -> Extr
             ),
         )
 
-    return node_extractor
+    return node_deconstructor
 
 
 @overload
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_extractors: Literal[False] = False
+    *skipped_fields: str, return_deconstructors: Literal[False] = False
 ) -> Fingerprinter: ...
 
 
 @overload
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_extractors: Literal[True]
-) -> tuple[Fingerprinter, dict[type, Extractor]]: ...
+    *skipped_fields: str, return_deconstructors: Literal[True]
+) -> tuple[Fingerprinter, dict[type, Deconstructor]]: ...
 
 
 @functools.cache
 def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_extractors: bool = False
-) -> Fingerprinter | tuple[Fingerprinter, dict[type, Extractor]]:
+    *skipped_fields: str, return_deconstructors: bool = False
+) -> Fingerprinter | tuple[Fingerprinter, dict[type, Deconstructor]]:
     """
     Return a fingerprinter that fingerprints a node while skipping fields.
 
     The provided field names are ignored recursively on all nodes. With
-    `return_extractors=True`, additionally return the per-type extractor
-    overrides so they can be composed into another extractor via
-    :func:`make_extractor`.
+    `return_deconstructors=True`, additionally return the per-type deconstructor
+    overrides so they can be composed into another deconstructor via
+    :func:`make_deconstructor`.
     """
-    extractors: dict[type, Extractor] = {
-        concepts.Node: _make_skipping_fields_node_extractor(frozenset(skipped_fields))
+    deconstructors: dict[type, Deconstructor] = {
+        concepts.Node: _make_skipping_fields_node_deconstructor(frozenset(skipped_fields))
     }
-    fingerprinter = make_fingerprinter(make_extractor(extractors))
+    fingerprinter = make_fingerprinter(make_deconstructor(deconstructors))
 
-    return (fingerprinter, extractors) if return_extractors else fingerprinter
+    return (fingerprinter, deconstructors) if return_deconstructors else fingerprinter
 
 
 class RecursionGuard:
