@@ -147,3 +147,32 @@ def test_compiler_skips_tx_markers_for_non_gpu_device(tmp_path):
 
     spy.assert_not_called()
     assert compiled_sdfg.instrument == _NONE
+
+
+# `CXXFLAGS`, `CUDAFLAGS` and `HIPFLAGS` feed `compiler.cpu.args`, `compiler.cuda.args`
+# and `compiler.cuda.hip_args` respectively (see `set_dace_config`).
+@pytest.mark.parametrize(
+    ("device_type", "compiler_flags_env"),
+    [
+        (core_defs.DeviceType.CPU, "CXXFLAGS"),
+        (core_defs.DeviceType.CUDA, "CUDAFLAGS"),
+        (core_defs.DeviceType.ROCM, "HIPFLAGS"),
+    ],
+)
+def test_compiler_flags_change_build_folder(tmp_path, monkeypatch, device_type, compiler_flags_env):
+    """Different compiler flags must produce a different build folder.
+
+    The flags are captured in `dace_config_nondefaults`, which is part of the compiler
+    fingerprint that names the per-compiler build sub-folder. Changing any of them must
+    therefore land the build in a different sub-folder of the (shared) cache folder.
+    """
+    monkeypatch.delenv(compiler_flags_env, raising=False)
+    _, sdfg_default = _run_compiler(tmp_path, add_gpu_trace_markers=False, device_type=device_type)
+
+    monkeypatch.setenv(compiler_flags_env, "-O0 -some-custom-flag")
+    _, sdfg_custom = _run_compiler(tmp_path, add_gpu_trace_markers=False, device_type=device_type)
+
+    # Only the fingerprint sub-folder changes; the shared cache folder (`tmp_path`) does not.
+    assert sdfg_default.build_folder.parent == tmp_path
+    assert sdfg_custom.build_folder.parent == tmp_path
+    assert sdfg_default.build_folder != sdfg_custom.build_folder

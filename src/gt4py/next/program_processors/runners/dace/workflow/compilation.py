@@ -19,6 +19,7 @@ import factory
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import common, config
+from gt4py.next.ffront import stages as ffront_stages
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
@@ -128,6 +129,13 @@ class CompiledDaceProgram:
         assert result is None
 
 
+def _get_dace_config_nondefaults() -> dict[str, Any]:
+    # device type is not relevant for this function, we just need to enter the context
+    # to get the non-default config values
+    with gtx_wfdcommon.dace_context(device_type=core_defs.DeviceType.CPU):
+        return dace.Config._data.nondefaults()
+
+
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
@@ -151,6 +159,10 @@ class DaCeCompiler(
     cmake_build_type: config.CMakeBuildType = dataclasses.field(
         default_factory=lambda: config.CMAKE_BUILD_TYPE
     )
+    # we store the non-default values of `dace.Config` in order to include it in the stage fingerprint
+    dace_config_nondefaults: dict[str, Any] = dataclasses.field(
+        default_factory=_get_dace_config_nondefaults
+    )
 
     def __call__(
         self,
@@ -160,7 +172,12 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
+            # Append a subfolder named after the fingerprint of this compiler instance, so
+            # that builds with different compiler settings (e.g. non-default dace config) do
+            # not clash in the same build folder.
+            sdfg_build_folder = gtx_cache.get_cache_folder(
+                inp, self.cache_lifetime
+            ) / ffront_stages.fingerprint_stage(self)
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
