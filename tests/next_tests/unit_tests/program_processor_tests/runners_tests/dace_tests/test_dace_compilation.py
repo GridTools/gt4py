@@ -92,11 +92,6 @@ def _run_compiler(
         ) as spy,
         mock.patch.object(dace.SDFG, "compile", autospec=True) as compile_mock,
         mock.patch.object(dace_wf_compilation, "CompiledDaceProgram"),
-        mock.patch.object(
-            dace_wf_compilation.gtx_wfdcommon,
-            "dace_context",
-            lambda **kwargs: contextlib.nullcontext(),
-        ),
         mock.patch.object(dace_wf_compilation.gtx_cache, "get_cache_folder", return_value=tmp_path),
         mock.patch.object(
             dace_wf_compilation.locking, "lock", lambda *args, **kwargs: contextlib.nullcontext()
