@@ -57,7 +57,9 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
 
-# -- Generic bottom-up tree reduction (catamorphism) --
+# -- Generic deconstruction of arbitrary objects --
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class Deconstruction(Collection[_T]):
     """
@@ -302,18 +304,20 @@ def _deconstruct(obj: Any) -> Deconstruction:
 deconstruct: Final[Deconstructor] = make_deconstructor()
 
 
-# -- Fingerprinting: digest collapsers over a per-type deconstructor registry --
+# -- Generic reduction of deconstructed objects --
+
 #: Collapses a deconstruction into a result; for non-terminal objects, the
 #: pieces have already been collapsed into results. This is the algebra of
-#: the catamorphism implemented by :func:`reduce_object`.
+#: the catamorphism implemented by :func:`catabolize`.
 Collapser: TypeAlias = Callable[[Deconstruction], _R]
 
 
-_VISIT: Final[int] = 0
-_COMBINE: Final[int] = 1
+class _VisitAction(enum.IntEnum):
+    VISIT = 0
+    COMBINE = 1
 
 
-def reduce_object(
+def catabolize(
     obj: Any,
     *,
     deconstructor: Deconstructor,
@@ -322,7 +326,7 @@ def reduce_object(
     memoize: bool = True,
 ) -> _R:
     """
-    Reduce an object bottom-up using a catamorphism (a generalized fold over trees).
+    Catabolize an object: reduce it bottom-up using a catamorphism (a generalized fold over trees).
 
     The traversal scheme is fixed: an iterative post-order walk over the
     one-level deconstructions produced by `deconstructor`, so the structure
@@ -359,7 +363,7 @@ def reduce_object(
         ...     if isinstance(obj, (list, tuple)):
         ...         return Deconstruction.from_pieces(*obj)
         ...     return EmptyDeconstruction(obj)
-        >>> reduce_object(
+        >>> catabolize(
         ...     [[1, [2]], 3],
         ...     deconstructor=deconstructor,
         ...     collapser=lambda d: (
@@ -376,74 +380,85 @@ def reduce_object(
     # not be memoized.
     taint_depth: float = float("inf")
 
-    work: list[tuple[int, Any]] = [(_VISIT, obj)]
+    work: list[tuple[_VisitAction, Any]] = [(_VisitAction.VISIT, obj)]
     results: list[_R] = []
     while work:
         action, payload = work.pop()
-        if action == _VISIT:
-            current = payload
-            current_id = id(current)
+        match action:
+            case _VisitAction.VISIT:
+                current = payload
+                current_id = id(current)
 
-            if memoize and current_id in memo:
-                results.append(memo[current_id])
-                continue
-
-            if (depth := open_nodes.get(current_id)) is not None:
-                # Cyclic reference: reduce to a back reference by relative
-                # depth, which is independent of memory addresses.
-                if allow_cycles:
-                    relative_depth = len(open_nodes) - depth
-                    result = collapser(
-                        EmptyDeconstruction(b"cycle\0" + str(relative_depth).encode())
-                    )
-                    results.append(result)
-                    taint_depth = min(taint_depth, depth)
+                if memoize and current_id in memo:
+                    results.append(memo[current_id])
                     continue
 
-                raise ValueError(
-                    f"Cycle detected on an object of type '{type(current).__name__}' "
-                    "and cycles are not allowed."
-                )
+                if (depth := open_nodes.get(current_id)) is not None:
+                    # Cyclic reference: reduce to a back reference by relative
+                    # depth, which is independent of memory addresses.
+                    if allow_cycles:
+                        relative_depth = len(open_nodes) - depth
+                        result = collapser(
+                            EmptyDeconstruction(b"cycle\0" + str(relative_depth).encode())
+                        )
+                        results.append(result)
+                        taint_depth = min(taint_depth, depth)
+                        continue
 
-            deconstruction = deconstructor(current)
-            if isinstance(deconstruction, EmptyDeconstruction):
-                result = collapser(deconstruction)
-                if memoize:
-                    memo[current_id] = result
-                    keep_alive.append(current)
+                    raise ValueError(
+                        f"Cycle detected on an object of type '{type(current).__name__}' "
+                        "and cycles are not allowed."
+                    )
+
+                deconstruction = deconstructor(current)
+                if isinstance(deconstruction, EmptyDeconstruction):
+                    result = collapser(deconstruction)
+                    if memoize:
+                        memo[current_id] = result
+                        keep_alive.append(current)
+                    results.append(result)
+                else:
+                    open_nodes[current_id] = len(open_nodes)
+                    work.append((_VisitAction.COMBINE, (current, deconstruction)))
+                    work.extend(
+                        (_VisitAction.VISIT, child) for child in reversed(deconstruction.pieces)
+                    )
+
+            case _VisitAction.COMBINE:
+                current, deconstruction = payload
+                num_pieces = len(deconstruction.pieces)
+                piece_results = results[len(results) - num_pieces :]
+                del results[len(results) - num_pieces :]
+                if isinstance(deconstruction, OrderInsensitiveDeconstruction):
+                    # Sorting the piece *results* canonicalizes order-insensitive
+                    # containers without requiring the pieces themselves to be
+                    # orderable (the results must be, see the docstring).
+                    piece_results = sorted(piece_results)  # type: ignore[type-var]  # conditional requirement on _R
+
+                result = collapser(dataclasses.replace(deconstruction, pieces=piece_results))
+                depth = open_nodes.pop(id(current))
+
+                if depth <= taint_depth:
+                    if memoize:
+                        memo[id(current)] = result
+                        keep_alive.append(current)
+                    if depth == taint_depth:
+                        # The target of all pending back references is complete;
+                        # its result is self-contained again.
+                        taint_depth = float("inf")
+
                 results.append(result)
-            else:
-                open_nodes[current_id] = len(open_nodes)
-                work.append((_COMBINE, (current, deconstruction)))
-                work.extend((_VISIT, child) for child in reversed(deconstruction.pieces))
 
-        else:
-            current, deconstruction = payload
-            num_pieces = len(deconstruction.pieces)
-            piece_results = results[len(results) - num_pieces :]
-            del results[len(results) - num_pieces :]
-            if isinstance(deconstruction, OrderInsensitiveDeconstruction):
-                # Sorting the piece *results* canonicalizes order-insensitive
-                # containers without requiring the pieces themselves to be
-                # orderable (the results must be, see the docstring).
-                piece_results = sorted(piece_results)  # type: ignore[type-var]  # conditional requirement on _R
-
-            result = collapser(dataclasses.replace(deconstruction, pieces=piece_results))
-            depth = open_nodes.pop(id(current))
-
-            if depth <= taint_depth:
-                if memoize:
-                    memo[id(current)] = result
-                    keep_alive.append(current)
-                if depth == taint_depth:
-                    # The target of all pending back references is complete;
-                    # its result is self-contained again.
-                    taint_depth = float("inf")
-
-            results.append(result)
+            case _:
+                raise RuntimeError(
+                    f"Internal error: invalid action '{action}' in catabolism work list."
+                )
 
     assert len(results) == 1
     return results[0]
+
+
+# -- Generic fingerprinting of objects --
 
 
 def fingerprint_collapser(deconstruction: Deconstruction[str]) -> str:
@@ -483,7 +498,7 @@ def fingerprint_fallback(obj: Any) -> Deconstruction:
 fingerprint_deconstructor: Final[Deconstructor] = make_deconstructor(fallback=fingerprint_fallback)
 
 
-#: A fingerprinter is :func:`reduce_object` instantiated with digest
+#: A fingerprinter is :func:`catabolize` instantiated with digest
 #: collapsers (xxhash64 with domain separation) over a deconstructor, which
 #: must produce type tags as `state`.
 Fingerprinter: TypeAlias = Callable[[Any], str]
@@ -494,7 +509,7 @@ Fingerprinter: TypeAlias = Callable[[Any], str]
 #: fingerprints of their items) and identifying types, functions and modules
 #: by their qualified name.
 stable_fingerprinter: Fingerprinter = functools.partial(
-    reduce_object,
+    catabolize,
     deconstructor=fingerprint_deconstructor,
     collapser=fingerprint_collapser,
     allow_cycles=True,
@@ -543,7 +558,7 @@ def skipping_fields_node_fingerprinter(
         concepts.Node: _make_skipping_fields_node_deconstructor(frozenset(skipped_fields))
     }
     fingerprinter: Fingerprinter = functools.partial(
-        reduce_object,
+        catabolize,
         deconstructor=make_deconstructor(deconstructors, fallback=fingerprint_fallback),
         collapser=fingerprint_collapser,
         allow_cycles=True,

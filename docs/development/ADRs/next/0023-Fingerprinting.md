@@ -74,7 +74,7 @@ trees — keeping three concerns explicitly separate:
 1. **Deconstruction** (*what is the one-level structure of an object?*): a
    per-type registry of *deconstructors*, each peeling off exactly one
    level into an `EmptyDeconstruction` or a `Deconstruction`.
-2. **Traversal scheme** (*in which order are objects visited?*): `reduce_object`,
+2. **Traversal scheme** (*in which order are objects visited?*): `catabolize`,
    a generic iterative post-order fold with result memoization and cycle
    support, reusable with any result type.
 3. **Reduction logic** (*how do results combine?*): the *collapser* (the
@@ -97,7 +97,7 @@ per-type registry plus optional overrides (dispatched on the object's MRO via
 `functools.singledispatch`), with a customizable `fallback` covering
 dataclasses, datamodels and `__reduce_ex__`-reducible objects; the
 module-level `deconstruct` is the default deconstructor.
-A fingerprinter is `reduce_object` partially applied to a deconstructor and
+A fingerprinter is `catabolize` partially applied to a deconstructor and
 the digest collapser (`stable_fingerprinter` uses `fingerprint_deconstructor`,
 whose `fingerprint_fallback` layers the `gt4py_metadata(fingerprint=False)`
 field opt-out on the default rules). The default deconstruction rules are:
@@ -124,9 +124,9 @@ field opt-out on the default rules). The default deconstruction rules are:
   (with a pinned protocol version), which covers e.g. NumPy arrays by content
   without any special-casing.
 
-### Layer 2: the traversal scheme (`reduce_object`)
+### Layer 2: the traversal scheme (`catabolize`)
 
-`reduce_object(obj, *, deconstructor, collapser, allow_cycles, memoize)`
+`catabolize(obj, *, deconstructor, collapser, allow_cycles, memoize)`
 reduces an object bottom-up over its one-level deconstructions. The fold is
 **iterative** (explicit two-phase work stack), so deeply nested inputs —
 lowered IR trees routinely exceed the recursion limit budget of any recursive
@@ -196,7 +196,7 @@ rules:
 
 ```python
 semantic_fingerprinter = functools.partial(
-    utils.reduce_object,
+    utils.catabolize,
     deconstructor=utils.make_deconstructor(
         {
             **foast.semantic_fingerprint_deconstructors,
@@ -337,7 +337,7 @@ registry entries. Using `optree` itself was evaluated and rejected:
 ## References
 
 - `src/gt4py/next/utils.py` — `Deconstruction`, `EmptyDeconstruction`,
-  `OrderInsensitiveDeconstruction`, `reduce_object`, `make_deconstructor`,
+  `OrderInsensitiveDeconstruction`, `catabolize`, `make_deconstructor`,
   `deconstruct`, `fingerprint_fallback`, `fingerprint_deconstructor`,
   `fingerprint_collapser`, `stable_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.

@@ -55,7 +55,7 @@ def _deconstruct_definition_function(func: types.FunctionType) -> utils.Deconstr
 #: and fingerprints DSL definition functions by their source code and closure
 #: variables (instead of by qualified name).
 semantic_fingerprinter: utils.Fingerprinter = functools.partial(
-    utils.reduce_object,
+    utils.catabolize,
     deconstructor=utils.make_deconstructor(
         {
             **foast.semantic_fingerprint_deconstructors,

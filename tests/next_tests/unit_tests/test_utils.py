@@ -100,7 +100,7 @@ def test_skipping_fields_node_fingerprinter_returns_deconstructors_when_requeste
     # The deconstructor overrides can be composed into another fingerprinter.
     assert set(deconstructors) == {concepts.Node}
     composed = functools.partial(
-        utils.reduce_object,
+        utils.catabolize,
         deconstructor=utils.make_deconstructor(deconstructors, fallback=utils.fingerprint_fallback),
         collapser=utils.fingerprint_collapser,
         allow_cycles=True,
@@ -122,11 +122,11 @@ def test_default_deconstructor():
     assert not isinstance(composite, utils.EmptyDeconstruction)
     assert not isinstance(composite, utils.OrderInsensitiveDeconstruction)
     assert isinstance(utils.deconstruct({1, 2}), utils.OrderInsensitiveDeconstruction)
-    # ... and composing `reduce_object` with the fingerprint deconstructor
+    # ... and composing `catabolize` with the fingerprint deconstructor
     # and collapser reproduces `stable_fingerprinter`.
     payload = {"a": (1, 2)}
     refingerprinter = functools.partial(
-        utils.reduce_object,
+        utils.catabolize,
         deconstructor=utils.fingerprint_deconstructor,
         collapser=utils.fingerprint_collapser,
         allow_cycles=True,
@@ -134,7 +134,7 @@ def test_default_deconstructor():
     assert refingerprinter(payload) == utils.stable_fingerprinter(payload)
 
 
-class TestReduceObject:
+class TestCatabolize:
     @staticmethod
     def _deconstruct(obj):
         if isinstance(obj, (list, tuple)):
@@ -143,7 +143,7 @@ class TestReduceObject:
 
     def test_carrier_type_is_generic(self):
         # The reduction result can be of any type, e.g. the structure depth.
-        depth = utils.reduce_object(
+        depth = utils.catabolize(
             [[1, [2]], 3],
             deconstructor=self._deconstruct,
             collapser=lambda d: (
@@ -166,7 +166,7 @@ class TestReduceObject:
             visited.append(result)
             return result
 
-        utils.reduce_object([1, [2, 3]], deconstructor=self._deconstruct, collapser=collapser)
+        utils.catabolize([1, [2, 3]], deconstructor=self._deconstruct, collapser=collapser)
         assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
 
     def test_empty_containers_are_nodes(self):
@@ -176,14 +176,14 @@ class TestReduceObject:
                 return (deconstruction.state,)
             return (deconstruction.state, *deconstruction.pieces)
 
-        result = utils.reduce_object([[], ()], deconstructor=self._deconstruct, collapser=collapser)
+        result = utils.catabolize([[], ()], deconstructor=self._deconstruct, collapser=collapser)
         assert result == (list, (list,), (tuple,))
 
     def test_deep_structures_do_not_hit_the_recursion_limit(self):
         deeply_nested: tuple = ()
         for _ in range(100_000):
             deeply_nested = (deeply_nested,)
-        depth = utils.reduce_object(
+        depth = utils.catabolize(
             deeply_nested,
             deconstructor=self._deconstruct,
             collapser=lambda d: (
@@ -200,7 +200,7 @@ class TestReduceObject:
             return self._deconstruct(obj)
 
         shared = [1, 2]
-        utils.reduce_object(
+        utils.catabolize(
             [shared, shared],
             deconstructor=deconstruct,
             collapser=lambda d: 0,
@@ -208,7 +208,7 @@ class TestReduceObject:
         assert sum(1 for obj in deconstruct_calls if obj is shared) == 1
 
         deconstruct_calls.clear()
-        utils.reduce_object(
+        utils.catabolize(
             [shared, shared],
             deconstructor=deconstruct,
             collapser=lambda d: 0,
@@ -222,7 +222,7 @@ class TestReduceObject:
                 return utils.OrderInsensitiveDeconstruction(state=None, pieces=tuple(obj))
             return utils.EmptyDeconstruction(obj)
 
-        rendered = utils.reduce_object(
+        rendered = utils.catabolize(
             frozenset({3, 1, 2}),
             deconstructor=deconstructor,
             collapser=lambda d: (
@@ -236,7 +236,7 @@ class TestReduceObject:
         cyclic: list = [1]
         cyclic.append(cyclic)
         with pytest.raises(ValueError, match="Cycle detected"):
-            utils.reduce_object(
+            utils.catabolize(
                 cyclic,
                 deconstructor=self._deconstruct,
                 collapser=lambda d: 0,
@@ -253,7 +253,7 @@ class TestReduceObject:
                 return 0
             return 1 + sum(deconstruction.pieces)
 
-        result = utils.reduce_object(
+        result = utils.catabolize(
             cyclic,
             deconstructor=self._deconstruct,
             collapser=collapser,
