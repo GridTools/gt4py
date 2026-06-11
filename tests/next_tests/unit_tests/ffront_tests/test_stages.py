@@ -6,7 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from unittest import mock
+
+import gt4py.next as gtx
 from gt4py.next.ffront import stages
+
+
+IDim = gtx.Dimension("I")
 
 
 def _make_field_operator_definition(offset: int):
@@ -65,3 +71,21 @@ def test_definition_stages_use_the_custom_fingerprinter():
     assert stages.fingerprinter(first_fieldop) != stages.fingerprinter(different_fieldop)
     assert stages.fingerprinter(first_program) == stages.fingerprinter(same_program)
     assert stages.fingerprinter(first_program) != stages.fingerprinter(different_program)
+
+
+def test_fingerprint_excludes_backend():
+    # The backend must not contribute to the lowering fingerprint: it is keyed
+    # separately in the backend's own caches, and a backend graph may hold
+    # non-importable objects (e.g. test doubles / custom workflow steps) that
+    # would otherwise crash fingerprinting.
+    @gtx.field_operator
+    def copy(a: gtx.Field[[IDim], gtx.int32]) -> gtx.Field[[IDim], gtx.int32]:
+        return a
+
+    without_backend = stages.fingerprinter(copy.with_backend(None))
+    with_backend = stages.fingerprinter(copy.with_backend(gtx.gtfn_cpu))
+    assert without_backend == with_backend
+
+    # A non-fingerprintable backend (here a `Mock`) must not crash fingerprinting.
+    object.__setattr__(copy, "backend", mock.Mock())
+    assert stages.fingerprinter(copy) == without_backend
