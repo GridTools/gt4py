@@ -90,7 +90,7 @@ def _get_build_cache_version_id() -> str:
 #: developers or advanced users when making changes requiring forced
 #: compatibility with previously cached builds.
 BUILD_CACHE_VERSION_ID: str = (
-    os.environ.get("BUILD_CACHE_VERSION_ID") or _get_build_cache_version_id()
+    os.environ.get("GT4PY_BUILD_CACHE_VERSION_ID") or _get_build_cache_version_id()
 )
 
 

@@ -202,13 +202,17 @@ Let's say we want to make our calculation workflow compatible with string input.
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
-@gtx.otf.workflow.make_step
+# NOTE: kept as a plain module-level function (instead of shadowing it with the
+# `@make_step` decorator) so that `CachedStep`, which fingerprints the step by
+# qualified name, can resolve it when `StrToIntFactory(cached=True)` is used below.
 def to_int(inp: str) -> int:
     assert isinstance(inp, str), "Can not work with 'int'!"  # yes, this is horribly contrived
     return int(inp)
 
 
-str_calc = to_int.chain(add_3_times_2)
+to_int_step = gtx.otf.workflow.make_step(to_int)
+
+str_calc = to_int_step.chain(add_3_times_2)
 
 str_calc("1")
 ```

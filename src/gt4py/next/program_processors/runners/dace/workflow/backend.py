@@ -15,8 +15,8 @@ import factory
 
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend, common, config, utils
-from gt4py.next.otf import workflow
+from gt4py.next import backend, common, config
+from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
@@ -49,7 +49,7 @@ class DaCeBackendFactory(factory.Factory):
             name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
-        key_function = utils.stable_fingerprinter
+        key_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
             DaCeWorkflowFactory,
             device_type=factory.SelfAttribute("..device_type"),

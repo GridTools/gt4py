@@ -18,7 +18,7 @@ import itertools
 import struct
 import sys
 import types
-from collections.abc import Callable, Collection, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from typing import (
     Any,
     ClassVar,
@@ -245,6 +245,17 @@ _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
 _DECONSTRUCT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
 
 
+def _fields_deconstruction(cls: type, items: Iterable[tuple[Any, Any]]) -> Deconstruction:
+    """
+    Deconstruct a dataclass-like object into its ``(field name, value)`` pieces.
+
+    Shared by every fields-based deconstructor (default, fingerprinting and
+    node-field-skipping) so they agree on the domain-separation tag and the
+    piece shape.
+    """
+    return Deconstruction.from_pieces(*items, state=b"fields\0" + _class_tag(cls))
+
+
 def _dataclass_fields(cls: type) -> Optional[tuple[Any, ...]]:
     # Common one-level field introspection for dataclasses and datamodels;
     # checked in the fallbacks instead of dispatched on virtual ABCs, whose
@@ -262,10 +273,7 @@ def _deconstruct(obj: Any) -> Deconstruction:
     if (fields := _dataclass_fields(cls)) is not None:
         # One level only (the traversal recurses into the pieces itself), so
         # the class identity of nested objects is preserved.
-        return Deconstruction.from_pieces(
-            *((f.name, getattr(obj, f.name)) for f in fields),
-            state=b"fields\0" + _class_tag(cls),
-        )
+        return _fields_deconstruction(cls, ((f.name, getattr(obj, f.name)) for f in fields))
 
     try:
         # Like `pickle.Pickler`, give precedence to reducers registered in
@@ -487,9 +495,9 @@ def fingerprint_fallback(obj: Any) -> Deconstruction:
     """
     cls = type(obj)
     if (fields := _dataclass_fields(cls)) is not None:
-        return Deconstruction.from_pieces(
-            *(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
-            state=b"fields\0" + _class_tag(cls),
+        return _fields_deconstruction(
+            cls,
+            ((f.name, getattr(obj, f.name)) for f in fields if _is_fingerprinted_field(f.metadata)),
         )
     return _deconstruct(obj)
 
@@ -518,13 +526,13 @@ stable_fingerprinter: Fingerprinter = functools.partial(
 
 def _make_skipping_fields_node_deconstructor(skipped_fields: frozenset[str]) -> Deconstructor:
     def node_deconstructor(node: concepts.Node) -> Deconstruction:
-        return Deconstruction.from_pieces(
-            *(
+        return _fields_deconstruction(
+            type(node),
+            (
                 (name, child)
                 for name, child in node.iter_children_items()
                 if name not in skipped_fields
             ),
-            state=b"fields\0" + _class_tag(type(node)),
         )
 
     return node_deconstructor

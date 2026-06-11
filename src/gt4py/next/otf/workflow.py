@@ -269,10 +269,15 @@ class CachedStep(
             result = self.cache[hash_] = self.step(inp)
         return result
 
+    @functools.cached_property
+    def _step_fingerprint(self) -> str:
+        # The step and the build-cache version are immutable, so their
+        # (potentially expensive) fingerprint is computed once per instance
+        # instead of on every cache lookup.
+        return utils.stable_fingerprinter((config.BUILD_CACHE_VERSION_ID, self))
+
     def cache_key(self, inp: StartT) -> str:
-        return utils.stable_fingerprinter(
-            (config.BUILD_CACHE_VERSION_ID, self, self.key_function(inp))
-        )
+        return utils.stable_fingerprinter((self._step_fingerprint, self.key_function(inp)))
 
 
 @dataclasses.dataclass(frozen=True)

@@ -109,7 +109,13 @@ class DataModelABC(abc.ABC):
 
     @classmethod
     def __subclasshook__(cls, subclass: type) -> bool:
-        return is_datamodel(subclass)
+        # Treat any data model as a virtual subclass of `DataModelABC` itself.
+        # Everything else (in particular real subclasses and checks against
+        # derived ABCs) is deferred to the normal MRO-based check by returning
+        # `NotImplemented`.
+        if cls is DataModelABC and is_datamodel(subclass):
+            return True
+        return NotImplemented
 
 
 DataModelT = TypeVar("DataModelT", bound=DataModelTP)

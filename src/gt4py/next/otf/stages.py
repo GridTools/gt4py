@@ -10,10 +10,54 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable
-from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Generic, Optional, Protocol, TypeAlias, TypeVar
 
+from gt4py.next import common, utils
+from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import code_specs
 from gt4py.next.otf.binding import interface
+
+
+if TYPE_CHECKING:
+    # Imported only for typing to avoid the import cycle with `otf.definitions`,
+    # which imports this module.
+    from gt4py.next.otf import definitions
+
+
+def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
+    """
+    In-memory executor cache key: changes whenever the program needs recompilation.
+
+    The program is identified by its location- and type-agnostic semantic
+    fingerprint, while the offset providers are identified by the identity of
+    their connectivities, in iteration order. The order matters because the
+    generated bindings bake in the offset-provider order (see
+    ``extract_connectivity_args``), and the by-identity (rather than by-content)
+    comparison keeps this in-memory key cheap by not hashing the connectivity
+    tables. As the key is only used within a single process, it relies on the
+    builtin (per-process) `hash`.
+    """
+    args = program_def.args
+    offset_provider = args.offset_provider
+    return hash(
+        (
+            itir.semantic_fingerprinter(program_def.data),
+            utils.stable_fingerprinter(tuple(args.args)),
+            common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
+            args.column_axis,
+        )
+    )
+
+
+def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef) -> str:
+    """
+    Persistent (cross-process) cache key for a compilable program.
+
+    Identifies the program by its location- and type-agnostic semantic
+    fingerprint and the offset providers and column axis by content, so the key
+    is stable across processes, machines and source locations.
+    """
+    return itir.semantic_fingerprinter(program_def)
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
