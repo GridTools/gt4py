@@ -39,16 +39,17 @@ class BaseStage: ...
 
 def _deconstruct_definition_function(func: types.FunctionType) -> utils.Deconstruction:
     """
-    Deconstruct a Python function into its source code and closure variables.
+    Deconstruct a Python function into its source definition and closure variables.
 
     This should be enough for the use case of GT4Py DSL definitions, which are
-    expected to be pure functions without complicated closures. Only the source
-    code (not the filename or line/column offsets) is fingerprinted, so that two
-    textually identical functions fingerprint equal regardless of where they are
-    defined.
+    expected to be pure functions without complicated closures. The full
+    :class:`SourceDefinition` (including filename and line/column offsets) is
+    fingerprinted, so that two textually identical operators defined at
+    different source locations are distinguished and do not share a cached
+    lowering with the wrong `SourceLocation`s.
     """
     return utils.Deconstruction.from_pieces(
-        source_utils.make_source_definition_from_function(func).source,
+        source_utils.make_source_definition_from_function(func),
         source_utils.get_closure_vars_from_function(func),
         state=b"definition_function",
     )

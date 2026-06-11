@@ -287,6 +287,45 @@ class TestStableFingerprinter:
     def test_distinguishes_different_content(self):
         assert utils.stable_fingerprinter({"a": 1}) != utils.stable_fingerprinter({"a": 2})
 
+    def test_locally_defined_namespace_subclasses_are_fingerprinted_by_content(self):
+        # Frontend-valid constant namespaces (e.g. icon4py constants) are often
+        # locally-defined `FrozenNamespace` subclasses reachable via closure
+        # vars; they must be fingerprinted by content, not crash on the
+        # non-importable local class.
+        from gt4py.eve import utils as eve_utils
+
+        def make_consts(a, b):
+            class Consts(eve_utils.FrozenNamespace):
+                pass
+
+            return Consts(a=a, b=b)
+
+        assert utils.stable_fingerprinter(make_consts(1, 2)) == utils.stable_fingerprinter(
+            make_consts(1, 2)
+        )
+        assert utils.stable_fingerprinter(make_consts(1, 2)) != utils.stable_fingerprinter(
+            make_consts(1, 3)
+        )
+
+    def test_container_subclass_instance_state_is_fingerprinted(self):
+        # A builtin-container subclass carrying extra instance attributes must
+        # not collapse to the same fingerprint as another instance with the same
+        # items but different attributes (which would be a false cache hit).
+        class TaggedDict(dict):
+            tag: str
+
+        a = TaggedDict({"x": 1})
+        a.tag = "A"
+        b = TaggedDict({"x": 1})
+        b.tag = "B"
+        same_as_a = TaggedDict({"x": 1})
+        same_as_a.tag = "A"
+
+        assert utils.stable_fingerprinter(a) != utils.stable_fingerprinter(b)
+        assert utils.stable_fingerprinter(a) == utils.stable_fingerprinter(same_as_a)
+        # Exact builtins (no instance `__dict__`) are unaffected.
+        assert utils.stable_fingerprinter({"x": 1}) == utils.stable_fingerprinter({"x": 1})
+
     def test_dicts_keyed_by_types_are_order_independent(self):
         # Dicts keyed by types occur in compile-time metadata (e.g. argument descriptors).
         assert utils.stable_fingerprinter({int: 1, str: 2}) == utils.stable_fingerprinter(

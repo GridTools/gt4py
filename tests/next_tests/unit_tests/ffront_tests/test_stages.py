@@ -23,6 +23,16 @@ def _make_program_definition(offset: int):
     return copy_program
 
 
+def _make_field_operator_definition_elsewhere(offset: int):
+    # Byte-identical body to `_make_field_operator_definition`, but defined at a
+    # different source location, so the resulting functions must fingerprint
+    # differently (location-sensitive frontend-stage keys).
+    def copy(a):
+        return a + offset
+
+    return copy
+
+
 def test_fingerprinter_hashes_functions_by_source_and_closure():
     first = _make_field_operator_definition(1)
     same = _make_field_operator_definition(1)
@@ -30,6 +40,16 @@ def test_fingerprinter_hashes_functions_by_source_and_closure():
 
     assert stages.fingerprinter(first) == stages.fingerprinter(same)
     assert stages.fingerprinter(first) != stages.fingerprinter(different)
+
+
+def test_fingerprinter_is_location_sensitive():
+    # Two functions with byte-identical source and closure but different source
+    # locations must fingerprint differently, otherwise a cached lowering would
+    # carry the wrong `SourceLocation`s (mislabeled errors / debug info).
+    here = _make_field_operator_definition(1)
+    elsewhere = _make_field_operator_definition_elsewhere(1)
+
+    assert stages.fingerprinter(here) != stages.fingerprinter(elsewhere)
 
 
 def test_definition_stages_use_the_custom_fingerprinter():

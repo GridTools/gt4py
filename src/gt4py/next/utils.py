@@ -186,6 +186,19 @@ def _class_obj_tag(obj: Any) -> bytes:
     return _class_tag(type(obj))
 
 
+def _instance_state_pieces(obj: Any) -> tuple[Any, ...]:
+    """
+    Extra instance ``__dict__`` state carried by a builtin-container *subclass*.
+
+    Exact ``dict``/``list``/``set``/... instances have no instance ``__dict__``,
+    so this is empty and the fingerprint is unchanged for them. Subclasses that
+    set extra attributes (which the items-only deconstruction would otherwise
+    drop, yielding false cache hits) contribute them here.
+    """
+    state = getattr(obj, "__dict__", None)
+    return ((b"__dict__\0", state),) if state else ()
+
+
 _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     **{
         # for mixin-based enums (`IntEnum`, `IntFlag`, `StrEnum`, ...) the value-type base
@@ -220,17 +233,33 @@ _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     ),
     bytes: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
     bytearray: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
-    tuple: lambda obj: Deconstruction.from_pieces(*obj, state=_class_obj_tag(obj)),
-    list: lambda obj: Deconstruction.from_pieces(*obj, state=_class_obj_tag(obj)),
+    tuple: lambda obj: Deconstruction.from_pieces(
+        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj)
+    ),
+    list: lambda obj: Deconstruction.from_pieces(
+        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj)
+    ),
     dict: lambda obj: Deconstruction.from_pieces(
-        *obj.items(), state=_class_obj_tag(obj), ordered=isinstance(obj, collections.OrderedDict)
+        *obj.items(),
+        *_instance_state_pieces(obj),
+        state=_class_obj_tag(obj),
+        ordered=isinstance(obj, collections.OrderedDict),
     ),
     collections.defaultdict: lambda obj: Deconstruction.from_pieces(
-        obj.default_factory, dict(obj), state=_class_obj_tag(obj)
+        obj.default_factory, dict(obj), *_instance_state_pieces(obj), state=_class_obj_tag(obj)
     ),
-    set: lambda obj: Deconstruction.from_pieces(*obj, state=_class_obj_tag(obj), ordered=False),
+    set: lambda obj: Deconstruction.from_pieces(
+        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj), ordered=False
+    ),
     frozenset: lambda obj: Deconstruction.from_pieces(
-        *obj, state=_class_obj_tag(obj), ordered=False
+        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj), ordered=False
+    ),
+    # `Namespace`/`FrozenNamespace` (e.g. frontend-valid constant namespaces in
+    # closure vars) are deconstructed by their contents. This both content-hashes
+    # the namespace and avoids the `__reduce_ex__` fallback, which would reference
+    # the (possibly locally-defined, non-importable) class and raise.
+    eve_utils.Namespace: lambda obj: Deconstruction.from_pieces(
+        *obj.items(), state=b"namespace\0" + _class_obj_tag(obj), ordered=False
     ),
     type: EmptyDeconstruction.from_reference,
     types.FunctionType: EmptyDeconstruction.from_reference,
@@ -256,16 +285,24 @@ def _fields_deconstruction(cls: type, items: Iterable[tuple[Any, Any]]) -> Decon
     return Deconstruction.from_pieces(*items, state=b"fields\0" + _class_tag(cls))
 
 
-def _dataclass_fields(cls: type) -> Optional[tuple[Any, ...]]:
+@functools.cache
+def _cached_dataclass_fields(cls: type) -> Optional[tuple[Any, ...]]:
     # Common one-level field introspection for dataclasses and datamodels;
     # checked in the fallbacks instead of dispatched on virtual ABCs, whose
     # composition into the MRO breaks `singledispatch` for eve's generic
-    # datamodel classes (`RuntimeError: Inconsistent hierarchy`).
+    # datamodel classes (`RuntimeError: Inconsistent hierarchy`). Cached per
+    # type, since this is on the fingerprinting hot path and the fields are a
+    # pure function of the class.
     if dataclasses.is_dataclass(cls):
         return dataclasses.fields(cls)
     if datamodels.is_datamodel(cls):
         return tuple(datamodels.get_fields(cls).values())
     return None
+
+
+_dataclass_fields: Final[Callable[[type], Optional[tuple[Any, ...]]]] = (
+    _cached_dataclass_fields  # for mypy
+)
 
 
 def _deconstruct(obj: Any) -> Deconstruction:
@@ -443,7 +480,10 @@ def catabolize(
                     # orderable (the results must be, see the docstring).
                     piece_results = sorted(piece_results)  # type: ignore[type-var]  # conditional requirement on _R
 
-                result = collapser(dataclasses.replace(deconstruction, pieces=piece_results))
+                # Direct construction (a non-empty `deconstruction` reaching
+                # COMBINE always has the `(state, pieces)` signature) avoids the
+                # field-introspection overhead of `dataclasses.replace` per node.
+                result = collapser(type(deconstruction)(deconstruction.state, tuple(piece_results)))
                 depth = open_nodes.pop(id(current))
 
                 if depth <= taint_depth:
