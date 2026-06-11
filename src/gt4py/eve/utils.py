@@ -692,6 +692,35 @@ def singledispatcher(
     return cast(xtyping.SingleDispatchCallable[P, T], result)
 
 
+def merge_dispatchers(
+    *dispatchers: xtyping.SingleDispatchCallable[P, T], default: Callable[P, T] | None = None
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Merge multiple single-dispatch callables into one.
+
+    The resulting dispatcher will have the union of the registered
+    implementations of the input dispatchers. If `default` is provided
+    it will be used as the default implementation for the merged
+    dispatcher, otherwise the default implementation of the last
+    dispatcher will be used.
+    """
+    if not dispatchers:
+        raise ValueError("At least one dispatcher must be provided.")
+
+    merged_registry: dict[Any, Any] = {}
+    for d in dispatchers:
+        if not xtyping.is_single_dispatch_callable(d):
+            raise TypeError(
+                f"Expected only single-dispatch callables, got '{d}' of type '{type(d)}'"
+            )
+        merged_registry.update(d.registry)
+
+    if default is not None:
+        merged_registry.pop(object, None)  # remove default implementation from registry if present
+
+    return singledispatcher(default, implementations=merged_registry)
+
+
 #: Pickle protocol pinned for `content_hash` so the serialized byte stream (and
 #: therefore the resulting hash) is reproducible across Python versions,
 #: regardless of changes to `pickle.DEFAULT_PROTOCOL`.
