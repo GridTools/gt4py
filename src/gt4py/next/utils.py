@@ -69,6 +69,11 @@ class AtomicContent:
         """Builder with a domain-separation tag and optional payload."""
         return cls(_class_tag(type_) + b"\0" + payload)
 
+    @classmethod
+    def from_reference(cls, obj: Any) -> AtomicContent:
+        """Builder for objects identified by their fully qualified name."""
+        return cls(b"ref\0" + _reference_by_fully_qualified_name(obj).encode())
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class CompositeContent:
@@ -141,41 +146,6 @@ def _cached_class_tag(cls: type) -> bytes:
 _class_tag: Final[Callable[[type], bytes]] = _cached_class_tag
 
 
-def _extract_by_reference(obj: Any) -> AtomicContent:
-    return AtomicContent(b"ref\0" + _reference_by_fully_qualified_name(obj).encode())
-
-
-def _extract_dict(obj: dict) -> CompositeContent:
-    # `collections.OrderedDict` equality is order-sensitive, so its fingerprint
-    # must be too; plain `dict` (and other subclasses) compare order-insensitively.
-    ordered = isinstance(obj, collections.OrderedDict)
-    return CompositeContent(_class_tag(type(obj)), tuple(obj.items()), ordered=ordered)
-
-
-def _extract_default_dict(obj: collections.defaultdict) -> CompositeContent:
-    # The `default_factory` is part of the observable behavior of a `defaultdict`,
-    # so it participates in the fingerprint; the items child keeps the
-    # order-insensitivity of plain `dict`s.
-    return CompositeContent(_class_tag(type(obj)), (obj.default_factory, dict(obj)))
-
-
-def _extract_enum_class(obj: type[enum.Enum]) -> CompositeContent:
-    # Enum classes are extracted by content (their members) instead of by
-    # reference: they are commonly defined locally (non-importable), and their
-    # semantic content is exactly the member set.
-    return CompositeContent(
-        b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
-        tuple((member.name, member.value) for member in obj),
-    )
-
-
-def _extract_enum_member(obj: enum.Enum) -> CompositeContent:
-    # The member's class is included by content (see `_extract_enum_class`),
-    # so members of distinct but identically named (e.g. local) enum classes
-    # cannot collide.
-    return CompositeContent(b"enum_member", (type(obj), obj.name, obj.value))
-
-
 # `enum.Enum` alone is not enough: for mixin-based enums (`IntEnum`, `IntFlag`,
 # `StrEnum`, ...) the value-type base precedes `Enum` in the MRO and would win
 # the dispatch.
@@ -187,8 +157,14 @@ _ENUM_MEMBER_BASES: Final[tuple[type, ...]] = tuple(
 
 
 _BUILTIN_EXTRACTORS: Final[dict[type, Extractor]] = {
-    **{base: _extract_enum_member for base in _ENUM_MEMBER_BASES},
-    enum.EnumMeta: _extract_enum_class,
+    **{
+        base: (lambda obj: CompositeContent(b"enum_member", (type(obj), obj.name, obj.value)))
+        for base in _ENUM_MEMBER_BASES
+    },
+    enum.EnumMeta: lambda obj: CompositeContent(
+        b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
+        tuple((member.name, member.value) for member in obj),
+    ),
     type(None): lambda obj: AtomicContent.from_typed_value(type(None)),
     bool: lambda obj: AtomicContent.from_typed_value(bool, b"1" if obj else b"0"),
     int: lambda obj: AtomicContent.from_typed_value(type(obj), str(int(obj)).encode()),
@@ -203,14 +179,18 @@ _BUILTIN_EXTRACTORS: Final[dict[type, Extractor]] = {
     bytearray: lambda obj: AtomicContent.from_typed_value(type(obj), bytes(obj)),
     tuple: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
     list: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj)),
-    dict: _extract_dict,
-    collections.defaultdict: _extract_default_dict,
+    dict: lambda obj: CompositeContent(
+        _class_tag(type(obj)), tuple(obj.items()), ordered=isinstance(obj, collections.OrderedDict)
+    ),
+    collections.defaultdict: lambda obj: CompositeContent(
+        _class_tag(type(obj)), (obj.default_factory, dict(obj))
+    ),
     set: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
     frozenset: lambda obj: CompositeContent(_class_tag(type(obj)), tuple(obj), ordered=False),
-    type: _extract_by_reference,
-    types.FunctionType: _extract_by_reference,
-    types.BuiltinFunctionType: _extract_by_reference,
-    types.ModuleType: _extract_by_reference,
+    type: AtomicContent.from_reference,
+    types.FunctionType: AtomicContent.from_reference,
+    types.BuiltinFunctionType: AtomicContent.from_reference,
+    types.ModuleType: AtomicContent.from_reference,
 }
 
 #: Pickle protocol used when extracting the content of unknown objects via
