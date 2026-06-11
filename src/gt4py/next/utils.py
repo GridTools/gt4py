@@ -18,7 +18,7 @@ import itertools
 import struct
 import sys
 import types
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from typing import (
     Any,
     ClassVar,
@@ -59,42 +59,55 @@ _R = TypeVar("_R")
 
 # -- Generic bottom-up tree reduction (catamorphism) --
 @dataclasses.dataclass(frozen=True, slots=True)
-class EmptyDeconstruction:
-    """One-level deconstruction of a terminal object: an opaque state, no children."""
+class Deconstruction(Collection):
+    """
+    A container with custom internal state for the pieces resulting from an object deconstruction.
+    """
 
     state: Any
+    pieces: tuple[Any, ...]
 
-    @classmethod
-    def from_typed_value(cls, type_: type, /, payload: bytes = b"") -> EmptyDeconstruction:
-        """Builder with a domain-separation tag and optional payload."""
-        return cls(_class_tag(type_) + b"\0" + payload)
+    def __contains__(self, __x: object) -> bool:
+        return __x in self.pieces
 
-    @classmethod
-    def from_reference(cls, obj: Any) -> EmptyDeconstruction:
+    def __iter__(self) -> Iterator:
+        return iter(self.pieces)
+
+    def __len__(self) -> int:
+        return len(self.pieces)
+
+    @staticmethod
+    def from_reference(obj: Any) -> EmptyDeconstruction:
         """Builder for objects identified by their fully qualified name."""
-        return cls(b"ref\0" + _reference_by_fully_qualified_name(obj).encode())
+        return EmptyDeconstruction(b"ref\0" + _reference_by_fully_qualified_name(obj).encode())
+
+    @staticmethod
+    def from_typed_value(type_: type, /, value: bytes = b"") -> EmptyDeconstruction:
+        """Builder with a domain-separation tag and optional payload."""
+        return EmptyDeconstruction(_class_tag(type_) + b"\0" + value)
+
+    @staticmethod
+    def from_pieces(*pieces: Any, state: Any = None, ordered: bool = True) -> Deconstruction:
+        """Builder for creating a deconstruction with the given pieces."""
+        deconstruction_cls = OrderInsensitiveDeconstruction if not ordered else Deconstruction
+        return deconstruction_cls(state=state, pieces=pieces)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class Deconstruction:
-    """
-    One-level deconstruction of a non-terminal object.
+class EmptyDeconstruction(Deconstruction):
+    state: Any = None
+    pieces: tuple[Any, ...] = dataclasses.field(default=(), init=False, repr=False)
 
-    `state` carries whatever node-level information the reduction needs
-    (e.g. a type tag), and `children` are the sub-objects to be reduced before
-    this node. `ordered` declares whether the order of the children is
-    semantically meaningful; order-insensitive reductions (e.g. for `dict` and
-    `set`, whose equality ignores iteration order) may use it to canonicalize
-    the combination of the child results.
-    """
 
-    state: Any
-    children: tuple[Any, ...]
-    ordered: bool = True
+@dataclasses.dataclass(frozen=True, slots=True)
+class OrderInsensitiveDeconstruction(Deconstruction):
+    """A deconstruction whose pieces are semantically order-insensitive and should be reduced in a canonical order."""
+
+    pass
 
 
 #: Deconstructs one level of an object.
-Deconstructor: TypeAlias = Callable[[Any], EmptyDeconstruction | Deconstruction]
+Deconstructor: TypeAlias = Callable[[Any], Deconstruction]
 
 
 def _resolves_as_global(obj: Any) -> bool:
@@ -143,11 +156,19 @@ def _cached_class_tag(cls: type) -> bytes:
 _class_tag: Final[Callable[[type], bytes]] = _cached_class_tag  # for mypy
 
 
+def _class_obj_tag(obj: Any) -> bytes:
+    return _class_tag(type(obj))
+
+
 _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     **{
         # for mixin-based enums (`IntEnum`, `IntFlag`, `StrEnum`, ...) the value-type base
         # precedes `Enum` in the MRO and would win the dispatch.
-        base: (lambda obj: Deconstruction(b"enum_member", (type(obj), obj.name, obj.value)))
+        base: (
+            lambda obj: Deconstruction.from_pieces(
+                type(obj), obj.name, obj.value, state=b"enum_member"
+            )
+        )
         for base in (
             enum.Enum,
             enum.IntEnum,
@@ -157,9 +178,9 @@ _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
         )
         if base is not None
     },
-    enum.EnumMeta: lambda obj: Deconstruction(
-        b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
-        tuple((member.name, member.value) for member in obj),
+    enum.EnumMeta: lambda obj: Deconstruction.from_pieces(
+        *((member.name, member.value) for member in obj),
+        state=b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
     ),
     type(None): lambda obj: EmptyDeconstruction.from_typed_value(type(None)),
     bool: lambda obj: EmptyDeconstruction.from_typed_value(bool, b"1" if obj else b"0"),
@@ -173,29 +194,31 @@ _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     ),
     bytes: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
     bytearray: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
-    tuple: lambda obj: Deconstruction(_class_tag(type(obj)), tuple(obj)),
-    list: lambda obj: Deconstruction(_class_tag(type(obj)), tuple(obj)),
-    dict: lambda obj: Deconstruction(
-        _class_tag(type(obj)), tuple(obj.items()), ordered=isinstance(obj, collections.OrderedDict)
+    tuple: lambda obj: Deconstruction.from_pieces(*obj, state=_class_obj_tag(obj)),
+    list: lambda obj: Deconstruction.from_pieces(*obj, state=_class_obj_tag(obj)),
+    dict: lambda obj: Deconstruction.from_pieces(
+        *obj.items(), state=_class_obj_tag(obj), ordered=isinstance(obj, collections.OrderedDict)
     ),
-    collections.defaultdict: lambda obj: Deconstruction(
-        _class_tag(type(obj)), (obj.default_factory, dict(obj))
+    collections.defaultdict: lambda obj: Deconstruction.from_pieces(
+        obj.default_factory, dict(obj), state=_class_obj_tag(obj)
     ),
-    set: lambda obj: Deconstruction(_class_tag(type(obj)), tuple(obj), ordered=False),
-    frozenset: lambda obj: Deconstruction(_class_tag(type(obj)), tuple(obj), ordered=False),
+    set: lambda obj: Deconstruction.from_pieces(*obj, state=_class_obj_tag(obj), ordered=False),
+    frozenset: lambda obj: Deconstruction.from_pieces(
+        *obj, state=_class_obj_tag(obj), ordered=False
+    ),
     type: EmptyDeconstruction.from_reference,
     types.FunctionType: EmptyDeconstruction.from_reference,
     types.BuiltinFunctionType: EmptyDeconstruction.from_reference,
     types.ModuleType: EmptyDeconstruction.from_reference,
 }
 
-#: Pickle protocol used when deconstructing unknown objects via
-#: `__reduce_ex__`. Pinned so the deconstruction (and therefore the
-#: fingerprint) does not depend on the running Python's default protocol.
+# Pickle protocol used when deconstructing unknown objects via
+# `__reduce_ex__`. Pinned so the deconstruction (and therefore the
+# fingerprint) does not depend on the running Python's default protocol.
 _DECONSTRUCT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
 
 
-def _deconstruct(obj: Any) -> EmptyDeconstruction | Deconstruction:
+def _deconstruct(obj: Any) -> Deconstruction:
     cls = type(obj)
     if dataclasses.is_dataclass(cls) or datamodels.is_datamodel(cls):
         fields: Iterable[Any] = (
@@ -203,9 +226,9 @@ def _deconstruct(obj: Any) -> EmptyDeconstruction | Deconstruction:
             if dataclasses.is_dataclass(cls)
             else datamodels.get_fields(cls).values()
         )
-        return Deconstruction(
-            b"fields\0" + _class_tag(cls),
-            tuple(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
+        return Deconstruction.from_pieces(
+            *(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
+            state=b"fields\0" + _class_tag(cls),
         )
 
     try:
@@ -224,12 +247,18 @@ def _deconstruct(obj: Any) -> EmptyDeconstruction | Deconstruction:
             b"global\0" + f"{getattr(obj, '__module__', '')}:{reduced}".encode()
         )
     constructor, constructor_args, *rest = reduced
-    state = rest[0] if len(rest) > 0 else None
+    obj_state = rest[0] if len(rest) > 0 else None
     list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
     dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
     custom_setstate = rest[3] if len(rest) > 3 else None
-    return Deconstruction(
-        b"reduce", (constructor, constructor_args, state, list_items, dict_items, custom_setstate)
+    return Deconstruction.from_pieces(
+        constructor,
+        constructor_args,
+        obj_state,
+        list_items,
+        dict_items,
+        custom_setstate,
+        state=b"reduce",
     )
 
 
@@ -239,9 +268,10 @@ def make_deconstructor(
     """
     Create a deconstructor, optionally with customized per-type deconstruction.
 
-    The returned deconstructor produces one level of an object as an
-    :class:`EmptyDeconstruction` or a :class:`Deconstruction` whose `state`
-    is a byte tag (a domain-separation tag, optionally followed by a payload).
+    The returned deconstructor produces one level of an object as a
+    :class:`Deconstruction` (an :class:`EmptyDeconstruction` for terminal
+    objects) whose `state` is a byte tag (a domain-separation tag, optionally
+    followed by a payload).
     Per-type deconstructors are dispatched on the object's MRO; `overrides`
     take precedence over the default rules. Objects without a matching
     deconstructor are deconstructed through their fields (dataclasses and
@@ -272,16 +302,16 @@ def _fingerprint_collapser(empty: EmptyDeconstruction) -> str:
     return xxhash.xxh64(b"leaf\0" + empty.state).hexdigest()
 
 
-def _fingerprint_composite_collapser(composite: Deconstruction, child_digests: list[str]) -> str:
-    """Combine the digests of an object's children into the object's digest."""
-    if not composite.ordered:
-        # Sorting the child *digests* canonicalizes order-insensitive containers
-        # without requiring the children themselves to be orderable.
-        child_digests = sorted(child_digests)
+def _fingerprint_composite_collapser(composite: Deconstruction, piece_digests: list[str]) -> str:
+    """Combine the digests of an object's pieces into the object's digest."""
+    if isinstance(composite, OrderInsensitiveDeconstruction):
+        # Sorting the piece *digests* canonicalizes order-insensitive containers
+        # without requiring the pieces themselves to be orderable.
+        piece_digests = sorted(piece_digests)
     hasher = xxhash.xxh64(b"node\0")
     hasher.update(composite.state)
     hasher.update(b"\0")
-    for digest in child_digests:  # fixed-length digests, unambiguous concatenation
+    for digest in piece_digests:  # fixed-length digests, unambiguous concatenation
         hasher.update(digest.encode("ascii"))
     return hasher.hexdigest()
 
@@ -290,7 +320,7 @@ def _fingerprint_composite_collapser(composite: Deconstruction, child_digests: l
 Collapser: TypeAlias = Callable[[EmptyDeconstruction], _R]
 
 #: Collapses the deconstruction of a non-terminal object and the results of
-#: its children into a result.
+#: its pieces into a result.
 CompositeCollapser: TypeAlias = Callable[[Deconstruction, list[_R]], _R]
 
 _VISIT: Final[int] = 0
@@ -316,14 +346,14 @@ def reduce_object(
     algebras of the catamorphism): `collapser` collapses an
     :class:`EmptyDeconstruction` into a result, and `composite_collapser`
     collapses a :class:`Deconstruction` together with the already-collapsed
-    results of its children.
+    results of its pieces.
 
     Keyword Args:
         deconstruct: Per-object deconstruction of one level of structure, as an
             :class:`EmptyDeconstruction` or a :class:`Deconstruction`.
         collapser: Collapse of the deconstruction of a terminal object.
         composite_collapser: Collapse of the deconstruction of a non-terminal
-            object with the results of its children (in child order).
+            object with the results of its pieces (in piece order).
         allow_cycles: Whether to allow cyclic references in the object graph.
             If allowed, a cyclic reference is collapsed as an
             :class:`EmptyDeconstruction` whose state encodes the relative
@@ -337,19 +367,20 @@ def reduce_object(
             not on where the object appears.
 
     Examples:
-        Computing the depth of a nested structure (children are reduced before
-        their parents, so the composite collapser only sees child depths):
+        Computing the depth of a nested structure (pieces are reduced before
+        the objects containing them, so the composite collapser only sees the
+        depths of the pieces):
 
         >>> def deconstruct(obj):
         ...     if isinstance(obj, (list, tuple)):
-        ...         return Deconstruction(state=None, children=tuple(obj))
+        ...         return Deconstruction.from_pieces(*obj)
         ...     return EmptyDeconstruction(obj)
         >>> reduce_object(
         ...     [[1, [2]], 3],
         ...     deconstruct=deconstruct,
         ...     collapser=lambda empty: 0,
-        ...     composite_collapser=lambda composite, child_depths: (
-        ...         1 + max(child_depths, default=0)
+        ...     composite_collapser=lambda composite, piece_depths: (
+        ...         1 + max(piece_depths, default=0)
         ...     ),
         ... )
         3
@@ -401,14 +432,14 @@ def reduce_object(
             else:
                 open_nodes[current_id] = len(open_nodes)
                 work.append((_COMBINE, (current, deconstruction)))
-                work.extend((_VISIT, child) for child in reversed(deconstruction.children))
+                work.extend((_VISIT, child) for child in reversed(deconstruction.pieces))
 
         else:
             current, deconstruction = payload
-            num_children = len(deconstruction.children)
-            child_results = results[len(results) - num_children :]
-            del results[len(results) - num_children :]
-            result = composite_collapser(deconstruction, child_results)
+            num_pieces = len(deconstruction.pieces)
+            piece_results = results[len(results) - num_pieces :]
+            del results[len(results) - num_pieces :]
+            result = composite_collapser(deconstruction, piece_results)
             depth = open_nodes.pop(id(current))
 
             if depth <= taint_depth:
@@ -457,13 +488,13 @@ stable_fingerprinter: Fingerprinter = make_fingerprinter()
 
 def _make_skipping_fields_node_deconstructor(skipped_fields: frozenset[str]) -> Deconstructor:
     def node_deconstructor(node: concepts.Node) -> Deconstruction:
-        return Deconstruction(
-            b"fields\0" + _class_tag(type(node)),
-            tuple(
+        return Deconstruction.from_pieces(
+            *(
                 (name, child)
                 for name, child in node.iter_children_items()
                 if name not in skipped_fields
             ),
+            state=b"fields\0" + _class_tag(type(node)),
         )
 
     return node_deconstructor

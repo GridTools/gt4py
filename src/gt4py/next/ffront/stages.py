@@ -43,12 +43,10 @@ def _deconstruct_definition_function(func: types.FunctionType) -> utils.Deconstr
     This should be enough for the use case of GT4Py DSL definitions, which are
     expected to be pure functions without complicated closures.
     """
-    return utils.Deconstruction(
-        b"definition_function",
-        (
-            source_utils.make_source_definition_from_function(func),
-            source_utils.get_closure_vars_from_function(func),
-        ),
+    return utils.Deconstruction.from_pieces(
+        source_utils.make_source_definition_from_function(func),
+        source_utils.get_closure_vars_from_function(func),
+        state=b"definition_function",
     )
 
 

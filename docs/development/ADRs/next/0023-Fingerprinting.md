@@ -79,7 +79,7 @@ trees — keeping three concerns explicitly separate:
    support, reusable with any result type.
 3. **Reduction logic** (*how do results combine?*): the fingerprint
    *collapsers* (the algebras of the catamorphism), which collapse empty
-   deconstructions to digests and combine child digests into composite
+   deconstructions to digests and combine piece digests into composite
    digests.
 
 ### Layer 1: one-level deconstruction
@@ -87,8 +87,9 @@ trees — keeping three concerns explicitly separate:
 A *fingerprint deconstructor* produces one level of an object:
 
 ```python
-EmptyDeconstruction(state: bytes)                       # terminal
-Deconstruction(state: bytes, children: tuple, ordered)  # recurse into children
+Deconstruction(state: bytes, pieces: tuple)        # recurse into the pieces
+EmptyDeconstruction(state: bytes)                  # terminal: no pieces
+OrderInsensitiveDeconstruction(state, pieces)      # pieces combine in canonical order
 ```
 
 `make_deconstructor(overrides)` builds a `Deconstructor` from the default per-type
@@ -136,10 +137,10 @@ serve other bottom-up reductions over arbitrary objects.
 ### Layer 3: the digest collapsers
 
 The fingerprint collapsers collapse an `EmptyDeconstruction` to
-`xxh64("leaf" + state)`, combine a `Deconstruction` with its child
-digests into `xxh64("node" + state + digests)` — sorting the child digests
-first when the node is unordered — and encode cyclic back references by their
-relative depth.
+`xxh64("leaf" + state)`, combine a `Deconstruction` with its piece
+digests into `xxh64("node" + state + digests)` — sorting the piece digests
+first for an `OrderInsensitiveDeconstruction` — and encode cyclic back
+references by their relative depth.
 Together with the identity-based memoization this keeps the fingerprint a pure
 function of *value*: a graph that shares a sub-object and a graph with an
 equal copy fingerprint identically.
@@ -324,9 +325,9 @@ registry entries. Using `optree` itself was evaluated and rejected:
 
 ## References
 
-- `src/gt4py/next/utils.py` — `EmptyDeconstruction`, `Deconstruction`,
-  `reduce_object`, `make_deconstructor`, `deconstruct`, `make_fingerprinter`,
-  `stable_fingerprinter`,
+- `src/gt4py/next/utils.py` — `Deconstruction`, `EmptyDeconstruction`,
+  `OrderInsensitiveDeconstruction`, `reduce_object`, `make_deconstructor`,
+  `deconstruct`, `make_fingerprinter`, `stable_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
 - `src/gt4py/next/otf/workflow.py` — `CachedStep.cache_key`.

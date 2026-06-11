@@ -105,10 +105,14 @@ def test_skipping_fields_node_fingerprinter_returns_deconstructors_when_requeste
 
 
 def test_default_deconstructor():
-    # The public default deconstructor classifies objects into empty and
-    # composite deconstructions...
+    # The public default deconstructor classifies objects into empty,
+    # ordered and order-insensitive deconstructions...
     assert isinstance(utils.deconstruct(1), utils.EmptyDeconstruction)
-    assert isinstance(utils.deconstruct((1, 2)), utils.Deconstruction)
+    composite = utils.deconstruct((1, 2))
+    assert isinstance(composite, utils.Deconstruction)
+    assert not isinstance(composite, utils.EmptyDeconstruction)
+    assert not isinstance(composite, utils.OrderInsensitiveDeconstruction)
+    assert isinstance(utils.deconstruct({1, 2}), utils.OrderInsensitiveDeconstruction)
     # ... and is the deconstructor `make_fingerprinter` uses by default.
     payload = {"a": (1, 2)}
     assert utils.make_fingerprinter(utils.deconstruct)(payload) == utils.stable_fingerprinter(
@@ -120,7 +124,7 @@ class TestReduceObject:
     @staticmethod
     def _deconstruct(obj):
         if isinstance(obj, (list, tuple)):
-            return utils.Deconstruction(state=type(obj), children=tuple(obj))
+            return utils.Deconstruction.from_pieces(*obj, state=type(obj))
         return utils.EmptyDeconstruction(obj)
 
     def test_carrier_type_is_generic(self):
@@ -129,21 +133,21 @@ class TestReduceObject:
             [[1, [2]], 3],
             deconstruct=self._deconstruct,
             collapser=lambda empty: 0,
-            composite_collapser=lambda composite, child_depths: 1 + max(child_depths, default=0),
+            composite_collapser=lambda composite, piece_depths: 1 + max(piece_depths, default=0),
         )
         assert depth == 3
 
-    def test_children_are_reduced_before_parents(self):
-        # Post-order traversal: the node algebra must always see the already
-        # reduced results of its children, in child order.
+    def test_pieces_are_reduced_before_their_containers(self):
+        # Post-order traversal: the composite collapser must always see the
+        # already collapsed results of the pieces, in piece order.
         visited = []
 
         def collapser(empty):
             visited.append(empty.state)
             return empty.state
 
-        def composite_collapser(composite, child_results):
-            result = list(child_results)
+        def composite_collapser(composite, piece_results):
+            result = list(piece_results)
             visited.append(result)
             return result
 
@@ -156,14 +160,14 @@ class TestReduceObject:
         assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
 
     def test_empty_containers_are_nodes(self):
-        # Zero-children nodes must not corrupt the result bookkeeping.
+        # Composites without pieces must not corrupt the result bookkeeping.
         def collapser(empty: utils.EmptyDeconstruction) -> tuple:
             return (empty.state,)
 
         def composite_collapser(
-            composite: utils.Deconstruction, child_results: list[tuple]
+            composite: utils.Deconstruction, piece_results: list[tuple]
         ) -> tuple:
-            return (composite.state, *child_results)
+            return (composite.state, *piece_results)
 
         result = utils.reduce_object(
             [[], ()],
@@ -181,7 +185,7 @@ class TestReduceObject:
             deeply_nested,
             deconstruct=self._deconstruct,
             collapser=lambda empty: 0,
-            composite_collapser=lambda composite, child_depths: 1 + max(child_depths, default=0),
+            composite_collapser=lambda composite, piece_depths: 1 + max(piece_depths, default=0),
         )
         assert depth == 100_001  # 100_000 wrappers + the innermost empty tuple node
 
@@ -197,7 +201,7 @@ class TestReduceObject:
             [shared, shared],
             deconstruct=deconstruct,
             collapser=lambda empty: 0,
-            composite_collapser=lambda composite, child_results: 0,
+            composite_collapser=lambda composite, piece_results: 0,
         )
         assert sum(1 for obj in deconstruct_calls if obj is shared) == 1
 
@@ -206,7 +210,7 @@ class TestReduceObject:
             [shared, shared],
             deconstruct=deconstruct,
             collapser=lambda empty: 0,
-            composite_collapser=lambda composite, child_results: 0,
+            composite_collapser=lambda composite, piece_results: 0,
             memoize=False,
         )
         assert sum(1 for obj in deconstruct_calls if obj is shared) == 2
@@ -219,7 +223,7 @@ class TestReduceObject:
                 cyclic,
                 deconstruct=self._deconstruct,
                 collapser=lambda empty: 0,
-                composite_collapser=lambda composite, child_results: 0,
+                composite_collapser=lambda composite, piece_results: 0,
             )
 
     def test_cycles_are_collapsed_as_back_references_when_allowed(self):
@@ -235,7 +239,7 @@ class TestReduceObject:
             cyclic,
             deconstruct=self._deconstruct,
             collapser=collapser,
-            composite_collapser=lambda composite, child_results: 1 + sum(child_results),
+            composite_collapser=lambda composite, piece_results: 1 + sum(piece_results),
             allow_cycles=True,
         )
         assert result == 1
