@@ -23,6 +23,7 @@ dialects contain `AST`.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import types
 import typing
 from typing import Any, Optional, TypeVar
@@ -53,13 +54,17 @@ def _deconstruct_definition_function(func: types.FunctionType) -> utils.Deconstr
 #: Fingerprinter for the frontend stages: skips source locations on AST nodes
 #: and fingerprints DSL definition functions by their source code and closure
 #: variables (instead of by qualified name).
-semantic_fingerprinter: utils.Fingerprinter = utils.make_fingerprinter(
-    utils.make_deconstructor(
+semantic_fingerprinter: utils.Fingerprinter = functools.partial(
+    utils.reduce_object,
+    deconstructor=utils.make_deconstructor(
         {
             **foast.semantic_fingerprint_deconstructors,
             types.FunctionType: _deconstruct_definition_function,
-        }
-    )
+        },
+        fallback=utils.fingerprint_fallback,
+    ),
+    collapser=utils.fingerprint_collapser,
+    allow_cycles=True,
 )
 
 

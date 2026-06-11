@@ -8,6 +8,7 @@
 
 import copy
 import dataclasses
+import functools
 import inspect
 import pytest
 
@@ -96,9 +97,17 @@ def test_skipping_fields_node_fingerprinter_returns_deconstructors_when_requeste
         "int_value", return_deconstructors=True
     )
     assert callable(fingerprinter)
-    # The deconstructor overrides can be composed into another deconstructor.
+    # The deconstructor overrides can be composed into another fingerprinter.
     assert set(deconstructors) == {concepts.Node}
-    assert callable(utils.make_fingerprinter(utils.make_deconstructor(deconstructors)))
+    composed = functools.partial(
+        utils.reduce_object,
+        deconstructor=utils.make_deconstructor(deconstructors, fallback=utils.fingerprint_fallback),
+        collapser=utils.fingerprint_collapser,
+        allow_cycles=True,
+    )
+    assert composed(definitions.make_simple_node(fixed=True)) == fingerprinter(
+        definitions.make_simple_node(fixed=True)
+    )
 
     # Without `return_deconstructors` only the fingerprinter callable is returned.
     assert callable(utils.skipping_fields_node_fingerprinter("int_value"))
@@ -113,11 +122,16 @@ def test_default_deconstructor():
     assert not isinstance(composite, utils.EmptyDeconstruction)
     assert not isinstance(composite, utils.OrderInsensitiveDeconstruction)
     assert isinstance(utils.deconstruct({1, 2}), utils.OrderInsensitiveDeconstruction)
-    # ... and is the deconstructor `make_fingerprinter` uses by default.
+    # ... and composing `reduce_object` with the fingerprint deconstructor
+    # and collapser reproduces `stable_fingerprinter`.
     payload = {"a": (1, 2)}
-    assert utils.make_fingerprinter(utils.deconstruct)(payload) == utils.stable_fingerprinter(
-        payload
+    refingerprinter = functools.partial(
+        utils.reduce_object,
+        deconstructor=utils.fingerprint_deconstructor,
+        collapser=utils.fingerprint_collapser,
+        allow_cycles=True,
     )
+    assert refingerprinter(payload) == utils.stable_fingerprinter(payload)
 
 
 class TestReduceObject:
@@ -131,9 +145,10 @@ class TestReduceObject:
         # The reduction result can be of any type, e.g. the structure depth.
         depth = utils.reduce_object(
             [[1, [2]], 3],
-            deconstruct=self._deconstruct,
-            collapser=lambda empty: 0,
-            composite_collapser=lambda composite, piece_depths: 1 + max(piece_depths, default=0),
+            deconstructor=self._deconstruct,
+            collapser=lambda d: (
+                0 if isinstance(d, utils.EmptyDeconstruction) else 1 + max(d.pieces, default=0)
+            ),
         )
         assert depth == 3
 
@@ -142,39 +157,26 @@ class TestReduceObject:
         # already collapsed results of the pieces, in piece order.
         visited = []
 
-        def collapser(empty):
-            visited.append(empty.state)
-            return empty.state
-
-        def composite_collapser(composite, piece_results):
-            result = list(piece_results)
+        def collapser(deconstruction):
+            result = (
+                deconstruction.state
+                if isinstance(deconstruction, utils.EmptyDeconstruction)
+                else list(deconstruction.pieces)
+            )
             visited.append(result)
             return result
 
-        utils.reduce_object(
-            [1, [2, 3]],
-            deconstruct=self._deconstruct,
-            collapser=collapser,
-            composite_collapser=composite_collapser,
-        )
+        utils.reduce_object([1, [2, 3]], deconstructor=self._deconstruct, collapser=collapser)
         assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
 
     def test_empty_containers_are_nodes(self):
         # Composites without pieces must not corrupt the result bookkeeping.
-        def collapser(empty: utils.EmptyDeconstruction) -> tuple:
-            return (empty.state,)
+        def collapser(deconstruction: utils.Deconstruction) -> tuple:
+            if isinstance(deconstruction, utils.EmptyDeconstruction):
+                return (deconstruction.state,)
+            return (deconstruction.state, *deconstruction.pieces)
 
-        def composite_collapser(
-            composite: utils.Deconstruction, piece_results: list[tuple]
-        ) -> tuple:
-            return (composite.state, *piece_results)
-
-        result = utils.reduce_object(
-            [[], ()],
-            deconstruct=self._deconstruct,
-            collapser=collapser,
-            composite_collapser=composite_collapser,
-        )
+        result = utils.reduce_object([[], ()], deconstructor=self._deconstruct, collapser=collapser)
         assert result == (list, (list,), (tuple,))
 
     def test_deep_structures_do_not_hit_the_recursion_limit(self):
@@ -183,9 +185,10 @@ class TestReduceObject:
             deeply_nested = (deeply_nested,)
         depth = utils.reduce_object(
             deeply_nested,
-            deconstruct=self._deconstruct,
-            collapser=lambda empty: 0,
-            composite_collapser=lambda composite, piece_depths: 1 + max(piece_depths, default=0),
+            deconstructor=self._deconstruct,
+            collapser=lambda d: (
+                0 if isinstance(d, utils.EmptyDeconstruction) else 1 + max(d.pieces, default=0)
+            ),
         )
         assert depth == 100_001  # 100_000 wrappers + the innermost empty tuple node
 
@@ -199,21 +202,35 @@ class TestReduceObject:
         shared = [1, 2]
         utils.reduce_object(
             [shared, shared],
-            deconstruct=deconstruct,
-            collapser=lambda empty: 0,
-            composite_collapser=lambda composite, piece_results: 0,
+            deconstructor=deconstruct,
+            collapser=lambda d: 0,
         )
         assert sum(1 for obj in deconstruct_calls if obj is shared) == 1
 
         deconstruct_calls.clear()
         utils.reduce_object(
             [shared, shared],
-            deconstruct=deconstruct,
-            collapser=lambda empty: 0,
-            composite_collapser=lambda composite, piece_results: 0,
+            deconstructor=deconstruct,
+            collapser=lambda d: 0,
             memoize=False,
         )
         assert sum(1 for obj in deconstruct_calls if obj is shared) == 2
+
+    def test_order_insensitive_pieces_are_collapsed_in_canonical_order(self):
+        def deconstructor(obj):
+            if isinstance(obj, frozenset):
+                return utils.OrderInsensitiveDeconstruction(state=None, pieces=tuple(obj))
+            return utils.EmptyDeconstruction(obj)
+
+        rendered = utils.reduce_object(
+            frozenset({3, 1, 2}),
+            deconstructor=deconstructor,
+            collapser=lambda d: (
+                str(d.state) if isinstance(d, utils.EmptyDeconstruction) else ",".join(d.pieces)
+            ),
+        )
+        # Canonical (sorted) order, independent of the set iteration order.
+        assert rendered == "1,2,3"
 
     def test_cycles_raise_by_default(self):
         cyclic: list = [1]
@@ -221,9 +238,8 @@ class TestReduceObject:
         with pytest.raises(ValueError, match="Cycle detected"):
             utils.reduce_object(
                 cyclic,
-                deconstruct=self._deconstruct,
-                collapser=lambda empty: 0,
-                composite_collapser=lambda composite, piece_results: 0,
+                deconstructor=self._deconstruct,
+                collapser=lambda d: 0,
             )
 
     def test_cycles_are_collapsed_as_back_references_when_allowed(self):
@@ -231,15 +247,16 @@ class TestReduceObject:
         cyclic.append(cyclic)
         collapsed_states: list = []
 
-        def collapser(empty: utils.EmptyDeconstruction) -> int:
-            collapsed_states.append(empty.state)
-            return 0
+        def collapser(deconstruction: utils.Deconstruction) -> int:
+            if isinstance(deconstruction, utils.EmptyDeconstruction):
+                collapsed_states.append(deconstruction.state)
+                return 0
+            return 1 + sum(deconstruction.pieces)
 
         result = utils.reduce_object(
             cyclic,
-            deconstruct=self._deconstruct,
+            deconstructor=self._deconstruct,
             collapser=collapser,
-            composite_collapser=lambda composite, piece_results: 1 + sum(piece_results),
             allow_cycles=True,
         )
         assert result == 1

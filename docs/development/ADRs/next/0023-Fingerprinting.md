@@ -77,10 +77,10 @@ trees — keeping three concerns explicitly separate:
 2. **Traversal scheme** (*in which order are objects visited?*): `reduce_object`,
    a generic iterative post-order fold with result memoization and cycle
    support, reusable with any result type.
-3. **Reduction logic** (*how do results combine?*): the fingerprint
-   *collapsers* (the algebras of the catamorphism), which collapse empty
-   deconstructions to digests and combine piece digests into composite
-   digests.
+3. **Reduction logic** (*how do results combine?*): the *collapser* (the
+   algebra of the catamorphism), a single function collapsing a
+   deconstruction — whose pieces have already been collapsed into results —
+   into a result; for fingerprinting, a digest.
 
 ### Layer 1: one-level deconstruction
 
@@ -92,11 +92,15 @@ EmptyDeconstruction(state: bytes)                  # terminal: no pieces
 OrderInsensitiveDeconstruction(state, pieces)      # pieces combine in canonical order
 ```
 
-`make_deconstructor(overrides)` builds a `Deconstructor` from the default per-type
-registry plus optional overrides (dispatched on the object's MRO via
-`functools.singledispatch`); the module-level `deconstruct` is the default
-deconstructor, and `make_fingerprinter(deconstructor)` turns any such deconstructor into a
-fingerprinting function. The default deconstruction rules are:
+`make_deconstructor(overrides)` builds a `Deconstructor` from the default
+per-type registry plus optional overrides (dispatched on the object's MRO via
+`functools.singledispatch`), with a customizable `fallback` covering
+dataclasses, datamodels and `__reduce_ex__`-reducible objects; the
+module-level `deconstruct` is the default deconstructor.
+A fingerprinter is `reduce_object` partially applied to a deconstructor and
+the digest collapser (`stable_fingerprinter` uses `fingerprint_deconstructor`,
+whose `fingerprint_fallback` layers the `gt4py_metadata(fingerprint=False)`
+field opt-out on the default rules). The default deconstruction rules are:
 
 - **Primitives** (`int`, `float`, `str`, `bytes`, ...) — leaves tagged with
   their concrete class, so `True`, `1` and `1.0` do not collide.
@@ -122,7 +126,7 @@ fingerprinting function. The default deconstruction rules are:
 
 ### Layer 2: the traversal scheme (`reduce_object`)
 
-`reduce_object(obj, *, deconstruct, collapser, composite_collapser, allow_cycles, memoize)`
+`reduce_object(obj, *, deconstructor, collapser, allow_cycles, memoize)`
 reduces an object bottom-up over its one-level deconstructions. The fold is
 **iterative** (explicit two-phase work stack), so deeply nested inputs —
 lowered IR trees routinely exceed the recursion limit budget of any recursive
@@ -130,17 +134,20 @@ scheme — cannot raise `RecursionError`. Results are memoized by object
 identity, which makes shared subgraphs cheap, and self-referential structures
 are collapsed (with `allow_cycles=True`) as back references by relative depth
 (results under a cycle target are never memoized, as they are
-context-dependent).
+context-dependent). Before collapsing an `OrderInsensitiveDeconstruction`,
+the already-collapsed piece results are put into canonical sorted order, so
+container iteration order never leaks into the result (this requires the
+results to be orderable).
 The driver is carrier-agnostic — nothing in it knows about hashing — so it can
 serve other bottom-up reductions over arbitrary objects.
 
-### Layer 3: the digest collapsers
+### Layer 3: the digest collapser
 
-The fingerprint collapsers collapse an `EmptyDeconstruction` to
-`xxh64("leaf" + state)`, combine a `Deconstruction` with its piece
-digests into `xxh64("node" + state + digests)` — sorting the piece digests
-first for an `OrderInsensitiveDeconstruction` — and encode cyclic back
-references by their relative depth.
+The single fingerprint collapser hashes a deconstruction uniformly as
+`xxh64("node" + state + "pieces" + piece_digests)` — an
+`EmptyDeconstruction` simply contributes no piece digests, the canonical
+order of order-insensitive pieces is established by the traversal layer, and
+cyclic back references arrive encoded in the state by their relative depth.
 Together with the identity-based memoization this keeps the fingerprint a pure
 function of *value*: a graph that shares a sub-object and a graph with an
 equal copy fingerprint identically.
@@ -188,13 +195,17 @@ rules:
   fingerprint equal, and recompiles when a referenced helper changes:
 
 ```python
-semantic_fingerprinter = utils.make_fingerprinter(
-    utils.make_deconstructor(
+semantic_fingerprinter = functools.partial(
+    utils.reduce_object,
+    deconstructor=utils.make_deconstructor(
         {
             **foast.semantic_fingerprint_deconstructors,
             types.FunctionType: _deconstruct_definition_function,
-        }
-    )
+        },
+        fallback=utils.fingerprint_fallback,
+    ),
+    collapser=utils.fingerprint_collapser,
+    allow_cycles=True,
 )
 ```
 
@@ -327,7 +338,8 @@ registry entries. Using `optree` itself was evaluated and rejected:
 
 - `src/gt4py/next/utils.py` — `Deconstruction`, `EmptyDeconstruction`,
   `OrderInsensitiveDeconstruction`, `reduce_object`, `make_deconstructor`,
-  `deconstruct`, `make_fingerprinter`, `stable_fingerprinter`,
+  `deconstruct`, `fingerprint_fallback`, `fingerprint_deconstructor`,
+  `fingerprint_collapser`, `stable_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
 - `src/gt4py/next/otf/workflow.py` — `CachedStep.cache_key`.

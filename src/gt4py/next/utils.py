@@ -18,7 +18,7 @@ import itertools
 import struct
 import sys
 import types
-from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping
 from typing import (
     Any,
     ClassVar,
@@ -59,7 +59,7 @@ _R = TypeVar("_R")
 
 # -- Generic bottom-up tree reduction (catamorphism) --
 @dataclasses.dataclass(frozen=True, slots=True)
-class Deconstruction(Collection):
+class Deconstruction(Collection[_T]):
     """
     A container with custom internal state for the pieces resulting from an object deconstruction.
     """
@@ -70,7 +70,7 @@ class Deconstruction(Collection):
     def __contains__(self, __x: object) -> bool:
         return __x in self.pieces
 
-    def __iter__(self) -> Iterator:
+    def __iter__(self) -> Iterator[_T]:
         return iter(self.pieces)
 
     def __len__(self) -> int:
@@ -94,13 +94,13 @@ class Deconstruction(Collection):
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class EmptyDeconstruction(Deconstruction):
+class EmptyDeconstruction(Deconstruction[_T]):
     state: Any = None
     pieces: tuple[Any, ...] = dataclasses.field(default=(), init=False, repr=False)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class OrderInsensitiveDeconstruction(Deconstruction):
+class OrderInsensitiveDeconstruction(Deconstruction[_T]):
     """A deconstruction whose pieces are semantically order-insensitive and should be reduced in a canonical order."""
 
     pass
@@ -108,6 +108,30 @@ class OrderInsensitiveDeconstruction(Deconstruction):
 
 #: Deconstructs one level of an object.
 Deconstructor: TypeAlias = Callable[[Any], Deconstruction]
+
+
+def make_deconstructor(
+    overrides: Optional[Mapping[type, Deconstructor]] = None,
+    *,
+    fallback: Optional[Deconstructor] = None,
+) -> Deconstructor:
+    """
+    Create a deconstructor, optionally with customized per-type deconstruction.
+
+    The returned deconstructor produces one level of an object as a
+    :class:`Deconstruction` (an :class:`EmptyDeconstruction` for terminal
+    objects) whose `state` is a byte tag (a domain-separation tag, optionally
+    followed by a payload).
+    Per-type deconstructors are dispatched on the object's MRO; `overrides`
+    take precedence over the default rules. Objects without a matching
+    deconstructor are handled by `fallback` (by default deconstructed through
+    their fields for dataclasses and datamodels, or via the standard
+    ``__reduce_ex__`` protocol).
+    """
+    return eve_utils.singledispatcher(
+        fallback if fallback is not None else _deconstruct,
+        implementations={**_BUILTIN_DECONSTRUCTORS, **(overrides or {})},
+    )
 
 
 def _resolves_as_global(obj: Any) -> bool:
@@ -212,22 +236,32 @@ _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     types.ModuleType: EmptyDeconstruction.from_reference,
 }
 
+
 # Pickle protocol used when deconstructing unknown objects via
 # `__reduce_ex__`. Pinned so the deconstruction (and therefore the
 # fingerprint) does not depend on the running Python's default protocol.
 _DECONSTRUCT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
 
 
+def _dataclass_fields(cls: type) -> Optional[tuple[Any, ...]]:
+    # Common one-level field introspection for dataclasses and datamodels;
+    # checked in the fallbacks instead of dispatched on virtual ABCs, whose
+    # composition into the MRO breaks `singledispatch` for eve's generic
+    # datamodel classes (`RuntimeError: Inconsistent hierarchy`).
+    if dataclasses.is_dataclass(cls):
+        return dataclasses.fields(cls)
+    if datamodels.is_datamodel(cls):
+        return tuple(datamodels.get_fields(cls).values())
+    return None
+
+
 def _deconstruct(obj: Any) -> Deconstruction:
     cls = type(obj)
-    if dataclasses.is_dataclass(cls) or datamodels.is_datamodel(cls):
-        fields: Iterable[Any] = (
-            dataclasses.fields(cls)
-            if dataclasses.is_dataclass(cls)
-            else datamodels.get_fields(cls).values()
-        )
+    if (fields := _dataclass_fields(cls)) is not None:
+        # One level only (the traversal recurses into the pieces itself), so
+        # the class identity of nested objects is preserved.
         return Deconstruction.from_pieces(
-            *(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
+            *((f.name, getattr(obj, f.name)) for f in fields),
             state=b"fields\0" + _class_tag(cls),
         )
 
@@ -251,6 +285,7 @@ def _deconstruct(obj: Any) -> Deconstruction:
     list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
     dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
     custom_setstate = rest[3] if len(rest) > 3 else None
+
     return Deconstruction.from_pieces(
         constructor,
         constructor_args,
@@ -262,66 +297,17 @@ def _deconstruct(obj: Any) -> Deconstruction:
     )
 
 
-def make_deconstructor(
-    overrides: Optional[Mapping[type, Deconstructor]] = None,
-) -> Deconstructor:
-    """
-    Create a deconstructor, optionally with customized per-type deconstruction.
-
-    The returned deconstructor produces one level of an object as a
-    :class:`Deconstruction` (an :class:`EmptyDeconstruction` for terminal
-    objects) whose `state` is a byte tag (a domain-separation tag, optionally
-    followed by a payload).
-    Per-type deconstructors are dispatched on the object's MRO; `overrides`
-    take precedence over the default rules. Objects without a matching
-    deconstructor are deconstructed through their fields (dataclasses and
-    datamodels, honoring ``gt4py_metadata(fingerprint=False)`` field metadata)
-    or via the standard ``__reduce_ex__`` protocol.
-    """
-    return eve_utils.singledispatcher(
-        _deconstruct,
-        implementations={**_BUILTIN_DECONSTRUCTORS, **(overrides or {})},
-    )
-
-
 #: Default deconstructor for GT4Py objects, built from the default per-type
 #: deconstruction rules (see :func:`make_deconstructor`).
 deconstruct: Final[Deconstructor] = make_deconstructor()
 
+
 # -- Fingerprinting: digest collapsers over a per-type deconstructor registry --
-Fingerprinter: TypeAlias = Callable[[Any], str]
+#: Collapses a deconstruction into a result; for non-terminal objects, the
+#: pieces have already been collapsed into results. This is the algebra of
+#: the catamorphism implemented by :func:`reduce_object`.
+Collapser: TypeAlias = Callable[[Deconstruction], _R]
 
-
-def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
-    gt4py_meta = metadata.get(GT4PY_CLASS_METADATA_NS, None)
-    return not gt4py_meta or gt4py_meta.get("fingerprint", True)
-
-
-def _fingerprint_collapser(empty: EmptyDeconstruction) -> str:
-    """Collapse the deconstruction of a terminal object into its digest."""
-    return xxhash.xxh64(b"leaf\0" + empty.state).hexdigest()
-
-
-def _fingerprint_composite_collapser(composite: Deconstruction, piece_digests: list[str]) -> str:
-    """Combine the digests of an object's pieces into the object's digest."""
-    if isinstance(composite, OrderInsensitiveDeconstruction):
-        # Sorting the piece *digests* canonicalizes order-insensitive containers
-        # without requiring the pieces themselves to be orderable.
-        piece_digests = sorted(piece_digests)
-    hasher = xxhash.xxh64(b"node\0")
-    hasher.update(composite.state)
-    hasher.update(b"\0")
-    for digest in piece_digests:  # fixed-length digests, unambiguous concatenation
-        hasher.update(digest.encode("ascii"))
-    return hasher.hexdigest()
-
-
-#: Collapses the deconstruction of a terminal object into a result.
-Collapser: TypeAlias = Callable[[EmptyDeconstruction], _R]
-
-#: Collapses the deconstruction of a non-terminal object and the results of
-#: its pieces into a result.
-CompositeCollapser: TypeAlias = Callable[[Deconstruction, list[_R]], _R]
 
 _VISIT: Final[int] = 0
 _COMBINE: Final[int] = 1
@@ -330,9 +316,8 @@ _COMBINE: Final[int] = 1
 def reduce_object(
     obj: Any,
     *,
-    deconstruct: Deconstructor,
+    deconstructor: Deconstructor,
     collapser: Collapser[_R],
-    composite_collapser: CompositeCollapser[_R],
     allow_cycles: bool = False,
     memoize: bool = True,
 ) -> _R:
@@ -340,20 +325,19 @@ def reduce_object(
     Reduce an object bottom-up using a catamorphism (a generalized fold over trees).
 
     The traversal scheme is fixed: an iterative post-order walk over the
-    one-level deconstructions produced by `deconstruct`, so the structure depth
-    is bounded neither by the Python recursion limit nor (on Python <= 3.10)
-    by the C stack. The reduction logic is supplied as collapsers (the
-    algebras of the catamorphism): `collapser` collapses an
-    :class:`EmptyDeconstruction` into a result, and `composite_collapser`
-    collapses a :class:`Deconstruction` together with the already-collapsed
-    results of its pieces.
+    one-level deconstructions produced by `deconstructor`, so the structure
+    depth is bounded neither by the Python recursion limit nor (on Python
+    <= 3.10) by the C stack. The reduction logic is supplied as the
+    `collapser` (the algebra of the catamorphism): it collapses an
+    :class:`EmptyDeconstruction` into a result and, for non-terminal objects,
+    a :class:`Deconstruction` whose pieces have been replaced by the
+    already-collapsed results of the original pieces — in piece order, or in
+    canonical sorted order for an :class:`OrderInsensitiveDeconstruction`
+    (which requires the results to be orderable).
 
     Keyword Args:
-        deconstruct: Per-object deconstruction of one level of structure, as an
-            :class:`EmptyDeconstruction` or a :class:`Deconstruction`.
-        collapser: Collapse of the deconstruction of a terminal object.
-        composite_collapser: Collapse of the deconstruction of a non-terminal
-            object with the results of its pieces (in piece order).
+        deconstructor: Per-object deconstruction of one level of structure.
+        collapser: Collapse of a deconstruction into a result.
         allow_cycles: Whether to allow cyclic references in the object graph.
             If allowed, a cyclic reference is collapsed as an
             :class:`EmptyDeconstruction` whose state encodes the relative
@@ -363,24 +347,23 @@ def reduce_object(
             cycles raise :class:`ValueError`.
         memoize: Reuse the result of already-reduced subobjects (matched by
             identity), so shared substructure is reduced only once. Requires
-            pure collapsers: results must depend only on the deconstruction,
+            a pure collapser: results must depend only on the deconstruction,
             not on where the object appears.
 
     Examples:
-        Computing the depth of a nested structure (pieces are reduced before
-        the objects containing them, so the composite collapser only sees the
-        depths of the pieces):
+        Computing the depth of a nested structure (pieces are collapsed
+        before the objects containing them, so the collapser sees their
+        depths):
 
-        >>> def deconstruct(obj):
+        >>> def deconstructor(obj):
         ...     if isinstance(obj, (list, tuple)):
         ...         return Deconstruction.from_pieces(*obj)
         ...     return EmptyDeconstruction(obj)
         >>> reduce_object(
         ...     [[1, [2]], 3],
-        ...     deconstruct=deconstruct,
-        ...     collapser=lambda empty: 0,
-        ...     composite_collapser=lambda composite, piece_depths: (
-        ...         1 + max(piece_depths, default=0)
+        ...     deconstructor=deconstructor,
+        ...     collapser=lambda d: (
+        ...         0 if isinstance(d, EmptyDeconstruction) else 1 + max(d.pieces, default=0)
         ...     ),
         ... )
         3
@@ -422,7 +405,7 @@ def reduce_object(
                     "and cycles are not allowed."
                 )
 
-            deconstruction = deconstruct(current)
+            deconstruction = deconstructor(current)
             if isinstance(deconstruction, EmptyDeconstruction):
                 result = collapser(deconstruction)
                 if memoize:
@@ -439,7 +422,13 @@ def reduce_object(
             num_pieces = len(deconstruction.pieces)
             piece_results = results[len(results) - num_pieces :]
             del results[len(results) - num_pieces :]
-            result = composite_collapser(deconstruction, piece_results)
+            if isinstance(deconstruction, OrderInsensitiveDeconstruction):
+                # Sorting the piece *results* canonicalizes order-insensitive
+                # containers without requiring the pieces themselves to be
+                # orderable (the results must be, see the docstring).
+                piece_results = sorted(piece_results)  # type: ignore[type-var]  # conditional requirement on _R
+
+            result = collapser(dataclasses.replace(deconstruction, pieces=piece_results))
             depth = open_nodes.pop(id(current))
 
             if depth <= taint_depth:
@@ -457,33 +446,59 @@ def reduce_object(
     return results[0]
 
 
-def make_fingerprinter(deconstructor: Deconstructor = deconstruct) -> Fingerprinter:
-    """
-    Create a fingerprinting function, optionally with a customized deconstructor.
+def fingerprint_collapser(deconstruction: Deconstruction[str]) -> str:
+    """Collapse a deconstruction (with already-collapsed piece digests) into its digest."""
+    hasher = xxhash.xxh64(b"node\0")
+    hasher.update(deconstruction.state)
+    hasher.update(b"pieces\0")
+    for digest in deconstruction.pieces:  # fixed-length digests, unambiguous concatenation
+        hasher.update(digest.encode("ascii"))
+    return hasher.hexdigest()
 
-    A fingerprinter is :func:`reduce_object` instantiated with digest
-    collapsers (xxhash64 with domain separation) over a deconstructor, which
-    must produce byte tags as `state`; use :func:`make_deconstructor` to
-    customize the default per-type deconstruction rules.
-    """
 
-    def fingerprinter(obj: Any) -> str:
-        return reduce_object(
-            obj,
-            deconstruct=deconstructor,
-            collapser=_fingerprint_collapser,
-            composite_collapser=_fingerprint_composite_collapser,
-            allow_cycles=True,
+def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
+    gt4py_meta = metadata.get(GT4PY_CLASS_METADATA_NS, None)
+    return not gt4py_meta or gt4py_meta.get("fingerprint", True)
+
+
+def fingerprint_fallback(obj: Any) -> Deconstruction:
+    """
+    Fallback deconstructor honoring the fingerprint field metadata opt-out.
+
+    Dataclasses and datamodels are deconstructed through their fields,
+    dropping those marked with ``gt4py_metadata(fingerprint=False)``;
+    everything else is delegated to the default fallback rules. Used as the
+    `fallback` of :func:`make_deconstructor` by every fingerprinter.
+    """
+    cls = type(obj)
+    if (fields := _dataclass_fields(cls)) is not None:
+        return Deconstruction.from_pieces(
+            *(getattr(obj, f.name) for f in fields if _is_fingerprinted_field(f.metadata)),
+            state=b"fields\0" + _class_tag(cls),
         )
+    return _deconstruct(obj)
 
-    return fingerprinter
+
+#: Default deconstructor used for fingerprinting GT4Py objects.
+fingerprint_deconstructor: Final[Deconstructor] = make_deconstructor(fallback=fingerprint_fallback)
+
+
+#: A fingerprinter is :func:`reduce_object` instantiated with digest
+#: collapsers (xxhash64 with domain separation) over a deconstructor, which
+#: must produce type tags as `state`.
+Fingerprinter: TypeAlias = Callable[[Any], str]
 
 
 #: Default fingerprinting function for GT4Py objects: deterministic across
 #: processes (dict and set contributions are canonicalized by sorting the
 #: fingerprints of their items) and identifying types, functions and modules
 #: by their qualified name.
-stable_fingerprinter: Fingerprinter = make_fingerprinter()
+stable_fingerprinter: Fingerprinter = functools.partial(
+    reduce_object,
+    deconstructor=fingerprint_deconstructor,
+    collapser=fingerprint_collapser,
+    allow_cycles=True,
+)
 
 
 def _make_skipping_fields_node_deconstructor(skipped_fields: frozenset[str]) -> Deconstructor:
@@ -527,7 +542,12 @@ def skipping_fields_node_fingerprinter(
     deconstructors: dict[type, Deconstructor] = {
         concepts.Node: _make_skipping_fields_node_deconstructor(frozenset(skipped_fields))
     }
-    fingerprinter = make_fingerprinter(make_deconstructor(deconstructors))
+    fingerprinter: Fingerprinter = functools.partial(
+        reduce_object,
+        deconstructor=make_deconstructor(deconstructors, fallback=fingerprint_fallback),
+        collapser=fingerprint_collapser,
+        allow_cycles=True,
+    )
 
     return (fingerprinter, deconstructors) if return_deconstructors else fingerprinter
 
