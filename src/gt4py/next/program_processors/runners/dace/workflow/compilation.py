@@ -32,11 +32,10 @@ def _add_tx_markers(sdfg: dace.SDFG) -> None:
 
     if has_gpu_schedule:
         sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for node, _ in sdfg.all_nodes_recursive(
-            # Also adds markers to scopes and maps that are NOT scheduled on GPU
-            predicate=lambda x, _: isinstance(x, (dace.nodes.MapEntry, dace.sdfg.state.SDFGState))
-        ):
-            node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+        for node, _ in sdfg.all_nodes_recursive():
+            # Also adds markers to map scopes that are NOT scheduled on GPU
+            if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
+                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
 
 class CompiledDaceProgram:

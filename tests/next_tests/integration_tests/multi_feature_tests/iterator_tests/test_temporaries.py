@@ -8,6 +8,7 @@
 
 
 import numpy as np
+import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import (
@@ -46,6 +47,7 @@ IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 
 
+@pytest.mark.uses_cartesian_shift
 def test_temporaries(program_processor_no_transforms):
     program_processor, validate = program_processor_no_transforms
     size = 10
