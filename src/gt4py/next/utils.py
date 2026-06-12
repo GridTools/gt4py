@@ -8,17 +8,22 @@
 
 from __future__ import annotations
 
+import collections
 import copyreg
 import dataclasses
+import enum
 import functools
 import inspect
 import itertools
+import struct
+import sys
 import types
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from typing import (
     Any,
-    Callable,
     ClassVar,
     Final,
+    Literal,
     Optional,
     ParamSpec,
     Sequence,
@@ -29,113 +34,585 @@ from typing import (
     overload,
 )
 
-from gt4py.eve import datamodels, utils as eve_utils
+import xxhash
+
+from gt4py.eve import concepts, datamodels, utils as eve_utils
 
 
 GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
 
 
 def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
-    """Helper function to store dataclass/datamodel field metadata within a GT4Py namespace."""
+    """
+    Helper function to store dataclass/datamodel field metadata within a GT4Py namespace.
+
+    Individual fields can opt out of fingerprinting with
+    `foo = field(..., metadata=gt4py_metadata(fingerprint=False))`.
+    """
     return {GT4PY_CLASS_METADATA_NS: kwargs}
 
 
-_StandardPickleState = None | dict[str, Any] | tuple[dict[str, Any] | None, dict[str, Any]]
-_StandardGetStateMethod: TypeAlias = Callable[[object], _StandardPickleState]
-_StandardSetStateMethod: TypeAlias = Callable[[object, _StandardPickleState], None]
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+# -- Generic deconstruction of arbitrary objects --
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Deconstruction(Collection[_T]):
+    """
+    A container with custom internal state for the pieces resulting from an object deconstruction.
+    """
+
+    state: Any
+    pieces: tuple[Any, ...]
+
+    def __contains__(self, __x: object) -> bool:
+        return __x in self.pieces
+
+    def __iter__(self) -> Iterator[_T]:
+        return iter(self.pieces)
+
+    def __len__(self) -> int:
+        return len(self.pieces)
+
+    @staticmethod
+    def from_reference(obj: Any) -> EmptyDeconstruction:
+        """Builder for objects identified by their fully qualified name."""
+        return EmptyDeconstruction(b"ref\0" + _reference_by_fully_qualified_name(obj).encode())
+
+    @staticmethod
+    def from_typed_value(type_: type, /, value: bytes = b"") -> EmptyDeconstruction:
+        """Builder with a domain-separation tag and optional payload."""
+        return EmptyDeconstruction(_class_tag(type_) + b"\0" + value)
+
+    @staticmethod
+    def from_pieces(*pieces: Any, state: Any = None, ordered: bool = True) -> Deconstruction:
+        """Builder for creating a deconstruction with the given pieces."""
+        deconstruction_cls = OrderInsensitiveDeconstruction if not ordered else Deconstruction
+        return deconstruction_cls(state=state, pieces=pieces)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class EmptyDeconstruction(Deconstruction[_T]):
+    state: Any = None
+    pieces: tuple[Any, ...] = dataclasses.field(default=(), init=False, repr=False)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class OrderInsensitiveDeconstruction(Deconstruction[_T]):
+    """A deconstruction whose pieces are semantically order-insensitive and should be reduced in a canonical order."""
+
+    pass
+
+
+#: Deconstructs one level of an object.
+Deconstructor: TypeAlias = Callable[[Any], Deconstruction]
+
+
+def make_deconstructor(
+    overrides: Optional[Mapping[type, Deconstructor]] = None,
+    *,
+    fallback: Optional[Deconstructor] = None,
+) -> Deconstructor:
+    """
+    Create a deconstructor, optionally with customized per-type deconstruction.
+
+    The returned deconstructor produces one level of an object as a
+    :class:`Deconstruction` (an :class:`EmptyDeconstruction` for terminal
+    objects) whose `state` is a byte tag (a domain-separation tag, optionally
+    followed by a payload).
+    Per-type deconstructors are dispatched on the object's MRO; `overrides`
+    take precedence over the default rules. Objects without a matching
+    deconstructor are handled by `fallback` (by default deconstructed through
+    their fields for dataclasses and datamodels, or via the standard
+    ``__reduce_ex__`` protocol).
+    """
+    return eve_utils.singledispatcher(
+        fallback if fallback is not None else _deconstruct,
+        implementations={**_BUILTIN_DECONSTRUCTORS, **(overrides or {})},
+    )
+
+
+def _resolves_as_global(obj: Any) -> bool:
+    """Return whether resolving ``<module>.<qualname>`` through `sys.modules` yields `obj` itself."""
+    if isinstance(obj, types.ModuleType):
+        return sys.modules.get(obj.__name__) is obj
+    module = getattr(obj, "__module__", None)
+    qualname = getattr(obj, "__qualname__", None) or getattr(obj, "__name__", None)
+    if not module or not qualname:
+        return False
+    target: Any = sys.modules.get(module, None)
+    for part in qualname.split("."):
+        if (target := getattr(target, part, None)) is None:
+            return False
+    return target is obj
+
+
+def _reference_by_fully_qualified_name(obj: Any) -> str:
+    """
+    Return the qualified name of `obj`, rejecting non-importable objects.
+
+    Objects identified by their fully qualified name (import path) can only be
+    properly fingerprinted if they are importable, module-level objects, whose
+    qualified name uniquely identifies them. Anything with ``<locals>`` in its
+    qualified name (closures, nested functions, classes defined inside a
+    function) and anonymous ``<lambda>`` callables are rejected by a cheap
+    string check; additionally, the name is resolved through `sys.modules` and
+    required to yield `obj` itself, which also rejects shadowed, reassigned or
+    deleted names whose qualified name no longer identifies the object.
+    """
+    fqn = eve_utils.get_fully_qualified_name(obj)
+    if "<locals>" in fqn or "<lambda>" in fqn or not _resolves_as_global(obj):
+        raise TypeError(
+            f"Objects which are not importable under their qualified name ('{fqn}') -- e.g. "
+            "locally defined or anonymous callables, shadowed or reassigned globals -- cannot "
+            "be safely referenced since the name does not uniquely identify them."
+        )
+    return fqn
 
 
 @functools.cache
-def _get_metadata_based_state_getstate(cls: type) -> _StandardGetStateMethod:
+def _cached_class_tag(cls: type) -> bytes:
+    return eve_utils.get_fully_qualified_name(cls).encode()
+
+
+_class_tag: Final[Callable[[type], bytes]] = _cached_class_tag  # for mypy
+
+
+def _class_obj_tag(obj: Any) -> bytes:
+    return _class_tag(type(obj))
+
+
+def _instance_state_pieces(obj: Any) -> tuple[Any, ...]:
     """
-    Helper function to make class-specific `__getstate__` method following the standard implementation.
+    Extra instance ``__dict__`` state carried by a builtin-container *subclass*.
+
+    Exact ``dict``/``list``/``set``/... instances have no instance ``__dict__``,
+    so this is empty and the fingerprint is unchanged for them. Subclasses that
+    set extra attributes (which the items-only deconstruction would otherwise
+    drop, yielding false cache hits) contribute them here.
     """
-    if not isinstance(cls, type) or not (
-        (is_dataclass := dataclasses.is_dataclass(cls)) or datamodels.is_datamodel(cls)
-    ):
-        raise TypeError(f"Expected a dataclass or datamodel type, got '{cls}'")
+    state = getattr(obj, "__dict__", None)
+    return ((b"__dict__\0", state),) if state else ()
 
-    if is_dataclass:
-        field_metadata = {
-            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
-            for field in dataclasses.fields(cls)
-        }
-    else:
-        field_metadata = {
-            field.name: field.metadata.get(GT4PY_CLASS_METADATA_NS, None)
-            for field in datamodels.get_fields(cls).values()
-        }
 
-    # To gather all slots we need to traverse the whole MRO not just the class itself.
-    # We reuse the implementation of `copyreg._slotnames` to avoid code duplication and
-    # potential bugs, even if it is not (unfortunately) part of the module's public API.
-    class_slots = copyreg._slotnames(cls)  # type: ignore[attr-defined] # copyreg._slotnames is not recognized
-
-    has_slots = len(class_slots) > 0
-    has_dict = any("__dict__" in c.__dict__ for c in cls.__mro__)
-
-    dict_names = []
-    slot_names = []
-    for name, metadata in field_metadata.items():
-        if metadata and not metadata.get("pickle", True):
-            continue
-        if name in class_slots:
-            slot_names.append(name)
-        else:
-            dict_names.append(name)
-
-    # Comply with the default implementation of object.__getstate__() / object.__setstate__(state)
-    if not (has_slots or has_dict):
-        # for class instances without __dict__ nor __slots__: state = None.
-        def __getstate__(self: object) -> _StandardPickleState:
-            return None
-
-    elif not has_slots:
-        # for class instances with __dict__ and no __slots__: state = self.__dict__.
-        def __getstate__(self: object) -> _StandardPickleState:
-            return {name: getattr(self, name) for name in dict_names}
-
-    elif not has_dict:
-        # for class instances with __slots__ and no __dict__: state = (None, {slot.name: slot.value for all slots}).
-        def __getstate__(self: object) -> _StandardPickleState:
-            return (None, {name: getattr(self, name) for name in slot_names})
-
-    else:
-        # for class instances with __dict__ and __slots__: state = (self.__dict__, {slot.name: slot.value for all slots}).
-        def __getstate__(self: object) -> _StandardPickleState:
-            return (
-                {name: getattr(self, name) for name in dict_names},
-                {name: getattr(self, name) for name in slot_names},
+_BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
+    **{
+        # for mixin-based enums (`IntEnum`, `IntFlag`, `StrEnum`, ...) the value-type base
+        # precedes `Enum` in the MRO and would win the dispatch.
+        base: (
+            lambda obj: Deconstruction.from_pieces(
+                type(obj), obj.name, obj.value, state=b"enum_member"
             )
+        )
+        for base in (
+            enum.Enum,
+            enum.IntEnum,
+            enum.IntFlag,
+            enum.Flag,
+            getattr(enum, "StrEnum", None),
+        )
+        if base is not None
+    },
+    enum.EnumMeta: lambda obj: Deconstruction.from_pieces(
+        *((member.name, member.value) for member in obj),
+        state=b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
+    ),
+    type(None): lambda obj: EmptyDeconstruction.from_typed_value(type(None)),
+    bool: lambda obj: EmptyDeconstruction.from_typed_value(bool, b"1" if obj else b"0"),
+    int: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), str(int(obj)).encode()),
+    float: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), struct.pack(">d", obj)),
+    complex: lambda obj: EmptyDeconstruction.from_typed_value(
+        type(obj), struct.pack(">dd", obj.real, obj.imag)
+    ),
+    str: lambda obj: EmptyDeconstruction.from_typed_value(
+        type(obj), obj.encode("utf-8", "surrogatepass")
+    ),
+    bytes: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
+    bytearray: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
+    tuple: lambda obj: Deconstruction.from_pieces(
+        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj)
+    ),
+    list: lambda obj: Deconstruction.from_pieces(
+        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj)
+    ),
+    dict: lambda obj: Deconstruction.from_pieces(
+        *obj.items(),
+        *_instance_state_pieces(obj),
+        state=_class_obj_tag(obj),
+        ordered=isinstance(obj, collections.OrderedDict),
+    ),
+    collections.defaultdict: lambda obj: Deconstruction.from_pieces(
+        obj.default_factory, dict(obj), *_instance_state_pieces(obj), state=_class_obj_tag(obj)
+    ),
+    set: lambda obj: Deconstruction.from_pieces(
+        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj), ordered=False
+    ),
+    frozenset: lambda obj: Deconstruction.from_pieces(
+        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj), ordered=False
+    ),
+    # `Namespace`/`FrozenNamespace` (e.g. frontend-valid constant namespaces in
+    # closure vars) are deconstructed by their contents. This both content-hashes
+    # the namespace and avoids the `__reduce_ex__` fallback, which would reference
+    # the (possibly locally-defined, non-importable) class and raise.
+    eve_utils.Namespace: lambda obj: Deconstruction.from_pieces(
+        *obj.items(), state=b"namespace\0" + _class_obj_tag(obj), ordered=False
+    ),
+    type: EmptyDeconstruction.from_reference,
+    types.FunctionType: EmptyDeconstruction.from_reference,
+    types.BuiltinFunctionType: EmptyDeconstruction.from_reference,
+    types.ModuleType: EmptyDeconstruction.from_reference,
+}
 
-    return __getstate__
+
+# Pickle protocol used when deconstructing unknown objects via
+# `__reduce_ex__`. Pinned so the deconstruction (and therefore the
+# fingerprint) does not depend on the running Python's default protocol.
+_DECONSTRUCT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
 
 
-class MetadataBasedPickling:
+def _fields_deconstruction(cls: type, items: Iterable[tuple[Any, Any]]) -> Deconstruction:
     """
-    Mixin for adding metadata-based pickling to dataclass-like objects.
+    Deconstruct a dataclass-like object into its ``(field name, value)`` pieces.
 
-    It uses the class field information to select only instance fields which
-    are not marked with `pickle=False` in the 'GT4PY_META' metadata namespace.
-    Individual fields can therefore opt out of pickling.
-    For example: `foo = field(..., metadata=gt4py_metadata(pickle=False))`.
+    Shared by every fields-based deconstructor (default, fingerprinting and
+    node-field-skipping) so they agree on the domain-separation tag and the
+    piece shape.
     """
+    return Deconstruction.from_pieces(*items, state=b"fields\0" + _class_tag(cls))
 
-    __slots__ = ()  # to avoid creation of __dict__ when not needed
 
-    def __getstate__(self) -> _StandardPickleState:
-        """
-        Get the state of the object for pickling.
+@functools.cache
+def _cached_dataclass_fields(cls: type) -> Optional[tuple[Any, ...]]:
+    # Common one-level field introspection for dataclasses and datamodels;
+    # checked in the fallbacks instead of dispatched on virtual ABCs, whose
+    # composition into the MRO breaks `singledispatch` for eve's generic
+    # datamodel classes (`RuntimeError: Inconsistent hierarchy`). Cached per
+    # type, since this is on the fingerprinting hot path and the fields are a
+    # pure function of the class.
+    if dataclasses.is_dataclass(cls):
+        return dataclasses.fields(cls)
+    if datamodels.is_datamodel(cls):
+        return tuple(datamodels.get_fields(cls).values())
+    return None
 
-        It returns the same kind of arguments as the default `__getstate__`
-        implementation, used by `pickle` (as documented in `object.__getstate__`,
-        check: https://devdocs.io/python~3.14/library/pickle#object.__getstate__)
-        """
-        return _get_metadata_based_state_getstate(type(self))(self)  # type: ignore[arg-type]  # type(self) should be hashable
 
-    # Note: we don't implement `__setstate__` as the output of our custom
-    #  `__getstate__` implementation should be compatible with the default
-    #  implementation.
+_dataclass_fields: Final[Callable[[type], Optional[tuple[Any, ...]]]] = (
+    _cached_dataclass_fields  # for mypy
+)
+
+
+def _deconstruct(obj: Any) -> Deconstruction:
+    cls = type(obj)
+    if (fields := _dataclass_fields(cls)) is not None:
+        # One level only (the traversal recurses into the pieces itself), so
+        # the class identity of nested objects is preserved.
+        return _fields_deconstruction(cls, ((f.name, getattr(obj, f.name)) for f in fields))
+
+    try:
+        # Like `pickle.Pickler`, give precedence to reducers registered in
+        # `copyreg.dispatch_table` (e.g. NumPy registers one for `ufunc`s,
+        # whose direct `__reduce_ex__` raises).
+        if (dispatched_reducer := copyreg.dispatch_table.get(cls)) is not None:
+            reduced = dispatched_reducer(obj)
+        else:
+            reduced = obj.__reduce_ex__(_DECONSTRUCT_PICKLE_REDUCE_PROTOCOL)
+    except Exception as error:
+        raise TypeError(f"Cannot fingerprint object of type '{cls.__name__}'.") from error
+    if isinstance(reduced, str):
+        # `__reduce__` may return a bare name to be looked up in the object's module.
+        return EmptyDeconstruction(
+            b"global\0" + f"{getattr(obj, '__module__', '')}:{reduced}".encode()
+        )
+    constructor, constructor_args, *rest = reduced
+    obj_state = rest[0] if len(rest) > 0 else None
+    list_items = tuple(rest[1]) if len(rest) > 1 and rest[1] is not None else ()
+    dict_items = tuple(rest[2]) if len(rest) > 2 and rest[2] is not None else ()
+    custom_setstate = rest[3] if len(rest) > 3 else None
+
+    return Deconstruction.from_pieces(
+        constructor,
+        constructor_args,
+        obj_state,
+        list_items,
+        dict_items,
+        custom_setstate,
+        state=b"reduce",
+    )
+
+
+#: Default deconstructor for GT4Py objects, built from the default per-type
+#: deconstruction rules (see :func:`make_deconstructor`).
+deconstruct: Final[Deconstructor] = make_deconstructor()
+
+
+# -- Generic reduction of deconstructed objects --
+
+#: Collapses a deconstruction into a result; for non-terminal objects, the
+#: pieces have already been collapsed into results. This is the algebra of
+#: the catamorphism implemented by :func:`catabolize`.
+Collapser: TypeAlias = Callable[[Deconstruction], _R]
+
+
+class _VisitAction(enum.IntEnum):
+    VISIT = 0
+    COMBINE = 1
+
+
+def catabolize(
+    obj: Any,
+    *,
+    deconstructor: Deconstructor,
+    collapser: Collapser[_R],
+    allow_cycles: bool = False,
+    memoize: bool = True,
+) -> _R:
+    """
+    Catabolize an object: reduce it bottom-up using a catamorphism (a generalized fold over trees).
+
+    The traversal scheme is fixed: an iterative post-order walk over the
+    one-level deconstructions produced by `deconstructor`, so the structure
+    depth is bounded neither by the Python recursion limit nor (on Python
+    <= 3.10) by the C stack. The reduction logic is supplied as the
+    `collapser` (the algebra of the catamorphism): it collapses an
+    :class:`EmptyDeconstruction` into a result and, for non-terminal objects,
+    a :class:`Deconstruction` whose pieces have been replaced by the
+    already-collapsed results of the original pieces — in piece order, or in
+    canonical sorted order for an :class:`OrderInsensitiveDeconstruction`
+    (which requires the results to be orderable).
+
+    Keyword Args:
+        deconstructor: Per-object deconstruction of one level of structure.
+        collapser: Collapse of a deconstruction into a result.
+        allow_cycles: Whether to allow cyclic references in the object graph.
+            If allowed, a cyclic reference is collapsed as an
+            :class:`EmptyDeconstruction` whose state encodes the relative
+            depth (in currently open nodes) back up to its target; results
+            computed below a cycle target embed context-dependent back
+            references and are therefore never memoized. If not allowed,
+            cycles raise :class:`ValueError`.
+        memoize: Reuse the result of already-reduced subobjects (matched by
+            identity), so shared substructure is reduced only once. Requires
+            a pure collapser: results must depend only on the deconstruction,
+            not on where the object appears.
+
+    Examples:
+        Computing the depth of a nested structure (pieces are collapsed
+        before the objects containing them, so the collapser sees their
+        depths):
+
+        >>> def deconstructor(obj):
+        ...     if isinstance(obj, (list, tuple)):
+        ...         return Deconstruction.from_pieces(*obj)
+        ...     return EmptyDeconstruction(obj)
+        >>> catabolize(
+        ...     [[1, [2]], 3],
+        ...     deconstructor=deconstructor,
+        ...     collapser=lambda d: (
+        ...         0 if isinstance(d, EmptyDeconstruction) else 1 + max(d.pieces, default=0)
+        ...     ),
+        ... )
+        3
+    """
+    memo: dict[int, _R] = {}
+    keep_alive: list[Any] = []  # ensures the `id()`s used as memo keys stay valid
+    open_nodes: dict[int, int] = {}  # id -> depth among currently open (in-progress) nodes
+    # Smallest open-node depth targeted by a cyclic back reference: results of
+    # nodes opened below it embed context-dependent back references and must
+    # not be memoized.
+    taint_depth: float = float("inf")
+
+    work: list[tuple[_VisitAction, Any]] = [(_VisitAction.VISIT, obj)]
+    results: list[_R] = []
+    while work:
+        action, payload = work.pop()
+        match action:
+            case _VisitAction.VISIT:
+                current = payload
+                current_id = id(current)
+
+                if memoize and current_id in memo:
+                    results.append(memo[current_id])
+                    continue
+
+                if (depth := open_nodes.get(current_id)) is not None:
+                    # Cyclic reference: reduce to a back reference by relative
+                    # depth, which is independent of memory addresses.
+                    if allow_cycles:
+                        relative_depth = len(open_nodes) - depth
+                        result = collapser(
+                            EmptyDeconstruction(b"cycle\0" + str(relative_depth).encode())
+                        )
+                        results.append(result)
+                        taint_depth = min(taint_depth, depth)
+                        continue
+
+                    raise ValueError(
+                        f"Cycle detected on an object of type '{type(current).__name__}' "
+                        "and cycles are not allowed."
+                    )
+
+                deconstruction = deconstructor(current)
+                if isinstance(deconstruction, EmptyDeconstruction):
+                    result = collapser(deconstruction)
+                    if memoize:
+                        memo[current_id] = result
+                        keep_alive.append(current)
+                    results.append(result)
+                else:
+                    open_nodes[current_id] = len(open_nodes)
+                    work.append((_VisitAction.COMBINE, (current, deconstruction)))
+                    work.extend(
+                        (_VisitAction.VISIT, child) for child in reversed(deconstruction.pieces)
+                    )
+
+            case _VisitAction.COMBINE:
+                current, deconstruction = payload
+                num_pieces = len(deconstruction.pieces)
+                piece_results = results[len(results) - num_pieces :]
+                del results[len(results) - num_pieces :]
+                if isinstance(deconstruction, OrderInsensitiveDeconstruction):
+                    # Sorting the piece *results* canonicalizes order-insensitive
+                    # containers without requiring the pieces themselves to be
+                    # orderable (the results must be, see the docstring).
+                    piece_results = sorted(piece_results)  # type: ignore[type-var]  # conditional requirement on _R
+
+                # Direct construction (a non-empty `deconstruction` reaching
+                # COMBINE always has the `(state, pieces)` signature) avoids the
+                # field-introspection overhead of `dataclasses.replace` per node.
+                result = collapser(type(deconstruction)(deconstruction.state, tuple(piece_results)))
+                depth = open_nodes.pop(id(current))
+
+                if depth <= taint_depth:
+                    if memoize:
+                        memo[id(current)] = result
+                        keep_alive.append(current)
+                    if depth == taint_depth:
+                        # The target of all pending back references is complete;
+                        # its result is self-contained again.
+                        taint_depth = float("inf")
+
+                results.append(result)
+
+            case _:
+                raise RuntimeError(
+                    f"Internal error: invalid action '{action}' in catabolism work list."
+                )
+
+    assert len(results) == 1
+    return results[0]
+
+
+# -- Generic fingerprinting of objects --
+
+
+def fingerprint_collapser(deconstruction: Deconstruction[str]) -> str:
+    """Collapse a deconstruction (with already-collapsed piece digests) into its digest."""
+    hasher = xxhash.xxh64(b"node\0")
+    hasher.update(deconstruction.state)
+    hasher.update(b"pieces\0")
+    for digest in deconstruction.pieces:  # fixed-length digests, unambiguous concatenation
+        hasher.update(digest.encode("ascii"))
+    return hasher.hexdigest()
+
+
+def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
+    gt4py_meta = metadata.get(GT4PY_CLASS_METADATA_NS, None)
+    return not gt4py_meta or gt4py_meta.get("fingerprint", True)
+
+
+def fingerprint_fallback(obj: Any) -> Deconstruction:
+    """
+    Fallback deconstructor honoring the fingerprint field metadata opt-out.
+
+    Dataclasses and datamodels are deconstructed through their fields,
+    dropping those marked with ``gt4py_metadata(fingerprint=False)``;
+    everything else is delegated to the default fallback rules. Used as the
+    `fallback` of :func:`make_deconstructor` by every fingerprinter.
+    """
+    cls = type(obj)
+    if (fields := _dataclass_fields(cls)) is not None:
+        return _fields_deconstruction(
+            cls,
+            ((f.name, getattr(obj, f.name)) for f in fields if _is_fingerprinted_field(f.metadata)),
+        )
+    return _deconstruct(obj)
+
+
+#: Default deconstructor used for fingerprinting GT4Py objects.
+fingerprint_deconstructor: Final[Deconstructor] = make_deconstructor(fallback=fingerprint_fallback)
+
+
+#: A fingerprinter is :func:`catabolize` instantiated with digest
+#: collapsers (xxhash64 with domain separation) over a deconstructor, which
+#: must produce type tags as `state`.
+Fingerprinter: TypeAlias = Callable[[Any], str]
+
+
+#: Default fingerprinting function for GT4Py objects: deterministic across
+#: processes (dict and set contributions are canonicalized by sorting the
+#: fingerprints of their items) and identifying types, functions and modules
+#: by their qualified name.
+stable_fingerprinter: Fingerprinter = functools.partial(
+    catabolize,
+    deconstructor=fingerprint_deconstructor,
+    collapser=fingerprint_collapser,
+    allow_cycles=True,
+)
+
+
+def _make_skipping_fields_node_deconstructor(skipped_fields: frozenset[str]) -> Deconstructor:
+    def node_deconstructor(node: concepts.Node) -> Deconstruction:
+        return _fields_deconstruction(
+            type(node),
+            (
+                (name, child)
+                for name, child in node.iter_children_items()
+                if name not in skipped_fields
+            ),
+        )
+
+    return node_deconstructor
+
+
+@overload
+def skipping_fields_node_fingerprinter(
+    *skipped_fields: str, return_deconstructors: Literal[False] = False
+) -> Fingerprinter: ...
+
+
+@overload
+def skipping_fields_node_fingerprinter(
+    *skipped_fields: str, return_deconstructors: Literal[True]
+) -> tuple[Fingerprinter, dict[type, Deconstructor]]: ...
+
+
+@functools.cache
+def skipping_fields_node_fingerprinter(
+    *skipped_fields: str, return_deconstructors: bool = False
+) -> Fingerprinter | tuple[Fingerprinter, dict[type, Deconstructor]]:
+    """
+    Return a fingerprinter that fingerprints a node while skipping fields.
+
+    The provided field names are ignored recursively on all nodes. With
+    `return_deconstructors=True`, additionally return the per-type deconstructor
+    overrides so they can be composed into another deconstructor via
+    :func:`make_deconstructor`.
+    """
+    deconstructors: dict[type, Deconstructor] = {
+        concepts.Node: _make_skipping_fields_node_deconstructor(frozenset(skipped_fields))
+    }
+    fingerprinter: Fingerprinter = functools.partial(
+        catabolize,
+        deconstructor=make_deconstructor(deconstructors, fallback=fingerprint_fallback),
+        collapser=fingerprint_collapser,
+        allow_cycles=True,
+    )
+
+    return (fingerprinter, deconstructors) if return_deconstructors else fingerprinter
 
 
 class RecursionGuard:
@@ -172,11 +649,6 @@ class RecursionGuard:
 
     def __exit__(self, *exc: Any) -> None:
         self.guarded_objects.remove(id(self.obj))
-
-
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
 
 
 def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:

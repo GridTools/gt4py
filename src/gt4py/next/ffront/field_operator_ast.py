@@ -8,52 +8,40 @@
 
 from __future__ import annotations
 
-import functools
 from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
-from gt4py.eve import (
-    Coerced,
-    Node,
-    SourceLocation,
-    SymbolName,
-    SymbolRef,
-    concepts as eve_concepts,
-    datamodels,
-    utils as eve_utils,
-)
+from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
+from gt4py.next import utils
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.utils import RecursionGuard
 
 
-#: Generate a custom pickler which ignores "location" attribute for `eve.Node`s.
-nonlocated_node_pickler = eve_concepts.skipping_fields_node_pickler("location")
-
-#: Generate an unique fingerprint for an `eve.Node` that is location agnostic.
-nonlocated_fingerprint: eve_concepts.NodeFingerprinter = functools.partial(
-    eve_utils.content_hash, pickler=nonlocated_node_pickler
+#: Fingerprint for FOAST/PAST `eve.Node`s that *includes* the source `location`.
+#: These deconstructors key the in-memory frontend-stage caches (func_to_foast,
+#: foast_to_gtir, past_to_itir, ...); the location must contribute so that two
+#: textually identical operators defined at different source locations do not
+#: alias to the same cached lowering (which would bake the first operator's
+#: `SourceLocation`s into the second, mislabeling its errors and debug info).
+#: Location-agnostic fingerprinting (e.g. for the persistent translation cache)
+#: is provided separately by `iterator.ir.semantic_fingerprinter`.
+semantic_fingerprinter, semantic_fingerprint_deconstructors = (
+    utils.skipping_fields_node_fingerprinter(return_deconstructors=True)
 )
 
 
 class LocatedNode(Node):
     location: SourceLocation = eve.field(repr=False, compare=False)
 
-    def fingerprint(self) -> str:
-        """
-        Generates a unique hash string for this node that is location agnostic.
-        """
-        return nonlocated_fingerprint(self)
-
     def __str__(self) -> str:
         from gt4py.next.ffront.foast_pretty_printer import pretty_format
 
         try:
-            with RecursionGuard(self):
+            with utils.RecursionGuard(self):
                 return pretty_format(self)
-        except RecursionGuard.RecursionDetected:
+        except utils.RecursionGuard.RecursionDetected:
             # If `pretty_format` itself calls `__str__`, i.e. when printing
             # an error that happend during formatting, just return the regular
             # string representation, consequently avoiding an infinite recursion.

@@ -6,22 +6,22 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import functools
 from typing import TypeAlias
 
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, common, float64, int32, max_over, min_over, neighbor_sum, where
+from gt4py.next import common, float64, int32, max_over, min_over, neighbor_sum, where
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
+    C2E,
+    E2V,
     V2E,
+    E2VDim,
     Edge,
-    IDim,
-    Ioff,
     JDim,
     Joff,
     KDim,
@@ -32,7 +32,7 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
     unstructured_case_3d,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
     mesh_descriptor,
 )
@@ -135,6 +135,7 @@ def test_neighbor_sum(unstructured_case_3d, fop):
 
 
 @pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_cartesian_shift
 def test_reduction_execution_with_offset(unstructured_case_3d):
     EKField: TypeAlias = gtx.Field[[Edge, KDim], np.int32]
     VKField: TypeAlias = gtx.Field[[Vertex, KDim], np.int32]
@@ -305,168 +306,6 @@ def test_reduction_expression_with_where_and_scalar(unstructured_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
-def test_conditional_nested_tuple(cartesian_case):
-    @gtx.field_operator
-    def conditional_nested_tuple(
-        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
-    ) -> tuple[
-        tuple[cases.IFloatField, cases.IFloatField], tuple[cases.IFloatField, cases.IFloatField]
-    ]:
-        return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
-
-    size = cartesian_case.default_sizes[IDim]
-    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=size))
-    a = cases.allocate(cartesian_case, conditional_nested_tuple, "a")()
-    b = cases.allocate(cartesian_case, conditional_nested_tuple, "b")()
-
-    where_with_mask = functools.partial(np.where, mask.asnumpy())
-
-    cases.verify(
-        cartesian_case,
-        conditional_nested_tuple,
-        mask,
-        a,
-        b,
-        out=cases.allocate(cartesian_case, conditional_nested_tuple, cases.RETURN)(),
-        ref=(
-            (
-                where_with_mask(a.asnumpy(), np.full(size, 5.0)),
-                where_with_mask(b.asnumpy(), np.full(size, 7.0)),
-            ),
-            (
-                where_with_mask(b.asnumpy(), np.full(size, 7.0)),
-                where_with_mask(a.asnumpy(), np.full(size, 5.0)),
-            ),
-        ),
-    )
-
-
-def test_broadcast_simple(cartesian_case):
-    @gtx.field_operator
-    def simple_broadcast(inp: cases.IField) -> cases.IJField:
-        return broadcast(inp, (IDim, JDim))
-
-    cases.verify_with_default_data(
-        cartesian_case, simple_broadcast, ref=lambda inp: inp[:, np.newaxis]
-    )
-
-
-def test_broadcast_scalar(cartesian_case):
-    size = cartesian_case.default_sizes[IDim]
-
-    @gtx.field_operator
-    def scalar_broadcast() -> gtx.Field[[IDim], float64]:
-        return broadcast(float(1.0), (IDim,))
-
-    cases.verify_with_default_data(cartesian_case, scalar_broadcast, ref=lambda: np.ones(size))
-
-
-def test_broadcast_two_fields(cartesian_case):
-    @gtx.field_operator
-    def broadcast_two_fields(inp1: cases.IField, inp2: gtx.Field[[JDim], int32]) -> cases.IJField:
-        a = broadcast(inp1, (IDim, JDim))
-        b = broadcast(inp2, (IDim, JDim))
-        return a + b
-
-    cases.verify_with_default_data(
-        cartesian_case, broadcast_two_fields, ref=lambda a, b: a[:, np.newaxis] + b[np.newaxis, :]
-    )
-
-
-@pytest.mark.uses_cartesian_shift
-def test_broadcast_shifted(cartesian_case):
-    @gtx.field_operator
-    def simple_broadcast(inp: cases.IField) -> cases.IJField:
-        bcasted = broadcast(inp, (IDim, JDim))
-        return bcasted(Joff[1])
-
-    cases.verify_with_default_data(
-        cartesian_case, simple_broadcast, ref=lambda inp: inp[:, np.newaxis]
-    )
-
-
-def test_conditional(cartesian_case):
-    @gtx.field_operator
-    def conditional(
-        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
-    ) -> cases.IFloatField:
-        return where(mask, a, b)
-
-    size = cartesian_case.default_sizes[IDim]
-    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
-    a = cases.allocate(cartesian_case, conditional, "a")()
-    b = cases.allocate(cartesian_case, conditional, "b")()
-    out = cases.allocate(cartesian_case, conditional, cases.RETURN)()
-
-    cases.verify(
-        cartesian_case,
-        conditional,
-        mask,
-        a,
-        b,
-        out=out,
-        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy()),
-    )
-
-
-def test_conditional_promotion(cartesian_case):
-    @gtx.field_operator
-    def conditional_promotion(mask: cases.IBoolField, a: cases.IFloatField) -> cases.IFloatField:
-        return where(mask, a, 10.0)
-
-    size = cartesian_case.default_sizes[IDim]
-    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
-    a = cases.allocate(cartesian_case, conditional_promotion, "a")()
-    out = cases.allocate(cartesian_case, conditional_promotion, cases.RETURN)()
-    ref = np.where(mask.asnumpy(), a.asnumpy(), 10.0)
-
-    cases.verify(cartesian_case, conditional_promotion, mask, a, out=out, ref=ref)
-
-
-def test_conditional_compareop(cartesian_case):
-    @gtx.field_operator
-    def conditional_promotion(a: cases.IFloatField) -> cases.IFloatField:
-        return where(a != a, a, 10.0)
-
-    cases.verify_with_default_data(
-        cartesian_case, conditional_promotion, ref=lambda a: np.where(a != a, a, 10.0)
-    )
-
-
-@pytest.mark.uses_cartesian_shift
-def test_conditional_shifted(cartesian_case):
-    @gtx.field_operator
-    def conditional_shifted(
-        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
-    ) -> gtx.Field[[IDim], float64]:
-        tmp = where(mask, a, b)
-        return tmp(Ioff[1])
-
-    @gtx.program
-    def conditional_program(
-        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField, out: cases.IFloatField
-    ):
-        conditional_shifted(mask, a, b, out=out)
-
-    size = cartesian_case.default_sizes[IDim] + 1
-    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
-    a = cases.allocate(cartesian_case, conditional_program, "a").extend({IDim: (0, 1)})()
-    b = cases.allocate(cartesian_case, conditional_program, "b").extend({IDim: (0, 1)})()
-    out = cases.allocate(cartesian_case, conditional_shifted, cases.RETURN)()
-
-    cases.verify(
-        cartesian_case,
-        conditional_program,
-        mask,
-        a,
-        b,
-        out,
-        inout=out,
-        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy())[1:],
-    )
-
-
 def test_promotion(unstructured_case_3d):
     @gtx.field_operator
     def promotion(
@@ -476,4 +315,234 @@ def test_promotion(unstructured_case_3d):
 
     cases.verify_with_default_data(
         unstructured_case_3d, promotion, ref=lambda inp1, inp2: inp1 / inp2
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_unstructured_shift(unstructured_case):
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.EField:
+        return a(E2V[0])
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: a[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]],
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_program_with_sliced_out_arguments
+def test_unstructured_shift_with_non_zero_origin(unstructured_case):
+    # TODO(edopao,havogt): remove the xfail below once the embedded backend supports
+    #   non-contiguous field domain, which is generated by the inverse image of the
+    #   connectivity used in this test.
+    if unstructured_case.backend is None:
+        pytest.xfail("Embedded backend only supports contiguous field domains.")
+
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.EField:
+        return a(E2V[0])
+
+    a = cases.allocate(unstructured_case, testee, "a")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    ORIGIN = 2
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    neighbor_0_iter = iter(enumerate(e2v_table[:, 0]))
+    edge_start = next(i for i, v in neighbor_0_iter if v >= ORIGIN)
+    edge_stop = next(i for i, v in neighbor_0_iter if v < ORIGIN)
+
+    ref = a.ndarray[e2v_table[edge_start:edge_stop, 0]]
+    cases.verify(unstructured_case, testee, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
+
+
+def test_horizontal_only_with_3d_mesh(unstructured_case_3d):
+    # test field operator operating only on horizontal fields while using an offset provider
+    # including a vertical dimension.
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.VField:
+        return a
+
+    cases.verify_with_default_data(
+        unstructured_case_3d,
+        testee,
+        ref=lambda a: a,
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_composed_unstructured_shift(unstructured_case):
+    @gtx.field_operator
+    def composed_shift_unstructured_flat(inp: cases.VField) -> cases.CField:
+        return inp(E2V[0])(C2E[0])
+
+    @gtx.field_operator
+    def composed_shift_unstructured_intermediate_result(inp: cases.VField) -> cases.CField:
+        tmp = inp(E2V[0])
+        return tmp(C2E[0])
+
+    @gtx.field_operator
+    def shift_e2v(inp: cases.VField) -> cases.EField:
+        return inp(E2V[0])
+
+    @gtx.field_operator
+    def composed_shift_unstructured(inp: cases.VField) -> cases.CField:
+        return shift_e2v(inp)(C2E[0])
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        composed_shift_unstructured_flat,
+        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]][
+            unstructured_case.offset_provider["C2E"].asnumpy()[:, 0]
+        ],
+    )
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        composed_shift_unstructured_intermediate_result,
+        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]][
+            unstructured_case.offset_provider["C2E"].asnumpy()[:, 0]
+        ],
+        comparison=lambda inp, tmp: np.all(inp == tmp),
+    )
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        composed_shift_unstructured,
+        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]][
+            unstructured_case.offset_provider["C2E"].asnumpy()[:, 0]
+        ],
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_program_with_sliced_out_arguments
+def test_neighbor_sum_with_non_zero_origin(unstructured_case):
+    # TODO(edopao,havogt): remove the xfail below once the embedded backend supports
+    #   non-contiguous field domain, which is generated by the inverse image of the
+    #   connectivity used in this test.
+    if unstructured_case.backend is None:
+        pytest.xfail("Embedded backend only supports contiguous field domains.")
+
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.EField:
+        return neighbor_sum(a(E2V), axis=E2VDim)
+
+    a = cases.allocate(unstructured_case, testee, "a")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    ORIGIN = 2
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    neighbor_iter = iter(enumerate(e2v_table))
+    edge_start = next(i for i, v in neighbor_iter if all(v >= ORIGIN))
+    edge_stop = next(i for i, v in neighbor_iter if any(v < ORIGIN))
+
+    ref = np.sum(a.ndarray[e2v_table[edge_start:edge_stop,]], axis=1)
+    cases.verify(unstructured_case, testee, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
+
+
+@pytest.mark.uses_unstructured_shift
+def test_nested_reduction(unstructured_case):
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.VField:
+        tmp = neighbor_sum(a(E2V), axis=E2VDim)
+        tmp_2 = neighbor_sum(tmp(V2E), axis=V2EDim)
+        return tmp_2
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.sum(
+            np.sum(a[unstructured_case.offset_provider["E2V"].asnumpy()], axis=1, initial=0)[
+                unstructured_case.offset_provider["V2E"].asnumpy()
+            ],
+            axis=1,
+            where=unstructured_case.offset_provider["V2E"].asnumpy() != common._DEFAULT_SKIP_VALUE,
+        ),
+        comparison=lambda a, tmp_2: np.all(a == tmp_2),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.xfail(reason="Not yet supported in lowering, requires `map_`ing of inner reduce op.")
+def test_nested_reduction_shift_first(unstructured_case):
+    @gtx.field_operator
+    def testee(inp: cases.EField) -> cases.EField:
+        tmp = inp(V2E)
+        tmp2 = tmp(E2V)
+        return neighbor_sum(neighbor_sum(tmp2, axis=V2EDim), axis=E2VDim)
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda inp: np.sum(
+            np.sum(inp[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1)[
+                unstructured_case.offset_provider["E2V"].asnumpy()
+            ],
+            axis=1,
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_constant_fields
+def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
+    @gtx.field_operator
+    def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
+        tup = e(V2E), v
+        red = neighbor_sum(tup[0] + v, axis=V2EDim)
+        tmp = red(E2V[0])
+        return tmp
+
+    v2e = unstructured_case.offset_provider["V2E"]
+    cases.verify_with_default_data(
+        unstructured_case,
+        reduce_tuple_element,
+        ref=lambda e, v: np.sum(
+            e[v2e.asnumpy()] + np.tile(v, (v2e.shape[1], 1)).T,
+            axis=1,
+            initial=0,
+            where=v2e.asnumpy() != common._DEFAULT_SKIP_VALUE,
+        )[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]],
+    )
+
+
+@pytest.mark.uses_constant_fields
+@pytest.mark.uses_unstructured_shift
+def test_ternary_builtin_neighbor_sum(unstructured_case):
+    @gtx.field_operator
+    def testee(a: cases.EField, b: cases.EField) -> cases.VField:
+        tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
+        return tmp
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b: np.sum(
+            b[v2e_table], axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_local_index_premapped_field(request, unstructured_case):
+    if request.node.get_closest_marker(pytest.mark.uses_mesh_with_skip_values.name):
+        pytest.skip("This test only works with non-skip value meshes.")
+
+    @gtx.field_operator
+    def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
+        shifted = inp(V2E)
+        return shifted[V2EDim(0)] + shifted[V2EDim(1)] + shifted[V2EDim(2)] + shifted[V2EDim(3)]
+
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    cases.verify(
+        unstructured_case,
+        testee,
+        inp,
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
+        ref=np.sum(inp.asnumpy()[v2e_table], axis=1),
     )

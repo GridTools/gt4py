@@ -17,6 +17,7 @@ from typing import Any, Callable, Generic, Protocol, TypeVar
 from typing_extensions import Self
 
 from gt4py.eve.extended_typing import OpaqueMutableMapping
+from gt4py.next import config, utils
 
 
 StartT = TypeVar("StartT")
@@ -92,7 +93,8 @@ class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co
 
 @dataclasses.dataclass(frozen=True)
 class NamedStepSequence(
-    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
 ):
     """
     Workflow with linear succession of named steps.
@@ -159,7 +161,8 @@ class NamedStepSequence(
 
 @dataclasses.dataclass(frozen=True)
 class MultiWorkflow(
-    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
 ):
     """A flexible workflow, where the sequence of steps depends on the input type."""
 
@@ -175,7 +178,9 @@ class MultiWorkflow(
 
 
 @dataclasses.dataclass(frozen=True)
-class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
+class StepSequence(
+    ChainableWorkflowMixin[StartT, EndT],
+):
     """
     Composable workflow of single input callables.
 
@@ -195,32 +200,23 @@ class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
 
     """
 
-    @dataclasses.dataclass(frozen=True)
-    class __Steps:
-        inner: tuple[Workflow[Any, Any], ...]
-
-    # todo(ricoh): replace with normal tuple with TypeVarTuple hints
-    #   to enable automatic deduction StartT and EndT fom constructor
-    #   calls. TypeVarTuple is available in typing_extensions in
-    #   Python <= 3.11. Revise after mypy constraint is > 1.0.1,
-    #   which fails on trying to check TypeVarTuple.
-    steps: __Steps
+    steps: tuple[Workflow[Any, Any], ...]
 
     def __call__(self, inp: StartT) -> EndT:
         step_result: Any = inp
-        for step in self.steps.inner:
+        for step in self.steps:
             step_result = step(step_result)
         return step_result
 
     def chain(self, next_step: Workflow[EndT, NewEndT]) -> ChainableWorkflowMixin[StartT, NewEndT]:
         return typing.cast(
             ChainableWorkflowMixin[StartT, NewEndT],
-            self.__class__(self.__Steps((*self.steps.inner, next_step))),
+            self.__class__((*self.steps, next_step)),
         )
 
     @classmethod
     def start(cls, first_step: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
-        return cls(cls.__Steps((first_step,)))
+        return cls((first_step,))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -232,44 +228,62 @@ class CachedStep(
     """
     Cached workflow of single input callables.
 
+    The cache key combines a fingerprint of the step itself (so that changes to
+    the step invalidate the cache) with the value returned by ``key_function``
+    for the given input. Functions referenced by the step are fingerprinted by
+    qualified name, so they must be module-level (not lambdas or closures).
+
     Examples:
     ---------
-    >>> def heavy_computation(x: int) -> int:
-    ...     print("This might take a while...")
-    ...     return x
+    >>> cached_step = CachedStep(step=tuple, key_function=lambda x: x)
 
-    >>> cached_step = CachedStep(step=heavy_computation)
+    The result of the first invocation is computed and stored in the cache:
+    >>> result = cached_step([1, 2, 3])
+    >>> result
+    (1, 2, 3)
 
-    >>> cached_step(42)
-    This might take a while...
-    42
+    The next invocation for the same argument returns the cached object without
+    recomputing it:
+    >>> cached_step([1, 2, 3]) is result
+    True
 
-    The next invocation for the same argument will be cached:
-    >>> cached_step(42)
-    42
-
-    >>> cached_step(1)
-    This might take a while...
-    1
+    A different argument is computed and cached separately:
+    >>> cached_step([4, 5]) is result
+    False
     """
 
     step: Workflow[StartT, EndT]
-    hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
-    cache: OpaqueMutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
+    key_function: Callable[[StartT], HashT] = dataclasses.field(
+        metadata=utils.gt4py_metadata(fingerprint=False)
+    )
+    cache: OpaqueMutableMapping[str, EndT] = dataclasses.field(
+        repr=False, default_factory=dict, metadata=utils.gt4py_metadata(fingerprint=False)
+    )
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
-        hash_ = self.hash_function(inp)
+        hash_ = self.cache_key(inp)
         try:
             result = self.cache[hash_]
         except KeyError:
             result = self.cache[hash_] = self.step(inp)
         return result
 
+    @functools.cached_property
+    def _step_fingerprint(self) -> str:
+        # The step and the build-cache version are immutable, so their
+        # (potentially expensive) fingerprint is computed once per instance
+        # instead of on every cache lookup.
+        return utils.stable_fingerprinter((config.BUILD_CACHE_VERSION_ID, self))
+
+    def cache_key(self, inp: StartT) -> str:
+        return utils.stable_fingerprinter((self._step_fingerprint, self.key_function(inp)))
+
 
 @dataclasses.dataclass(frozen=True)
 class SkippableStep(
-    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
 ):
     step: Workflow[StartT, EndT]
 

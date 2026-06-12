@@ -32,8 +32,8 @@ def test_fingerprint():
     node1 = ir.SymRef(id="abc", location=loc1)
     node2 = ir.SymRef(id="abc", location=loc2)
     node3 = ir.SymRef(id="abcd", location=loc1)
-    assert node1.fingerprint() == node2.fingerprint()
-    assert node1.fingerprint() != node3.fingerprint()
+    assert ir.semantic_fingerprinter(node1) == ir.semantic_fingerprinter(node2)
+    assert ir.semantic_fingerprinter(node1) != ir.semantic_fingerprinter(node3)
 
 
 def test_fingerprint_nested():
@@ -48,5 +48,5 @@ def test_fingerprint_nested():
     node1 = node_maker("f1", "loc1")
     node2 = node_maker("f1", "loc2")
     node3 = node_maker("f3", "loc1")
-    assert node1.fingerprint() == node2.fingerprint()
-    assert node1.fingerprint() != node3.fingerprint()
+    assert ir.semantic_fingerprinter(node1) == ir.semantic_fingerprinter(node2)
+    assert ir.semantic_fingerprinter(node1) != ir.semantic_fingerprinter(node3)

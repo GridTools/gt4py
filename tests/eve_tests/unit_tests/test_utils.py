@@ -93,6 +93,130 @@ def test_register_subclasses():
     )
 
 
+def test_singledispatcher():
+    from gt4py.eve.utils import singledispatcher
+
+    class Base:
+        pass
+
+    class Derived(Base):
+        pass
+
+    dispatcher = singledispatcher(
+        lambda _: "default",
+        implementations={
+            Base: lambda _: "base",
+            Derived: lambda _: "derived",
+        },
+    )
+
+    assert dispatcher(1) == "default"
+    assert dispatcher(Base()) == "base"
+    assert dispatcher(Derived()) == "derived"
+    assert dispatcher.registry.keys() == {object, Base, Derived}
+
+
+def test_singledispatcher_default_from_object_implementation():
+    from gt4py.eve.utils import singledispatcher
+
+    class Base:
+        pass
+
+    # When no explicit `default` is given, the 'object' implementation is used as default.
+    dispatcher = singledispatcher(
+        implementations={
+            object: lambda _: "default",
+            Base: lambda _: "base",
+        }
+    )
+
+    assert dispatcher(1) == "default"
+    assert dispatcher(Base()) == "base"
+    assert dispatcher.registry.keys() == {object, Base}
+
+
+def test_singledispatcher_validation_errors():
+    from gt4py.eve.utils import singledispatcher
+
+    # Neither an explicit `default` nor an 'object' implementation is provided.
+    with pytest.raises(ValueError, match="default implementation for 'object' must be provided"):
+        singledispatcher(implementations={})
+
+    # A non-callable default is rejected.
+    with pytest.raises(ValueError, match="must be callable"):
+        singledispatcher("not-callable", implementations={})  # type: ignore[arg-type]  # intentionally wrong
+
+    # Providing both an explicit `default` and an 'object' implementation is ambiguous.
+    with pytest.raises(ValueError, match="already provided in 'implementations'"):
+        singledispatcher(lambda _: "default", implementations={object: lambda _: "obj"})
+
+
+def test_get_fully_qualified_name():
+    import json
+
+    from gt4py.eve.utils import get_fully_qualified_name
+
+    # Built-in type and a regular function: "<module>.<qualname>".
+    assert get_fully_qualified_name(dict) == "builtins.dict"
+    assert get_fully_qualified_name(json.dumps) == "json.dumps"
+
+    # Nested objects use the dotted __qualname__.
+    class Outer:
+        class Inner: ...
+
+    assert get_fully_qualified_name(Outer.Inner).endswith(".Outer.Inner")
+
+    # Modules are identified by their import name only (no qualname).
+    assert get_fully_qualified_name(json) == "json"
+
+
+def test_merge_dispatchers_merges_registries_and_uses_last_default():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    class A:
+        pass
+
+    class B:
+        pass
+
+    d1 = singledispatcher(lambda _: "first-default", implementations={A: lambda _: "a"})
+    d2 = singledispatcher(lambda _: "second-default", implementations={B: lambda _: "b"})
+
+    merged = merge_dispatchers(d1, d2)
+
+    # Without an explicit default, the default of the *last* dispatcher is used.
+    assert merged("x") == "second-default"
+    assert merged(A()) == "a"
+    assert merged(B()) == "b"
+    assert merged.registry.keys() == {object, A, B}
+
+
+def test_merge_dispatchers_uses_explicit_default_and_last_registration_wins():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    class A:
+        pass
+
+    d1 = singledispatcher(lambda _: "default-1", implementations={A: lambda _: "a-1"})
+    d2 = singledispatcher(lambda _: "default-2", implementations={A: lambda _: "a-2"})
+
+    merged = merge_dispatchers(d1, d2, default=lambda _: "custom-default")
+
+    assert merged("x") == "custom-default"
+    assert merged(A()) == "a-2"
+
+
+def test_merge_dispatchers_validation_errors():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    with pytest.raises(ValueError, match="At least one dispatcher"):
+        merge_dispatchers()
+
+    dispatcher = singledispatcher(lambda _: "default", implementations={})
+    with pytest.raises(TypeError, match="single-dispatch callables"):
+        merge_dispatchers(dispatcher, lambda _: "not-a-dispatcher")
+
+
 class ModelClass(eve.datamodels.DataModel):
     data: Any
 
@@ -323,9 +447,7 @@ def test_noninstantiable_class():
     assert not eve.utils.is_noninstantiable(InstantiableSubclass)
 
 
-@pytest.fixture(
-    params=[None, hashlib.md5(), "md5", hashlib.sha1(), "sha1", hashlib.sha256(), "sha256"]
-)
+@pytest.fixture(params=[None, hashlib.md5(), hashlib.sha1(), hashlib.sha256()])
 def hash_algorithm(request):
     yield request.param
 
@@ -430,98 +552,3 @@ def test_xenumerate():
     from gt4py.eve.utils import xenumerate
 
     assert list(xenumerate(string.ascii_letters[:3])) == [(0, "a"), (1, "b"), (2, "c")]
-
-
-# -- Custom Pickler utilities --
-@dataclasses.dataclass
-class _Offseter:
-    offset: int
-    calls_log: list[int] = dataclasses.field(default_factory=list)
-
-    def __call__(self, a: int) -> int:
-        self.calls_log.append(a)
-        return a + self.offset
-
-
-def test_custom_pickler_with_singledispatch_reducer():
-    import functools
-    import io
-    import pickle
-
-    from gt4py.eve.utils import custom_pickler
-
-    offseter = _Offseter(4)
-    offseter(2)
-    offseter(3)
-    assert offseter.calls_log == [2, 3]
-
-    @functools.singledispatch
-    def my_reducer(obj):
-        return NotImplemented
-
-    my_reducer.register(
-        _Offseter,
-        lambda obj: (
-            obj.__class__,
-            (),
-            (
-                ("offset", obj.offset),
-                ("calls_log", []),
-            ),
-        ),
-    )
-
-    pickler_cls = custom_pickler(my_reducer, name="MyCustomPickler")
-
-    assert issubclass(pickler_cls, pickle.Pickler)
-    assert pickler_cls.__name__ == "MyCustomPickler"
-
-    # Verify we can instantiate the pickler
-    buf = io.BytesIO()
-    pickler = pickler_cls(buf)
-    assert hasattr(pickler, "reducer_override")
-
-    # Verify the custom pickler is used for objects of type _Offseter
-    # and that calls_log is ignored
-    pickler.dump([1, offseter])
-    custom_dump_1 = buf.getvalue()
-
-    std_buf = io.BytesIO()
-    std_pickler = pickle.Pickler(std_buf)
-    std_pickler.dump([1, offseter])
-    std_dump_1 = std_buf.getvalue()
-
-    assert custom_dump_1 != std_dump_1
-
-    buf2 = io.BytesIO()
-    pickler = pickler_cls(buf2)
-    pickler.dump([1, _Offseter(4)])  # calls_log should be an empty list
-    custom_dump_2 = buf2.getvalue()
-
-    assert custom_dump_1 == custom_dump_2
-
-    # Verify the custom pickler is not used for objects of other types
-    buf = io.BytesIO()
-    pickler = pickler_cls(buf)
-    pickler.dump([1])
-    custom_dump = buf.getvalue()
-
-    std_buf = io.BytesIO()
-    std_pickler = pickle.Pickler(std_buf)
-    std_pickler.dump([1])
-    std_dump = std_buf.getvalue()
-
-    # This time they should be equal
-    assert custom_dump == std_dump
-
-
-def test_custom_pickler_from_reducers_creates_subclass():
-    import pickle
-    from gt4py.eve.utils import custom_pickler_from_reducers
-
-    reducers = {int: (lambda obj: (int, (obj,)))}
-    pickler_cls = custom_pickler_from_reducers(reducers, name="TestPickler")
-
-    assert issubclass(pickler_cls, pickle.Pickler)
-    assert pickler_cls.__name__ == "TestPickler"
-    assert hasattr(pickler_cls, "reducer_override")

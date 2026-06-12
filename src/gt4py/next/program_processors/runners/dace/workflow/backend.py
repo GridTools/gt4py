@@ -44,12 +44,12 @@ class DaCeBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
+                lambda o: workflow.CachedStep(o.otf_workflow, key_function=o.key_function)
             ),
             name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
-        hash_function = stages.compilation_hash
+        key_function = stages.compilation_hash
         otf_workflow = factory.SubFactory(
             DaCeWorkflowFactory,
             cached_translation=True,

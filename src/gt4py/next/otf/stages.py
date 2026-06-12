@@ -10,48 +10,54 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable
-from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Generic, Optional, Protocol, TypeAlias, TypeVar
 
-from gt4py.eve import utils
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import code_specs, definitions
+from gt4py.next.otf import code_specs
 from gt4py.next.otf.binding import interface
 
 
+if TYPE_CHECKING:
+    # Imported only for typing to avoid the import cycle with `otf.definitions`,
+    # which imports this module.
+    from gt4py.next.otf import definitions
+
+
 def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
-    """Given closure compute a hash uniquely determining if we need to recompile."""
-    offset_provider = program_def.args.offset_provider
+    """
+    In-memory executor cache key: changes whenever the program needs recompilation.
+
+    The program is identified by its location- and type-agnostic semantic
+    fingerprint, while the offset providers are identified by the identity of
+    their connectivities, in iteration order. The order matters because the
+    generated bindings bake in the offset-provider order (see
+    ``extract_connectivity_args``), and the by-identity (rather than by-content)
+    comparison keeps this in-memory key cheap by not hashing the connectivity
+    tables. As the key is only used within a single process, it relies on the
+    builtin (per-process) `hash`.
+    """
+    args = program_def.args
+    offset_provider = args.offset_provider
     return hash(
         (
-            program_def.data,
-            # As the frontend types contain lists they are not hashable. As a workaround we just
-            # use content_hash here.
-            utils.content_hash(tuple(arg for arg in program_def.args.args)),
+            itir.semantic_fingerprinter(program_def.data),
+            utils.stable_fingerprinter(tuple(args.args)),
             common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
-            program_def.args.column_axis,
+            args.column_axis,
         )
     )
 
 
 def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef) -> str:
     """
-    Generates a unique hash string for a stencil source program representing
-    the program, sorted offset_provider, and column_axis.
+    Persistent (cross-process) cache key for a compilable program.
+
+    Identifies the program by its location- and type-agnostic semantic
+    fingerprint and the offset providers and column axis by content, so the key
+    is stable across processes, machines and source locations.
     """
-    program: itir.Program = program_def.data
-    offset_provider: common.OffsetProvider = program_def.args.offset_provider
-    column_axis: Optional[common.Dimension] = program_def.args.column_axis
-
-    program_hash = utils.content_hash(
-        (
-            program.fingerprint(),
-            sorted(offset_provider.items(), key=lambda el: el[0]),
-            column_axis,
-        )
-    )
-
-    return program_hash
+    return itir.semantic_fingerprinter(program_def)
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
