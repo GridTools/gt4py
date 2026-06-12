@@ -590,8 +590,9 @@ def execute_shift(
     # a `CartesianConnectivity` tag is a self-describing cartesian shift (e.g. from a
     # `CartesianOffset` IR node); named offsets are resolved through the offset provider
     if isinstance(tag, common.CartesianConnectivity):
+        assert tag.domain_dim == tag.codomain  # relocation (staggering) is not supported here
         new_pos = copy.copy(pos)
-        key = tag.codomain.value
+        key = tag.domain_dim.value
         if common.is_int_index(value := new_pos[key]):
             new_pos[key] = value + index + tag.offset
         else:
