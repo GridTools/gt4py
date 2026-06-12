@@ -1,0 +1,107 @@
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+"""
+Unified scripts tests entry point.
+
+Provides two sub-commands:
+- ``python``: run python scripts tests at ``scripts/tests/python`` (executed from ``scripts/python``).
+- ``sh``: run bash scripts tests with bats from ``scripts/tests/sh``.
+
+Usage:
+    ./scripts/test --help
+    ./scripts/test python -- -k common
+    ./scripts/test sh
+"""
+
+from __future__ import annotations
+
+import pathlib
+import subprocess
+import sys
+from typing import Annotated
+
+import rich
+import typer
+
+
+if __name__ == "__main__":
+    try:
+        # First try to import the 'python' folder inside './scripts'
+        # and check that it is indeed the expected one.
+        import python
+
+        python_scripts_dir = str(pathlib.Path(__file__).resolve().absolute().parent / "python")
+        if len(python.__path__) == 1 and python.__path__[0] == python_scripts_dir:
+            pass
+        else:
+            raise RuntimeError(
+                "The 'scripts/python' package path does not match the expected path. "
+                "Please check the structure of the repository."
+            )
+
+        # Then add the 'python' folder to sys.path to mimic the `sys.path` of the
+        # command modules run directly as scripts.
+        sys.path.insert(0, python_scripts_dir)
+        from helpers import common  # noqa: F401 - just to check that it can be imported
+
+    except ImportError as e:
+        print(
+            f"ERROR: '{e.name}' package cannot be imported!!\n"
+            "Make sure 'uv' is installed in your system and run directly this script "
+            "as an executable file, to let 'uv' create a temporary venv with all the "
+            "required dependencies.\n",
+            file=sys.stderr,
+        )
+        sys.exit(127)
+
+    app = typer.Typer(
+        name="test",
+        help="Scripts tests toolbox.",
+        no_args_is_help=True,
+    )
+
+    @app.command("python")
+    def python_tests(
+        pytest_args: Annotated[
+            list[str] | None,
+            typer.Argument(help="Pytest arguments to forward. Pass them after '--'."),
+        ] = None,
+    ):
+        if pytest_args and "--" not in sys.argv:
+            raise typer.BadParameter(
+                "Pytest arguments must be passed after '--', for example: "
+                "./scripts/test python -- -k common"
+            )
+
+        cmd = ["pytest", *(pytest_args or [])]
+        base_dir = common.SCRIPTS_DIR / "tests" / "python"
+        rich.print(f"Running: {base_dir} $ {' '.join(cmd)}\n")
+        result = subprocess.run(cmd, cwd=base_dir)
+        raise SystemExit(result.returncode)
+
+    @app.command("sh")
+    def sh_tests():
+        cmd = ["bats", str(common.SCRIPTS_DIR / "tests" / "sh")]
+        try:
+            result = subprocess.run(cmd, cwd=common.SCRIPTS_DIR.parent)
+        except FileNotFoundError:
+            print(
+                "ERROR: 'bats' executable cannot be found. Install bats-core to run shell tests.",
+                file=sys.stderr,
+            )
+            raise SystemExit(127)
+        raise SystemExit(result.returncode)
+
+    app()
+
+else:
+    raise ImportError("This module is not meant to be imported. Please run it as a script.")
