@@ -248,6 +248,11 @@ def _enable_ruff_pyupgrade(edits: Edits) -> None:
             return text
         rich.print("Enabling ruff 'UP' (pyupgrade) ruleset")
         updated = m.group(0).replace("'YTT'", "'UP', 'YTT'", 1)
+        if updated == m.group(0):
+            rich.print(
+                "[yellow]Warning:[/yellow] 'YTT' not found in ruff 'select' list; 'UP' not inserted (skipped)"
+            )
+            return text
         return text[: m.start()] + updated + text[m.end() :]
 
     edits.edit(path, _apply)
@@ -434,7 +439,7 @@ def bump_lower(
     ] = True,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip the confirmation prompt")] = False,
 ) -> None:
-    """Raise the lower bound by dropping the current lowest supported Python version."""
+    """Bump the lower bound by dropping the current lowest supported Python version."""
     versions = common.PYTHON_VERSIONS
     if len(versions) <= 1:
         rich.print("[red]Error:[/red] cannot drop the only remaining Python version.")
@@ -478,7 +483,7 @@ def bump_upper(
     ] = True,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip the confirmation prompt")] = False,
 ) -> None:
-    """Raise the upper bound by adding a new highest supported Python version."""
+    """Bump the upper bound by adding a new highest supported Python version."""
     versions = common.PYTHON_VERSIONS
     if new_version in versions:
         rich.print(f"[red]Error:[/red] Python {new_version} is already supported.")

@@ -45,13 +45,13 @@ if __name__ == "__main__":
         import python
 
         python_scripts_dir = str(pathlib.Path(__file__).resolve().absolute().parent / "python")
-        if len(python.__path__) == 1 and python.__path__[0] == python_scripts_dir:
-            pass
-        else:
-            raise RuntimeError(
-                "The 'scripts/python' package path does not match the expected path. "
-                "Please check the structure of the repository."
+        if not (len(python.__path__) == 1 and python.__path__[0] == python_scripts_dir):
+            print(
+                "ERROR: The 'scripts/python' package path does not match the expected path.\n"
+                "Please check the structure of the repository.\n",
+                file=sys.stderr,
             )
+            sys.exit(1)
 
         # Then add the 'python' folder to sys.path to mimic the `sys.path` of the
         # command modules run directly as scripts.
