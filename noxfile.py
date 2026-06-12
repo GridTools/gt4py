@@ -392,6 +392,10 @@ def _run_dace_determinism_check(
     On mismatch, calls ``session.error(...)`` with a pointer to the diffs/
     directory and report.txt so the failure is actionable.
     """
+    # Self-check the comparator first: a broken script aborts the session
+    # here, before the two expensive test-suite runs.
+    session.run("pytest", "-q", str(pathlib.Path("scripts") / "tests"))
+
     workdir = REPO_ROOT / DACE_DETERMINISM_WORKDIR_NAME
     if workdir.exists():
         shutil.rmtree(workdir)

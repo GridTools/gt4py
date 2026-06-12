@@ -12,29 +12,18 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
-import sys
 
 import pytest
 
-
-def _repo_root() -> pathlib.Path:
-    for parent in pathlib.Path(__file__).resolve().parents:
-        if (parent / "scripts" / "dace_deterministic_codegen.py").is_file():
-            return parent
-    raise RuntimeError("scripts/dace_deterministic_codegen.py not found")
-
-
-sys.path.insert(0, str(_repo_root()))
-
-from scripts.dace_deterministic_codegen import (  # noqa: E402
+from scripts.dace_deterministic_codegen import (
     DeterminismError,
     NoComparableProgramsError,
     NoProgramsObservedError,
     NoSourceFilesObservedError,
     UnsupportedBackendError,
+    _scan,
     check_determinism,
     compare,
-    _scan,
     render_report,
 )
 
