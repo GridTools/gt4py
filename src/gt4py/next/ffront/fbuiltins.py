@@ -508,3 +508,12 @@ class FieldOffset(runtime.Offset):
             self._cache[cache_key] = connectivity
 
         return connectivity
+
+
+def is_cartesian_offset(offset: FieldOffset | ts.OffsetType) -> bool:
+    return (
+        len(offset.target) == 1
+        and offset.source == offset.target[0]
+        and offset.source.kind == offset.target[0].kind
+        and offset.target[0].kind != common.DimensionKind.LOCAL
+    )

@@ -8,6 +8,7 @@
 
 
 import numpy as np
+import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import (
@@ -45,6 +46,7 @@ def lap_ref(inp):
     return -4.0 * inp[1:-1, 1:-1] + inp[2:, 1:-1] + inp[1:-1, 2:] + inp[:-2, 1:-1] + inp[1:-1, :-2]
 
 
+@pytest.mark.uses_cartesian_shift
 def test_temporaries(program_processor_no_transforms):
     program_processor, validate = program_processor_no_transforms
     size = 10

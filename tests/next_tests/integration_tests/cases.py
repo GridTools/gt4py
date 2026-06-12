@@ -37,7 +37,7 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.otf import arguments
 
 from next_tests import definitions as test_definitions
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
+from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-import]
     C2E,
     C2V,
     E2V,

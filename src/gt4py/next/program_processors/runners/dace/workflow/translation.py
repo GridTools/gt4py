@@ -15,7 +15,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import code_specs, definitions, stages, workflow
@@ -264,16 +264,6 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         None,
         dace.Memlet(f"{output}[0]"),
     )
-
-    if gpu and _has_gpu_schedule(sdfg) and config.ADD_GPU_TRACE_MARKERS:
-        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for node, _ in sdfg.all_nodes_recursive():
-            if isinstance(
-                node, dace.nodes.MapEntry
-            ):  # Add ranges to scopes and maps that are NOT scheduled to the GPU
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-            elif isinstance(node, dace.sdfg.state.SDFGState):
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
     # Check SDFG validity after applying the above changes.
     # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
