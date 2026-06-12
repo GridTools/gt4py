@@ -51,10 +51,11 @@ def test_format(type_, qualname, message):
 
 
 def test_format_loc(type_, qualname, message, location):
-    loc_pattern = "Source location.*"
-    file_pattern = '  File "/source.*".*'
+    # The qualified message comes first, the source location follows (same body
+    # as str(err), only with the type name prepended).
     cls_pattern = f"{qualname}: {message}"
-    pattern = r"\n".join([loc_pattern, file_pattern, cls_pattern])
+    file_pattern = '  File "/source.*".*'
+    pattern = r"\n".join([cls_pattern, file_pattern])
     s = "".join(format_compilation_error(type_, message, location, None, None))
     assert re.match(pattern, s)
 

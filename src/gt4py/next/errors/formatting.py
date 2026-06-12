@@ -198,8 +198,9 @@ def format_diagnostic_parts(
     """
     Render the full body of a diagnostic: message, source snippet, related locations, notes and hints.
 
-    This is the single place defining the on-screen shape of GT4Py diagnostics;
-    both ``DSLError.__str__`` and the excepthook go through it.
+    This is the single renderer for the on-screen shape of GT4Py diagnostics:
+    ``DSLError.__str__`` calls it directly, and ``format_compilation_error``
+    (the verbose excepthook) prepends the traceback and qualified type name.
     """
     same_line_related, remote_related = _split_related(location, related)
     bits: list[str] = [message]
@@ -243,20 +244,14 @@ def format_compilation_error(
     hints: Sequence[str] = (),
 ) -> list[str]:
     bits: list[str] = []
-
-    same_line_related, remote_related = _split_related(location, related)
     if cause is not None:
-        bits = [*bits, *_format_cause(cause)]
+        bits += _format_cause(cause)
     if tb is not None:
-        bits = [*bits, *_format_traceback(tb)]
-    if location is not None:
-        loc_str = format_location(
-            location, show_caret=True, label=label, secondary=same_line_related
+        bits += _format_traceback(tb)
+    qualified_message = f"{type_.__module__}.{type_.__name__}: {message}"
+    bits.append(
+        format_diagnostic_parts(
+            qualified_message, location, label=label, related=related, notes=notes, hints=hints
         )
-        loc_str_all = f"Source location:\n{textwrap.indent(loc_str, '  ')}\n"
-        bits = [*bits, loc_str_all]
-    msg_str = f"{type_.__module__}.{type_.__name__}: {message}"
-    bits = [*bits, msg_str]
-    if extras := _format_extras(remote_related, notes, hints):
-        bits = [*bits, "\n" + "\n".join(extras)]
+    )
     return bits

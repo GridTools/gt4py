@@ -17,12 +17,12 @@ def test_format_uncaught_error():
         raise exceptions.DSLError(loc, msg) from ValueError("value error msg")
     except exceptions.DSLError as err:
         str_devmode = "".join(excepthook._format_uncaught_error(err, True))
-        assert str_devmode.find("Source location") >= 0
+        assert str_devmode.find('File "/src/file.py"') >= 0
         assert str_devmode.find("Traceback") >= 0
         assert str_devmode.find("cause") >= 0
         assert str_devmode.find("ValueError") >= 0
         str_usermode = "".join(excepthook._format_uncaught_error(err, False))
-        assert str_usermode.find("Source location") >= 0
+        assert str_usermode.find('File "/src/file.py"') >= 0
         assert str_usermode.find("Traceback") < 0
         assert str_usermode.find("cause") < 0
         assert str_usermode.find("ValueError") < 0
