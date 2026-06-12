@@ -57,6 +57,9 @@ PROGRAM_FOLDER_RE = re.compile(r"^(?P<name>.+)_[0-9a-f]{64}$")
 CODEGEN_DIR = "src"
 SUPPORTED_BACKENDS = frozenset({"cpu", "cuda"})
 
+SourceFileHash = tuple[str, str]  # (source file path, source file contents hash)
+ProgramSignature = frozenset[SourceFileHash]  # all source files of one compiled program
+
 
 class UnsupportedBackendError(RuntimeError):
     """A program's src/ contained a backend other than cpu/cuda."""
@@ -83,18 +86,28 @@ class NoComparableProgramsError(RuntimeError):
 
 
 class DeterminismError(RuntimeError):
-    def __init__(self, message: str, results: list[NameResult]) -> None:
+    def __init__(self, message: str, results: list[ComparisonResult]) -> None:
         super().__init__(message)
         self.results = results
 
 
 @dataclasses.dataclass
-class NameResult:
+class ComparisonResult:
+    """Comparison between the two runs of all programs sharing a logical name.
+
+    Note: the same program can be compiled with different options (e.g.
+    different static parameters). Different options and non-deterministic
+    codegen both manifest in the same way — a different digest in the cache
+    folder name — so a folder in one run cannot be paired with its counterpart
+    in the other. Instead, this class collects all variants of one logical
+    name into a single comparison result.
+    """
+
     name: str
     comparable: bool  # both runs compiled the same number of programs
     match: bool  # comparable and the two signature multisets are identical
-    only_in_run1: list[tuple[str, str]]
-    only_in_run2: list[tuple[str, str]]
+    only_in_run1: list[SourceFileHash]
+    only_in_run2: list[SourceFileHash]
     count1: int
     count2: int
 
@@ -107,7 +120,7 @@ class NameResult:
         return not self.comparable
 
 
-def _is_failure(r: NameResult, runs_healthy: bool | None) -> bool:
+def _is_failure(r: ComparisonResult, runs_healthy: bool | None) -> bool:
     """Whether a name counts as a determinism failure.
 
     A content difference always fails. A differing program count fails only when
@@ -117,7 +130,8 @@ def _is_failure(r: NameResult, runs_healthy: bool | None) -> bool:
     return r.differs or (r.skipped and runs_healthy is True)
 
 
-def _sha256(path: Path) -> str:
+def _sha256_of_contents(path: Path) -> str:
+    """Return the SHA-256 hexdigest of the file's contents."""
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1 << 16), b""):
@@ -125,8 +139,14 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter], int]:
+def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter[ProgramSignature]], int]:
     """Return the signature multiset per logical name and the program count.
+
+    Each program folder yields one ``ProgramSignature``: the set of
+    ``(relative path, contents hash)`` pairs of every file under ``src/``. The
+    contents hash is what the determinism check ultimately rests on — two
+    compilations produced byte-identical code iff their signatures are equal,
+    which ``compare`` tests via multiset equality.
 
     Program folders whose ``src/`` holds no source files are counted but
     excluded from the multisets, so they cannot manufacture mismatches.
@@ -134,7 +154,9 @@ def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter], int]:
     if not cache_root.is_dir():
         return {}, 0
 
-    by_name: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    by_name: dict[str, collections.Counter[ProgramSignature]] = collections.defaultdict(
+        collections.Counter
+    )
     n_folders = 0
     for folder in sorted(p for p in cache_root.iterdir() if p.is_dir()):
         m = PROGRAM_FOLDER_RE.match(folder.name)
@@ -143,7 +165,7 @@ def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter], int]:
         n_folders += 1
 
         src_root = folder / CODEGEN_DIR
-        sources: list[tuple[str, str]] = []
+        sources: list[SourceFileHash] = []
         if src_root.is_dir():
             for backend in sorted(d for d in src_root.iterdir() if d.is_dir()):
                 if backend.name not in SUPPORTED_BACKENDS:
@@ -154,7 +176,7 @@ def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter], int]:
                     )
             for path in sorted(src_root.rglob("*")):
                 if path.is_file():
-                    sources.append((path.relative_to(folder).as_posix(), _sha256(path)))
+                    sources.append((path.relative_to(folder).as_posix(), _sha256_of_contents(path)))
 
         if sources:
             by_name[m.group("name")][frozenset(sources)] += 1
@@ -175,9 +197,9 @@ def _diagnose_empty(cache_root: Path) -> str:
 
 
 def compare(
-    run1: dict[str, collections.Counter],
-    run2: dict[str, collections.Counter],
-) -> list[NameResult]:
+    run1: dict[str, collections.Counter[ProgramSignature]],
+    run2: dict[str, collections.Counter[ProgramSignature]],
+) -> list[ComparisonResult]:
     results = []
     for name in sorted(set(run1) | set(run2)):
         bag1 = run1.get(name, collections.Counter())
@@ -191,7 +213,7 @@ def compare(
         extra1 = bag1 - bag2
         extra2 = bag2 - bag1
         results.append(
-            NameResult(
+            ComparisonResult(
                 name=name,
                 comparable=comparable,
                 match=match,
@@ -204,7 +226,7 @@ def compare(
     return results
 
 
-def write_diffs(results: list[NameResult], diffs_dir: Path) -> None:
+def write_diffs(results: list[ComparisonResult], diffs_dir: Path) -> None:
     for r in results:
         if r.match:
             continue
@@ -216,7 +238,7 @@ def write_diffs(results: list[NameResult], diffs_dir: Path) -> None:
         (diffs_dir / f"{safe}.txt").write_text("\n".join([r.name, *relpaths]) + "\n")
 
 
-def render_report(results: list[NameResult], *, runs_healthy: bool | None = None) -> str:
+def render_report(results: list[ComparisonResult], *, runs_healthy: bool | None = None) -> str:
     n_total = len(results)
     n_match = sum(1 for r in results if r.match)
     n_differ = sum(1 for r in results if r.differs)
@@ -290,7 +312,7 @@ def check_determinism(
     runs_healthy: bool | None = None,
     diffs_dir: Path | None = None,
     report_path: Path | None = None,
-) -> list[NameResult]:
+) -> list[ComparisonResult]:
     bags1, n_folders1 = _scan(cache1)
     bags2, n_folders2 = _scan(cache2)
     results = compare(bags1, bags2)
