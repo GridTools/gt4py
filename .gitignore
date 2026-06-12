@@ -1,6 +1,7 @@
 ### Custom ####
 _build
 _local
+.worktrees
 
 ### Coding agents ####
 *.local.md
