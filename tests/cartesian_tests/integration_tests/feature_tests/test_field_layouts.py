@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from typing import Literal
+
 import pytest
 
 from gt4py import cartesian as gt4pyc, storage as gt_storage
@@ -28,8 +30,8 @@ def is_rocm_cupy():
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 @pytest.mark.parametrize("order", ["C", "F"])
-def test_numpy_allocators(backend, order):
-    if backend in ["gt:gpu", "dace:gpu"] and is_rocm_cupy():
+def test_numpy_allocators(backend: str, order: Literal["C"] | Literal["F"]) -> None:
+    if is_rocm_cupy() and backend in ["gt:gpu", "dace:gpu", "dace:gpu_IJK"]:
         pytest.skip(
             f"This test would need GT4Py's custom `__hip_array_interface__` on the cupy array. Using dlpack (via nanobind) would make this test work for ROCm."
         )
@@ -46,8 +48,8 @@ def test_numpy_allocators(backend, order):
 
 
 @pytest.mark.parametrize("backend", PERFORMANCE_BACKENDS)
-def test_bad_layout_warns(backend):
-    if backend in ["gt:gpu", "dace:gpu"] and is_rocm_cupy():
+def test_bad_layout_warns(backend: str) -> None:
+    if is_rocm_cupy() and backend in ["gt:gpu", "dace:gpu", "dace:gpu_IJK"]:
         pytest.skip(
             f"This test would need GT4Py's custom `__hip_array_interface__` on the cupy array. Using dlpack (via nanobind) would make this test work for ROCm."
         )

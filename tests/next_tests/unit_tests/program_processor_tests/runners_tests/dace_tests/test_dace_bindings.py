@@ -24,7 +24,7 @@ from gt4py.next import neighbor_sum
 from next_tests.integration_tests.cases import E2V, E2VDim, V2E, V2EDim
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
+from next_tests.integration_tests import cases_utils
 from next_tests.unit_tests.test_common import IDim, JDim, KDim
 
 
@@ -311,7 +311,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     )
 
     test_case = cases.Case.from_cartesian_grid_descriptor(
-        ffront_test_utils.simple_cartesian_grid(),
+        cases_utils.simple_cartesian_grid(),
         backend=backend,
         allocator=backend,
     )
@@ -368,7 +368,7 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         ),
     )
 
-    SIMPLE_MESH = ffront_test_utils.simple_mesh(None)
+    SIMPLE_MESH = cases_utils.simple_mesh(None)
     offset_provider = SIMPLE_MESH.offset_provider
 
     test_case = cases.Case.from_mesh_descriptor(SIMPLE_MESH, backend=backend, allocator=backend)
