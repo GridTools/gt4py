@@ -417,8 +417,8 @@ def _finalize(edits: Edits, *, dry_run: bool, yes: bool, run_tools: bool, modern
 
 
 # -- Commands --
-@cli.command("raise-lower")
-def raise_lower(
+@cli.command("bump-lower")
+def bump_lower(
     *,
     modernize: Annotated[
         bool,
@@ -460,8 +460,8 @@ def raise_lower(
     _finalize(edits, dry_run=dry_run, yes=yes, run_tools=run_tools, modernize=modernize)
 
 
-@cli.command("raise-upper")
-def raise_upper(
+@cli.command("bump-upper")
+def bump_upper(
     new_version: Annotated[str, typer.Argument(help="New highest supported version, e.g. '3.15'")],
     *,
     modernize: Annotated[
