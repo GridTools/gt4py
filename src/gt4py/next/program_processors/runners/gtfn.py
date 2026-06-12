@@ -195,3 +195,7 @@ run_gtfn_imperative = GTFNBackendFactory(
 )
 
 run_gtfn_gpu = GTFNBackendFactory(cached=True, gpu=True)
+
+run_gtfn_no_transforms = GTFNBackendFactory(
+    cached=True, otf_workflow__bare_translation__enable_itir_transforms=False
+)

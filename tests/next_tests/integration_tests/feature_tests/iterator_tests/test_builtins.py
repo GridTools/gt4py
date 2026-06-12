@@ -189,11 +189,7 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     inps = field_maker(*array_maker(*inputs))
     out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
-    gtfn_without_transforms = gtfn.GTFNBackendFactory(
-        otf_workflow__bare_translation__enable_itir_transforms=False
-    )
-
-    fencil(builtin, out, *inps, processor=gtfn_without_transforms)
+    fencil(builtin, out, *inps, processor=gtfn.run_gtfn_no_transforms)
 
     assert np.allclose(out.asnumpy(), expected)
 
