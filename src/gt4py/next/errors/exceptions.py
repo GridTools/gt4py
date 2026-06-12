@@ -50,18 +50,19 @@ class DSLError(GT4PyError):
     Error in user code of one of the GT4Py-embedded DSLs.
 
     Besides the message and the primary source location, a diagnostic can carry
-    optional structured payload that the formatter renders for the user:
+    optional structured payload that the formatter renders for the user.
 
-    - ``label``: short text printed right after the carets, qualifying the
-      marked code (e.g. "this has type 'bool'").
-    - ``related``: further (location, message) pairs that contribute to the
-      error (e.g. the other operand of a type mismatch).
-    - ``notes``: factual background ("Note: ..."), explaining *why* this is an
-      error.
-    - ``hints``: actionable advice ("Hint: ..."), telling the user what to do
-      instead.
-    - ``code``: a stable, machine-readable identifier of the error category,
-      set per subclass; intended for searching documentation and for tooling.
+    Attributes:
+        label: Short text printed right after the carets, qualifying the marked
+            code (e.g. "this has type 'bool'").
+        related: Further (location, message) pairs that contribute to the error
+            (e.g. the other operand of a type mismatch).
+        notes: Factual background ("Note: ..."), explaining why this is an
+            error.
+        hints: Actionable advice ("Hint: ..."), telling the user what to do
+            instead.
+        code: A stable, machine-readable identifier of the error category, set
+            per subclass; intended for searching documentation and for tooling.
     """
 
     code: ClassVar[Optional[str]] = None
