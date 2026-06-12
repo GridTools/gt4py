@@ -1207,7 +1207,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a3"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/GridTools/dace?branch=dev-sorted_depends_on#09f9eb4a88af4cc33d2a7d5c0a16ab584c4c45f3" }
 dependencies = [
     { name = "astunparse" },
     { name = "dill" },
@@ -1223,7 +1223,6 @@ dependencies = [
     { name = "sympy" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c3/f8/2401889078017475ce1293af212b76cfdb8a5771ece179851d441ef363f3/dace-2.0.0a3.tar.gz", hash = "sha256:94cbaac4b1f4ef312d24f4151b0905a0e6292a9cfdf9c8b643dabdb2e95b02fa", size = 6005767, upload-time = "2026-05-11T14:49:16.021Z" }
 
 [[package]]
 name = "debugpy"
@@ -1859,7 +1858,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", specifier = ">=2.0.0a3" },
+    { name = "dace", git = "https://github.com/GridTools/dace?branch=dev-sorted_depends_on" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "factory-boy", specifier = ">=3.3.3" },
