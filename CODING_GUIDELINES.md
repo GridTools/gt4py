@@ -93,6 +93,8 @@ raise TypeError(f"Wrong argument type: 'int' expected, got '{type(arg)}'")
 
 The terseness vs. helpfulness tradeoff should be more in favor of terseness for internal error messages and more in favor of helpfulness for `DSLError` and it's subclassses, where additional sentences are encouraged if they point out likely hidden sources of the problem or common fixes.
 
+For `gt4py.next` user-facing DSL diagnostics (`DSLError` and subclasses), see [`docs/development/next/error-messages.md`](docs/development/next/error-messages.md): it covers structured diagnostics (source spans, notes, hints), the unsupported-construct catalogue, and the regression-test requirement.
+
 ### Docstrings
 
 We generate the API documentation automatically from the docstrings using [Sphinx] and some extensions such as [Sphinx-autodoc] and [Sphinx-napoleon]. These follow the Google Python Style Guide docstring conventions to automatically format the generated documentation. A complete overview can be found here: [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google).

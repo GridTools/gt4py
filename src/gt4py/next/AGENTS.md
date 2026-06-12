@@ -35,7 +35,11 @@ field operators / programs (ffront)
   `dace` (DaCe SDFG), `roundtrip` / `double_roundtrip` (pure Python).
 - `type_system/` — `next` type specifications and the type inference the
   frontend runs.
-- `errors/` — user-facing DSL error formatting.
+- `errors/` — user-facing DSL error formatting. When raising or improving a
+  `DSLError`, follow
+  [`docs/development/next/error-messages.md`](../../../docs/development/next/error-messages.md)
+  (structured diagnostics: spans, notes, hints, the unsupported-construct
+  catalogue, and the UI-test requirement).
 
 ## Conventions specific to next
 
