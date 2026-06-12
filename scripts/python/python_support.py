@@ -1,3 +1,253 @@
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""Raise the lower or upper supported Python version across the project.
+
+The supported versions are enumerated in the '.python-versions' file (the
+single source of truth from which the noxfile and the GitHub Actions workflows
+derive their version matrices). This script keeps that file in sync with all
+the places that hardcode the supported range: project metadata and dev-tool
+configuration in 'pyproject.toml', the 'nox.options.sessions' list in
+'noxfile.py', the CSCS CI bounds in 'ci/cscs-ci.yml', and the documentation.
+
+Use '--dry-run' to preview every change without writing files or running tools.
+"""
+
+from __future__ import annotations
+
+import difflib
+import enum
+import pathlib
+import re
+import subprocess
+from typing import Annotated, Callable
+
+import packaging.version
+import rich
+import rich.markup
+import tomllib
+import typer
+from helpers import common
+
+
+class ExitCode(enum.IntEnum):
+    """Exit codes for the script."""
+
+    UNRECOGNIZED_PYPROJECT_TOML = 10
+    INVALID_VERSION_STRING = 12
+    VERSION_ALREADY_SUPPORTED = 20
+    CANNOT_DROP_LAST_VERSION = 21
+    NEW_VERSION_NOT_HIGHEST = 22
+    UNRECOGNIZED_NOXFILE = 30
+    TOOL_RUN_FAILED = 40
+
+
+cli = typer.Typer(no_args_is_help=True, name="python-support", help=__doc__)
+
+
+# -- Version helpers --
+def _parts(version: str) -> tuple[int, int]:
+    """Return the '(major, minor)' tuple of a 'X.Y' version string."""
+    try:
+        release = packaging.version.Version(version).release
+    except packaging.version.InvalidVersion as e:
+        rich.print(f"[red]Error:[/red] '{version}' is not a valid version string.")
+        raise typer.Exit(ExitCode.INVALID_VERSION_STRING) from e
+    return (release[0], release[1] if len(release) > 1 else 0)
+
+
+def _nodot(version: str) -> str:
+    """Turn '3.10' into '310' (used for ruff's 'target-version')."""
+    major, minor = _parts(version)
+    return f"{major}{minor}"
+
+
+def _next_minor(version: str) -> str:
+    """Return the next minor version, e.g. '3.15' -> '3.16'."""
+    major, minor = _parts(version)
+    return f"{major}.{minor + 1}"
+
+
+# -- File-edit accumulator --
+class Edits:
+    """Collect in-memory edits so they can be previewed or written atomically."""
+
+    def __init__(self) -> None:
+        self._originals: dict[pathlib.Path, str] = {}
+        self._current: dict[pathlib.Path, str] = {}
+
+    def _load(self, path: pathlib.Path) -> str:
+        if path not in self._current:
+            text = path.read_text(encoding="utf-8")
+            self._originals[path] = text
+            self._current[path] = text
+        return self._current[path]
+
+    def get(self, path: pathlib.Path) -> str:
+        return self._load(path)
+
+    def edit(self, path: pathlib.Path, fn: Callable[[str], str]) -> None:
+        """Apply 'fn' to the current text of 'path'."""
+        self._current[path] = fn(self._load(path))
+
+    def sub(self, path: pathlib.Path, pattern: str, repl: str, *, count: int = 1) -> None:
+        """Apply a single regex substitution, warning if nothing matched."""
+
+        def _apply(text: str) -> str:
+            new_text, n = re.subn(pattern, repl, text, count=count)
+            if n == 0:
+                rich.print(
+                    f"[yellow]Warning:[/yellow] pattern not found in "
+                    f"'{path.relative_to(common.REPO_ROOT)}': {pattern!r} (skipped)"
+                )
+            return new_text
+
+        self.edit(path, _apply)
+
+    @property
+    def changed(self) -> dict[pathlib.Path, tuple[str, str]]:
+        return {
+            path: (self._originals[path], current)
+            for path, current in self._current.items()
+            if current != self._originals[path]
+        }
+
+    def preview(self) -> None:
+        for path, (old, new) in self.changed.items():
+            rel = path.relative_to(common.REPO_ROOT)
+            diff = difflib.unified_diff(
+                old.splitlines(keepends=True),
+                new.splitlines(keepends=True),
+                fromfile=f"a/{rel}",
+                tofile=f"b/{rel}",
+            )
+            rich.print(f"[bold]{rel}[/bold]")
+            for line in diff:
+                content = rich.markup.escape(line.rstrip("\n"))
+                if line.startswith("+") and not line.startswith("+++"):
+                    rich.print(f"[green]{content}[/green]")
+                elif line.startswith("-") and not line.startswith("---"):
+                    rich.print(f"[red]{content}[/red]")
+                else:
+                    rich.print(content)
+            rich.print()
+
+    def write(self) -> None:
+        for path, (_old, new) in self.changed.items():
+            path.write_text(new, encoding="utf-8")
+            rich.print(f"  updated [bold]{path.relative_to(common.REPO_ROOT)}[/bold]")
+
+
+# -- Individual file editors --
+def _edit_python_versions(edits: Edits, *, drop: str | None, add: str | None) -> None:
+    path = common.REPO_ROOT / ".python-versions"
+
+    def _apply(text: str) -> str:
+        lines = text.splitlines()
+        if drop is not None:
+            lines = [line for line in lines if line.strip() != drop]
+        if add is not None:
+            last_version_idx = max(
+                i for i, line in enumerate(lines) if (v := line.strip()) and not v.startswith("#")
+            )
+            lines.insert(last_version_idx + 1, add)
+        return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+
+    edits.edit(path, _apply)
+
+
+def _edit_pyproject_lower(edits: Edits, *, dropped: str, new_min: str) -> None:
+    path = common.REPO_ROOT / "pyproject.toml"
+    # Remove the classifier for the dropped version.
+    edits.sub(
+        path,
+        rf"(?m)^[ \t]*'Programming Language :: Python :: {re.escape(dropped)}',\n",
+        "",
+    )
+    # Bump only the '>=' lower bound, preserving '<...' and '!=...' exclusions.
+    _bump_requires_python(edits, path, rf">={re.escape(dropped)}", f">={new_min}")
+    # ruff target-version tracks the floor.
+    edits.sub(path, r"target-version = 'py\d+'", f"target-version = 'py{_nodot(new_min)}'")
+    # mypy should target the lowest supported version.
+    _set_mypy_python_version(edits, path, new_min)
+
+
+def _edit_pyproject_upper(edits: Edits, *, current_max: str, new_version: str) -> None:
+    path = common.REPO_ROOT / "pyproject.toml"
+    # Add the classifier for the new highest version after the current highest.
+    edits.sub(
+        path,
+        rf"( *'Programming Language :: Python :: {re.escape(current_max)}',\n)",
+        rf"\1  'Programming Language :: Python :: {new_version}',\n",
+    )
+    # Bump only the '<' upper bound to the next minor after the new version.
+    _bump_requires_python(edits, path, r"<\d+\.\d+", f"<{_next_minor(new_version)}")
+
+
+def _bump_requires_python(edits: Edits, path: pathlib.Path, pattern: str, repl: str) -> None:
+    """Substitute a single bound token inside the 'requires-python' value only."""
+
+    def _apply(text: str) -> str:
+        m = re.search(r"(requires-python = ')([^']*)(')", text)
+        if not m:
+            rich.print("[yellow]Warning:[/yellow] 'requires-python' not found (skipped)")
+            return text
+        new_value, n = re.subn(pattern, repl, m.group(2), count=1)
+        if n == 0:
+            rich.print(
+                f"[yellow]Warning:[/yellow] bound {pattern!r} not found in 'requires-python' "
+                f"(skipped)"
+            )
+            return text
+        return text[: m.start()] + m.group(1) + new_value + m.group(3) + text[m.end() :]
+
+    edits.edit(path, _apply)
+
+
+def _set_mypy_python_version(edits: Edits, path: pathlib.Path, version: str) -> None:
+    def _apply(text: str) -> str:
+        # Replace an existing 'python_version' inside '[tool.mypy]' if present.
+        block = re.search(r"\[tool\.mypy\][^\[]*", text)
+        if block and re.search(r"^python_version = ", block.group(0), re.MULTILINE):
+            start = block.start()
+            updated = re.sub(
+                r"^python_version = .*$",
+                f"python_version = '{version}'",
+                block.group(0),
+                count=1,
+                flags=re.MULTILINE,
+            )
+            return text[:start] + updated + text[block.end() :]
+        return re.sub(
+            r"(\[tool\.mypy\]\n)",
+            rf"\1python_version = '{version}'\n",
+            text,
+            count=1,
+        )
+
+    edits.edit(path, _apply)
+
+
+def _enable_ruff_pyupgrade(edits: Edits) -> None:
+    """Add the 'UP' (pyupgrade) ruleset to ruff's 'select' list if absent."""
+    path = common.REPO_ROOT / "pyproject.toml"
+
+    def _apply(text: str) -> str:
+        m = re.search(r"^select = \[([^\]]*)\]", text, re.MULTILINE)
+        if not m:
+            rich.print("[yellow]Warning:[/yellow] ruff 'select' list not found (skipped)")
+            return text
+        if re.search(r"'UP'", m.group(1)):
+            return text
+        rich.print("Enabling ruff 'UP' (pyupgrade) ruleset")
+        updated = m.group(0).replace("'YTT'", "'UP', 'YTT'", 1)
         return text[: m.start()] + updated + text[m.end() :]
 
     edits.edit(path, _apply)
@@ -248,3 +498,17 @@ def raise_upper(
 
     edits = Edits()
     _edit_python_versions(edits, drop=None, add=new_version)
+    _edit_pyproject_upper(edits, current_max=current_max, new_version=new_version)
+    if modernize:
+        _enable_ruff_pyupgrade(edits)
+    _rebuild_nox_sessions(edits, [*versions, new_version])
+    _edit_cscs_ci(edits, new_min, new_version)
+    _edit_docs(edits, new_min, new_version, floor_changed=False)
+    _add_changelog_entry(edits, f"Add support for Python {new_version}.")
+    _warn_dependency_markers(new_version)
+
+    _finalize(edits, dry_run=dry_run, yes=yes, run_tools=run_tools, modernize=modernize)
+
+
+if __name__ == "__main__":
+    cli()
