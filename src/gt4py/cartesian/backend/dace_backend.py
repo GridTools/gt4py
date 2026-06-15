@@ -131,9 +131,8 @@ def _sdfg_add_arrays_and_edges(
                     continue
                 o = origin[index]
                 lower, upper = field_info[name].boundary[cartesian_index]
-                s = inner_sdfg.arrays[name].shape[index]
+                d = domain[cartesian_index]
                 if axis == CartesianSpace.Axis.K.name:
-                    d = domain[cartesian_index]
                     ranges.append(
                         # max(0, lower) because ...
                         # d - 1 because ranges are inclusive
@@ -141,8 +140,8 @@ def _sdfg_add_arrays_and_edges(
                     )
                 else:
                     ranges.append(
-                        # s - 1 because ranges are inclusive
-                        (o - max(0, lower), o - max(0, lower) + s - 1, 1)
+                        # d - 1 because ranges are inclusive
+                        (o - max(0, lower), o - max(0, lower) + d - 1, 1)
                     )
                 index += 1
 
