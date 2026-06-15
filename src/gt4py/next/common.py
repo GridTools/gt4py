@@ -1146,6 +1146,7 @@ def _connectivity(
     raise NotImplementedError
 
 
+@runtime_checkable
 class NeighborTable(Connectivity, Protocol):
     # TODO(havogt): work towards encoding this properly in the type
     def __gt_type__(self) -> NeighborConnectivityType: ...

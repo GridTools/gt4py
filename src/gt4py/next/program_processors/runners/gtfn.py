@@ -48,7 +48,7 @@ def convert_args(
 ) -> stages.ExecutableProgram:
     def decorated_program(
         *args: Any,
-        offset_provider: dict[str, common.Connectivity],
+        offset_provider: dict[str, common.OffsetProviderElem],
         out: Any = None,
     ) -> None:
         # Note: this function is on the hot path and needs to have minimal overhead.

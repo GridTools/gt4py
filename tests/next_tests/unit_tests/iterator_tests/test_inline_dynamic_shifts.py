@@ -21,9 +21,7 @@ def test_inline_dynamic_shift_as_fieldop_arg(uids):
         im.as_fieldop("deref")("inp"), "offset_field"
     )
     expected = im.as_fieldop(
-        im.lambda_("inp", "offset_field")(
-            im.deref(im.shift(IOff, im.deref("offset_field"))("inp"))
-        )
+        im.lambda_("inp", "offset_field")(im.deref(im.shift(IOff, im.deref("offset_field"))("inp")))
     )("inp", "offset_field")
 
     actual = inline_dynamic_shifts.InlineDynamicShifts.apply(
@@ -40,9 +38,7 @@ def test_inline_dynamic_shift_let_var(uids):
     )
 
     expected = im.as_fieldop(
-        im.lambda_("inp", "offset_field")(
-            im.deref(im.shift(IOff, im.deref("offset_field"))("inp"))
-        )
+        im.lambda_("inp", "offset_field")(im.deref(im.shift(IOff, im.deref("offset_field"))("inp")))
     )("inp", "offset_field")
 
     actual = inline_dynamic_shifts.InlineDynamicShifts.apply(

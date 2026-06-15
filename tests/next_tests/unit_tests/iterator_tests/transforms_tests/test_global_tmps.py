@@ -393,7 +393,9 @@ def test_tuple_different_domain_nested(uids: utils.IDGeneratorPool):
             im.lambda_("it1", "it2", "it3")(
                 im.plus(
                     im.deref("it1"),
-                    im.plus(im.deref(im.shift(Ioff, 1)("it2")), im.deref(im.shift(Ioff, -1)("it3"))),
+                    im.plus(
+                        im.deref(im.shift(Ioff, 1)("it2")), im.deref(im.shift(Ioff, -1)("it3"))
+                    ),
                 )
             ),
             domain,
