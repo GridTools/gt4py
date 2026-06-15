@@ -13,15 +13,16 @@ from gt4py.next.type_system import type_specifications as ts
 
 IDim = gtx.Dimension("IDim")
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+IOff = im.cartesian_offset(IDim, IDim)
 
 
 def test_inline_dynamic_shift_as_fieldop_arg(uids):
-    testee = im.as_fieldop(im.lambda_("a", "b")(im.deref(im.shift("IOff", im.deref("b"))("a"))))(
+    testee = im.as_fieldop(im.lambda_("a", "b")(im.deref(im.shift(IOff, im.deref("b"))("a"))))(
         im.as_fieldop("deref")("inp"), "offset_field"
     )
     expected = im.as_fieldop(
         im.lambda_("inp", "offset_field")(
-            im.deref(im.shift("IOff", im.deref("offset_field"))("inp"))
+            im.deref(im.shift(IOff, im.deref("offset_field"))("inp"))
         )
     )("inp", "offset_field")
 
@@ -33,14 +34,14 @@ def test_inline_dynamic_shift_as_fieldop_arg(uids):
 
 def test_inline_dynamic_shift_let_var(uids):
     testee = im.let("tmp", im.as_fieldop("deref")("inp"))(
-        im.as_fieldop(im.lambda_("a", "b")(im.deref(im.shift("IOff", im.deref("b"))("a"))))(
+        im.as_fieldop(im.lambda_("a", "b")(im.deref(im.shift(IOff, im.deref("b"))("a"))))(
             "tmp", "offset_field"
         )
     )
 
     expected = im.as_fieldop(
         im.lambda_("inp", "offset_field")(
-            im.deref(im.shift("IOff", im.deref("offset_field"))("inp"))
+            im.deref(im.shift(IOff, im.deref("offset_field"))("inp"))
         )
     )("inp", "offset_field")
 

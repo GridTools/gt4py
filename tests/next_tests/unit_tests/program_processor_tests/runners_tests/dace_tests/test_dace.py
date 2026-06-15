@@ -57,7 +57,7 @@ def exec_alloc_descriptor(request):
 def cartesian_case(request, exec_alloc_descriptor):
     yield cases.Case(
         backend=exec_alloc_descriptor,
-        offset_provider={"Ioff": IDim},
+        offset_provider={},
         default_sizes={IDim: 10},
         grid_type=gtx_common.GridType.CARTESIAN,
         allocator=exec_alloc_descriptor.allocator,

@@ -8,6 +8,7 @@
 
 
 import dataclasses
+import warnings
 from typing import Any, Callable, Optional
 
 from gt4py import eve
@@ -293,13 +294,29 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         for arg in node.args:
             match arg:
                 # `field(Off[idx])`
-                case foast.Subscript(value=foast.Name(id=offset_name), index=index):
+                case foast.Subscript(value=foast.Name() as offset_name, index=index):
                     # Constant folding to a `Literal` ensures that `index` becomes an `OffsetLiteral`,
                     # which can be generated as compile-time value backend code.
                     new_index = constant_folding.ConstantFolding.apply(self.visit(index, **kwargs))
                     assert isinstance(new_index, itir.Literal)
+                    assert isinstance(offset_name.type, ts.OffsetType)
+                    if fbuiltins.is_cartesian_offset(offset_name.type):
+                        # Deprecated: Cartesian shift via the subscript syntax `field(Off[i])`.
+                        # We deduce the dimension from the offset type and emit a self-describing
+                        # `CartesianOffset` (cf. the `Dim + idx` and `as_offset` cases).
+                        warnings.warn(
+                            f"Cartesian shifts via the subscript syntax 'field({offset_name.id}[i])' "
+                            f"are deprecated; use 'field({offset_name.type.source.value} + i)' instead.",
+                            DeprecationWarning,
+                            stacklevel=2,
+                        )
+                        dim = offset_name.type.source
+                        shift_offset: itir.CartesianOffset | str = im.cartesian_offset(dim, dim)
+                    else:
+                        # Unstructured neighbor selection, resolved through the offset provider.
+                        shift_offset = offset_name.id
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(im.deref(im.shift(offset_name, new_index)("__it")))
+                        im.lambda_("__it")(im.deref(im.shift(shift_offset, new_index)("__it")))
                     )(current_expr)
                 # `field(Dim + idx)`
                 case foast.BinOp(
@@ -327,14 +344,17 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # `field(as_offset(Off, offset_field))`
                 case foast.Call(func=foast.Name(id="as_offset")):
                     func_args = arg
-                    # TODO(tehrengruber): Discuss representation. We could use the type system to
-                    #  deduce the offset dimension instead of (e.g. to allow aliasing).
-                    offset_dim = func_args.args[0]
-                    assert isinstance(offset_dim, foast.Name)
+                    offset_type = func_args.args[0].type
+                    assert isinstance(offset_type, ts.OffsetType)
+                    dim = offset_type.source
                     offset_field = self.visit(func_args.args[1], **kwargs)
                     current_expr = im.as_fieldop(
                         im.lambda_("__it", "__offset")(
-                            im.deref(im.shift(offset_dim.id, im.deref("__offset"))("__it"))
+                            im.deref(
+                                im.shift(im.cartesian_offset(dim, dim), im.deref("__offset"))(
+                                    "__it"
+                                )
+                            )
                         )
                     )(current_expr, offset_field)
                 case _:

@@ -31,6 +31,7 @@ KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
 index_type = ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 i_field_type = ts.FieldType(dims=[IDim], dtype=float_type)
+Ioff = im.cartesian_offset(IDim, IDim)
 
 
 def index_field_type_factory(dim):
@@ -301,11 +302,11 @@ def test_nested_if(uids: utils.IDGeneratorPool):
 def test_tuple_different_domain(uids: utils.IDGeneratorPool):
     domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
-    offset_provider = {"I": IDim}
+    offset_provider = {}
 
     def add_shifted(domain: itir.FunCall | None = None):
         return im.as_fieldop(
-            im.lambda_("it1", "it2")(im.plus(im.deref("it1"), im.deref(im.shift("I", 1)("it2")))),
+            im.lambda_("it1", "it2")(im.plus(im.deref("it1"), im.deref(im.shift(Ioff, 1)("it2")))),
             domain,
         )
 
@@ -385,14 +386,14 @@ def test_tuple_different_domain_nested(uids: utils.IDGeneratorPool):
     domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
     domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
     domainm10 = im.domain("cartesian_domain", {IDim: (-1, 0)})
-    offset_provider = {"I": IDim}
+    offset_provider = {}
 
     def add_shifted(domain: itir.FunCall | None = None):
         return im.as_fieldop(
             im.lambda_("it1", "it2", "it3")(
                 im.plus(
                     im.deref("it1"),
-                    im.plus(im.deref(im.shift("I", 1)("it2")), im.deref(im.shift("I", -1)("it3"))),
+                    im.plus(im.deref(im.shift(Ioff, 1)("it2")), im.deref(im.shift(Ioff, -1)("it3"))),
                 )
             ),
             domain,
