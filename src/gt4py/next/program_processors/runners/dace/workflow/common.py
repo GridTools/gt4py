@@ -113,6 +113,11 @@ def set_dace_config(
     # NOTE: In the CI file we export the variable to force the experimental code gen to be used.
     dace.Config.set("compiler.cuda.implementation", value="experimental")
 
+    # Skip GPU Sync at the end.
+    # NOTE: That this will most likely break the UNIT tests, but should not be a problem
+    #   for the blueline.
+    dace.Config.set("compiler", "cuda", "synchronize_on_exit", value=False)
+
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
     #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first
     #  idea was to use just one stream. However, even in that case the generator
