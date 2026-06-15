@@ -203,6 +203,26 @@ def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:
     raise ValueError(f"Can not unambiguosly extract data type from '{symbol_type}'.")
 
 
+_FLOATING_POINT_KINDS = (ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64)
+_INTEGRAL_KINDS = (
+    ts.ScalarKind.INT8,
+    ts.ScalarKind.UINT8,
+    ts.ScalarKind.INT16,
+    ts.ScalarKind.UINT16,
+    ts.ScalarKind.INT32,
+    ts.ScalarKind.UINT32,
+    ts.ScalarKind.INT64,
+)
+
+
+def _is_field_or_scalar_of_kind(symbol_type: ts.TypeSpec, kinds: tuple[ts.ScalarKind, ...]) -> bool:
+    """Check if ``symbol_type`` is a scalar or a field whose dtype kind is in ``kinds``."""
+    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
+        return False
+    dtype = extract_dtype(symbol_type)
+    return isinstance(dtype, ts.ScalarType) and dtype.kind in kinds
+
+
 def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     """
     Check if the dtype of ``symbol_type`` is a floating point type.
@@ -218,12 +238,7 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
-        return False
-    return isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType) and dtype.kind in [
-        ts.ScalarKind.FLOAT32,
-        ts.ScalarKind.FLOAT64,
-    ]
+    return _is_field_or_scalar_of_kind(symbol_type, _FLOATING_POINT_KINDS)
 
 
 def is_integer(symbol_type: ts.TypeSpec) -> bool:
@@ -239,15 +254,7 @@ def is_integer(symbol_type: ts.TypeSpec) -> bool:
     >>> is_integer(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     False
     """
-    return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in {
-        ts.ScalarKind.INT8,
-        ts.ScalarKind.UINT8,
-        ts.ScalarKind.INT16,
-        ts.ScalarKind.UINT16,
-        ts.ScalarKind.INT32,
-        ts.ScalarKind.UINT32,
-        ts.ScalarKind.INT64,
-    }
+    return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in _INTEGRAL_KINDS
 
 
 def is_integral(symbol_type: ts.TypeSpec) -> bool:
@@ -263,9 +270,7 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
     >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     True
     """
-    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
-        return False
-    return is_integer(extract_dtype(symbol_type))
+    return _is_field_or_scalar_of_kind(symbol_type, _INTEGRAL_KINDS)
 
 
 def is_number(symbol_type: ts.TypeSpec) -> bool:
@@ -291,11 +296,19 @@ def is_number(symbol_type: ts.TypeSpec) -> bool:
 
 
 def is_logical(symbol_type: ts.TypeSpec) -> bool:
-    return (
-        isinstance(symbol_type, (ts.FieldType, ts.ScalarType))
-        and isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType)
-        and dtype.kind is ts.ScalarKind.BOOL
-    )
+    """
+    Check if the dtype of ``symbol_type`` is a boolean type.
+
+    Examples:
+    ---------
+    >>> is_logical(ts.ScalarType(kind=ts.ScalarKind.BOOL))
+    True
+    >>> is_logical(ts.ScalarType(kind=ts.ScalarKind.INT32))
+    False
+    >>> is_logical(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)))
+    True
+    """
+    return _is_field_or_scalar_of_kind(symbol_type, (ts.ScalarKind.BOOL,))
 
 
 def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
