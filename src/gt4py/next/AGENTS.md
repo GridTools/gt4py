@@ -83,5 +83,5 @@ Next tests run across a **backend matrix** (embedded NumPy/CuPy/JAX, `gtfn`,
   recorded as a marker, not a reason to move it (so `pytest -m uses_<feature>`
   finds it regardless of which file it lives in).
 - Run with `uv run pytest tests/next_tests/ -x -q`; matrix-level confidence
-  comes from `uv run nox -s "test_next-<py>(...)"`. GPU and `dace` sessions
+  comes from `uv run nox -s "test_next-<py>(...)"`. GPU sessions
   may be unavailable locally and will skip.
