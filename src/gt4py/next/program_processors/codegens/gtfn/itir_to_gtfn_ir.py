@@ -183,31 +183,10 @@ def _collect_offset_definitions(
                     name=Sym(id=axis.value), alias=_vertical_dimension
                 )
 
-    for offset_name, dim_or_connectivity_type in offset_provider_type.items():
-        if isinstance(dim_or_connectivity_type, common.Dimension):
-            dim: common.Dimension = dim_or_connectivity_type
-            if grid_type == common.GridType.CARTESIAN:
-                # create alias from offset to dimension
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
-            else:
-                assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim.kind == common.DimensionKind.VERTICAL:
-                    raise ValueError(
-                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
-                    )
-                # create alias from vertical offset to vertical dimension
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value), alias=_vertical_dimension
-                )
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
-        elif isinstance(
-            connectivity_type := dim_or_connectivity_type, common.NeighborConnectivityType
-        ):
+    for offset_name, connectivity_type in offset_provider_type.items():
+        # cartesian shifts are encoded as `CartesianOffset` nodes (handled above) and don't
+        # occur in the `offset_provider_type`, which now only holds neighbor connectivities
+        if isinstance(connectivity_type, common.NeighborConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
             if offset_name != connectivity_type.neighbor_dim.value:
@@ -223,7 +202,7 @@ def _collect_offset_definitions(
                 )
         else:
             raise AssertionError(
-                "Elements of offset provider need to be either 'Dimension' or 'Connectivity'."
+                "Elements of the offset provider type need to be a 'NeighborConnectivityType'."
             )
     return offset_definitions
 

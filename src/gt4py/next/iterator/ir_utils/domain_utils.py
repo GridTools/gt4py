@@ -193,16 +193,7 @@ class SymbolicDomain:
             assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
             connectivity_type = common.get_offset_type(offset_provider_type, off.value)
 
-            if isinstance(connectivity_type, common.Dimension):
-                if val is trace_shifts.Sentinel.VALUE:
-                    raise NotImplementedError("Dynamic offsets not supported.")
-                assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
-                current_dim = connectivity_type
-                # cartesian offset
-                new_ranges[current_dim] = SymbolicRange.translate(
-                    self.ranges[current_dim], val.value
-                )
-            elif isinstance(connectivity_type, common.NeighborConnectivityType):
+            if isinstance(connectivity_type, common.NeighborConnectivityType):
                 # unstructured shift
                 assert (
                     isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)

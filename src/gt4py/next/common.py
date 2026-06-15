@@ -1169,8 +1169,8 @@ def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
     )
 
 
-OffsetProviderElem: TypeAlias = Dimension | NeighborTable
-OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
+OffsetProviderElem: TypeAlias = NeighborTable
+OffsetProviderTypeElem: TypeAlias = NeighborConnectivityType
 # Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
 # use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]

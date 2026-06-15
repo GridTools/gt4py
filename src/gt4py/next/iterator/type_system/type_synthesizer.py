@@ -513,8 +513,6 @@ def _resolve_dimensions(
                 continue  # translation does not change the dimension
             assert isinstance(off_literal.value, str)
             offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
-            if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
-                continue  # No shift applied
             if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
                 if input_dim == offset_type.codomain:  # Check if input fits to offset
                     input_dim = offset_type.domain[0]  # Update input_dim for next iteration
@@ -670,9 +668,7 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
                     offset_axis.value, str
                 )
                 type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
-                if isinstance(type_, common.Dimension):
-                    pass
-                elif isinstance(type_, common.NeighborConnectivityType):
+                if isinstance(type_, common.NeighborConnectivityType):
                     found = False
                     for i, dim in enumerate(new_position_dims):
                         if dim.value == type_.source_dim.value:

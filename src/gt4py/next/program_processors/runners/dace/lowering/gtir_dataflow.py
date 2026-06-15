@@ -1686,19 +1686,18 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(offset, str)
         offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
 
-        if isinstance(offset_provider_type, gtx_common.Dimension):
-            return self._make_cartesian_shift(it, offset_provider_type, offset_expr)
-        else:
-            # initially, the storage for the connectivity tables is created as transient;
-            # when the tables are used, the storage is changed to non-transient,
-            # so the corresponding arrays are supposed to be allocated by the SDFG caller
-            offset_table = gtx_dace_args.connectivity_identifier(offset)
-            self.sdfg.arrays[offset_table].transient = False
-            offset_table_node = self.state.add_access(offset_table)
+        # named offsets are always unstructured shifts; cartesian shifts are encoded as
+        # self-describing `CartesianOffset` nodes and handled above
+        # initially, the storage for the connectivity tables is created as transient;
+        # when the tables are used, the storage is changed to non-transient,
+        # so the corresponding arrays are supposed to be allocated by the SDFG caller
+        offset_table = gtx_dace_args.connectivity_identifier(offset)
+        self.sdfg.arrays[offset_table].transient = False
+        offset_table_node = self.state.add_access(offset_table)
 
-            return self._make_unstructured_shift(
-                it, offset_provider_type, offset_table_node, offset_expr
-            )
+        return self._make_unstructured_shift(
+            it, offset_provider_type, offset_table_node, offset_expr
+        )
 
     def _visit_generic_builtin(self, node: gtir.FunCall) -> ValueExpr:
         """

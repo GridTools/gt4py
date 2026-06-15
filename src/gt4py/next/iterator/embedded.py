@@ -599,14 +599,7 @@ def execute_shift(
             raise AssertionError()
         return new_pos
     offset_implementation = common.get_offset(offset_provider, tag)
-    if isinstance(offset_implementation, common.Dimension):
-        new_pos = copy.copy(pos)
-        if common.is_int_index(value := new_pos[offset_implementation.value]):
-            new_pos[offset_implementation.value] = value + index
-        else:
-            raise AssertionError()
-        return new_pos
-    elif common.is_neighbor_table(offset_implementation):
+    if common.is_neighbor_table(offset_implementation):
         source_dim = offset_implementation.__gt_type__().source_dim
         assert source_dim.value in pos
         new_pos = pos.copy()
