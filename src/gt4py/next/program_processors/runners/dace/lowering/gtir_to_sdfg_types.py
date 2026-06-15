@@ -86,9 +86,9 @@ class FieldopData:
                 (dim, dace.symbolic.SymExpr(0) if self.origin is None else self.origin[i])
                 for i, dim in enumerate(self.gt_type.dims)
             ]
-            return gtir_dataflow.IteratorExpr(
-                self.dc_node, self.gt_type.dtype, field_origin, it_indices
-            )
+            dtype = self.gt_type.dtype
+            assert isinstance(dtype, (ts.ScalarType, ts.ListType))
+            return gtir_dataflow.IteratorExpr(self.dc_node, dtype, field_origin, it_indices)
 
         raise NotImplementedError(f"Node type {type(self.gt_type)} not supported.")
 

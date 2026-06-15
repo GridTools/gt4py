@@ -831,7 +831,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             print(f"Warning: return type of '{func_name}' might be inconsistent (not implemented).")
 
         # deduce return type
-        return_type: Optional[ts.FieldType | ts.ScalarType] = None
+        return_type: Optional[ts.FieldType | ts.ScalarType | ts.TypeVarType] = None
         if (
             func_name
             in fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES + fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES

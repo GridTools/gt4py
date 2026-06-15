@@ -396,7 +396,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             # expensive type deduction for all arguments and not include it in the key.
             if enable_jit:
                 warnings.warn(
-                    "Calling generic programs / direct calls to scan operators are not optimized. "
+                    "Calling generic programs / operators (e.g. operators with generic dtype "
+                    "or direct calls to scan operators) is not optimized. "
                     "Consider calling a specialized version instead.",
                     stacklevel=3,
                 )
@@ -459,19 +460,11 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         Is the operator or program generic in the sense that it can be called for different
         argument types.
 
-        Right now this is only the case for scan operators.
+        Right now this is the case for scan operators (genericity communicated via
+        `DeferredType` parameters created in `type_info.type_in_program_context`) and for
+        operators with a generic dtype (type variable).
         """
-        # TODO(tehrengruber): This concept does not exist elsewhere and is not properly reflected
-        #  in the type system. For now we just use `DeferredType` to communicate between
-        #  here and `type_info.type_in_program_context`.
-        return any(
-            isinstance(t, ts.DeferredType)
-            for t in itertools.chain(
-                self.program_type.definition.pos_only_args,
-                self.program_type.definition.pos_or_kw_args.values(),
-                self.program_type.definition.kw_only_args.values(),
-            )
-        )
+        return type_info.is_generic(self.program_type.definition)
 
     @functools.cached_property
     def _args_canonicalizer(self) -> Callable[..., tuple[tuple, dict[str, Any]]]:

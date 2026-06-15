@@ -105,6 +105,32 @@ class ScalarType(DataType):
         return f"{kind_str}{self.shape}"
 
 
+class TypeVarType(DataType):
+    """
+    A scalar type variable, universally quantified over its constraints.
+
+    Represents the type of a value-constrained Python ``typing.TypeVar`` (e.g.
+    ``TypeVar("T", float32, float64)``) used in the signature of a generic operator.
+    Two occurrences with the same ``name`` within one signature denote the same type.
+    """
+
+    name: str
+    constraints: tuple[ScalarType, ...]
+
+    def __str__(self) -> str:
+        return f"{self.name}: ({' | '.join(map(str, self.constraints))})"
+
+    @eve_datamodels.validator("constraints")
+    def _constraints_validator(
+        self, attribute: eve_datamodels.Attribute, constraints: tuple[ScalarType, ...]
+    ) -> None:
+        if not constraints:
+            raise ValueError(
+                f"Type variable '{self.name}' must be value-constrained, i.e. have at"
+                " least one constraint."
+            )
+
+
 class ListType(DataType):
     """Represents a neighbor list in the ITIR representation.
 
@@ -119,7 +145,7 @@ class ListType(DataType):
 
 class FieldType(DataType, CallableType):
     dims: list[common.Dimension]
-    dtype: ScalarType | ListType
+    dtype: ScalarType | ListType | TypeVarType
 
     def __str__(self) -> str:
         dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"

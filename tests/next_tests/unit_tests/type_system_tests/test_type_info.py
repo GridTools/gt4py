@@ -373,6 +373,206 @@ def test_type_info_basic(symbol_type, expected):
         assert getattr(type_info, key)(symbol_type) == expected[key]
 
 
+def is_generic_cases() -> list[tuple[ts.TypeSpec, bool]]:
+    deferred_type = ts.DeferredType(constraint=None)
+    float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    concrete_field_type = ts.FieldType(dims=[TDim], dtype=float_type)
+
+    def function_type(params: list[ts.TypeSpec]) -> ts.FunctionType:
+        return ts.FunctionType(
+            pos_only_args=[],
+            pos_or_kw_args={f"arg{i}": param for i, param in enumerate(params)},
+            kw_only_args={},
+            returns=ts.VoidType(),
+        )
+
+    return [
+        (deferred_type, True),
+        (float_type, False),
+        (concrete_field_type, False),
+        (ts.TupleType(types=[float_type, concrete_field_type]), False),
+        # `DeferredType` nested inside a composite type, e.g. the program context signature
+        #  of a scan operator with tuple arguments
+        (ts.TupleType(types=[float_type, deferred_type]), True),
+        (function_type([concrete_field_type]), False),
+        (function_type([deferred_type]), True),
+        (function_type([ts.TupleType(types=[deferred_type])]), True),
+        (
+            ts_ffront.ProgramType(definition=function_type([deferred_type])),
+            True,
+        ),
+        (
+            ts_ffront.FieldOperatorType(definition=function_type([concrete_field_type])),
+            False,
+        ),
+    ]
+
+
+@pytest.mark.parametrize("symbol_type,expected", is_generic_cases())
+def test_is_generic(symbol_type: ts.TypeSpec, expected: bool):
+    assert type_info.is_generic(symbol_type) == expected
+
+
+float32_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+int32_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
+bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
+float_var = ts.TypeVarType(name="T", constraints=(float32_type, float64_type))
+mixed_var = ts.TypeVarType(name="U", constraints=(float64_type, int32_type))
+
+
+class TestTypeVarType:
+    def test_validation(self):
+        with pytest.raises(ValueError, match="value-constrained"):
+            ts.TypeVarType(name="T", constraints=())
+
+    def test_identity_and_hashing(self):
+        from gt4py.eve import utils as eve_utils
+
+        same_var = ts.TypeVarType(name="T", constraints=(float32_type, float64_type))
+        assert float_var == same_var
+        assert hash(float_var) == hash(same_var)
+        assert eve_utils.content_hash(float_var) == eve_utils.content_hash(same_var)
+        assert float_var != ts.TypeVarType(name="S", constraints=(float32_type, float64_type))
+        # constraint order is part of the identity (preserved as written)
+        assert float_var != ts.TypeVarType(name="T", constraints=(float64_type, float32_type))
+
+    def test_is_generic(self):
+        assert type_info.is_generic(float_var)
+        assert type_info.is_generic(ts.FieldType(dims=[TDim], dtype=float_var))
+        assert type_info.is_generic(
+            ts.TupleType(types=[float64_type, ts.FieldType(dims=[TDim], dtype=float_var)])
+        )
+
+    @pytest.mark.parametrize(
+        "predicate,var,expected",
+        [
+            (type_info.is_floating_point, float_var, True),
+            (type_info.is_floating_point, mixed_var, False),
+            (type_info.is_integral, float_var, False),
+            (type_info.is_integral, ts.TypeVarType(name="I", constraints=(int32_type,)), True),
+            (type_info.is_arithmetic, float_var, True),
+            (type_info.is_arithmetic, mixed_var, True),
+            (
+                type_info.is_arithmetic,
+                ts.TypeVarType(name="B", constraints=(bool_type, float64_type)),
+                False,
+            ),
+            (type_info.is_logical, ts.TypeVarType(name="B", constraints=(bool_type,)), True),
+            (type_info.is_logical, float_var, False),
+            (type_info.is_arithmetic_scalar, float_var, True),
+        ],
+    )
+    def test_predicates_evaluate_over_constraints(self, predicate, var, expected):
+        assert predicate(var) == expected
+        if predicate is not type_info.is_arithmetic_scalar:  # rejects fields by design
+            assert predicate(ts.FieldType(dims=[TDim], dtype=var)) == expected
+
+    def test_promote_same_var(self):
+        assert type_info.promote(float_var, float_var) == float_var
+        promoted = type_info.promote(
+            ts.FieldType(dims=[TDim], dtype=float_var), ts.FieldType(dims=[TDim], dtype=float_var)
+        )
+        assert promoted == ts.FieldType(dims=[TDim], dtype=float_var)
+
+    def test_promote_var_with_scalar_arg(self):
+        promoted = type_info.promote(ts.FieldType(dims=[TDim], dtype=float_var), float_var)
+        assert promoted == ts.FieldType(dims=[TDim], dtype=float_var)
+
+    @pytest.mark.parametrize(
+        "types",
+        [
+            (float_var, float64_type),
+            (float_var, mixed_var),
+            (ts.FieldType(dims=[TDim], dtype=float_var), float64_type),
+            (
+                ts.FieldType(dims=[TDim], dtype=float_var),
+                ts.FieldType(dims=[TDim], dtype=float64_type),
+            ),
+        ],
+    )
+    def test_promote_mixing_error(self, types):
+        with pytest.raises(ValueError, match="type variable"):
+            type_info.promote(*types)
+
+
+class TestBindTypeVars:
+    def test_bind_from_field(self):
+        binding = type_info.bind_type_vars(
+            [ts.FieldType(dims=[TDim], dtype=float_var)],
+            [ts.FieldType(dims=[TDim], dtype=float32_type)],
+        )
+        assert binding == {"T": float32_type}
+
+    def test_bind_from_scalar_and_nested(self):
+        binding = type_info.bind_type_vars(
+            [ts.TupleType(types=[float_var, ts.FieldType(dims=[TDim], dtype=float_var)])],
+            [ts.TupleType(types=[float64_type, ts.FieldType(dims=[TDim], dtype=float64_type)])],
+        )
+        assert binding == {"T": float64_type}
+
+    def test_concrete_params_dont_bind(self):
+        assert (
+            type_info.bind_type_vars(
+                [ts.FieldType(dims=[TDim], dtype=float64_type)],
+                [ts.FieldType(dims=[TDim], dtype=float32_type)],
+            )
+            == {}
+        )
+
+    def test_inconsistent_binding(self):
+        with pytest.raises(ValueError, match="bound inconsistently"):
+            type_info.bind_type_vars(
+                [
+                    ts.FieldType(dims=[TDim], dtype=float_var),
+                    ts.FieldType(dims=[TDim], dtype=float_var),
+                ],
+                [
+                    ts.FieldType(dims=[TDim], dtype=float32_type),
+                    ts.FieldType(dims=[TDim], dtype=float64_type),
+                ],
+            )
+
+    def test_constraint_violation(self):
+        with pytest.raises(ValueError, match="constraints"):
+            type_info.bind_type_vars(
+                [ts.FieldType(dims=[TDim], dtype=float_var)],
+                [ts.FieldType(dims=[TDim], dtype=int32_type)],
+            )
+
+
+class TestSubstituteTypeVars:
+    def test_substitute(self):
+        generic = ts.TupleType(
+            types=[float_var, ts.FieldType(dims=[TDim], dtype=float_var), int32_type]
+        )
+        substituted = type_info.substitute_type_vars(generic, {"T": float32_type})
+        assert substituted == ts.TupleType(
+            types=[float32_type, ts.FieldType(dims=[TDim], dtype=float32_type), int32_type]
+        )
+        assert not type_info.is_generic(substituted)
+
+    def test_unbound_vars_are_kept(self):
+        generic = ts.FieldType(dims=[TDim], dtype=float_var)
+        assert type_info.substitute_type_vars(generic, {"S": float32_type}) == generic
+
+    def test_concrete_is_returned_unchanged(self):
+        concrete = ts.FieldType(dims=[TDim], dtype=float64_type)
+        assert type_info.substitute_type_vars(concrete, {"T": float32_type}) is concrete
+
+    def test_substitute_function_type(self):
+        func_type = ts.FunctionType(
+            pos_only_args=[ts.FieldType(dims=[TDim], dtype=float_var)],
+            pos_or_kw_args={"a": float_var},
+            kw_only_args={},
+            returns=ts.FieldType(dims=[TDim], dtype=float_var),
+        )
+        substituted = type_info.substitute_type_vars(func_type, {"T": float64_type})
+        assert substituted.pos_only_args[0] == ts.FieldType(dims=[TDim], dtype=float64_type)
+        assert substituted.pos_or_kw_args["a"] == float64_type
+        assert substituted.returns == ts.FieldType(dims=[TDim], dtype=float64_type)
+
+
 @pytest.mark.parametrize("func_type,args,kwargs,expected,return_type", callable_type_info_cases())
 def test_accept_args(
     func_type: ts.TypeSpec,
