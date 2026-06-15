@@ -76,9 +76,10 @@ if __name__ == "__main__":
     )
 
     # -- Python sub-commands --
-    # Assemble the CLI from all public commands in the 'scripts/python' package
-    for _, name, _ in pkgutil.walk_packages([str(common.PY_SCRIPTS_DIR)]):
-        if not name.startswith("_"):
+    # Assemble the CLI from all public top-level command modules in 'scripts/python'.
+    # iter_modules (non-recursive) avoids importing infrastructure sub-packages like helpers/.
+    for _, name, ispkg in pkgutil.iter_modules([str(common.PY_SCRIPTS_DIR)]):
+        if not name.startswith("_") and not ispkg:
             module = importlib.import_module(f"python.{name}")
             if hasattr(module, "cli") and isinstance(module.cli, typer.Typer):
                 if len(module.cli.registered_commands) > 1:
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     def _extract_shell_help(script_path: pathlib.Path) -> str | None:
         """Extract help text from lines with a ``[help]`` marker in a shell script."""
         help_lines: list[str] = []
-        with open(script_path) as fh:
+        with open(script_path, encoding="utf-8") as fh:
             for line in fh:
                 comment_body = line.strip().lstrip("#").lstrip()
                 if comment_body.startswith("[help]"):

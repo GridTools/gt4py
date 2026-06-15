@@ -13,7 +13,7 @@
 Unified scripts tests entry point.
 
 Provides two sub-commands:
-- ``python``: run python scripts tests at ``scripts/tests/python`` (executed from ``scripts/python``).
+- ``python``: run python scripts tests at ``scripts/tests/python`` (pytest cwd is ``scripts/tests/python``).
 - ``sh``: run bash scripts tests with bats from ``scripts/tests/sh``.
 
 Usage:
