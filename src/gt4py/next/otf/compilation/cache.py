@@ -8,13 +8,12 @@
 
 """Caching for compiled backend artifacts."""
 
-import hashlib
 import pathlib
 import tempfile
+from typing import Any
 
-from gt4py.next import config
+from gt4py.next import config, utils
 from gt4py.next.otf import stages
-from gt4py.next.otf.binding import interface
 
 
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
@@ -22,30 +21,8 @@ _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 _session_cache_dir_path = pathlib.Path(_session_cache_dir.name)
 
 
-def _serialize_param(parameter: interface.Parameter) -> str:
-    return f"{parameter.name}: {parameter.type_!s}"
-
-
-def _serialize_library_dependency(dependency: interface.LibraryDependency) -> str:
-    return f"{dependency.name}/{dependency.version}"
-
-
-def _serialize_source(source: stages.ProgramSource) -> str:
-    parameters = [_serialize_param(param) for param in source.entry_point.parameters]
-    dependencies = [_serialize_library_dependency(dep) for dep in source.library_deps]
-    return f"""\
-    language: {source.code_spec}
-    name: {source.entry_point.name}
-    params: {", ".join(parameters)}
-    deps: {", ".join(dependencies)}
-    src: {source.source_code}
-    """
-
-
-def _cache_folder_name(source: stages.ProgramSource) -> str:
-    serialized = _serialize_source(source)
-    fingerprint = hashlib.sha256(serialized.encode(encoding="utf-8"))
-    fingerprint_hex_str = fingerprint.hexdigest()
+def _cache_folder_name(source: stages.ProgramSource, *ctx: Any) -> str:
+    fingerprint_hex_str = utils.stable_fingerprinter((source, *ctx))
     return source.entry_point.name + "_" + fingerprint_hex_str
 
 
@@ -61,7 +38,9 @@ def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:
 
 
 def get_cache_folder(
-    compilable_source: stages.CompilableProject, lifetime: config.BuildCacheLifetime
+    compilable_source: stages.CompilableProject,
+    lifetime: config.BuildCacheLifetime,
+    *ctx: Any,
 ) -> pathlib.Path:
     """
     Construct the path to where the build system project artifact of a compilable source should be cached.
@@ -69,7 +48,7 @@ def get_cache_folder(
     The returned path points to an existing folder in all cases.
     """
     # TODO(ricoh): make dependent on binding source too or add alternative that depends on bindings
-    folder_name = _cache_folder_name(compilable_source.program_source)
+    folder_name = _cache_folder_name(compilable_source.program_source, ctx)
 
     base_path = get_cache_base_path(lifetime)
     base_path.mkdir(exist_ok=True)

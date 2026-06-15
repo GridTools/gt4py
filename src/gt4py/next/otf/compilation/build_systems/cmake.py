@@ -100,7 +100,7 @@ class CMakeFactory(
         )
 
         return CMakeProject(
-            root_path=cache.get_cache_folder(source, cache_lifetime),
+            root_path=cache.get_cache_folder(source, cache_lifetime, self),
             source_files={
                 header_name: source.program_source.source_code,
                 bindings_name: source.binding_source.source_code,

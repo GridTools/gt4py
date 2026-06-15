@@ -19,7 +19,6 @@ import factory
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import common, config
-from gt4py.next.ffront import stages as ffront_stages
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
@@ -171,13 +170,13 @@ class DaCeCompiler(
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
-        ):
+        ) as dace_config:
             # Append a subfolder named after the fingerprint of this compiler instance, so
             # that builds with different compiler settings (e.g. non-default dace config) do
             # not clash in the same build folder.
             sdfg_build_folder = gtx_cache.get_cache_folder(
-                inp, self.cache_lifetime
-            ) / ffront_stages.fingerprint_stage(self)
+                inp, self.cache_lifetime, self, dace_config
+            )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)

@@ -66,7 +66,7 @@ class Compiler(
         self,
         inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
     ) -> stages.ExecutableProgram:
-        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
+        src_dir = cache.get_cache_folder(inp, self.cache_lifetime, self)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.

@@ -19,6 +19,8 @@ from dace.sdfg import nodes as dace_nodes
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
+from gt4py.next.otf import code_specs, stages
+from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace.workflow import compilation as dace_wf_compilation
 
 
@@ -66,16 +68,31 @@ def _make_sdfg_with_gpu_map() -> dace.SDFG:
     return sdfg
 
 
+def _make_compilable_project() -> stages.CompilableProject:
+    """A real `CompilableProject` wrapping the GPU SDFG, as the dace translation step emits.
+
+    Using a real project (rather than a `MagicMock`) lets the unmocked `get_cache_folder`
+    fingerprint the program source for the build-folder name.
+    """
+    program_source = stages.ProgramSource(
+        entry_point=interface.Function("gpu_program", parameters=()),
+        source_code=_make_sdfg_with_gpu_map().to_json(),
+        library_deps=(),
+        code_spec=code_specs.SDFGCodeSpec(),
+    )
+    binding_source = stages.BindingSource(source_code="", library_deps=())
+    return stages.CompilableProject(program_source=program_source, binding_source=binding_source)
+
+
 def _run_compiler(
-    tmp_path, *, add_gpu_trace_markers: bool, device_type: core_defs.DeviceType
+    *, add_gpu_trace_markers: bool, device_type: core_defs.DeviceType
 ) -> tuple[mock.MagicMock, dace.SDFG]:
     """Run `DaCeCompiler` on a GPU SDFG with compilation stubbed out.
 
     Returns the spy wrapping `_add_tx_markers` and the SDFG that was handed to
     ``SDFG.compile`` (i.e. the SDFG after any marker processing).
     """
-    inp = mock.MagicMock()
-    inp.program_source.source_code = _make_sdfg_with_gpu_map().to_json()
+    inp = _make_compilable_project()
 
     compiler = dace_wf_compilation.DaCeCompiler(
         bind_func_name="bind",
@@ -92,7 +109,6 @@ def _run_compiler(
         ) as spy,
         mock.patch.object(dace.SDFG, "compile", autospec=True) as compile_mock,
         mock.patch.object(dace_wf_compilation, "CompiledDaceProgram"),
-        mock.patch.object(dace_wf_compilation.gtx_cache, "get_cache_folder", return_value=tmp_path),
         mock.patch.object(
             dace_wf_compilation.locking, "lock", lambda *args, **kwargs: contextlib.nullcontext()
         ),
@@ -111,7 +127,7 @@ def _run_compiler(
 def test_compiler_applies_tx_markers_for_gpu(tmp_path):
     """On a CUDA target with the flag on, the compiler applies the markers to the SDFG."""
     spy, compiled_sdfg = _run_compiler(
-        tmp_path, add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CUDA
+        add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CUDA
     )
 
     spy.assert_called_once()
@@ -127,7 +143,7 @@ def test_compiler_applies_tx_markers_for_gpu(tmp_path):
 def test_compiler_skips_tx_markers_when_flag_disabled(tmp_path):
     """With the flag off the compiler must not touch instrumentation, even on CUDA."""
     spy, compiled_sdfg = _run_compiler(
-        tmp_path, add_gpu_trace_markers=False, device_type=core_defs.DeviceType.CUDA
+        add_gpu_trace_markers=False, device_type=core_defs.DeviceType.CUDA
     )
 
     spy.assert_not_called()
@@ -137,7 +153,7 @@ def test_compiler_skips_tx_markers_when_flag_disabled(tmp_path):
 def test_compiler_skips_tx_markers_for_non_gpu_device(tmp_path):
     """On a CPU target the markers must not be applied even with the flag on."""
     spy, compiled_sdfg = _run_compiler(
-        tmp_path, add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CPU
+        add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CPU
     )
 
     spy.assert_not_called()
@@ -154,20 +170,21 @@ def test_compiler_skips_tx_markers_for_non_gpu_device(tmp_path):
         (core_defs.DeviceType.ROCM, "HIPFLAGS"),
     ],
 )
-def test_compiler_flags_change_build_folder(tmp_path, monkeypatch, device_type, compiler_flags_env):
+def test_compiler_flags_change_build_folder(monkeypatch, device_type, compiler_flags_env):
     """Different compiler flags must produce a different build folder.
 
-    The flags are captured in `dace_config_nondefaults`, which is part of the compiler
-    fingerprint that names the per-compiler build sub-folder. Changing any of them must
-    therefore land the build in a different sub-folder of the (shared) cache folder.
+    The flags are captured in `dace_config_nondefaults`, which is part of the compiler's
+    fingerprint. The compiler instance is passed to `get_cache_folder` as the `ctx`, whose
+    fingerprint (together with the program source) is hashed into the build-folder name.
+    Changing any flag therefore changes that fingerprint and lands the build in a different
+    folder of the build cache.
     """
     monkeypatch.delenv(compiler_flags_env, raising=False)
-    _, sdfg_default = _run_compiler(tmp_path, add_gpu_trace_markers=False, device_type=device_type)
+    _, sdfg_default = _run_compiler(add_gpu_trace_markers=False, device_type=device_type)
 
     monkeypatch.setenv(compiler_flags_env, "-O0 -some-custom-flag")
-    _, sdfg_custom = _run_compiler(tmp_path, add_gpu_trace_markers=False, device_type=device_type)
+    _, sdfg_custom = _run_compiler(add_gpu_trace_markers=False, device_type=device_type)
 
-    # Only the fingerprint sub-folder changes; the shared cache folder (`tmp_path`) does not.
-    assert sdfg_default.build_folder.parent == tmp_path
-    assert sdfg_custom.build_folder.parent == tmp_path
+    # The differing `dace_config_nondefaults` make the two compilers fingerprint differently,
+    # so `get_cache_folder` names two distinct build folders.
     assert sdfg_default.build_folder != sdfg_custom.build_folder
