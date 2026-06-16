@@ -72,19 +72,23 @@ def func_to_foast(inp: DSLFieldOperatorDef) -> FOASTOperatorDef:
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
     annotations = typing.get_type_hints(inp.definition)
-    foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
-    loc = foast_definition_node.location
-    operator_attribute_nodes = {
-        key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
-        for key, value in inp.attributes.items()
-    }
-    untyped_foast_node = inp.node_class(
-        id=foast_definition_node.id,
-        definition=foast_definition_node,
-        location=loc,
-        **operator_attribute_nodes,
-    )
-    foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
+    try:
+        foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
+        loc = foast_definition_node.location
+        operator_attribute_nodes = {
+            key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
+            for key, value in inp.attributes.items()
+        }
+        untyped_foast_node = inp.node_class(
+            id=foast_definition_node.id,
+            definition=foast_definition_node,
+            location=loc,
+            **operator_attribute_nodes,
+        )
+        foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
+    except errors.DSLError as err:
+        err.add_note(f"While processing the definition of '{inp.definition.__name__}'.")
+        raise
     return ffront_stages.FOASTOperatorDef(
         foast_node=foast_node,
         closure_vars=closure_vars,
@@ -409,7 +413,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs: Any) -> None:
         raise errors.UnsupportedPythonFeatureError(
-            self.get_location(node), "logical operators `and`, `or`"
+            self.get_location(node),
+            "logical operators `and`, `or`",
+            notes=[
+                "`and` and `or` operate on whole truth values, but fields contain "
+                "one boolean per grid point."
+            ],
+            hints=["Use the element-wise operators '&' and '|' instead."],
         )
 
     def visit_IfExp(self, node: ast.IfExp, **kwargs: Any) -> foast.TernaryExpr:
