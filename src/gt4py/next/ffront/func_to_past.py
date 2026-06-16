@@ -233,8 +233,18 @@ class ProgramParser(DialectParser[past.Program]):
         )
 
     def visit_Dict(self, node: ast.Dict) -> past.Dict:
+        keys = []
+        for param in node.keys:
+            new_key = self.visit(cast(ast.AST, param))
+            if not isinstance(new_key, past.Name):
+                raise errors.DSLError(
+                    self.get_location(cast(ast.AST, param)),
+                    "Dictionary keys must be dimension objects referenced by name "
+                    "(e.g. 'IDim', not '\"IDim\"').",
+                )
+            keys.append(new_key)
         return past.Dict(
-            keys_=[self.visit(cast(ast.AST, param)) for param in node.keys],
+            keys_=keys,
             values_=[self.visit(param) for param in node.values],
             location=self.get_location(node),
         )
