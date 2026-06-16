@@ -73,7 +73,7 @@ def _type_of_argument(value: Any, description: str, function_name: str) -> ts.Ty
     try:
         return type_translation.from_value(value)
     except Exception as err:
-        hints = ()
+        hints: tuple[str, ...] = ()
         if hasattr(value, "__array__") or hasattr(value, "__cuda_array_interface__"):
             hints = (
                 "Wrap raw arrays in a GT4Py field before passing them to a program or "
@@ -485,8 +485,7 @@ class ProgramWithBoundArgs(Program):
         )
 
         arg_types = [
-            _type_of_argument(arg, f"argument {i + 1}", self.__name__)
-            for i, arg in enumerate(args)
+            _type_of_argument(arg, f"argument {i + 1}", self.__name__) for i, arg in enumerate(args)
         ]
         kwarg_types = {
             k: _type_of_argument(v, f"keyword argument '{k}'", self.__name__)

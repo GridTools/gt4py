@@ -476,9 +476,7 @@ def test_wrong_out_type_in_direct_call_is_a_dsl_error():
     a = gtx.as_field([IDim], np.zeros(5))
     out = gtx.as_field([JDim], np.zeros(5))
 
-    with pytest.raises(
-        errors.DSLTypeError, match="expected keyword argument 'out' to be of type"
-    ):
+    with pytest.raises(errors.DSLTypeError, match="expected keyword argument 'out' to be of type"):
         _copy_op(a, out=out, offset_provider={})
 
 
@@ -559,9 +557,7 @@ def test_non_integral_neighbor_table_reports_dtype():
     V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
 
     with pytest.raises(ValueError, match="integral dtype"):
-        gtx.as_connectivity(
-            [Vertex, V2EDim], codomain=Edge, data=np.array([[0.5, 1.5]])
-        )
+        gtx.as_connectivity([Vertex, V2EDim], codomain=Edge, data=np.array([[0.5, 1.5]]))
 
 
 def test_diagnostic_codes_are_stable():

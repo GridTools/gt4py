@@ -183,8 +183,7 @@ class FieldConstructor:
             and any(isinstance(d, str) for d in domain)
         ):
             raise TypeError(
-                f"Invalid domain {domain!r}: dimensions must be 'Dimension' objects, "
-                "not strings."
+                f"Invalid domain {domain!r}: dimensions must be 'Dimension' objects, not strings."
             )
         if isinstance(domain, Sequence) and all(
             isinstance(dim, common.Dimension) for dim in domain

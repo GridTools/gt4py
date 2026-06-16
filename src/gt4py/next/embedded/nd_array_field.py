@@ -502,9 +502,7 @@ class NdArrayConnectivityField(
             assert array.dtype.type == core_defs.dtype(dtype).scalar_type
 
         if not issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES):
-            raise ValueError(
-                f"Neighbor tables must have an integral dtype, got '{array.dtype}'."
-            )
+            raise ValueError(f"Neighbor tables must have an integral dtype, got '{array.dtype}'.")
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
