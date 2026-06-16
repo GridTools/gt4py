@@ -9,7 +9,7 @@
 import functools
 import types
 from collections.abc import Callable, Collection, Iterable, Iterator
-from typing import Any, Literal, Sequence, Type, TypeGuard, TypeVar, cast, overload
+from typing import Any, Final, Literal, Sequence, Type, TypeGuard, TypeVar, cast, overload
 
 import numpy as np
 
@@ -210,8 +210,8 @@ def _scalar_kinds(scalar_types: tuple[type, ...]) -> frozenset[ts.ScalarKind]:
     return frozenset(ts.ScalarKind[np.dtype(t).name.upper()] for t in scalar_types)
 
 
-_FLOATING_POINT_KINDS = _scalar_kinds(core_defs.FLOAT_TYPES)
-_INTEGRAL_KINDS = _scalar_kinds(core_defs.INTEGRAL_TYPES)
+_FLOATING_POINT_KINDS: Final[frozenset[ts.ScalarKind]] = _scalar_kinds(core_defs.FLOAT_TYPES)
+_INTEGRAL_KINDS: Final[frozenset[ts.ScalarKind]] = _scalar_kinds(core_defs.INTEGRAL_TYPES)
 
 
 def _is_field_or_scalar_of_kind(symbol_type: ts.TypeSpec, kinds: Collection[ts.ScalarKind]) -> bool:
