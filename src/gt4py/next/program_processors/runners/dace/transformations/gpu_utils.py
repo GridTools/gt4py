@@ -1058,9 +1058,6 @@ def gt_gpu_apply_mempool(sdfg: dace.SDFG) -> None:
         sdfg: The SDFG that should be processed.
     """
 
-    # NOTE: For experimentation purposes we will disable the CUDA MemoryPool
-    return
-
     # TODO(phimuell): Reverse once the new codegen has caught up.
     gpu_backend = dace.Config.get("compiler.cuda.backend")
     if gpu_backend != "cuda":
