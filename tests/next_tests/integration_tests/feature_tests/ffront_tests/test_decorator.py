@@ -81,13 +81,13 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
 
 def test_offset_provider_cache(unstructured_case):
     if unstructured_case.backend is None:
-        pytest.skip("Precompiled program with embedded execution is not possible.")
+        pytest.skip("Embedded execution does not use the compiled program cache.")
 
     @gtx.field_operator
     def testee_op(a: cases.VField) -> cases.VField:
         return a
 
-    @gtx.program(backend=unstructured_case.backend)
+    @gtx.program(backend=unstructured_case.backend, grid_type=gtx_common.GridType.UNSTRUCTURED)
     def testee(a: cases.VField, out: cases.VField):
         testee_op(a, out=out)
 
