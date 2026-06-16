@@ -108,8 +108,9 @@ def _tree_map_tuple_body(
         result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
         with_path_arg=True,
     )
-    def mapper(*args):
+    def mapper(*args: ts.TypeSpec | tuple[int, ...]) -> itir.Expr:
         *_el_types, path = args
+        assert isinstance(path, tuple), "Expected path to be tuple[int, ...]"
         return im.call(f)(
             *(functools.reduce(_collapsing_tuple_get, path, tup_expr) for tup_expr in tup_exprs)
         )
@@ -143,16 +144,18 @@ def _unroll_tuple_map(
     uids: utils.IDGeneratorPool,
 ) -> itir.Expr:
     tup_exprs = list(tup_exprs)
-    tup_types = list(tup_types)
-    for tup_type in tup_types:
+    tup_types_list = list(tup_types)
+    for tup_type in tup_types_list:
         if not isinstance(tup_type, ts.TupleType):
             raise TypeError(
                 f"'{builtin_name}' requires all arguments to be tuples, got '{tup_type}'."
             )
-    if not type_info.tuple_structures_match(*tup_types):
+    tup_types_validated: list[ts.TupleType] = tup_types_list  # type: ignore[assignment]
+
+    if not type_info.tuple_structures_match(*tup_types_validated):
         raise TypeError(
             f"'{builtin_name}' requires all arguments to share the same (nested) tuple "
-            f"structure, got {[str(t) for t in tup_types]}."
+            f"structure, got {[str(t) for t in tup_types_validated]}."
         )
 
     # For trivial args (those that can be duplicated without cost or side effects),
@@ -170,7 +173,7 @@ def _unroll_tuple_map(
             let_bindings.append((ref_name, tup))
             substituted_exprs.append(im.ref(ref_name))
 
-    body = _UNROLLERS[builtin_name](f, substituted_exprs, tup_types)
+    body = _UNROLLERS[builtin_name](f, substituted_exprs, tup_types_validated)
     return im.let(*let_bindings)(body) if let_bindings else body
 
 
