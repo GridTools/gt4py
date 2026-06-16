@@ -5,6 +5,16 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+"""Framework for gt4py.next integration ("feature") tests.
+
+A test requests the ``cartesian_case`` / ``unstructured_case`` fixture -- a
+``Case`` bundling a backend, allocator, offset provider and default sizes --
+builds inputs with ``allocate(...)``, and checks results with ``verify(...)`` /
+``verify_with_default_data(...)``. The backend matrix these fixtures
+parametrize over, and the per-backend skip/xfail lists, live in
+``next_tests.definitions`` (see ADR 0015). The shared fixtures and the
+dimension / offset / field aliases live in the sibling ``cases_utils`` module.
+"""
 
 from __future__ import annotations
 
