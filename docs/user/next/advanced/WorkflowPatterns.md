@@ -153,7 +153,7 @@ graph LR
 
 
 inp --> calc
-inp(A: int) --> ha{{"key_function(A)"}} --> h("hash(A)") --> ck{{"check cache"}} -->|miss| miss("not in cache") --> calc{{add_3_times_2}} --> out(result)
+inp(A: int) --> ha{{"input_fingerprinter(A)"}} --> h("hash(A)") --> ck{{"check cache"}} -->|miss| miss("not in cache") --> calc{{add_3_times_2}} --> out(result)
 ck -->|hit| hit("in cache") --> out
 ```
 
@@ -167,15 +167,15 @@ def debug_print(inp: int) -> int:
     return inp
 
 
-# NOTE: `CachedStep` includes a fingerprint of the step itself in the cache key,
-# so the step (and any functions it wraps) must be picklable. We therefore keep
-# `debug_print` as a plain module-level function and wrap it with `make_step`
-# under a different name, instead of shadowing it with the `@make_step` decorator.
+# NOTE: `CachedStep` keys the cache on a fingerprint of the step itself plus the
+# `input_fingerprinter` of the input. `.in_memory` pairs a `dict` cache with the
+# session fingerprinter, which hashes the step structurally -- so non-importable
+# callables (lambdas, closures) are fine for this single-process cache.
 debug_print_step = gtx.otf.workflow.make_step(debug_print)
 
-cached_calc = gtx.otf.workflow.CachedStep(
+cached_calc = gtx.otf.workflow.CachedStep.in_memory(
     step=debug_print_step.chain(add_3_times_2),
-    key_function=lambda i: str(i),  # using ints as their own hash
+    input_fingerprinter=lambda i: str(i),  # using ints as their own hash
 )
 
 cached_calc(1)
@@ -202,9 +202,8 @@ Let's say we want to make our calculation workflow compatible with string input.
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
-# NOTE: kept as a plain module-level function (instead of shadowing it with the
-# `@make_step` decorator) so that `CachedStep`, which fingerprints the step by
-# qualified name, can resolve it when `StrToIntFactory(cached=True)` is used below.
+# A plain conversion step turning a string into an int, chained into the
+# workflow below and reused by `StrToIntFactory(cached=True)`.
 def to_int(inp: str) -> int:
     assert isinstance(inp, str), "Can not work with 'int'!"  # yes, this is horribly contrived
     return int(inp)
@@ -314,7 +313,9 @@ class StrToIntFactory(factory.Factory):
         )
         cached = factory.Trait(
             inner_step=factory.LazyAttribute(
-                lambda o: gtx.otf.workflow.CachedStep(step=(o.optional_or_not), key_function=str)
+                lambda o: gtx.otf.workflow.CachedStep.in_memory(
+                    step=o.optional_or_not, input_fingerprinter=str
+                )
             )
         )
 
