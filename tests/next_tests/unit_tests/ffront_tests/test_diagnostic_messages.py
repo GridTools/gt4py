@@ -23,6 +23,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import errors, float32, float64
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
+from gt4py.next.ffront.func_to_past import ProgramParser
 
 
 IDim = gtx.Dimension("IDim")
@@ -31,6 +32,12 @@ IDim = gtx.Dimension("IDim")
 def parse_error(func) -> errors.DSLError:
     with pytest.raises(errors.DSLError) as exc_info:
         FieldOperatorParser.apply_to_function(func)
+    return exc_info.value
+
+
+def parse_program_error(func) -> errors.DSLError:
+    with pytest.raises(errors.DSLError) as exc_info:
+        ProgramParser.apply_to_function(func)
     return exc_info.value
 
 
@@ -278,6 +285,49 @@ def test_unresolvable_annotated_assignment_is_a_dsl_error():
 
     assert "Invalid type annotation 'gtx.Field[[IDim], float64]'" in err.message
     assert any("GT4Py builtins" in note for note in err.notes)
+
+
+@gtx.field_operator
+def _copy_op(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+    return a
+
+
+def test_expression_statement_in_program_is_a_dsl_error():
+    # used to leak a TypeError from IR node validation
+    def with_expr_stmt(a: gtx.Field[[IDim], float64], out: gtx.Field[[IDim], float64]):
+        a + a
+
+    err = parse_program_error(with_expr_stmt)
+
+    assert err.message == "Only calls to GT4Py operators are allowed as statements in a program."
+
+
+def test_calling_program_from_program_is_a_dsl_error():
+    # used to crash with AssertionError
+    @gtx.program
+    def inner(a: gtx.Field[[IDim], float64], out: gtx.Field[[IDim], float64]):
+        _copy_op(a, out=out)
+
+    def with_program_call(a: gtx.Field[[IDim], float64], out: gtx.Field[[IDim], float64]):
+        inner(a, out)
+
+    err = parse_program_error(with_program_call)
+
+    assert err.message == "Program 'inner' cannot be called from within another program."
+
+
+def test_plain_python_function_in_program_is_a_dsl_error():
+    # used to leak ValueError: Invalid callable annotations ...
+    def plain(a, out):
+        return a
+
+    def with_plain_call(a: gtx.Field[[IDim], float64], out: gtx.Field[[IDim], float64]):
+        plain(a, out=out)
+
+    err = parse_program_error(with_plain_call)
+
+    assert isinstance(err, errors.DSLTypeError)
+    assert any("@field_operator" in hint for hint in err.hints)
 
 
 def test_diagnostic_codes_are_stable():

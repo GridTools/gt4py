@@ -108,24 +108,54 @@ class ProgramParser(DialectParser[past.Program]):
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
-        self._check_not_a_reserved_name(node.name, self.get_location(node))
-        closure_symbols: list[past.Symbol] = [
-            past.Symbol(
-                id=name,
-                type=type_translation.from_value(val),
-                namespace=dialect_ast_enums.Namespace.CLOSURE,
-                location=self.get_location(node),
+        loc = self.get_location(node)
+        self._check_not_a_reserved_name(node.name, loc)
+        closure_symbols: list[past.Symbol] = []
+        for name, val in self.closure_vars.items():
+            try:
+                type_ = type_translation.from_value(val)
+            except ValueError as e:
+                hints = ()
+                if callable(val):
+                    hints = (
+                        "Only functions decorated with '@field_operator' or "
+                        "'@scan_operator' can be called inside a program.",
+                    )
+                raise errors.DSLTypeError(
+                    loc,
+                    f"Unexpected object '{name}' of type '{type(val)}' encountered.",
+                    hints=hints,
+                ) from e
+            closure_symbols.append(
+                past.Symbol(
+                    id=name,
+                    type=type_,
+                    namespace=dialect_ast_enums.Namespace.CLOSURE,
+                    location=loc,
+                )
             )
-            for name, val in self.closure_vars.items()
-        ]
+
+        body: list[past.LocatedNode] = []
+        for stmt in node.body:
+            new_stmt = self.visit(stmt)
+            if not isinstance(new_stmt, past.Call):
+                raise errors.DSLError(
+                    self.get_location(stmt),
+                    "Only calls to GT4Py operators are allowed as statements in a program.",
+                    notes=(
+                        "A program orchestrates operator calls that write into 'out' "
+                        "arguments; computations belong inside field operators.",
+                    ),
+                )
+            body.append(new_stmt)
 
         return past.Program(
             id=node.name,
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
             params=self.visit(node.args),
-            body=[self.visit(node) for node in node.body],
+            body=body,
             closure_vars=closure_symbols,
-            location=self.get_location(node),
+            location=loc,
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[past.DataSymbol]:
