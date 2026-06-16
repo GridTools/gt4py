@@ -20,6 +20,7 @@ in that submodule as opposed to being in this file.
 from __future__ import annotations
 
 import difflib
+import sys
 from typing import Any, ClassVar, Iterable, Optional, Sequence
 
 from gt4py.eve import SourceLocation
@@ -94,26 +95,18 @@ class DSLError(GT4PyError):
         self.location = location
         return self
 
-    # TODO(havogt): on Python >=3.11 this shadows 'BaseException.add_note' (PEP 678);
-    #  on 3.10 it is a plain new method, so 'add_note' on GT4Py exceptions that are
-    #  not 'DSLError's raises 'AttributeError' on 3.10 but silently goes to
-    #  '__notes__' on 3.11+. Remove this caveat once the Python floor is >=3.12.
-    def add_note(self, note: str) -> None:
-        """
-        Add a note to the diagnostic, using the standard 'BaseException.add_note' API.
+    # TODO(havogt): drop this shim and the matching '__notes__' fold-in in
+    #  '__str__' once the Python floor is >=3.11, where 'BaseException.add_note'
+    #  (PEP 678) and its automatic '__notes__' traceback rendering are built in.
+    if sys.version_info < (3, 11):
 
-        Toolchain stages use this to attach context to an in-flight error
-        ("While processing ...") without touching the message.
-
-        The note is routed into the structured 'notes' field instead of
-        '__notes__': the traceback machinery (and IPython/pytest) renders this
-        exception through 'str()', which already includes the structured notes,
-        so storing them in '__notes__' as well would print them twice.
-        """
-        self.notes.append(note)
+        def add_note(self, note: str) -> None:
+            if not hasattr(self, "__notes__"):
+                self.__notes__ = []
+            self.__notes__.append(note)
 
     def __str__(self) -> str:
-        return formatting.format_diagnostic_parts(
+        body = formatting.format_diagnostic_parts(
             self.message,
             self.location,
             label=self.label,
@@ -121,6 +114,12 @@ class DSLError(GT4PyError):
             notes=self.notes,
             hints=self.hints,
         )
+        if sys.version_info < (3, 11):
+            # On 3.10 the traceback machinery doesn't render '__notes__'; fold
+            # them in so they surface through 'str()' (pytest, IPython, logging)
+            # the way the >=3.11 machinery does automatically.
+            body += "".join(f"\n{note}" for note in getattr(self, "__notes__", []))
+        return body
 
 
 class UnsupportedPythonFeatureError(DSLError):

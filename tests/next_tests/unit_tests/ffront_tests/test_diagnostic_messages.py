@@ -16,6 +16,7 @@ regress. When changing a message, update the expectation here alongside.
 """
 
 import re
+import sys
 
 import pytest
 
@@ -126,15 +127,26 @@ def test_bool_op_suggests_bitwise_operators():
     assert any("'&' and '|'" in hint for hint in err.hints)
 
 
-def test_add_note_renders_once_via_str():
-    # 'add_note' (PEP 678) routes into the structured diagnostic instead of
-    # '__notes__', so the note is rendered exactly once (through 'str()').
+def test_add_note_uses_pep678_notes():
+    # 'add_note' uses the standard PEP 678 mechanism ('__notes__'); the
+    # structured 'notes' field is reserved for content authored at the raise
+    # site, so the breadcrumb must not leak into it.
     err = errors.DSLError(None, "A message.")
     err.add_note("Extra context.")
 
-    assert err.notes == ["Extra context."]
-    assert "Note: Extra context." in str(err)
-    assert "__notes__" not in err.__dict__
+    assert err.__notes__ == ["Extra context."]
+    assert err.notes == []
+
+
+@pytest.mark.skipif(
+    sys.version_info >= (3, 11),
+    reason="On >=3.11 the traceback machinery renders '__notes__'; 'str()' does not.",
+)
+def test_add_note_folded_into_str_on_py310():
+    err = errors.DSLError(None, "A message.")
+    err.add_note("Extra context.")
+
+    assert "Extra context." in str(err)
 
 
 def test_toolchain_step_attaches_definition_context():
@@ -148,7 +160,7 @@ def test_toolchain_step_attaches_definition_context():
     with pytest.raises(errors.DSLError) as exc_info:
         func_to_foast(ffront_stages.DSLFieldOperatorDef(definition=misspelled))
 
-    assert "While processing the definition of 'misspelled'." in exc_info.value.notes
+    assert "While processing the definition of 'misspelled'." in exc_info.value.__notes__
 
 
 def test_diagnostic_codes_are_stable():

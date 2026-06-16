@@ -50,6 +50,9 @@ def compilation_error_hook(
     # in hard crashes of the interpreter, the `exceptions` module might be partially unloaded
     if exceptions.DSLError is not None and isinstance(value, exceptions.DSLError):
         exc_strs = _format_uncaught_error(value, config.VERBOSE_EXCEPTIONS)
+        # Our hook replaces the default, so we render PEP 678 '__notes__'
+        # ('add_note' breadcrumbs) ourselves instead of the traceback machinery.
+        exc_strs += [f"\n{note}" for note in getattr(value, "__notes__", [])]
         print("".join(exc_strs), file=sys.stderr)
     else:
         fallback(type_, value, tb)
