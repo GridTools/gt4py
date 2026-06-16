@@ -9,10 +9,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Shared functions for bash dev-scripts.  Source, don't execute.
+# Sourcing must not change the caller's shell options, so each executable
+# script is responsible for its own `set -euo pipefail`.
 # Usage (in sibling scripts):
+#   set -euo pipefail
 #   source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
-
-set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

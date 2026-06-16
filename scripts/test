@@ -13,8 +13,8 @@
 Unified scripts tests entry point.
 
 Provides two sub-commands:
-- ``python``: run python scripts tests at ``scripts/tests/python`` (pytest cwd is ``scripts/tests/python``).
-- ``sh``: run bash scripts tests with bats from ``scripts/tests/sh``.
+- ``python``: run pytest in ``scripts/tests/python``.
+- ``sh``: run bats in ``scripts/tests/sh``.
 
 Usage:
     ./scripts/test --help
@@ -51,11 +51,11 @@ if __name__ == "__main__":
         # Then add the 'python' folder to sys.path to mimic the `sys.path` of the
         # command modules run directly as scripts.
         sys.path.insert(0, python_scripts_dir)
-        from helpers import common  # noqa: F401 - just to check that it can be imported
+        from helpers import common
 
     except ImportError as e:
         print(
-            f"ERROR: '{e.name}' package cannot be imported!!\n"
+            f"ERROR: '{e.name}' package cannot be imported.\n"
             "Make sure 'uv' is installed in your system and run directly this script "
             "as an executable file, to let 'uv' create a temporary venv with all the "
             "required dependencies.\n",
@@ -76,12 +76,6 @@ if __name__ == "__main__":
             typer.Argument(help="Pytest arguments to forward. Pass them after '--'."),
         ] = None,
     ):
-        if pytest_args and "--" not in sys.argv:
-            raise typer.BadParameter(
-                "Pytest arguments must be passed after '--', for example: "
-                "./scripts/test python -- -k common"
-            )
-
         cmd = ["pytest", *(pytest_args or [])]
         base_dir = common.SCRIPTS_DIR / "tests" / "python"
         rich.print(f"Running: {base_dir} $ {' '.join(cmd)}\n")
@@ -98,7 +92,7 @@ if __name__ == "__main__":
                 "ERROR: 'bats' executable cannot be found. Install bats-core to run shell tests.",
                 file=sys.stderr,
             )
-            raise SystemExit(127)
+            raise SystemExit(127) from None
         raise SystemExit(result.returncode)
 
     app()
