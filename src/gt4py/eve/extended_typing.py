@@ -776,7 +776,9 @@ def infer_type(
     if isinstance(value, (StdGenericAliasType, _TypingSpecialFormType)):
         return value
 
-    if value in (None, type(None)):
+    # note: identity check instead of `in`, which would use `__eq__` and fail
+    # for values with non-boolean equality (e.g. NumPy arrays)
+    if value is None or value is type(None):
         return type(None) if none_as_type else None
 
     if isinstance(value, type):
