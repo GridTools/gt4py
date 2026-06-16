@@ -380,6 +380,69 @@ def test_string_dimension_key_in_domain_is_a_dsl_error():
     assert "Dictionary keys must be dimension objects" in err.message
 
 
+@pytest.mark.parametrize(
+    "feature, definition",
+    [
+        ("keyword-only parameters", "def f(a: F, *, b: F) -> F:\n    return a"),
+        ("positional-only parameters", "def f(a: F, /) -> F:\n    return a"),
+        ("'*args' parameters", "def f(*args: F) -> F:\n    return args[0]"),
+        ("'**kwargs' parameters", "def f(a: F, **kw: F) -> F:\n    return a"),
+        ("default values for parameters", "def f(a: F, b: float = 1.0) -> F:\n    return a"),
+    ],
+)
+def test_unsupported_signature_features_are_dsl_errors(feature, definition, tmp_path):
+    # these used to be silently dropped, leading to misleading
+    # "Undeclared symbol" errors for the affected parameters
+    import textwrap
+
+    module = tmp_path / "sig_case.py"
+    module.write_text(
+        textwrap.dedent(
+            """
+            import gt4py.next as gtx
+            from gt4py.next import float64
+            IDim = gtx.Dimension("IDim")
+            F = gtx.Field[[IDim], float64]
+            """
+        )
+        + definition
+    )
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("sig_case", module)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    with pytest.raises(errors.UnsupportedPythonFeatureError) as exc_info:
+        FieldOperatorParser.apply_to_function(mod.f)
+    assert exc_info.value.message == f"Unsupported Python syntax: {feature}."
+
+
+def test_out_of_range_integer_constant_explains_reason():
+    def with_huge_constant(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        b = 99999999999999999999999999
+        return a
+
+    err = parse_error(with_huge_constant)
+
+    assert err.message == "Invalid constant of type 'int'."
+    assert any("out of range" in note for note in err.notes)
+
+
+def test_calling_program_inside_field_operator_is_explained():
+    # the message used to dump the entire 'ProgramType(...)' spec
+    @gtx.program
+    def some_prog(a: gtx.Field[[IDim], float64], out: gtx.Field[[IDim], float64]):
+        _copy_op(a, out=out)
+
+    def with_prog_call(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return some_prog(a)
+
+    err = parse_error(with_prog_call)
+
+    assert err.message == "Programs cannot be called inside field operators."
+
+
 # --- call-time diagnostics (embedded execution, no backend) ---------------
 
 import numpy as np  # noqa: E402 [import-not-at-top-of-file]

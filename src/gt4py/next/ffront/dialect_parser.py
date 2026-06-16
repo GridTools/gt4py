@@ -173,6 +173,35 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             hints=hints,
         )
 
+    def _validate_signature(self, node: ast.arguments) -> None:
+        """Reject parameter-list features that have no DSL semantics with a clear diagnostic."""
+        if node.posonlyargs:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(node.posonlyargs[0]),
+                "positional-only parameters",
+                hints=("Remove the '/' marker from the parameter list.",),
+            )
+        if node.kwonlyargs:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(node.kwonlyargs[0]),
+                "keyword-only parameters",
+                hints=("Remove the '*' marker from the parameter list.",),
+            )
+        if node.vararg is not None:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(node.vararg), "'*args' parameters"
+            )
+        if node.kwarg is not None:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(node.kwarg), "'**kwargs' parameters"
+            )
+        if defaults := [d for d in [*node.defaults, *node.kw_defaults] if d is not None]:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(defaults[0]),
+                "default values for parameters",
+                hints=("Pass the value explicitly at every call site instead.",),
+            )
+
     def _check_not_a_reserved_name(self, name: str, location: SourceLocation) -> None:
         if name in self.reserved_names:
             raise errors.DSLError(

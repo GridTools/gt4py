@@ -507,19 +507,37 @@ class FieldOffset(runtime.Offset):
 
     def as_connectivity_field(self) -> common.Connectivity:
         """Convert to connectivity field using the offset providers in current embedded execution context."""
-        from gt4py.next import embedded  # avoid circular import
+        from gt4py.next import embedded, errors  # avoid circular import
 
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.get_offset_provider(None)
         assert current_offset_provider is not None
-        offset_definition = common.get_offset(current_offset_provider, self.value)
+        try:
+            offset_definition = common.get_offset(current_offset_provider, self.value)
+        except KeyError as err:
+            raise errors.DSLError(
+                None,
+                f"Offset '{self.value}' not found in the offset provider.",
+                hints=(
+                    f"Add an entry for '{self.value}' to the 'offset_provider' argument "
+                    "of the call.",
+                ),
+            ) from err
 
         cache_key = id(offset_definition)
         if (connectivity := self._cache.get(cache_key, None)) is None:
             if isinstance(offset_definition, common.Connectivity):
                 connectivity = offset_definition
             else:
-                raise NotImplementedError()
+                raise errors.DSLTypeError(
+                    None,
+                    f"Invalid offset provider entry for '{self.value}': expected a "
+                    f"connectivity, got '{type(offset_definition).__name__}'.",
+                    hints=(
+                        "Construct connectivities from neighbor tables with "
+                        "'gtx.as_connectivity(...)'.",
+                    ),
+                )
 
             self._cache[cache_key] = connectivity
 

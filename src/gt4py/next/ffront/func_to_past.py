@@ -159,6 +159,7 @@ class ProgramParser(DialectParser[past.Program]):
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[past.DataSymbol]:
+        self._validate_signature(node)
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
@@ -236,7 +237,7 @@ class ProgramParser(DialectParser[past.Program]):
         keys = []
         for param in node.keys:
             new_key = self.visit(cast(ast.AST, param))
-            if not isinstance(new_key, past.Name):
+            if not isinstance(new_key, (past.Name, past.Attribute)):
                 raise errors.DSLError(
                     self.get_location(cast(ast.AST, param)),
                     "Dictionary keys must be dimension objects referenced by name "
