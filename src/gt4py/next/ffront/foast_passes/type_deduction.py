@@ -503,6 +503,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         node.location,
                         f"Tuples need to be indexed with literal integers, got '{node.index}'.",
                     ) from ex
+                if not -len(types) <= index < len(types):
+                    raise errors.DSLError(
+                        node.location,
+                        f"Tuple index {index} is out of range.",
+                        label=f"this tuple has {len(types)} element{'s' * (len(types) != 1)}",
+                    )
                 new_type = types[index]
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
@@ -521,7 +527,23 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     )
                 new_type = new_value.type
             case ts.FieldType(dims=dims, dtype=dtype):
-                # e.g. `field[LocalDim(42)]`
+                # e.g. `field[LocalDim(42)]`: the only valid field subscript is a
+                # local-dimension index, which removes that dimension
+                if not isinstance(new_index.type, ts.IndexType):
+                    raise errors.DSLError(
+                        node.location,
+                        f"Fields cannot be indexed with '{new_index.type}'.",
+                        label="invalid field index",
+                        notes=(
+                            "GT4Py expressions operate on whole fields; accessing single "
+                            "grid points by absolute position is not possible.",
+                        ),
+                        hints=(
+                            "To access neighboring grid points, apply a field offset, "
+                            "e.g. 'field(Ioff[1])'. Entries of a local (neighbor) dimension "
+                            "can be selected with 'field[LocalDim(0)]'.",
+                        ),
+                    )
                 new_type = ts.FieldType(
                     dims=[d for d in dims if d != new_index.type.dim],
                     dtype=dtype,
@@ -794,7 +816,21 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         elif isinstance(new_func.type, ts.FieldType):
             pass
         elif isinstance(new_func.type, ts.DimensionType):
-            assert new_func.type.dim.kind == DimensionKind.LOCAL
+            if new_func.type.dim.kind != DimensionKind.LOCAL:
+                raise errors.DSLError(
+                    node.location,
+                    f"'{new_func.type.dim.value}' is not a local (neighbor) dimension and "
+                    "cannot be used to construct an index.",
+                    label=f"this dimension is of kind '{new_func.type.dim.kind}'",
+                    notes=(
+                        "Only indices of a local dimension (e.g. 'V2EDim(0)') can be "
+                        "constructed this way, to select one neighbor entry of a field.",
+                    ),
+                    hints=(
+                        "To access neighboring grid points along a dimension, apply a "
+                        "field offset instead, e.g. 'field(Ioff[1])'.",
+                    ),
+                )
             return foast.Call(
                 func=new_func,
                 args=new_args,
