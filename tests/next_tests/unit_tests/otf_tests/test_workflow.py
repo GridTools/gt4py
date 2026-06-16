@@ -11,7 +11,7 @@ import dataclasses
 import pytest
 
 from gt4py._core import filecache
-from gt4py.next import utils
+from gt4py.next import fingerprinting
 from gt4py.next.otf import workflow
 
 
@@ -101,31 +101,37 @@ def test_replace():
 
 
 def test_fingerprint_is_defined():
-    assert callable(utils.stable_fingerprinter)
-    assert isinstance(utils.stable_fingerprinter("hello"), str)
+    assert callable(fingerprinting.stable_fingerprinter)
+    assert isinstance(fingerprinting.stable_fingerprinter("hello"), str)
 
 
 def test_fingerprint_is_stable_for_calls():
-    assert utils.stable_fingerprinter("hello") == utils.stable_fingerprinter("hello")
+    assert fingerprinting.stable_fingerprinter("hello") == fingerprinting.stable_fingerprinter(
+        "hello"
+    )
 
 
 def test_fingerprint_is_stable_for_dicts():
     d1 = {"b": 2, "a": 1}
     d2 = {"a": 1, "b": 2}
-    assert utils.stable_fingerprinter(d1) == utils.stable_fingerprinter(d2)
+    assert fingerprinting.stable_fingerprinter(d1) == fingerprinting.stable_fingerprinter(d2)
 
     # Dicts keyed by types occur in compile-time metadata (e.g. argument descriptors).
     d3 = {int: 1, str: 2}
     d4 = {str: 2, int: 1}
-    assert utils.stable_fingerprinter(d3) == utils.stable_fingerprinter(d4)
+    assert fingerprinting.stable_fingerprinter(d3) == fingerprinting.stable_fingerprinter(d4)
 
 
 def test_fingerprint_is_stable_for_sets():
-    assert utils.stable_fingerprinter({3, 1, 2}) == utils.stable_fingerprinter({1, 2, 3})
+    assert fingerprinting.stable_fingerprinter({3, 1, 2}) == fingerprinting.stable_fingerprinter(
+        {1, 2, 3}
+    )
 
 
 def test_fingerprint_differs_for_different_objects():
-    assert utils.stable_fingerprinter({"a": 1}) != utils.stable_fingerprinter({"a": 2})
+    assert fingerprinting.stable_fingerprinter({"a": 1}) != fingerprinting.stable_fingerprinter(
+        {"a": 2}
+    )
 
 
 def test_fingerprint_handles_modules():
@@ -134,9 +140,13 @@ def test_fingerprint_handles_modules():
     import sys
 
     # Does not raise and is deterministic.
-    assert utils.stable_fingerprinter({"mod": os}) == utils.stable_fingerprinter({"mod": os})
+    assert fingerprinting.stable_fingerprinter({"mod": os}) == fingerprinting.stable_fingerprinter(
+        {"mod": os}
+    )
     # Different modules produce different fingerprints.
-    assert utils.stable_fingerprinter({"mod": os}) != utils.stable_fingerprinter({"mod": sys})
+    assert fingerprinting.stable_fingerprinter({"mod": os}) != fingerprinting.stable_fingerprinter(
+        {"mod": sys}
+    )
 
 
 def test_cached_step_cache_key_includes_step_config():
@@ -171,7 +181,7 @@ def test_cached_step_stable_fingerprinter_rejects_non_importable_step(tmp_path):
     cached = workflow.CachedStep(
         step=lambda inp: inp + 1,
         input_fingerprinter=_identity,
-        step_fingerprinter=utils.stable_fingerprinter,
+        step_fingerprinter=fingerprinting.stable_fingerprinter,
         cache=filecache.FileCache(str(tmp_path)),
     )
     with pytest.raises(TypeError, match="not importable"):
@@ -181,7 +191,7 @@ def test_cached_step_stable_fingerprinter_rejects_non_importable_step(tmp_path):
 def test_in_memory_factory_pairs_session_fingerprinter():
     """``CachedStep.in_memory`` wires the session fingerprinter and a dict store."""
     cached = workflow.CachedStep.in_memory(step=lambda inp: inp + 1, input_fingerprinter=_identity)
-    assert cached.step_fingerprinter is utils.session_fingerprinter
+    assert cached.step_fingerprinter is fingerprinting.session_fingerprinter
     assert isinstance(cached.cache, dict)
     # A non-importable (lambda) step is tolerated by the session fingerprinter.
     assert cached(5) == 6
@@ -196,7 +206,7 @@ def test_persistent_factory_pairs_stable_fingerprinter(tmp_path):
         input_fingerprinter=_identity,
         cache=filecache.FileCache(str(tmp_path)),
     )
-    assert cached.step_fingerprinter is utils.stable_fingerprinter
+    assert cached.step_fingerprinter is fingerprinting.stable_fingerprinter
     with pytest.raises(TypeError, match="not importable"):
         cached.cache_key(5)
 
@@ -210,7 +220,7 @@ def test_cached_step_rejection_follows_fingerprinter_not_cache():
     cached = workflow.CachedStep(
         step=lambda inp: inp + 1,
         input_fingerprinter=_identity,
-        step_fingerprinter=utils.stable_fingerprinter,
+        step_fingerprinter=fingerprinting.stable_fingerprinter,
     )
     with pytest.raises(TypeError, match="not importable"):
         cached.cache_key(5)

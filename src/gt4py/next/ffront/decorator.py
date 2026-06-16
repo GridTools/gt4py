@@ -32,6 +32,7 @@ from gt4py.next import (
     custom_layout_allocators as next_allocators,
     embedded as next_embedded,
     errors,
+    fingerprinting,
     utils,
 )
 from gt4py.next.embedded import operators as embedded_operators
@@ -98,7 +99,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     # caches, and fingerprinting the whole backend object graph is both wasteful
     # and fragile (it may hold non-importable callables, see also test doubles).
     backend: Optional[next_backend.Backend] = dataclasses.field(
-        metadata=utils.gt4py_metadata(fingerprint=False)
+        metadata=fingerprinting.gt4py_metadata(fingerprint=False)
     )
     compilation_options: options.CompilationOptions
 

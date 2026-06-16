@@ -68,9 +68,8 @@ The drivers for a redesign were therefore:
 
 We standardize on a **structural fingerprinter**: a content hash of the object
 graph computed bottom-up, Merkle-tree style. The implementation (in
-`gt4py.eve.fingerprinting`, re-exported from `gt4py.next.utils`) is layered as a
-**catamorphism** — a generalized fold over trees — keeping three concerns
-explicitly separate:
+`gt4py.next.fingerprinting`) is layered as a **catamorphism** — a generalized
+fold over trees — keeping three concerns explicitly separate:
 
 1. **Deconstruction** (*what is the one-level structure of an object?*): a
    per-type registry of *deconstructors*, each peeling off exactly one
@@ -164,13 +163,14 @@ Fields of dataclasses/datamodels can opt out of fingerprinting through the
 class CachedStep(...):
     step: Workflow[StartT, EndT]
     input_fingerprinter: Callable[..., HashT] = dataclasses.field(
-        metadata=utils.gt4py_metadata(fingerprint=False)
+        metadata=fingerprinting.gt4py_metadata(fingerprint=False)
     )
-    step_fingerprinter: utils.Fingerprinter = dataclasses.field(
-        default=utils.session_fingerprinter, metadata=utils.gt4py_metadata(fingerprint=False)
+    step_fingerprinter: fingerprinting.Fingerprinter = dataclasses.field(
+        default=fingerprinting.session_fingerprinter,
+        metadata=fingerprinting.gt4py_metadata(fingerprint=False),
     )
     cache: ... = dataclasses.field(
-        default_factory=dict, metadata=utils.gt4py_metadata(fingerprint=False)
+        default_factory=dict, metadata=fingerprinting.gt4py_metadata(fingerprint=False)
     )
 ```
 
@@ -208,15 +208,15 @@ rules:
 
 ```python
 semantic_fingerprinter = functools.partial(
-    utils.catabolize,
-    deconstructor=utils.make_deconstructor(
+    fingerprinting.catabolize,
+    deconstructor=fingerprinting.make_deconstructor(
         {
             **foast.semantic_fingerprint_deconstructors,
             types.FunctionType: _deconstruct_definition_function,
         },
-        fallback=utils.fingerprint_fallback,
+        fallback=fingerprinting.fingerprint_fallback,
     ),
-    collapser=utils.fingerprint_collapser,
+    collapser=fingerprinting.fingerprint_collapser,
     allow_cycles=True,
 )
 ```
@@ -416,12 +416,12 @@ registry entries. Using `optree` itself was evaluated and rejected:
 
 ## References
 
-- `src/gt4py/eve/fingerprinting.py` — `Deconstruction`, `EmptyDeconstruction`,
+- `src/gt4py/next/fingerprinting.py` — `Deconstruction`, `EmptyDeconstruction`,
   `OrderInsensitiveDeconstruction`, `catabolize`, `make_deconstructor`,
   `deconstruct`, `fingerprint_fallback`, `fingerprint_deconstructor`,
   `fingerprint_collapser`, `stable_fingerprinter`, `session_fingerprinter`,
-  `skipping_fields_node_fingerprinter`, `gt4py_metadata`. Re-exported from
-  `src/gt4py/next/utils.py` for `gt4py.next` consumers.
+  `skipping_fields_node_fingerprinter`, `gt4py_metadata`. Imported directly by
+  `gt4py.next` consumers (not re-exported through `gt4py.next.utils`).
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
 - `src/gt4py/next/otf/workflow.py` — `CachedStep.cache_key`.
 - `src/gt4py/next/config.py` — `BUILD_CACHE_VERSION_ID`.

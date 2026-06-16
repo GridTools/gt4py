@@ -16,25 +16,6 @@ from collections.abc import Callable
 from typing import Any, ClassVar, Optional, ParamSpec, Sequence, TypeGuard, TypeVar, cast, overload
 
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.fingerprinting import (
-    GT4PY_CLASS_METADATA_NS as GT4PY_CLASS_METADATA_NS,
-    Collapser as Collapser,
-    Deconstruction as Deconstruction,
-    Deconstructor as Deconstructor,
-    EmptyDeconstruction as EmptyDeconstruction,
-    Fingerprinter as Fingerprinter,
-    OrderInsensitiveDeconstruction as OrderInsensitiveDeconstruction,
-    catabolize as catabolize,
-    deconstruct as deconstruct,
-    fingerprint_collapser as fingerprint_collapser,
-    fingerprint_deconstructor as fingerprint_deconstructor,
-    fingerprint_fallback as fingerprint_fallback,
-    gt4py_metadata as gt4py_metadata,
-    make_deconstructor as make_deconstructor,
-    session_fingerprinter as session_fingerprinter,
-    skipping_fields_node_fingerprinter as skipping_fields_node_fingerprinter,
-    stable_fingerprinter as stable_fingerprinter,
-)
 
 
 _T = TypeVar("_T")

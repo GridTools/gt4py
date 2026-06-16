@@ -17,7 +17,7 @@ from typing import Any, Callable, Generic, Protocol, TypeVar
 from typing_extensions import Self
 
 from gt4py.eve.extended_typing import OpaqueMutableMapping
-from gt4py.next import config, utils
+from gt4py.next import config, fingerprinting
 
 
 StartT = TypeVar("StartT")
@@ -236,12 +236,12 @@ class CachedStep(
     - ``input_fingerprinter`` fingerprints each input value.
     - ``step_fingerprinter`` fingerprints the workflow state and combines the
       two halves into the final key. Its choice fixes the cache's durability.
-      The default, :data:`~gt4py.next.utils.session_fingerprinter`, suits an
+      The default, :data:`~gt4py.next.fingerprinting.session_fingerprinter`, suits an
       in-memory cache (a plain ``dict``, the default): it lives within a single
       process and so tolerates non-importable callables in the step graph
       (lambdas, closures, dynamically-created steps) by hashing them
       structurally. A persistent cache (e.g. ``FileCache``) instead requires
-      :data:`~gt4py.next.utils.stable_fingerprinter`, so that every referenced
+      :data:`~gt4py.next.fingerprinting.stable_fingerprinter`, so that every referenced
       function is importable by qualified name and the on-disk keys stay
       reproducible across processes.
 
@@ -271,13 +271,14 @@ class CachedStep(
 
     step: Workflow[StartT, EndT]
     input_fingerprinter: Callable[[StartT], HashT] = dataclasses.field(
-        metadata=utils.gt4py_metadata(fingerprint=False)
+        metadata=fingerprinting.gt4py_metadata(fingerprint=False)
     )
-    step_fingerprinter: utils.Fingerprinter = dataclasses.field(
-        default=utils.session_fingerprinter, metadata=utils.gt4py_metadata(fingerprint=False)
+    step_fingerprinter: fingerprinting.Fingerprinter = dataclasses.field(
+        default=fingerprinting.session_fingerprinter,
+        metadata=fingerprinting.gt4py_metadata(fingerprint=False),
     )
     cache: OpaqueMutableMapping[str, EndT] = dataclasses.field(
-        repr=False, default_factory=dict, metadata=utils.gt4py_metadata(fingerprint=False)
+        repr=False, default_factory=dict, metadata=fingerprinting.gt4py_metadata(fingerprint=False)
     )
 
     def __call__(self, inp: StartT) -> EndT:
@@ -317,7 +318,7 @@ class CachedStep(
         return cls(
             step=step,
             input_fingerprinter=input_fingerprinter,
-            step_fingerprinter=utils.session_fingerprinter,
+            step_fingerprinter=fingerprinting.session_fingerprinter,
             cache={} if cache is None else cache,
         )
 
@@ -339,7 +340,7 @@ class CachedStep(
         return cls(
             step=step,
             input_fingerprinter=input_fingerprinter,
-            step_fingerprinter=utils.stable_fingerprinter,
+            step_fingerprinter=fingerprinting.stable_fingerprinter,
             cache=cache,
         )
 

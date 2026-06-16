@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, concepts, utils as eve_utils
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
-from gt4py.next import common, utils
+from gt4py.next import common, fingerprinting
 from gt4py.next.iterator.builtins import BUILTINS
 from gt4py.next.type_system import type_specifications as ts
 
@@ -23,8 +23,8 @@ DimensionKind = common.DimensionKind
 # Generate an unique fingerprint for `eve.Node`s ignoring the "location" and "type" attribute.
 # TODO(tehrengruber): this is a workaround for the fact that `eve.Node`s type can be
 # set after creation, in the type inference passes.
-semantic_fingerprinter: utils.Fingerprinter = utils.skipping_fields_node_fingerprinter(
-    "location", "type"
+semantic_fingerprinter: fingerprinting.Fingerprinter = (
+    fingerprinting.skipping_fields_node_fingerprinter("location", "type")
 )
 
 

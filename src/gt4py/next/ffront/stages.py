@@ -28,7 +28,7 @@ import types
 import typing
 from typing import Any, Optional, TypeVar
 
-from gt4py.next import common, utils
+from gt4py.next import common, fingerprinting
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.otf import arguments, toolchain
 
@@ -37,7 +37,7 @@ from gt4py.next.otf import arguments, toolchain
 class BaseStage: ...
 
 
-def _deconstruct_definition_function(func: types.FunctionType) -> utils.Deconstruction:
+def _deconstruct_definition_function(func: types.FunctionType) -> fingerprinting.Deconstruction:
     """
     Deconstruct a Python function into its source definition and closure variables.
 
@@ -48,7 +48,7 @@ def _deconstruct_definition_function(func: types.FunctionType) -> utils.Deconstr
     different source locations are distinguished and do not share a cached
     lowering with the wrong `SourceLocation`s.
     """
-    return utils.Deconstruction.from_pieces(
+    return fingerprinting.Deconstruction.from_pieces(
         source_utils.make_source_definition_from_function(func),
         source_utils.get_closure_vars_from_function(func),
         state=b"definition_function",
@@ -58,13 +58,13 @@ def _deconstruct_definition_function(func: types.FunctionType) -> utils.Deconstr
 #: Fingerprinter for the frontend stages: skips source locations on AST nodes
 #: and fingerprints DSL definition functions by their source code and closure
 #: variables (instead of by qualified name).
-semantic_fingerprinter: utils.Fingerprinter = functools.partial(
-    utils.catabolize,
-    deconstructor=utils.make_deconstructor(
+semantic_fingerprinter: fingerprinting.Fingerprinter = functools.partial(
+    fingerprinting.catabolize,
+    deconstructor=fingerprinting.make_deconstructor(
         {types.FunctionType: _deconstruct_definition_function},
-        fallback=utils.fingerprint_fallback,
+        fallback=fingerprinting.fingerprint_fallback,
     ),
-    collapser=utils.fingerprint_collapser,
+    collapser=fingerprinting.fingerprint_collapser,
     allow_cycles=True,
 )
 

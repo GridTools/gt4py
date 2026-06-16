@@ -670,6 +670,9 @@ session_fingerprinter: Fingerprinter = functools.partial(
 )
 
 
+# -- Other fingerprinters --
+
+
 def _make_skipping_fields_node_deconstructor(skipped_fields: frozenset[str]) -> Deconstructor:
     def node_deconstructor(node: concepts.Node) -> Deconstruction:
         return _fields_deconstruction(

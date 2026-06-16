@@ -15,7 +15,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next import utils
+from gt4py.next import fingerprinting
 from gt4py.next.otf import arguments, code_specs, stages, definitions
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
@@ -92,7 +92,7 @@ def test_hash_and_diskcache(program_example, tmp_path):
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
-    hash = utils.stable_fingerprinter(compilable_program)
+    hash = fingerprinting.stable_fingerprinter(compilable_program)
 
     cache = filecache.FileCache(tmp_path)
     cache[hash] = compilable_program
@@ -105,27 +105,27 @@ def test_hash_and_diskcache(program_example, tmp_path):
     del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
-    assert hash == utils.stable_fingerprinter(compilable_program)
-    assert hash == utils.stable_fingerprinter(compilable_program_from_cache)
+    assert hash == fingerprinting.stable_fingerprinter(compilable_program)
+    assert hash == fingerprinting.stable_fingerprinter(compilable_program_from_cache)
 
     # hash is different if program changes
     altered_program_id = copy.deepcopy(compilable_program)
     altered_program_id.data.id = "example2"
-    assert utils.stable_fingerprinter(compilable_program) != utils.stable_fingerprinter(
-        altered_program_id
-    )
+    assert fingerprinting.stable_fingerprinter(
+        compilable_program
+    ) != fingerprinting.stable_fingerprinter(altered_program_id)
 
     altered_program_offset_provider = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_offset_provider.args, "offset_provider", {"Koff": KDim})
-    assert utils.stable_fingerprinter(compilable_program) != utils.stable_fingerprinter(
-        altered_program_offset_provider
-    )
+    assert fingerprinting.stable_fingerprinter(
+        compilable_program
+    ) != fingerprinting.stable_fingerprinter(altered_program_offset_provider)
 
     altered_program_column_axis = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_column_axis.args, "column_axis", KDim)
-    assert utils.stable_fingerprinter(compilable_program) != utils.stable_fingerprinter(
-        altered_program_column_axis
-    )
+    assert fingerprinting.stable_fingerprinter(
+        compilable_program
+    ) != fingerprinting.stable_fingerprinter(altered_program_column_axis)
 
 
 def test_gtfn_file_cache(program_example):

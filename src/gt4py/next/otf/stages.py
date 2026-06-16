@@ -12,7 +12,7 @@ import dataclasses
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Generic, Optional, Protocol, TypeAlias, TypeVar
 
-from gt4py.next import common, utils
+from gt4py.next import common, fingerprinting
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import code_specs
 from gt4py.next.otf.binding import interface
@@ -42,7 +42,7 @@ def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
     return hash(
         (
             itir.semantic_fingerprinter(program_def.data),
-            utils.stable_fingerprinter(tuple(args.args)),
+            fingerprinting.stable_fingerprinter(tuple(args.args)),
             common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
             args.column_axis,
         )
