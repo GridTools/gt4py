@@ -168,6 +168,17 @@ def test_different_static_args_break_same_prg_after_static_params_change(testee_
         prg.compile(cond=[True], offset_provider={})
 
 
+def test_compile_with_empty_static_args_does_not_register_static_arg(testee_prog):
+    pool = testee_prog._compiled_programs
+
+    # Call pool.compile() with empty static_args dict
+    static_args = {}
+    pool.compile(offset_providers=[{}], **static_args)
+
+    # when static_args={}, no StaticArg descriptor should be registered
+    assert arguments.StaticArg not in pool.argument_descriptor_mapping
+
+
 def _verify_program_has_expected_domain(
     program: itir.Program, expected_domain: gtx.Domain, uids: utils.IDGeneratorPool
 ):
