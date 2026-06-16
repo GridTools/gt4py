@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
 #
 # GT4Py - GridTools Framework
 #
@@ -15,11 +16,11 @@ import json
 from collections.abc import Sequence
 from typing import Annotated, Literal, cast
 
+import nox_sessions
 import rich
 import typer
+from helpers import common
 from rich import pretty
-
-from . import _common as common, nox_sessions
 
 
 cli = typer.Typer(no_args_is_help=True, name="github-ci", help=__doc__)
