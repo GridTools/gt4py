@@ -838,6 +838,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 location=node.location,
                 type=ts.IndexType(dim=new_func.type.dim),
             )
+        elif isinstance(new_func.type, ts_ffront.ProgramType):
+            raise errors.DSLError(
+                node.location,
+                "Programs cannot be called inside field operators.",
+                label="this is a '@program'",
+                hints=(
+                    "Call the field operators directly; programs can only be called "
+                    "from plain Python.",
+                ),
+            )
         else:
             raise errors.DSLError(
                 node.location,

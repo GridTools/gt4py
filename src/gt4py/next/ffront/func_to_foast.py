@@ -232,6 +232,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.DataSymbol]:
+        self._validate_signature(node)
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
@@ -548,9 +549,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         loc = self.get_location(node)
         try:
             type_ = type_translation.from_value(node.value)
-        except ValueError:
+        except ValueError as e:
             raise errors.DSLError(
-                loc, f"Constants of type {type(node.value)} are not permitted."
+                loc,
+                f"Invalid constant of type '{type(node.value).__name__}'.",
+                notes=(str(e),),
             ) from None
 
         return foast.Constant(value=node.value, location=loc, type=type_)
