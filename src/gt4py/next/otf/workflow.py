@@ -311,13 +311,3 @@ class SkippableStep(
         raise NotImplementedError()
 
 
-
-def f():
-    ...
-
-assert f.__module__ == "module"  # type: ignore[attr-defined]
-assert f.__name__ == "f"  # type: ignore[attr-defined]
-
-f = Wrapper(f)
-
-
