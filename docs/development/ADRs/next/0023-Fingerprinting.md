@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-06-09
-- **Updated**: 2026-06-10
+- **Updated**: 2026-06-15
 
 In the context of identifying GT4Py objects (frontend stages, IR nodes, OTF
 workflow steps, ...) for caching and content-based comparison, facing a
@@ -55,10 +55,10 @@ The drivers for a redesign were therefore:
   independent of dict/set insertion order and of object identity.
 - **One mechanism**: avoid one fingerprinting path per subsystem; reuse the same
   core everywhere and customize it locally.
-- **Selective content**: some fields must be excluded from the fingerprint
-  (source locations, inferred types that are filled in later, non-semantic
-  caches), and some values must be identified by reference rather than by value
-  (functions, types, modules).
+- **Selective content**: some fields must be excluded from *some* fingerprints
+  (inferred types that are filled in later and non-semantic caches always; source
+  locations only from the persistent build-cache key, see below), and some values
+  must be identified by reference rather than by value (functions, types, modules).
 - **Robustness**: real inputs are large — lowered IR trees can nest far deeper
   than the Python recursion limit allows for recursive traversals.
 - **Cache-version safety**: a way to globally invalidate cached builds when the
@@ -117,7 +117,8 @@ field opt-out on the default rules). The default deconstruction rules are:
   `sys.modules` and must yield the object itself; non-importable callables
   (lambdas, local closures), whose qualified names are ambiguous, as well as
   shadowed or reassigned globals, are rejected with a `TypeError` instead of
-  silently colliding.
+  silently colliding. (In-memory keys relax this to a structural fallback — see
+  *Strict vs. lenient: the durability axis* below.)
 - **Dataclasses and datamodels** — nodes of class + field values, honoring
   the field metadata opt-out (below).
 - **Everything else** — deconstructed via the standard `__reduce_ex__` protocol
@@ -161,15 +162,18 @@ Fields of dataclasses/datamodels can opt out of fingerprinting through the
 @dataclasses.dataclass(frozen=True)
 class CachedStep(...):
     step: Workflow[StartT, EndT]
-    key_function: Callable[..., HashT] = dataclasses.field(
+    input_fingerprinter: Callable[..., HashT] = dataclasses.field(
         metadata=utils.gt4py_metadata(fingerprint=False)
+    )
+    step_fingerprinter: utils.Fingerprinter = dataclasses.field(
+        default=utils.session_fingerprinter, metadata=utils.gt4py_metadata(fingerprint=False)
     )
     cache: ... = dataclasses.field(
         default_factory=dict, metadata=utils.gt4py_metadata(fingerprint=False)
     )
 ```
 
-Here the *runtime* fields (`key_function`, `cache`) do not pollute the
+Here the *runtime* fields (`input_fingerprinter`, `step_fingerprinter`, `cache`) do not pollute the
 fingerprint — only the semantically meaningful `step` does. This is a
 declarative, per-class opt-out read directly from the field definitions; it
 does **not** alter how the class pickles, so fingerprinting and real
@@ -185,14 +189,21 @@ rules:
 - `skipping_fields_node_fingerprinter("location", "type", ...)` — a cached
   factory returning a fingerprinter (and optionally its deconstructor overrides) for
   `eve.Node`s that recursively skips the named child fields. The iterator/GTIR
-  `semantic_fingerprinter` skips `location` and `type` (types are filled in
-  later by inference and must not change identity); the FOAST
-  `semantic_fingerprinter` skips `location`.
-- The ffront stages `semantic_fingerprinter` composes the FOAST node deconstructors
-  with a `types.FunctionType` deconstructor that deconstructs a DSL definition function
-  into its **source code + closure variables** rather than identifying it by
-  reference — which is what makes two textually identical field operators
-  fingerprint equal, and recompiles when a referenced helper changes:
+  `semantic_fingerprinter` skips `location` and `type`: it keys the **persistent**
+  (cross-process, on-disk) C++/SDFG build cache, which must stay stable when only
+  source locations shift (an unrelated edit above a stencil, a moved checkout) and
+  across the inference passes that fill in `type` after node creation.
+- The FOAST/PAST `semantic_fingerprinter`, by contrast, skips **nothing** — it keys
+  the **in-memory** frontend-stage caches, whose cached product (the lowered IR) has
+  `SourceLocation`s baked in by `PreserveLocationVisitor`. If two textually identical
+  operators defined at different locations shared a stage-cache entry, the second
+  would be served the first's lowering with the wrong locations, mislabeling its
+  errors, warnings and (dace) debug info. For the same reason the ffront stages
+  compose those FOAST/PAST node deconstructors with a `types.FunctionType`
+  deconstructor that deconstructs a DSL definition function into its full
+  **`SourceDefinition` (source, filename, line/column offsets) + closure variables** —
+  location-*sensitive*, and recompiling when a referenced helper changes — rather
+  than identifying it by reference:
 
 ```python
 semantic_fingerprinter = functools.partial(
@@ -209,23 +220,86 @@ semantic_fingerprinter = functools.partial(
 )
 ```
 
+This split is deliberate and complementary: a location-only edit changes the
+in-memory ffront key (so the operator is re-lowered in-process, cheaply, with
+correct locations) but leaves the persistent ITIR key unchanged (so the
+expensive C++/SDFG artifact is still a cache hit and is not rebuilt).
+
+### Strict vs. lenient: the durability axis
+
+By-reference identification (above) exists because a **persistent** key must be
+reproducible in a *different* process, where only an import path uniquely
+identifies an object — a lambda, a local closure or a dynamically-created class
+has no stable cross-process identity. That requirement is real for the on-disk
+caches (`fingerprint_compilable_program`, the gtfn/dace `cached_translation`
+trait), but **not** for the in-memory caches (the ffront stages, the executor
+`dict`): those live and die within a single process, so an object's structure
+is a perfectly valid identity there. Keying every fragility one importable name
+at a time (the icon4py `FrozenNamespace` closure constants, a `Mock` backend, a
+custom-backend workflow step have each tripped it) does not scale.
+
+`session_fingerprinter` therefore mirrors `stable_fingerprinter` but, instead of
+rejecting a non-importable object, falls back to a **structural** identity:
+
+- a **function** is hashed by its code object (bytecode + constants, recursing
+  into nested code objects), its defaults, and its captured closure cells —
+  *not* its `__globals__`, which the bytecode already references by name. This
+  is collision-free, invalidates correctly when a lambda's body or a captured
+  value changes, and is only stable per CPython version (acceptable: in-memory
+  ⇒ one process; the persistent path never uses it).
+- a dynamically-created **type/module** is identified by its (unverified)
+  qualified name.
+
+For any graph *without* non-importable objects the two fingerprinters agree
+exactly (the lenient overrides try by-reference first), so switching a cache
+between them never spuriously invalidates it.
+
+`CachedStep` makes strict-vs-lenient an **explicit** choice: the caller passes a
+`step_fingerprinter`, defaulting to `session_fingerprinter` (lenient). The choice
+must match the cache's durability — an in-memory `dict` (the default) is happy
+with the lenient default, while a persistent cache (e.g. `FileCache`) must be
+paired with `stable_fingerprinter` so its on-disk keys stay reproducible across
+processes. The two persistent call sites (the gtfn/dace `cached_translation`
+traits) do exactly that. The default is the safe one *for the default cache*: a
+lambda-bearing step is fine under the lenient default, but a `FileCache` paired
+with `stable_fingerprinter` still rejects it with a hard `TypeError`, so a
+persistent cache never gets a non-reproducible key (the worst failure mode in
+this subsystem: a stale on-disk binary reused for changed code → silently wrong
+numerics).
+
+An earlier design inferred the fingerprinter from `isinstance(self.cache, dict)`.
+Making it an explicit parameter keeps the two halves of the key — input identity
+(`input_fingerprinter`) and workflow-state identity (`step_fingerprinter`) —
+under direct caller control, and decouples the durability decision from the
+concrete cache type.
+
 ### Integration with the build cache
 
 `CachedStep.cache_key(inp)` ties the pieces together:
 
 ```python
+@functools.cached_property
+def _step_fingerprint(self):
+    # The step and the version salt are immutable, so this is computed once per instance.
+    return self.step_fingerprinter((config.BUILD_CACHE_VERSION_ID, self))
+
+
 def cache_key(self, inp):
-    return utils.stable_fingerprinter((config.BUILD_CACHE_VERSION_ID, self, self.key_function(inp)))
+    return self.step_fingerprinter((self._step_fingerprint, self.input_fingerprinter(inp)))
 ```
 
 - `self` is the step, content by fields, so changing the step configuration
-  invalidates the cache. Functions referenced by the step are identified by
-  qualified name, so they must be module-level (not lambdas or local closures).
-- `self.key_function(inp)` contributes the input's identity.
+  invalidates the cache. Whether functions referenced by the step must be
+  identified by qualified name (so, behind a persistent `FileCache`, module-level
+  rather than lambdas or local closures) or may be hashed structurally is decided
+  by the caller-chosen `step_fingerprinter` (see *the durability axis* above).
+  Since the step is immutable, its fingerprint is computed once per instance and
+  reused across lookups.
+- `self.input_fingerprinter(inp)` contributes the input's identity.
 - `config.BUILD_CACHE_VERSION_ID` (defaulting to the gt4py version, overridable
-  via the `BUILD_CACHE_VERSION_ID` env var) is a global salt that lets us force
-  incompatibility with previously cached builds when the toolchain changes in a
-  way the fingerprint alone would not capture.
+  via the `GT4PY_BUILD_CACHE_VERSION_ID` env var) is a global salt that lets us
+  force incompatibility with previously cached builds when the toolchain changes
+  in a way the fingerprint alone would not capture.
 
 ## Consequences
 
@@ -246,15 +320,20 @@ What becomes harder / the trade-offs:
 - The traversal logic is our own (~200 lines) rather than delegated to
   `pickle`; it has to be maintained and its determinism guarded by tests.
 - Correctness of caching depends on deconstructors being faithful: a deconstructor that
-  drops semantically relevant content can cause false cache hits. The defaults
-  (skip `location`/`type`, deconstruct functions by source) are chosen
-  conservatively for this reason.
-- Objects identified by reference must be importable (module-level); lambdas
-  and local closures in fingerprinted positions are a hard error. Structurally
-  fingerprinting local functions (code object + defaults + closure cells) would
-  lift the restriction and is a possible follow-up, but it is only stable per
-  CPython version and the loud failure is preferred until a real use case
-  appears.
+  drops content the cached output actually depends on causes false cache hits. What
+  counts as "non-semantic" is therefore per-cache, not absolute — `location` is
+  dropped from the persistent ITIR key (the C++ artifact does not depend on it) but
+  kept in the frontend-stage keys (the lowered IR embeds it). Skips are chosen
+  conservatively against the specific cached product for this reason.
+- Objects identified by reference must be importable (module-level) **for
+  persistent keys**; lambdas and local closures behind a `FileCache` are a hard
+  error, by design (a non-reproducible on-disk key is the worst failure mode).
+  In-memory keys lift the restriction via `session_fingerprinter`, which hashes
+  local functions structurally (code object + defaults + closure cells) — only
+  stable per CPython version, which is fine within one process. The price is two
+  fingerprinters to maintain and a durability invariant (`FileCache` ⇒ pair with
+  `stable_fingerprinter`) that each `CachedStep` call site must uphold by passing
+  the matching `step_fingerprinter`.
 
 ## Alternatives considered
 
@@ -339,7 +418,7 @@ registry entries. Using `optree` itself was evaluated and rejected:
 - `src/gt4py/next/utils.py` — `Deconstruction`, `EmptyDeconstruction`,
   `OrderInsensitiveDeconstruction`, `catabolize`, `make_deconstructor`,
   `deconstruct`, `fingerprint_fallback`, `fingerprint_deconstructor`,
-  `fingerprint_collapser`, `stable_fingerprinter`,
+  `fingerprint_collapser`, `stable_fingerprinter`, `session_fingerprinter`,
   `skipping_fields_node_fingerprinter`, `gt4py_metadata`.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
 - `src/gt4py/next/otf/workflow.py` — `CachedStep.cache_key`.

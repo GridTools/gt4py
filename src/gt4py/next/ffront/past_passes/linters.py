@@ -51,7 +51,7 @@ def linter_factory(
         (lint_misnamed_functions, lint_undefined_symbols)
     )
     if cached:
-        wf = workflow.CachedStep(step=wf, key_function=ffront_stages.semantic_fingerprinter)
+        wf = workflow.CachedStep(step=wf, input_fingerprinter=ffront_stages.semantic_fingerprinter)
     return wf
 
 

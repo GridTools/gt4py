@@ -8,6 +8,9 @@
 
 import dataclasses
 
+import pytest
+
+from gt4py._core import filecache
 from gt4py.next import utils
 from gt4py.next.otf import workflow
 
@@ -84,7 +87,7 @@ def test_cached_with_hashing():
     def hashing(inp: list[int]) -> int:
         return hash(sum(inp))
 
-    wf = workflow.CachedStep(step=_append_one, key_function=hashing)
+    wf = workflow.CachedStep(step=_append_one, input_fingerprinter=hashing)
 
     assert wf([1, 2, 3]) == [1, 2, 3, 1]
     assert wf([3, 2, 1]) == [1, 2, 3, 1]
@@ -139,6 +142,51 @@ def test_fingerprint_handles_modules():
 def test_cached_step_cache_key_includes_step_config():
     """Two CachedStep instances with different step configs produce different cache keys."""
     # Use dataclass steps with different configurations (v=1 vs v=2)
-    cs1 = workflow.CachedStep(step=_StepWithValue(v=1), key_function=lambda x: x)
-    cs2 = workflow.CachedStep(step=_StepWithValue(v=2), key_function=lambda x: x)
+    cs1 = workflow.CachedStep(step=_StepWithValue(v=1), input_fingerprinter=lambda x: x)
+    cs2 = workflow.CachedStep(step=_StepWithValue(v=2), input_fingerprinter=lambda x: x)
     assert cs1.cache_key(42) != cs2.cache_key(42)
+
+
+def _identity(x: int) -> int:
+    return x
+
+
+def test_cached_step_session_fingerprinter_tolerates_non_importable_step():
+    """The default ``session_fingerprinter`` hashes a non-importable step structurally."""
+    # The step is a lambda (no importable qualified name). The default
+    # ``step_fingerprinter`` (``session_fingerprinter``) lives within one
+    # process, so it hashes the step structurally rather than raising. The
+    # cache key is still a stable string and the step runs.
+    cached = workflow.CachedStep(step=lambda inp: inp + 1, input_fingerprinter=_identity)
+    assert isinstance(cached.cache_key(5), str)
+    assert cached(5) == 6
+    assert cached(5) == 6  # served from cache
+
+
+def test_cached_step_stable_fingerprinter_rejects_non_importable_step(tmp_path):
+    """``stable_fingerprinter`` requires reproducible cross-process keys, so a
+    non-importable step must raise rather than risk a non-reproducible on-disk key.
+
+    This is the fingerprinter a persistent ``FileCache`` must be paired with."""
+    cached = workflow.CachedStep(
+        step=lambda inp: inp + 1,
+        input_fingerprinter=_identity,
+        step_fingerprinter=utils.stable_fingerprinter,
+        cache=filecache.FileCache(str(tmp_path)),
+    )
+    with pytest.raises(TypeError, match="not importable"):
+        cached.cache_key(5)
+
+
+def test_cached_step_strictness_follows_fingerprinter_not_cache():
+    """Strictness is driven by ``step_fingerprinter``, not by the cache type.
+
+    Even with the default in-memory ``dict`` cache, an explicit
+    ``stable_fingerprinter`` rejects a non-importable step."""
+    cached = workflow.CachedStep(
+        step=lambda inp: inp + 1,
+        input_fingerprinter=_identity,
+        step_fingerprinter=utils.stable_fingerprinter,
+    )
+    with pytest.raises(TypeError, match="not importable"):
+        cached.cache_key(5)

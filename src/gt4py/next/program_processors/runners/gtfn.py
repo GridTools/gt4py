@@ -15,7 +15,7 @@ import numpy as np
 import gt4py._core.definitions as core_defs
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import filecache
-from gt4py.next import backend, common, config, field_utils
+from gt4py.next import backend, common, config, field_utils, utils
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import recipes, stages, workflow
@@ -123,7 +123,8 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
                     o.bare_translation,
-                    key_function=stages.fingerprint_compilable_program,
+                    input_fingerprinter=stages.fingerprint_compilable_program,
+                    step_fingerprinter=utils.stable_fingerprinter,
                     cache=filecache.FileCache(
                         str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
                     ),
@@ -167,7 +168,7 @@ class GTFNBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, key_function=o.key_function)
+                lambda o: workflow.CachedStep(o.otf_workflow, input_fingerprinter=o.key_function)
             ),
             name_cached="_cached",
         )

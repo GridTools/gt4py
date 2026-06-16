@@ -508,6 +508,67 @@ class TestStableFingerprinter:
         assert utils.stable_fingerprinter(np.cbrt) != utils.stable_fingerprinter(np.sqrt)
 
 
+class TestLenientFingerprinter:
+    def test_agrees_with_stable_fingerprinter_on_importable_objects(self):
+        # The lenient fingerprinter only relaxes the by-reference rules, so for
+        # a graph without non-importable objects it must produce the exact same
+        # fingerprint as the strict one (no spurious cache invalidation when a
+        # step graph switches between the two).
+        import os
+
+        payload = {"f": _module_level_func_a, "t": int, "m": os, "vals": [1, "x", (2.0,)]}
+        assert utils.session_fingerprinter(payload) == utils.stable_fingerprinter(payload)
+
+    def test_non_importable_callables_are_fingerprinted_structurally(self):
+        # Lambdas and closures have no identifying qualified name; the lenient
+        # fingerprinter hashes them by their code and captured closure instead
+        # of raising (valid for single-process, in-memory keys).
+        def make_closure(n):
+            def inner(x):
+                return x + n
+
+            return inner
+
+        # Same body and captured value → equal; different captured value → different.
+        assert utils.session_fingerprinter(make_closure(1)) == utils.session_fingerprinter(
+            make_closure(1)
+        )
+        assert utils.session_fingerprinter(make_closure(1)) != utils.session_fingerprinter(
+            make_closure(2)
+        )
+
+        # Different bodies → different; byte-identical bodies → equal (location
+        # is irrelevant for an in-memory step graph, unlike frontend keys).
+        assert utils.session_fingerprinter(lambda x: x + 1) != utils.session_fingerprinter(
+            lambda x: x + 2
+        )
+        assert utils.session_fingerprinter(lambda x: x + 1) == utils.session_fingerprinter(
+            lambda x: x + 1
+        )
+
+    def test_dynamically_created_types_do_not_raise(self):
+        # A locally-defined class (qualified name contains `<locals>`, hence not
+        # importable) reached as a value -- e.g. a `unittest.mock.Mock` subclass
+        # -- is identified by its qualified name instead of crashing.
+        def make_class():
+            class Dynamic:
+                pass
+
+            return Dynamic
+
+        first, second = make_class(), make_class()
+        assert isinstance(utils.session_fingerprinter({"t": first}), str)
+        assert utils.session_fingerprinter({"t": first}) == utils.session_fingerprinter(
+            {"t": second}
+        )
+
+    def test_strict_fingerprinter_still_rejects_non_importable_callables(self):
+        # The durability split is enforced: the strict fingerprinter (the one
+        # that keys persistent, cross-process caches) keeps raising.
+        with pytest.raises(TypeError, match="not importable"):
+            utils.stable_fingerprinter(lambda: None)
+
+
 def test_tree_map_default():
     @utils.tree_map
     def testee(x):

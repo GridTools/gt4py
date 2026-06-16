@@ -44,7 +44,7 @@ class DaCeBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, key_function=o.key_function)
+                lambda o: workflow.CachedStep(o.otf_workflow, input_fingerprinter=o.key_function)
             ),
             name_cached="_cached",
         )

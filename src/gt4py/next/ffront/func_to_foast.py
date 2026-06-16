@@ -100,7 +100,7 @@ def func_to_foast_factory(
     """Wrap `func_to_foast` in a chainable and optionally cached workflow step."""
     wf = workflow.make_step(func_to_foast)
     if cached:
-        wf = workflow.CachedStep(step=wf, key_function=ffront_stages.semantic_fingerprinter)
+        wf = workflow.CachedStep(step=wf, input_fingerprinter=ffront_stages.semantic_fingerprinter)
     return wf
 
 

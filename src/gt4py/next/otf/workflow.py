@@ -228,14 +228,26 @@ class CachedStep(
     """
     Cached workflow of single input callables.
 
-    The cache key combines a fingerprint of the step itself (so that changes to
-    the step invalidate the cache) with the value returned by ``key_function``
-    for the given input. Functions referenced by the step are fingerprinted by
-    qualified name, so they must be module-level (not lambdas or closures).
+    The cache key combines a fingerprint of the workflow state (so that changes
+    to the step invalidate the cache) with the value returned by
+    ``input_fingerprinter`` for the given input. The caller selects both
+    fingerprinters explicitly:
+
+    - ``input_fingerprinter`` fingerprints each input value.
+    - ``step_fingerprinter`` fingerprints the workflow state and combines the
+      two halves into the final key. Its choice fixes the cache's durability.
+      The default, :data:`~gt4py.next.utils.session_fingerprinter`, suits an
+      in-memory cache (a plain ``dict``, the default): it lives within a single
+      process and so tolerates non-importable callables in the step graph
+      (lambdas, closures, dynamically-created steps) by hashing them
+      structurally. A persistent cache (e.g. ``FileCache``) instead requires
+      :data:`~gt4py.next.utils.stable_fingerprinter`, so that every referenced
+      function is importable by qualified name and the on-disk keys stay
+      reproducible across processes.
 
     Examples:
     ---------
-    >>> cached_step = CachedStep(step=tuple, key_function=lambda x: x)
+    >>> cached_step = CachedStep(step=tuple, input_fingerprinter=lambda x: x)
 
     The result of the first invocation is computed and stored in the cache:
     >>> result = cached_step([1, 2, 3])
@@ -253,8 +265,11 @@ class CachedStep(
     """
 
     step: Workflow[StartT, EndT]
-    key_function: Callable[[StartT], HashT] = dataclasses.field(
+    input_fingerprinter: Callable[[StartT], HashT] = dataclasses.field(
         metadata=utils.gt4py_metadata(fingerprint=False)
+    )
+    step_fingerprinter: utils.Fingerprinter = dataclasses.field(
+        default=utils.session_fingerprinter, metadata=utils.gt4py_metadata(fingerprint=False)
     )
     cache: OpaqueMutableMapping[str, EndT] = dataclasses.field(
         repr=False, default_factory=dict, metadata=utils.gt4py_metadata(fingerprint=False)
@@ -274,10 +289,10 @@ class CachedStep(
         # The step and the build-cache version are immutable, so their
         # (potentially expensive) fingerprint is computed once per instance
         # instead of on every cache lookup.
-        return utils.stable_fingerprinter((config.BUILD_CACHE_VERSION_ID, self))
+        return self.step_fingerprinter((config.BUILD_CACHE_VERSION_ID, self))
 
     def cache_key(self, inp: StartT) -> str:
-        return utils.stable_fingerprinter((self._step_fingerprint, self.key_function(inp)))
+        return self.step_fingerprinter((self._step_fingerprint, self.input_fingerprinter(inp)))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -294,3 +309,15 @@ class SkippableStep(
 
     def skip_condition(self, inp: StartT) -> bool:
         raise NotImplementedError()
+
+
+
+def f():
+    ...
+
+assert f.__module__ == "module"  # type: ignore[attr-defined]
+assert f.__name__ == "f"  # type: ignore[attr-defined]
+
+f = Wrapper(f)
+
+
