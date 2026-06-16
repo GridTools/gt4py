@@ -8,13 +8,13 @@
 
 import ast
 import textwrap
-import typing
 from dataclasses import dataclass
 from typing import Callable, ClassVar, Collection
 
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.extended_typing import Any, Generic, TypeVar
 from gt4py.next import errors
+from gt4py.next.ffront import source_utils
 from gt4py.next.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from gt4py.next.ffront.ast_passes.remove_docstrings import RemoveDocstrings
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
@@ -150,7 +150,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     def apply_to_function(cls, function: Callable) -> DialectRootT:
         src = SourceDefinition.from_function(function)
         closure_vars = get_closure_vars_from_function(function)
-        annotations = typing.get_type_hints(function)
+        annotations = source_utils.get_type_hints_from_function(function, src)
         return cls.apply(src, closure_vars, annotations)
 
     @classmethod

@@ -91,7 +91,10 @@ def test_mistyped_arg():
     def mistyped(inp: gtx.Field):
         return inp
 
-    with pytest.raises(ValueError, match="Field type requires two arguments, got 0."):
+    with pytest.raises(
+        errors.InvalidParameterAnnotationError,
+        match="Field type requires two arguments, got 0.",
+    ):
         _ = FieldOperatorParser.apply_to_function(mistyped)
 
 

@@ -246,6 +246,40 @@ def test_non_local_dimension_index_is_a_dsl_error():
     assert "'IDim' is not a local (neighbor) dimension" in err.message
 
 
+def test_unresolvable_string_annotation_is_a_dsl_error():
+    # used to leak SyntaxError from typing.get_type_hints
+    def with_bad_annotation(a: "not a type") -> gtx.Field[[IDim], float64]:  # noqa: F722 [syntax-error-in-forward-annotation]
+        return a
+
+    err = parse_error(with_bad_annotation)
+
+    assert "Could not resolve type annotations of 'with_bad_annotation'" in err.message
+
+
+def test_non_gt4py_parameter_annotation_is_a_dsl_error():
+    # used to leak ValueError: Type <class 'list'> not supported
+    def with_list_param(a: list) -> gtx.Field[[IDim], float64]:
+        return a
+
+    err = parse_error(with_list_param)
+
+    assert isinstance(err, errors.InvalidParameterAnnotationError)
+    assert any("GT4Py type" in hint for hint in err.hints)
+
+
+def test_unresolvable_annotated_assignment_is_a_dsl_error():
+    # used to leak NameError from eval'ing the annotation: 'gtx' is only
+    # visible inside the function if it is also referenced in the body
+    def with_ann_assign(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        b: gtx.Field[[IDim], float64] = a
+        return b
+
+    err = parse_error(with_ann_assign)
+
+    assert "Invalid type annotation 'gtx.Field[[IDim], float64]'" in err.message
+    assert any("GT4Py builtins" in note for note in err.notes)
+
+
 def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"
