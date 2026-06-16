@@ -96,7 +96,7 @@ The `pyproject.toml` file contains both the definition of the `gt4py` Python dis
 
 ### Development Tasks (`/scripts`)
 
-Recurrent development tasks like bumping versions of used development tools or required third party dependencies have been collected as separate modules in the `/scripts` folder, and collected as subcommands of the [`scripts-cli.py`](./scripts-cli.py) tool. Read the tool help for a brief description of every task and always use this tool to update the versions and sync the version configuration across different files (e.g. `pyproject.toml` and `.pre-commit-config.yaml`).
+Recurrent development tasks like bumping versions of used development tools or required third party dependencies have been collected as separate modules in the [`/scripts`](./scripts) folder, and collected as subcommands of the [`./scripts/run`](./scripts/run) tool (see [`scripts/README.md`](./scripts/README.md) for the conventions). Read the tool help for a brief description of every task and always use this tool to update the versions and sync the version configuration across different files (e.g. `pyproject.toml` and `.pre-commit-config.yaml`).
 
 ## 📖 Documentation
 
