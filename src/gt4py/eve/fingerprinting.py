@@ -15,21 +15,21 @@ one-level deconstructions of those objects.
 
 Public API:
 
-- :class:`Deconstruction` / :class:`EmptyDeconstruction` / :class:`OrderInsensitiveDeconstruction`
+- `Deconstruction` / `EmptyDeconstruction` / `OrderInsensitiveDeconstruction`
   — results of deconstructing one level of an object.
-- :data:`Deconstructor` — type alias for a per-object deconstructor.
-- :func:`make_deconstructor` — build a dispatching deconstructor from per-type overrides.
-- :data:`deconstruct` — the default GT4Py deconstructor.
-- :func:`catabolize` — iterative bottom-up fold over a deconstructed object graph.
-- :data:`Collapser` / :data:`Fingerprinter` — type aliases.
-- :func:`fingerprint_collapser` — the xxhash-based collapser used by all built-in fingerprinters.
-- :data:`fingerprint_deconstructor` — deconstructor used by :data:`stable_fingerprinter`.
-- :func:`fingerprint_fallback` — fallback deconstructor honoring ``gt4py_metadata(fingerprint=False)``.
-- :data:`stable_fingerprinter` — cross-process deterministic fingerprinter.
-- :data:`session_fingerprinter` — single-process fingerprinter tolerant of non-importable objects.
-- :func:`skipping_fields_node_fingerprinter` — fingerprinter that skips named node fields.
-- :func:`gt4py_metadata` — helper to attach GT4Py field metadata (e.g. ``fingerprint=False``).
-- :data:`GT4PY_CLASS_METADATA_NS` — the metadata namespace key used by :func:`gt4py_metadata`.
+- `Deconstructor` — type alias for a per-object deconstructor.
+- `make_deconstructor` — build a dispatching deconstructor from per-type overrides.
+- `deconstruct` — the default GT4Py deconstructor.
+- `catabolize` — iterative bottom-up fold over a deconstructed object graph.
+- `Collapser` / `Fingerprinter` — type aliases.
+- `fingerprint_collapser` — the xxhash-based collapser used by all built-in fingerprinters.
+- `fingerprint_deconstructor` — deconstructor used by `stable_fingerprinter`.
+- `fingerprint_fallback` — fallback deconstructor honoring ``gt4py_metadata(fingerprint=False)``.
+- `stable_fingerprinter` — cross-process deterministic fingerprinter.
+- `session_fingerprinter` — single-process fingerprinter tolerant of non-importable objects.
+- `skipping_fields_node_fingerprinter` — fingerprinter that skips named node fields.
+- `gt4py_metadata` — helper to attach GT4Py field metadata (e.g. ``fingerprint=False``).
+- `GT4PY_CLASS_METADATA_NS` — the metadata namespace key used by `gt4py_metadata`.
 """
 
 from __future__ import annotations
@@ -131,7 +131,7 @@ def make_deconstructor(
     Create a deconstructor, optionally with customized per-type deconstruction.
 
     The returned deconstructor produces one level of an object as a
-    :class:`Deconstruction` (an :class:`EmptyDeconstruction` for terminal
+    `Deconstruction` (an `EmptyDeconstruction` for terminal
     objects) whose `state` is a byte tag (a domain-separation tag, optionally
     followed by a payload).
     Per-type deconstructors are dispatched on the object's MRO; `overrides`
@@ -355,7 +355,7 @@ def _deconstruct(obj: Any) -> Deconstruction:
 
 
 #: Default deconstructor for GT4Py objects, built from the default per-type
-#: deconstruction rules (see :func:`make_deconstructor`).
+#: deconstruction rules (see `make_deconstructor`).
 deconstruct: Final[Deconstructor] = make_deconstructor()
 
 
@@ -363,7 +363,7 @@ deconstruct: Final[Deconstructor] = make_deconstructor()
 
 #: Collapses a deconstruction into a result; for non-terminal objects, the
 #: pieces have already been collapsed into results. This is the algebra of
-#: the catamorphism implemented by :func:`catabolize`.
+#: the catamorphism implemented by `catabolize`.
 Collapser: TypeAlias = Callable[[Deconstruction], _R]
 
 
@@ -388,10 +388,10 @@ def catabolize(
     depth is bounded neither by the Python recursion limit nor (on Python
     <= 3.10) by the C stack. The reduction logic is supplied as the
     `collapser` (the algebra of the catamorphism): it collapses an
-    :class:`EmptyDeconstruction` into a result and, for non-terminal objects,
-    a :class:`Deconstruction` whose pieces have been replaced by the
+    `EmptyDeconstruction` into a result and, for non-terminal objects,
+    a `Deconstruction` whose pieces have been replaced by the
     already-collapsed results of the original pieces — in piece order, or in
-    canonical sorted order for an :class:`OrderInsensitiveDeconstruction`
+    canonical sorted order for an `OrderInsensitiveDeconstruction`
     (which requires the results to be orderable).
 
     Keyword Args:
@@ -399,11 +399,11 @@ def catabolize(
         collapser: Collapse of a deconstruction into a result.
         allow_cycles: Whether to allow cyclic references in the object graph.
             If allowed, a cyclic reference is collapsed as an
-            :class:`EmptyDeconstruction` whose state encodes the relative
+            `EmptyDeconstruction` whose state encodes the relative
             depth (in currently open nodes) back up to its target; results
             computed below a cycle target embed context-dependent back
             references and are therefore never memoized. If not allowed,
-            cycles raise :class:`ValueError`.
+            cycles raise `ValueError`.
         memoize: Reuse the result of already-reduced subobjects (matched by
             identity), so shared substructure is reduced only once. Requires
             a pure collapser: results must depend only on the deconstruction,
@@ -541,7 +541,7 @@ def fingerprint_fallback(obj: Any) -> Deconstruction:
     Dataclasses and datamodels are deconstructed through their fields,
     dropping those marked with ``gt4py_metadata(fingerprint=False)``;
     everything else is delegated to the default fallback rules. Used as the
-    `fallback` of :func:`make_deconstructor` by every fingerprinter.
+    `fallback` of `make_deconstructor` by every fingerprinter.
     """
     cls = type(obj)
     if (fields := _dataclass_fields(cls)) is not None:
@@ -556,7 +556,7 @@ def fingerprint_fallback(obj: Any) -> Deconstruction:
 fingerprint_deconstructor: Final[Deconstructor] = make_deconstructor(fallback=fingerprint_fallback)
 
 
-#: A fingerprinter is :func:`catabolize` instantiated with digest
+#: A fingerprinter is `catabolize` instantiated with digest
 #: collapsers (xxhash64 with domain separation) over a deconstructor, which
 #: must produce type tags as `state`.
 Fingerprinter: TypeAlias = Callable[[Any], str]
@@ -577,13 +577,13 @@ stable_fingerprinter: Fingerprinter = functools.partial(
 # -- Session fingerprinting for in-memory (single-process) keys --
 #
 # The default by-reference rules reject non-importable callables, types and
-# modules (see :func:`_reference_by_fully_qualified_name`) because a persistent,
+# modules (see `_reference_by_fully_qualified_name`) because a persistent,
 # on-disk key must be reproducible in a *different* process, where only an
 # import path uniquely identifies an object. That requirement does not hold for
 # an in-memory cache, which lives and dies within a single process: there an
 # object's structure is a perfectly valid identity. The session fingerprinter
 # keeps the stable by-reference behavior whenever it applies (so it agrees with
-# :data:`stable_fingerprinter` on graphs without non-importable objects), but
+# `stable_fingerprinter` on graphs without non-importable objects), but
 # falls back to structural ("by code") hashing for functions and to an
 # unverified qualified name for dynamically-created types/modules, instead of
 # raising.
@@ -645,8 +645,8 @@ def _session_reference(obj: Any) -> EmptyDeconstruction:
         )
 
 
-#: Tolerant overrides composed into :data:`session_fingerprinter`'s
-#: deconstructor (see :func:`make_deconstructor`).
+#: Tolerant overrides composed into `session_fingerprinter`'s
+#: deconstructor (see `make_deconstructor`).
 _SESSION_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     types.FunctionType: _session_function_deconstruction,
     types.BuiltinFunctionType: _session_reference,
@@ -658,7 +658,7 @@ _SESSION_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
 
 
 #: Fingerprinter for in-memory (single-process) cache keys: like
-#: :data:`stable_fingerprinter`, but tolerant of non-importable callables, types
+#: `stable_fingerprinter`, but tolerant of non-importable callables, types
 #: and modules in the object graph (functions are hashed by code + closure,
 #: dynamic types/modules by unverified qualified name). It MUST NOT key a
 #: persistent cache, whose keys must be reproducible across processes.
@@ -706,7 +706,7 @@ def skipping_fields_node_fingerprinter(
     The provided field names are ignored recursively on all nodes. With
     `return_deconstructors=True`, additionally return the per-type deconstructor
     overrides so they can be composed into another deconstructor via
-    :func:`make_deconstructor`.
+    `make_deconstructor`.
     """
     deconstructors: dict[type, Deconstructor] = {
         concepts.Node: _make_skipping_fields_node_deconstructor(frozenset(skipped_fields))

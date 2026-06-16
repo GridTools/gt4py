@@ -61,10 +61,7 @@ def _deconstruct_definition_function(func: types.FunctionType) -> utils.Deconstr
 semantic_fingerprinter: utils.Fingerprinter = functools.partial(
     utils.catabolize,
     deconstructor=utils.make_deconstructor(
-        {
-            **foast.semantic_fingerprint_deconstructors,
-            types.FunctionType: _deconstruct_definition_function,
-        },
+        {types.FunctionType: _deconstruct_definition_function},
         fallback=utils.fingerprint_fallback,
     ),
     collapser=utils.fingerprint_collapser,

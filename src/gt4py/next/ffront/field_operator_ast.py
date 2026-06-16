@@ -19,19 +19,6 @@ from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffron
 from gt4py.next.type_system import type_specifications as ts
 
 
-#: Fingerprint for FOAST/PAST `eve.Node`s that *includes* the source `location`.
-#: These deconstructors key the in-memory frontend-stage caches (func_to_foast,
-#: foast_to_gtir, past_to_itir, ...); the location must contribute so that two
-#: textually identical operators defined at different source locations do not
-#: alias to the same cached lowering (which would bake the first operator's
-#: `SourceLocation`s into the second, mislabeling its errors and debug info).
-#: Location-agnostic fingerprinting (e.g. for the persistent translation cache)
-#: is provided separately by `iterator.ir.semantic_fingerprinter`.
-semantic_fingerprinter, semantic_fingerprint_deconstructors = (
-    utils.skipping_fields_node_fingerprinter(return_deconstructors=True)
-)
-
-
 class LocatedNode(Node):
     location: SourceLocation = eve.field(repr=False, compare=False)
 
