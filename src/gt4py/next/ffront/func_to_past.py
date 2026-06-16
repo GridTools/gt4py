@@ -115,7 +115,7 @@ class ProgramParser(DialectParser[past.Program]):
             try:
                 type_ = type_translation.from_value(val)
             except ValueError as e:
-                hints = ()
+                hints: tuple[str, ...] = ()
                 if callable(val):
                     hints = (
                         "Only functions decorated with '@field_operator' or "

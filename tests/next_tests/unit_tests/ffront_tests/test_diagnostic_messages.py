@@ -43,7 +43,7 @@ def parse_program_error(func) -> errors.DSLError:
 
 def test_undeclared_symbol_suggests_close_match():
     def misspelled(temperature: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
-        tmp_field = temperature * 2.0
+        tmp_field = temperature * 2.0  # noqa: F841 [unused-variable]
         return tmp_feild  # noqa: F821 [undefined-name]
 
     err = parse_error(misspelled)
@@ -85,7 +85,7 @@ def test_while_loop_names_construct_and_alternative():
 
 def test_unlisted_construct_falls_back_to_ast_name():
     def with_string(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
-        f"{a}"
+        f"{a}"  # noqa: B021 [f-string-docstring]
         return a
 
     err = parse_error(with_string)
@@ -333,7 +333,7 @@ def test_plain_python_function_in_program_is_a_dsl_error():
 def test_nested_tuple_unpacking_is_a_dsl_error():
     # used to leak AttributeError: 'TupleExpr' object has no attribute 'id'
     def with_nested_unpack(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
-        (b, c), d = (a, a), a
+        (b, c), d = (a, a), a  # noqa: F841 [unused-variable]
         return b
 
     err = parse_error(with_nested_unpack)
@@ -346,7 +346,7 @@ def test_invalid_literal_for_type_constructor_is_a_dsl_error():
     from gt4py.next import int32
 
     def with_bad_cast(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
-        b = int32("abc")
+        b = int32("abc")  # noqa: F841 [unused-variable]
         return a
 
     err = parse_error(with_bad_cast)
@@ -420,7 +420,7 @@ def test_unsupported_signature_features_are_dsl_errors(feature, definition, tmp_
 
 def test_out_of_range_integer_constant_explains_reason():
     def with_huge_constant(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
-        b = 99999999999999999999999999
+        b = 99999999999999999999999999  # noqa: F841 [unused-variable]
         return a
 
     err = parse_error(with_huge_constant)
@@ -476,9 +476,7 @@ def test_wrong_out_type_in_direct_call_is_a_dsl_error():
     a = gtx.as_field([IDim], np.zeros(5))
     out = gtx.as_field([JDim], np.zeros(5))
 
-    with pytest.raises(
-        errors.DSLTypeError, match="expected keyword argument 'out' to be of type"
-    ):
+    with pytest.raises(errors.DSLTypeError, match="expected keyword argument 'out' to be of type"):
         _copy_op(a, out=out, offset_provider={})
 
 
@@ -559,9 +557,7 @@ def test_non_integral_neighbor_table_reports_dtype():
     V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
 
     with pytest.raises(ValueError, match="integral dtype"):
-        gtx.as_connectivity(
-            [Vertex, V2EDim], codomain=Edge, data=np.array([[0.5, 1.5]])
-        )
+        gtx.as_connectivity([Vertex, V2EDim], codomain=Edge, data=np.array([[0.5, 1.5]]))
 
 
 def test_diagnostic_codes_are_stable():

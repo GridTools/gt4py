@@ -30,25 +30,14 @@ Basic Interface Tests
     - evaluation test cases
 """
 
-import re
-
 import pytest
 
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next import (
-    astype,
-    broadcast,
-    errors,
-    float32,
-    float64,
-    int32,
-    int64,
-    where,
-)
-from gt4py.next.ffront.experimental import concat_where
+from gt4py.next import astype, broadcast, errors, float32, float64, int32, int64, where
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
+from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import builtins as itb, ir as itir
 from gt4py.next.type_system import type_specifications as ts
@@ -93,7 +82,7 @@ def test_mistyped_arg():
 
     with pytest.raises(
         errors.InvalidParameterAnnotationError,
-        match="Field type requires two arguments, got 0.",
+        match=r"Field type requires two arguments, got 0",
     ):
         _ = FieldOperatorParser.apply_to_function(mistyped)
 
@@ -117,7 +106,7 @@ def test_invalid_syntax_no_return():
     def no_return(inp: gtx.Field[[TDim], "float64"]):
         tmp = inp  # noqa
 
-    with pytest.raises(errors.DSLError, match=".*return.*"):
+    with pytest.raises(errors.DSLError, match=r".*return.*"):
         _ = FieldOperatorParser.apply_to_function(no_return)
 
 
@@ -137,7 +126,7 @@ def test_invalid_assign_to_expr():
 
 def test_declaration_without_assignment():
     def empty_assign() -> float:
-        x: float
+        x: float  # noqa: F842 [unused-annotated-variable]
         return 1.0
 
     with pytest.raises(errors.DSLError, match=r"without assignment"):
@@ -271,7 +260,7 @@ def test_conditional_wrong_arg_type():
 
     with pytest.raises(
         errors.DSLError,
-        match="Field arguments to 'where' must be of same dtype, got 'float32' != 'float64'.",
+        match=r"Field arguments to 'where' must be of same dtype, got 'float32' != 'float64'\.",
     ):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
@@ -342,7 +331,7 @@ def test_closure_symbols():
     from gt4py.eve.utils import FrozenNamespace
 
     nonlocals = FrozenNamespace(float_value=2.3, np_value=np.float32(3.4))
-    nonlocals_unreferenced = "nonlocals_unreferenced"
+    nonlocals_unreferenced = "nonlocals_unreferenced"  # noqa: F841 [unused-variable]
 
     def operator_with_refs(inp: gtx.Field[[TDim], "float64"], inp2: gtx.Field[[TDim], "float32"]):
         a = inp + nonlocals.float_value
