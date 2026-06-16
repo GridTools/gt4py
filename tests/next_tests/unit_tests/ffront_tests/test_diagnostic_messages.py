@@ -330,6 +330,144 @@ def test_plain_python_function_in_program_is_a_dsl_error():
     assert any("@field_operator" in hint for hint in err.hints)
 
 
+def test_nested_tuple_unpacking_is_a_dsl_error():
+    # used to leak AttributeError: 'TupleExpr' object has no attribute 'id'
+    def with_nested_unpack(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        (b, c), d = (a, a), a
+        return b
+
+    err = parse_error(with_nested_unpack)
+
+    assert err.message == "Nested tuple unpacking is not supported."
+
+
+def test_invalid_literal_for_type_constructor_is_a_dsl_error():
+    # used to leak ValueError at execution time, long after the definition
+    from gt4py.next import int32
+
+    def with_bad_cast(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        b = int32("abc")
+        return a
+
+    err = parse_error(with_bad_cast)
+
+    assert "is not a valid literal for 'int32'" in err.message
+
+
+def test_scan_operator_init_with_unsupported_type_is_a_dsl_error():
+    # 'init=np.zeros(...)' used to crash with NumPy's ambiguous-truth-value
+    # ValueError when fingerprinting the value
+    import numpy as np
+
+    KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+    with pytest.raises(errors.DSLTypeError, match="Argument 'init'") as exc_info:
+
+        @gtx.scan_operator(axis=KDim, forward=True, init=np.zeros(3))
+        def scan_op(state: float64, x: float64) -> float64:
+            return state + x
+
+    assert "ndarray" in exc_info.value.message
+
+
+def test_string_dimension_key_in_domain_is_a_dsl_error():
+    # used to leak a TypeError from IR node validation
+    def with_str_domain_key(a: gtx.Field[[IDim], float64], out: gtx.Field[[IDim], float64]):
+        _copy_op(a, out=out, domain={"IDim": (0, 10)})
+
+    err = parse_program_error(with_str_domain_key)
+
+    assert "Dictionary keys must be dimension objects" in err.message
+
+
+# --- call-time diagnostics (embedded execution, no backend) ---------------
+
+import numpy as np  # noqa: E402 [import-not-at-top-of-file]
+
+
+def test_numpy_array_argument_in_direct_call_is_a_dsl_error():
+    # used to crash an assert deep inside the embedded execution
+    arr = np.zeros(5)
+    out = gtx.as_field([IDim], np.zeros(5))
+
+    with pytest.raises(errors.DSLTypeError) as exc_info:
+        _copy_op(arr, out=out, offset_provider={})
+
+    assert "argument 1 has a type not supported by GT4Py: 'ndarray'" in exc_info.value.message
+    assert any("as_field" in hint for hint in exc_info.value.hints)
+
+
+def test_wrong_dims_argument_in_direct_call_is_a_dsl_error():
+    # used to leak ValueError: Incompatible 'Domain' in assignment
+    JDim = gtx.Dimension("JDim")
+    a = gtx.as_field([JDim], np.zeros(5))
+    out = gtx.as_field([IDim], np.zeros(5))
+
+    with pytest.raises(errors.DSLError, match="Invalid argument types in call to '_copy_op'"):
+        _copy_op(a, out=out, offset_provider={})
+
+
+def test_wrong_out_type_in_direct_call_is_a_dsl_error():
+    # used to leak ValueError: Incompatible 'Domain' in assignment
+    JDim = gtx.Dimension("JDim")
+    a = gtx.as_field([IDim], np.zeros(5))
+    out = gtx.as_field([JDim], np.zeros(5))
+
+    with pytest.raises(
+        errors.DSLTypeError, match="expected keyword argument 'out' to be of type"
+    ):
+        _copy_op(a, out=out, offset_provider={})
+
+
+def test_extra_argument_in_direct_call_is_a_dsl_error():
+    # used to leak TypeError: ... takes 1 positional argument but 2 were given
+    a = gtx.as_field([IDim], np.zeros(5))
+    out = gtx.as_field([IDim], np.zeros(5))
+
+    with pytest.raises(errors.DSLError, match="Invalid argument types in call to '_copy_op'"):
+        _copy_op(a, a, out=out, offset_provider={})
+
+
+def test_missing_offset_provider_entry_is_a_dsl_error():
+    # used to leak a KeyError
+    Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
+
+    @gtx.field_operator
+    def shift_op(f: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return f(Ioff[1])
+
+    a = gtx.as_field([IDim], np.zeros(5))
+    out = gtx.as_field([IDim], np.zeros(5))
+
+    with pytest.raises(errors.DSLError, match="Offset 'Ioff' not found") as exc_info:
+        shift_op(a, out=out, offset_provider={})
+    assert any("offset_provider" in hint for hint in exc_info.value.hints)
+
+
+def test_invalid_domain_argument_is_a_dsl_error():
+    # used to leak ValueError: '0' is not 'DomainLike'
+    a = gtx.as_field([IDim], np.zeros(5))
+    out = gtx.as_field([IDim], np.zeros(5))
+
+    with pytest.raises(errors.DSLTypeError, match="Invalid 'domain' argument"):
+        _copy_op(a, out=out, domain=(0, 5), offset_provider={})
+
+
+def test_numpy_array_argument_in_program_call_is_a_dsl_error():
+    # used to leak ValueError: The truth value of an array ... is ambiguous
+    @gtx.program
+    def copy_prog(f: gtx.Field[[IDim], float64], out: gtx.Field[[IDim], float64]):
+        _copy_op(f, out=out)
+
+    arr = np.zeros(5)
+    out = gtx.as_field([IDim], np.zeros(5))
+
+    with pytest.raises(errors.DSLTypeError) as exc_info:
+        copy_prog(arr, out, offset_provider={})
+
+    assert "argument 1 has a type not supported by GT4Py" in exc_info.value.message
+
+
 def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"
