@@ -118,7 +118,7 @@ field opt-out on the default rules). The default deconstruction rules are:
   (lambdas, local closures), whose qualified names are ambiguous, as well as
   shadowed or reassigned globals, are rejected with a `TypeError` instead of
   silently colliding. (In-memory keys relax this to a structural fallback — see
-  *Strict vs. lenient: the durability axis* below.)
+  *Stable vs. session: the durability axis* below.)
 - **Dataclasses and datamodels** — nodes of class + field values, honoring
   the field metadata opt-out (below).
 - **Everything else** — deconstructed via the standard `__reduce_ex__` protocol
@@ -225,7 +225,7 @@ in-memory ffront key (so the operator is re-lowered in-process, cheaply, with
 correct locations) but leaves the persistent ITIR key unchanged (so the
 expensive C++/SDFG artifact is still a cache hit and is not rebuilt).
 
-### Strict vs. lenient: the durability axis
+### Stable vs. session: the durability axis
 
 By-reference identification (above) exists because a **persistent** key must be
 reproducible in a *different* process, where only an import path uniquely
@@ -251,17 +251,17 @@ rejecting a non-importable object, falls back to a **structural** identity:
   qualified name.
 
 For any graph *without* non-importable objects the two fingerprinters agree
-exactly (the lenient overrides try by-reference first), so switching a cache
+exactly (the session overrides try by-reference first), so switching a cache
 between them never spuriously invalidates it.
 
-`CachedStep` makes strict-vs-lenient an **explicit** choice: the caller passes a
-`step_fingerprinter`, defaulting to `session_fingerprinter` (lenient). The choice
+`CachedStep` makes stable-vs-session an **explicit** choice: the caller passes a
+`step_fingerprinter`, defaulting to `session_fingerprinter`. The choice
 must match the cache's durability — an in-memory `dict` (the default) is happy
-with the lenient default, while a persistent cache (e.g. `FileCache`) must be
+with the session default, while a persistent cache (e.g. `FileCache`) must be
 paired with `stable_fingerprinter` so its on-disk keys stay reproducible across
 processes. The two persistent call sites (the gtfn/dace `cached_translation`
 traits) do exactly that. The default is the safe one *for the default cache*: a
-lambda-bearing step is fine under the lenient default, but a `FileCache` paired
+lambda-bearing step is fine under the session default, but a `FileCache` paired
 with `stable_fingerprinter` still rejects it with a hard `TypeError`, so a
 persistent cache never gets a non-reproducible key (the worst failure mode in
 this subsystem: a stale on-disk binary reused for changed code → silently wrong

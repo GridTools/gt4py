@@ -178,8 +178,9 @@ def test_cached_step_stable_fingerprinter_rejects_non_importable_step(tmp_path):
         cached.cache_key(5)
 
 
-def test_cached_step_strictness_follows_fingerprinter_not_cache():
-    """Strictness is driven by ``step_fingerprinter``, not by the cache type.
+def test_cached_step_rejection_follows_fingerprinter_not_cache():
+    """Rejection of non-importable steps is driven by ``step_fingerprinter``,
+    not by the cache type.
 
     Even with the default in-memory ``dict`` cache, an explicit
     ``stable_fingerprinter`` rejects a non-importable step."""

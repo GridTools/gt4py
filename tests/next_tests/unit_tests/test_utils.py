@@ -508,11 +508,11 @@ class TestStableFingerprinter:
         assert utils.stable_fingerprinter(np.cbrt) != utils.stable_fingerprinter(np.sqrt)
 
 
-class TestLenientFingerprinter:
+class TestSessionFingerprinter:
     def test_agrees_with_stable_fingerprinter_on_importable_objects(self):
-        # The lenient fingerprinter only relaxes the by-reference rules, so for
+        # The session fingerprinter only relaxes the by-reference rules, so for
         # a graph without non-importable objects it must produce the exact same
-        # fingerprint as the strict one (no spurious cache invalidation when a
+        # fingerprint as the stable one (no spurious cache invalidation when a
         # step graph switches between the two).
         import os
 
@@ -520,7 +520,7 @@ class TestLenientFingerprinter:
         assert utils.session_fingerprinter(payload) == utils.stable_fingerprinter(payload)
 
     def test_non_importable_callables_are_fingerprinted_structurally(self):
-        # Lambdas and closures have no identifying qualified name; the lenient
+        # Lambdas and closures have no identifying qualified name; the session
         # fingerprinter hashes them by their code and captured closure instead
         # of raising (valid for single-process, in-memory keys).
         def make_closure(n):
@@ -562,8 +562,8 @@ class TestLenientFingerprinter:
             {"t": second}
         )
 
-    def test_strict_fingerprinter_still_rejects_non_importable_callables(self):
-        # The durability split is enforced: the strict fingerprinter (the one
+    def test_stable_fingerprinter_still_rejects_non_importable_callables(self):
+        # The durability split is enforced: the stable fingerprinter (the one
         # that keys persistent, cross-process caches) keeps raising.
         with pytest.raises(TypeError, match="not importable"):
             utils.stable_fingerprinter(lambda: None)

@@ -574,15 +574,15 @@ stable_fingerprinter: Fingerprinter = functools.partial(
 )
 
 
-# -- Lenient fingerprinting for in-memory (single-process) keys --
+# -- Session fingerprinting for in-memory (single-process) keys --
 #
 # The default by-reference rules reject non-importable callables, types and
 # modules (see :func:`_reference_by_fully_qualified_name`) because a persistent,
 # on-disk key must be reproducible in a *different* process, where only an
 # import path uniquely identifies an object. That requirement does not hold for
 # an in-memory cache, which lives and dies within a single process: there an
-# object's structure is a perfectly valid identity. The lenient fingerprinter
-# keeps the strict by-reference behavior whenever it applies (so it agrees with
+# object's structure is a perfectly valid identity. The session fingerprinter
+# keeps the stable by-reference behavior whenever it applies (so it agrees with
 # :data:`stable_fingerprinter` on graphs without non-importable objects), but
 # falls back to structural ("by code") hashing for functions and to an
 # unverified qualified name for dynamically-created types/modules, instead of
@@ -615,7 +615,7 @@ def _deconstruct_cell(cell: types.CellType) -> Deconstruction:
     return Deconstruction.from_pieces(contents, state=b"cell")
 
 
-def _lenient_function_deconstruction(func: types.FunctionType) -> Deconstruction:
+def _session_function_deconstruction(func: types.FunctionType) -> Deconstruction:
     try:
         return EmptyDeconstruction.from_reference(func)
     except TypeError:
@@ -633,13 +633,13 @@ def _lenient_function_deconstruction(func: types.FunctionType) -> Deconstruction
         )
 
 
-def _lenient_reference(obj: Any) -> EmptyDeconstruction:
+def _session_reference(obj: Any) -> EmptyDeconstruction:
     try:
         return EmptyDeconstruction.from_reference(obj)
     except TypeError:
         # A dynamically-created type/module (e.g. a ``unittest.mock.Mock``
         # subclass): identify it by its qualified name without the round-trip
-        # resolve check that the strict reference requires.
+        # resolve check that the stable reference requires.
         return EmptyDeconstruction(
             b"unresolved-ref\0" + eve_utils.get_fully_qualified_name(obj).encode()
         )
@@ -647,11 +647,11 @@ def _lenient_reference(obj: Any) -> EmptyDeconstruction:
 
 #: Tolerant overrides composed into :data:`session_fingerprinter`'s
 #: deconstructor (see :func:`make_deconstructor`).
-_LENIENT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
-    types.FunctionType: _lenient_function_deconstruction,
-    types.BuiltinFunctionType: _lenient_reference,
-    types.ModuleType: _lenient_reference,
-    type: _lenient_reference,
+_SESSION_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
+    types.FunctionType: _session_function_deconstruction,
+    types.BuiltinFunctionType: _session_reference,
+    types.ModuleType: _session_reference,
+    type: _session_reference,
     types.CodeType: _deconstruct_code,
     types.CellType: _deconstruct_cell,
 }
@@ -664,7 +664,7 @@ _LENIENT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
 #: persistent cache, whose keys must be reproducible across processes.
 session_fingerprinter: Fingerprinter = functools.partial(
     catabolize,
-    deconstructor=make_deconstructor(_LENIENT_DECONSTRUCTORS, fallback=fingerprint_fallback),
+    deconstructor=make_deconstructor(_SESSION_DECONSTRUCTORS, fallback=fingerprint_fallback),
     collapser=fingerprint_collapser,
     allow_cycles=True,
 )
