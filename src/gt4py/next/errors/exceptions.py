@@ -36,7 +36,7 @@ class GT4PyError(Exception):
         return self.args[0]
 
 
-def _did_you_mean(name: str, candidates: Iterable[str]) -> list[str]:
+def did_you_mean(name: str, candidates: Iterable[str]) -> list[str]:
     """Produce a 'Did you mean ...?' hint if `name` closely matches any candidate."""
     # Never suggest the name the user already wrote (it can appear among the
     # candidates as a same-named symbol from another SSA generation).
@@ -157,7 +157,7 @@ class UndefinedSymbolError(DSLError):
             location,
             f"Undeclared symbol '{name}'.",
             label="not defined at this point",
-            hints=_did_you_mean(name, candidates),
+            hints=did_you_mean(name, candidates),
         )
         self.sym_name = name
 

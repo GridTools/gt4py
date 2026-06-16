@@ -19,6 +19,7 @@ from .exceptions import (
     MissingParameterAnnotationError,
     UndefinedSymbolError,
     UnsupportedPythonFeatureError,
+    did_you_mean,
 )
 
 
@@ -32,4 +33,5 @@ __all__ = [
     "MissingParameterAnnotationError",
     "UndefinedSymbolError",
     "UnsupportedPythonFeatureError",
+    "did_you_mean",
 ]
