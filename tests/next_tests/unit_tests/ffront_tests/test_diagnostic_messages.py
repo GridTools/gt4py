@@ -531,6 +531,39 @@ def test_numpy_array_argument_in_program_call_is_a_dsl_error():
     assert "argument 1 has a type not supported by GT4Py" in exc_info.value.message
 
 
+def test_non_mapping_offset_provider_is_a_dsl_error():
+    # used to be silently accepted until an offset lookup crashed (or not at all)
+    a = gtx.as_field([IDim], np.zeros(5))
+    out = gtx.as_field([IDim], np.zeros(5))
+
+    with pytest.raises(errors.DSLTypeError, match="'offset_provider' must be a mapping"):
+        _copy_op(a, out=out, offset_provider=[("Ioff", IDim)])
+
+
+def test_unsupported_field_dtype_reports_dtype():
+    # used to crash an assert in NdArrayField.from_array
+    with pytest.raises(ValueError, match="unsupported dtype 'float16'"):
+        gtx.as_field([IDim], np.zeros(5, dtype=np.float16))
+
+
+def test_string_dimensions_in_as_field_are_rejected():
+    # used to fail with a baffling "''D'' cannot be interpreted as 'UnitRange'"
+    with pytest.raises(TypeError, match="must be 'Dimension' objects"):
+        gtx.as_field(["IDim"], np.zeros(5))
+
+
+def test_non_integral_neighbor_table_reports_dtype():
+    # used to crash an assert in NdArrayConnectivityField.from_array
+    Vertex = gtx.Dimension("Vertex")
+    Edge = gtx.Dimension("Edge")
+    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+
+    with pytest.raises(ValueError, match="integral dtype"):
+        gtx.as_connectivity(
+            [Vertex, V2EDim], codomain=Edge, data=np.array([[0.5, 1.5]])
+        )
+
+
 def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"
