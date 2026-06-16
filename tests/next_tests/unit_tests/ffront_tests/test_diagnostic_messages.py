@@ -163,6 +163,20 @@ def test_toolchain_step_attaches_definition_context():
     assert "While processing the definition of 'misspelled'." in exc_info.value.__notes__
 
 
+def test_global_statement_is_rejected_with_friendly_message():
+    # 'global' used to crash an AST preprocessing pass with an AttributeError
+    # because its 'names' field holds plain strings, not AST nodes.
+    def with_global(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        global IDim
+        return a
+
+    err = parse_error(with_global)
+
+    assert isinstance(err, errors.UnsupportedPythonFeatureError)
+    assert err.message == "Unsupported Python syntax: 'global' statement."
+    assert any("read-only" in hint for hint in err.hints)
+
+
 def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"

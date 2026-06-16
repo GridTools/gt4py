@@ -67,6 +67,20 @@ _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
     ast.ClassDef: ("class definition", ()),
     ast.JoinedStr: ("f-string", ("Strings cannot be computed inside GT4Py functions.",)),
     ast.Match: ("'match' statement", ("Use 'if'/'elif' chains or 'where' instead.",)),
+    ast.Global: (
+        "'global' statement",
+        (
+            "Variables from the surrounding scope are read-only inside GT4Py functions; "
+            "pass values as parameters and return results instead.",
+        ),
+    ),
+    ast.Nonlocal: (
+        "'nonlocal' statement",
+        (
+            "Variables from the surrounding scope are read-only inside GT4Py functions; "
+            "pass values as parameters and return results instead.",
+        ),
+    ),
 }
 
 
