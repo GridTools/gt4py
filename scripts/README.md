@@ -52,8 +52,12 @@ scripts/
 
 **Bash scripts**
 
-- Source `_lib.sh` for shared helpers:
-  `source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"`
+- Set strict mode and source `_lib.sh` for shared helpers (`_lib.sh` does not
+  set shell options itself):
+  ```bash
+  set -euo pipefail
+  source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+  ```
 - Add `# [help] ...` comment lines to customize the help text shown by
   `./scripts/run`.
 

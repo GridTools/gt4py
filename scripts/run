@@ -56,11 +56,11 @@ if __name__ == "__main__":
         # Then add the 'python' folder to sys.path to mimic the `sys.path` of the
         # command modules run directly as scripts.
         sys.path.insert(0, python_scripts_dir)
-        from helpers import common  # noqa: F401 - just to check that it can be imported
+        from helpers import common
 
     except ImportError as e:
         print(
-            f"ERROR: '{e.name}' package cannot be imported!!\n"
+            f"ERROR: '{e.name}' package cannot be imported.\n"
             "Make sure 'uv' is installed in your system and run directly this script "
             "as an executable file, to let 'uv' create a temporary venv with all the "
             "required dependencies.\n",
@@ -82,10 +82,7 @@ if __name__ == "__main__":
         if not name.startswith("_") and not ispkg:
             module = importlib.import_module(f"python.{name}")
             if hasattr(module, "cli") and isinstance(module.cli, typer.Typer):
-                if len(module.cli.registered_commands) > 1:
-                    app.add_typer(module.cli, name=module.cli.info.name or name)
-                else:
-                    app.add_typer(module.cli)
+                app.add_typer(module.cli, name=module.cli.info.name or name)
 
     # -- Shell sub-commands (auto-discovered wrappers) --
     def _extract_shell_help(script_path: pathlib.Path) -> str | None:
