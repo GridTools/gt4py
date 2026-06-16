@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import ast
-import textwrap
 from typing import Any, Type
 
 import gt4py.eve as eve
@@ -468,14 +467,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             refactored = UnchainComparesPass.apply(node)
             raise errors.DSLError(
                 loc,
-                textwrap.dedent(
-                    f"""
-                    Comparison chains are not allowed. Please replace
-                        {ast.unparse(node)}
-                    by
-                        {ast.unparse(refactored)}
-                    """,
-                ),
+                "Comparison chains are not allowed.",
+                hints=(f"Replace '{ast.unparse(node)}' by '{ast.unparse(refactored)}'.",),
             )
         return foast.Compare(
             op=self.visit(node.ops[0]),
