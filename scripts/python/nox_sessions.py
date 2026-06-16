@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
 #
 # GT4Py - GridTools Framework
 #
@@ -23,9 +24,8 @@ from typing import Annotated, Final, NotRequired, TypedDict
 import rich
 import typer
 import yaml
+from helpers import common
 from rich import pretty
-
-from . import _common as common
 
 
 DEFAULT_CONFIG: Final = "{REPO_ROOT}/nox-sessions-config.yml"
