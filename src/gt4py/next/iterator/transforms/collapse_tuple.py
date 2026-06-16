@@ -287,7 +287,7 @@ class CollapseTuple(
             and cpm.is_call_to(node.args[1], "make_tuple")
         ):
             # `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
-            assert not node.args[0].type or type_info.is_integer(node.args[0].type)
+            assert not node.args[0].type or type_info.is_integral_scalar(node.args[0].type)
             make_tuple_call = node.args[1]
             idx = int(node.args[0].value)
             assert idx < len(make_tuple_call.args), (

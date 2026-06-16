@@ -190,7 +190,7 @@ def _collect_offset_definitions(
 
 
 def _literal_as_integral_constant(node: itir.Literal) -> IntegralConstant:
-    assert type_info.is_integer(node.type)
+    assert type_info.is_integral_scalar(node.type)
     return IntegralConstant(value=int(node.value))
 
 
