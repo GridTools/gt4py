@@ -124,7 +124,7 @@ class DSLError(GT4PyError):
 
 
 class UnsupportedPythonFeatureError(DSLError):
-    code = "unsupported-syntax"
+    code: ClassVar[str] = "unsupported-syntax"
 
     feature: str
 
@@ -143,7 +143,7 @@ class UnsupportedPythonFeatureError(DSLError):
 
 
 class UndefinedSymbolError(DSLError):
-    code = "undefined-symbol"
+    code: ClassVar[str] = "undefined-symbol"
 
     sym_name: str
 

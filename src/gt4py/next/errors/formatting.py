@@ -14,7 +14,7 @@ import linecache
 import textwrap
 import traceback
 import types
-from typing import TYPE_CHECKING, Optional, Sequence
+from typing import TYPE_CHECKING, Final, Optional, Sequence, TypeAlias
 
 from gt4py.eve import SourceLocation
 
@@ -23,11 +23,11 @@ if TYPE_CHECKING:
     from gt4py.next.errors import exceptions
 
 #: Maximum number of source lines rendered for a multi-line location.
-_MAX_SNIPPET_LINES = 3
+_MAX_SNIPPET_LINES: Final = 3
 
 
 #: An underline row below the first snippet line: (column, end_column, label).
-_UnderlineRow = tuple[int, Optional[int], str]
+_UnderlineRow: TypeAlias = tuple[int, Optional[int], str]
 
 
 def _gutter(width: int, body: str, lineno: Optional[int] = None) -> str:
