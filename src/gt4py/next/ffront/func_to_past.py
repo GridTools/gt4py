@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import ast
 import dataclasses
-import typing
 from typing import Any, cast
 
 from gt4py._core import definitions as core_defs
@@ -63,7 +62,7 @@ def func_to_past(inp: DSLProgramDef) -> PASTProgramDef:
     """
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
-    annotations = typing.get_type_hints(inp.definition)
+    annotations = source_utils.get_type_hints_from_function(inp.definition, source_def)
     return ffront_stages.PASTProgramDef(
         past_node=ProgramParser.apply(source_def, closure_vars, annotations),
         closure_vars=closure_vars,
@@ -136,7 +135,12 @@ class ProgramParser(DialectParser[past.Program]):
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
-        new_type = type_translation.from_type_hint(annotation)
+        try:
+            new_type = type_translation.from_type_hint(annotation)
+        except ValueError as e:
+            err = errors.InvalidParameterAnnotationError(loc, node.arg, annotation)
+            err.notes.append(str(e))
+            raise err from e
         if not isinstance(new_type, ts.DataType):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
         return past.DataSymbol(id=node.arg, location=loc, type=new_type)

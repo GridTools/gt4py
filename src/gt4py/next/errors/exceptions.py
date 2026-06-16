@@ -203,6 +203,11 @@ class InvalidParameterAnnotationError(DSLTypeError):
         super().__init__(
             location, f"Parameter '{param_name}' has invalid type annotation '{type_}'."
         )
+        self.hints = [
+            "Annotate parameters with a GT4Py type: a field (e.g. "
+            "'gtx.Field[[IDim], gtx.float64]'), a scalar (e.g. 'gtx.float64') or a "
+            "tuple of these."
+        ]
         self.param_name = param_name
         self.annotated_type = type_
 

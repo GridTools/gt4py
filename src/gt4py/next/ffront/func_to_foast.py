@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import ast
 import textwrap
-import typing
 from typing import Any, Type
 
 import gt4py.eve as eve
@@ -71,7 +70,7 @@ def func_to_foast(inp: DSLFieldOperatorDef) -> FOASTOperatorDef:
     """
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
-    annotations = typing.get_type_hints(inp.definition)
+    annotations = source_utils.get_type_hints_from_function(inp.definition, source_def)
     try:
         foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
         loc = foast_definition_node.location
@@ -233,7 +232,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
-        new_type = type_translation.from_type_hint(annotation)
+        try:
+            new_type = type_translation.from_type_hint(annotation)
+        except ValueError as e:
+            err = errors.InvalidParameterAnnotationError(loc, node.arg, annotation)
+            err.notes.append(str(e))
+            raise err from e
         if not isinstance(new_type, ts.DataType):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
         return foast.DataSymbol(id=node.arg, location=loc, type=new_type)
@@ -310,8 +314,19 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
 
             context = {**fbuiltins.BUILTINS, **self.closure_vars}
-            annotation = eval(node.annotation.value, context)
-            target_type = type_translation.from_type_hint(annotation, globalns=context)
+            try:
+                annotation = eval(node.annotation.value, context)
+                target_type = type_translation.from_type_hint(annotation, globalns=context)
+            except Exception as e:
+                raise errors.DSLError(
+                    self.get_location(node),
+                    f"Invalid type annotation '{node.annotation.value}': {e}.",
+                    notes=(
+                        "Inside a GT4Py function, annotations can only use GT4Py "
+                        "builtins and names that are also referenced in the function "
+                        "body.",
+                    ),
+                ) from e
         else:
             target_type = ts.DeferredType()
 
