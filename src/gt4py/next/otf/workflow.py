@@ -245,9 +245,14 @@ class CachedStep(
       function is importable by qualified name and the on-disk keys stay
       reproducible across processes.
 
+    Because the ``step_fingerprinter`` must match the cache's durability, prefer
+    the :meth:`in_memory` and :meth:`persistent` constructors, which pair the
+    cache with the matching fingerprinter for you. Use the raw constructor only
+    when you need a non-default fingerprinter combination.
+
     Examples:
     ---------
-    >>> cached_step = CachedStep(step=tuple, input_fingerprinter=lambda x: x)
+    >>> cached_step = CachedStep.in_memory(step=tuple, input_fingerprinter=lambda x: x)
 
     The result of the first invocation is computed and stored in the cache:
     >>> result = cached_step([1, 2, 3])
@@ -294,6 +299,50 @@ class CachedStep(
     def cache_key(self, inp: StartT) -> str:
         return self.step_fingerprinter((self._step_fingerprint, self.input_fingerprinter(inp)))
 
+    @classmethod
+    def in_memory(
+        cls,
+        step: Workflow[StartT, EndT],
+        input_fingerprinter: Callable[[StartT], HashT],
+        cache: OpaqueMutableMapping[str, EndT] | None = None,
+    ) -> CachedStep[StartT, EndT, HashT]:
+        """
+        Build a single-process cache, pairing an in-memory store with the session fingerprinter.
+
+        The session fingerprinter tolerates non-importable steps (lambdas,
+        closures, dynamically-created steps) by hashing them structurally, which
+        is valid because the cache lives and dies within a single process.
+        Defaults to a fresh ``dict``.
+        """
+        return cls(
+            step=step,
+            input_fingerprinter=input_fingerprinter,
+            step_fingerprinter=utils.session_fingerprinter,
+            cache={} if cache is None else cache,
+        )
+
+    @classmethod
+    def persistent(
+        cls,
+        step: Workflow[StartT, EndT],
+        input_fingerprinter: Callable[[StartT], HashT],
+        cache: OpaqueMutableMapping[str, EndT],
+    ) -> CachedStep[StartT, EndT, HashT]:
+        """
+        Build a cross-process cache, pairing a persistent store with the stable fingerprinter.
+
+        The stable fingerprinter requires every referenced function to be
+        importable by qualified name, so the on-disk keys stay reproducible
+        across processes: a non-importable step raises a ``TypeError`` instead
+        of risking a non-reproducible key and stale-binary reuse.
+        """
+        return cls(
+            step=step,
+            input_fingerprinter=input_fingerprinter,
+            step_fingerprinter=utils.stable_fingerprinter,
+            cache=cache,
+        )
+
 
 @dataclasses.dataclass(frozen=True)
 class SkippableStep(
@@ -309,5 +358,3 @@ class SkippableStep(
 
     def skip_condition(self, inp: StartT) -> bool:
         raise NotImplementedError()
-
-

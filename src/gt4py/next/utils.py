@@ -16,7 +16,7 @@ from collections.abc import Callable
 from typing import Any, ClassVar, Optional, ParamSpec, Sequence, TypeGuard, TypeVar, cast, overload
 
 from gt4py.eve import utils as eve_utils
-from gt4py.next.fingerprinting import (
+from gt4py.eve.fingerprinting import (
     GT4PY_CLASS_METADATA_NS as GT4PY_CLASS_METADATA_NS,
     Collapser as Collapser,
     Deconstruction as Deconstruction,

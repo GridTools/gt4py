@@ -41,7 +41,9 @@ def transform_program_args_factory(
 ) -> workflow.Workflow[ffront_stages.ConcretePASTProgramDef, ffront_stages.ConcretePASTProgramDef]:
     wf = transform_program_args
     if cached:
-        wf = workflow.CachedStep(wf, input_fingerprinter=ffront_stages.semantic_fingerprinter)
+        wf = workflow.CachedStep.in_memory(
+            wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        )
     return wf
 
 

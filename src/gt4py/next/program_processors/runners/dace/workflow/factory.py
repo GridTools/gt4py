@@ -14,7 +14,7 @@ from typing import Final
 import factory
 
 from gt4py._core import definitions as core_defs, filecache
-from gt4py.next import config, utils
+from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -45,10 +45,9 @@ class DaCeWorkflowFactory(factory.Factory):
 
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(
+                lambda o: workflow.CachedStep.persistent(
                     o.bare_translation,
                     input_fingerprinter=stages.fingerprint_compilable_program,
-                    step_fingerprinter=utils.stable_fingerprinter,
                     cache=filecache.FileCache(
                         str(
                             cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME)

@@ -178,6 +178,29 @@ def test_cached_step_stable_fingerprinter_rejects_non_importable_step(tmp_path):
         cached.cache_key(5)
 
 
+def test_in_memory_factory_pairs_session_fingerprinter():
+    """``CachedStep.in_memory`` wires the session fingerprinter and a dict store."""
+    cached = workflow.CachedStep.in_memory(step=lambda inp: inp + 1, input_fingerprinter=_identity)
+    assert cached.step_fingerprinter is utils.session_fingerprinter
+    assert isinstance(cached.cache, dict)
+    # A non-importable (lambda) step is tolerated by the session fingerprinter.
+    assert cached(5) == 6
+    assert cached(5) == 6  # served from cache
+
+
+def test_persistent_factory_pairs_stable_fingerprinter(tmp_path):
+    """``CachedStep.persistent`` wires the stable fingerprinter, so a non-importable
+    step is rejected and persistent keys stay reproducible across processes."""
+    cached = workflow.CachedStep.persistent(
+        step=lambda inp: inp + 1,
+        input_fingerprinter=_identity,
+        cache=filecache.FileCache(str(tmp_path)),
+    )
+    assert cached.step_fingerprinter is utils.stable_fingerprinter
+    with pytest.raises(TypeError, match="not importable"):
+        cached.cache_key(5)
+
+
 def test_cached_step_rejection_follows_fingerprinter_not_cache():
     """Rejection of non-importable steps is driven by ``step_fingerprinter``,
     not by the cache type.
