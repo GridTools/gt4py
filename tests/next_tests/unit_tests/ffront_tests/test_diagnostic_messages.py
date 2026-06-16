@@ -213,6 +213,39 @@ def test_missing_module_attribute_is_a_dsl_error():
     assert "module 'numpy' has no attribute 'sinn'" in err.message
 
 
+def test_absolute_field_index_is_a_dsl_error():
+    # used to leak AttributeError: 'ScalarType' object has no attribute 'dim'
+    def with_index(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return a[3]
+
+    err = parse_error(with_index)
+
+    assert err.message == "Fields cannot be indexed with 'int32'."
+    assert any("field offset" in hint for hint in err.hints)
+
+
+def test_tuple_index_out_of_range_is_a_dsl_error():
+    # used to leak IndexError: list index out of range
+    def with_oob_index(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        t = (a, a)
+        return t[5]
+
+    err = parse_error(with_oob_index)
+
+    assert err.message == "Tuple index 5 is out of range."
+    assert err.label == "this tuple has 2 elements"
+
+
+def test_non_local_dimension_index_is_a_dsl_error():
+    # used to crash with AssertionError on the dimension kind
+    def with_dim_index(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return a[IDim(3)]
+
+    err = parse_error(with_dim_index)
+
+    assert "'IDim' is not a local (neighbor) dimension" in err.message
+
+
 def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"
