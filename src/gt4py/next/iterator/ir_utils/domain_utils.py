@@ -17,7 +17,7 @@ import numpy as np
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im, misc
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
@@ -185,8 +185,8 @@ class SymbolicDomain:
                 if val is trace_shifts.Sentinel.VALUE:
                     raise NotImplementedError("Dynamic offsets not supported.")
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
-                dom = common.Dimension(value=off.domain.value, kind=off.domain.kind)
-                cod = common.Dimension(value=off.codomain.value, kind=off.codomain.kind)
+                dom = misc.dim_from_axis_literal(off.domain)
+                cod = misc.dim_from_axis_literal(off.codomain)
                 assert dom == cod  # relocation (staggering) is not supported here
                 new_ranges[dom] = SymbolicRange.translate(self.ranges[dom], val.value)
                 return SymbolicDomain(self.grid_type, new_ranges)

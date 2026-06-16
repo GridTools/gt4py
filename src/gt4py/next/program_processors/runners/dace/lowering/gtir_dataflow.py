@@ -1686,8 +1686,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(offset, str)
         offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
 
-        # named offsets are always unstructured shifts; cartesian shifts are encoded as
-        # self-describing `CartesianOffset` nodes and handled above
+        # reaching here means a named offset → unstructured shift (cartesian shifts took the
+        # CartesianOffset branch above)
         # initially, the storage for the connectivity tables is created as transient;
         # when the tables are used, the storage is changed to non-transient,
         # so the corresponding arrays are supposed to be allocated by the SDFG caller

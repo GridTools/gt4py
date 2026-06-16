@@ -118,6 +118,7 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "DimensionKind",
     "Dims",
     "Field",
+    "CartesianConnectivity",
     "Connectivity",
     "GridType",
     "domain",

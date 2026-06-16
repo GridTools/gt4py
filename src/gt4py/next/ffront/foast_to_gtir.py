@@ -311,7 +311,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                             stacklevel=2,
                         )
                         dim = offset_name.type.source
-                        shift_offset: itir.CartesianOffset | str = im.cartesian_offset(dim, dim)
+                        shift_offset: itir.CartesianOffset | str = im.cartesian_offset(dim)
                     else:
                         # Unstructured neighbor selection, resolved through the offset provider.
                         shift_offset = offset_name.id
@@ -330,7 +330,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     dim = dim_name.type.dim
                     current_expr = im.as_fieldop(
                         im.lambda_("__it")(
-                            im.deref(im.shift(im.cartesian_offset(dim, dim), offset_index)("__it"))
+                            im.deref(im.shift(im.cartesian_offset(dim), offset_index)("__it"))
                         )
                     )(current_expr)
                 # `field(Off)`
@@ -351,9 +351,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     current_expr = im.as_fieldop(
                         im.lambda_("__it", "__offset")(
                             im.deref(
-                                im.shift(im.cartesian_offset(dim, dim), im.deref("__offset"))(
-                                    "__it"
-                                )
+                                im.shift(im.cartesian_offset(dim), im.deref("__offset"))("__it")
                             )
                         )
                     )(current_expr, offset_field)

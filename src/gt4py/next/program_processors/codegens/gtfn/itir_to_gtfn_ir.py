@@ -184,8 +184,6 @@ def _collect_offset_definitions(
                 )
 
     for offset_name, connectivity_type in offset_provider_type.items():
-        # cartesian shifts are encoded as `CartesianOffset` nodes (handled above) and don't
-        # occur in the `offset_provider_type`, which now only holds neighbor connectivities
         if isinstance(connectivity_type, common.NeighborConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))

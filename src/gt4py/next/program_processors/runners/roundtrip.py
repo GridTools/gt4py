@@ -66,10 +66,6 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     AxisLiteral = as_fmt("{value}")
 
     def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> str:
-        # render as a `gtx.CartesianConnectivity(domain, codomain=codomain)` constructor call.
-        # The dimensions are injected as `gtx.Dimension`s in the generated module (see
-        # `axis_literals` below) and the embedded `shift` consumes the resulting connectivity
-        # as a self-describing cartesian offset.
         return f"gtx.CartesianConnectivity({node.domain.value}, codomain={node.codomain.value})"
 
     FunCall = as_fmt("{fun}({','.join(args)})")
