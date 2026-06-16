@@ -12,6 +12,7 @@ import collections
 import dataclasses
 import functools
 import itertools
+import math
 from collections.abc import Callable, Sequence
 from types import ModuleType
 
@@ -55,12 +56,18 @@ def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArra
 
 
 def _make_builtin(
-    builtin_name: str, array_builtin_name: str, reverse: bool = False
+    builtin_name: str,
+    array_builtin_name: str | Callable[[ModuleType], Callable],
+    reverse: bool = False,
 ) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
         cls_ = _get_nd_array_class(*fields)
         xp = cls_.array_ns
-        op = getattr(xp, array_builtin_name)
+        op = (
+            array_builtin_name(xp)
+            if callable(array_builtin_name)
+            else getattr(xp, array_builtin_name)
+        )
 
         domain_intersection = embedded_common.domain_intersection(
             *[f.domain for f in fields if isinstance(f, common.Field)]
@@ -87,6 +94,28 @@ def _make_builtin(
 
     _builtin_op.__name__ = builtin_name
     return _builtin_op
+
+
+try:
+    from scipy.special import gamma as _np_gamma
+except ImportError:
+
+    def _np_gamma(a: core_defs.NDArrayObject) -> core_defs.NDArrayObject:
+        return np.vectorize(math.gamma, otypes=[a.dtype])(a)
+
+
+def _gamma_op(xp: ModuleType) -> Callable:
+    if xp is np:
+        return _np_gamma
+    if cp is not None and xp is cp:
+        import cupyx.scipy.special
+
+        return cupyx.scipy.special.gamma
+    if jnp is not None and xp is jnp:
+        import jax.scipy.special
+
+        return jax.scipy.special.gamma
+    raise NotImplementedError(f"'gamma' is not implemented for array namespace '{xp.__name__}'.")
 
 
 _Value: TypeAlias = common.Field | core_defs.ScalarT
@@ -730,7 +759,7 @@ NdArrayField.register_builtin_func(
     fbuiltins.power,
     NdArrayField.__pow__,
 )
-# TODO gamma
+NdArrayField.register_builtin_func(fbuiltins.gamma, _make_builtin("gamma", _gamma_op))
 
 for name in (
     fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
