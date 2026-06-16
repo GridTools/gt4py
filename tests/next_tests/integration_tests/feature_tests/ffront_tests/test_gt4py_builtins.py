@@ -276,6 +276,45 @@ def test_reduction_expression_with_where_and_tuples(unstructured_case):
 
 
 @pytest.mark.uses_unstructured_shift
+def test_reduction_expression_with_where_tuple_local_condition(unstructured_case):
+    # Regression test: a tuple-`where` whose condition is itself a per-neighbour (local) field.
+    # The condition lowers to a list-typed predicate, so each tuple leaf must be lowered as
+    # `map_list(if_)` (with the condition promoted via `make_const_list`), exactly like the
+    # non-tuple path does. A uniform leaf (e.g. `op_as_fieldop("if_")`) would produce invalid IR.
+    @gtx.field_operator
+    def testee(a: cases.EField, b: cases.EField) -> cases.VField:
+        cond = a(V2E) > b(V2E)  # per-neighbour (local) bool field
+        t = where(cond, (a(V2E), b(V2E)), (b(V2E), a(V2E)))
+        return neighbor_sum(t[0] + t[1], axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+
+    a = cases.allocate(unstructured_case, testee, "a")()
+    b = cases.allocate(unstructured_case, testee, "b")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    a_nbh = a.asnumpy()[v2e_table]
+    b_nbh = b.asnumpy()[v2e_table]
+    cond_nbh = a_nbh > b_nbh
+    t0 = np.where(cond_nbh, a_nbh, b_nbh)
+    t1 = np.where(cond_nbh, b_nbh, a_nbh)
+
+    cases.verify(
+        unstructured_case,
+        testee,
+        a,
+        b,
+        out=out,
+        ref=np.sum(
+            t0 + t1,
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
 def test_reduction_expression_with_where_and_scalar(unstructured_case):
     @gtx.field_operator
     def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:

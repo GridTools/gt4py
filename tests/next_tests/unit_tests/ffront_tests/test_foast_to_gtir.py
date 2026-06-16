@@ -207,9 +207,10 @@ def test_where_tuple():
         lowered
     )  # we generate a let for the condition which is removed by inlining for easier testing
 
-    reference = im.tree_map_tuple(
-        im.lambda_("__a", "__b")(im.op_as_fieldop("if_")("a", im.ref("__a"), im.ref("__b")))
-    )("b", "c")
+    reference = im.make_tuple(
+        im.op_as_fieldop("if_")("a", im.tuple_get(0, "b"), im.tuple_get(0, "c")),
+        im.op_as_fieldop("if_")("a", im.tuple_get(1, "b"), im.tuple_get(1, "c")),
+    )
 
     assert lowered_inlined.expr == reference
 
