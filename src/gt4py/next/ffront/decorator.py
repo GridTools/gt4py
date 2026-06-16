@@ -19,7 +19,7 @@ import functools
 import types
 import typing
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Generic, Optional, Sequence, TypeAlias
 
 from gt4py import eve
@@ -57,6 +57,15 @@ DEFAULT_BACKEND: next_backend.Backend | None = None
 ProgramCallMetricsCollector = metrics.make_collector(
     level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
 )
+
+
+def _validate_offset_provider(offset_provider: Any) -> None:
+    if not isinstance(offset_provider, Mapping):
+        raise errors.DSLTypeError(
+            None,
+            "'offset_provider' must be a mapping from offset names to dimensions or "
+            f"connectivities, got '{type(offset_provider).__name__}'.",
+        )
 
 
 def _type_of_argument(value: Any, description: str, function_name: str) -> ts.TypeSpec:
@@ -117,6 +126,10 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     def __gt_type__(self) -> ts.CallableType: ...
 
     def with_backend(self, backend: next_backend.Backend | None) -> Self:
+        if backend is not None and not isinstance(backend, next_backend.Backend):
+            raise TypeError(
+                f"Expected a 'gt4py.next' backend or 'None', got '{type(backend).__name__}'."
+            )
         return dataclasses.replace(self, backend=backend)
 
     def with_compilation_options(
@@ -392,6 +405,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     ) -> None:
         if offset_provider is None:
             offset_provider = {}
+        _validate_offset_provider(offset_provider)
         enable_jit = self.compilation_options.enable_jit if enable_jit is None else enable_jit
 
         with program_call_context(
@@ -684,6 +698,8 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         """
         if "out" not in kwargs:
             raise errors.MissingArgumentError(None, "out", True)
+        if "offset_provider" in kwargs:
+            _validate_offset_provider(kwargs["offset_provider"])
         operator_type = self.__gt_type__()
         name = self.__name__
         arg_types = [
