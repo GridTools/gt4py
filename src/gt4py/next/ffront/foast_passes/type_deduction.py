@@ -429,13 +429,64 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return new_node
         return node
 
+    def _invalid_attribute_error(
+        self, node: foast.Attribute, value_type: ts.TypeSpec
+    ) -> errors.DSLError:
+        notes: list[str] = []
+        hints: list[str] = []
+        if isinstance(value_type, ts.NamedCollectionType):
+            hints = errors.did_you_mean(node.attr, value_type.keys)
+        elif isinstance(value_type, (ts.FieldType, ts.ScalarType)):
+            notes = [
+                "GT4Py fields and scalars do not provide NumPy-style methods or attributes; "
+                "use the GT4Py built-in functions instead."
+            ]
+        return errors.DSLError(
+            node.location,
+            f"Type '{value_type}' has no attribute '{node.attr}'.",
+            label="attribute does not exist",
+            notes=notes,
+            hints=hints,
+        )
+
     def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Attribute:
         new_value = self.visit(node.value, **kwargs)
+        # Attribute access is only valid on namespaces (e.g. modules) and named
+        # collections; anything else (e.g. NumPy-style attributes of a field)
+        # is a user error and must not leak `getattr` failures.
+        try:
+            new_type = getattr(new_value.type, node.attr)
+        except AttributeError as e:
+            if isinstance(new_value.type, type_translation.NamespaceProxy):
+                # `getattr` on the underlying Python object failed; its message
+                # ("module 'numpy' has no attribute ...") is the best we have.
+                raise errors.DSLError(node.location, f"{e}.") from e
+            raise self._invalid_attribute_error(node, new_value.type) from e
+        except ValueError as e:
+            # the attribute exists on the Python object behind a namespace, but
+            # its value has no representation in the DSL type system
+            hints: list[str] = []
+            if isinstance(new_value.type, type_translation.NamespaceProxy) and callable(
+                getattr(new_value.type._object, node.attr, None)
+            ):
+                hints = [
+                    "External Python functions cannot be called inside GT4Py functions. "
+                    "Use the corresponding GT4Py built-in (e.g. 'sin', 'sqrt', 'exp', "
+                    "'maximum' from 'gt4py.next') if one exists."
+                ]
+            raise errors.DSLError(
+                node.location,
+                f"'{node.attr}' cannot be used inside a GT4Py function.",
+                label="value not representable in the GT4Py type system",
+                hints=hints,
+            ) from e
+        if not isinstance(new_type, ts.TypeSpec):
+            raise self._invalid_attribute_error(node, new_value.type)
         return foast.Attribute(
             value=new_value,
             attr=node.attr,
             location=node.location,
-            type=getattr(new_value.type, node.attr),
+            type=new_type,
         )
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> foast.Subscript:

@@ -177,6 +177,42 @@ def test_global_statement_is_rejected_with_friendly_message():
     assert any("read-only" in hint for hint in err.hints)
 
 
+def test_numpy_style_attribute_on_field_is_a_dsl_error():
+    # used to leak AttributeError: 'FieldType' object has no attribute 'T'
+    def with_numpy_attr(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return a.T
+
+    err = parse_error(with_numpy_attr)
+
+    assert err.message == "Type 'Field[[IDim], float64]' has no attribute 'T'."
+    assert any("NumPy-style" in note for note in err.notes)
+
+
+def test_numpy_function_call_is_a_dsl_error():
+    # used to leak ValueError: Type <class 'numpy.ufunc'> not supported
+    import numpy as np
+
+    def with_numpy_call(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return np.sin(a)
+
+    err = parse_error(with_numpy_call)
+
+    assert err.message == "'sin' cannot be used inside a GT4Py function."
+    assert any("GT4Py built-in" in hint for hint in err.hints)
+
+
+def test_missing_module_attribute_is_a_dsl_error():
+    # used to leak AttributeError: module 'numpy' has no attribute 'sinn'
+    import numpy as np
+
+    def with_missing_attr(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return np.sinn(a)
+
+    err = parse_error(with_missing_attr)
+
+    assert "module 'numpy' has no attribute 'sinn'" in err.message
+
+
 def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"
