@@ -28,26 +28,20 @@ differing count cannot be a failed test — it means the *number* of generated
 programs is itself non-deterministic — so it is counted as a failure instead.
 If no name is comparable the check raises rather than reporting a vacuous match.
 
-This module provides two layers:
+Internally there are two parts: a comparison core (``check_determinism`` and its
+helpers) that diffs two existing build caches, and an orchestration layer
+(``run_determinism_check``) that first produces those caches by running a gt4py
+pytest selection twice — shelling out to ``python -m pytest`` — and then compares
+them. Both are exposed as CLI subcommands.
 
-* a pure-stdlib **comparison library** (``check_determinism`` and friends) that
-  compares two existing build caches. It is deliberately stdlib-only so it
-  imports without the dev-scripts dependencies (e.g. during plain test
-  collection);
-* an **orchestration** layer (``run_determinism_check``) that runs gt4py's pytest
-  selection twice with an isolated build cache per run, then feeds the two caches
-  to the comparison library. It only uses the stdlib + ``subprocess`` (it shells
-  out to ``python -m pytest``), so it has no nox dependency.
+This is a standalone dev-scripts CLI: it is meant to be *executed*, not imported.
+Run it via ``./scripts/run dace-determinism ...`` or directly through its uv
+shebang; either way it runs inside the dev-scripts ``scripts`` environment, where
+its dependency (``typer``) is available. The ``test_next_dace_determinism`` nox
+session runs the ``run`` subcommand as a subprocess rather than importing this
+module.
 
-Both are exposed as CLI subcommands when ``typer`` is available.
-
-Library usage::
-
-    from dace_deterministic_codegen import check_determinism, run_determinism_check
-    check_determinism(run1_cache, run2_cache, runs_healthy=True,
-                      diffs_dir=..., report_path=...)
-
-CLI::
+Usage::
 
     # Compare two existing build caches:
     ./scripts/run dace-determinism check --run1 PATH --run2 PATH \\
@@ -74,6 +68,9 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Annotated
+
+import typer
 
 
 PROGRAM_FOLDER_RE = re.compile(r"^(?P<name>.+)_[0-9a-f]{64}$")
@@ -465,10 +462,7 @@ def run_determinism_check(
     # two expensive test-suite runs.
     if self_check:
         test_file = (
-            Path(__file__).resolve().parent.parent
-            / "tests"
-            / "python"
-            / "test_dace_deterministic_codegen.py"
+            Path(__file__).resolve().parent.parent / "tests" / "python" / "test_dace_determinism.py"
         )
         subprocess.run([python, "-m", "pytest", "-q", str(test_file)], check=True)
 
@@ -533,125 +527,112 @@ _EXIT_CODES: dict[type[Exception], int] = {
 
 # -- CLI --
 #
-# ``typer`` lives in the dev-scripts ``scripts`` dependency group. The library
-# and orchestration functions above use only the stdlib, so this module imports
-# cleanly without typer (e.g. during plain test collection); the CLI is guarded
-# so stdlib-only importers never require it. ``scripts/run`` and the
-# ``test_next_dace_determinism`` nox session both run this module from an
-# environment where the ``scripts`` group (hence typer) is installed.
-try:
-    import typer
-except ImportError:
-    typer = None  # type: ignore[assignment]
+# This module always runs inside the dev-scripts ``scripts`` environment (via
+# ``./scripts/run`` or its uv shebang), so ``typer`` is always importable.
 
-if typer is not None:
-    from typing import Annotated
+cli = typer.Typer(no_args_is_help=True, name="dace-determinism", help=__doc__)
 
-    cli = typer.Typer(no_args_is_help=True, name="dace-determinism", help=__doc__)
 
-    @cli.command()
-    def check(
-        run1: Annotated[Path, typer.Option("--run1", metavar="PATH", help="First cache root.")],
-        run2: Annotated[Path, typer.Option("--run2", metavar="PATH", help="Second cache root.")],
-        diffs_dir: Annotated[
-            Path | None,
-            typer.Option(
-                "--diffs-dir",
-                metavar="PATH",
-                help="If set, write per-program mismatch reports here.",
-            ),
-        ] = None,
-        report: Annotated[
-            Path | None,
-            typer.Option("--report", metavar="PATH", help="If set, write the summary report here."),
-        ] = None,
-        runs_healthy: Annotated[
-            bool | None,
-            typer.Option(
-                "--runs-healthy/--no-runs-healthy",
-                help="Whether both runs completed cleanly. When set, a differing program "
-                "count is treated as a failure (non-deterministic count) instead of a skip.",
-            ),
-        ] = None,
-    ) -> None:
-        """Compare two gt4py.next build caches for deterministic DaCe codegen."""
-        try:
-            results = check_determinism(
-                run1.expanduser().resolve(),
-                run2.expanduser().resolve(),
-                runs_healthy=runs_healthy,
-                diffs_dir=diffs_dir.expanduser().resolve() if diffs_dir else None,
-                report_path=report.expanduser().resolve() if report else None,
-            )
-        except DeterminismError as e:
-            if report is None:
-                typer.echo(render_report(e.results, runs_healthy=runs_healthy))
-            typer.echo(f"error: {e}", err=True)
-            raise typer.Exit(_EXIT_CODES[type(e)]) from e
-        except (
-            UnsupportedBackendError,
-            NoProgramsObservedError,
-            NoSourceFilesObservedError,
-            NoComparableProgramsError,
-        ) as e:
-            typer.echo(f"error: {e}", err=True)
-            raise typer.Exit(_EXIT_CODES[type(e)]) from e
+@cli.command()
+def check(
+    run1: Annotated[Path, typer.Option("--run1", metavar="PATH", help="First cache root.")],
+    run2: Annotated[Path, typer.Option("--run2", metavar="PATH", help="Second cache root.")],
+    diffs_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--diffs-dir",
+            metavar="PATH",
+            help="If set, write per-program mismatch reports here.",
+        ),
+    ] = None,
+    report: Annotated[
+        Path | None,
+        typer.Option("--report", metavar="PATH", help="If set, write the summary report here."),
+    ] = None,
+    runs_healthy: Annotated[
+        bool | None,
+        typer.Option(
+            "--runs-healthy/--no-runs-healthy",
+            help="Whether both runs completed cleanly. When set, a differing program "
+            "count is treated as a failure (non-deterministic count) instead of a skip.",
+        ),
+    ] = None,
+) -> None:
+    """Compare two gt4py.next build caches for deterministic DaCe codegen."""
+    try:
+        results = check_determinism(
+            run1.expanduser().resolve(),
+            run2.expanduser().resolve(),
+            runs_healthy=runs_healthy,
+            diffs_dir=diffs_dir.expanduser().resolve() if diffs_dir else None,
+            report_path=report.expanduser().resolve() if report else None,
+        )
+    except DeterminismError as e:
         if report is None:
-            typer.echo(render_report(results, runs_healthy=runs_healthy))
+            typer.echo(render_report(e.results, runs_healthy=runs_healthy))
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(_EXIT_CODES[type(e)]) from e
+    except (
+        UnsupportedBackendError,
+        NoProgramsObservedError,
+        NoSourceFilesObservedError,
+        NoComparableProgramsError,
+    ) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(_EXIT_CODES[type(e)]) from e
+    if report is None:
+        typer.echo(render_report(results, runs_healthy=runs_healthy))
 
-    @cli.command()
-    def run(
-        pytest_args: Annotated[
-            list[str] | None,
-            typer.Argument(
-                help="Arguments passed to `python -m pytest` for each of the two runs "
-                "(pass them after `--`)."
-            ),
-        ] = None,
-        workdir: Annotated[
-            Path,
-            typer.Option(
-                "--workdir",
-                metavar="PATH",
-                help="Working directory for the per-run caches, diffs/, and report.txt.",
-            ),
-        ] = Path("_dace_deterministic_codegen"),
-        self_check: Annotated[
-            bool,
-            typer.Option(
-                "--self-check/--no-self-check",
-                help="Run the comparator's own unit tests before the expensive runs.",
-            ),
-        ] = True,
-    ) -> None:
-        """Run a pytest selection twice and verify DaCe codegen is byte-identical."""
-        workdir_abs = workdir.expanduser().resolve()
-        try:
-            run_determinism_check(pytest_args or [], workdir=workdir, self_check=self_check)
-        except subprocess.CalledProcessError as e:
-            typer.echo(f"error: comparator self-check failed (exit {e.returncode}).", err=True)
-            raise typer.Exit(2) from e
-        except RuntimeError as e:
-            typer.echo(f"error: {e}", err=True)
-            raise typer.Exit(2) from e
-        except (
-            DeterminismError,
-            UnsupportedBackendError,
-            NoProgramsObservedError,
-            NoSourceFilesObservedError,
-            NoComparableProgramsError,
-        ) as e:
-            typer.echo(
-                f"error: {e}\nSee {workdir_abs / 'report.txt'} and {workdir_abs / 'diffs'}/",
-                err=True,
-            )
-            raise typer.Exit(_EXIT_CODES[type(e)]) from e
-        typer.echo((workdir_abs / "report.txt").read_text())
+
+@cli.command()
+def run(
+    pytest_args: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help="Arguments passed to `python -m pytest` for each of the two runs "
+            "(pass them after `--`)."
+        ),
+    ] = None,
+    workdir: Annotated[
+        Path,
+        typer.Option(
+            "--workdir",
+            metavar="PATH",
+            help="Working directory for the per-run caches, diffs/, and report.txt.",
+        ),
+    ] = Path("_dace_deterministic_codegen"),
+    self_check: Annotated[
+        bool,
+        typer.Option(
+            "--self-check/--no-self-check",
+            help="Run the comparator's own unit tests before the expensive runs.",
+        ),
+    ] = True,
+) -> None:
+    """Run a pytest selection twice and verify DaCe codegen is byte-identical."""
+    workdir_abs = workdir.expanduser().resolve()
+    try:
+        run_determinism_check(pytest_args or [], workdir=workdir, self_check=self_check)
+    except subprocess.CalledProcessError as e:
+        typer.echo(f"error: comparator self-check failed (exit {e.returncode}).", err=True)
+        raise typer.Exit(2) from e
+    except RuntimeError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2) from e
+    except (
+        DeterminismError,
+        UnsupportedBackendError,
+        NoProgramsObservedError,
+        NoSourceFilesObservedError,
+        NoComparableProgramsError,
+    ) as e:
+        typer.echo(
+            f"error: {e}\nSee {workdir_abs / 'report.txt'} and {workdir_abs / 'diffs'}/",
+            err=True,
+        )
+        raise typer.Exit(_EXIT_CODES[type(e)]) from e
+    typer.echo((workdir_abs / "report.txt").read_text())
 
 
 if __name__ == "__main__":
-    if typer is None:
-        raise SystemExit(
-            "error: this CLI requires `typer`; run it via `./scripts/run` or the uv shebang."
-        )
     cli()

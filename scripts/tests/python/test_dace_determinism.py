@@ -18,7 +18,7 @@ import stat
 import sys
 
 import pytest
-from dace_deterministic_codegen import (
+from dace_determinism import (
     DeterminismError,
     NoComparableProgramsError,
     NoProgramsObservedError,

@@ -358,7 +358,7 @@ def test_typing_exports(session: nox.Session) -> None:
 # a determinism bug somewhere in the gt4py + dace toolchain for that selection.
 #
 # The orchestration (run twice + compare) and the hashing/comparison library
-# both live in `scripts/python/dace_deterministic_codegen.py`, exposed as its
+# both live in `scripts/python/dace_determinism.py`, exposed as its
 # `run` and `check` subcommands. This session installs the `scripts` dependency
 # group into the session venv and executes that script with the venv's own
 # python — it does not import the module.
@@ -424,7 +424,7 @@ def test_next_dace_determinism(
     ]
     session.run(
         "python",
-        str(pathlib.Path("scripts") / "python" / "dace_deterministic_codegen.py"),
+        str(pathlib.Path("scripts") / "python" / "dace_determinism.py"),
         "run",
         "--workdir",
         str(REPO_ROOT / "_dace_deterministic_codegen"),
