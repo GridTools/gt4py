@@ -130,6 +130,7 @@ def test_calling_fo_from_fo_execution(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_tuple_program_return_constructed_inside(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
@@ -151,12 +152,11 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
     out_a = cases.allocate(cartesian_case, prog, "out_a")()
     out_b = cases.allocate(cartesian_case, prog, "out_b")()
 
-    cases.run(cartesian_case, prog, a, b, out_a, out_b, offset_provider={})
-
-    assert np.allclose((a.asnumpy(), b.asnumpy()), (out_a.asnumpy(), out_b.asnumpy()))
+    cases.verify(cartesian_case, prog, a, b, out_a, out_b, inout=(out_a, out_b), ref=(a, b))
 
 
 @pytest.mark.uses_program_with_sliced_out_arguments
+@pytest.mark.uses_tuple_returns
 def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
@@ -186,6 +186,7 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     assert out_a[0].as_scalar() == 0 and out_b[0].as_scalar() == 0
 
 
+@pytest.mark.uses_tuple_returns
 def test_tuple_program_return_constructed_inside_nested(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
@@ -211,10 +212,17 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
     out_b = cases.allocate(cartesian_case, prog, "out_b").strategy(cases.ConstInitializer(0))()
     out_c = cases.allocate(cartesian_case, prog, "out_c").strategy(cases.ConstInitializer(0))()
 
-    cases.run(cartesian_case, prog, a, b, c, out_a, out_b, out_c, offset_provider={})
-
-    assert np.allclose(
-        (a.asnumpy(), b.asnumpy(), c.asnumpy()), (out_a.asnumpy(), out_b.asnumpy(), out_c.asnumpy())
+    cases.verify(
+        cartesian_case,
+        prog,
+        a,
+        b,
+        c,
+        out_a,
+        out_b,
+        out_c,
+        inout=((out_a, out_b), out_c),
+        ref=((a, b), c),
     )
 
 

@@ -1,0 +1,137 @@
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+# DaCe codegen determinism check — STANDALONE CSCS-CI PIPELINE
+# ============================================================
+#
+# How to trigger
+# --------------
+# Whitelisted users trigger it on any PR by posting the comment:
+#
+#     cscs-ci run dace-determinism
+#
+# What it does
+# ------------
+# Drives gt4py's `test_*_dace_determinism` nox sessions, each of which
+# runs pytest twice with isolated build caches and asserts the
+# DaCe-generated source files are byte-identical between the two runs.
+# A diff means the gt4py + dace toolchain is non-deterministic for that
+# test selection.
+#
+# Logic lives in:
+#   noxfile.py                              (test_*_dace_determinism sessions)
+#   scripts/dace_deterministic_codegen.py   (cache comparison lib + CLI)
+
+include:
+  - local: 'ci/cscs-ci-base.yml'
+
+.test_python_versions: &test_python_versions ['3.10']
+
+# -- Build stage --
+build_cscs_gh200:
+  extends:
+    - .container-builder-cscs-gh200
+    - .build_settings
+    - .build_extra_cuda
+  needs: []
+  parallel:
+    matrix:
+      - PY_VERSION: *test_python_versions
+
+build_cscs_amd_rocm:
+  extends:
+    - .container-builder-cscs-zen2
+    - .build_settings
+    - .build_extra_rocm
+  needs: []
+  parallel:
+    matrix:
+      - PY_VERSION: *test_python_versions
+
+# -- Test stage --
+.dace_determinism_common:
+  stage: test
+  image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
+  variables:
+    TEST_VARIANTS: 'cpu'
+    USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_TIMELIMIT: 60
+  allow_failure: true
+  artifacts:
+    when: always
+    paths:
+      - _dace_deterministic_codegen/
+    expire_in: 1 month
+  parallel:
+    matrix:
+      - SUBPACKAGE: [next]
+        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
+        DETAIL: ["nomesh"]
+        PY_VERSION: *test_python_versions
+  rules: &exclude_variants_rules
+    - if: '$SUBVARIANT == "cpu" && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
+      when: never
+    - if: '$SUBVARIANT == "cuda12" && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
+      when: never
+    - if: '$SUBVARIANT == "rocm7" && ($TEST_VARIANTS !~ /(^|\s)rocm7(\s|$)/)'
+      when: never
+
+  script:
+    - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
+    - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
+    - export NOX_SESSION_ARGS="(${SUBVARIANT}${DETAIL:+, $DETAIL})"
+    - |
+      cd "${WORKDIR}/gt4py"
+      nox_rc=0
+      ./noxfile.py -s "test_${SUBPACKAGE}_dace_determinism-${PY_VERSION}${NOX_SESSION_ARGS}" || nox_rc=$?
+      if [ -d _dace_deterministic_codegen ]; then
+        cp -r _dace_deterministic_codegen "${CI_PROJECT_DIR}/"
+      fi
+      exit $nox_rc
+
+dace_determinism_cscs_gh200:
+  extends:
+    - .container-runner-santis-gh200
+    - .dace_determinism_common
+  needs:
+    - build_cscs_gh200
+  variables:
+    TEST_VARIANTS: 'cpu cuda12'
+    SLURM_GPUS_PER_NODE: 1
+    SLURM_PARTITION: 'shared'
+    GT4PY_BUILD_JOBS: 8
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+  rules:
+    - *exclude_variants_rules
+    - if: $SUBPACKAGE == 'next' && $DETAIL == 'nomesh'
+      variables:
+        # TODO: investigate why the dace tests seem to hang with multiple jobs
+        GT4PY_BUILD_JOBS: 1
+    - when: on_success
+
+dace_determinism_cscs_amd_rocm:
+  extends:
+    - .container-runner-beverin-mi200
+    - .dace_determinism_common
+  needs:
+    - build_cscs_amd_rocm
+  variables:
+    TEST_VARIANTS: 'rocm7'
+    SLURM_GPUS_PER_NODE: 4
+    GT4PY_BUILD_JOBS: 8
+    PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    SLURM_PARTITION: mi300
+    CMAKE_PREFIX_PATH: /opt/rocm
+    CUDA_HOME: /opt/rocm
+    CXX: /opt/rocm/bin/hipcc
+  rules:
+    - *exclude_variants_rules
+    - when: on_success

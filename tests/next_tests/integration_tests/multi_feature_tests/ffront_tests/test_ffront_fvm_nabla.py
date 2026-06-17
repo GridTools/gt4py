@@ -18,7 +18,7 @@ from gt4py import next as gtx
 from gt4py.next import neighbor_sum
 
 from next_tests import definitions as test_definitions
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
 )
 from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
@@ -75,6 +75,7 @@ def pnabla(
     return compute_pnabla(pp, S_M[0], sign, vol), compute_pnabla(pp, S_M[1], sign, vol)
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.requires_atlas
 def test_ffront_compute_zavgS(exec_alloc_descriptor):
     _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor)
@@ -96,6 +97,8 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
     assert_close(388241977.58389181, np.max(zavgS.asnumpy()))
 
 
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_tuple_returns
 @pytest.mark.requires_atlas
 def test_ffront_nabla(exec_alloc_descriptor):
     _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor)

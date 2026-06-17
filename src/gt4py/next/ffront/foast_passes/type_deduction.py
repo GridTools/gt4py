@@ -18,9 +18,9 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental,
     fbuiltins,
-    type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.iterator import builtins
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -146,6 +146,21 @@ class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
             incomplete_nodes.append(node)
 
 
+def _no_implicit_conversion_diagnostic(left: foast.Expr, right: foast.Expr) -> dict[str, Any]:
+    """Shared 'related'/'notes'/'hints' payload for the no-implicit-conversion errors."""
+    return {
+        "related": [
+            (left.location, f"this operand has type '{left.type}'"),
+            (right.location, f"this operand has type '{right.type}'"),
+        ],
+        "notes": ["GT4Py does not implicitly convert between datatypes."],
+        "hints": [
+            "Convert one operand explicitly, e.g. 'astype(<expr>, float64)', "
+            "or make the datatypes of the inputs match."
+        ],
+    }
+
+
 class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
@@ -249,15 +264,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
-        carry_type = next(iter(new_def_type.pos_or_kw_args.values()))
-        if new_init.type != new_def_type.returns:
+        if not new_def_type.pos_or_kw_args:
             raise errors.DSLError(
                 node.location,
-                f"Argument 'init' to scan operator '{node.id}' must have same type as its return: "
-                f"expected '{new_def_type.returns}', got '{new_init.type}'.",
+                f"Scan operator '{node.id}' must have at least one argument (the carry).",
+            )
+        carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
+        carry_type = new_def_type.pos_or_kw_args[carry_arg_name]
+        if carry_type != new_def_type.returns:
+            raise errors.DSLError(
+                node.location,
+                f"Argument '{carry_arg_name}' to scan operator '{node.id}' must have same type as its return: "
+                f"expected '{new_def_type.returns}', got '{carry_type}'.",
             )
         elif new_init.type != carry_type:
-            carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
             raise errors.DSLError(
                 node.location,
                 f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument: "
@@ -278,7 +298,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> foast.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            raise errors.DSLError(node.location, f"Undeclared symbol '{node.id}'.")
+            defined_names = {
+                ssa.original_name(name) for name, sym in symtable.items() if sym.type is not None
+            }
+            raise errors.UndefinedSymbolError(
+                node.location, ssa.original_name(node.id), candidates=defined_names
+            )
 
         symbol = symtable[node.id]
         return foast.Name(id=node.id, type=symbol.type, location=node.location)
@@ -608,9 +633,23 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             is_compatible = (
                 type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
             )
-            for arg in (left, right):
+            requirement = "logical" if node.op in logical_ops else "arithmetic"
+            for arg, other in ((left, right), (right, left)):
                 if not is_compatible(arg.type):
-                    raise errors.DSLError(arg.location, err_msg)
+                    hints = []
+                    if node.op not in logical_ops and type_info.is_logical(arg.type):
+                        hints = [
+                            "To select values based on a boolean mask, use 'where(mask, a, b)'. "
+                            "To compute with a boolean field, convert it explicitly, "
+                            "e.g. 'astype(mask, int32)'."
+                        ]
+                    raise errors.DSLError(
+                        arg.location,
+                        err_msg,
+                        label=f"'{node.op}' expects {requirement} operands, but this has type '{arg.type}'",
+                        related=[(other.location, f"the other operand has type '{other.type}'")],
+                        hints=hints,
+                    )
 
             if node.op == dialect_ast_enums.BinaryOperator.POW:
                 return left.type
@@ -619,7 +658,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 right.type
             ):
                 raise errors.DSLError(
-                    arg.location,
+                    right.location,
                     f"Type '{right.type}' can not be used in operator '{node.op}', it only accepts 'int'.",
                 )
 
@@ -630,6 +669,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     node.location,
                     f"Could not promote '{left.type}' and '{right.type}' to common type"
                     f" in call to '{node.op}'.",
+                    **_no_implicit_conversion_diagnostic(left, right),
                 ) from ex
         elif isinstance(left.type, ts.DomainType) and isinstance(right.type, ts.DomainType):
             if node.op not in logical_ops:
@@ -650,6 +690,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise errors.DSLError(
                 node.location,
                 f"Incompatible datatypes in operator '{node.op}': '{left.type}' and '{right.type}'.",
+                **_no_implicit_conversion_diagnostic(left, right),
             )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> foast.UnaryOp:
@@ -871,10 +912,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         new_type = new_type_constructor.type.definition.returns
 
-        return_type = type_info.apply_to_primitive_constituents(
-            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind),
-            value.type,
-        )
+        return_type = type_info.tree_map_type(
+            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind)
+        )(value.type)
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(
@@ -934,7 +974,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         # replace all primitive constituents by the same type, `ts.DeferredType()` for convenience,
         # to capture the structure of the two branches
-        extract_structure = ti_ffront.tree_map_type(lambda x: ts.DeferredType(constraint=None))
+        extract_structure = type_info.tree_map_type(lambda x: ts.DeferredType(constraint=None))
         tb_structure = extract_structure(true_branch)
         fb_structure = extract_structure(false_branch)
 
@@ -948,7 +988,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 ),
             )
 
-        @ti_ffront.tree_map_type
+        @type_info.tree_map_type
         def deduce_return_type(
             tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
         ) -> ts.FieldType:
@@ -962,7 +1002,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
             return return_type
 
-        return deduce_return_type(true_branch, false_branch)  # type: ignore[return-value]
+        return deduce_return_type(true_branch, false_branch)
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         mask_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)
