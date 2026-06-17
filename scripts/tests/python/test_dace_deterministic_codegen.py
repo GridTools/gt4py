@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
+import stat
+import sys
 
 import pytest
 from dace_deterministic_codegen import (
@@ -26,6 +28,7 @@ from dace_deterministic_codegen import (
     check_determinism,
     compare,
     render_report,
+    run_determinism_check,
 )
 
 
@@ -275,3 +278,89 @@ def test_report_marks_count_as_failure_when_healthy(tmp_path):
     assert "[COUNT ]" in healthy and "NON-DETERMINISTIC" in healthy
     unknown = render_report(results)
     assert "[SKIP  ]" in unknown and "Re-run" in unknown
+
+
+# --- orchestration (run_determinism_check) ---
+#
+# These tests drive the run-twice loop with a stub interpreter instead of a real
+# gt4py + pytest run: the stub mimics `python -m pytest ... --junit-xml=PATH` by
+# fabricating a `.gt4py_cache` program tree under GT4PY_BUILD_CACHE_DIR plus a
+# JUnit XML, so the loop, health parsing, and comparison are exercised without
+# needing gt4py installed.
+
+_STUB_PYTEST = """\
+#!{python}
+import hashlib, os, pathlib, sys
+
+junit = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--junit-xml="))
+cache = pathlib.Path(os.environ["GT4PY_BUILD_CACHE_DIR"]) / ".gt4py_cache"
+run_name = pathlib.Path(os.environ["GT4PY_BUILD_CACHE_DIR"]).name
+# Codegen differs between runs only when perturbation is requested.
+content = run_name if os.environ.get("FAKE_PERTURB") else "stable"
+folder = cache / ("prog_" + hashlib.sha256(b"prog").hexdigest()) / "src" / "cpu"
+folder.mkdir(parents=True, exist_ok=True)
+(folder / "k.cpp").write_text(content)
+pathlib.Path(junit).write_text('<testsuite tests="1" failures="0" errors="0" />')
+"""
+
+
+def _stub_interpreter(tmp_path: pathlib.Path) -> str:
+    stub = tmp_path / "fake_pytest.py"
+    stub.write_text(_STUB_PYTEST.format(python=sys.executable))
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IRWXU)
+    return str(stub)
+
+
+def test_run_determinism_check_deterministic_pass(tmp_path, monkeypatch):
+    monkeypatch.delenv("FAKE_PERTURB", raising=False)
+    workdir = tmp_path / "_workdir"
+    results = run_determinism_check(
+        ["-q"], workdir=workdir, python=_stub_interpreter(tmp_path), self_check=False
+    )
+    assert results and all(r.match for r in results)
+    assert "deterministic" in (workdir / "report.txt").read_text()
+    # the per-run caches are reclaimed, the report is kept
+    assert not (workdir / "run1").exists() and not (workdir / "run2").exists()
+
+
+def test_run_determinism_check_detects_nondeterminism(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_PERTURB", "1")
+    workdir = tmp_path / "_workdir"
+    with pytest.raises(DeterminismError):
+        run_determinism_check(
+            ["-q"], workdir=workdir, python=_stub_interpreter(tmp_path), self_check=False
+        )
+    report = (workdir / "report.txt").read_text()
+    assert "NON-DETERMINISTIC" in report
+
+
+def test_run_determinism_check_infra_failure_raises(tmp_path):
+    # An interpreter that exits non-zero (and != 1/5) is an infrastructure error.
+    stub = tmp_path / "boom.py"
+    stub.write_text(f"#!{sys.executable}\nimport sys; sys.exit(2)\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IRWXU)
+    with pytest.raises(RuntimeError, match="unexpected code"):
+        run_determinism_check(
+            ["-q"], workdir=tmp_path / "_workdir", python=str(stub), self_check=False
+        )
+
+
+def test_run_determinism_check_env_overrides_are_set(tmp_path):
+    # The stub records the determinism-relevant env vars it was invoked with.
+    stub = tmp_path / "record_env.py"
+    stub.write_text(
+        f"#!{sys.executable}\n"
+        "import os, pathlib, sys\n"
+        "junit = next(a.split('=', 1)[1] for a in sys.argv if a.startswith('--junit-xml='))\n"
+        "cache = pathlib.Path(os.environ['GT4PY_BUILD_CACHE_DIR']) / '.gt4py_cache'\n"
+        "rec = cache.parent.parent / (pathlib.Path(os.environ['GT4PY_BUILD_CACHE_DIR']).name + '.env')\n"
+        "rec.write_text(os.environ.get('DACE_compiler_build_folder_mode', '') + ',' "
+        "+ os.environ.get('GT4PY_BUILD_CACHE_LIFETIME', ''))\n"
+        "cache.mkdir(parents=True, exist_ok=True)\n"
+        'pathlib.Path(junit).write_text(\'<testsuite tests="0" failures="0" errors="0" />\')\n'
+    )
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IRWXU)
+    workdir = tmp_path / "_workdir"
+    with pytest.raises(NoProgramsObservedError):  # empty caches -> nothing to compare
+        run_determinism_check(["-q"], workdir=workdir, python=str(stub), self_check=False)
+    assert (workdir / "run1.env").read_text() == "development,persistent"

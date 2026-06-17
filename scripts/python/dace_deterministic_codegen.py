@@ -28,23 +28,38 @@ differing count cannot be a failed test — it means the *number* of generated
 programs is itself non-deterministic — so it is counted as a failure instead.
 If no name is comparable the check raises rather than reporting a vacuous match.
 
-The library API below (``check_determinism`` and friends) is intentionally
-stdlib-only so it can be imported from ``noxfile.py`` and the nox session venvs,
-neither of which has the dev-scripts dependencies installed.
+This module provides two layers:
 
-Usage::
+* a pure-stdlib **comparison library** (``check_determinism`` and friends) that
+  compares two existing build caches. It is deliberately stdlib-only so it
+  imports without the dev-scripts dependencies (e.g. during plain test
+  collection);
+* an **orchestration** layer (``run_determinism_check``) that runs gt4py's pytest
+  selection twice with an isolated build cache per run, then feeds the two caches
+  to the comparison library. It only uses the stdlib + ``subprocess`` (it shells
+  out to ``python -m pytest``), so it has no nox dependency.
 
-    from dace_deterministic_codegen import check_determinism
+Both are exposed as CLI subcommands when ``typer`` is available.
+
+Library usage::
+
+    from dace_deterministic_codegen import check_determinism, run_determinism_check
     check_determinism(run1_cache, run2_cache, runs_healthy=True,
                       diffs_dir=..., report_path=...)
 
 CLI::
 
+    # Compare two existing build caches:
     ./scripts/run dace-determinism check --run1 PATH --run2 PATH \\
         [--diffs-dir DIR] [--report FILE] [--runs-healthy/--no-runs-healthy]
 
-Exit codes: 0 deterministic, 1 differs, 2 bad args / unsupported backend /
-no source files / nothing comparable, 3 no programs observed.
+    # Run a pytest selection twice and compare (used by the
+    # `test_next_dace_determinism` nox session):
+    ./scripts/run dace-determinism run --workdir DIR -- <pytest args>
+
+Exit codes (both subcommands): 0 deterministic, 1 differs, 2 bad args /
+unsupported backend / no source files / nothing comparable, 3 no programs
+observed.
 """
 
 from __future__ import annotations
@@ -52,7 +67,12 @@ from __future__ import annotations
 import collections
 import dataclasses
 import hashlib
+import os
 import re
+import shutil
+import subprocess
+import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 
@@ -368,14 +388,157 @@ def check_determinism(
     return results
 
 
+# -- Orchestration --
+#
+# The `run_determinism_check` function below runs a gt4py pytest selection twice
+# with an isolated build cache per run, then compares the generated sources. It
+# uses only the stdlib + subprocess (it shells out to `python -m pytest`), so it
+# carries no nox dependency and runs wherever gt4py's test suite can run.
+
+CACHE_SUBDIR = ".gt4py_cache"
+PYTEST_TOLERATED_EXIT_CODES = frozenset({0, 1, 5})  # ok, tests failed, no tests collected
+
+
+def _run_is_healthy(junit_xml: Path) -> bool:
+    """Whether a pytest run collected tests and none failed or errored.
+
+    Read from the JUnit XML (written regardless of outcome) so the comparator can
+    tell a legitimate skip (a test failed -> differing program count) from a
+    genuine non-deterministic program count (counts differ in a clean pair).
+    """
+    import xml.etree.ElementTree as ET
+
+    if not junit_xml.is_file():
+        return False
+    root = ET.parse(junit_xml).getroot()
+    tests = failures = errors = 0
+    for suite in root.iter("testsuite"):
+        tests += int(suite.get("tests", 0))
+        failures += int(suite.get("failures", 0))
+        errors += int(suite.get("errors", 0))
+    return tests > 0 and failures == 0 and errors == 0
+
+
+def _env_for_run(run_dir: Path) -> dict[str, str]:
+    # gt4py.next appends `.gt4py_cache` to GT4PY_BUILD_CACHE_DIR, so we pass the
+    # parent directory and the cache lands at .gt4py_cache/ underneath. Setting
+    # GT4PY_BUILD_CACHE_LIFETIME to `persistent` keeps the cache around long
+    # enough for the comparison to read it.
+    #
+    # Setting DACE_compiler_build_folder_mode to `development` is REQUIRED: gt4py
+    # configures dace to `production` mode by default, which cleans up the dace
+    # build folder after compilation — leaving only the compiled .so and
+    # stripping the codegen sources we need to diff. Forcing `development` keeps
+    # `src/...` around so the checker has codegen to compare. (See src/gt4py/next/
+    # program_processors/runners/dace/workflow/common.py for the upstream config
+    # this overrides; the comment there documents this env var as the escape hatch.)
+    return {
+        "GT4PY_BUILD_CACHE_DIR": str(run_dir),
+        "GT4PY_BUILD_CACHE_LIFETIME": "persistent",
+        "DACE_compiler_build_folder_mode": "development",
+    }
+
+
+def run_determinism_check(
+    pytest_args: Sequence[str],
+    *,
+    workdir: Path,
+    python: str = sys.executable,
+    self_check: bool = True,
+) -> list[ComparisonResult]:
+    """Run ``pytest`` twice with an isolated cache per run, then compare codegen.
+
+    ``pytest_args`` are the arguments passed to ``python -m pytest`` (without the
+    leading ``pytest``) for each of the two runs. ``python`` is the interpreter
+    used to run the suite (defaults to the current one, i.e. the environment that
+    has gt4py installed when this script is executed there). Each run sets
+    ``GT4PY_BUILD_CACHE_DIR`` so its cache lands at ``<run_dir>/.gt4py_cache/``.
+
+    The two per-run caches and ``.dacecache`` are removed afterwards; ``diffs/``
+    and ``report.txt`` under ``workdir`` are kept as debugging artifacts. Returns
+    the comparison results, or raises the same exceptions as ``check_determinism``
+    (plus ``RuntimeError`` if a pytest run fails for an infrastructure reason).
+    """
+    workdir = workdir.expanduser().resolve()
+
+    # Self-check the comparator first: a broken script aborts here, before the
+    # two expensive test-suite runs.
+    if self_check:
+        test_file = (
+            Path(__file__).resolve().parent.parent
+            / "tests"
+            / "python"
+            / "test_dace_deterministic_codegen.py"
+        )
+        subprocess.run([python, "-m", "pytest", "-q", str(test_file)], check=True)
+
+    if workdir.exists():
+        shutil.rmtree(workdir)
+    run1_dir = workdir / "run1"
+    run2_dir = workdir / "run2"
+    run1_dir.mkdir(parents=True)
+    run2_dir.mkdir(parents=True)
+
+    dacecache = workdir.parent / ".dacecache"
+
+    def wipe_dacecache() -> None:
+        if dacecache.exists():
+            shutil.rmtree(dacecache, ignore_errors=True)
+
+    runs_healthy = True
+    try:
+        for run_dir in (run1_dir, run2_dir):
+            wipe_dacecache()
+            junit_xml = run_dir / "pytest-junit.xml"
+            result = subprocess.run(
+                [python, "-m", "pytest", *pytest_args, f"--junit-xml={junit_xml}"],
+                env={**os.environ, **_env_for_run(run_dir)},
+            )
+            # Tolerate test failures / empty collection: a failed test only
+            # changes how a count mismatch is classified, never whether content
+            # differences are reported. Any other code is an infrastructure error.
+            if result.returncode not in PYTEST_TOLERATED_EXIT_CODES:
+                raise RuntimeError(
+                    f"pytest exited with unexpected code {result.returncode} for run "
+                    f"{run_dir.name}; cannot assess determinism."
+                )
+            runs_healthy = _run_is_healthy(junit_xml) and runs_healthy
+
+        return check_determinism(
+            run1_dir / CACHE_SUBDIR,
+            run2_dir / CACHE_SUBDIR,
+            runs_healthy=runs_healthy,
+            diffs_dir=workdir / "diffs",
+            report_path=workdir / "report.txt",
+        )
+    finally:
+        # Reclaim disk after the comparison. The two per-run caches are ~hundreds
+        # of MB each in development mode. We always keep `workdir/diffs/` and
+        # `workdir/report.txt` — those are the artifacts a maintainer needs to
+        # debug a failure; the raw caches are reproducible by rerunning.
+        for tbd in (run1_dir, run2_dir, dacecache):
+            shutil.rmtree(tbd, ignore_errors=True)
+
+
+# Exit-code mapping shared by the `check` and `run` CLI subcommands. (0 is the
+# success code, returned implicitly; the values below mirror the docstring.)
+_EXIT_CODES: dict[type[Exception], int] = {
+    DeterminismError: 1,
+    UnsupportedBackendError: 2,
+    NoSourceFilesObservedError: 2,
+    NoComparableProgramsError: 2,
+    NoProgramsObservedError: 3,
+}
+
+
 # -- CLI --
 #
-# ``typer`` lives in the dev-scripts ``scripts`` dependency group, which is only
-# present in the uv environment created by this file's shebang (and used by
-# ``scripts/run``). The library API above must stay importable from stdlib-only
-# interpreters (``noxfile.py`` and the nox session venvs import it directly), so
-# the CLI is guarded: those importers never touch ``cli``, and ``scripts/run``
-# only ever imports this module from inside the uv scripts env.
+# ``typer`` lives in the dev-scripts ``scripts`` dependency group. The library
+# and orchestration functions above use only the stdlib, so this module imports
+# cleanly without typer (e.g. during plain test collection); the CLI is guarded
+# so stdlib-only importers never require it. ``scripts/run`` and the
+# ``test_next_dace_determinism`` nox session both run this module from an
+# environment where the ``scripts`` group (hence typer) is installed.
 try:
     import typer
 except ImportError:
@@ -420,22 +583,70 @@ if typer is not None:
                 diffs_dir=diffs_dir.expanduser().resolve() if diffs_dir else None,
                 report_path=report.expanduser().resolve() if report else None,
             )
-        except UnsupportedBackendError as e:
-            typer.echo(f"error: {e}", err=True)
-            raise typer.Exit(2) from e
-        except NoProgramsObservedError as e:
-            typer.echo(f"error: {e}", err=True)
-            raise typer.Exit(3) from e
-        except (NoSourceFilesObservedError, NoComparableProgramsError) as e:
-            typer.echo(f"error: {e}", err=True)
-            raise typer.Exit(2) from e
         except DeterminismError as e:
             if report is None:
                 typer.echo(render_report(e.results, runs_healthy=runs_healthy))
             typer.echo(f"error: {e}", err=True)
-            raise typer.Exit(1) from e
+            raise typer.Exit(_EXIT_CODES[type(e)]) from e
+        except (
+            UnsupportedBackendError,
+            NoProgramsObservedError,
+            NoSourceFilesObservedError,
+            NoComparableProgramsError,
+        ) as e:
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(_EXIT_CODES[type(e)]) from e
         if report is None:
             typer.echo(render_report(results, runs_healthy=runs_healthy))
+
+    @cli.command()
+    def run(
+        pytest_args: Annotated[
+            list[str] | None,
+            typer.Argument(
+                help="Arguments passed to `python -m pytest` for each of the two runs "
+                "(pass them after `--`)."
+            ),
+        ] = None,
+        workdir: Annotated[
+            Path,
+            typer.Option(
+                "--workdir",
+                metavar="PATH",
+                help="Working directory for the per-run caches, diffs/, and report.txt.",
+            ),
+        ] = Path("_dace_deterministic_codegen"),
+        self_check: Annotated[
+            bool,
+            typer.Option(
+                "--self-check/--no-self-check",
+                help="Run the comparator's own unit tests before the expensive runs.",
+            ),
+        ] = True,
+    ) -> None:
+        """Run a pytest selection twice and verify DaCe codegen is byte-identical."""
+        workdir_abs = workdir.expanduser().resolve()
+        try:
+            run_determinism_check(pytest_args or [], workdir=workdir, self_check=self_check)
+        except subprocess.CalledProcessError as e:
+            typer.echo(f"error: comparator self-check failed (exit {e.returncode}).", err=True)
+            raise typer.Exit(2) from e
+        except RuntimeError as e:
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(2) from e
+        except (
+            DeterminismError,
+            UnsupportedBackendError,
+            NoProgramsObservedError,
+            NoSourceFilesObservedError,
+            NoComparableProgramsError,
+        ) as e:
+            typer.echo(
+                f"error: {e}\nSee {workdir_abs / 'report.txt'} and {workdir_abs / 'diffs'}/",
+                err=True,
+            )
+            raise typer.Exit(_EXIT_CODES[type(e)]) from e
+        typer.echo((workdir_abs / "report.txt").read_text())
 
 
 if __name__ == "__main__":
