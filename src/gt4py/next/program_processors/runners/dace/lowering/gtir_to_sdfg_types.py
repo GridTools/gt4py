@@ -88,8 +88,7 @@ class FieldopData:
             ]
             dtype = self.gt_type.dtype
             # `FieldType.dtype` is widened to include `TypeVarType`, but generic operators are
-            # monomorphized before lowering, so only concrete dtypes reach here. Removing this
-            # (and the sibling asserts) would need a non-generic field type; deferred for now.
+            # monomorphized before lowering, so only concrete dtypes reach here.
             assert isinstance(dtype, (ts.ScalarType, ts.ListType))
             return gtir_dataflow.IteratorExpr(self.dc_node, dtype, field_origin, it_indices)
 

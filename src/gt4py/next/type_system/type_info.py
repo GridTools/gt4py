@@ -55,11 +55,9 @@ def is_concrete(symbol_type: ts.TypeSpec) -> TypeGuard[ts.TypeSpec]:
 
 
 def _type_params(symbol_type: ts.TypeSpec) -> tuple[ts.TypeSpec, ...]:
-    """The immediate type-parameter sub-types of ``symbol_type``.
+    """Return the immediate type-parameter sub-types of ``symbol_type``.
 
-    These are its dtype, element type, tuple elements, or function argument / return types --
-    one definition of where type parameters live, shared by the recursive type-variable
-    traversals (`is_generic` here, `substitute_type_vars` via `tree_map_type_params`).
+    These are its dtype, element type, tuple elements, or function argument / return types.
     """
     match symbol_type:
         case ts.FieldType(dtype=dtype):
@@ -86,25 +84,24 @@ def is_generic(symbol_type: ts.TypeSpec) -> bool:
     """
     Figure out if a type contains parts that are only known when concrete arguments are given.
 
-    A generic (callable) type can be called with arguments of varying types, e.g. the program
-    context signature of a scan operator. This recurses into composite types, reporting ``True``
-    if any nested part is a `DeferredType` or `TypeVarType`. It is *not* the negation of
-    :func:`is_concrete`: the latter is a shallow deduction-progress flag (top-level
-    `DeferredType` only), so a tuple with a nested `DeferredType` is both concrete and generic.
+    Recurses into composite types, reporting ``True`` if any nested part is a `DeferredType` or
+    `TypeVarType`. Unlike :func:`is_concrete` (a shallow top-level check), this is deep, so a
+    tuple with a nested `DeferredType` is both concrete and generic.
 
     Note: this returns ``True`` for a bare ``astype`` constructor type, whose ``definition``
     carries a ``DeferredType`` by design; callers that only care about *data* arguments must
     filter for ``ts.DataType`` themselves.
 
-    >>> is_generic(ts.DeferredType(constraint=None))
-    True
+    Examples:
+        >>> is_generic(ts.DeferredType(constraint=None))
+        True
 
-    >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
-    >>> is_generic(bool_type)
-    False
+        >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
+        >>> is_generic(bool_type)
+        False
 
-    >>> is_generic(ts.TupleType(types=[bool_type, ts.DeferredType(constraint=None)]))
-    True
+        >>> is_generic(ts.TupleType(types=[bool_type, ts.DeferredType(constraint=None)]))
+        True
     """
     if isinstance(symbol_type, (ts.DeferredType, ts.TypeVarType)):
         return True
@@ -639,26 +636,23 @@ def bind_type_vars(
     """
     Compute a binding of all type variables in ``params`` by structurally matching ``args``.
 
-    Concrete (non-generic) parts of the parameters are ignored here; mismatches in those are
-    reported by the regular signature checks. A type variable position only binds if the
-    corresponding argument provides a concrete scalar dtype; the caller is responsible for
-    checking that no type variable remained unbound (if required).
-
-    Note: the binding is intentionally ``dtype``-scoped (scalar type variables only); a future
-    extension for dimension variables will widen it.
+    Concrete (non-generic) parts of the parameters are ignored; a type variable position binds
+    only if the corresponding argument provides a concrete scalar dtype. The caller is
+    responsible for checking that no type variable remained unbound.
 
     Raises:
         ValueError: If a type variable would be bound inconsistently or to a dtype that is
             not one of its constraints.
 
-    >>> var = ts.TypeVarType(name="T", constraints=(ts.ScalarType(kind=ts.ScalarKind.FLOAT64),))
-    >>> I = common.Dimension(value="I")
-    >>> binding = bind_type_vars(
-    ...     [ts.FieldType(dims=[I], dtype=var)],
-    ...     [ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))],
-    ... )
-    >>> print(binding["T"])
-    float64
+    Examples:
+        >>> var = ts.TypeVarType(name="T", constraints=(ts.ScalarType(kind=ts.ScalarKind.FLOAT64),))
+        >>> I = common.Dimension(value="I")
+        >>> binding = bind_type_vars(
+        ...     [ts.FieldType(dims=[I], dtype=var)],
+        ...     [ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))],
+        ... )
+        >>> print(binding["T"])
+        float64
     """
     binding: dict[str, ts.ScalarType] = {}
 
@@ -708,9 +702,7 @@ def tree_map_type_params(
 ) -> ts.TypeSpec:
     """Rebuild ``symbol_type`` applying ``fun`` to each immediate type-parameter sub-type.
 
-    The counterpart of `tree_map_type` for the type-parameter positions enumerated by
-    `_type_params` (dtype, element type, function argument / return types), which `tree_map_type`
-    -- a *collection* map -- does not descend into. Leaf types are returned unchanged.
+    Leaf types are returned unchanged.
     """
     match symbol_type:
         case ts.FieldType(dims=dims, dtype=dtype):
@@ -747,15 +739,16 @@ def substitute_type_vars(
 
     Unbound type variables and all other generic parts (e.g. `DeferredType`) are kept as-is.
 
-    >>> var = ts.TypeVarType(name="T", constraints=(ts.ScalarType(kind=ts.ScalarKind.FLOAT64),))
-    >>> I = common.Dimension(value="I")
-    >>> print(
-    ...     substitute_type_vars(
-    ...         ts.FieldType(dims=[I], dtype=var),
-    ...         {"T": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
-    ...     )
-    ... )
-    Field[[I], float64]
+    Examples:
+        >>> var = ts.TypeVarType(name="T", constraints=(ts.ScalarType(kind=ts.ScalarKind.FLOAT64),))
+        >>> I = common.Dimension(value="I")
+        >>> print(
+        ...     substitute_type_vars(
+        ...         ts.FieldType(dims=[I], dtype=var),
+        ...         {"T": ts.ScalarType(kind=ts.ScalarKind.FLOAT64)},
+        ...     )
+        ... )
+        Field[[I], float64]
     """
     if not binding or not is_generic(type_):
         return type_
