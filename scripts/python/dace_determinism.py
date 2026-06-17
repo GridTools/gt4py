@@ -37,9 +37,18 @@ them. Both are exposed as CLI subcommands.
 This is a standalone dev-scripts CLI: it is meant to be *executed*, not imported.
 Run it via ``./scripts/run dace-determinism ...`` or directly through its uv
 shebang; either way it runs inside the dev-scripts ``scripts`` environment, where
-its dependency (``typer``) is available. The ``test_next_dace_determinism`` nox
-session runs the ``run`` subcommand as a subprocess rather than importing this
-module.
+its dependency (``typer``) is available.
+
+.. note::
+
+   The ``ci-check`` subcommand runs the gt4py test suite, so it needs an
+   interpreter that has gt4py installed. By default it uses the interpreter
+   running this script — which, when launched via ``./scripts/run`` or the uv
+   shebang, is the ``scripts`` environment, and that does **not** have gt4py.
+   So ``ci-check`` is either driven by a gt4py-capable interpreter (this is what
+   the ``test_next_dace_determinism`` nox session does: it executes the script
+   with its session venv's python) or told one explicitly with ``--python``.
+   The ``check`` subcommand has no such requirement — it only reads caches.
 
 Usage::
 
@@ -48,8 +57,10 @@ Usage::
         [--diffs-dir DIR] [--report FILE] [--runs-healthy/--no-runs-healthy]
 
     # Run a pytest selection twice and compare (used by the
-    # `test_next_dace_determinism` nox session):
-    ./scripts/run dace-determinism run --workdir DIR -- <pytest args>
+    # `test_next_dace_determinism` nox session, which omits --python because it
+    # already executes the script with a gt4py-capable interpreter):
+    ./scripts/run dace-determinism ci-check --python PATH/TO/gt4py/python \\
+        --workdir DIR -- <pytest args>
 
 Exit codes (both subcommands): 0 deterministic, 1 differs, 2 bad args /
 unsupported backend / no source files / nothing comparable, 3 no programs
@@ -102,6 +113,15 @@ class NoComparableProgramsError(RuntimeError):
 
     Nothing could be compared, so the result is inconclusive (e.g. one run failed
     wholesale, or the two runs share no name at an equal program count).
+    """
+
+
+class PytestRunError(RuntimeError):
+    """A pytest run exited with an unexpected code (an infrastructure failure).
+
+    Distinct from the comparison exceptions above so the CLI can map it to its
+    own exit code without depending on ``except`` ordering against the shared
+    ``RuntimeError`` base.
     """
 
 
@@ -441,6 +461,7 @@ def run_determinism_check(
     *,
     workdir: Path,
     python: str = sys.executable,
+    dacecache: Path | None = None,
     self_check: bool = True,
 ) -> list[ComparisonResult]:
     """Run ``pytest`` twice with an isolated cache per run, then compare codegen.
@@ -451,12 +472,18 @@ def run_determinism_check(
     has gt4py installed when this script is executed there). Each run sets
     ``GT4PY_BUILD_CACHE_DIR`` so its cache lands at ``<run_dir>/.gt4py_cache/``.
 
-    The two per-run caches and ``.dacecache`` are removed afterwards; ``diffs/``
+    ``dacecache`` is DaCe's build-cache directory, wiped before each run so the
+    two runs cannot share build artifacts. It defaults to ``<cwd>/.dacecache`` —
+    where DaCe writes it relative to the test process's working directory — and
+    must be overridden if a custom DaCe build folder is configured.
+
+    The two per-run caches and ``dacecache`` are removed afterwards; ``diffs/``
     and ``report.txt`` under ``workdir`` are kept as debugging artifacts. Returns
     the comparison results, or raises the same exceptions as ``check_determinism``
-    (plus ``RuntimeError`` if a pytest run fails for an infrastructure reason).
+    (plus ``PytestRunError`` if a pytest run fails for an infrastructure reason).
     """
     workdir = workdir.expanduser().resolve()
+    dacecache = (dacecache or Path.cwd() / ".dacecache").expanduser().resolve()
 
     # Self-check the comparator first: a broken script aborts here, before the
     # two expensive test-suite runs.
@@ -472,8 +499,6 @@ def run_determinism_check(
     run2_dir = workdir / "run2"
     run1_dir.mkdir(parents=True)
     run2_dir.mkdir(parents=True)
-
-    dacecache = workdir.parent / ".dacecache"
 
     def wipe_dacecache() -> None:
         if dacecache.exists():
@@ -492,7 +517,7 @@ def run_determinism_check(
             # changes how a count mismatch is classified, never whether content
             # differences are reported. Any other code is an infrastructure error.
             if result.returncode not in PYTEST_TOLERATED_EXIT_CODES:
-                raise RuntimeError(
+                raise PytestRunError(
                     f"pytest exited with unexpected code {result.returncode} for run "
                     f"{run_dir.name}; cannot assess determinism."
                 )
@@ -584,8 +609,8 @@ def check(
         typer.echo(render_report(results, runs_healthy=runs_healthy))
 
 
-@cli.command()
-def run(
+@cli.command("ci-check")
+def ci_check(
     pytest_args: Annotated[
         list[str] | None,
         typer.Argument(
@@ -601,6 +626,27 @@ def run(
             help="Working directory for the per-run caches, diffs/, and report.txt.",
         ),
     ] = Path("_dace_deterministic_codegen"),
+    python: Annotated[
+        str,
+        typer.Option(
+            "--python",
+            metavar="EXE",
+            help="Interpreter used to run the gt4py test suite; it must have gt4py "
+            "installed. Defaults to the interpreter running this script (which only "
+            "has gt4py when the script is launched by a gt4py-capable interpreter, "
+            "e.g. the nox session venv — not the bare `./scripts/run` environment).",
+        ),
+    ] = sys.executable,
+    dacecache: Annotated[
+        Path | None,
+        typer.Option(
+            "--dacecache",
+            metavar="PATH",
+            help="DaCe's build-cache directory, wiped between runs so they don't "
+            "share artifacts. Defaults to ./.dacecache (where DaCe writes it); "
+            "override only if a custom DaCe build folder is configured.",
+        ),
+    ] = None,
     self_check: Annotated[
         bool,
         typer.Option(
@@ -612,11 +658,17 @@ def run(
     """Run a pytest selection twice and verify DaCe codegen is byte-identical."""
     workdir_abs = workdir.expanduser().resolve()
     try:
-        run_determinism_check(pytest_args or [], workdir=workdir, self_check=self_check)
+        run_determinism_check(
+            pytest_args or [],
+            workdir=workdir,
+            python=python,
+            dacecache=dacecache,
+            self_check=self_check,
+        )
     except subprocess.CalledProcessError as e:
         typer.echo(f"error: comparator self-check failed (exit {e.returncode}).", err=True)
         raise typer.Exit(2) from e
-    except RuntimeError as e:
+    except PytestRunError as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2) from e
     except (

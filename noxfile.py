@@ -359,9 +359,10 @@ def test_typing_exports(session: nox.Session) -> None:
 #
 # The orchestration (run twice + compare) and the hashing/comparison library
 # both live in `scripts/python/dace_determinism.py`, exposed as its
-# `run` and `check` subcommands. This session installs the `scripts` dependency
-# group into the session venv and executes that script with the venv's own
-# python — it does not import the module.
+# `ci-check` and `check` subcommands. This session installs the `scripts`
+# dependency group into the session venv and executes that script with the
+# venv's own python (a gt4py-capable interpreter) — it does not import the
+# module.
 #
 # Only `dace` codegen is checked (`internal` doesn't go through dace), so the
 # codegen parameter is dropped from this session's signature.
@@ -425,7 +426,7 @@ def test_next_dace_determinism(
     session.run(
         "python",
         str(pathlib.Path("scripts") / "python" / "dace_determinism.py"),
-        "run",
+        "ci-check",
         "--workdir",
         str(REPO_ROOT / "_dace_deterministic_codegen"),
         "--",

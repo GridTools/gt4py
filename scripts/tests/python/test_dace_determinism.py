@@ -23,13 +23,16 @@ from dace_determinism import (
     NoComparableProgramsError,
     NoProgramsObservedError,
     NoSourceFilesObservedError,
+    PytestRunError,
     UnsupportedBackendError,
     _scan,
     check_determinism,
+    cli,
     compare,
     render_report,
     run_determinism_check,
 )
+from typer.testing import CliRunner
 
 
 def _bags(cache: pathlib.Path):
@@ -311,11 +314,19 @@ def _stub_interpreter(tmp_path: pathlib.Path) -> str:
     return str(stub)
 
 
+# An explicit `dacecache` keeps these tests hermetic: with the default
+# (`<cwd>/.dacecache`) a run started from the repo root would wipe a real cache.
+
+
 def test_run_determinism_check_deterministic_pass(tmp_path, monkeypatch):
     monkeypatch.delenv("FAKE_PERTURB", raising=False)
     workdir = tmp_path / "_workdir"
     results = run_determinism_check(
-        ["-q"], workdir=workdir, python=_stub_interpreter(tmp_path), self_check=False
+        ["-q"],
+        workdir=workdir,
+        python=_stub_interpreter(tmp_path),
+        dacecache=tmp_path / ".dacecache",
+        self_check=False,
     )
     assert results and all(r.match for r in results)
     assert "deterministic" in (workdir / "report.txt").read_text()
@@ -328,7 +339,11 @@ def test_run_determinism_check_detects_nondeterminism(tmp_path, monkeypatch):
     workdir = tmp_path / "_workdir"
     with pytest.raises(DeterminismError):
         run_determinism_check(
-            ["-q"], workdir=workdir, python=_stub_interpreter(tmp_path), self_check=False
+            ["-q"],
+            workdir=workdir,
+            python=_stub_interpreter(tmp_path),
+            dacecache=tmp_path / ".dacecache",
+            self_check=False,
         )
     report = (workdir / "report.txt").read_text()
     assert "NON-DETERMINISTIC" in report
@@ -339,10 +354,33 @@ def test_run_determinism_check_infra_failure_raises(tmp_path):
     stub = tmp_path / "boom.py"
     stub.write_text(f"#!{sys.executable}\nimport sys; sys.exit(2)\n")
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IRWXU)
-    with pytest.raises(RuntimeError, match="unexpected code"):
+    with pytest.raises(PytestRunError, match="unexpected code"):
         run_determinism_check(
-            ["-q"], workdir=tmp_path / "_workdir", python=str(stub), self_check=False
+            ["-q"],
+            workdir=tmp_path / "_workdir",
+            python=str(stub),
+            dacecache=tmp_path / ".dacecache",
+            self_check=False,
         )
+
+
+def test_run_determinism_check_default_dacecache_tracks_cwd(tmp_path, monkeypatch):
+    # DaCe writes .dacecache relative to the process CWD, not relative to the
+    # workdir. With the workdir nested below the CWD, the default dacecache must
+    # still resolve to <cwd>/.dacecache (and get wiped so the two runs cannot
+    # share artifacts) — not <workdir.parent>/.dacecache.
+    monkeypatch.delenv("FAKE_PERTURB", raising=False)
+    monkeypatch.chdir(tmp_path)
+    cwd_dacecache = tmp_path / ".dacecache"
+    cwd_dacecache.mkdir()
+    (cwd_dacecache / "stale.so").write_text("old build artifact")
+    run_determinism_check(  # no `dacecache=` -> exercises the default
+        ["-q"],
+        workdir=tmp_path / "sub" / "_workdir",
+        python=_stub_interpreter(tmp_path),
+        self_check=False,
+    )
+    assert not cwd_dacecache.exists()
 
 
 def test_run_determinism_check_env_overrides_are_set(tmp_path):
@@ -362,5 +400,50 @@ def test_run_determinism_check_env_overrides_are_set(tmp_path):
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IRWXU)
     workdir = tmp_path / "_workdir"
     with pytest.raises(NoProgramsObservedError):  # empty caches -> nothing to compare
-        run_determinism_check(["-q"], workdir=workdir, python=str(stub), self_check=False)
+        run_determinism_check(
+            ["-q"],
+            workdir=workdir,
+            python=str(stub),
+            dacecache=tmp_path / ".dacecache",
+            self_check=False,
+        )
     assert (workdir / "run1.env").read_text() == "development,persistent"
+
+
+# --- CLI `ci-check` exit-code mapping ---
+#
+# Regression guard: every comparison exception subclasses RuntimeError, so the
+# `ci-check` handler must map each to its documented exit code rather than
+# collapsing them onto a single catch-all.
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected_code"),
+    [
+        (DeterminismError("nondeterministic codegen", []), 1),
+        (NoProgramsObservedError("no programs"), 3),
+        (NoComparableProgramsError("nothing comparable"), 2),
+        (NoSourceFilesObservedError("no sources"), 2),
+        (UnsupportedBackendError("bad backend"), 2),
+        (PytestRunError("pytest exited with unexpected code 2"), 2),
+    ],
+)
+def test_ci_check_command_maps_exceptions_to_exit_codes(monkeypatch, tmp_path, exc, expected_code):
+    def boom(*args, **kwargs):
+        raise exc
+
+    monkeypatch.setattr("dace_determinism.run_determinism_check", boom)
+    result = CliRunner().invoke(
+        cli, ["ci-check", "--workdir", str(tmp_path / "_wd"), "--no-self-check"]
+    )
+    assert result.exit_code == expected_code
+
+
+def test_ci_check_command_success_echoes_report(monkeypatch, tmp_path):
+    workdir = tmp_path / "_wd"
+    workdir.mkdir()
+    (workdir / "report.txt").write_text("RESULT: codegen deterministic — 1 program(s) match.\n")
+    monkeypatch.setattr("dace_determinism.run_determinism_check", lambda *a, **k: [])
+    result = CliRunner().invoke(cli, ["ci-check", "--workdir", str(workdir), "--no-self-check"])
+    assert result.exit_code == 0
+    assert "deterministic" in result.output

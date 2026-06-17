@@ -27,7 +27,7 @@
 #
 # Logic lives in:
 #   noxfile.py                              (test_*_dace_determinism sessions)
-#   scripts/python/dace_determinism.py   (comparison lib + orchestration; `run`/`check` CLI)
+#   scripts/python/dace_determinism.py   (comparison lib + orchestration; `ci-check`/`check` CLI)
 
 include:
   - local: 'ci/cscs-ci-base.yml'
