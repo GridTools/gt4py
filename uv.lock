@@ -1210,7 +1210,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "1.0.0"
-source = { git = "https://github.com/romanc/dace?branch=romanc%2Fmath-functions#c8cb49cc29cc281a5c92bd84e231e31cb6dc561d" }
+source = { git = "https://github.com/romanc/dace?branch=romanc%2Fmath-functions#c6bc57a3f23d2427da3cb23ece13255de4a9af47" }
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
@@ -1789,7 +1789,7 @@ build = [
     { name = "wheel" },
 ]
 dace-cartesian = [
-    { name = "dace", version = "1.0.0", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fmath-functions#c8cb49cc29cc281a5c92bd84e231e31cb6dc561d" } },
+    { name = "dace", version = "1.0.0", source = { git = "https://github.com/romanc/dace?branch=romanc%2Fmath-functions#c6bc57a3f23d2427da3cb23ece13255de4a9af47" } },
 ]
 dace-next = [
     { name = "dace", version = "43!2026.4.27", source = { registry = "https://gridtools.github.io/pypi/" } },
