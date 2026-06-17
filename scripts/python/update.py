@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
 #
 # GT4Py - GridTools Framework
 #
@@ -19,8 +20,7 @@ import packaging
 import rich
 import tomllib
 import typer
-
-from . import _common as common
+from helpers import common
 
 
 class ExitCode(enum.IntEnum):
