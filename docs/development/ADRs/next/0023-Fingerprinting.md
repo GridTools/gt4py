@@ -96,11 +96,13 @@ OrderInsensitiveDeconstruction(state, pieces)      # pieces combine in canonical
 per-type registry plus optional overrides (dispatched on the object's MRO via
 `functools.singledispatch`), with a customizable `fallback` covering
 dataclasses, datamodels and `__reduce_ex__`-reducible objects; the
-module-level `deconstruct` is the default deconstructor.
-A fingerprinter is `catabolize` partially applied to a deconstructor and
-the digest collapser (`stable_fingerprinter` uses `fingerprint_deconstructor`,
-whose `fingerprint_fallback` layers the `gt4py_metadata(fingerprint=False)`
-field opt-out on the default rules). The default deconstruction rules are:
+module-level `deconstruct` is the default deconstructor, whose `fallback`
+layers the `gt4py_metadata(fingerprint=False)` field opt-out on the dataclass /
+datamodel / `__reduce_ex__` rules.
+A fingerprinter is `catabolize` partially applied to a deconstructor and the
+digest collapser; `make_fingerprinter(deconstructor=…, collapser=…)` builds one
+(`strict_fingerprinter` is the default deconstructor + collapser). The default
+deconstruction rules are:
 
 - **Primitives** (`int`, `float`, `str`, `bytes`, ...) — leaves tagged with
   their concrete class, so `True`, `1` and `1.0` do not collide.
@@ -118,7 +120,7 @@ field opt-out on the default rules). The default deconstruction rules are:
   (lambdas, local closures), whose qualified names are ambiguous, as well as
   shadowed or reassigned globals, are rejected with a `TypeError` instead of
   silently colliding. (In-memory keys relax this to a structural fallback — see
-  *Stable vs. session: the durability axis* below.)
+  *Strict vs. lenient: the durability axis* below.)
 - **Dataclasses and datamodels** — nodes of class + field values, honoring
   the field metadata opt-out (below).
 - **Everything else** — deconstructed via the standard `__reduce_ex__` protocol
@@ -163,14 +165,14 @@ Fields of dataclasses/datamodels can opt out of fingerprinting through the
 class CachedStep(...):
     step: Workflow[StartT, EndT]
     input_fingerprinter: Callable[..., HashT] = dataclasses.field(
-        metadata=fingerprinting.gt4py_metadata(fingerprint=False)
+        metadata=utils.gt4py_metadata(fingerprint=False)
     )
     step_fingerprinter: fingerprinting.Fingerprinter = dataclasses.field(
-        default=fingerprinting.session_fingerprinter,
-        metadata=fingerprinting.gt4py_metadata(fingerprint=False),
+        default=fingerprinting.lenient_fingerprinter,
+        metadata=utils.gt4py_metadata(fingerprint=False),
     )
     cache: ... = dataclasses.field(
-        default_factory=dict, metadata=fingerprinting.gt4py_metadata(fingerprint=False)
+        default_factory=dict, metadata=utils.gt4py_metadata(fingerprint=False)
     )
 ```
 
@@ -185,11 +187,12 @@ serialization stay independent concerns.
 Subsystems describe only the *deltas* they need on top of the shared default
 rules:
 
-- `stable_fingerprinter` — the default fingerprinter (default deconstructor); used
+- `strict_fingerprinter` — the default fingerprinter (default deconstructor); used
   by the OTF build caches.
-- `skipping_fields_node_fingerprinter("location", "type", ...)` — a cached
-  factory returning a fingerprinter (and optionally its deconstructor overrides) for
-  `eve.Node`s that recursively skips the named child fields. The iterator/GTIR
+- `skipping_fields_node_deconstructor("location", "type", ...)` — a cached
+  factory returning a `Deconstructor` for `eve.Node`s that recursively skips the
+  named child fields, ready to compose into a fingerprinter via
+  `make_fingerprinter`. The iterator/GTIR
   `semantic_fingerprinter` skips `location` and `type`: it keys the **persistent**
   (cross-process, on-disk) C++/SDFG build cache, which must stay stable when only
   source locations shift (an unrelated edit above a stencil, a moved checkout) and
@@ -207,17 +210,10 @@ rules:
   than identifying it by reference:
 
 ```python
-semantic_fingerprinter = functools.partial(
-    fingerprinting.catabolize,
+semantic_fingerprinter = fingerprinting.make_fingerprinter(
     deconstructor=fingerprinting.make_deconstructor(
-        {
-            **foast.semantic_fingerprint_deconstructors,
-            types.FunctionType: _deconstruct_definition_function,
-        },
-        fallback=fingerprinting.fingerprint_fallback,
+        {types.FunctionType: _deconstruct_definition_function},
     ),
-    collapser=fingerprinting.fingerprint_collapser,
-    allow_cycles=True,
 )
 ```
 
@@ -226,7 +222,7 @@ in-memory ffront key (so the operator is re-lowered in-process, cheaply, with
 correct locations) but leaves the persistent ITIR key unchanged (so the
 expensive C++/SDFG artifact is still a cache hit and is not rebuilt).
 
-### Stable vs. session: the durability axis
+### Strict vs. lenient: the tolerance axis
 
 By-reference identification (above) exists because a **persistent** key must be
 reproducible in a *different* process, where only an import path uniquely
@@ -239,7 +235,7 @@ is a perfectly valid identity there. Keying every fragility one importable name
 at a time (the icon4py `FrozenNamespace` closure constants, a `Mock` backend, a
 custom-backend workflow step have each tripped it) does not scale.
 
-`session_fingerprinter` therefore mirrors `stable_fingerprinter` but, instead of
+`lenient_fingerprinter` therefore mirrors `strict_fingerprinter` but, instead of
 rejecting a non-importable object, falls back to a **structural** identity:
 
 - a **function** is hashed by its code object (bytecode + constants, recursing
@@ -252,18 +248,18 @@ rejecting a non-importable object, falls back to a **structural** identity:
   qualified name.
 
 For any graph *without* non-importable objects the two fingerprinters agree
-exactly (the session overrides try by-reference first), so switching a cache
+exactly (the lenient overrides try by-reference first), so switching a cache
 between them never spuriously invalidates it.
 
-`CachedStep` makes stable-vs-session an **explicit** choice: the caller passes a
-`step_fingerprinter`, defaulting to `session_fingerprinter`. The choice
+`CachedStep` makes strict-vs-lenient an **explicit** choice: the caller passes a
+`step_fingerprinter`, defaulting to `lenient_fingerprinter`. The choice
 must match the cache's durability — an in-memory `dict` (the default) is happy
-with the session default, while a persistent cache (e.g. `FileCache`) must be
-paired with `stable_fingerprinter` so its on-disk keys stay reproducible across
+with the lenient default, while a persistent cache (e.g. `FileCache`) must be
+paired with `strict_fingerprinter` so its on-disk keys stay reproducible across
 processes. The two persistent call sites (the gtfn/dace `cached_translation`
 traits) do exactly that. The default is the safe one *for the default cache*: a
-lambda-bearing step is fine under the session default, but a `FileCache` paired
-with `stable_fingerprinter` still rejects it with a hard `TypeError`, so a
+lambda-bearing step is fine under the lenient default, but a `FileCache` paired
+with `strict_fingerprinter` still rejects it with a hard `TypeError`, so a
 persistent cache never gets a non-reproducible key (the worst failure mode in
 this subsystem: a stale on-disk binary reused for changed code → silently wrong
 numerics).
@@ -329,11 +325,11 @@ What becomes harder / the trade-offs:
 - Objects identified by reference must be importable (module-level) **for
   persistent keys**; lambdas and local closures behind a `FileCache` are a hard
   error, by design (a non-reproducible on-disk key is the worst failure mode).
-  In-memory keys lift the restriction via `session_fingerprinter`, which hashes
+  In-memory keys lift the restriction via `lenient_fingerprinter`, which hashes
   local functions structurally (code object + defaults + closure cells) — only
   stable per CPython version, which is fine within one process. The price is two
   fingerprinters to maintain and a durability invariant (`FileCache` ⇒ pair with
-  `stable_fingerprinter`) that each `CachedStep` call site must uphold by passing
+  `strict_fingerprinter`) that each `CachedStep` call site must uphold by passing
   the matching `step_fingerprinter`.
 
 ## Alternatives considered
@@ -418,10 +414,12 @@ registry entries. Using `optree` itself was evaluated and rejected:
 
 - `src/gt4py/next/fingerprinting.py` — `Deconstruction`, `EmptyDeconstruction`,
   `OrderInsensitiveDeconstruction`, `catabolize`, `make_deconstructor`,
-  `deconstruct`, `fingerprint_fallback`, `fingerprint_deconstructor`,
-  `fingerprint_collapser`, `stable_fingerprinter`, `session_fingerprinter`,
-  `skipping_fields_node_fingerprinter`, `gt4py_metadata`. Imported directly by
+  `make_fingerprinter`, `deconstruct`, `fingerprint_collapser`,
+  `strict_fingerprinter`, `lenient_fingerprinter`,
+  `skipping_fields_node_deconstructor`. Imported directly by
   `gt4py.next` consumers (not re-exported through `gt4py.next.utils`).
+- `src/gt4py/next/utils.py` — `gt4py_metadata` and its namespace key
+  `GT4PY_CLASS_METADATA_NS`, the per-field fingerprinting opt-out helper.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
 - `src/gt4py/next/otf/workflow.py` — `CachedStep.cache_key`.
 - `src/gt4py/next/config.py` — `BUILD_CACHE_VERSION_ID`.

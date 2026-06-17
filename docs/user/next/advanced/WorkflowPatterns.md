@@ -169,7 +169,7 @@ def debug_print(inp: int) -> int:
 
 # NOTE: `CachedStep` keys the cache on a fingerprint of the step itself plus the
 # `input_fingerprinter` of the input. `.in_memory` pairs a `dict` cache with the
-# session fingerprinter, which hashes the step structurally -- so non-importable
+# lenient fingerprinter, which hashes the step structurally -- so non-importable
 # callables (lambdas, closures) are fine for this single-process cache.
 debug_print_step = gtx.otf.workflow.make_step(debug_print)
 

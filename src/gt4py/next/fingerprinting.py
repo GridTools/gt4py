@@ -19,17 +19,20 @@ Public API:
   — results of deconstructing one level of an object.
 - `Deconstructor` — type alias for a per-object deconstructor.
 - `make_deconstructor` — build a dispatching deconstructor from per-type overrides.
+- `make_fingerprinter` — build a fingerprinter from a deconstructor and a collapser.
 - `deconstruct` — the default GT4Py deconstructor.
 - `catabolize` — iterative bottom-up fold over a deconstructed object graph.
 - `Collapser` / `Fingerprinter` — type aliases.
 - `fingerprint_collapser` — the xxhash-based collapser used by all built-in fingerprinters.
-- `fingerprint_deconstructor` — deconstructor used by `stable_fingerprinter`.
-- `fingerprint_fallback` — fallback deconstructor honoring ``gt4py_metadata(fingerprint=False)``.
-- `stable_fingerprinter` — cross-process deterministic fingerprinter.
-- `session_fingerprinter` — single-process fingerprinter tolerant of non-importable objects.
-- `skipping_fields_node_fingerprinter` — fingerprinter that skips named node fields.
-- `gt4py_metadata` — helper to attach GT4Py field metadata (e.g. ``fingerprint=False``).
-- `GT4PY_CLASS_METADATA_NS` — the metadata namespace key used by `gt4py_metadata`.
+- `strict_fingerprinter` — cross-process deterministic fingerprinter.
+- `strict_fingerprint_deconstructor` — deconstructor used by `strict_fingerprinter`.
+- `lenient_fingerprinter` — single-process fingerprinter tolerant of non-importable objects.
+- `lenient_fingerprint_deconstructor` — deconstructor used by `lenient_fingerprinter`.
+- `skipping_fields_node_deconstructor` — deconstructor that skips named node fields.
+
+The per-field opt-out helper `gt4py_metadata` (and its namespace key
+`GT4PY_CLASS_METADATA_NS`) used to live here; they now live in
+`gt4py.next.utils`.
 """
 
 from __future__ import annotations
@@ -43,24 +46,12 @@ import struct
 import sys
 import types
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
-from typing import Any, Final, Literal, Optional, TypeAlias, TypeVar, overload
+from typing import Any, Final, Optional, TypeAlias, TypeVar
 
 import xxhash
 
 from gt4py.eve import concepts, datamodels, utils as eve_utils
-
-
-GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
-
-
-def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
-    """
-    Helper function to store dataclass/datamodel field metadata within a GT4Py namespace.
-
-    Individual fields can opt out of fingerprinting with
-    `foo = field(..., metadata=gt4py_metadata(fingerprint=False))`.
-    """
-    return {GT4PY_CLASS_METADATA_NS: kwargs}
+from gt4py.next import utils as next_utils
 
 
 _T = TypeVar("_T")
@@ -122,30 +113,6 @@ class OrderInsensitiveDeconstruction(Deconstruction[_T]):
 Deconstructor: TypeAlias = Callable[[Any], Deconstruction]
 
 
-def make_deconstructor(
-    overrides: Optional[Mapping[type, Deconstructor]] = None,
-    *,
-    fallback: Optional[Deconstructor] = None,
-) -> Deconstructor:
-    """
-    Create a deconstructor, optionally with customized per-type deconstruction.
-
-    The returned deconstructor produces one level of an object as a
-    `Deconstruction` (an `EmptyDeconstruction` for terminal
-    objects) whose `state` is a byte tag (a domain-separation tag, optionally
-    followed by a payload).
-    Per-type deconstructors are dispatched on the object's MRO; `overrides`
-    take precedence over the default rules. Objects without a matching
-    deconstructor are handled by `fallback` (by default deconstructed through
-    their fields for dataclasses and datamodels, or via the standard
-    ``__reduce_ex__`` protocol).
-    """
-    return eve_utils.singledispatcher(
-        fallback if fallback is not None else _deconstruct,
-        implementations={**_BUILTIN_DECONSTRUCTORS, **(overrides or {})},
-    )
-
-
 def _resolves_as_global(obj: Any) -> bool:
     """Return whether resolving ``<module>.<qualname>`` through `sys.modules` yields `obj` itself."""
     if isinstance(obj, types.ModuleType):
@@ -185,15 +152,13 @@ def _reference_by_fully_qualified_name(obj: Any) -> str:
 
 
 @functools.cache
-def _cached_class_tag(cls: type) -> bytes:
+def _class_tag(cls: type) -> bytes:
     return eve_utils.get_fully_qualified_name(cls).encode()
 
 
-_class_tag: Final[Callable[[type], bytes]] = _cached_class_tag  # for mypy
-
-
 def _class_obj_tag(obj: Any) -> bytes:
-    return _class_tag(type(obj))
+    cls: type = type(obj)
+    return _class_tag(cls)
 
 
 def _instance_state_pieces(obj: Any) -> tuple[Any, ...]:
@@ -284,43 +249,8 @@ _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
 _DECONSTRUCT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
 
 
-def _fields_deconstruction(cls: type, items: Iterable[tuple[Any, Any]]) -> Deconstruction:
-    """
-    Deconstruct a dataclass-like object into its ``(field name, value)`` pieces.
-
-    Shared by every fields-based deconstructor (default, fingerprinting and
-    node-field-skipping) so they agree on the domain-separation tag and the
-    piece shape.
-    """
-    return Deconstruction.from_pieces(*items, state=b"fields\0" + _class_tag(cls))
-
-
-@functools.cache
-def _cached_dataclass_fields(cls: type) -> Optional[tuple[Any, ...]]:
-    # Common one-level field introspection for dataclasses and datamodels;
-    # checked in the fallbacks instead of dispatched on virtual ABCs, whose
-    # composition into the MRO breaks `singledispatch` for eve's generic
-    # datamodel classes (`RuntimeError: Inconsistent hierarchy`). Cached per
-    # type, since this is on the fingerprinting hot path and the fields are a
-    # pure function of the class.
-    if dataclasses.is_dataclass(cls):
-        return dataclasses.fields(cls)
-    if datamodels.is_datamodel(cls):
-        return tuple(datamodels.get_fields(cls).values())
-    return None
-
-
-_dataclass_fields: Final[Callable[[type], Optional[tuple[Any, ...]]]] = (
-    _cached_dataclass_fields  # for mypy
-)
-
-
-def _deconstruct(obj: Any) -> Deconstruction:
+def _object_deconstruct(obj: Any) -> Deconstruction:
     cls = type(obj)
-    if (fields := _dataclass_fields(cls)) is not None:
-        # One level only (the traversal recurses into the pieces itself), so
-        # the class identity of nested objects is preserved.
-        return _fields_deconstruction(cls, ((f.name, getattr(obj, f.name)) for f in fields))
 
     try:
         # Like `pickle.Pickler`, give precedence to reducers registered in
@@ -351,6 +281,76 @@ def _deconstruct(obj: Any) -> Deconstruction:
         dict_items,
         custom_setstate,
         state=b"reduce",
+    )
+
+
+@functools.cache
+def _data_fields(cls: type) -> Optional[tuple[Any, ...]]:
+    # Cached per type, since this is on the fingerprinting hot path and the
+    # fields are a pure function of the class.
+    if dataclasses.is_dataclass(cls):
+        return dataclasses.fields(cls)
+    if datamodels.is_datamodel(cls):
+        return tuple(datamodels.get_fields(cls).values())
+    return None
+
+
+def _fields_deconstruction(cls: type, items: Iterable[tuple[Any, Any]]) -> Deconstruction:
+    """
+    Deconstruct a dataclass-like object into its ``(field name, value)`` pieces.
+
+    Shared by every fields-based deconstructor (default, fingerprinting and
+    node-field-skipping) so they agree on the domain-separation tag and the
+    piece shape.
+    """
+    return Deconstruction.from_pieces(*items, state=b"fields\0" + _class_tag(cls))
+
+
+def _deconstructor(obj: Any) -> Deconstruction:
+    """
+    Default deconstructor understanding dataclasses and datamodels through their fields.
+
+    Dataclasses and datamodels are deconstructed through their fields, everything
+    else is delegated to the ``__reduce_ex__`` rules.
+
+    We need to define this workaround instead of dispatching on virtual
+    Dataclass / DataModel ABCs, since complicated inheritance / composition
+    hierarchies breaks `singledispatch`.
+
+    Used as the `fallback` of `make_deconstructor`.
+    """
+    cls: type = type(obj)
+    if (fields := _data_fields(cls)) is not None:
+        return _fields_deconstruction(
+            cls,
+            ((f.name, getattr(obj, f.name)) for f in fields if _is_fingerprinted_field(f.metadata)),
+        )
+    else:
+        return _object_deconstruct(obj)
+
+
+def make_deconstructor(
+    overrides: Optional[Mapping[type, Deconstructor]] = None,
+    *,
+    fallback: Deconstructor = _deconstructor,
+) -> Deconstructor:
+    """
+    Create a deconstructor, optionally with customized per-type deconstruction.
+
+    The returned deconstructor produces one level of an object as a
+    `Deconstruction` (an `EmptyDeconstruction` for terminal
+    objects) whose `state` is a byte tag (a domain-separation tag, optionally
+    followed by a payload).
+    Per-type deconstructors are dispatched on the object's MRO; `overrides`
+    take precedence over the default rules. Objects without a matching
+    deconstructor are handled by `fallback` (by default deconstructed through
+    their fields for dataclasses and datamodels, or via the standard
+    ``__reduce_ex__`` protocol).
+    """
+
+    return eve_utils.singledispatcher(
+        fallback,
+        implementations={**_BUILTIN_DECONSTRUCTORS, **(overrides or {})},
     )
 
 
@@ -519,6 +519,12 @@ def catabolize(
 # -- Generic fingerprinting of objects --
 
 
+#: A fingerprinter is `catabolize` instantiated with digest
+#: collapsers (xxhash64 with domain separation) over a deconstructor, which
+#: must produce type tags as `state`.
+Fingerprinter: TypeAlias = Callable[[Any], str]
+
+
 def fingerprint_collapser(deconstruction: Deconstruction[str]) -> str:
     """Collapse a deconstruction (with already-collapsed piece digests) into its digest."""
     hasher = xxhash.xxh64(b"node\0")
@@ -530,60 +536,52 @@ def fingerprint_collapser(deconstruction: Deconstruction[str]) -> str:
 
 
 def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
-    gt4py_meta = metadata.get(GT4PY_CLASS_METADATA_NS, None)
+    gt4py_meta = metadata.get(next_utils.GT4PY_CLASS_METADATA_NS, None)
     return not gt4py_meta or gt4py_meta.get("fingerprint", True)
 
 
-def fingerprint_fallback(obj: Any) -> Deconstruction:
+def strict_fingerprint_deconstructor(obj: Any) -> Deconstruction:
     """
-    Fallback deconstructor honoring the fingerprint field metadata opt-out.
+    Deconstructor honoring the fingerprint field metadata opt-out.
 
     Dataclasses and datamodels are deconstructed through their fields,
     dropping those marked with ``gt4py_metadata(fingerprint=False)``;
-    everything else is delegated to the default fallback rules. Used as the
-    `fallback` of `make_deconstructor` by every fingerprinter.
+    everything else is delegated to the default fallback rules.
+
+    # Used as default deconstructor for fingerprinting.
     """
     cls = type(obj)
-    if (fields := _dataclass_fields(cls)) is not None:
+    if (fields := _data_fields(cls)) is not None:  # type: ignore[arg-type]  # mypy doesn't think a type is hashable
         return _fields_deconstruction(
             cls,
             ((f.name, getattr(obj, f.name)) for f in fields if _is_fingerprinted_field(f.metadata)),
         )
-    return _deconstruct(obj)
-
-
-#: Default deconstructor used for fingerprinting GT4Py objects.
-fingerprint_deconstructor: Final[Deconstructor] = make_deconstructor(fallback=fingerprint_fallback)
-
-
-#: A fingerprinter is `catabolize` instantiated with digest
-#: collapsers (xxhash64 with domain separation) over a deconstructor, which
-#: must produce type tags as `state`.
-Fingerprinter: TypeAlias = Callable[[Any], str]
+    else:
+        return _object_deconstruct(obj)
 
 
 #: Default fingerprinting function for GT4Py objects: deterministic across
 #: processes (dict and set contributions are canonicalized by sorting the
 #: fingerprints of their items) and identifying types, functions and modules
 #: by their qualified name.
-stable_fingerprinter: Fingerprinter = functools.partial(
+strict_fingerprinter: Fingerprinter = functools.partial(
     catabolize,
-    deconstructor=fingerprint_deconstructor,
+    deconstructor=strict_fingerprint_deconstructor,
     collapser=fingerprint_collapser,
     allow_cycles=True,
 )
 
 
-# -- Session fingerprinting for in-memory (single-process) keys --
+# -- Lenient fingerprinting for complex cases with dynamically-created objects --
 #
 # The default by-reference rules reject non-importable callables, types and
-# modules (see `_reference_by_fully_qualified_name`) because a persistent,
-# on-disk key must be reproducible in a *different* process, where only an
-# import path uniquely identifies an object. That requirement does not hold for
-# an in-memory cache, which lives and dies within a single process: there an
-# object's structure is a perfectly valid identity. The session fingerprinter
-# keeps the stable by-reference behavior whenever it applies (so it agrees with
-# `stable_fingerprinter` on graphs without non-importable objects), but
+# modules (see `_reference_by_fully_qualified_name`) to make sure persistent,
+# on-disk key is always reproducible in a *different* process, where only an
+# import path uniquely identifies an object. That requirement is impossible
+# to satisfy when there are dynamically-created objects without an import path.
+# In that case, the object's structure is a perfectly valid identity. This lenient
+# fingerprinter keeps the strict by-reference behavior whenever it applies (so it
+# agrees with `strict_fingerprinter` on graphs without non-importable objects), but
 # falls back to structural ("by code") hashing for functions and to an
 # unverified qualified name for dynamically-created types/modules, instead of
 # raising.
@@ -615,7 +613,7 @@ def _deconstruct_cell(cell: types.CellType) -> Deconstruction:
     return Deconstruction.from_pieces(contents, state=b"cell")
 
 
-def _session_function_deconstruction(func: types.FunctionType) -> Deconstruction:
+def _lenient_function_deconstruction(func: types.FunctionType) -> Deconstruction:
     try:
         return EmptyDeconstruction.from_reference(func)
     except TypeError:
@@ -633,38 +631,41 @@ def _session_function_deconstruction(func: types.FunctionType) -> Deconstruction
         )
 
 
-def _session_reference(obj: Any) -> EmptyDeconstruction:
+def _lenient_reference(obj: Any) -> EmptyDeconstruction:
     try:
         return EmptyDeconstruction.from_reference(obj)
     except TypeError:
         # A dynamically-created type/module (e.g. a ``unittest.mock.Mock``
         # subclass): identify it by its qualified name without the round-trip
-        # resolve check that the stable reference requires.
+        # resolve check that the strict reference requires.
         return EmptyDeconstruction(
             b"unresolved-ref\0" + eve_utils.get_fully_qualified_name(obj).encode()
         )
 
 
-#: Tolerant overrides composed into `session_fingerprinter`'s
+#: Tolerant overrides composed into `lenient_fingerprinter`'s
 #: deconstructor (see `make_deconstructor`).
-_SESSION_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
-    types.FunctionType: _session_function_deconstruction,
-    types.BuiltinFunctionType: _session_reference,
-    types.ModuleType: _session_reference,
-    type: _session_reference,
+_LENIENT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
+    types.FunctionType: _lenient_function_deconstruction,
+    types.BuiltinFunctionType: _lenient_reference,
+    types.ModuleType: _lenient_reference,
+    type: _lenient_reference,
     types.CodeType: _deconstruct_code,
     types.CellType: _deconstruct_cell,
 }
 
+lenient_fingerprint_deconstructor = make_deconstructor(
+    _LENIENT_DECONSTRUCTORS, fallback=strict_fingerprint_deconstructor
+)
 
 #: Fingerprinter for in-memory (single-process) cache keys: like
-#: `stable_fingerprinter`, but tolerant of non-importable callables, types
+#: `strict_fingerprinter`, but tolerant of non-importable callables, types
 #: and modules in the object graph (functions are hashed by code + closure,
 #: dynamic types/modules by unverified qualified name). It MUST NOT key a
 #: persistent cache, whose keys must be reproducible across processes.
-session_fingerprinter: Fingerprinter = functools.partial(
+lenient_fingerprinter: Fingerprinter = functools.partial(
     catabolize,
-    deconstructor=make_deconstructor(_SESSION_DECONSTRUCTORS, fallback=fingerprint_fallback),
+    deconstructor=lenient_fingerprint_deconstructor,
     collapser=fingerprint_collapser,
     allow_cycles=True,
 )
@@ -673,52 +674,37 @@ session_fingerprinter: Fingerprinter = functools.partial(
 # -- Other fingerprinters --
 
 
-def _make_skipping_fields_node_deconstructor(skipped_fields: frozenset[str]) -> Deconstructor:
+def make_fingerprinter(
+    *,
+    deconstructor: Deconstructor = strict_fingerprint_deconstructor,
+    collapser: Collapser[str] = fingerprint_collapser,
+    allow_cycles: bool = True,
+) -> Fingerprinter:
+    """Helper to make a fingerprinter from a deconstructor and a collapser."""
+    return functools.partial(
+        catabolize,
+        deconstructor=deconstructor,
+        collapser=collapser,
+        allow_cycles=allow_cycles,
+    )
+
+
+@functools.cache
+def skipping_fields_node_deconstructor(
+    *skipped_fields: str, fallback: Deconstructor = strict_fingerprint_deconstructor
+) -> Deconstructor:
+    """Return a node deconstructor which skips some fields."""
+
+    _skipped_fields_set = frozenset(skipped_fields)
+
     def node_deconstructor(node: concepts.Node) -> Deconstruction:
         return _fields_deconstruction(
             type(node),
             (
                 (name, child)
                 for name, child in node.iter_children_items()
-                if name not in skipped_fields
+                if name not in _skipped_fields_set
             ),
         )
 
-    return node_deconstructor
-
-
-@overload
-def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_deconstructors: Literal[False] = False
-) -> Fingerprinter: ...
-
-
-@overload
-def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_deconstructors: Literal[True]
-) -> tuple[Fingerprinter, dict[type, Deconstructor]]: ...
-
-
-@functools.cache
-def skipping_fields_node_fingerprinter(
-    *skipped_fields: str, return_deconstructors: bool = False
-) -> Fingerprinter | tuple[Fingerprinter, dict[type, Deconstructor]]:
-    """
-    Return a fingerprinter that fingerprints a node while skipping fields.
-
-    The provided field names are ignored recursively on all nodes. With
-    `return_deconstructors=True`, additionally return the per-type deconstructor
-    overrides so they can be composed into another deconstructor via
-    `make_deconstructor`.
-    """
-    deconstructors: dict[type, Deconstructor] = {
-        concepts.Node: _make_skipping_fields_node_deconstructor(frozenset(skipped_fields))
-    }
-    fingerprinter: Fingerprinter = functools.partial(
-        catabolize,
-        deconstructor=make_deconstructor(deconstructors, fallback=fingerprint_fallback),
-        collapser=fingerprint_collapser,
-        allow_cycles=True,
-    )
-
-    return (fingerprinter, deconstructors) if return_deconstructors else fingerprinter
+    return make_deconstructor({concepts.Node: node_deconstructor}, fallback=fallback)

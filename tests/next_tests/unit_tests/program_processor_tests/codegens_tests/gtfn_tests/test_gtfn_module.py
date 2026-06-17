@@ -92,7 +92,7 @@ def test_hash_and_diskcache(program_example, tmp_path):
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
-    hash = fingerprinting.stable_fingerprinter(compilable_program)
+    hash = fingerprinting.strict_fingerprinter(compilable_program)
 
     cache = filecache.FileCache(tmp_path)
     cache[hash] = compilable_program
@@ -105,27 +105,27 @@ def test_hash_and_diskcache(program_example, tmp_path):
     del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
-    assert hash == fingerprinting.stable_fingerprinter(compilable_program)
-    assert hash == fingerprinting.stable_fingerprinter(compilable_program_from_cache)
+    assert hash == fingerprinting.strict_fingerprinter(compilable_program)
+    assert hash == fingerprinting.strict_fingerprinter(compilable_program_from_cache)
 
     # hash is different if program changes
     altered_program_id = copy.deepcopy(compilable_program)
     altered_program_id.data.id = "example2"
-    assert fingerprinting.stable_fingerprinter(
+    assert fingerprinting.strict_fingerprinter(
         compilable_program
-    ) != fingerprinting.stable_fingerprinter(altered_program_id)
+    ) != fingerprinting.strict_fingerprinter(altered_program_id)
 
     altered_program_offset_provider = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_offset_provider.args, "offset_provider", {"Koff": KDim})
-    assert fingerprinting.stable_fingerprinter(
+    assert fingerprinting.strict_fingerprinter(
         compilable_program
-    ) != fingerprinting.stable_fingerprinter(altered_program_offset_provider)
+    ) != fingerprinting.strict_fingerprinter(altered_program_offset_provider)
 
     altered_program_column_axis = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_column_axis.args, "column_axis", KDim)
-    assert fingerprinting.stable_fingerprinter(
+    assert fingerprinting.strict_fingerprinter(
         compilable_program
-    ) != fingerprinting.stable_fingerprinter(altered_program_column_axis)
+    ) != fingerprinting.strict_fingerprinter(altered_program_column_axis)
 
 
 def test_gtfn_file_cache(program_example):

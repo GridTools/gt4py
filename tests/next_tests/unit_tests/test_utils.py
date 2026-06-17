@@ -8,8 +8,8 @@
 
 import copy
 import dataclasses
-import functools
 import inspect
+
 import pytest
 
 from gt4py.eve import datamodels
@@ -22,7 +22,7 @@ from eve_tests import definitions
 class _DataclassModel:
     value: int
     transient: str = dataclasses.field(
-        default="skip", metadata=fingerprinting.gt4py_metadata(fingerprint=False)
+        default="skip", metadata=utils.gt4py_metadata(fingerprint=False)
     )
 
 
@@ -30,7 +30,7 @@ class _DataclassModel:
 class _SlottedDataclassModel:
     value: int
     transient: str = dataclasses.field(
-        default="skip", metadata=fingerprinting.gt4py_metadata(fingerprint=False)
+        default="skip", metadata=utils.gt4py_metadata(fingerprint=False)
     )
 
 
@@ -38,7 +38,7 @@ class _SlottedDataclassModel:
 class _DatamodelModel:
     value: int
     transient: str = datamodels.field(
-        default="skip", metadata=fingerprinting.gt4py_metadata(fingerprint=False)
+        default="skip", metadata=utils.gt4py_metadata(fingerprint=False)
     )
 
 
@@ -47,27 +47,28 @@ class TestFingerprintFieldMetadata:
         "model_class", [_DataclassModel, _SlottedDataclassModel, _DatamodelModel]
     )
     def test_fields_marked_fingerprint_false_do_not_affect_fingerprint(self, model_class):
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             model_class(1, "foo")
-        ) == fingerprinting.stable_fingerprinter(model_class(1, "bar"))
+        ) == fingerprinting.strict_fingerprinter(model_class(1, "bar"))
 
     @pytest.mark.parametrize(
         "model_class", [_DataclassModel, _SlottedDataclassModel, _DatamodelModel]
     )
     def test_other_fields_affect_fingerprint(self, model_class):
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             model_class(1, "foo")
-        ) != fingerprinting.stable_fingerprinter(model_class(2, "foo"))
+        ) != fingerprinting.strict_fingerprinter(model_class(2, "foo"))
 
     def test_different_classes_with_equal_fields_differ(self):
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             _DataclassModel(1)
-        ) != fingerprinting.stable_fingerprinter(_SlottedDataclassModel(1))
+        ) != fingerprinting.strict_fingerprinter(_SlottedDataclassModel(1))
 
 
-def test_skipping_fields_node_fingerprinter_skips_nested_fields_and_is_cached():
-    fingerprinter = fingerprinting.skipping_fields_node_fingerprinter("int_value")
-    assert fingerprinter is fingerprinting.skipping_fields_node_fingerprinter("int_value")
+def test_skipping_fields_node_deconstructor_skips_nested_fields_and_is_cached():
+    deconstructor = fingerprinting.skipping_fields_node_deconstructor("int_value")
+    assert deconstructor is fingerprinting.skipping_fields_node_deconstructor("int_value")
+    fingerprinter = fingerprinting.make_fingerprinter(deconstructor=deconstructor)
 
     node_a = definitions.CompoundNode(
         int_value=1,
@@ -90,29 +91,14 @@ def test_skipping_fields_node_fingerprinter_skips_nested_fields_and_is_cached():
     assert fingerprinter(node_a) != fingerprinter(node_b)
 
 
-def test_skipping_fields_node_fingerprinter_returns_deconstructors_when_requested():
-    from gt4py.eve import concepts
-
-    fingerprinter, deconstructors = fingerprinting.skipping_fields_node_fingerprinter(
-        "int_value", return_deconstructors=True
-    )
-    assert callable(fingerprinter)
-    # The deconstructor overrides can be composed into another fingerprinter.
-    assert set(deconstructors) == {concepts.Node}
-    composed = functools.partial(
-        fingerprinting.catabolize,
-        deconstructor=fingerprinting.make_deconstructor(
-            deconstructors, fallback=fingerprinting.fingerprint_fallback
-        ),
-        collapser=fingerprinting.fingerprint_collapser,
-        allow_cycles=True,
-    )
-    assert composed(definitions.make_simple_node(fixed=True)) == fingerprinter(
-        definitions.make_simple_node(fixed=True)
-    )
-
-    # Without `return_deconstructors` only the fingerprinter callable is returned.
-    assert callable(fingerprinting.skipping_fields_node_fingerprinter("int_value"))
+def test_skipping_fields_node_deconstructor_returns_a_composable_deconstructor():
+    # The factory returns a `Deconstructor` (one level of structure), so it can be
+    # composed into a custom fingerprinter via `make_fingerprinter`. The skipped
+    # field is dropped from the deconstruction pieces.
+    deconstructor = fingerprinting.skipping_fields_node_deconstructor("int_value")
+    deconstruction = deconstructor(definitions.make_simple_node(fixed=True))
+    field_names = {name for name, _ in deconstruction.pieces}
+    assert "int_value" not in field_names
 
 
 def test_default_deconstructor():
@@ -126,16 +112,11 @@ def test_default_deconstructor():
     assert isinstance(
         fingerprinting.deconstruct({1, 2}), fingerprinting.OrderInsensitiveDeconstruction
     )
-    # ... and composing `catabolize` with the fingerprint deconstructor
-    # and collapser reproduces `stable_fingerprinter`.
+    # ... and a fingerprinter built from the default deconstructor and collapser
+    # (via `make_fingerprinter`) reproduces `strict_fingerprinter`.
     payload = {"a": (1, 2)}
-    refingerprinter = functools.partial(
-        fingerprinting.catabolize,
-        deconstructor=fingerprinting.fingerprint_deconstructor,
-        collapser=fingerprinting.fingerprint_collapser,
-        allow_cycles=True,
-    )
-    assert refingerprinter(payload) == fingerprinting.stable_fingerprinter(payload)
+    refingerprinter = fingerprinting.make_fingerprinter()
+    assert refingerprinter(payload) == fingerprinting.strict_fingerprinter(payload)
 
 
 class TestCatabolize:
@@ -282,24 +263,24 @@ def _module_level_func_a() -> None: ...
 def _module_level_func_b() -> None: ...
 
 
-class TestStableFingerprinter:
+class TestStrictFingerprinter:
     def test_returns_stable_string(self):
-        fingerprint = fingerprinting.stable_fingerprinter({"a": 1})
+        fingerprint = fingerprinting.strict_fingerprinter({"a": 1})
         assert isinstance(fingerprint, str)
-        assert fingerprint == fingerprinting.stable_fingerprinter({"a": 1})
+        assert fingerprint == fingerprinting.strict_fingerprinter({"a": 1})
 
     def test_dicts_are_order_independent(self):
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             {"a": 1, "b": 2}
-        ) == fingerprinting.stable_fingerprinter({"b": 2, "a": 1})
+        ) == fingerprinting.strict_fingerprinter({"b": 2, "a": 1})
 
     def test_sets_are_order_independent(self):
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             {1, 2, 3}
-        ) == fingerprinting.stable_fingerprinter({3, 2, 1})
+        ) == fingerprinting.strict_fingerprinter({3, 2, 1})
 
     def test_distinguishes_different_content(self):
-        assert fingerprinting.stable_fingerprinter({"a": 1}) != fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter({"a": 1}) != fingerprinting.strict_fingerprinter(
             {"a": 2}
         )
 
@@ -316,12 +297,12 @@ class TestStableFingerprinter:
 
             return Consts(a=a, b=b)
 
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             make_consts(1, 2)
-        ) == fingerprinting.stable_fingerprinter(make_consts(1, 2))
-        assert fingerprinting.stable_fingerprinter(
+        ) == fingerprinting.strict_fingerprinter(make_consts(1, 2))
+        assert fingerprinting.strict_fingerprinter(
             make_consts(1, 2)
-        ) != fingerprinting.stable_fingerprinter(make_consts(1, 3))
+        ) != fingerprinting.strict_fingerprinter(make_consts(1, 3))
 
     def test_container_subclass_instance_state_is_fingerprinted(self):
         # A builtin-container subclass carrying extra instance attributes must
@@ -337,41 +318,41 @@ class TestStableFingerprinter:
         same_as_a = TaggedDict({"x": 1})
         same_as_a.tag = "A"
 
-        assert fingerprinting.stable_fingerprinter(a) != fingerprinting.stable_fingerprinter(b)
-        assert fingerprinting.stable_fingerprinter(a) == fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(a) != fingerprinting.strict_fingerprinter(b)
+        assert fingerprinting.strict_fingerprinter(a) == fingerprinting.strict_fingerprinter(
             same_as_a
         )
         # Exact builtins (no instance `__dict__`) are unaffected.
-        assert fingerprinting.stable_fingerprinter({"x": 1}) == fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter({"x": 1}) == fingerprinting.strict_fingerprinter(
             {"x": 1}
         )
 
     def test_dicts_keyed_by_types_are_order_independent(self):
         # Dicts keyed by types occur in compile-time metadata (e.g. argument descriptors).
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             {int: 1, str: 2}
-        ) == fingerprinting.stable_fingerprinter({str: 2, int: 1})
+        ) == fingerprinting.strict_fingerprinter({str: 2, int: 1})
 
     def test_types_are_fingerprinted_by_reference(self):
         # Regression for the `type` reducer that used to recurse infinitely: types nested in
         # containers must be fingerprinted by reference, deterministically and distinctly.
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             {"t": int}
-        ) == fingerprinting.stable_fingerprinter({"t": int})
-        assert fingerprinting.stable_fingerprinter(
+        ) == fingerprinting.strict_fingerprinter({"t": int})
+        assert fingerprinting.strict_fingerprinter(
             {"t": int}
-        ) != fingerprinting.stable_fingerprinter({"t": str})
+        ) != fingerprinting.strict_fingerprinter({"t": str})
 
     def test_functions_are_fingerprinted_by_reference(self):
         # Importable, module-level functions are identified by their qualified name.
         foo = _module_level_func_a
         bar = _module_level_func_b
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             {"f": foo}
-        ) == fingerprinting.stable_fingerprinter({"f": foo})
-        assert fingerprinting.stable_fingerprinter(
+        ) == fingerprinting.strict_fingerprinter({"f": foo})
+        assert fingerprinting.strict_fingerprinter(
             {"f": foo}
-        ) != fingerprinting.stable_fingerprinter({"f": bar})
+        ) != fingerprinting.strict_fingerprinter({"f": bar})
 
     def test_non_importable_callables_raise(self):
         # Locally defined and anonymous callables can share a qualified name with
@@ -391,7 +372,7 @@ class TestStableFingerprinter:
 
         for non_importable in (local_func, lambda: None, make_closure(1)):
             with pytest.raises(TypeError, match="not importable"):
-                fingerprinting.stable_fingerprinter({"f": non_importable})
+                fingerprinting.strict_fingerprinter({"f": non_importable})
 
     def test_shadowed_globals_raise(self, monkeypatch):
         import sys
@@ -401,19 +382,19 @@ class TestStableFingerprinter:
         original = _module_level_func_a
         monkeypatch.setattr(sys.modules[__name__], "_module_level_func_a", _module_level_func_b)
         with pytest.raises(TypeError, match="not importable"):
-            fingerprinting.stable_fingerprinter({"f": original})
+            fingerprinting.strict_fingerprinter({"f": original})
 
     def test_modules_are_fingerprinted_by_reference(self):
         import os
         import sys
 
         # Modules are unpicklable by the pure-Python pickler unless reduced by reference.
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             {"m": os}
-        ) == fingerprinting.stable_fingerprinter({"m": os})
-        assert fingerprinting.stable_fingerprinter(
+        ) == fingerprinting.strict_fingerprinter({"m": os})
+        assert fingerprinting.strict_fingerprinter(
             {"m": os}
-        ) != fingerprinting.stable_fingerprinter({"m": sys})
+        ) != fingerprinting.strict_fingerprinter({"m": sys})
 
     def test_does_not_recurse_on_nested_types_modules_and_functions(self):
         import os
@@ -421,7 +402,7 @@ class TestStableFingerprinter:
         # Regression: fingerprinting a built-in container holding types/modules/functions
         # used to raise RecursionError (and later TypeError); it must just produce a hash.
         payload = {"types": [int, str], "module": os, "nested": {float: ("x",)}}
-        assert isinstance(fingerprinting.stable_fingerprinter(payload), str)
+        assert isinstance(fingerprinting.strict_fingerprinter(payload), str)
 
     def test_deep_structures_do_not_hit_the_recursion_limit(self):
         # Regression: lowered IR trees (and other inputs) can nest far deeper than
@@ -429,12 +410,12 @@ class TestStableFingerprinter:
         deeply_nested: tuple = ()
         for _ in range(100_000):
             deeply_nested = (deeply_nested,)
-        assert isinstance(fingerprinting.stable_fingerprinter(deeply_nested), str)
+        assert isinstance(fingerprinting.strict_fingerprinter(deeply_nested), str)
 
         nested_dicts: dict = {}
         for _ in range(10_000):
             nested_dicts = {"k": nested_dicts}
-        assert isinstance(fingerprinting.stable_fingerprinter(nested_dicts), str)
+        assert isinstance(fingerprinting.strict_fingerprinter(nested_dicts), str)
 
     def test_dicts_with_unorderable_keys_are_order_independent(self):
         from gt4py.next import common
@@ -442,17 +423,17 @@ class TestStableFingerprinter:
         # `Dimension`s (and other dataclasses without `__lt__`) occur as dict keys
         # e.g. in user closure variables.
         i, j = common.Dimension("I"), common.Dimension("J")
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             {i: 1, j: 2}
-        ) == fingerprinting.stable_fingerprinter({j: 2, i: 1})
-        assert fingerprinting.stable_fingerprinter(
+        ) == fingerprinting.strict_fingerprinter({j: 2, i: 1})
+        assert fingerprinting.strict_fingerprinter(
             {i: 1, j: 2}
-        ) != fingerprinting.stable_fingerprinter({i: 2, j: 1})
+        ) != fingerprinting.strict_fingerprinter({i: 2, j: 1})
 
     def test_fingerprint_is_a_function_of_value_not_identity(self):
         # Shared sub-objects and equal copies must produce the same fingerprint.
         d = {"a": 1}
-        assert fingerprinting.stable_fingerprinter((d, d)) == fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter((d, d)) == fingerprinting.strict_fingerprinter(
             (d, dict(d))
         )
 
@@ -464,35 +445,35 @@ class TestStableFingerprinter:
         od1 = collections.OrderedDict([("a", 1), ("b", 2)])
         od2 = collections.OrderedDict([("b", 2), ("a", 1)])
         assert od1 != od2
-        assert fingerprinting.stable_fingerprinter(od1) != fingerprinting.stable_fingerprinter(od2)
+        assert fingerprinting.strict_fingerprinter(od1) != fingerprinting.strict_fingerprinter(od2)
 
     def test_defaultdict_factories_are_fingerprinted(self):
         import collections
 
         # The `default_factory` is part of a `defaultdict`'s observable behavior.
         dd_int = collections.defaultdict(int, {"a": 1})
-        assert fingerprinting.stable_fingerprinter(dd_int) == fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(dd_int) == fingerprinting.strict_fingerprinter(
             collections.defaultdict(int, {"a": 1})
         )
-        assert fingerprinting.stable_fingerprinter(dd_int) != fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(dd_int) != fingerprinting.strict_fingerprinter(
             collections.defaultdict(list, {"a": 1})
         )
         # A `defaultdict` is also distinguished from a plain `dict` with equal items.
-        assert fingerprinting.stable_fingerprinter(dd_int) != fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(dd_int) != fingerprinting.strict_fingerprinter(
             {"a": 1}
         )
         # The items contribution remains order-insensitive.
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             collections.defaultdict(int, {"a": 1, "b": 2})
-        ) == fingerprinting.stable_fingerprinter(collections.defaultdict(int, {"b": 2, "a": 1}))
+        ) == fingerprinting.strict_fingerprinter(collections.defaultdict(int, {"b": 2, "a": 1}))
 
     def test_distinguishes_equal_values_of_different_types(self):
-        assert fingerprinting.stable_fingerprinter(True) != fingerprinting.stable_fingerprinter(1)
-        assert fingerprinting.stable_fingerprinter(1) != fingerprinting.stable_fingerprinter(1.0)
-        assert fingerprinting.stable_fingerprinter((1, 2)) != fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(True) != fingerprinting.strict_fingerprinter(1)
+        assert fingerprinting.strict_fingerprinter(1) != fingerprinting.strict_fingerprinter(1.0)
+        assert fingerprinting.strict_fingerprinter((1, 2)) != fingerprinting.strict_fingerprinter(
             [1, 2]
         )
-        assert fingerprinting.stable_fingerprinter("1") != fingerprinting.stable_fingerprinter(b"1")
+        assert fingerprinting.strict_fingerprinter("1") != fingerprinting.strict_fingerprinter(b"1")
 
     def test_self_referential_structures_are_supported(self):
         # E.g. module-level recursive functions appear in their own closure variables.
@@ -500,13 +481,13 @@ class TestStableFingerprinter:
         cyclic_a["self"] = cyclic_a
         cyclic_b: dict = {"value": 1}
         cyclic_b["self"] = cyclic_b
-        assert fingerprinting.stable_fingerprinter(cyclic_a) == fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(cyclic_a) == fingerprinting.strict_fingerprinter(
             cyclic_b
         )
 
         cyclic_c: dict = {"value": 2}
         cyclic_c["self"] = cyclic_c
-        assert fingerprinting.stable_fingerprinter(cyclic_a) != fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(cyclic_a) != fingerprinting.strict_fingerprinter(
             cyclic_c
         )
 
@@ -523,12 +504,12 @@ class TestStableFingerprinter:
             return Constants
 
         c1, c2, c3 = make_enum(3.142), make_enum(3.142), make_enum(3.0)
-        assert fingerprinting.stable_fingerprinter(c1) == fingerprinting.stable_fingerprinter(c2)
-        assert fingerprinting.stable_fingerprinter(c1) != fingerprinting.stable_fingerprinter(c3)
-        assert fingerprinting.stable_fingerprinter(c1.PI) == fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(c1) == fingerprinting.strict_fingerprinter(c2)
+        assert fingerprinting.strict_fingerprinter(c1) != fingerprinting.strict_fingerprinter(c3)
+        assert fingerprinting.strict_fingerprinter(c1.PI) == fingerprinting.strict_fingerprinter(
             c2.PI
         )
-        assert fingerprinting.stable_fingerprinter(c1.PI) != fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(c1.PI) != fingerprinting.strict_fingerprinter(
             c3.PI
         )
 
@@ -537,21 +518,21 @@ class TestStableFingerprinter:
             CPU = 0
             GPU = 1
 
-        assert fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(
             Device.CPU
-        ) != fingerprinting.stable_fingerprinter(0)
-        assert fingerprinting.stable_fingerprinter(
+        ) != fingerprinting.strict_fingerprinter(0)
+        assert fingerprinting.strict_fingerprinter(
             Device.CPU
-        ) != fingerprinting.stable_fingerprinter(Device.GPU)
+        ) != fingerprinting.strict_fingerprinter(Device.GPU)
 
     def test_ndarray_content_is_fingerprinted(self):
         import numpy as np
 
         a = np.array([[1, 2], [3, 4]], dtype=np.int32)
         b = np.array([[1, 2], [3, 4]], dtype=np.int32)
-        assert fingerprinting.stable_fingerprinter(a) == fingerprinting.stable_fingerprinter(b)
-        assert fingerprinting.stable_fingerprinter(a) != fingerprinting.stable_fingerprinter(a.T)
-        assert fingerprinting.stable_fingerprinter(a) != fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(a) == fingerprinting.strict_fingerprinter(b)
+        assert fingerprinting.strict_fingerprinter(a) != fingerprinting.strict_fingerprinter(a.T)
+        assert fingerprinting.strict_fingerprinter(a) != fingerprinting.strict_fingerprinter(
             a.astype(np.int64)
         )
 
@@ -560,29 +541,29 @@ class TestStableFingerprinter:
 
         # NumPy ufuncs (e.g. in DSL closure variables) only pickle through their
         # `copyreg.dispatch_table` reducer; their direct `__reduce_ex__` raises.
-        assert fingerprinting.stable_fingerprinter(np.cbrt) == fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(np.cbrt) == fingerprinting.strict_fingerprinter(
             np.cbrt
         )
-        assert fingerprinting.stable_fingerprinter(np.cbrt) != fingerprinting.stable_fingerprinter(
+        assert fingerprinting.strict_fingerprinter(np.cbrt) != fingerprinting.strict_fingerprinter(
             np.sqrt
         )
 
 
-class TestSessionFingerprinter:
-    def test_agrees_with_stable_fingerprinter_on_importable_objects(self):
-        # The session fingerprinter only relaxes the by-reference rules, so for
+class TestLenientFingerprinter:
+    def test_agrees_with_strict_fingerprinter_on_importable_objects(self):
+        # The lenient fingerprinter only relaxes the by-reference rules, so for
         # a graph without non-importable objects it must produce the exact same
-        # fingerprint as the stable one (no spurious cache invalidation when a
+        # fingerprint as the strict one (no spurious cache invalidation when a
         # step graph switches between the two).
         import os
 
         payload = {"f": _module_level_func_a, "t": int, "m": os, "vals": [1, "x", (2.0,)]}
-        assert fingerprinting.session_fingerprinter(payload) == fingerprinting.stable_fingerprinter(
+        assert fingerprinting.lenient_fingerprinter(payload) == fingerprinting.strict_fingerprinter(
             payload
         )
 
     def test_non_importable_callables_are_fingerprinted_structurally(self):
-        # Lambdas and closures have no identifying qualified name; the session
+        # Lambdas and closures have no identifying qualified name; the lenient
         # fingerprinter hashes them by their code and captured closure instead
         # of raising (valid for single-process, in-memory keys).
         def make_closure(n):
@@ -592,21 +573,21 @@ class TestSessionFingerprinter:
             return inner
 
         # Same body and captured value → equal; different captured value → different.
-        assert fingerprinting.session_fingerprinter(
+        assert fingerprinting.lenient_fingerprinter(
             make_closure(1)
-        ) == fingerprinting.session_fingerprinter(make_closure(1))
-        assert fingerprinting.session_fingerprinter(
+        ) == fingerprinting.lenient_fingerprinter(make_closure(1))
+        assert fingerprinting.lenient_fingerprinter(
             make_closure(1)
-        ) != fingerprinting.session_fingerprinter(make_closure(2))
+        ) != fingerprinting.lenient_fingerprinter(make_closure(2))
 
         # Different bodies → different; byte-identical bodies → equal (location
         # is irrelevant for an in-memory step graph, unlike frontend keys).
-        assert fingerprinting.session_fingerprinter(
+        assert fingerprinting.lenient_fingerprinter(
             lambda x: x + 1
-        ) != fingerprinting.session_fingerprinter(lambda x: x + 2)
-        assert fingerprinting.session_fingerprinter(
+        ) != fingerprinting.lenient_fingerprinter(lambda x: x + 2)
+        assert fingerprinting.lenient_fingerprinter(
             lambda x: x + 1
-        ) == fingerprinting.session_fingerprinter(lambda x: x + 1)
+        ) == fingerprinting.lenient_fingerprinter(lambda x: x + 1)
 
     def test_dynamically_created_types_do_not_raise(self):
         # A locally-defined class (qualified name contains `<locals>`, hence not
@@ -619,16 +600,16 @@ class TestSessionFingerprinter:
             return Dynamic
 
         first, second = make_class(), make_class()
-        assert isinstance(fingerprinting.session_fingerprinter({"t": first}), str)
-        assert fingerprinting.session_fingerprinter(
+        assert isinstance(fingerprinting.lenient_fingerprinter({"t": first}), str)
+        assert fingerprinting.lenient_fingerprinter(
             {"t": first}
-        ) == fingerprinting.session_fingerprinter({"t": second})
+        ) == fingerprinting.lenient_fingerprinter({"t": second})
 
-    def test_stable_fingerprinter_still_rejects_non_importable_callables(self):
-        # The durability split is enforced: the stable fingerprinter (the one
+    def test_strict_fingerprinter_still_rejects_non_importable_callables(self):
+        # The durability split is enforced: the strict fingerprinter (the one
         # that keys persistent, cross-process caches) keeps raising.
         with pytest.raises(TypeError, match="not importable"):
-            fingerprinting.stable_fingerprinter(lambda: None)
+            fingerprinting.strict_fingerprinter(lambda: None)
 
 
 def test_tree_map_default():

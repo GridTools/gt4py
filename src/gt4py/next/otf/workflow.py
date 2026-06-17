@@ -11,13 +11,15 @@ from __future__ import annotations
 import abc
 import dataclasses
 import functools
+import pathlib
 import typing
 from typing import Any, Callable, Generic, Protocol, TypeVar
 
 from typing_extensions import Self
 
+from gt4py._core import filecache
 from gt4py.eve.extended_typing import OpaqueMutableMapping
-from gt4py.next import config, fingerprinting
+from gt4py.next import config, fingerprinting, utils
 
 
 StartT = TypeVar("StartT")
@@ -236,12 +238,12 @@ class CachedStep(
     - ``input_fingerprinter`` fingerprints each input value.
     - ``step_fingerprinter`` fingerprints the workflow state and combines the
       two halves into the final key. Its choice fixes the cache's durability.
-      The default, :data:`~gt4py.next.fingerprinting.session_fingerprinter`, suits an
+      The default, :data:`~gt4py.next.fingerprinting.lenient_fingerprinter`, suits an
       in-memory cache (a plain ``dict``, the default): it lives within a single
       process and so tolerates non-importable callables in the step graph
       (lambdas, closures, dynamically-created steps) by hashing them
       structurally. A persistent cache (e.g. ``FileCache``) instead requires
-      :data:`~gt4py.next.fingerprinting.stable_fingerprinter`, so that every referenced
+      :data:`~gt4py.next.fingerprinting.strict_fingerprinter`, so that every referenced
       function is importable by qualified name and the on-disk keys stay
       reproducible across processes.
 
@@ -271,15 +273,72 @@ class CachedStep(
 
     step: Workflow[StartT, EndT]
     input_fingerprinter: Callable[[StartT], HashT] = dataclasses.field(
-        metadata=fingerprinting.gt4py_metadata(fingerprint=False)
+        metadata=utils.gt4py_metadata(fingerprint=False)
     )
     step_fingerprinter: fingerprinting.Fingerprinter = dataclasses.field(
-        default=fingerprinting.session_fingerprinter,
-        metadata=fingerprinting.gt4py_metadata(fingerprint=False),
+        default=fingerprinting.lenient_fingerprinter,
+        metadata=utils.gt4py_metadata(fingerprint=False),
     )
     cache: OpaqueMutableMapping[str, EndT] = dataclasses.field(
-        repr=False, default_factory=dict, metadata=fingerprinting.gt4py_metadata(fingerprint=False)
+        repr=False, default_factory=dict, metadata=utils.gt4py_metadata(fingerprint=False)
     )
+
+    @classmethod
+    def in_memory(
+        cls,
+        step: Workflow[StartT, EndT],
+        *,
+        input_fingerprinter: Callable[[StartT], HashT],
+        cache: OpaqueMutableMapping[str, EndT] | None = None,
+    ) -> CachedStep[StartT, EndT, HashT]:
+        """
+        Build a single-process cache, pairing an in-memory store with the lenient fingerprinter.
+
+        The lenient fingerprinter tolerates non-importable steps (lambdas,
+        closures, dynamically-created steps) by hashing them structurally, which
+        is valid because the cache lives and dies within a single process.
+        Defaults to a fresh ``dict``.
+        """
+        return cls(
+            step=step,
+            input_fingerprinter=input_fingerprinter,
+            step_fingerprinter=fingerprinting.lenient_fingerprinter,
+            cache={} if cache is None else cache,
+        )
+
+    @classmethod
+    def persistent(
+        cls,
+        step: Workflow[StartT, EndT],
+        *,
+        input_fingerprinter: Callable[[StartT], HashT],
+        cache: OpaqueMutableMapping[str, EndT] | str | pathlib.Path,
+    ) -> CachedStep[StartT, EndT, HashT]:
+        """
+        Build a cross-process cache, pairing a persistent store with the strict fingerprinter.
+
+        The strict fingerprinter requires every referenced function to be
+        importable by qualified name, so the on-disk keys stay reproducible
+        across processes: a non-importable step raises a ``TypeError`` instead
+        of risking a non-reproducible key and stale-binary reuse.
+        """
+
+        if isinstance(cache, (str, pathlib.Path)):
+            cache = filecache.FileCache(cache)
+
+        return cls(
+            step=step,
+            input_fingerprinter=input_fingerprinter,
+            step_fingerprinter=fingerprinting.strict_fingerprinter,
+            cache=cache,
+        )
+
+    @functools.cached_property
+    def _step_fingerprint(self) -> str:
+        # The step and the build-cache version are immutable, so their
+        # (potentially expensive) fingerprint is computed once per instance
+        # instead of on every cache lookup.
+        return self.step_fingerprinter((config.BUILD_CACHE_VERSION_ID, self))
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
@@ -290,59 +349,8 @@ class CachedStep(
             result = self.cache[hash_] = self.step(inp)
         return result
 
-    @functools.cached_property
-    def _step_fingerprint(self) -> str:
-        # The step and the build-cache version are immutable, so their
-        # (potentially expensive) fingerprint is computed once per instance
-        # instead of on every cache lookup.
-        return self.step_fingerprinter((config.BUILD_CACHE_VERSION_ID, self))
-
     def cache_key(self, inp: StartT) -> str:
         return self.step_fingerprinter((self._step_fingerprint, self.input_fingerprinter(inp)))
-
-    @classmethod
-    def in_memory(
-        cls,
-        step: Workflow[StartT, EndT],
-        input_fingerprinter: Callable[[StartT], HashT],
-        cache: OpaqueMutableMapping[str, EndT] | None = None,
-    ) -> CachedStep[StartT, EndT, HashT]:
-        """
-        Build a single-process cache, pairing an in-memory store with the session fingerprinter.
-
-        The session fingerprinter tolerates non-importable steps (lambdas,
-        closures, dynamically-created steps) by hashing them structurally, which
-        is valid because the cache lives and dies within a single process.
-        Defaults to a fresh ``dict``.
-        """
-        return cls(
-            step=step,
-            input_fingerprinter=input_fingerprinter,
-            step_fingerprinter=fingerprinting.session_fingerprinter,
-            cache={} if cache is None else cache,
-        )
-
-    @classmethod
-    def persistent(
-        cls,
-        step: Workflow[StartT, EndT],
-        input_fingerprinter: Callable[[StartT], HashT],
-        cache: OpaqueMutableMapping[str, EndT],
-    ) -> CachedStep[StartT, EndT, HashT]:
-        """
-        Build a cross-process cache, pairing a persistent store with the stable fingerprinter.
-
-        The stable fingerprinter requires every referenced function to be
-        importable by qualified name, so the on-disk keys stay reproducible
-        across processes: a non-importable step raises a ``TypeError`` instead
-        of risking a non-reproducible key and stale-binary reuse.
-        """
-        return cls(
-            step=step,
-            input_fingerprinter=input_fingerprinter,
-            step_fingerprinter=fingerprinting.stable_fingerprinter,
-            cache=cache,
-        )
 
 
 @dataclasses.dataclass(frozen=True)

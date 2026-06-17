@@ -13,7 +13,18 @@ import inspect
 import itertools
 import types
 from collections.abc import Callable
-from typing import Any, ClassVar, Optional, ParamSpec, Sequence, TypeGuard, TypeVar, cast, overload
+from typing import (
+    Any,
+    ClassVar,
+    Final,
+    Optional,
+    ParamSpec,
+    Sequence,
+    TypeGuard,
+    TypeVar,
+    cast,
+    overload,
+)
 
 from gt4py.eve import utils as eve_utils
 
@@ -21,6 +32,19 @@ from gt4py.eve import utils as eve_utils
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
+
+
+GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
+
+
+def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
+    """
+    Helper function to store dataclass/datamodel field metadata within a GT4Py namespace.
+
+    Individual fields can opt out of fingerprinting with
+    `foo = field(..., metadata=gt4py_metadata(fingerprint=False))`.
+    """
+    return {GT4PY_CLASS_METADATA_NS: kwargs}
 
 
 class RecursionGuard:
