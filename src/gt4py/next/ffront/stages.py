@@ -54,8 +54,10 @@ def _deconstruct_definition_function(func: types.FunctionType) -> fingerprinting
     )
 
 
-#: Fingerprinter for the frontend stages: skips source locations on AST nodes
-#: and fingerprints DSL definition functions by their source code and closure
+#: Fingerprinter for the frontend stages: keeps source locations on AST nodes
+#: (the in-memory stage cache's lowered product bakes them in, so two textually
+#: identical operators at different locations must not share an entry) and
+#: fingerprints DSL definition functions by their source code and closure
 #: variables (instead of by qualified name).
 semantic_fingerprinter: fingerprinting.Fingerprinter = fingerprinting.make_fingerprinter(
     deconstructor=fingerprinting.make_deconstructor(

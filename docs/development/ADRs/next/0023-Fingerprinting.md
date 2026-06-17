@@ -217,6 +217,7 @@ rules:
 semantic_fingerprinter = fingerprinting.make_fingerprinter(
     deconstructor=fingerprinting.make_deconstructor(
         {types.FunctionType: _deconstruct_definition_function},
+        fallback=fingerprinting.lenient_fingerprint_deconstructor,
     ),
 )
 ```
@@ -254,8 +255,10 @@ exactly (the lenient overrides try by-reference first), so switching a cache
 between them never spuriously invalidates it.
 
 `CachedStep` makes the choice **explicit** through two independently chosen
-fingerprinters, `step_fingerprinter` and `input_fingerprinter` (both defaulting
-to `lenient_fingerprinter` on the bare constructor):
+fingerprinters, `step_fingerprinter` and `input_fingerprinter`. On the bare
+constructor `step_fingerprinter` defaults to `lenient_fingerprinter`, while
+`input_fingerprinter` is a required argument (every cache must say how to
+identify its inputs):
 
 - `step_fingerprinter` keys the immutable workflow-state half. The persistent
   call sites (`CachedStep.persistent`, used by the gtfn/dace `cached_translation`
