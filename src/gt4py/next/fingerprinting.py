@@ -540,7 +540,7 @@ def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
     return not gt4py_meta or gt4py_meta.get("fingerprint", True)
 
 
-def strict_fingerprint_deconstructor(obj: Any) -> Deconstruction:
+def _metadata_aware_deconstructor(obj: Any) -> Deconstruction:
     """
     Deconstructor honoring the fingerprint field metadata opt-out.
 
@@ -559,6 +559,10 @@ def strict_fingerprint_deconstructor(obj: Any) -> Deconstruction:
     else:
         return _object_deconstruct(obj)
 
+
+strict_fingerprint_deconstructor = make_deconstructor(
+    fallback=_metadata_aware_deconstructor,
+)
 
 #: Default fingerprinting function for GT4Py objects: deterministic across
 #: processes (dict and set contributions are canonicalized by sorting the
@@ -655,7 +659,7 @@ _LENIENT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
 }
 
 lenient_fingerprint_deconstructor = make_deconstructor(
-    _LENIENT_DECONSTRUCTORS, fallback=strict_fingerprint_deconstructor
+    _LENIENT_DECONSTRUCTORS, fallback=_metadata_aware_deconstructor
 )
 
 #: Fingerprinter for in-memory (single-process) cache keys: like
