@@ -153,7 +153,9 @@ class TestCatabolize:
             visited.append(result)
             return result
 
-        fingerprinting.catabolize([1, [2, 3]], deconstructor=self._deconstruct, aggregator=aggregator)
+        fingerprinting.catabolize(
+            [1, [2, 3]], deconstructor=self._deconstruct, aggregator=aggregator
+        )
         assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
 
     def test_empty_containers_are_nodes(self):

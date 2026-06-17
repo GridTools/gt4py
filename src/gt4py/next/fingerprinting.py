@@ -19,7 +19,7 @@ Public API:
   — results of deconstructing one level of an object.
 - `Deconstructor` — type alias for a per-object deconstructor.
 - `make_deconstructor` — build a dispatching deconstructor from per-type overrides.
-- `make_fingerprinter` — build a fingerprinter from a deconstructor and a aggregator.
+- `make_fingerprinter` — build a fingerprinter from a deconstructor and an aggregator.
 - `deconstruct` — the default GT4Py deconstructor.
 - `catabolize` — iterative bottom-up fold over a deconstructed object graph.
 - `Aggregator` / `Fingerprinter` — type aliases.
@@ -516,7 +516,9 @@ def catabolize(
                 # Direct construction (a non-empty `deconstruction` reaching
                 # COMBINE always has the `(state, pieces)` signature) avoids the
                 # field-introspection overhead of `dataclasses.replace` per node.
-                result = aggregator(type(deconstruction)(deconstruction.state, tuple(piece_results)))
+                result = aggregator(
+                    type(deconstruction)(deconstruction.state, tuple(piece_results))
+                )
                 depth = open_nodes.pop(id(current))
 
                 if depth <= taint_depth:
@@ -574,7 +576,7 @@ def make_fingerprinter(
     aggregator: Aggregator[str] = fingerprint_aggregator,
     allow_cycles: bool = True,
 ) -> Fingerprinter:
-    """Helper to make a fingerprinter from a deconstructor and a aggregator."""
+    """Helper to make a fingerprinter from a deconstructor and an aggregator."""
     return functools.partial(
         catabolize,
         deconstructor=deconstructor,

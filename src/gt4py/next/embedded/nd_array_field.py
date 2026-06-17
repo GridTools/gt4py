@@ -19,16 +19,7 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import (
-    Any,
-    ClassVar,
-    Never,
-    Optional,
-    ParamSpec,
-    TypeAlias,
-    TypeVar,
-    cast,
-)
+from gt4py.eve.extended_typing import ClassVar, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
 from gt4py.next import common
 from gt4py.next.embedded import (
     common as embedded_common,
@@ -71,9 +62,9 @@ def _make_builtin(
         xp = cls_.array_ns
         op = getattr(xp, array_builtin_name)
 
-        domain_intersection = embedded_common.domain_intersection(*[
-            f.domain for f in fields if isinstance(f, common.Field)
-        ])
+        domain_intersection = embedded_common.domain_intersection(
+            *[f.domain for f in fields if isinstance(f, common.Field)]
+        )
 
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
