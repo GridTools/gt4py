@@ -417,6 +417,10 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         def create_if(
             true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
         ) -> itir.FunCall:
+            # Lower each leaf via `_map` so that the per-leaf, type-dependent decision whether
+            # to wrap `if_` in `map_list` (and promote the condition with `make_const_list`)
+            # is taken based on the actual leaf types. A single, uniform leaf (e.g. via
+            # `tree_map_tuple`) can not do this, see `_map` for details.
             return _map(
                 "if_",
                 (im.ref(cond_symref_name), true_, false_),
