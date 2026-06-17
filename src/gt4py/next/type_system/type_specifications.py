@@ -105,6 +105,12 @@ class ScalarType(DataType):
         return f"{kind_str}{self.shape}"
 
 
+def _canonicalize_constraints(constraints: Sequence[ScalarType]) -> tuple[ScalarType, ...]:
+    # A value-constrained type variable resolves to exactly one of its constraints, so their
+    # order carries no meaning; canonicalize it to make `TypeVarType` identity order-insensitive.
+    return tuple(sorted(constraints, key=lambda c: c.kind))
+
+
 class TypeVarType(DataType):
     """
     A scalar type variable, universally quantified over its constraints.
@@ -115,7 +121,7 @@ class TypeVarType(DataType):
     """
 
     name: str
-    constraints: tuple[ScalarType, ...]
+    constraints: tuple[ScalarType, ...] = eve_datamodels.field(converter=_canonicalize_constraints)
 
     def __str__(self) -> str:
         return f"{self.name}: ({' | '.join(map(str, self.constraints))})"

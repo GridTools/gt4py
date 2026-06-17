@@ -54,13 +54,43 @@ def is_concrete(symbol_type: ts.TypeSpec) -> TypeGuard[ts.TypeSpec]:
     return False
 
 
+def _type_params(symbol_type: ts.TypeSpec) -> tuple[ts.TypeSpec, ...]:
+    """The immediate type-parameter sub-types of ``symbol_type``.
+
+    These are its dtype, element type, tuple elements, or function argument / return types --
+    one definition of where type parameters live, shared by the recursive type-variable
+    traversals (`is_generic` here, `substitute_type_vars` via `tree_map_type_params`).
+    """
+    match symbol_type:
+        case ts.FieldType(dtype=dtype):
+            return (dtype,)
+        case ts.ListType(element_type=element_type):
+            return (element_type,)
+        case ts.TupleType(types=types) | ts.NamedCollectionType(types=types):
+            return tuple(types)
+        case ts.FunctionType():
+            return (
+                *symbol_type.pos_only_args,
+                *symbol_type.pos_or_kw_args.values(),
+                *symbol_type.kw_only_args.values(),
+                symbol_type.returns,
+            )
+    # callable type wrappers (e.g. the field operator types in `ffront`) carry their
+    # signature in a `definition` attribute
+    if isinstance(definition := getattr(symbol_type, "definition", None), ts.TypeSpec):
+        return (definition,)
+    return ()
+
+
 def is_generic(symbol_type: ts.TypeSpec) -> bool:
     """
     Figure out if a type contains parts that are only known when concrete arguments are given.
 
     A generic (callable) type can be called with arguments of varying types, e.g. the program
-    context signature of a scan operator. Contrary to :func:`is_concrete` this predicate
-    recurses into composite types.
+    context signature of a scan operator. This recurses into composite types, reporting ``True``
+    if any nested part is a `DeferredType` or `TypeVarType`. It is *not* the negation of
+    :func:`is_concrete`: the latter is a shallow deduction-progress flag (top-level
+    `DeferredType` only), so a tuple with a nested `DeferredType` is both concrete and generic.
 
     Note: this returns ``True`` for a bare ``astype`` constructor type, whose ``definition``
     carries a ``DeferredType`` by design; callers that only care about *data* arguments must
@@ -76,30 +106,9 @@ def is_generic(symbol_type: ts.TypeSpec) -> bool:
     >>> is_generic(ts.TupleType(types=[bool_type, ts.DeferredType(constraint=None)]))
     True
     """
-    match symbol_type:
-        case ts.DeferredType() | ts.TypeVarType():
-            return True
-        case ts.FieldType(dtype=dtype):
-            return is_generic(dtype)
-        case ts.ListType(element_type=element_type):
-            return is_generic(element_type)
-        case ts.TupleType(types=types) | ts.NamedCollectionType(types=types):
-            return any(is_generic(t) for t in types)
-        case ts.FunctionType():
-            return any(
-                is_generic(t)
-                for t in (
-                    *symbol_type.pos_only_args,
-                    *symbol_type.pos_or_kw_args.values(),
-                    *symbol_type.kw_only_args.values(),
-                    symbol_type.returns,
-                )
-            )
-    # callable type wrappers (e.g. the field operator types in `ffront`) carry their
-    # signature in a `definition` attribute
-    if isinstance(definition := getattr(symbol_type, "definition", None), ts.TypeSpec):
-        return is_generic(definition)
-    return False
+    if isinstance(symbol_type, (ts.DeferredType, ts.TypeVarType)):
+        return True
+    return any(is_generic(p) for p in _type_params(symbol_type))
 
 
 def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
@@ -636,7 +645,7 @@ def bind_type_vars(
     checking that no type variable remained unbound (if required).
 
     Note: the binding is intentionally ``dtype``-scoped (scalar type variables only); a future
-    extension for dimension variables (see the dimension-generics design) will widen it.
+    extension for dimension variables will widen it.
 
     Raises:
         ValueError: If a type variable would be bound inconsistently or to a dtype that is
@@ -655,7 +664,10 @@ def bind_type_vars(
 
     def bind_var(var: ts.TypeVarType, dtype: ts.TypeSpec) -> None:
         if not isinstance(dtype, ts.ScalarType):
-            return  # no concrete dtype available, leave unbound
+            # not a concrete scalar to bind to -- e.g. a `TypeVarType` (operator-from-operator
+            # call), a `DeferredType` (scan), or a `ListType` (local field). Leave it unbound;
+            # the caller is responsible for checking that no type variable remained unbound.
+            return
         if dtype not in var.constraints:
             raise ValueError(
                 f"'{dtype}' does not satisfy the constraints of type variable '{var}'."
@@ -691,6 +703,42 @@ def bind_type_vars(
     return binding
 
 
+def tree_map_type_params(
+    fun: Callable[[ts.TypeSpec], ts.TypeSpec], symbol_type: ts.TypeSpec
+) -> ts.TypeSpec:
+    """Rebuild ``symbol_type`` applying ``fun`` to each immediate type-parameter sub-type.
+
+    The counterpart of `tree_map_type` for the type-parameter positions enumerated by
+    `_type_params` (dtype, element type, function argument / return types), which `tree_map_type`
+    -- a *collection* map -- does not descend into. Leaf types are returned unchanged.
+    """
+    match symbol_type:
+        case ts.FieldType(dims=dims, dtype=dtype):
+            new_dtype = fun(dtype)
+            assert isinstance(new_dtype, (ts.ScalarType, ts.ListType, ts.TypeVarType))
+            return ts.FieldType(dims=dims, dtype=new_dtype)
+        case ts.ListType(element_type=element_type, offset_type=offset_type):
+            new_element_type = fun(element_type)
+            assert isinstance(new_element_type, ts.DataType)
+            return ts.ListType(element_type=new_element_type, offset_type=offset_type)
+        case ts.TupleType(types=types):
+            return ts.TupleType(types=[fun(t) for t in types])
+        case ts.NamedCollectionType(types=types):
+            return ts.NamedCollectionType(
+                types=[fun(t) for t in types],
+                keys=symbol_type.keys,
+                original_python_type=symbol_type.original_python_type,
+            )
+        case ts.FunctionType():
+            return ts.FunctionType(
+                pos_only_args=[fun(t) for t in symbol_type.pos_only_args],
+                pos_or_kw_args={name: fun(t) for name, t in symbol_type.pos_or_kw_args.items()},
+                kw_only_args={name: fun(t) for name, t in symbol_type.kw_only_args.items()},
+                returns=fun(symbol_type.returns),
+            )
+    return symbol_type
+
+
 def substitute_type_vars(
     type_: ts.TypeSpec, binding: xtyping.Mapping[str, ts.ScalarType]
 ) -> ts.TypeSpec:
@@ -711,38 +759,9 @@ def substitute_type_vars(
     """
     if not binding or not is_generic(type_):
         return type_
-    match type_:
-        case ts.TypeVarType(name=name):
-            return binding.get(name, type_)
-        case ts.FieldType(dims=dims, dtype=dtype):
-            new_dtype = substitute_type_vars(dtype, binding)
-            assert isinstance(new_dtype, (ts.ScalarType, ts.ListType, ts.TypeVarType))
-            return ts.FieldType(dims=dims, dtype=new_dtype)
-        case ts.ListType(element_type=element_type, offset_type=offset_type):
-            new_element_type = substitute_type_vars(element_type, binding)
-            assert isinstance(new_element_type, ts.DataType)
-            return ts.ListType(element_type=new_element_type, offset_type=offset_type)
-        case ts.TupleType(types=types):
-            return ts.TupleType(types=[substitute_type_vars(t, binding) for t in types])
-        case ts.NamedCollectionType(types=types):
-            return ts.NamedCollectionType(
-                types=[substitute_type_vars(t, binding) for t in types],
-                keys=type_.keys,
-                original_python_type=type_.original_python_type,
-            )
-        case ts.FunctionType():
-            return ts.FunctionType(
-                pos_only_args=[substitute_type_vars(t, binding) for t in type_.pos_only_args],
-                pos_or_kw_args={
-                    name: substitute_type_vars(t, binding)
-                    for name, t in type_.pos_or_kw_args.items()
-                },
-                kw_only_args={
-                    name: substitute_type_vars(t, binding) for name, t in type_.kw_only_args.items()
-                },
-                returns=substitute_type_vars(type_.returns, binding),
-            )
-    return type_
+    if isinstance(type_, ts.TypeVarType):
+        return binding.get(type_.name, type_)
+    return tree_map_type_params(lambda t: substitute_type_vars(t, binding), type_)
 
 
 def promote(

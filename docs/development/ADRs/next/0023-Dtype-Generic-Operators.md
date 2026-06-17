@@ -19,7 +19,7 @@ FloatT = typing.TypeVar("FloatT", gtx.float32, gtx.float64)
 
 
 @gtx.field_operator
-def diffusion(
+def diff(
     a: gtx.Field[gtx.Dims[I, J], FloatT], b: gtx.Field[gtx.Dims[I, J], FloatT]
 ) -> gtx.Field[gtx.Dims[I, J], FloatT]:
     return a - b
@@ -29,19 +29,16 @@ def diffusion(
 
 `common.Field` is already a runtime-introspectable generic protocol, so
 `Field[Dims[I, J], T]` with a value-constrained `TypeVar` is a valid, mypy-visible
-annotation today. What was missing is the DSL side: translating such an annotation
-into the internal type system and type-checking/lowering operators that use it. The
-internal type system had `DeferredType` ("some type, maybe constrained") but no
-notion of *identity* — it could not express "the *same* unknown dtype in two
-parameters and the return type", which is the essence of generics. The runtime
-monomorphization machinery, on the other hand, already existed (grown for scan
-operators): `CompiledProgramsPool` keys a per-call specialization cache on the
-concrete argument types.
+annotation today; what was missing is the DSL side. The internal type system had
+`DeferredType` ("some type, maybe constrained") but no notion of *identity* — it
+could not express "the *same* unknown dtype in two parameters and the return type",
+the essence of generics. The runtime monomorphization machinery already existed
+(grown for scan operators): `CompiledProgramsPool` keys a per-call specialization
+cache on the concrete argument types.
 
-Prior art (numpy.typing, jaxtyping, Numba, Taichi, Triton, DaCe, two-level type
-theory) converges on the same two choices adopted here: a real generic annotation
-that static checkers can see, and monomorphization at call time. See the design
-investigation for the full survey.
+Prior art (numpy.typing, jaxtyping, Numba, Taichi, Triton, DaCe) converges on the
+two choices adopted here: a real generic annotation that static checkers can see,
+and monomorphization at call time.
 
 ## Decision
 
@@ -111,7 +108,7 @@ A new `DataType` subclass carrying `name` and `constraints: tuple[ScalarType, ..
   at program decoration. The fieldop signature checks bind-and-substitute, and a
   PAST monomorphization pass (run in `past_to_itir`) recomputes the binding from the
   typed call-site args, name-mangles the callee per binding (e.g.
-  `diffusion__float32`), and swaps in a specialized callable via a new
+  `diff__float32`), and swaps in a specialized callable via a new
   `GTCallable.__gt_specialize__(binding)`. Two bindings of one operator naturally
   become two GTIR `FunctionDefinition`s.
 - **Embedded mode:** nearly free — the original Python definition runs on real

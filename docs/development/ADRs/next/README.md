@@ -25,6 +25,10 @@ Writing a new ADR is simple:
 - [0010 - Domain in Field View](0010-Domain_in_Field_View.md)
 - [0013 - Scalar vs 0d-Fields](0013-Scalar_vs_0d_Fields.md)
 
+### Type System
+
+- [0023 - Dtype-Generic Operators](0023-Dtype-Generic-Operators.md)
+
 ### Iterator IR #iterator
 
 - [0003 - Iterator View Tuple Support for Fields](0003-Iterator_View_Tuple_Support_for_Fields.md)

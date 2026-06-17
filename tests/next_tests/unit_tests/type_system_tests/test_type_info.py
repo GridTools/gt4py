@@ -434,8 +434,8 @@ class TestTypeVarType:
         assert hash(float_var) == hash(same_var)
         assert eve_utils.content_hash(float_var) == eve_utils.content_hash(same_var)
         assert float_var != ts.TypeVarType(name="S", constraints=(float32_type, float64_type))
-        # constraint order is part of the identity (preserved as written)
-        assert float_var != ts.TypeVarType(name="T", constraints=(float64_type, float32_type))
+        # constraint order is canonicalized, so it is not part of the identity
+        assert float_var == ts.TypeVarType(name="T", constraints=(float64_type, float32_type))
 
     def test_is_generic(self):
         assert type_info.is_generic(float_var)
