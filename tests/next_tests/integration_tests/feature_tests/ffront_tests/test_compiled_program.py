@@ -124,6 +124,28 @@ def test_compile(cartesian_case, compile_testee):
     assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
 
 
+def test_compile_with_empty_static_args_matches_no_static_args(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    empty_static_args = {}
+    decorator_path_testee = compile_testee.with_backend(cartesian_case.backend)
+    decorator_path_testee.compile(
+        offset_provider=cartesian_case.offset_provider, **empty_static_args
+    )
+    decorator_path_mapping = decorator_path_testee._compiled_programs.argument_descriptor_mapping
+    assert arguments.StaticArg not in decorator_path_mapping
+
+    compiled_program_path_testee = compile_testee.with_backend(cartesian_case.backend)
+    compiled_program_path_pool = compiled_program_path_testee._make_compiled_programs_pool(
+        static_params=(), static_domains=False
+    )
+    compiled_program_path_pool.argument_descriptor_mapping = None
+    compiled_program_path_pool.compile(offset_providers=[cartesian_case.offset_provider])
+
+    assert compiled_program_path_pool.argument_descriptor_mapping == decorator_path_mapping
+
+
 def test_compile_twice_same_program_errors(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")

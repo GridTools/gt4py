@@ -169,8 +169,14 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         #  the dict directly. Note that we don't need to check any args, since the pool checks
         #  this on compile anyway.
         if "_compiled_programs" not in self.__dict__:
+            static_params: tuple[str, ...] = ()
+            if static_args:
+                # This is reached by `entry_point.compile(..., **static_args)` before delegating
+                # to `CompiledProgramsPool.compile()` below.
+                # Keep this in sync with `compile` in compiled_program.py.
+                static_params = tuple(static_args.keys())
             self.__dict__["_compiled_programs"] = self._make_compiled_programs_pool(
-                static_params=tuple(static_args.keys()),
+                static_params=static_params,
                 static_domains=self.compilation_options.static_domains,
             )
 

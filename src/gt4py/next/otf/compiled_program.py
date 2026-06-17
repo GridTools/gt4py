@@ -670,6 +670,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                 #  actually given.
                 argument_descriptors: ArgStaticDescriptorsByType = {}
                 if static_args:
+                    # Calls from `Program.compile()`/`FieldOperator.compile()` reach this.
+                    # Keep this in sync with `compile` in decorator.py.
                     argument_descriptors[arguments.StaticArg] = dict(
                         zip(
                             static_args.keys(),
