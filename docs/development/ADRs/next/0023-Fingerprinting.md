@@ -187,8 +187,10 @@ serialization stay independent concerns.
 Subsystems describe only the *deltas* they need on top of the shared default
 rules:
 
-- `strict_fingerprinter` — the default fingerprinter (default deconstructor); used
-  by the OTF build caches.
+- `strict_fingerprinter` — the by-reference variant (built-in rules over the
+  dataclass/datamodel field fallback) that rejects non-importable objects; used
+  for the workflow-step half of the persistent OTF build caches (see the
+  durability split below).
 - `skipping_fields_node_deconstructor("location", "type", ...)` — a cached
   factory returning a `Deconstructor` for `eve.Node`s that recursively skips the
   named child fields, ready to compose into a fingerprinter via
@@ -196,7 +198,9 @@ rules:
   `semantic_fingerprinter` skips `location` and `type`: it keys the **persistent**
   (cross-process, on-disk) C++/SDFG build cache, which must stay stable when only
   source locations shift (an unrelated edit above a stencil, a moved checkout) and
-  across the inference passes that fill in `type` after node creation.
+  across the inference passes that fill in `type` after node creation. It composes
+  the skip on top of `lenient_fingerprint_deconstructor`, so a program graph is
+  hashed structurally rather than rejected.
 - The FOAST/PAST `semantic_fingerprinter`, by contrast, skips **nothing** — it keys
   the **in-memory** frontend-stage caches, whose cached product (the lowered IR) has
   `SourceLocation`s baked in by `PreserveLocationVisitor`. If two textually identical
@@ -224,16 +228,14 @@ expensive C++/SDFG artifact is still a cache hit and is not rebuilt).
 
 ### Strict vs. lenient: the tolerance axis
 
-By-reference identification (above) exists because a **persistent** key must be
-reproducible in a *different* process, where only an import path uniquely
-identifies an object — a lambda, a local closure or a dynamically-created class
-has no stable cross-process identity. That requirement is real for the on-disk
-caches (`fingerprint_compilable_program`, the gtfn/dace `cached_translation`
-trait), but **not** for the in-memory caches (the ffront stages, the executor
-`dict`): those live and die within a single process, so an object's structure
-is a perfectly valid identity there. Keying every fragility one importable name
-at a time (the icon4py `FrozenNamespace` closure constants, a `Mock` backend, a
-custom-backend workflow step have each tripped it) does not scale.
+By-reference identification (above) is what makes a key reproducible in a
+*different* process, where only an import path uniquely identifies an object — a
+lambda, a local closure or a dynamically-created class has no stable cross-process
+identity. Keying every fragility one importable name at a time (the icon4py
+`FrozenNamespace` closure constants, a `Mock` backend, a custom-backend workflow
+step have each tripped it) does not scale, so `lenient_fingerprinter` is the
+**default** everywhere and the strict, reject-on-non-importable behavior is opt-in
+(see the durability split below).
 
 `lenient_fingerprinter` therefore mirrors `strict_fingerprinter` but, instead of
 rejecting a non-importable object, falls back to a **structural** identity:
@@ -241,9 +243,9 @@ rejecting a non-importable object, falls back to a **structural** identity:
 - a **function** is hashed by its code object (bytecode + constants, recursing
   into nested code objects), its defaults, and its captured closure cells —
   *not* its `__globals__`, which the bytecode already references by name. This
-  is collision-free, invalidates correctly when a lambda's body or a captured
-  value changes, and is only stable per CPython version (acceptable: in-memory
-  ⇒ one process; the persistent path never uses it).
+  is collision-free and invalidates correctly when a lambda's body or a captured
+  value changes, but the code object is only stable **per CPython version**: a
+  structural function hash can shift across interpreter upgrades.
 - a dynamically-created **type/module** is identified by its (unverified)
   qualified name.
 
@@ -251,18 +253,28 @@ For any graph *without* non-importable objects the two fingerprinters agree
 exactly (the lenient overrides try by-reference first), so switching a cache
 between them never spuriously invalidates it.
 
-`CachedStep` makes strict-vs-lenient an **explicit** choice: the caller passes a
-`step_fingerprinter`, defaulting to `lenient_fingerprinter`. The choice
-must match the cache's durability — an in-memory `dict` (the default) is happy
-with the lenient default, while a persistent cache (e.g. `FileCache`) must be
-paired with `strict_fingerprinter` so its on-disk keys stay reproducible across
-processes. The two persistent call sites (the gtfn/dace `cached_translation`
-traits) do exactly that. The default is the safe one *for the default cache*: a
-lambda-bearing step is fine under the lenient default, but a `FileCache` paired
-with `strict_fingerprinter` still rejects it with a hard `TypeError`, so a
-persistent cache never gets a non-reproducible key (the worst failure mode in
-this subsystem: a stale on-disk binary reused for changed code → silently wrong
-numerics).
+`CachedStep` makes the choice **explicit** through two independently chosen
+fingerprinters, `step_fingerprinter` and `input_fingerprinter` (both defaulting
+to `lenient_fingerprinter` on the bare constructor):
+
+- `step_fingerprinter` keys the immutable workflow-state half. The persistent
+  call sites (`CachedStep.persistent`, used by the gtfn/dace `cached_translation`
+  traits) pair it with `strict_fingerprinter`, so a non-importable **step**
+  (lambda, local closure, dynamically-created backend object) is rejected with a
+  hard `TypeError` instead of being baked into a non-reproducible on-disk key.
+- `input_fingerprinter` keys the per-call input half. The gtfn/dace persistent
+  caches use `compilable_program_fingerprinter` (the iterator/GTIR
+  `semantic_fingerprinter`), which is **lenient**: the program graph being
+  compiled is hashed structurally rather than rejected. In practice the ITIR of
+  a compilable program holds no non-importable callables, so lenient and strict
+  agree on it; tolerating the rare exception (a `Mock`-backed value, a
+  dynamically-created connectivity type) is preferred over a hard failure.
+
+The consequence of a lenient input half is that a persistent key is reproducible
+across processes and machines, but only **per CPython version**: should a
+program graph ever contain a structurally-hashed function, an interpreter upgrade
+shifts its key (a spurious rebuild, never a stale-binary reuse, since a
+structural hash still changes when the code changes).
 
 An earlier design inferred the fingerprinter from `isinstance(self.cache, dict)`.
 Making it an explicit parameter keeps the two halves of the key — input identity
@@ -322,15 +334,18 @@ What becomes harder / the trade-offs:
   dropped from the persistent ITIR key (the C++ artifact does not depend on it) but
   kept in the frontend-stage keys (the lowered IR embeds it). Skips are chosen
   conservatively against the specific cached product for this reason.
-- Objects identified by reference must be importable (module-level) **for
-  persistent keys**; lambdas and local closures behind a `FileCache` are a hard
-  error, by design (a non-reproducible on-disk key is the worst failure mode).
-  In-memory keys lift the restriction via `lenient_fingerprinter`, which hashes
-  local functions structurally (code object + defaults + closure cells) — only
-  stable per CPython version, which is fine within one process. The price is two
-  fingerprinters to maintain and a durability invariant (`FileCache` ⇒ pair with
-  `strict_fingerprinter`) that each `CachedStep` call site must uphold by passing
-  the matching `step_fingerprinter`.
+- The **workflow step** behind a persistent `FileCache` must be importable
+  (module-level): a lambda or local closure step is a hard error, by design
+  (`CachedStep.persistent` pairs `step_fingerprinter=strict_fingerprinter`), so a
+  non-reproducible on-disk step identity — the worst failure mode — cannot occur.
+  Everything else is hashed with `lenient_fingerprinter`, which falls back to a
+  structural identity (code object + defaults + closure cells for functions) only
+  stable per CPython version. The price is two fingerprinters to maintain and the
+  fact that the **input** half of a persistent key (e.g. the program graph behind
+  the gtfn/dace caches) is reproducible only per CPython version, not across
+  interpreter upgrades — acceptable because a structural hash still changes with
+  the code (a stale binary is never reused; at worst a key shifts and triggers a
+  rebuild).
 
 ## Alternatives considered
 

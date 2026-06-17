@@ -135,6 +135,29 @@ def test_singledispatcher_default_from_object_implementation():
     assert dispatcher.registry.keys() == {object, Base}
 
 
+def test_singledispatcher_dispatcher_as_default_is_not_mutated():
+    from gt4py.eve.utils import singledispatcher
+
+    # Chaining dispatchers: a dispatcher is used as the `default` (fallback) of
+    # another. Registering implementations on the new dispatcher must NOT leak
+    # into the one used as default (a regression: `functools.singledispatch`
+    # aliases `register`/`registry` of a single-dispatch default via
+    # `update_wrapper`).
+    class Base:
+        pass
+
+    base = singledispatcher(lambda _: "default", implementations={Base: lambda _: "base"})
+    chained = singledispatcher(base, implementations={int: lambda _: "int"})
+
+    assert chained(1) == "int"
+    assert chained(Base()) == "base"  # delegated to `base`
+    assert chained("x") == "default"
+
+    # `base` is unchanged: its registry never learned about `int`.
+    assert base.registry.keys() == {object, Base}
+    assert base(1) == "default"
+
+
 def test_singledispatcher_validation_errors():
     from gt4py.eve.utils import singledispatcher
 

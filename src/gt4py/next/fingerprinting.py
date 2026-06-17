@@ -249,7 +249,7 @@ _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
 _DECONSTRUCT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
 
 
-def _object_deconstruct(obj: Any) -> Deconstruction:
+def object_deconstruct_fallback(obj: Any) -> Deconstruction:
     cls = type(obj)
 
     try:
@@ -306,18 +306,41 @@ def _fields_deconstruction(cls: type, items: Iterable[tuple[Any, Any]]) -> Decon
     return Deconstruction.from_pieces(*items, state=b"fields\0" + _class_tag(cls))
 
 
-def _deconstructor(obj: Any) -> Deconstruction:
+def data_deconstructor_fallback(obj: Any) -> Deconstruction:
     """
     Default deconstructor understanding dataclasses and datamodels through their fields.
 
-    Dataclasses and datamodels are deconstructed through their fields, everything
-    else is delegated to the ``__reduce_ex__`` rules.
+    Dataclasses and datamodels are deconstructed through their fields, everything else is
+    delegated to the ``__reduce_ex__`` rules.
 
     We need to define this workaround instead of dispatching on virtual
     Dataclass / DataModel ABCs, since complicated inheritance / composition
     hierarchies breaks `singledispatch`.
 
-    Used as the `fallback` of `make_deconstructor`.
+    Used as the default `fallback` of `make_deconstructor`.
+    """
+    cls: type = type(obj)
+    if (fields := _data_fields(cls)) is not None:
+        return _fields_deconstruction(
+            cls,
+            ((f.name, getattr(obj, f.name)) for f in fields),
+        )
+    else:
+        return object_deconstruct_fallback(obj)
+
+
+def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
+    gt4py_meta = metadata.get(next_utils.GT4PY_CLASS_METADATA_NS, None)
+    return not gt4py_meta or gt4py_meta.get("fingerprint", True)
+
+
+def metadata_based_deconstructor_fallback(obj: Any) -> Deconstruction:
+    """
+    Deconstructor understanding dataclasses and datamodels metadata.
+
+    Dataclasses and datamodels are deconstructed through their fields, dropping
+    those marked with ``gt4py_metadata(fingerprint=False)``; everything else is
+    delegated to the ``__reduce_ex__`` rules.
     """
     cls: type = type(obj)
     if (fields := _data_fields(cls)) is not None:
@@ -326,13 +349,13 @@ def _deconstructor(obj: Any) -> Deconstruction:
             ((f.name, getattr(obj, f.name)) for f in fields if _is_fingerprinted_field(f.metadata)),
         )
     else:
-        return _object_deconstruct(obj)
+        return object_deconstruct_fallback(obj)
 
 
 def make_deconstructor(
     overrides: Optional[Mapping[type, Deconstructor]] = None,
     *,
-    fallback: Deconstructor = _deconstructor,
+    fallback: Deconstructor = metadata_based_deconstructor_fallback,
 ) -> Deconstructor:
     """
     Create a deconstructor, optionally with customized per-type deconstruction.
@@ -354,7 +377,7 @@ def make_deconstructor(
     )
 
 
-#: Default deconstructor for GT4Py objects, built from the default per-type
+#: General deconstructor for objects, built from the default per-type
 #: deconstruction rules (see `make_deconstructor`).
 deconstruct: Final[Deconstructor] = make_deconstructor()
 
@@ -525,6 +548,16 @@ def catabolize(
 Fingerprinter: TypeAlias = Callable[[Any], str]
 
 
+#: Deconstructor used by `strict_fingerprinter`: the default dispatching
+#: deconstructor (built-in per-type rules over the dataclass/datamodel field
+#: fallback). Identifies types, functions and modules by their qualified name,
+#: rejecting non-importable ones, and honors the
+#: ``gt4py_metadata(fingerprint=False)`` opt-out.
+strict_fingerprint_deconstructor: Final[Deconstructor] = make_deconstructor(
+    fallback=metadata_based_deconstructor_fallback
+)
+
+
 def fingerprint_collapser(deconstruction: Deconstruction[str]) -> str:
     """Collapse a deconstruction (with already-collapsed piece digests) into its digest."""
     hasher = xxhash.xxh64(b"node\0")
@@ -535,44 +568,27 @@ def fingerprint_collapser(deconstruction: Deconstruction[str]) -> str:
     return hasher.hexdigest()
 
 
-def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
-    gt4py_meta = metadata.get(next_utils.GT4PY_CLASS_METADATA_NS, None)
-    return not gt4py_meta or gt4py_meta.get("fingerprint", True)
+def make_fingerprinter(
+    *,
+    deconstructor: Deconstructor = strict_fingerprint_deconstructor,
+    collapser: Collapser[str] = fingerprint_collapser,
+    allow_cycles: bool = True,
+) -> Fingerprinter:
+    """Helper to make a fingerprinter from a deconstructor and a collapser."""
+    return functools.partial(
+        catabolize,
+        deconstructor=deconstructor,
+        collapser=collapser,
+        allow_cycles=allow_cycles,
+    )
 
-
-def _metadata_aware_deconstructor(obj: Any) -> Deconstruction:
-    """
-    Deconstructor honoring the fingerprint field metadata opt-out.
-
-    Dataclasses and datamodels are deconstructed through their fields,
-    dropping those marked with ``gt4py_metadata(fingerprint=False)``;
-    everything else is delegated to the default fallback rules.
-
-    # Used as default deconstructor for fingerprinting.
-    """
-    cls = type(obj)
-    if (fields := _data_fields(cls)) is not None:  # type: ignore[arg-type]  # mypy doesn't think a type is hashable
-        return _fields_deconstruction(
-            cls,
-            ((f.name, getattr(obj, f.name)) for f in fields if _is_fingerprinted_field(f.metadata)),
-        )
-    else:
-        return _object_deconstruct(obj)
-
-
-strict_fingerprint_deconstructor = make_deconstructor(
-    fallback=_metadata_aware_deconstructor,
-)
 
 #: Default fingerprinting function for GT4Py objects: deterministic across
 #: processes (dict and set contributions are canonicalized by sorting the
 #: fingerprints of their items) and identifying types, functions and modules
 #: by their qualified name.
-strict_fingerprinter: Fingerprinter = functools.partial(
-    catabolize,
-    deconstructor=strict_fingerprint_deconstructor,
-    collapser=fingerprint_collapser,
-    allow_cycles=True,
+strict_fingerprinter: Fingerprinter = make_fingerprinter(
+    deconstructor=strict_fingerprint_deconstructor
 )
 
 
@@ -659,7 +675,7 @@ _LENIENT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
 }
 
 lenient_fingerprint_deconstructor = make_deconstructor(
-    _LENIENT_DECONSTRUCTORS, fallback=_metadata_aware_deconstructor
+    _LENIENT_DECONSTRUCTORS, fallback=metadata_based_deconstructor_fallback
 )
 
 #: Fingerprinter for in-memory (single-process) cache keys: like
@@ -667,35 +683,17 @@ lenient_fingerprint_deconstructor = make_deconstructor(
 #: and modules in the object graph (functions are hashed by code + closure,
 #: dynamic types/modules by unverified qualified name). It MUST NOT key a
 #: persistent cache, whose keys must be reproducible across processes.
-lenient_fingerprinter: Fingerprinter = functools.partial(
-    catabolize,
-    deconstructor=lenient_fingerprint_deconstructor,
-    collapser=fingerprint_collapser,
-    allow_cycles=True,
+lenient_fingerprinter: Fingerprinter = make_fingerprinter(
+    deconstructor=lenient_fingerprint_deconstructor
 )
 
 
 # -- Other fingerprinters --
 
 
-def make_fingerprinter(
-    *,
-    deconstructor: Deconstructor = strict_fingerprint_deconstructor,
-    collapser: Collapser[str] = fingerprint_collapser,
-    allow_cycles: bool = True,
-) -> Fingerprinter:
-    """Helper to make a fingerprinter from a deconstructor and a collapser."""
-    return functools.partial(
-        catabolize,
-        deconstructor=deconstructor,
-        collapser=collapser,
-        allow_cycles=allow_cycles,
-    )
-
-
 @functools.cache
 def skipping_fields_node_deconstructor(
-    *skipped_fields: str, fallback: Deconstructor = strict_fingerprint_deconstructor
+    *skipped_fields: str, fallback: Deconstructor = metadata_based_deconstructor_fallback
 ) -> Deconstructor:
     """Return a node deconstructor which skips some fields."""
 

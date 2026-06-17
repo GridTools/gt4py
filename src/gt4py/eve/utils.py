@@ -686,6 +686,21 @@ def singledispatcher(
             )
 
     assert callable(default)  # for mypy
+
+    if xtyping.is_single_dispatch_callable(default):
+        # `default` is itself a single-dispatch callable (e.g. a dispatcher used
+        # as the fallback to chain dispatchers). `functools.singledispatch`
+        # copies the wrapped callable's ``__dict__`` -- which, for a dispatcher,
+        # holds ``register``/``registry`` -- onto the new dispatcher via
+        # ``update_wrapper``, aliasing the two. Registering the implementations
+        # below would then silently mutate ``default`` itself. Forward through a
+        # plain function (empty ``__dict__``) so the new dispatcher keeps its own
+        # independent registry.
+        inner_default = default
+
+        def default(*args: Any, **kwargs: Any) -> T:  # deliberately shadowing the parameter
+            return inner_default(*args, **kwargs)
+
     result = functools.singledispatch(default)
     for cls, func in implementations.items():
         result.register(cls)(func)
