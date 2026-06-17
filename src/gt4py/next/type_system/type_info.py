@@ -442,40 +442,6 @@ def contains_local_field(type_: ts.TypeSpec) -> bool:
     )
 
 
-def tuple_structures_match(*types: ts.TypeSpec) -> bool:
-    """
-    Return if all `types` share the same (nested) tuple structure.
-
-    Only the tuple skeleton is compared; the leaf types are not required to be equal.
-
-    Examples:
-    ---------
-    >>> i = ts.ScalarType(kind=ts.ScalarKind.INT32)
-    >>> f = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    >>> tuple_structures_match(ts.TupleType(types=[i, i]), ts.TupleType(types=[f, f]))
-    True
-    >>> tuple_structures_match(ts.TupleType(types=[i, i]), ts.TupleType(types=[i]))
-    False
-    >>> tuple_structures_match(
-    ...     ts.TupleType(types=[i, ts.TupleType(types=[i])]),
-    ...     ts.TupleType(types=[i, i]),
-    ... )
-    False
-    """
-    if not types:
-        return True
-    first, *rest = types
-    for other in rest:
-        if isinstance(first, ts.TupleType) != isinstance(other, ts.TupleType):
-            return False
-        if isinstance(first, ts.TupleType) and isinstance(other, ts.TupleType):
-            if len(first.types) != len(other.types):
-                return False
-            if not all(tuple_structures_match(f, o) for f, o in zip(first.types, other.types)):
-                return False
-    return True
-
-
 # TODO(tehrengruber): This function has specializations on Iterator types, which are not part of
 #  the general / shared type system. This functionality should be moved to the iterator-only
 #  type system, but we need some sort of multiple dispatch for that.
