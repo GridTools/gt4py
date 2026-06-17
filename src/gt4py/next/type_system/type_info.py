@@ -630,6 +630,49 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     return False
 
 
+def _bind_var(var: ts.TypeVarType, dtype: ts.TypeSpec) -> dict[str, ts.ScalarType]:
+    if not isinstance(dtype, ts.ScalarType):
+        # not a concrete scalar to bind to -- e.g. a `TypeVarType` (operator-from-operator
+        # call), a `DeferredType` (scan), or a `ListType` (local field). Leave it unbound;
+        # the caller is responsible for checking that no type variable remained unbound.
+        return {}
+    if dtype not in var.constraints:
+        raise ValueError(f"'{dtype}' does not satisfy the constraints of type variable '{var}'.")
+    return {var.name: dtype}
+
+
+def _merge_bindings(parts: Iterable[dict[str, ts.ScalarType]]) -> dict[str, ts.ScalarType]:
+    binding: dict[str, ts.ScalarType] = {}
+    for part in parts:
+        for name, dtype in part.items():
+            if (previous := binding.get(name)) is not None and previous != dtype:
+                raise ValueError(
+                    f"Type variable '{name}' is bound inconsistently:"
+                    f" '{previous}' and '{dtype}' (all arguments using '{name}'"
+                    " must have the same dtype)."
+                )
+            binding[name] = dtype
+    return binding
+
+
+def _bind(param: ts.TypeSpec, arg: ts.TypeSpec) -> dict[str, ts.ScalarType]:
+    match param:
+        case ts.TypeVarType() as var:
+            return _bind_var(var, arg)
+        case ts.FieldType(dtype=ts.TypeVarType() as var):
+            # scalar arguments are promoted to zero-dimensional fields
+            return _bind_var(var, arg.dtype if isinstance(arg, ts.FieldType) else arg)
+        case ts.ListType(element_type=element_type) if isinstance(arg, ts.ListType):
+            return _bind(element_type, arg.element_type)
+        case ts.TupleType() | ts.NamedCollectionType() if isinstance(
+            arg, (ts.TupleType, ts.NamedCollectionType)
+        ):
+            # tolerant by design: a structural mismatch (e.g. tuple vs scalar) binds nothing
+            # here and is reported by the regular signature checks instead.
+            return _merge_bindings(_bind(p, a) for p, a in zip(param.types, arg.types))
+    return {}
+
+
 def bind_type_vars(
     params: Sequence[ts.TypeSpec], args: Sequence[ts.TypeSpec]
 ) -> dict[str, ts.ScalarType]:
@@ -654,47 +697,7 @@ def bind_type_vars(
         >>> print(binding["T"])
         float64
     """
-    binding: dict[str, ts.ScalarType] = {}
-
-    def bind_var(var: ts.TypeVarType, dtype: ts.TypeSpec) -> None:
-        if not isinstance(dtype, ts.ScalarType):
-            # not a concrete scalar to bind to -- e.g. a `TypeVarType` (operator-from-operator
-            # call), a `DeferredType` (scan), or a `ListType` (local field). Leave it unbound;
-            # the caller is responsible for checking that no type variable remained unbound.
-            return
-        if dtype not in var.constraints:
-            raise ValueError(
-                f"'{dtype}' does not satisfy the constraints of type variable '{var}'."
-            )
-        if (previous := binding.get(var.name)) is not None and previous != dtype:
-            raise ValueError(
-                f"Type variable '{var.name}' is bound inconsistently:"
-                f" '{previous}' and '{dtype}' (all arguments using '{var.name}'"
-                " must have the same dtype)."
-            )
-        binding[var.name] = dtype
-
-    def bind(param: ts.TypeSpec, arg: ts.TypeSpec) -> None:
-        match param:
-            case ts.TypeVarType():
-                bind_var(param, arg)
-            case ts.FieldType(dtype=ts.TypeVarType() as var):
-                if isinstance(arg, ts.FieldType):
-                    bind_var(var, arg.dtype)
-                elif isinstance(arg, ts.ScalarType):
-                    # scalar arguments are promoted to zero-dimensional fields
-                    bind_var(var, arg)
-            case ts.ListType(element_type=element_type) if isinstance(arg, ts.ListType):
-                bind(element_type, arg.element_type)
-            case ts.TupleType() | ts.NamedCollectionType() if isinstance(
-                arg, (ts.TupleType, ts.NamedCollectionType)
-            ):
-                for param_el, arg_el in zip(param.types, arg.types):
-                    bind(param_el, arg_el)
-
-    for param, arg in zip(params, args):
-        bind(param, arg)
-    return binding
+    return _merge_bindings(_bind(param, arg) for param, arg in zip(params, args))
 
 
 def tree_map_type_params(
