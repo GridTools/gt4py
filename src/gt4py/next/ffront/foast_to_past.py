@@ -77,7 +77,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         ...         copy.foast_stage.foast_node.definition.type.returns,
         ...     ),
         ...     kwargs={},
-        ...     offset_provider={"I": IDim},
+        ...     offset_provider={},
         ...     column_axis=None,
         ...     argument_descriptor_contexts={},
         ... )

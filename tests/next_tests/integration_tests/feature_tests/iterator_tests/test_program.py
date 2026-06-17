@@ -26,7 +26,7 @@ from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 I = gtx.Dimension("I")
-Ioff = gtx.FieldOffset("Ioff", source=I, target=(I,))
+Ioff = gtx.CartesianConnectivity(I)
 
 
 @fundef
@@ -80,7 +80,8 @@ def test_index_builtin(program_processor):
 def index_program_shift(out, size):
     set_at(
         as_fieldop(
-            lambda i: deref(i) + deref(shift(Ioff, 1)(i)), cartesian_domain(named_range(I, 0, size))
+            lambda i: deref(i) + deref(shift(Ioff, 1)(i)),
+            cartesian_domain(named_range(I, 0, size)),
         )(index(I)),
         cartesian_domain(named_range(I, 0, size)),
         out,
@@ -95,6 +96,6 @@ def test_index_builtin_shift(program_processor):
     isize = 10
     out = gtx.as_field([I], np.zeros(shape=(isize,)), dtype=getattr(np, INTEGER_INDEX_BUILTIN))
 
-    run_processor(index_program_shift, program_processor, out, isize, offset_provider={"Ioff": I})
+    run_processor(index_program_shift, program_processor, out, isize, offset_provider={})
     if validate:
         assert np.allclose(np.arange(10) + np.arange(1, 11), out.asnumpy())

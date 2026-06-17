@@ -48,7 +48,7 @@ def convert_args(
 ) -> stages.ExecutableProgram:
     def decorated_program(
         *args: Any,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: dict[str, common.OffsetProviderElem],
         out: Any = None,
     ) -> None:
         # Note: this function is on the hot path and needs to have minimal overhead.
@@ -80,14 +80,11 @@ def convert_args(
 
 
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
+    offset_provider: dict[str, common.OffsetProviderElem], device: core_defs.DeviceType
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
     # Note: this function is on the hot path and needs to have minimal overhead.
     zero_origin = (0, 0)
-    assert all(
-        hasattr(conn, "ndarray") or isinstance(conn, common.Dimension)
-        for conn in offset_provider.values()
-    )
+    assert all(hasattr(conn, "ndarray") for conn in offset_provider.values())
     # Note: the order here needs to agree with the order of the generated bindings.
     # This is currently true only because when hashing offset provider dicts,
     # the keys' order is taken into account. Any modification to the hashing

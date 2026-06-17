@@ -99,6 +99,11 @@ class AxisLiteral(Expr):
     kind: common.DimensionKind = common.DimensionKind.HORIZONTAL
 
 
+class CartesianOffset(Expr):
+    domain: AxisLiteral
+    codomain: AxisLiteral
+
+
 class SymRef(Expr):
     id: Coerced[SymbolRef]
 
@@ -159,6 +164,7 @@ Literal.__hash__ = Node.__hash__  # type: ignore[method-assign]
 NoneLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
 OffsetLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
 AxisLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
+CartesianOffset.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SymRef.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Lambda.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]
