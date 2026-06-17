@@ -41,7 +41,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             # Exclude test sessions not affected by the PR changes
-            ./scripts-cli.py github-ci matrix-exclude \
+            ./scripts/run github-ci matrix-exclude \
               --config nox-sessions-config.yml \
               --base "origin/${{ github.base_ref }}" \
               --output gh-exclude-test-sessions.json \
