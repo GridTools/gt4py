@@ -71,9 +71,9 @@ def _make_builtin(
         xp = cls_.array_ns
         op = getattr(xp, array_builtin_name)
 
-        domain_intersection = embedded_common.domain_intersection(
-            *[f.domain for f in fields if isinstance(f, common.Field)]
-        )
+        domain_intersection = embedded_common.domain_intersection(*[
+            f.domain for f in fields if isinstance(f, common.Field)
+        ])
 
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
@@ -121,11 +121,6 @@ class NdArrayField(
     _ndarray: core_defs.NDArrayObject
 
     array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
-
-    def __getstate__(self) -> dict[str, Any]:
-        # Serialize only the dataclass fields, excluding cached properties
-        # stored in `__dict__` (which may not be picklable).
-        return {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
 
     @classmethod
     def from_array(

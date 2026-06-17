@@ -77,9 +77,9 @@ fold over trees — keeping three concerns explicitly separate:
 2. **Traversal scheme** (*in which order are objects visited?*): `catabolize`,
    a generic iterative post-order fold with result memoization and cycle
    support, reusable with any result type.
-3. **Reduction logic** (*how do results combine?*): the *collapser* (the
-   algebra of the catamorphism), a single function collapsing a
-   deconstruction — whose pieces have already been collapsed into results —
+3. **Reduction logic** (*how do results combine?*): the *aggregator* (the
+   algebra of the catamorphism), a single function aggregating a
+   deconstruction — whose pieces have already been aggregated into results —
    into a result; for fingerprinting, a digest.
 
 ### Layer 1: one-level deconstruction
@@ -100,8 +100,8 @@ module-level `deconstruct` is the default deconstructor, whose `fallback`
 layers the `gt4py_metadata(fingerprint=False)` field opt-out on the dataclass /
 datamodel / `__reduce_ex__` rules.
 A fingerprinter is `catabolize` partially applied to a deconstructor and the
-digest collapser; `make_fingerprinter(deconstructor=…, collapser=…)` builds one
-(`strict_fingerprinter` is the default deconstructor + collapser). The default
+digest aggregator; `make_fingerprinter(deconstructor=…, aggregator=…)` builds one
+(`strict_fingerprinter` is the default deconstructor + aggregator). The default
 deconstruction rules are:
 
 - **Primitives** (`int`, `float`, `str`, `bytes`, ...) — leaves tagged with
@@ -129,24 +129,24 @@ deconstruction rules are:
 
 ### Layer 2: the traversal scheme (`catabolize`)
 
-`catabolize(obj, *, deconstructor, collapser, allow_cycles, memoize)`
+`catabolize(obj, *, deconstructor, aggregator, allow_cycles, memoize)`
 reduces an object bottom-up over its one-level deconstructions. The fold is
 **iterative** (explicit two-phase work stack), so deeply nested inputs —
 lowered IR trees routinely exceed the recursion limit budget of any recursive
 scheme — cannot raise `RecursionError`. Results are memoized by object
 identity, which makes shared subgraphs cheap, and self-referential structures
-are collapsed (with `allow_cycles=True`) as back references by relative depth
+are aggregated (with `allow_cycles=True`) as back references by relative depth
 (results under a cycle target are never memoized, as they are
-context-dependent). Before collapsing an `OrderInsensitiveDeconstruction`,
-the already-collapsed piece results are put into canonical sorted order, so
+context-dependent). Before aggregating an `OrderInsensitiveDeconstruction`,
+the already-aggregated piece results are put into canonical sorted order, so
 container iteration order never leaks into the result (this requires the
 results to be orderable).
 The driver is carrier-agnostic — nothing in it knows about hashing — so it can
 serve other bottom-up reductions over arbitrary objects.
 
-### Layer 3: the digest collapser
+### Layer 3: the digest aggregator
 
-The single fingerprint collapser hashes a deconstruction uniformly as
+The single fingerprint aggregator hashes a deconstruction uniformly as
 `xxh64("node" + state + "pieces" + piece_digests)` — an
 `EmptyDeconstruction` simply contributes no piece digests, the canonical
 order of order-insensitive pieces is established by the traversal layer, and
@@ -389,7 +389,7 @@ What becomes harder / the trade-offs:
 ### Build the catamorphism on `optree` pytrees instead of our own driver
 
 The layering of this design (one-level deconstruction / generic fold /
-collapsers) deliberately mirrors how a fingerprinter would be written over
+aggregators) deliberately mirrors how a fingerprinter would be written over
 [`optree`](https://github.com/metaopt/optree)'s `tree_flatten_one_level`, with
 `EmptyDeconstruction`/`Deconstruction` playing the role of the pytree
 registry entries. Using `optree` itself was evaluated and rejected:
@@ -429,7 +429,7 @@ registry entries. Using `optree` itself was evaluated and rejected:
 
 - `src/gt4py/next/fingerprinting.py` — `Deconstruction`, `EmptyDeconstruction`,
   `OrderInsensitiveDeconstruction`, `catabolize`, `make_deconstructor`,
-  `make_fingerprinter`, `deconstruct`, `fingerprint_collapser`,
+  `make_fingerprinter`, `deconstruct`, `fingerprint_aggregator`,
   `strict_fingerprinter`, `lenient_fingerprinter`,
   `skipping_fields_node_deconstructor`. Imported directly by
   `gt4py.next` consumers (not re-exported through `gt4py.next.utils`).

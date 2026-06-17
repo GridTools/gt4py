@@ -112,7 +112,7 @@ def test_default_deconstructor():
     assert isinstance(
         fingerprinting.deconstruct({1, 2}), fingerprinting.OrderInsensitiveDeconstruction
     )
-    # ... and a fingerprinter built from the default deconstructor and collapser
+    # ... and a fingerprinter built from the default deconstructor and aggregator
     # (via `make_fingerprinter`) reproduces `strict_fingerprinter`.
     payload = {"a": (1, 2)}
     refingerprinter = fingerprinting.make_fingerprinter()
@@ -131,7 +131,7 @@ class TestCatabolize:
         depth = fingerprinting.catabolize(
             [[1, [2]], 3],
             deconstructor=self._deconstruct,
-            collapser=lambda d: (
+            aggregator=lambda d: (
                 0
                 if isinstance(d, fingerprinting.EmptyDeconstruction)
                 else 1 + max(d.pieces, default=0)
@@ -140,11 +140,11 @@ class TestCatabolize:
         assert depth == 3
 
     def test_pieces_are_reduced_before_their_containers(self):
-        # Post-order traversal: the composite collapser must always see the
-        # already collapsed results of the pieces, in piece order.
+        # Post-order traversal: the composite aggregator must always see the
+        # already aggregated results of the pieces, in piece order.
         visited = []
 
-        def collapser(deconstruction):
+        def aggregator(deconstruction):
             result = (
                 deconstruction.state
                 if isinstance(deconstruction, fingerprinting.EmptyDeconstruction)
@@ -153,18 +153,18 @@ class TestCatabolize:
             visited.append(result)
             return result
 
-        fingerprinting.catabolize([1, [2, 3]], deconstructor=self._deconstruct, collapser=collapser)
+        fingerprinting.catabolize([1, [2, 3]], deconstructor=self._deconstruct, aggregator=aggregator)
         assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
 
     def test_empty_containers_are_nodes(self):
         # Composites without pieces must not corrupt the result bookkeeping.
-        def collapser(deconstruction: fingerprinting.Deconstruction) -> tuple:
+        def aggregator(deconstruction: fingerprinting.Deconstruction) -> tuple:
             if isinstance(deconstruction, fingerprinting.EmptyDeconstruction):
                 return (deconstruction.state,)
             return (deconstruction.state, *deconstruction.pieces)
 
         result = fingerprinting.catabolize(
-            [[], ()], deconstructor=self._deconstruct, collapser=collapser
+            [[], ()], deconstructor=self._deconstruct, aggregator=aggregator
         )
         assert result == (list, (list,), (tuple,))
 
@@ -175,7 +175,7 @@ class TestCatabolize:
         depth = fingerprinting.catabolize(
             deeply_nested,
             deconstructor=self._deconstruct,
-            collapser=lambda d: (
+            aggregator=lambda d: (
                 0
                 if isinstance(d, fingerprinting.EmptyDeconstruction)
                 else 1 + max(d.pieces, default=0)
@@ -194,7 +194,7 @@ class TestCatabolize:
         fingerprinting.catabolize(
             [shared, shared],
             deconstructor=deconstruct,
-            collapser=lambda d: 0,
+            aggregator=lambda d: 0,
         )
         assert sum(1 for obj in deconstruct_calls if obj is shared) == 1
 
@@ -202,12 +202,12 @@ class TestCatabolize:
         fingerprinting.catabolize(
             [shared, shared],
             deconstructor=deconstruct,
-            collapser=lambda d: 0,
+            aggregator=lambda d: 0,
             memoize=False,
         )
         assert sum(1 for obj in deconstruct_calls if obj is shared) == 2
 
-    def test_order_insensitive_pieces_are_collapsed_in_canonical_order(self):
+    def test_order_insensitive_pieces_are_aggregated_in_canonical_order(self):
         def deconstructor(obj):
             if isinstance(obj, frozenset):
                 return fingerprinting.OrderInsensitiveDeconstruction(state=None, pieces=tuple(obj))
@@ -216,7 +216,7 @@ class TestCatabolize:
         rendered = fingerprinting.catabolize(
             frozenset({3, 1, 2}),
             deconstructor=deconstructor,
-            collapser=lambda d: (
+            aggregator=lambda d: (
                 str(d.state)
                 if isinstance(d, fingerprinting.EmptyDeconstruction)
                 else ",".join(d.pieces)
@@ -232,29 +232,29 @@ class TestCatabolize:
             fingerprinting.catabolize(
                 cyclic,
                 deconstructor=self._deconstruct,
-                collapser=lambda d: 0,
+                aggregator=lambda d: 0,
             )
 
-    def test_cycles_are_collapsed_as_back_references_when_allowed(self):
+    def test_cycles_are_aggregated_as_back_references_when_allowed(self):
         cyclic: list = [1]
         cyclic.append(cyclic)
-        collapsed_states: list = []
+        aggregated_states: list = []
 
-        def collapser(deconstruction: fingerprinting.Deconstruction) -> int:
+        def aggregator(deconstruction: fingerprinting.Deconstruction) -> int:
             if isinstance(deconstruction, fingerprinting.EmptyDeconstruction):
-                collapsed_states.append(deconstruction.state)
+                aggregated_states.append(deconstruction.state)
                 return 0
             return 1 + sum(deconstruction.pieces)
 
         result = fingerprinting.catabolize(
             cyclic,
             deconstructor=self._deconstruct,
-            collapser=collapser,
+            aggregator=aggregator,
             allow_cycles=True,
         )
         assert result == 1
         # The back reference encodes the relative depth up to its target.
-        assert collapsed_states == [1, b"cycle\x001"]
+        assert aggregated_states == [1, b"cycle\x001"]
 
 
 def _module_level_func_a() -> None: ...

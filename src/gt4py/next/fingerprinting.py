@@ -19,11 +19,11 @@ Public API:
   — results of deconstructing one level of an object.
 - `Deconstructor` — type alias for a per-object deconstructor.
 - `make_deconstructor` — build a dispatching deconstructor from per-type overrides.
-- `make_fingerprinter` — build a fingerprinter from a deconstructor and a collapser.
+- `make_fingerprinter` — build a fingerprinter from a deconstructor and a aggregator.
 - `deconstruct` — the default GT4Py deconstructor.
 - `catabolize` — iterative bottom-up fold over a deconstructed object graph.
-- `Collapser` / `Fingerprinter` — type aliases.
-- `fingerprint_collapser` — the xxhash-based collapser used by all built-in fingerprinters.
+- `Aggregator` / `Fingerprinter` — type aliases.
+- `fingerprint_aggregator` — the xxhash-based aggregator used by all built-in fingerprinters.
 - `strict_fingerprinter` — cross-process deterministic fingerprinter.
 - `strict_fingerprint_deconstructor` — deconstructor used by `strict_fingerprinter`.
 - `lenient_fingerprinter` — single-process fingerprinter tolerant of non-importable objects.
@@ -384,10 +384,10 @@ deconstruct: Final[Deconstructor] = make_deconstructor()
 
 # -- Generic reduction of deconstructed objects --
 
-#: Collapses a deconstruction into a result; for non-terminal objects, the
-#: pieces have already been collapsed into results. This is the algebra of
+#: Aggregates a deconstruction into a result; for non-terminal objects, the
+#: pieces have already been aggregated into results. This is the algebra of
 #: the catamorphism implemented by `catabolize`.
-Collapser: TypeAlias = Callable[[Deconstruction], _R]
+Aggregator: TypeAlias = Callable[[Deconstruction], _R]
 
 
 class _VisitAction(enum.IntEnum):
@@ -399,7 +399,7 @@ def catabolize(
     obj: Any,
     *,
     deconstructor: Deconstructor,
-    collapser: Collapser[_R],
+    aggregator: Aggregator[_R],
     allow_cycles: bool = False,
     memoize: bool = True,
 ) -> _R:
@@ -410,18 +410,18 @@ def catabolize(
     one-level deconstructions produced by `deconstructor`, so the structure
     depth is bounded neither by the Python recursion limit nor (on Python
     <= 3.10) by the C stack. The reduction logic is supplied as the
-    `collapser` (the algebra of the catamorphism): it collapses an
+    `aggregator` (the algebra of the catamorphism): it aggregates an
     `EmptyDeconstruction` into a result and, for non-terminal objects,
     a `Deconstruction` whose pieces have been replaced by the
-    already-collapsed results of the original pieces — in piece order, or in
+    already-aggregated results of the original pieces — in piece order, or in
     canonical sorted order for an `OrderInsensitiveDeconstruction`
     (which requires the results to be orderable).
 
     Keyword Args:
         deconstructor: Per-object deconstruction of one level of structure.
-        collapser: Collapse of a deconstruction into a result.
+        aggregator: Aggregation of a deconstruction into a result.
         allow_cycles: Whether to allow cyclic references in the object graph.
-            If allowed, a cyclic reference is collapsed as an
+            If allowed, a cyclic reference is aggregated as an
             `EmptyDeconstruction` whose state encodes the relative
             depth (in currently open nodes) back up to its target; results
             computed below a cycle target embed context-dependent back
@@ -429,12 +429,12 @@ def catabolize(
             cycles raise `ValueError`.
         memoize: Reuse the result of already-reduced subobjects (matched by
             identity), so shared substructure is reduced only once. Requires
-            a pure collapser: results must depend only on the deconstruction,
+            a pure aggregator: results must depend only on the deconstruction,
             not on where the object appears.
 
     Examples:
-        Computing the depth of a nested structure (pieces are collapsed
-        before the objects containing them, so the collapser sees their
+        Computing the depth of a nested structure (pieces are aggregated
+        before the objects containing them, so the aggregator sees their
         depths):
 
         >>> def deconstructor(obj):
@@ -444,7 +444,7 @@ def catabolize(
         >>> catabolize(
         ...     [[1, [2]], 3],
         ...     deconstructor=deconstructor,
-        ...     collapser=lambda d: (
+        ...     aggregator=lambda d: (
         ...         0 if isinstance(d, EmptyDeconstruction) else 1 + max(d.pieces, default=0)
         ...     ),
         ... )
@@ -476,7 +476,7 @@ def catabolize(
                     # depth, which is independent of memory addresses.
                     if allow_cycles:
                         relative_depth = len(open_nodes) - depth
-                        result = collapser(
+                        result = aggregator(
                             EmptyDeconstruction(b"cycle\0" + str(relative_depth).encode())
                         )
                         results.append(result)
@@ -490,7 +490,7 @@ def catabolize(
 
                 deconstruction = deconstructor(current)
                 if isinstance(deconstruction, EmptyDeconstruction):
-                    result = collapser(deconstruction)
+                    result = aggregator(deconstruction)
                     if memoize:
                         memo[current_id] = result
                         keep_alive.append(current)
@@ -516,7 +516,7 @@ def catabolize(
                 # Direct construction (a non-empty `deconstruction` reaching
                 # COMBINE always has the `(state, pieces)` signature) avoids the
                 # field-introspection overhead of `dataclasses.replace` per node.
-                result = collapser(type(deconstruction)(deconstruction.state, tuple(piece_results)))
+                result = aggregator(type(deconstruction)(deconstruction.state, tuple(piece_results)))
                 depth = open_nodes.pop(id(current))
 
                 if depth <= taint_depth:
@@ -543,7 +543,7 @@ def catabolize(
 
 
 #: A fingerprinter is `catabolize` instantiated with digest
-#: collapsers (xxhash64 with domain separation) over a deconstructor, which
+#: aggregators (xxhash64 with domain separation) over a deconstructor, which
 #: must produce type tags as `state`.
 Fingerprinter: TypeAlias = Callable[[Any], str]
 
@@ -558,8 +558,8 @@ strict_fingerprint_deconstructor: Final[Deconstructor] = make_deconstructor(
 )
 
 
-def fingerprint_collapser(deconstruction: Deconstruction[str]) -> str:
-    """Collapse a deconstruction (with already-collapsed piece digests) into its digest."""
+def fingerprint_aggregator(deconstruction: Deconstruction[str]) -> str:
+    """Aggregate a deconstruction (with already-aggregated piece digests) into its digest."""
     hasher = xxhash.xxh64(b"node\0")
     hasher.update(deconstruction.state)
     hasher.update(b"pieces\0")
@@ -571,14 +571,14 @@ def fingerprint_collapser(deconstruction: Deconstruction[str]) -> str:
 def make_fingerprinter(
     *,
     deconstructor: Deconstructor = strict_fingerprint_deconstructor,
-    collapser: Collapser[str] = fingerprint_collapser,
+    aggregator: Aggregator[str] = fingerprint_aggregator,
     allow_cycles: bool = True,
 ) -> Fingerprinter:
-    """Helper to make a fingerprinter from a deconstructor and a collapser."""
+    """Helper to make a fingerprinter from a deconstructor and a aggregator."""
     return functools.partial(
         catabolize,
         deconstructor=deconstructor,
-        collapser=collapser,
+        aggregator=aggregator,
         allow_cycles=allow_cycles,
     )
 
