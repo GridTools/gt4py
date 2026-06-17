@@ -361,7 +361,7 @@ def test_typing_exports(session: nox.Session) -> None:
 # somewhere in the gt4py + dace toolchain for that test selection.
 #
 # Hashing and comparison live in
-# `scripts/dace_deterministic_codegen.py`; the helper below just
+# `scripts/python/dace_deterministic_codegen.py`; the helper below just
 # wires gt4py's existing pytest invocation pattern into a "run
 # twice + compare" loop.
 #
@@ -393,8 +393,14 @@ def _run_dace_determinism_check(
     directory and report.txt so the failure is actionable.
     """
     # Self-check the comparator first: a broken script aborts the session
-    # here, before the two expensive test-suite runs.
-    session.run("pytest", "-q", str(pathlib.Path("scripts") / "tests"))
+    # here, before the two expensive test-suite runs. The conftest under
+    # scripts/tests/python puts scripts/python on sys.path so the test can
+    # `from dace_deterministic_codegen import ...`.
+    session.run(
+        "pytest",
+        "-q",
+        str(pathlib.Path("scripts") / "tests" / "python" / "test_dace_deterministic_codegen.py"),
+    )
 
     workdir = REPO_ROOT / DACE_DETERMINISM_WORKDIR_NAME
     if workdir.exists():
@@ -466,11 +472,14 @@ def _run_dace_determinism_check(
         )
         runs_healthy = run_is_healthy(junit_xml) and runs_healthy
 
-    # Import the comparison library from scripts/. It uses only stdlib, so it
-    # runs fine in nox's runtime python (no session venv needed).
-    if str(REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(REPO_ROOT))
-    from scripts.dace_deterministic_codegen import (
+    # Import the comparison library from scripts/python/. It uses only stdlib,
+    # so it runs fine in nox's runtime python (no session venv needed). The
+    # modules in scripts/python are top-level (not a package), so we add that
+    # directory to sys.path and import by module name.
+    scripts_python_dir = str(REPO_ROOT / "scripts" / "python")
+    if scripts_python_dir not in sys.path:
+        sys.path.insert(0, scripts_python_dir)
+    from dace_deterministic_codegen import (
         DeterminismError,
         NoComparableProgramsError,
         NoProgramsObservedError,

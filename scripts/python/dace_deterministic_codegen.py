@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
+#
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2024, ETH Zurich
@@ -27,15 +28,19 @@ differing count cannot be a failed test — it means the *number* of generated
 programs is itself non-deterministic — so it is counted as a failure instead.
 If no name is comparable the check raises rather than reporting a vacuous match.
 
+The library API below (``check_determinism`` and friends) is intentionally
+stdlib-only so it can be imported from ``noxfile.py`` and the nox session venvs,
+neither of which has the dev-scripts dependencies installed.
+
 Usage::
 
-    from scripts.dace_deterministic_codegen import check_determinism
+    from dace_deterministic_codegen import check_determinism
     check_determinism(run1_cache, run2_cache, runs_healthy=True,
                       diffs_dir=..., report_path=...)
 
 CLI::
 
-    python scripts/dace_deterministic_codegen.py --run1 PATH --run2 PATH \\
+    ./scripts/run dace-determinism check --run1 PATH --run2 PATH \\
         [--diffs-dir DIR] [--report FILE] [--runs-healthy/--no-runs-healthy]
 
 Exit codes: 0 deterministic, 1 differs, 2 bad args / unsupported backend /
@@ -44,12 +49,10 @@ no source files / nothing comparable, 3 no programs observed.
 
 from __future__ import annotations
 
-import argparse
 import collections
 import dataclasses
 import hashlib
 import re
-import sys
 from pathlib import Path
 
 
@@ -365,66 +368,79 @@ def check_determinism(
     return results
 
 
-def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        prog="dace_deterministic_codegen",
-        description="Compare two gt4py.next build caches for deterministic DaCe codegen.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    p.add_argument("--run1", required=True, type=Path, metavar="PATH", help="First cache root.")
-    p.add_argument("--run2", required=True, type=Path, metavar="PATH", help="Second cache root.")
-    p.add_argument(
-        "--diffs-dir",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="If set, write per-program mismatch reports here.",
-    )
-    p.add_argument(
-        "--report",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="If set, write the summary report here.",
-    )
-    p.add_argument(
-        "--runs-healthy",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Whether both runs completed cleanly. When set, a differing program "
-        "count is treated as a failure (non-deterministic count) instead of a skip.",
-    )
-    return p.parse_args(argv)
+# -- CLI --
+#
+# ``typer`` lives in the dev-scripts ``scripts`` dependency group, which is only
+# present in the uv environment created by this file's shebang (and used by
+# ``scripts/run``). The library API above must stay importable from stdlib-only
+# interpreters (``noxfile.py`` and the nox session venvs import it directly), so
+# the CLI is guarded: those importers never touch ``cli``, and ``scripts/run``
+# only ever imports this module from inside the uv scripts env.
+try:
+    import typer
+except ImportError:
+    typer = None  # type: ignore[assignment]
 
+if typer is not None:
+    from typing import Annotated
 
-def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
-    try:
-        results = check_determinism(
-            args.run1.expanduser().resolve(),
-            args.run2.expanduser().resolve(),
-            runs_healthy=args.runs_healthy,
-            diffs_dir=args.diffs_dir.expanduser().resolve() if args.diffs_dir else None,
-            report_path=args.report.expanduser().resolve() if args.report else None,
-        )
-    except UnsupportedBackendError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    except NoProgramsObservedError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 3
-    except (NoSourceFilesObservedError, NoComparableProgramsError) as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    except DeterminismError as e:
-        if args.report is None:
-            print(render_report(e.results, runs_healthy=args.runs_healthy))
-        print(f"error: {e}", file=sys.stderr)
-        return 1
-    if args.report is None:
-        print(render_report(results, runs_healthy=args.runs_healthy))
-    return 0
+    cli = typer.Typer(no_args_is_help=True, name="dace-determinism", help=__doc__)
+
+    @cli.command()
+    def check(
+        run1: Annotated[Path, typer.Option("--run1", metavar="PATH", help="First cache root.")],
+        run2: Annotated[Path, typer.Option("--run2", metavar="PATH", help="Second cache root.")],
+        diffs_dir: Annotated[
+            Path | None,
+            typer.Option(
+                "--diffs-dir",
+                metavar="PATH",
+                help="If set, write per-program mismatch reports here.",
+            ),
+        ] = None,
+        report: Annotated[
+            Path | None,
+            typer.Option("--report", metavar="PATH", help="If set, write the summary report here."),
+        ] = None,
+        runs_healthy: Annotated[
+            bool | None,
+            typer.Option(
+                "--runs-healthy/--no-runs-healthy",
+                help="Whether both runs completed cleanly. When set, a differing program "
+                "count is treated as a failure (non-deterministic count) instead of a skip.",
+            ),
+        ] = None,
+    ) -> None:
+        """Compare two gt4py.next build caches for deterministic DaCe codegen."""
+        try:
+            results = check_determinism(
+                run1.expanduser().resolve(),
+                run2.expanduser().resolve(),
+                runs_healthy=runs_healthy,
+                diffs_dir=diffs_dir.expanduser().resolve() if diffs_dir else None,
+                report_path=report.expanduser().resolve() if report else None,
+            )
+        except UnsupportedBackendError as e:
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(2) from e
+        except NoProgramsObservedError as e:
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(3) from e
+        except (NoSourceFilesObservedError, NoComparableProgramsError) as e:
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(2) from e
+        except DeterminismError as e:
+            if report is None:
+                typer.echo(render_report(e.results, runs_healthy=runs_healthy))
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(1) from e
+        if report is None:
+            typer.echo(render_report(results, runs_healthy=runs_healthy))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    if typer is None:
+        raise SystemExit(
+            "error: this CLI requires `typer`; run it via `./scripts/run` or the uv shebang."
+        )
+    cli()

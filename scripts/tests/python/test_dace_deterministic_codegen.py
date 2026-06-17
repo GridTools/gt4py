@@ -1,3 +1,4 @@
+#
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2024, ETH Zurich
@@ -5,6 +6,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+#
 
 """Tests for the DaCe codegen determinism check."""
 
@@ -14,8 +16,7 @@ import hashlib
 import pathlib
 
 import pytest
-
-from scripts.dace_deterministic_codegen import (
+from dace_deterministic_codegen import (
     DeterminismError,
     NoComparableProgramsError,
     NoProgramsObservedError,
