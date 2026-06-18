@@ -117,7 +117,7 @@ class NdArrayField(
         # Serialize only the dataclass fields, excluding cached properties
         # stored in `__dict__` (which may not be picklable).
         return {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
-    
+
     @classmethod
     def from_array(
         cls,
