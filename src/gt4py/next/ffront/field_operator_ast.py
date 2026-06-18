@@ -21,7 +21,7 @@ from gt4py.eve import (
     datamodels,
     utils as eve_utils,
 )
-from gt4py.eve.extended_typing import Any, Generic, TypeAlias, TypeVar, Union
+from gt4py.eve.extended_typing import Any, Generic, Optional, TypeAlias, TypeVar, Union
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
@@ -144,6 +144,7 @@ class TupleComprehension(Expr):
 
     inner: TupleComprehensionMapper
     iterable: Expr
+    fixed_length_mappers: Optional[list[TupleComprehensionMapper]] = None
 
 
 # This is essentially a lambda. The difference is that for a lambda we might not know the type of

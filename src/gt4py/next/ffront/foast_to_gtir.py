@@ -12,7 +12,7 @@ import functools
 from typing import Any, Callable, Optional
 
 from gt4py import eve
-from gt4py.eve.extended_typing import Never, cast
+from gt4py.eve.extended_typing import Never, TypeGuard, cast
 from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -31,6 +31,12 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
 from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
+
+
+def _is_sym_or_tuple_of_sym(value: object) -> TypeGuard[itir.Sym | tuple]:
+    return isinstance(value, itir.Sym) or (
+        isinstance(value, tuple) and all(_is_sym_or_tuple_of_sym(element) for element in value)
+    )
 
 
 def foast_to_gtir(inp: ffront_stages.FOASTOperatorDef) -> itir.FunctionDefinition:
@@ -258,24 +264,62 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> itir.Expr:
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
 
-    def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> itir.Expr:
-        target = self.visit(node.inner.target, **kwargs)
-        element_expr = self.visit(node.inner.element_expr, **kwargs)
-
+    def _bind_tuple_comprehension_target(
+        self,
+        target: itir.Sym | tuple,
+        element_expr: itir.Expr,
+        iterable_el: itir.Expr | str,
+    ) -> itir.Expr:
         # e.g. `(... for el1, el2 in ...)` -> `(let el1 = t[0], el2 = t[1] ... for t in ...)`
-        if isinstance(target, tuple):
-            flat_targets = utils.flatten_nested_tuple(target)
-            new_target = next(self.uid_generator["__tuple_comprh"])
-            flat_targets_vals = utils.flatten_nested_tuple(
-                utils.tree_map(
-                    lambda _, path: functools.reduce(
-                        lambda el, i: im.tuple_get(i, el), path, new_target
-                    ),
-                    with_path_arg=True,
-                )(target)
+        if not isinstance(target, tuple):
+            return im.let(target, iterable_el)(element_expr)
+
+        flat_targets = cast(tuple[str | itir.Sym, ...], utils.flatten_nested_tuple(target))
+        nested_target_values = cast(
+            tuple,
+            utils.tree_map(
+                lambda _, path: functools.reduce(
+                    lambda el, i: im.tuple_get(i, el), path, iterable_el
+                ),
+                with_path_arg=True,
+            )(target),
+        )
+        flat_targets_vals = utils.flatten_nested_tuple(nested_target_values)
+
+        bindings = [
+            (target, cast(itir.Expr | str, value))
+            for target, value in zip(flat_targets, flat_targets_vals, strict=True)
+        ]
+        return im.let(*bindings)(element_expr)
+
+    def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> itir.Expr:
+        if node.fixed_length_mappers is not None:
+            # Fixed-length tuple comprehensions are unrolled with `process_elements`. Variable
+            # length comprehensions (`VarArgType`) keep the single mapper below and use `map_tuple`.
+            elements = node.fixed_length_mappers
+            iterable = self.visit(node.iterable, **kwargs)
+            element_types = ts.TupleType(types=[ts.DeferredType(constraint=None) for _ in elements])
+
+            def lower_fixed_element(iterable_el: itir.Expr, path: tuple[int, ...]) -> itir.Expr:
+                (index,) = path
+                element = elements[index]
+                return self._bind_tuple_comprehension_target(
+                    self.visit(element.target, **kwargs),
+                    self.visit(element.element_expr, **kwargs),
+                    iterable_el,
+                )
+
+            return lowering_utils.process_elements(
+                lower_fixed_element, iterable, element_types, with_path_arg=True
             )
+
+        target = self.visit(node.inner.target, **kwargs)
+        assert _is_sym_or_tuple_of_sym(target)
+        element_expr = self.visit(node.inner.element_expr, **kwargs)
+        if isinstance(target, tuple):
+            new_target = next(self.uid_generator["__tuple_comprh"])
+            element_expr = self._bind_tuple_comprehension_target(target, element_expr, new_target)
             target = new_target
-            element_expr = im.let(*zip(flat_targets, flat_targets_vals))(element_expr)
 
         return im.call(im.call("map_tuple")(im.lambda_(target)(element_expr)))(
             self.visit(node.iterable, **kwargs)
@@ -528,10 +572,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.literal(str(val), target_type)
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
-        if isinstance(type_, ts.COLLECTION_TYPE_SPECS):
-            type_ = cast(
-                ts.CollectionTypeSpec, type_
-            )  # This shouldn't be needed after the previous isinstance() check
+        if isinstance(type_, (ts.TupleType, ts.NamedCollectionType)):
             # This code-path is only active in the init of a scan,
             # as otherwise the frontend generates tuple expressions of `Constant`s.
             val = arguments.extract(val) if isinstance(type_, ts.NamedCollectionType) else val

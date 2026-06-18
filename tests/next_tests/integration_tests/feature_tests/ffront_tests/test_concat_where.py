@@ -8,13 +8,23 @@
 
 import numpy as np
 import pytest
-from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
+from next_tests.integration_tests.cases import (
+    E2V,
+    E2VDim,
+    Edge,
+    IDim,
+    JDim,
+    KDim,
+    cartesian_case,
+    unstructured_case,
+)
 from gt4py import next as gtx
-from gt4py.next import broadcast
+from gt4py.next import broadcast, common, neighbor_sum
 from gt4py.next.ffront.experimental import concat_where
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 pytestmark = pytest.mark.uses_concat_where
@@ -330,6 +340,87 @@ def test_with_tuples(cartesian_case):
         boundary1,
         out=out,
         ref=(ref0, ref1),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+def test_with_nested_tuples(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        interior0: cases.IJKField,
+        boundary0: cases.IJField,
+        interior1: cases.IJKField,
+        boundary1: cases.IJField,
+        interior2: cases.IJKField,
+        boundary2: cases.IJField,
+    ) -> tuple[cases.IJKField, tuple[cases.IJKField, cases.IJKField]]:
+        return concat_where(
+            KDim == 0,
+            (boundary0, (boundary1, boundary2)),
+            (interior0, (interior1, interior2)),
+        )
+
+    interiors = tuple(cases.allocate(cartesian_case, testee, f"interior{i}")() for i in range(3))
+    boundaries = tuple(cases.allocate(cartesian_case, testee, f"boundary{i}")() for i in range(3))
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    refs = tuple(
+        np.where(
+            k[np.newaxis, np.newaxis, :] == 0,
+            boundary.asnumpy()[:, :, np.newaxis],
+            interior.asnumpy(),
+        )
+        for boundary, interior in zip(boundaries, interiors)
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        interiors[0],
+        boundaries[0],
+        interiors[1],
+        boundaries[1],
+        interiors[2],
+        boundaries[2],
+        out=out,
+        ref=(refs[0], (refs[1], refs[2])),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_sparse_fields
+def test_with_tuples_of_local_fields(unstructured_case):
+    @gtx.field_operator
+    def testee(
+        a: cases.VField,
+        b: cases.VField,
+        c: cases.VField,
+        d: cases.VField,
+    ) -> tuple[cases.EField, cases.EField]:
+        t = concat_where(Edge < 2, (a(E2V), b(E2V)), (c(E2V), d(E2V)))
+        return neighbor_sum(t[0], axis=E2VDim), neighbor_sum(t[1], axis=E2VDim)
+
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    edge_mask = np.arange(unstructured_case.default_sizes[Edge]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c, d: (
+            np.sum(
+                np.where(edge_mask[:, np.newaxis], a[e2v_table], c[e2v_table]),
+                axis=1,
+                initial=0,
+                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(edge_mask[:, np.newaxis], b[e2v_table], d[e2v_table]),
+                axis=1,
+                initial=0,
+                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
     )
 
 

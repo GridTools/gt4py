@@ -42,7 +42,6 @@ from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.iterator import ir as itir
 
-
 Edge = gtx.Dimension("Edge")
 Vertex = gtx.Dimension("Vertex")
 V2EDim = gtx.Dimension("V2E", gtx.DimensionKind.LOCAL)
@@ -372,6 +371,100 @@ def test_astype_nested_tuple():
     )
 
     assert lowered_inlined.expr == reference
+
+
+def test_fixed_len_tuple_comprehension():
+    def foo(a: tuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]], factor: float64):
+        return tuple(el * factor for el in a)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    iterable = "__tuple_comprh_0"
+    reference = im.let(iterable, "a")(
+        im.make_tuple(
+            im.let("el", im.tuple_get(0, iterable))(im.op_as_fieldop("multiplies")("el", "factor")),
+            im.let("el", im.tuple_get(1, iterable))(im.op_as_fieldop("multiplies")("el", "factor")),
+        )
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
+
+
+def test_var_len_tuple_comprehension_scalar():
+    def foo(a: tuple[float64, ...]):
+        return tuple(2.0 * el for el in a)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.call(
+        im.call("map_tuple")(im.lambda_("el")(im.multiplies_(im.literal("2.0", "float64"), "el")))
+    )("a")
+
+    assert lowered.expr == reference
+
+
+def test_var_len_tuple_comprehension_field():
+    def foo(a: tuple[gtx.Field[[TDim], float64], ...], factor: float64):
+        return tuple(el * factor for el in a)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.call(
+        im.call("map_tuple")(im.lambda_("el")(im.op_as_fieldop("multiplies")("el", "factor")))
+    )("a")
+
+    assert lowered.expr == reference
+
+
+def test_var_len_tuple_comprehension_field_with_local_dim():
+    def foo(a: tuple[gtx.Field[[Vertex, V2EDim], float64], ...]):
+        return tuple(2.0 * el for el in a)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    two = im.literal("2.0", "float64")
+    reference = im.call(
+        im.call("map_tuple")(
+            im.lambda_("el")(
+                im.op_as_fieldop(im.map_("multiplies"))(
+                    im.op_as_fieldop("make_const_list")(two), "el"
+                )
+            )
+        )
+    )("a")
+
+    assert lowered.expr == reference
+
+
+def test_fixed_len_tuple_comprehension_mixed_local_field():
+    def foo(a: gtx.Field[[Edge], float64], b: gtx.Field[[Vertex], float64]):
+        return tuple(2.0 * el for el in (a(V2E), b))
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    iterable = "__tuple_comprh_0"
+    two = im.literal("2.0", "float64")
+    reference = im.let(iterable, im.make_tuple(im.as_fieldop_neighbors("V2E", "a"), "b"))(
+        im.make_tuple(
+            im.let("el", im.tuple_get(0, iterable))(
+                im.op_as_fieldop(im.map_("multiplies"))(
+                    im.op_as_fieldop("make_const_list")(two), "el"
+                )
+            ),
+            im.let("el", im.tuple_get(1, iterable))(im.op_as_fieldop("multiplies")(two, "el")),
+        )
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
 
 
 def test_unary_minus():

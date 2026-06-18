@@ -380,6 +380,32 @@ def test_fixed_len_tuple_comprehension(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+@pytest.mark.uses_unstructured_shift
+def test_fixed_len_tuple_comprehension_mixed_local_field(unstructured_case):
+    @gtx.field_operator
+    def testee(
+        edge_field: cases.EField, vertex_field: cases.VField
+    ) -> tuple[cases.VField, cases.VField]:
+        local_field, field = tuple(2 * el for el in (edge_field(V2E), vertex_field))
+        return neighbor_sum(local_field, axis=V2EDim), field
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda e, v: (
+            np.sum(
+                2 * e[v2e_table],
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            2 * v,
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_args
 def test_var_len_tuple_comprehension(cartesian_case):
     @gtx.field_operator
     def testee(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:

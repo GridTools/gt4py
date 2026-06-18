@@ -11,6 +11,7 @@ from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
+from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import errors
 from gt4py.next.common import Dimension, DimensionKind, promote_dims
 from gt4py.next.ffront import (
@@ -326,8 +327,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]
-                    assert isinstance(new_type, ts.DataType)
+                    indexed_type = values.type.types[index]
+                    assert isinstance(indexed_type, ts.DataType)
+                    new_type = indexed_type
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
                     )
@@ -683,18 +685,63 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ) -> foast.TupleComprehension:
         target = self.visit(node.inner.target, **kwargs)
         iterable = self.visit(node.iterable, **kwargs)
+
+        def deduce_target_type(
+            target: NestedTuple[foast.Symbol] | foast.Symbol,
+            element_type: ts.TypeSpec,
+            inner_kwargs: dict[str, Any],
+        ) -> NestedTuple[foast.Symbol] | foast.Symbol:
+            @tree_map(with_path_arg=True)
+            def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> foast.Symbol:
+                try:
+                    type_ = element_type
+                    for i in path:
+                        if not isinstance(type_, ts.TupleType) or len(type_.types) <= i:
+                            raise IndexError()
+                        type_ = type_.types[i]
+                    return self.visit(target_el, refine_type=type_, **inner_kwargs)
+                except IndexError:
+                    raise errors.DSLError(
+                        target_el.location, f"Cannot unpack non-iterable '{type_}' object."
+                    ) from None
+
+            return process_target(target)
+
+        def deduce_mapper(
+            element_type: ts.DataType,
+        ) -> foast.TupleComprehensionMapper:
+            inner_kwargs = {**kwargs, "symtable": kwargs["symtable"].new_child()}
+            new_target = deduce_target_type(target, element_type, inner_kwargs)
+            return foast.TupleComprehensionMapper(
+                target=new_target,
+                element_expr=self.visit(node.inner.element_expr, **inner_kwargs),
+                location=node.location,
+            )
+
         if isinstance(iterable.type, ts.TupleType):
             if len(iterable.type.types) == 0:
                 raise errors.DSLError(
                     iterable.location,
                     "Cannot iterate over an empty tuple in a tuple comprehension.",
                 )
-            if not all(t == iterable.type.types[0] for t in iterable.type.types):
+            if not all(
+                isinstance(element_type, ts.DataType) for element_type in iterable.type.types
+            ):
                 raise errors.DSLError(
                     iterable.location,
-                    "Not implemented: all elements of the iterable in a tuple comprehension must have the same type.",
+                    "Tuple comprehension iterable elements must be data types.",
                 )
-            element_type = iterable.type.types[0]
+
+            element_types = cast(list[ts.DataType], iterable.type.types)
+            elements = [deduce_mapper(element_type) for element_type in element_types]
+            result = foast.TupleComprehension(
+                inner=elements[0],
+                iterable=iterable,
+                fixed_length_mappers=elements,
+                location=node.location,
+                type=ts.TupleType(types=[element.element_expr.type for element in elements]),
+            )
+            return result
         elif isinstance(iterable.type, ts.VarArgType):
             element_type = iterable.type.element_type
         else:
@@ -703,37 +750,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Iterable in generator expression must be a tuple, got '{iterable.type}'.",
             )
 
-        inner_kwargs = {"symtable": node.inner.annex.symtable, **kwargs}
-
-        @tree_map(with_path_arg=True)
-        def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> foast.Symbol:
-            try:
-                type_ = element_type
-                for i in path:
-                    if not isinstance(type_, ts.TupleType) or len(type_.types) <= i:
-                        raise IndexError()
-                    type_ = type_.types[i]
-                return self.visit(target_el, refine_type=type_, **inner_kwargs)
-            except IndexError:
-                raise errors.DSLError(
-                    target_el.location, f"Cannot unpack non-iterable '{type_}' object."
-                ) from None
-
-        new_target = process_target(target)
-
-        element_expr = self.visit(node.inner.element_expr, **inner_kwargs)
-
-        return_type: ts.TupleType | ts.VarArgType
-        if isinstance(iterable.type, ts.TupleType):
-            return_type = ts.TupleType(types=[element_expr.type] * len(iterable.type.types))
-        else:
-            assert isinstance(iterable.type, ts.VarArgType)
-            return_type = ts.VarArgType(element_type=element_expr.type)
+        new_mapper = deduce_mapper(element_type)
+        element_expr = new_mapper.element_expr
+        return_type = ts.VarArgType(element_type=element_expr.type)
 
         return foast.TupleComprehension(
-            inner=foast.TupleComprehensionMapper(
-                target=new_target, element_expr=element_expr, location=node.location
-            ),
+            inner=new_mapper,
             iterable=iterable,
             location=node.location,
             type=return_type,

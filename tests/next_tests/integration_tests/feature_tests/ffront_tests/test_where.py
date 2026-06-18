@@ -7,15 +7,24 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
-from typing import Tuple
 import pytest
-from next_tests.integration_tests.cases import IDim, JDim, KDim, Koff, cartesian_case
+from next_tests.integration_tests.cases import (
+    E2V,
+    E2VDim,
+    IDim,
+    JDim,
+    KDim,
+    Koff,
+    cartesian_case,
+    unstructured_case,
+)
 from gt4py import next as gtx
-from gt4py.next import int32
+from gt4py.next import common, int32, neighbor_sum
 from gt4py.next.ffront.fbuiltins import where, broadcast
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 
@@ -109,4 +118,39 @@ def test_with_tuples(cartesian_case):
         *boundaries,
         out=out,
         ref=(refs[0], (refs[1], refs[2])),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+def test_with_tuples_and_local_condition(unstructured_case):
+    @gtx.field_operator
+    def testee(
+        a: cases.VField,
+        b: cases.VField,
+        c: cases.VField,
+        d: cases.VField,
+    ) -> tuple[cases.EField, cases.EField]:
+        cond = a(E2V) > c(E2V)
+        t = where(cond, (a(E2V), b(E2V)), (c(E2V), d(E2V)))
+        return neighbor_sum(t[0], axis=E2VDim), neighbor_sum(t[1], axis=E2VDim)
+
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c, d: (
+            np.sum(
+                np.where(a[e2v_table] > c[e2v_table], a[e2v_table], c[e2v_table]),
+                axis=1,
+                initial=0,
+                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(a[e2v_table] > c[e2v_table], b[e2v_table], d[e2v_table]),
+                axis=1,
+                initial=0,
+                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
     )
