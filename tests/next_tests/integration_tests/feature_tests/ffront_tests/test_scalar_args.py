@@ -14,7 +14,6 @@ from gt4py.next import broadcast, int32
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
     IDim,
-    Ioff,
     Vertex,
     cartesian_case,
     unstructured_case,
@@ -76,7 +75,7 @@ def test_scalar_arg_with_field(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
         tmp = b * a
-        return tmp(Ioff[1])
+        return tmp(IDim + 1)
 
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, testee, "b")()

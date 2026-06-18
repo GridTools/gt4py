@@ -15,9 +15,7 @@ from gt4py.next.ffront.experimental import as_offset
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
     IDim,
-    Ioff,
     KDim,
-    Koff,
     cartesian_case,
 )
 from next_tests.integration_tests.cases_utils import (
@@ -29,7 +27,7 @@ from next_tests.integration_tests.cases_utils import (
 def test_cartesian_shift(cartesian_case):
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
-        return a(Ioff[1])
+        return a(IDim + 1)
 
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
@@ -43,8 +41,8 @@ def test_fold_shifts(cartesian_case):
 
     @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
-        tmp = a + b(Ioff[1])
-        return tmp(Ioff[1])
+        tmp = a + b(IDim + 1)
+        return tmp(IDim + 1)
 
     a = cases.allocate(cartesian_case, testee, "a").extend({cases.IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, testee, "b").extend({cases.IDim: (0, 2)})()
@@ -56,6 +54,9 @@ def test_fold_shifts(cartesian_case):
 @pytest.mark.uses_cartesian_shift
 @pytest.mark.uses_dynamic_offsets
 def test_offset_field(cartesian_case):
+    Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
+    Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
+
     ref = np.full(
         (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
     )
@@ -66,8 +67,8 @@ def test_offset_field(cartesian_case):
         # note: this leads to an access to offset_field in
         # IDim: (0, out.size[I]), KDim: (0, out.size[K]+1)
         a_i_k = a_i(as_offset(Koff, offset_field))
-        b_i = a(Ioff[1])
-        b_i_k = b_i(Koff[1])
+        b_i = a(IDim + 1)
+        b_i_k = b_i(KDim + 1)
         return a_i_k == b_i_k
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
@@ -84,7 +85,6 @@ def test_offset_field(cartesian_case):
         a,
         offset_field,
         out=out,
-        offset_provider={"Ioff": IDim, "Koff": KDim},
         ref=ref,
         comparison=lambda out, ref: np.all(out == ref),
     )

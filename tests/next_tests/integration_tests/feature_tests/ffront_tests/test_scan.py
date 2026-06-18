@@ -19,7 +19,6 @@ from next_tests.integration_tests.cases import (
     IDim,
     JDim,
     KDim,
-    Koff,
     cartesian_case,
 )
 from next_tests.integration_tests.cases_utils import (
@@ -81,7 +80,7 @@ def test_scalar_scan_vertical_offset(cartesian_case):
 
     @gtx.field_operator
     def testee(inp: gtx.Field[[KDim], float]) -> gtx.Field[[KDim], float]:
-        return testee_scan(inp(Koff[1]))
+        return testee_scan(inp(KDim + 1))
 
     inp = cases.allocate(
         cartesian_case,

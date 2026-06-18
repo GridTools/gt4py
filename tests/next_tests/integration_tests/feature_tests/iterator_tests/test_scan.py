@@ -11,7 +11,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, named_range, scan, shift
-from gt4py.next.iterator.runtime import fundef, offset
+from gt4py.next.iterator.runtime import fundef
 
 from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
@@ -25,7 +25,7 @@ def test_scan_in_stencil(program_processor):
 
     isize = 1
     ksize = 3
-    Koff = offset("Koff")
+    Koff = gtx.CartesianConnectivity(KDim)
     inp = gtx.as_field(
         [IDim, KDim],
         np.copy(np.broadcast_to(np.arange(0, ksize, dtype=np.float64), (isize, ksize))),
@@ -50,7 +50,7 @@ def test_scan_in_stencil(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"Koff": KDim},
+        offset_provider={},
         column_axis=KDim,
     )
 

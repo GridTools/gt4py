@@ -57,7 +57,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDe
         >>> compile_time_args = arguments.CompileTimeArgs(
         ...     args=tuple(param.type for param in copy_program.past_stage.past_node.params),
         ...     kwargs={},
-        ...     offset_provider={"I": IDim},
+        ...     offset_provider={},
         ...     column_axis=None,
         ...     argument_descriptor_contexts={},
         ... )
