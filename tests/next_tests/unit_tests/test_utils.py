@@ -12,7 +12,7 @@ import inspect
 
 import pytest
 
-from gt4py.eve import datamodels
+from gt4py.eve import concepts, datamodels
 from gt4py.next import fingerprinting, utils
 
 from eve_tests import definitions
@@ -68,7 +68,11 @@ class TestFingerprintFieldMetadata:
 def test_skipping_fields_node_deconstructor_skips_nested_fields_and_is_cached():
     deconstructor = fingerprinting.skipping_fields_node_deconstructor("int_value")
     assert deconstructor is fingerprinting.skipping_fields_node_deconstructor("int_value")
-    fingerprinter = fingerprinting.make_fingerprinter(deconstructor=deconstructor)
+    # The factory returns a per-node deconstructor; compose it as a `Node`
+    # override to obtain a full deconstructor a fingerprinter can use.
+    fingerprinter = fingerprinting.make_fingerprinter(
+        deconstructor=fingerprinting.make_strict_data_deconstructor({concepts.Node: deconstructor})
+    )
 
     node_a = definitions.CompoundNode(
         int_value=1,
@@ -92,9 +96,9 @@ def test_skipping_fields_node_deconstructor_skips_nested_fields_and_is_cached():
 
 
 def test_skipping_fields_node_deconstructor_returns_a_composable_deconstructor():
-    # The factory returns a `Deconstructor` (one level of structure), so it can be
-    # composed into a custom fingerprinter via `make_fingerprinter`. The skipped
-    # field is dropped from the deconstruction pieces.
+    # The factory returns a `NodeDeconstructor` (one level of a node), so it can be
+    # composed as a `Node` override into a custom deconstructor (and from there a
+    # fingerprinter). The skipped field is dropped from the deconstruction pieces.
     deconstructor = fingerprinting.skipping_fields_node_deconstructor("int_value")
     deconstruction = deconstructor(definitions.make_simple_node(fixed=True))
     field_names = {name for name, _ in deconstruction.pieces}
@@ -102,16 +106,15 @@ def test_skipping_fields_node_deconstructor_returns_a_composable_deconstructor()
 
 
 def test_default_deconstructor():
-    # The public default deconstructor classifies objects into empty,
+    # The default (strict) deconstructor classifies objects into empty,
     # ordered and order-insensitive deconstructions...
-    assert isinstance(fingerprinting.deconstruct(1), fingerprinting.EmptyDeconstruction)
-    composite = fingerprinting.deconstruct((1, 2))
+    deconstruct = fingerprinting.strict_fingerprint_deconstructor
+    assert isinstance(deconstruct(1), fingerprinting.EmptyDeconstruction)
+    composite = deconstruct((1, 2))
     assert isinstance(composite, fingerprinting.Deconstruction)
     assert not isinstance(composite, fingerprinting.EmptyDeconstruction)
     assert not isinstance(composite, fingerprinting.OrderInsensitiveDeconstruction)
-    assert isinstance(
-        fingerprinting.deconstruct({1, 2}), fingerprinting.OrderInsensitiveDeconstruction
-    )
+    assert isinstance(deconstruct({1, 2}), fingerprinting.OrderInsensitiveDeconstruction)
     # ... and a fingerprinter built from the default deconstructor and aggregator
     # (via `make_fingerprinter`) reproduces `strict_fingerprinter`.
     payload = {"a": (1, 2)}

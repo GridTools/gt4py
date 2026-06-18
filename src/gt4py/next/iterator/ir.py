@@ -24,8 +24,8 @@ DimensionKind = common.DimensionKind
 # TODO(tehrengruber): this is a workaround for the fact that `eve.Node`s type can be
 # set after creation, in the type inference passes.
 lenient_ir_fingerprinter: fingerprinting.Fingerprinter = fingerprinting.make_fingerprinter(
-    deconstructor=fingerprinting.skipping_fields_node_deconstructor(
-        "location", "type", fallback=fingerprinting.lenient_fingerprint_deconstructor
+    deconstructor=fingerprinting.make_lenient_data_deconstructor(
+        {concepts.Node: fingerprinting.skipping_fields_node_deconstructor("location", "type")}
     )
 )
 

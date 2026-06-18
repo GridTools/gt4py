@@ -18,17 +18,20 @@ Public API:
 - `Deconstruction` / `EmptyDeconstruction` / `OrderInsensitiveDeconstruction`
   — results of deconstructing one level of an object.
 - `Deconstructor` — type alias for a per-object deconstructor.
-- `make_deconstructor` — build a dispatching deconstructor from per-type overrides.
+- `make_deconstructor` — build a dispatching deconstructor from per-type overrides and a fallback.
+- `make_strict_data_deconstructor` / `make_lenient_data_deconstructor` — build the
+  by-reference (strict) / structural (lenient) deconstructor, optionally with overrides.
 - `make_fingerprinter` — build a fingerprinter from a deconstructor and an aggregator.
-- `deconstruct` — the default GT4Py deconstructor.
 - `catabolize` — iterative bottom-up fold over a deconstructed object graph.
 - `Aggregator` / `Fingerprinter` — type aliases.
 - `fingerprint_aggregator` — the xxhash-based aggregator used by all built-in fingerprinters.
 - `strict_fingerprinter` — cross-process deterministic fingerprinter.
-- `strict_fingerprint_deconstructor` — deconstructor used by `strict_fingerprinter`.
+- `strict_fingerprint_deconstructor` — the default deconstructor, used by `strict_fingerprinter`.
 - `lenient_fingerprinter` — single-process fingerprinter tolerant of non-importable objects.
 - `lenient_fingerprint_deconstructor` — deconstructor used by `lenient_fingerprinter`.
-- `skipping_fields_node_deconstructor` — deconstructor that skips named node fields.
+- `NodeDeconstructor` — type alias for a per-`eve.Node` deconstructor.
+- `skipping_fields_node_deconstructor` — node deconstructor (a `make_*_data_deconstructor`
+  override) that skips named node fields.
 
 The per-field opt-out helper `gt4py_metadata` (and its namespace key
 `GT4PY_CLASS_METADATA_NS`) used to live here; they now live in
@@ -256,7 +259,23 @@ _DECONSTRUCT_PICKLE_REDUCE_PROTOCOL: Final[int] = 2
 
 
 def object_deconstruct_fallback(obj: Any) -> Deconstruction:
-    cls = type(obj)
+    """
+    General deconstructor for objects.
+
+    Dataclasses and datamodels are deconstructed through their fields, everything else is
+    delegated to the ``__reduce_ex__`` rules.
+
+    We need to define this workaround instead of dispatching on virtual
+    Dataclass / DataModel ABCs, since complicated inheritance / composition
+    hierarchies breaks `functools.singledispatch` dispatch.
+    """
+    cls: type = type(obj)
+
+    if (fields := _data_fields(cls)) is not None:
+        return _fields_deconstruction(
+            cls,
+            ((f.name, getattr(obj, f.name)) for f in fields),
+        )
 
     try:
         # Like `pickle.Pickler`, give precedence to reducers registered in
@@ -382,29 +401,6 @@ def _fields_deconstruction(cls: type, items: Iterable[tuple[Any, Any]]) -> Decon
     return Deconstruction.from_pieces(*items, state=b"fields\0" + _class_tag(cls))
 
 
-def data_deconstructor_fallback(obj: Any) -> Deconstruction:
-    """
-    Default deconstructor understanding dataclasses and datamodels through their fields.
-
-    Dataclasses and datamodels are deconstructed through their fields, everything else is
-    delegated to the ``__reduce_ex__`` rules.
-
-    We need to define this workaround instead of dispatching on virtual
-    Dataclass / DataModel ABCs, since complicated inheritance / composition
-    hierarchies breaks `singledispatch`.
-
-    Used as the default `fallback` of `make_deconstructor`.
-    """
-    cls: type = type(obj)
-    if (fields := _data_fields(cls)) is not None:
-        return _fields_deconstruction(
-            cls,
-            ((f.name, getattr(obj, f.name)) for f in fields),
-        )
-    else:
-        return object_deconstruct_fallback(obj)
-
-
 def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
     gt4py_meta = metadata.get(next_utils.GT4PY_CLASS_METADATA_NS, None)
     return not gt4py_meta or gt4py_meta.get("fingerprint", True)
@@ -412,11 +408,17 @@ def _is_fingerprinted_field(metadata: Mapping[str, Any]) -> bool:
 
 def metadata_based_deconstructor_fallback(obj: Any) -> Deconstruction:
     """
-    Deconstructor understanding dataclasses and datamodels metadata.
+    Default deconstructor understanding dataclasses and datamodels through their fields.
 
     Dataclasses and datamodels are deconstructed through their fields, dropping
     those marked with ``gt4py_metadata(fingerprint=False)``; everything else is
-    delegated to the ``__reduce_ex__`` rules. = metadata_based_deconstructor_fallback
+    delegated to the ``__reduce_ex__`` rules.
+
+    We need to define this workaround instead of dispatching on virtual
+    Dataclass / DataModel ABCs, since complicated inheritance / composition
+    hierarchies breaks `singledispatch`.
+
+    Used as the `fallback` of the ``make_*_data_deconstructor`` factories.
     """
     cls: type = type(obj)
     if (fields := _data_fields(cls)) is not None:
@@ -458,7 +460,7 @@ def make_strict_data_deconstructor(
 ) -> Deconstructor:
     return make_deconstructor(
         overrides=STRICT_DECONSTRUCTORS | dict(overrides or {}),
-        fallback=data_deconstructor_fallback,
+        fallback=metadata_based_deconstructor_fallback,
     )
 
 
@@ -467,7 +469,7 @@ def make_lenient_data_deconstructor(
 ) -> Deconstructor:
     return make_deconstructor(
         overrides=LENIENT_DECONSTRUCTORS | dict(overrides or {}),
-        fallback=data_deconstructor_fallback,
+        fallback=metadata_based_deconstructor_fallback,
     )
 
 
@@ -705,12 +707,22 @@ lenient_fingerprinter: Fingerprinter = make_fingerprinter(
 )
 
 
-# -- Other fingerprinters --
+# -- Other deconstructors --
+#: Deconstructs one level of an `eve.Node`; composed into a fingerprinter as a
+#: `concepts.Node` override of a `make_*_data_deconstructor` map.
+NodeDeconstructor: TypeAlias = Callable[[concepts.Node], Deconstruction]
+
+
 @functools.cache
-def skipping_fields_node_deconstructor(
-    *skipped_fields: str, fallback: Deconstructor = metadata_based_deconstructor_fallback
-) -> Deconstructor:
-    """Return a node deconstructor which skips some fields."""
+def skipping_fields_node_deconstructor(*skipped_fields: str) -> NodeDeconstructor:
+    """
+    Return a node deconstructor which skips some fields.
+
+    The result deconstructs one level of an `eve.Node` (dropping the named child
+    fields); it is *not* a full `Deconstructor`, so compose it as a
+    `concepts.Node` override into `make_strict_data_deconstructor` /
+    `make_lenient_data_deconstructor` before building a fingerprinter.
+    """
 
     _skipped_fields_set = frozenset(skipped_fields)
 
@@ -724,4 +736,4 @@ def skipping_fields_node_deconstructor(
             ),
         )
 
-    return make_deconstructor({concepts.Node: node_deconstructor}, fallback=fallback)
+    return node_deconstructor

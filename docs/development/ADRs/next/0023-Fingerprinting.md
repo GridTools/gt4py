@@ -92,13 +92,16 @@ EmptyDeconstruction(state: bytes)                  # terminal: no pieces
 OrderInsensitiveDeconstruction(state, pieces)      # pieces combine in canonical order
 ```
 
-`make_deconstructor(overrides)` builds a `Deconstructor` from the default
-per-type registry plus optional overrides (dispatched on the object's MRO via
-`functools.singledispatch`), with a customizable `fallback` covering
-dataclasses, datamodels and `__reduce_ex__`-reducible objects; the
-module-level `deconstruct` is the default deconstructor, whose `fallback`
-layers the `gt4py_metadata(fingerprint=False)` field opt-out on the dataclass /
-datamodel / `__reduce_ex__` rules.
+`make_deconstructor(overrides, *, fallback)` builds a `Deconstructor` from the
+default per-type registry plus optional overrides (dispatched on the object's
+MRO via `functools.singledispatch`), with a `fallback` covering dataclasses,
+datamodels and `__reduce_ex__`-reducible objects. The
+`make_strict_data_deconstructor` / `make_lenient_data_deconstructor` factories
+wrap it with the by-reference / structural type rules and the shared
+`metadata_based_deconstructor_fallback`, which layers the
+`gt4py_metadata(fingerprint=False)` field opt-out on the dataclass / datamodel /
+`__reduce_ex__` rules; `strict_fingerprint_deconstructor`
+(`= make_strict_data_deconstructor()`) is the default deconstructor.
 A fingerprinter is `catabolize` partially applied to a deconstructor and the
 digest aggregator; `make_fingerprinter(deconstructor=…, aggregator=…)` builds one
 (`strict_fingerprinter` is the default deconstructor + aggregator). The default
@@ -192,14 +195,14 @@ rules:
   for the workflow-step half of the persistent OTF build caches (see the
   durability split below).
 - `skipping_fields_node_deconstructor("location", "type", ...)` — a cached
-  factory returning a `Deconstructor` for `eve.Node`s that recursively skips the
-  named child fields, ready to compose into a fingerprinter via
-  `make_fingerprinter`. The iterator/GTIR
+  factory returning a per-node `NodeDeconstructor` for `eve.Node`s that skips the
+  named child fields, ready to compose as a `concepts.Node` override into a
+  `make_*_data_deconstructor` map. The iterator/GTIR
   `semantic_fingerprinter` skips `location` and `type`: it keys the **persistent**
   (cross-process, on-disk) C++/SDFG build cache, which must stay stable when only
   source locations shift (an unrelated edit above a stencil, a moved checkout) and
   across the inference passes that fill in `type` after node creation. It composes
-  the skip on top of `lenient_fingerprint_deconstructor`, so a program graph is
+  the skip into `make_lenient_data_deconstructor`, so a program graph is
   hashed structurally rather than rejected.
 - The FOAST/PAST `semantic_fingerprinter`, by contrast, skips **nothing** — it keys
   the **in-memory** frontend-stage caches, whose cached product (the lowered IR) has
@@ -215,9 +218,8 @@ rules:
 
 ```python
 semantic_fingerprinter = fingerprinting.make_fingerprinter(
-    deconstructor=fingerprinting.make_deconstructor(
+    deconstructor=fingerprinting.make_lenient_data_deconstructor(
         {types.FunctionType: _deconstruct_definition_function},
-        fallback=fingerprinting.lenient_fingerprint_deconstructor,
     ),
 )
 ```
@@ -432,7 +434,8 @@ registry entries. Using `optree` itself was evaluated and rejected:
 
 - `src/gt4py/next/fingerprinting.py` — `Deconstruction`, `EmptyDeconstruction`,
   `OrderInsensitiveDeconstruction`, `catabolize`, `make_deconstructor`,
-  `make_fingerprinter`, `deconstruct`, `fingerprint_aggregator`,
+  `make_strict_data_deconstructor`, `make_lenient_data_deconstructor`,
+  `make_fingerprinter`, `strict_fingerprint_deconstructor`, `fingerprint_aggregator`,
   `strict_fingerprinter`, `lenient_fingerprinter`,
   `skipping_fields_node_deconstructor`. Imported directly by
   `gt4py.next` consumers (not re-exported through `gt4py.next.utils`).

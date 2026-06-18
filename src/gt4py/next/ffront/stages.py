@@ -60,9 +60,8 @@ def _deconstruct_definition_function(func: types.FunctionType) -> fingerprinting
 #: fingerprints DSL definition functions by their source code and closure
 #: variables (instead of by qualified name).
 semantic_fingerprinter: fingerprinting.Fingerprinter = fingerprinting.make_fingerprinter(
-    deconstructor=fingerprinting.make_deconstructor(
-        {types.FunctionType: _deconstruct_definition_function},
-        fallback=fingerprinting.lenient_fingerprint_deconstructor,
+    deconstructor=fingerprinting.make_lenient_data_deconstructor(
+        {types.FunctionType: _deconstruct_definition_function}
     ),
 )
 
