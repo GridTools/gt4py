@@ -80,9 +80,17 @@ class Deconstruction(Collection[_T]):
         return len(self.pieces)
 
     @staticmethod
-    def from_reference(obj: Any) -> EmptyDeconstruction:
-        """Builder for objects identified by their fully qualified name."""
-        return EmptyDeconstruction(b"ref\0" + _reference_by_fully_qualified_name(obj).encode())
+    def from_reference(obj: Any, *, strict: bool = True) -> EmptyDeconstruction:
+        """
+        Builder for objects identified by their fully qualified name.
+
+        With ``strict`` (the default) non-importable objects are rejected; with
+        ``strict=False`` the qualified name is trusted unverified (the lenient
+        by-reference variant). See `_reference_by_fully_qualified_name`.
+        """
+        return EmptyDeconstruction(
+            b"ref\0" + _reference_by_fully_qualified_name(obj, check=strict).encode()
+        )
 
     @staticmethod
     def from_typed_value(type_: type, /, value: bytes = b"") -> EmptyDeconstruction:
@@ -128,21 +136,24 @@ def _resolves_as_global(obj: Any) -> bool:
     return target is obj
 
 
-def _reference_by_fully_qualified_name(obj: Any) -> str:
+def _reference_by_fully_qualified_name(obj: Any, check: bool) -> str:
     """
-    Return the qualified name of `obj`, rejecting non-importable objects.
+    Return the qualified name of `obj`, optionally rejecting non-importable objects.
 
     Objects identified by their fully qualified name (import path) can only be
-    properly fingerprinted if they are importable, module-level objects, whose
-    qualified name uniquely identifies them. Anything with ``<locals>`` in its
-    qualified name (closures, nested functions, classes defined inside a
-    function) and anonymous ``<lambda>`` callables are rejected by a cheap
-    string check; additionally, the name is resolved through `sys.modules` and
-    required to yield `obj` itself, which also rejects shadowed, reassigned or
-    deleted names whose qualified name no longer identifies the object.
+    properly fingerprinted across processes if they are importable, module-level
+    objects, whose qualified name uniquely identifies them. When ``check`` is
+    set, anything with ``<locals>`` in its qualified name (closures, nested
+    functions, classes defined inside a function) and anonymous ``<lambda>``
+    callables are rejected by a cheap string check; additionally, the name is
+    resolved through `sys.modules` and required to yield `obj` itself, which
+    also rejects shadowed, reassigned or deleted names whose qualified name no
+    longer identifies the object. When ``check`` is unset (the lenient
+    by-reference variant) the name is returned unverified, trusting it as the
+    object's identity within a single process.
     """
     fqn = eve_utils.get_fully_qualified_name(obj)
-    if "<locals>" in fqn or "<lambda>" in fqn or not _resolves_as_global(obj):
+    if check and ("<locals>" in fqn or "<lambda>" in fqn or not _resolves_as_global(obj)):
         raise TypeError(
             f"Objects which are not importable under their qualified name ('{fqn}') -- e.g. "
             "locally defined or anonymous callables, shadowed or reassigned globals -- cannot "
@@ -597,7 +608,7 @@ strict_fingerprinter: Fingerprinter = make_fingerprinter(
 # -- Lenient fingerprinting for complex cases with dynamically-created objects --
 #
 # The default by-reference rules reject non-importable callables, types and
-# modules (see `_reference_by_fully_qualified_name`) to make sure persistent,
+# modules (see `_reference_by_fully_qualified_name(check=True)`) to make sure persistent,
 # on-disk key is always reproducible in a *different* process, where only an
 # import path uniquely identifies an object. That requirement is impossible
 # to satisfy when there are dynamically-created objects without an import path.
@@ -653,17 +664,11 @@ def _lenient_function_deconstruction(func: types.FunctionType) -> Deconstruction
         )
 
 
-def _lenient_reference(obj: Any) -> EmptyDeconstruction:
-    try:
-        return EmptyDeconstruction.from_reference(obj)
-    except TypeError:
-        # A dynamically-created type/module (e.g. a ``unittest.mock.Mock``
-        # subclass): identify it by its qualified name without the round-trip
-        # resolve check that the strict reference requires.
-        return EmptyDeconstruction(
-            b"unresolved-ref\0" + eve_utils.get_fully_qualified_name(obj).encode()
-        )
-
+#: Tolerant by-reference deconstructor: identifies a dynamically-created
+#: type/module (e.g. a ``unittest.mock.Mock`` subclass) by its (unverified)
+#: qualified name, skipping the resolve check the strict reference requires
+#: instead of raising.
+_lenient_reference = functools.partial(Deconstruction.from_reference, strict=False)
 
 #: Tolerant overrides composed into `lenient_fingerprinter`'s
 #: deconstructor (see `make_deconstructor`).

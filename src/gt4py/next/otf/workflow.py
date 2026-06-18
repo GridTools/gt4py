@@ -329,7 +329,7 @@ class CachedStep(
         return cls(
             step=step,
             input_fingerprinter=input_fingerprinter,
-            step_fingerprinter=fingerprinting.strict_fingerprinter,
+            step_fingerprinter=fingerprinting.lenient_fingerprinter,
             cache=cache,
         )
 
