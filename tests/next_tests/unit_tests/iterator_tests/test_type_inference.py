@@ -325,6 +325,24 @@ def test_expression_type(test_case):
 
 
 @pytest.mark.parametrize(
+    "testee",
+    [
+        im.tree_map_tuple(im.ref("plus"))(
+            im.ref("t1", ts.TupleType(types=[int_type, int_type, int_type])),
+            im.ref("t2", ts.TupleType(types=[int_type, int_type])),
+        ),
+        im.tree_map_tuple(im.ref("plus"))(
+            im.ref("t1", ts.TupleType(types=[int_type, ts.TupleType(types=[int_type, int_type])])),
+            im.ref("t2", ts.TupleType(types=[int_type, int_type])),
+        ),
+    ],
+)
+def test_tree_map_tuple_mismatched_structure_raises_type_error(testee):
+    with pytest.raises(TypeError, match=r"same tuple structure"):
+        itir_type_inference.infer(testee, offset_provider_type={}, allow_undeclared_symbols=True)
+
+
+@pytest.mark.parametrize(
     "test_case",
     [(expr, type_) for expr, type_ in expression_test_cases() if cpm.is_applied_as_fieldop(expr)],
 )
