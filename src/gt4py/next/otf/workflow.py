@@ -292,11 +292,8 @@ class CachedStep(
         cache: OpaqueMutableMapping[str, EndT] | None = None,
     ) -> CachedStep[StartT, EndT, HashT]:
         """
-        Build a single-process cache, pairing an in-memory store with the lenient fingerprinter.
+        Build an in-memory store with the lenient fingerprinter.
 
-        The lenient fingerprinter tolerates non-importable steps (lambdas,
-        closures, dynamically-created steps) by hashing them structurally, which
-        is valid because the cache lives and dies within a single process.
         Defaults to a fresh ``dict``.
         """
         return cls(
@@ -314,14 +311,7 @@ class CachedStep(
         input_fingerprinter: Callable[[StartT], HashT],
         cache: OpaqueMutableMapping[str, EndT] | str | pathlib.Path,
     ) -> CachedStep[StartT, EndT, HashT]:
-        """
-        Build a cross-process cache, pairing a persistent store with the strict fingerprinter.
-
-        The strict fingerprinter requires every referenced function to be
-        importable by qualified name, so the on-disk keys stay reproducible
-        across processes: a non-importable step raises a ``TypeError`` instead
-        of risking a non-reproducible key and stale-binary reuse.
-        """
+        """Build a persistent folder-based store with the lenient fingerprinter."""
 
         if isinstance(cache, (str, pathlib.Path)):
             cache = filecache.FileCache(cache)
@@ -342,11 +332,11 @@ class CachedStep(
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
-        hash_ = self.cache_key(inp)
+        key = self.cache_key(inp)
         try:
-            result = self.cache[hash_]
+            result = self.cache[key]
         except KeyError:
-            result = self.cache[hash_] = self.step(inp)
+            result = self.cache[key] = self.step(inp)
         return result
 
     def cache_key(self, inp: StartT) -> str:

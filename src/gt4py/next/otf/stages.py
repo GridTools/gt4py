@@ -40,7 +40,7 @@ def fast_compilable_program_fingerprinter(program_def: definitions.CompilablePro
     offset_provider = prog_def_args.offset_provider
     return fingerprinting.lenient_fingerprinter(
         (
-            itir.semantic_fingerprinter(program_def.data),
+            itir.lenient_ir_fingerprinter(program_def.data),
             prog_def_args.args,
             prog_def_args.kwargs,
             common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
@@ -49,7 +49,9 @@ def fast_compilable_program_fingerprinter(program_def: definitions.CompilablePro
     )
 
 
-compilable_program_fingerprinter: Final[fingerprinting.Fingerprinter] = itir.semantic_fingerprinter
+compilable_program_fingerprinter: Final[fingerprinting.Fingerprinter] = (
+    fingerprinting.strict_fingerprinter
+)
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)

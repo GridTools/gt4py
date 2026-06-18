@@ -172,7 +172,7 @@ def _class_obj_tag(obj: Any) -> bytes:
     return _class_tag(cls)
 
 
-def _instance_state_pieces(obj: Any) -> tuple[Any, ...]:
+def _instance_state(obj: Any) -> tuple[Any, ...]:
     """
     Extra instance ``__dict__`` state carried by a builtin-container *subclass*.
 
@@ -185,7 +185,7 @@ def _instance_state_pieces(obj: Any) -> tuple[Any, ...]:
     return ((b"__dict__\0", state),) if state else ()
 
 
-_BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
+_COMMON_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     **{
         # for mixin-based enums (`IntEnum`, `IntFlag`, `StrEnum`, ...) the value-type base
         # precedes `Enum` in the MRO and would win the dispatch.
@@ -220,25 +220,25 @@ _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     bytes: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
     bytearray: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), bytes(obj)),
     tuple: lambda obj: Deconstruction.from_pieces(
-        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj)
+        *obj, *_instance_state(obj), state=_class_obj_tag(obj)
     ),
     list: lambda obj: Deconstruction.from_pieces(
-        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj)
+        *obj, *_instance_state(obj), state=_class_obj_tag(obj)
     ),
     dict: lambda obj: Deconstruction.from_pieces(
         *obj.items(),
-        *_instance_state_pieces(obj),
+        *_instance_state(obj),
         state=_class_obj_tag(obj),
         ordered=isinstance(obj, collections.OrderedDict),
     ),
     collections.defaultdict: lambda obj: Deconstruction.from_pieces(
-        obj.default_factory, dict(obj), *_instance_state_pieces(obj), state=_class_obj_tag(obj)
+        obj.default_factory, dict(obj), *_instance_state(obj), state=_class_obj_tag(obj)
     ),
     set: lambda obj: Deconstruction.from_pieces(
-        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj), ordered=False
+        *obj, *_instance_state(obj), state=_class_obj_tag(obj), ordered=False
     ),
     frozenset: lambda obj: Deconstruction.from_pieces(
-        *obj, *_instance_state_pieces(obj), state=_class_obj_tag(obj), ordered=False
+        *obj, *_instance_state(obj), state=_class_obj_tag(obj), ordered=False
     ),
     # `Namespace`/`FrozenNamespace` (e.g. frontend-valid constant namespaces in
     # closure vars) are deconstructed by their contents. This both content-hashes
@@ -247,12 +247,7 @@ _BUILTIN_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     eve_utils.Namespace: lambda obj: Deconstruction.from_pieces(
         *obj.items(), state=b"namespace\0" + _class_obj_tag(obj), ordered=False
     ),
-    type: EmptyDeconstruction.from_reference,
-    types.FunctionType: EmptyDeconstruction.from_reference,
-    types.BuiltinFunctionType: EmptyDeconstruction.from_reference,
-    types.ModuleType: EmptyDeconstruction.from_reference,
 }
-
 
 # Pickle protocol used when deconstructing unknown objects via
 # `__reduce_ex__`. Pinned so the deconstruction (and therefore the
@@ -293,6 +288,76 @@ def object_deconstruct_fallback(obj: Any) -> Deconstruction:
         custom_setstate,
         state=b"reduce",
     )
+
+
+#: Strict deconstructors map used by `strict_fingerprinter`
+STRICT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = _COMMON_DECONSTRUCTORS | {
+    type: EmptyDeconstruction.from_reference,
+    types.FunctionType: EmptyDeconstruction.from_reference,
+    types.BuiltinFunctionType: EmptyDeconstruction.from_reference,
+    types.ModuleType: EmptyDeconstruction.from_reference,
+}
+
+
+def _deconstruct_code(code: types.CodeType) -> Deconstruction:
+    """Deconstruct a code object by its behaviorally-relevant, deterministic parts."""
+    return Deconstruction.from_pieces(
+        code.co_code,
+        code.co_consts,  # includes nested code objects (inner functions, comprehensions)
+        code.co_names,
+        code.co_varnames,
+        code.co_freevars,
+        code.co_cellvars,
+        code.co_argcount,
+        code.co_posonlyargcount,
+        code.co_kwonlyargcount,
+        code.co_flags,
+        state=b"code\0" + code.co_name.encode(),
+    )
+
+
+def _deconstruct_cell(cell: types.CellType) -> Deconstruction:
+    """Deconstruct a closure cell by its captured value (an empty cell carries none)."""
+    try:
+        contents = cell.cell_contents
+    except ValueError:
+        return EmptyDeconstruction.from_typed_value(types.CellType, b"empty")
+    return Deconstruction.from_pieces(contents, state=b"cell")
+
+
+def _lenient_function_deconstruction(func: types.FunctionType) -> Deconstruction:
+    try:
+        return EmptyDeconstruction.from_reference(func, strict=True)
+    except TypeError:
+        # Non-importable callable (lambda / nested / locally-defined): hash its
+        # code, defaults and captured closure instead of its (non-identifying)
+        # qualified name. Globals are intentionally *not* included -- the
+        # bytecode references them by name (in ``co_names``), so the body still
+        # affects the fingerprint without dragging in the whole module namespace.
+        return Deconstruction.from_pieces(
+            func.__code__,
+            func.__defaults__,
+            func.__kwdefaults__,
+            func.__closure__ or (),
+            state=b"function\0" + func.__qualname__.encode(),
+        )
+
+
+# Tolerant by-reference deconstructor: identifies a dynamically-created
+# type/module (e.g. a ``unittest.mock.Mock`` subclass) by its (unverified)
+# qualified name, skipping the resolve check the strict reference requires
+# instead of raising.
+_lenient_reference = functools.partial(Deconstruction.from_reference, strict=False)
+
+#: Tolerant deconstructors map used by `lenient_fingerprinter`
+LENIENT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
+    types.FunctionType: _lenient_function_deconstruction,
+    types.BuiltinFunctionType: _lenient_reference,
+    types.ModuleType: _lenient_reference,
+    type: _lenient_reference,
+    types.CodeType: _deconstruct_code,
+    types.CellType: _deconstruct_cell,
+}
 
 
 @functools.cache
@@ -351,7 +416,7 @@ def metadata_based_deconstructor_fallback(obj: Any) -> Deconstruction:
 
     Dataclasses and datamodels are deconstructed through their fields, dropping
     those marked with ``gt4py_metadata(fingerprint=False)``; everything else is
-    delegated to the ``__reduce_ex__`` rules.
+    delegated to the ``__reduce_ex__`` rules. = metadata_based_deconstructor_fallback
     """
     cls: type = type(obj)
     if (fields := _data_fields(cls)) is not None:
@@ -366,7 +431,7 @@ def metadata_based_deconstructor_fallback(obj: Any) -> Deconstruction:
 def make_deconstructor(
     overrides: Optional[Mapping[type, Deconstructor]] = None,
     *,
-    fallback: Deconstructor = metadata_based_deconstructor_fallback,
+    fallback: Deconstructor,
 ) -> Deconstructor:
     """
     Create a deconstructor, optionally with customized per-type deconstruction.
@@ -384,13 +449,26 @@ def make_deconstructor(
 
     return eve_utils.singledispatcher(
         fallback,
-        implementations={**_BUILTIN_DECONSTRUCTORS, **(overrides or {})},
+        implementations={**_COMMON_DECONSTRUCTORS, **(overrides or {})},
     )
 
 
-#: General deconstructor for objects, built from the default per-type
-#: deconstruction rules (see `make_deconstructor`).
-deconstruct: Final[Deconstructor] = make_deconstructor()
+def make_strict_data_deconstructor(
+    overrides: Optional[Mapping[type, Deconstructor]] = None,
+) -> Deconstructor:
+    return make_deconstructor(
+        overrides=STRICT_DECONSTRUCTORS | dict(overrides or {}),
+        fallback=data_deconstructor_fallback,
+    )
+
+
+def make_lenient_data_deconstructor(
+    overrides: Optional[Mapping[type, Deconstructor]] = None,
+) -> Deconstructor:
+    return make_deconstructor(
+        overrides=LENIENT_DECONSTRUCTORS | dict(overrides or {}),
+        fallback=data_deconstructor_fallback,
+    )
 
 
 # -- Generic reduction of deconstructed objects --
@@ -553,8 +631,6 @@ def catabolize(
 
 
 # -- Generic fingerprinting of objects --
-
-
 #: A fingerprinter is `catabolize` instantiated with digest
 #: aggregators (xxhash64 with domain separation) over a deconstructor, which
 #: must produce type tags as `state`.
@@ -566,9 +642,7 @@ Fingerprinter: TypeAlias = Callable[[Any], str]
 #: fallback). Identifies types, functions and modules by their qualified name,
 #: rejecting non-importable ones, and honors the
 #: ``gt4py_metadata(fingerprint=False)`` opt-out.
-strict_fingerprint_deconstructor: Final[Deconstructor] = make_deconstructor(
-    fallback=metadata_based_deconstructor_fallback
-)
+strict_fingerprint_deconstructor: Final[Deconstructor] = make_strict_data_deconstructor()
 
 
 def fingerprint_aggregator(deconstruction: Deconstruction[str]) -> str:
@@ -619,71 +693,7 @@ strict_fingerprinter: Fingerprinter = make_fingerprinter(
 # unverified qualified name for dynamically-created types/modules, instead of
 # raising.
 
-
-def _deconstruct_code(code: types.CodeType) -> Deconstruction:
-    """Deconstruct a code object by its behaviorally-relevant, deterministic parts."""
-    return Deconstruction.from_pieces(
-        code.co_code,
-        code.co_consts,  # includes nested code objects (inner functions, comprehensions)
-        code.co_names,
-        code.co_varnames,
-        code.co_freevars,
-        code.co_cellvars,
-        code.co_argcount,
-        code.co_posonlyargcount,
-        code.co_kwonlyargcount,
-        code.co_flags,
-        state=b"code\0" + code.co_name.encode(),
-    )
-
-
-def _deconstruct_cell(cell: types.CellType) -> Deconstruction:
-    """Deconstruct a closure cell by its captured value (an empty cell carries none)."""
-    try:
-        contents = cell.cell_contents
-    except ValueError:
-        return EmptyDeconstruction.from_typed_value(types.CellType, b"empty")
-    return Deconstruction.from_pieces(contents, state=b"cell")
-
-
-def _lenient_function_deconstruction(func: types.FunctionType) -> Deconstruction:
-    try:
-        return EmptyDeconstruction.from_reference(func)
-    except TypeError:
-        # Non-importable callable (lambda / nested / locally-defined): hash its
-        # code, defaults and captured closure instead of its (non-identifying)
-        # qualified name. Globals are intentionally *not* included -- the
-        # bytecode references them by name (in ``co_names``), so the body still
-        # affects the fingerprint without dragging in the whole module namespace.
-        return Deconstruction.from_pieces(
-            func.__code__,
-            func.__defaults__,
-            func.__kwdefaults__,
-            func.__closure__ or (),
-            state=b"function\0" + func.__qualname__.encode(),
-        )
-
-
-#: Tolerant by-reference deconstructor: identifies a dynamically-created
-#: type/module (e.g. a ``unittest.mock.Mock`` subclass) by its (unverified)
-#: qualified name, skipping the resolve check the strict reference requires
-#: instead of raising.
-_lenient_reference = functools.partial(Deconstruction.from_reference, strict=False)
-
-#: Tolerant overrides composed into `lenient_fingerprinter`'s
-#: deconstructor (see `make_deconstructor`).
-_LENIENT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
-    types.FunctionType: _lenient_function_deconstruction,
-    types.BuiltinFunctionType: _lenient_reference,
-    types.ModuleType: _lenient_reference,
-    type: _lenient_reference,
-    types.CodeType: _deconstruct_code,
-    types.CellType: _deconstruct_cell,
-}
-
-lenient_fingerprint_deconstructor = make_deconstructor(
-    _LENIENT_DECONSTRUCTORS, fallback=metadata_based_deconstructor_fallback
-)
+lenient_fingerprint_deconstructor: Final[Deconstructor] = make_lenient_data_deconstructor()
 
 #: Fingerprinter for in-memory (single-process) cache keys: like
 #: `strict_fingerprinter`, but tolerant of non-importable callables, types
@@ -696,8 +706,6 @@ lenient_fingerprinter: Fingerprinter = make_fingerprinter(
 
 
 # -- Other fingerprinters --
-
-
 @functools.cache
 def skipping_fields_node_deconstructor(
     *skipped_fields: str, fallback: Deconstructor = metadata_based_deconstructor_fallback

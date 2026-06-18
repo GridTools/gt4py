@@ -23,7 +23,7 @@ DimensionKind = common.DimensionKind
 # Generate an unique fingerprint for `eve.Node`s ignoring the "location" and "type" attribute.
 # TODO(tehrengruber): this is a workaround for the fact that `eve.Node`s type can be
 # set after creation, in the type inference passes.
-semantic_fingerprinter: fingerprinting.Fingerprinter = fingerprinting.make_fingerprinter(
+lenient_ir_fingerprinter: fingerprinting.Fingerprinter = fingerprinting.make_fingerprinter(
     deconstructor=fingerprinting.skipping_fields_node_deconstructor(
         "location", "type", fallback=fingerprinting.lenient_fingerprint_deconstructor
     )

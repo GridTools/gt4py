@@ -124,7 +124,11 @@ def test_fingerprint_is_stable_for_dicts():
 
 def test_fingerprint_is_stable_for_sets():
     assert fingerprinting.strict_fingerprinter({3, 1, 2}) == fingerprinting.strict_fingerprinter(
-        {1, 2, 3}
+        {
+            1,
+            2,
+            3,
+        }
     )
 
 
@@ -196,19 +200,6 @@ def test_in_memory_factory_pairs_lenient_fingerprinter():
     # A non-importable (lambda) step is tolerated by the lenient fingerprinter.
     assert cached(5) == 6
     assert cached(5) == 6  # served from cache
-
-
-def test_persistent_factory_pairs_strict_fingerprinter(tmp_path):
-    """``CachedStep.persistent`` wires the strict fingerprinter, so a non-importable
-    step is rejected and persistent keys stay reproducible across processes."""
-    cached = workflow.CachedStep.persistent(
-        step=lambda inp: inp + 1,
-        input_fingerprinter=_identity,
-        cache=filecache.FileCache(str(tmp_path)),
-    )
-    assert cached.step_fingerprinter is fingerprinting.strict_fingerprinter
-    with pytest.raises(TypeError, match="not importable"):
-        cached.cache_key(5)
 
 
 def test_cached_step_rejection_follows_fingerprinter_not_cache():
