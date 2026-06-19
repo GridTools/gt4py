@@ -5,6 +5,13 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+"""Shared fixtures and helpers for the gt4py.next test suite.
+
+Holds the backend-matrix fixture (``exec_alloc_descriptor``), the mesh fixture
+(``mesh_descriptor``) and the grid / mesh descriptors, plus the common
+dimension, offset and field-type aliases used across unit, integration and
+regression tests. The ``cases`` framework builds on these; see ``cases.py``.
+"""
 
 import types
 from typing import Any, Protocol, TypeVar
@@ -35,9 +42,6 @@ __all__ = [
     "IDim",
     "JDim",
     "KDim",
-    "Ioff",
-    "Joff",
-    "Koff",
     "Vertex",
     "Edge",
     "Cell",
@@ -145,9 +149,6 @@ IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
-Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
-Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
-Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
 
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")
@@ -187,12 +188,7 @@ def simple_cartesian_grid(
         sizes = (sizes,) * 4
     assert len(sizes) == 4, "sizes must be a tuple of four integers"
 
-    offset_provider = {
-        "Ioff": IDim,
-        "Joff": JDim,
-        "Koff": KDim,
-        "KHalfoff": KHalfDim,
-    }
+    offset_provider = {}
 
     return types.SimpleNamespace(
         name="simple_cartesian_grid",

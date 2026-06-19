@@ -405,3 +405,14 @@ def test_infer_type():
             Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": Tuple[str, ...]})
         ]
     )
+
+
+def test_is_single_dispatch_callable():
+    import functools
+
+    # `functools.singledispatch` results (and wrappers exposing `dispatch`/`register`).
+    assert xtyping.is_single_dispatch_callable(functools.singledispatch(lambda _: None))
+
+    # Plain callables and non-callables are rejected.
+    assert not xtyping.is_single_dispatch_callable(lambda _: None)
+    assert not xtyping.is_single_dispatch_callable(42)
