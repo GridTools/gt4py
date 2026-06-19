@@ -6,89 +6,615 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import copy
 import dataclasses
 import inspect
-import pickle
+
 import pytest
 
-from gt4py.eve import datamodels
-from gt4py.next import utils
+from gt4py.eve import concepts, datamodels
+from gt4py.next import fingerprinting, utils
 
-
-# Module-level classes so pickle can resolve them by qualified name.
-@dataclasses.dataclass
-class _DataclassModel(utils.MetadataBasedPickling):
-    value: int
-    transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
-
-
-@dataclasses.dataclass(slots=True)
-class _SlottedDataclassModel(utils.MetadataBasedPickling):
-    value: int
-    transient: str = dataclasses.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
-
-
-@datamodels.datamodel(slots=False)
-class _DatamodelModel(utils.MetadataBasedPickling):
-    value: int
-    transient: str = datamodels.field(default="skip", metadata=utils.gt4py_metadata(pickle=False))
+from eve_tests import definitions
 
 
 @dataclasses.dataclass
-class _EmptyDataclassModel(utils.MetadataBasedPickling):
-    pass
+class _DataclassModel:
+    value: int
+    transient: str = dataclasses.field(
+        default="skip", metadata=utils.gt4py_metadata(fingerprint=False)
+    )
 
 
 @dataclasses.dataclass(slots=True)
-class _EmptySlottedDataclassModel(utils.MetadataBasedPickling):
-    pass
+class _SlottedDataclassModel:
+    value: int
+    transient: str = dataclasses.field(
+        default="skip", metadata=utils.gt4py_metadata(fingerprint=False)
+    )
 
 
 @datamodels.datamodel(slots=False)
-class _EmptyDatamodelModel(utils.MetadataBasedPickling):
-    pass
+class _DatamodelModel:
+    value: int
+    transient: str = datamodels.field(
+        default="skip", metadata=utils.gt4py_metadata(fingerprint=False)
+    )
 
 
-class TestMetadataBasedPickling:
-    def test_get_metadata_based_getstate_rejects_non_dataclass_like_type(self):
-        with pytest.raises(TypeError, match="Expected a dataclass or datamodel type"):
-            utils._get_metadata_based_state_getstate(object)
+class TestFingerprintFieldMetadata:
+    @pytest.mark.parametrize(
+        "model_class", [_DataclassModel, _SlottedDataclassModel, _DatamodelModel]
+    )
+    def test_fields_marked_fingerprint_false_do_not_affect_fingerprint(self, model_class):
+        assert fingerprinting.strict_fingerprinter(
+            model_class(1, "foo")
+        ) == fingerprinting.strict_fingerprinter(model_class(1, "bar"))
 
     @pytest.mark.parametrize(
-        "instance,expected_state",
-        [
-            (_DataclassModel(1, "foo"), {"value": 1}),
-            (_SlottedDataclassModel(1, "foo"), (None, {"value": 1})),
-            (_DatamodelModel(1, "foo"), {"value": 1}),
-            (_EmptyDataclassModel(), {}),
-            (_EmptySlottedDataclassModel(), None),
-            (_EmptyDatamodelModel(), {}),
-        ],
+        "model_class", [_DataclassModel, _SlottedDataclassModel, _DatamodelModel]
     )
-    def test_get_metadata_based_getstate(self, instance, expected_state):
-        cls = type(instance)
-        getstate = utils._get_metadata_based_state_getstate(cls)
-        assert getstate is utils._get_metadata_based_state_getstate(cls)  # cached
+    def test_other_fields_affect_fingerprint(self, model_class):
+        assert fingerprinting.strict_fingerprinter(
+            model_class(1, "foo")
+        ) != fingerprinting.strict_fingerprinter(model_class(2, "foo"))
 
-        assert getstate(instance) == expected_state
+    def test_different_classes_with_equal_fields_differ(self):
+        assert fingerprinting.strict_fingerprinter(
+            _DataclassModel(1)
+        ) != fingerprinting.strict_fingerprinter(_SlottedDataclassModel(1))
 
-    @pytest.mark.parametrize(
-        "instance,expected_fields",
-        [
-            (_DataclassModel(42, "skip"), {"value": 42}),
-            (_SlottedDataclassModel(42, "skip"), {"value": 42}),
-            (_DatamodelModel(42, "skip"), {"value": 42}),
-            (_EmptyDataclassModel(), {}),
-            (_EmptySlottedDataclassModel(), {}),
-            (_EmptyDatamodelModel(), {}),
-        ],
+
+def test_skipping_fields_node_deconstructor_skips_nested_fields_and_is_cached():
+    deconstructor = fingerprinting.skipping_fields_node_deconstructor("int_value")
+    assert deconstructor is fingerprinting.skipping_fields_node_deconstructor("int_value")
+    # The factory returns a per-node deconstructor; compose it as a `Node`
+    # override to obtain a full deconstructor a fingerprinter can use.
+    fingerprinter = fingerprinting.make_fingerprinter(
+        deconstructor=fingerprinting.make_strict_data_deconstructor({concepts.Node: deconstructor})
     )
-    def test_pickle_roundtrip(self, instance, expected_fields):
-        obj = instance
-        restored = pickle.loads(pickle.dumps(obj))
 
-        for field_name, expected_value in expected_fields.items():
-            assert getattr(restored, field_name) == expected_value
+    node_a = definitions.CompoundNode(
+        int_value=1,
+        location=definitions.make_location_node(fixed=True),
+        simple=definitions.make_simple_node(fixed=True),
+        simple_loc=definitions.make_simple_node_with_loc(fixed=True),
+        simple_opt=definitions.make_simple_node_with_optionals(fixed=True),
+        other_simple_opt=None,
+    )
+    node_b = copy.deepcopy(node_a)
+
+    node_b.int_value += 100
+    node_b.simple.int_value += 100
+    node_b.simple_loc.int_value += 100
+    node_b.simple_opt.int_value += 100
+
+    assert fingerprinter(node_a) == fingerprinter(node_b)
+
+    node_b.simple.str_value = "changed"
+    assert fingerprinter(node_a) != fingerprinter(node_b)
+
+
+def test_skipping_fields_node_deconstructor_returns_a_composable_deconstructor():
+    # The factory returns a `NodeDeconstructor` (one level of a node), so it can be
+    # composed as a `Node` override into a custom deconstructor (and from there a
+    # fingerprinter). The skipped field is dropped from the deconstruction pieces.
+    deconstructor = fingerprinting.skipping_fields_node_deconstructor("int_value")
+    deconstruction = deconstructor(definitions.make_simple_node(fixed=True))
+    field_names = {name for name, _ in deconstruction.pieces}
+    assert "int_value" not in field_names
+
+
+def test_default_deconstructor():
+    # The default (strict) deconstructor classifies objects into empty,
+    # ordered and order-insensitive deconstructions...
+    deconstruct = fingerprinting.strict_fingerprint_deconstructor
+    assert isinstance(deconstruct(1), fingerprinting.EmptyDeconstruction)
+    composite = deconstruct((1, 2))
+    assert isinstance(composite, fingerprinting.Deconstruction)
+    assert not isinstance(composite, fingerprinting.EmptyDeconstruction)
+    assert not isinstance(composite, fingerprinting.OrderInsensitiveDeconstruction)
+    assert isinstance(deconstruct({1, 2}), fingerprinting.OrderInsensitiveDeconstruction)
+    # ... and a fingerprinter built from the default deconstructor and aggregator
+    # (via `make_fingerprinter`) reproduces `strict_fingerprinter`.
+    payload = {"a": (1, 2)}
+    refingerprinter = fingerprinting.make_fingerprinter()
+    assert refingerprinter(payload) == fingerprinting.strict_fingerprinter(payload)
+
+
+class TestCatabolize:
+    @staticmethod
+    def _deconstruct(obj):
+        if isinstance(obj, (list, tuple)):
+            return fingerprinting.Deconstruction.from_pieces(*obj, state=type(obj))
+        return fingerprinting.EmptyDeconstruction(obj)
+
+    def test_carrier_type_is_generic(self):
+        # The reduction result can be of any type, e.g. the structure depth.
+        depth = fingerprinting.catabolize(
+            [[1, [2]], 3],
+            deconstructor=self._deconstruct,
+            aggregator=lambda d: (
+                0
+                if isinstance(d, fingerprinting.EmptyDeconstruction)
+                else 1 + max(d.pieces, default=0)
+            ),
+        )
+        assert depth == 3
+
+    def test_pieces_are_reduced_before_their_containers(self):
+        # Post-order traversal: the composite aggregator must always see the
+        # already aggregated results of the pieces, in piece order.
+        visited = []
+
+        def aggregator(deconstruction):
+            result = (
+                deconstruction.state
+                if isinstance(deconstruction, fingerprinting.EmptyDeconstruction)
+                else list(deconstruction.pieces)
+            )
+            visited.append(result)
+            return result
+
+        fingerprinting.catabolize(
+            [1, [2, 3]], deconstructor=self._deconstruct, aggregator=aggregator
+        )
+        assert visited == [1, 2, 3, [2, 3], [1, [2, 3]]]
+
+    def test_empty_containers_are_nodes(self):
+        # Composites without pieces must not corrupt the result bookkeeping.
+        def aggregator(deconstruction: fingerprinting.Deconstruction) -> tuple:
+            if isinstance(deconstruction, fingerprinting.EmptyDeconstruction):
+                return (deconstruction.state,)
+            return (deconstruction.state, *deconstruction.pieces)
+
+        result = fingerprinting.catabolize(
+            [[], ()], deconstructor=self._deconstruct, aggregator=aggregator
+        )
+        assert result == (list, (list,), (tuple,))
+
+    def test_deep_structures_do_not_hit_the_recursion_limit(self):
+        deeply_nested: tuple = ()
+        for _ in range(100_000):
+            deeply_nested = (deeply_nested,)
+        depth = fingerprinting.catabolize(
+            deeply_nested,
+            deconstructor=self._deconstruct,
+            aggregator=lambda d: (
+                0
+                if isinstance(d, fingerprinting.EmptyDeconstruction)
+                else 1 + max(d.pieces, default=0)
+            ),
+        )
+        assert depth == 100_001  # 100_000 wrappers + the innermost empty tuple node
+
+    def test_memoization_reduces_shared_subobjects_once(self):
+        deconstruct_calls = []
+
+        def deconstruct(obj):
+            deconstruct_calls.append(obj)
+            return self._deconstruct(obj)
+
+        shared = [1, 2]
+        fingerprinting.catabolize(
+            [shared, shared],
+            deconstructor=deconstruct,
+            aggregator=lambda d: 0,
+        )
+        assert sum(1 for obj in deconstruct_calls if obj is shared) == 1
+
+        deconstruct_calls.clear()
+        fingerprinting.catabolize(
+            [shared, shared],
+            deconstructor=deconstruct,
+            aggregator=lambda d: 0,
+            memoize=False,
+        )
+        assert sum(1 for obj in deconstruct_calls if obj is shared) == 2
+
+    def test_order_insensitive_pieces_are_aggregated_in_canonical_order(self):
+        def deconstructor(obj):
+            if isinstance(obj, frozenset):
+                return fingerprinting.OrderInsensitiveDeconstruction(state=None, pieces=tuple(obj))
+            return fingerprinting.EmptyDeconstruction(obj)
+
+        rendered = fingerprinting.catabolize(
+            frozenset({3, 1, 2}),
+            deconstructor=deconstructor,
+            aggregator=lambda d: (
+                str(d.state)
+                if isinstance(d, fingerprinting.EmptyDeconstruction)
+                else ",".join(d.pieces)
+            ),
+        )
+        # Canonical (sorted) order, independent of the set iteration order.
+        assert rendered == "1,2,3"
+
+    def test_cycles_raise_by_default(self):
+        cyclic: list = [1]
+        cyclic.append(cyclic)
+        with pytest.raises(ValueError, match="Cycle detected"):
+            fingerprinting.catabolize(
+                cyclic,
+                deconstructor=self._deconstruct,
+                aggregator=lambda d: 0,
+            )
+
+    def test_cycles_are_aggregated_as_back_references_when_allowed(self):
+        cyclic: list = [1]
+        cyclic.append(cyclic)
+        aggregated_states: list = []
+
+        def aggregator(deconstruction: fingerprinting.Deconstruction) -> int:
+            if isinstance(deconstruction, fingerprinting.EmptyDeconstruction):
+                aggregated_states.append(deconstruction.state)
+                return 0
+            return 1 + sum(deconstruction.pieces)
+
+        result = fingerprinting.catabolize(
+            cyclic,
+            deconstructor=self._deconstruct,
+            aggregator=aggregator,
+            allow_cycles=True,
+        )
+        assert result == 1
+        # The back reference encodes the relative depth up to its target.
+        assert aggregated_states == [1, b"cycle\x001"]
+
+
+def _module_level_func_a() -> None: ...
+
+
+def _module_level_func_b() -> None: ...
+
+
+class TestStrictFingerprinter:
+    def test_returns_stable_string(self):
+        fingerprint = fingerprinting.strict_fingerprinter({"a": 1})
+        assert isinstance(fingerprint, str)
+        assert fingerprint == fingerprinting.strict_fingerprinter({"a": 1})
+
+    def test_dicts_are_order_independent(self):
+        assert fingerprinting.strict_fingerprinter(
+            {"a": 1, "b": 2}
+        ) == fingerprinting.strict_fingerprinter({"b": 2, "a": 1})
+
+    def test_sets_are_order_independent(self):
+        assert fingerprinting.strict_fingerprinter(
+            {1, 2, 3}
+        ) == fingerprinting.strict_fingerprinter({3, 2, 1})
+
+    def test_distinguishes_different_content(self):
+        assert fingerprinting.strict_fingerprinter({"a": 1}) != fingerprinting.strict_fingerprinter(
+            {"a": 2}
+        )
+
+    def test_locally_defined_namespace_subclasses_are_fingerprinted_by_content(self):
+        # Frontend-valid constant namespaces (e.g. icon4py constants) are often
+        # locally-defined `FrozenNamespace` subclasses reachable via closure
+        # vars; they must be fingerprinted by content, not crash on the
+        # non-importable local class.
+        from gt4py.eve import utils as eve_utils
+
+        def make_consts(a, b):
+            class Consts(eve_utils.FrozenNamespace):
+                pass
+
+            return Consts(a=a, b=b)
+
+        assert fingerprinting.strict_fingerprinter(
+            make_consts(1, 2)
+        ) == fingerprinting.strict_fingerprinter(make_consts(1, 2))
+        assert fingerprinting.strict_fingerprinter(
+            make_consts(1, 2)
+        ) != fingerprinting.strict_fingerprinter(make_consts(1, 3))
+
+    def test_container_subclass_instance_state_is_fingerprinted(self):
+        # A builtin-container subclass carrying extra instance attributes must
+        # not collapse to the same fingerprint as another instance with the same
+        # items but different attributes (which would be a false cache hit).
+        class TaggedDict(dict):
+            tag: str
+
+        a = TaggedDict({"x": 1})
+        a.tag = "A"
+        b = TaggedDict({"x": 1})
+        b.tag = "B"
+        same_as_a = TaggedDict({"x": 1})
+        same_as_a.tag = "A"
+
+        assert fingerprinting.strict_fingerprinter(a) != fingerprinting.strict_fingerprinter(b)
+        assert fingerprinting.strict_fingerprinter(a) == fingerprinting.strict_fingerprinter(
+            same_as_a
+        )
+        # Exact builtins (no instance `__dict__`) are unaffected.
+        assert fingerprinting.strict_fingerprinter({"x": 1}) == fingerprinting.strict_fingerprinter(
+            {"x": 1}
+        )
+
+    def test_dicts_keyed_by_types_are_order_independent(self):
+        # Dicts keyed by types occur in compile-time metadata (e.g. argument descriptors).
+        assert fingerprinting.strict_fingerprinter(
+            {int: 1, str: 2}
+        ) == fingerprinting.strict_fingerprinter({str: 2, int: 1})
+
+    def test_types_are_fingerprinted_by_reference(self):
+        # Regression for the `type` reducer that used to recurse infinitely: types nested in
+        # containers must be fingerprinted by reference, deterministically and distinctly.
+        assert fingerprinting.strict_fingerprinter(
+            {"t": int}
+        ) == fingerprinting.strict_fingerprinter({"t": int})
+        assert fingerprinting.strict_fingerprinter(
+            {"t": int}
+        ) != fingerprinting.strict_fingerprinter({"t": str})
+
+    def test_functions_are_fingerprinted_by_reference(self):
+        # Importable, module-level functions are identified by their qualified name.
+        foo = _module_level_func_a
+        bar = _module_level_func_b
+        assert fingerprinting.strict_fingerprinter(
+            {"f": foo}
+        ) == fingerprinting.strict_fingerprinter({"f": foo})
+        assert fingerprinting.strict_fingerprinter(
+            {"f": foo}
+        ) != fingerprinting.strict_fingerprinter({"f": bar})
+
+    def test_non_importable_callables_raise(self):
+        # Locally defined and anonymous callables can share a qualified name with
+        # distinct objects (e.g. each call of a factory produces a new closure named
+        # `...<locals>.inner`, and every lambda is named `<lambda>`), so reducing
+        # them by reference would silently collide. They must raise instead.
+        def local_func() -> None: ...  # qualified name contains `<locals>`
+
+        def make_closure(n: int):
+            def inner() -> int:  # distinct objects, identical qualified name
+                return n
+
+            return inner
+
+        # Two distinct closures that would otherwise collide by reference.
+        assert make_closure(1) is not make_closure(2)
+
+        for non_importable in (local_func, lambda: None, make_closure(1)):
+            with pytest.raises(TypeError, match="not importable"):
+                fingerprinting.strict_fingerprinter({"f": non_importable})
+
+    def test_shadowed_globals_raise(self, monkeypatch):
+        import sys
+
+        # An object whose qualified name no longer resolves to itself (e.g. after
+        # being redefined interactively) cannot be safely identified by that name.
+        original = _module_level_func_a
+        monkeypatch.setattr(sys.modules[__name__], "_module_level_func_a", _module_level_func_b)
+        with pytest.raises(TypeError, match="not importable"):
+            fingerprinting.strict_fingerprinter({"f": original})
+
+    def test_modules_are_fingerprinted_by_reference(self):
+        import os
+        import sys
+
+        # Modules are unpicklable by the pure-Python pickler unless reduced by reference.
+        assert fingerprinting.strict_fingerprinter(
+            {"m": os}
+        ) == fingerprinting.strict_fingerprinter({"m": os})
+        assert fingerprinting.strict_fingerprinter(
+            {"m": os}
+        ) != fingerprinting.strict_fingerprinter({"m": sys})
+
+    def test_does_not_recurse_on_nested_types_modules_and_functions(self):
+        import os
+
+        # Regression: fingerprinting a built-in container holding types/modules/functions
+        # used to raise RecursionError (and later TypeError); it must just produce a hash.
+        payload = {"types": [int, str], "module": os, "nested": {float: ("x",)}}
+        assert isinstance(fingerprinting.strict_fingerprinter(payload), str)
+
+    def test_deep_structures_do_not_hit_the_recursion_limit(self):
+        # Regression: lowered IR trees (and other inputs) can nest far deeper than
+        # the Python recursion limit allows for recursive traversals.
+        deeply_nested: tuple = ()
+        for _ in range(100_000):
+            deeply_nested = (deeply_nested,)
+        assert isinstance(fingerprinting.strict_fingerprinter(deeply_nested), str)
+
+        nested_dicts: dict = {}
+        for _ in range(10_000):
+            nested_dicts = {"k": nested_dicts}
+        assert isinstance(fingerprinting.strict_fingerprinter(nested_dicts), str)
+
+    def test_dicts_with_unorderable_keys_are_order_independent(self):
+        from gt4py.next import common
+
+        # `Dimension`s (and other dataclasses without `__lt__`) occur as dict keys
+        # e.g. in user closure variables.
+        i, j = common.Dimension("I"), common.Dimension("J")
+        assert fingerprinting.strict_fingerprinter(
+            {i: 1, j: 2}
+        ) == fingerprinting.strict_fingerprinter({j: 2, i: 1})
+        assert fingerprinting.strict_fingerprinter(
+            {i: 1, j: 2}
+        ) != fingerprinting.strict_fingerprinter({i: 2, j: 1})
+
+    def test_fingerprint_is_a_function_of_value_not_identity(self):
+        # Shared sub-objects and equal copies must produce the same fingerprint.
+        d = {"a": 1}
+        assert fingerprinting.strict_fingerprinter((d, d)) == fingerprinting.strict_fingerprinter(
+            (d, dict(d))
+        )
+
+    def test_ordered_dicts_are_order_sensitive(self):
+        import collections
+
+        # Unlike `dict`, `collections.OrderedDict` equality is order-sensitive,
+        # so differently ordered instances must not collide.
+        od1 = collections.OrderedDict([("a", 1), ("b", 2)])
+        od2 = collections.OrderedDict([("b", 2), ("a", 1)])
+        assert od1 != od2
+        assert fingerprinting.strict_fingerprinter(od1) != fingerprinting.strict_fingerprinter(od2)
+
+    def test_defaultdict_factories_are_fingerprinted(self):
+        import collections
+
+        # The `default_factory` is part of a `defaultdict`'s observable behavior.
+        dd_int = collections.defaultdict(int, {"a": 1})
+        assert fingerprinting.strict_fingerprinter(dd_int) == fingerprinting.strict_fingerprinter(
+            collections.defaultdict(int, {"a": 1})
+        )
+        assert fingerprinting.strict_fingerprinter(dd_int) != fingerprinting.strict_fingerprinter(
+            collections.defaultdict(list, {"a": 1})
+        )
+        # A `defaultdict` is also distinguished from a plain `dict` with equal items.
+        assert fingerprinting.strict_fingerprinter(dd_int) != fingerprinting.strict_fingerprinter(
+            {"a": 1}
+        )
+        # The items contribution remains order-insensitive.
+        assert fingerprinting.strict_fingerprinter(
+            collections.defaultdict(int, {"a": 1, "b": 2})
+        ) == fingerprinting.strict_fingerprinter(collections.defaultdict(int, {"b": 2, "a": 1}))
+
+    def test_distinguishes_equal_values_of_different_types(self):
+        assert fingerprinting.strict_fingerprinter(True) != fingerprinting.strict_fingerprinter(1)
+        assert fingerprinting.strict_fingerprinter(1) != fingerprinting.strict_fingerprinter(1.0)
+        assert fingerprinting.strict_fingerprinter((1, 2)) != fingerprinting.strict_fingerprinter(
+            [1, 2]
+        )
+        assert fingerprinting.strict_fingerprinter("1") != fingerprinting.strict_fingerprinter(b"1")
+
+    def test_self_referential_structures_are_supported(self):
+        # E.g. module-level recursive functions appear in their own closure variables.
+        cyclic_a: dict = {"value": 1}
+        cyclic_a["self"] = cyclic_a
+        cyclic_b: dict = {"value": 1}
+        cyclic_b["self"] = cyclic_b
+        assert fingerprinting.strict_fingerprinter(cyclic_a) == fingerprinting.strict_fingerprinter(
+            cyclic_b
+        )
+
+        cyclic_c: dict = {"value": 2}
+        cyclic_c["self"] = cyclic_c
+        assert fingerprinting.strict_fingerprinter(cyclic_a) != fingerprinting.strict_fingerprinter(
+            cyclic_c
+        )
+
+    def test_enums_are_fingerprinted_by_content(self):
+        import enum
+
+        # Enum classes (commonly defined locally, e.g. as DSL constants) are
+        # fingerprinted by their member content, not by reference.
+        def make_enum(pi):
+            class Constants(enum.Enum):
+                PI = pi
+                E = 2.718
+
+            return Constants
+
+        c1, c2, c3 = make_enum(3.142), make_enum(3.142), make_enum(3.0)
+        assert fingerprinting.strict_fingerprinter(c1) == fingerprinting.strict_fingerprinter(c2)
+        assert fingerprinting.strict_fingerprinter(c1) != fingerprinting.strict_fingerprinter(c3)
+        assert fingerprinting.strict_fingerprinter(c1.PI) == fingerprinting.strict_fingerprinter(
+            c2.PI
+        )
+        assert fingerprinting.strict_fingerprinter(c1.PI) != fingerprinting.strict_fingerprinter(
+            c3.PI
+        )
+
+        # Mixin-based enums dispatch to the enum handler, not the value type.
+        class Device(enum.IntEnum):
+            CPU = 0
+            GPU = 1
+
+        assert fingerprinting.strict_fingerprinter(
+            Device.CPU
+        ) != fingerprinting.strict_fingerprinter(0)
+        assert fingerprinting.strict_fingerprinter(
+            Device.CPU
+        ) != fingerprinting.strict_fingerprinter(Device.GPU)
+
+    def test_ndarray_content_is_fingerprinted(self):
+        import numpy as np
+
+        a = np.array([[1, 2], [3, 4]], dtype=np.int32)
+        b = np.array([[1, 2], [3, 4]], dtype=np.int32)
+        assert fingerprinting.strict_fingerprinter(a) == fingerprinting.strict_fingerprinter(b)
+        assert fingerprinting.strict_fingerprinter(a) != fingerprinting.strict_fingerprinter(a.T)
+        assert fingerprinting.strict_fingerprinter(a) != fingerprinting.strict_fingerprinter(
+            a.astype(np.int64)
+        )
+
+    def test_copyreg_dispatch_table_reducers_are_honored(self):
+        import numpy as np
+
+        # NumPy ufuncs (e.g. in DSL closure variables) only pickle through their
+        # `copyreg.dispatch_table` reducer; their direct `__reduce_ex__` raises.
+        assert fingerprinting.strict_fingerprinter(np.cbrt) == fingerprinting.strict_fingerprinter(
+            np.cbrt
+        )
+        assert fingerprinting.strict_fingerprinter(np.cbrt) != fingerprinting.strict_fingerprinter(
+            np.sqrt
+        )
+
+
+class TestLenientFingerprinter:
+    def test_agrees_with_strict_fingerprinter_on_importable_objects(self):
+        # The lenient fingerprinter only relaxes the by-reference rules, so for
+        # a graph without non-importable objects it must produce the exact same
+        # fingerprint as the strict one (no spurious cache invalidation when a
+        # step graph switches between the two).
+        import os
+
+        payload = {"f": _module_level_func_a, "t": int, "m": os, "vals": [1, "x", (2.0,)]}
+        assert fingerprinting.lenient_fingerprinter(payload) == fingerprinting.strict_fingerprinter(
+            payload
+        )
+
+    def test_non_importable_callables_are_fingerprinted_structurally(self):
+        # Lambdas and closures have no identifying qualified name; the lenient
+        # fingerprinter hashes them by their code and captured closure instead
+        # of raising (valid for single-process, in-memory keys).
+        def make_closure(n):
+            def inner(x):
+                return x + n
+
+            return inner
+
+        # Same body and captured value → equal; different captured value → different.
+        assert fingerprinting.lenient_fingerprinter(
+            make_closure(1)
+        ) == fingerprinting.lenient_fingerprinter(make_closure(1))
+        assert fingerprinting.lenient_fingerprinter(
+            make_closure(1)
+        ) != fingerprinting.lenient_fingerprinter(make_closure(2))
+
+        # Different bodies → different; byte-identical bodies → equal (location
+        # is irrelevant for an in-memory step graph, unlike frontend keys).
+        assert fingerprinting.lenient_fingerprinter(
+            lambda x: x + 1
+        ) != fingerprinting.lenient_fingerprinter(lambda x: x + 2)
+        assert fingerprinting.lenient_fingerprinter(
+            lambda x: x + 1
+        ) == fingerprinting.lenient_fingerprinter(lambda x: x + 1)
+
+    def test_dynamically_created_types_do_not_raise(self):
+        # A locally-defined class (qualified name contains `<locals>`, hence not
+        # importable) reached as a value -- e.g. a `unittest.mock.Mock` subclass
+        # -- is identified by its qualified name instead of crashing.
+        def make_class():
+            class Dynamic:
+                pass
+
+            return Dynamic
+
+        first, second = make_class(), make_class()
+        assert isinstance(fingerprinting.lenient_fingerprinter({"t": first}), str)
+        assert fingerprinting.lenient_fingerprinter(
+            {"t": first}
+        ) == fingerprinting.lenient_fingerprinter({"t": second})
+
+    def test_strict_fingerprinter_still_rejects_non_importable_callables(self):
+        # The durability split is enforced: the strict fingerprinter (the one
+        # that keys persistent, cross-process caches) keeps raising.
+        with pytest.raises(TypeError, match="not importable"):
+            fingerprinting.strict_fingerprinter(lambda: None)
 
 
 def test_tree_map_default():

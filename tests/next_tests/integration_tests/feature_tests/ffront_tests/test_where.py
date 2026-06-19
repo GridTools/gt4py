@@ -10,7 +10,7 @@ import functools
 import numpy as np
 from typing import Tuple
 import pytest
-from next_tests.integration_tests.cases import IDim, Ioff, JDim, KDim, Koff, cartesian_case
+from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
 from gt4py import next as gtx
 from gt4py.next import float64, int32
 from gt4py.next.ffront.fbuiltins import where, broadcast
@@ -26,7 +26,7 @@ def test_where_k_offset(cartesian_case):
     def fieldop_where_k_offset(
         inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
     ) -> cases.IKField:
-        return where(k_index > 0, inp(Koff[-1]), 2)
+        return where(k_index > 0, inp(KDim - 1), 2)
 
     @gtx.program
     def prog(
@@ -205,7 +205,7 @@ def test_conditional_shifted(cartesian_case):
         mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
     ) -> gtx.Field[[IDim], float64]:
         tmp = where(mask, a, b)
-        return tmp(Ioff[1])
+        return tmp(IDim + 1)
 
     @gtx.program
     def conditional_program(
