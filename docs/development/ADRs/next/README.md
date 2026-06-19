@@ -28,7 +28,7 @@ Writing a new ADR is simple:
 
 ### Type System
 
-- [0023 - Dtype-Generic Operators](0023-Dtype-Generic-Operators.md)
+- [0024 - Dtype-Generic Operators](0024-Dtype-Generic-Operators.md)
 
 ### Iterator IR #iterator
 
