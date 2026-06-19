@@ -153,20 +153,11 @@ class GTFNBackendFactory(factory.Factory):
 
     class Params:
         name_device = "cpu"
-        name_cached = ""
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
             name_device="gpu",
-        )
-        cached = factory.Trait(
-            executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep.in_memory(
-                    o.otf_workflow, input_fingerprinter=o.key_function
-                )
-            ),
-            name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
         key_function = stages.fast_compilable_program_fingerprinter
@@ -176,25 +167,26 @@ class GTFNBackendFactory(factory.Factory):
             device_type=factory.SelfAttribute("..device_type"),
         )
 
-    name = factory.LazyAttribute(
-        lambda o: f"run_gtfn_{o.name_device}{o.name_cached}{o.name_postfix}"
+    name = factory.LazyAttribute(lambda o: f"run_gtfn_{o.name_device}{o.name_postfix}")
+    executor = factory.LazyAttribute(
+        lambda o: workflow.CachedStep.in_memory(
+            o.otf_workflow,
+            input_fingerprinter=stages.fast_compilable_program_fingerprinter,
+        )
     )
-
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
 
 
-run_gtfn = GTFNBackendFactory(cached=True)
+run_gtfn = GTFNBackendFactory()
 
 run_gtfn_imperative = GTFNBackendFactory(
-    cached=True,
     name_postfix="_imperative",
     otf_workflow__translation__use_imperative_backend=True,
 )
 
-run_gtfn_gpu = GTFNBackendFactory(cached=True, gpu=True)
+run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
 run_gtfn_no_transforms = GTFNBackendFactory(
-    cached=True, otf_workflow__bare_translation__enable_itir_transforms=False
+    otf_workflow__bare_translation__enable_itir_transforms=False
 )

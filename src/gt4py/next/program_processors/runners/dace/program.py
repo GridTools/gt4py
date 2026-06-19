@@ -18,7 +18,7 @@ from gt4py.next import backend as gtx_backend, common as gtx_common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
-from gt4py.next.otf import arguments, recipes, toolchain
+from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.type_system import type_specifications as ts
 
@@ -76,22 +76,19 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             gt4py_program_args=[p.type for p in program.params],
         )
 
-        compile_workflow = typing.cast(
-            recipes.OTFCompileWorkflow,
-            self.backend.executor
-            if not hasattr(self.backend.executor, "step")
-            else self.backend.executor.step,
-        )  # We know which backend we are using, but we don't know if the compile workflow is cached.
-        compile_workflow_translation = (
-            compile_workflow.translation
-            if not hasattr(compile_workflow.translation, "step")
-            else compile_workflow.translation.step
+        assert isinstance(self.backend.executor, workflow.CachedStep)
+        otf_workflow = self.backend.executor.step
+        assert hasattr(otf_workflow, "translation")
+        otf_workflow_translation = (
+            otf_workflow.translation.step
+            if isinstance(otf_workflow.translation, workflow.CachedStep)
+            else otf_workflow.translation
         )  # Same for the translation stage, which could be a `CachedStep` depending on backend configuration.
         # TODO(ricoh): switch 'disable_itir_transforms=True' because we ran them separately previously
         # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
         # the other parts of the workaround when possible.
         sdfg = dace.SDFG.from_json(
-            compile_workflow_translation.replace(
+            otf_workflow_translation.replace(  # type: ignore[union-attr]
                 disable_itir_transforms=True,
                 disable_field_origin_on_program_arguments=True,
                 use_metrics=False,

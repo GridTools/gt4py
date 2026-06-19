@@ -28,19 +28,23 @@ from gt4py.next.program_processors.runners import gtfn
 
 
 def test_backend_factory_trait_device():
-    cpu_version = gtfn.GTFNBackendFactory(gpu=False, cached=False)
-    gpu_version = gtfn.GTFNBackendFactory(gpu=True, cached=False)
+    cpu_version = gtfn.GTFNBackendFactory(gpu=False)
+    gpu_version = gtfn.GTFNBackendFactory(gpu=True)
 
     assert cpu_version.name == "run_gtfn_cpu"
+    assert isinstance(cpu_version.executor, workflow.CachedStep)
+    otf_workflow_cpu = cpu_version.executor.step
     assert gpu_version.name == "run_gtfn_gpu"
+    assert isinstance(gpu_version.executor, workflow.CachedStep)
+    otf_workflow_gpu = gpu_version.executor.step
 
-    assert isinstance(cpu_version.executor.translation, workflow.CachedStep)
-    assert cpu_version.executor.translation.step.device_type is core_defs.DeviceType.CPU
-    assert isinstance(gpu_version.executor.translation, workflow.CachedStep)
-    assert gpu_version.executor.translation.step.device_type is core_defs.DeviceType.CUDA
+    assert isinstance(otf_workflow_cpu.translation, workflow.CachedStep)
+    assert otf_workflow_cpu.translation.step.device_type is core_defs.DeviceType.CPU
+    assert isinstance(otf_workflow_gpu.translation, workflow.CachedStep)
+    assert otf_workflow_gpu.translation.step.device_type is core_defs.DeviceType.CUDA
 
-    assert cpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CPU
-    assert gpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CUDA
+    assert otf_workflow_cpu.decoration.keywords["device"] is core_defs.DeviceType.CPU
+    assert otf_workflow_gpu.decoration.keywords["device"] is core_defs.DeviceType.CUDA
 
     assert custom_layout_allocators.is_field_allocator_for(
         cpu_version.allocator, core_defs.DeviceType.CPU
@@ -50,36 +54,37 @@ def test_backend_factory_trait_device():
     )
 
 
-def test_backend_factory_trait_cached():
-    cached_version = gtfn.GTFNBackendFactory(gpu=False, cached=True)
-    assert isinstance(cached_version.executor, workflow.CachedStep)
-    assert cached_version.name == "run_gtfn_cpu_cached"
-
-
 def test_backend_factory_build_cache_config(monkeypatch):
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.SESSION)
     session_version = gtfn.GTFNBackendFactory()
+    assert isinstance(session_version.executor, workflow.CachedStep)
+    session_otf_workflow = session_version.executor.step
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.PERSISTENT)
     persistent_version = gtfn.GTFNBackendFactory()
+    assert isinstance(persistent_version.executor, workflow.CachedStep)
+    persistent_otf_workflow = persistent_version.executor.step
 
-    assert session_version.executor.compilation.cache_lifetime is config.BuildCacheLifetime.SESSION
+    assert session_otf_workflow.compilation.cache_lifetime is config.BuildCacheLifetime.SESSION
     assert (
-        persistent_version.executor.compilation.cache_lifetime
-        is config.BuildCacheLifetime.PERSISTENT
+        persistent_otf_workflow.compilation.cache_lifetime is config.BuildCacheLifetime.PERSISTENT
     )
 
 
 def test_backend_factory_build_type_config(monkeypatch):
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.RELEASE)
     release_version = gtfn.GTFNBackendFactory()
+    assert isinstance(release_version.executor, workflow.CachedStep)
+    release_otf_workflow = release_version.executor.step
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.MIN_SIZE_REL)
     min_size_version = gtfn.GTFNBackendFactory()
+    assert isinstance(min_size_version.executor, workflow.CachedStep)
+    min_size_otf_workflow = min_size_version.executor.step
 
     assert (
-        release_version.executor.compilation.builder_factory.cmake_build_type
+        release_otf_workflow.compilation.builder_factory.cmake_build_type
         is config.CMakeBuildType.RELEASE
     )
     assert (
-        min_size_version.executor.compilation.builder_factory.cmake_build_type
+        min_size_otf_workflow.compilation.builder_factory.cmake_build_type
         is config.CMakeBuildType.MIN_SIZE_REL
     )
