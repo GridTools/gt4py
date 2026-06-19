@@ -98,6 +98,7 @@ InfinityLiteral.NEGATIVE = InfinityLiteral(name="NEGATIVE")
 InfinityLiteral.POSITIVE = InfinityLiteral(name="POSITIVE")
 
 
+# TODO(tehrengruber): allow int only and create OffsetRef for str instead
 class OffsetLiteral(Expr):
     value: Union[int, str]
 

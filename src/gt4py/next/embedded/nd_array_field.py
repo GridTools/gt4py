@@ -472,7 +472,9 @@ class NdArrayField(
 
 @dataclasses.dataclass(frozen=True)
 class NdArrayConnectivityField(
-    common.GatherConnectivity[common.DimsT, common.DimT],
+    # `NdArrayConnectivityField` is currently the only `GatherConnectivity`, and we restrict it to
+    # be a `NeighborTable` (a generic gather has no use-case yet).
+    common.NeighborTable[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
     _codomain: common.DimT

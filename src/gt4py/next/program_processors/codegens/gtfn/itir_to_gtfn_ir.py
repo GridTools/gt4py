@@ -91,10 +91,18 @@ def _name_from_named_range(named_range_call: itir.FunCall) -> str:
     return named_range_call.args[0].value
 
 
+class FlipStaggeredDims(eve.NodeTranslator):
+    def visit_AxisLiteral(self, node: itir.AxisLiteral) -> itir.AxisLiteral:
+        dim = ir_utils_misc.dim_from_axis_literal(node)
+        if common.is_staggered(dim):
+            return im.axis_literal(common.as_non_staggered(dim))
+        return node
+
+
 def _collect_dimensions_from_domain(
     body: Iterable[itir.Stmt],
 ) -> dict[str, TagDefinition]:
-    domains = _get_domains(body)
+    domains = FlipStaggeredDims().visit(_get_domains(body))
     offset_definitions = {}
     for domain in domains:
         if domain.fun == itir.SymRef(id="cartesian_domain"):
@@ -151,37 +159,20 @@ def _collect_offset_definitions(
     grid_type: common.GridType,
     offset_provider_type: common.OffsetProviderType,
 ) -> dict[str, TagDefinition]:
-    used_offset_tags: set[str] = (
-        node.walk_values()
-        .if_isinstance(itir.OffsetLiteral)
-        .filter(lambda offset_literal: isinstance(offset_literal.value, str))
-        .getattr("value")
-    ).to_set()
-    # implicit offsets don't occur in the `offset_provider_type`, get them from the used offset tags
-    offset_provider_type = {
-        offset_name: common.get_offset_type(offset_provider_type, offset_name)
-        for offset_name in used_offset_tags
-    } | {**offset_provider_type}
     offset_definitions = {}
+    offset_provider_type = {**offset_provider_type}
 
-    # cartesian shifts (`field(Dim + n)`) are encoded as `CartesianOffset` nodes and don't
-    # occur in the `offset_provider_type`; define a tag for each of their dimensions
     cartesian_offsets: set[itir.CartesianOffset] = (
         node.walk_values().if_isinstance(itir.CartesianOffset)
     ).to_set()
     for cart_offset in cartesian_offsets:
-        for axis in (cart_offset.domain, cart_offset.codomain):
-            if grid_type == common.GridType.CARTESIAN:
-                offset_definitions[axis.value] = TagDefinition(name=Sym(id=axis.value))
-            else:
-                assert grid_type == common.GridType.UNSTRUCTURED
-                if axis.kind != common.DimensionKind.VERTICAL:
-                    raise ValueError(
-                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
-                    )
-                offset_definitions[axis.value] = TagDefinition(
-                    name=Sym(id=axis.value), alias=_vertical_dimension
-                )
+        dims = [
+            common.Dimension(value=v.value, kind=v.kind)
+            for v in (cart_offset.domain, cart_offset.codomain)
+        ]
+        for dim in dims:
+            dim = common.as_non_staggered(dim)
+            offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
 
     for offset_name, connectivity_type in offset_provider_type.items():
         if isinstance(connectivity_type, common.NeighborConnectivityType):
@@ -387,12 +378,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return OffsetLiteral(value=node.value)
 
     def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> Literal:
-        # render as the (shared) dimension tag
-        assert node.domain == node.codomain, "relocation (staggering) is not supported"
         return self.visit(node.codomain, **kwargs)
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
-        return Literal(value=node.value, type="axis_literal")
+        assert isinstance(node.type, ts.DimensionType)
+        dim = common.as_non_staggered(node.type.dim)
+        return Literal(value=dim.value, type="axis_literal")
 
     def _make_domain(self, node: itir.FunCall) -> tuple[TaggedValues, TaggedValues]:
         tags = []

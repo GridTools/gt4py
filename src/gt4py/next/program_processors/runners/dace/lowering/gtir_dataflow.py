@@ -1497,12 +1497,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         return offset_provider_arg, offset_value_arg, it
 
     def _make_cartesian_shift(
-        self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: DataExpr
+        self, it: IteratorExpr, conn: gtx_common.CartesianConnectivityType, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        assert any(dim == offset_dim for dim, _ in it.field_domain)
+        (old_dim,) = conn.domain
+        new_dim = conn.codomain
         new_index: SymbolExpr | ValueExpr
-        index_expr = it.indices[offset_dim]
+        index_expr = it.indices[old_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
             new_index = SymbolExpr(
@@ -1565,9 +1566,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
 
         # a new iterator with a shifted index along one dimension
-        shifted_indices = {
-            dim: (new_index if dim == offset_dim else index) for dim, index in it.indices.items()
-        }
+        shifted_indices = dict(
+            (new_dim, new_index) if dim == old_dim else (dim, index)
+            for dim, index in it.indices.items()
+        )
         return IteratorExpr(it.field, it.gt_dtype, it.field_domain, shifted_indices)
 
     def _make_dynamic_neighbor_offset(
@@ -1665,6 +1667,17 @@ class LambdaToDataflow(eve.NodeVisitor):
             node.args[0], node.fun.args
         )
 
+        offset_provider_type: gtx_common.ConnectivityType
+        if isinstance(offset_provider_arg, gtir.CartesianOffset):
+            conn = itir_misc.connectivity_from_cartesian_offset(offset_provider_arg)
+            offset_provider_type = conn.__gt_type__()
+        else:
+            assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
+            assert isinstance(offset_provider_arg.value, str)
+            offset_provider_type = self.subgraph_builder.get_offset_provider_type(
+                offset_provider_arg.value
+            )
+
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr = (
             SymbolExpr(offset_value_arg.value, gtir_to_sdfg_types.INDEX_DTYPE)
@@ -1672,10 +1685,21 @@ class LambdaToDataflow(eve.NodeVisitor):
             else self.visit(offset_value_arg)
         )
 
-        if isinstance(offset_provider_arg, gtir.CartesianOffset):
-            # cartesian shift; the dimension (incl. kind) is encoded in the node
-            assert offset_provider_arg.domain == offset_provider_arg.codomain, (
-                "relocation (staggering) is not supported"
+        if isinstance(offset_provider_type, gtx_common.CartesianConnectivityType):
+            return self._make_cartesian_shift(it, offset_provider_type, offset_expr)
+        else:
+            assert isinstance(offset_value_arg, gtir.OffsetLiteral)
+            assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
+            assert isinstance(offset_provider_arg.value, str)
+            # initially, the storage for the connectivity tables is created as transient;
+            # when the tables are used, the storage is changed to non-transient,
+            # so the corresponding arrays are supposed to be allocated by the SDFG caller
+            offset_table = gtx_dace_args.connectivity_identifier(offset_provider_arg.value)
+            self.sdfg.arrays[offset_table].transient = False
+            offset_table_node = self.state.add_access(offset_table)
+
+            return self._make_unstructured_shift(
+                it, offset_provider_type, offset_table_node, offset_expr
             )
             offset_dim = itir_misc.dim_from_axis_literal(offset_provider_arg.codomain)
             return self._make_cartesian_shift(it, offset_dim, offset_expr)
