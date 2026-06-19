@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic
+import weakref
+from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import custom_layout_allocators as next_allocators
@@ -166,19 +167,34 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         return self.allocator
 
 
-def serialize_backend_for_worker(backend: Backend) -> bytes:
-    """Serialize ``backend`` into bytes for a :class:`concurrent.futures.ProcessPoolExecutor`.
+def _empty_weak_key_dict() -> weakref.WeakKeyDictionary:
+    return weakref.WeakKeyDictionary()
 
-    Uses :mod:`cloudpickle` rather than stdlib :mod:`pickle`: a ``Backend`` transitively
+
+def _empty_weak_value_dict() -> weakref.WeakValueDictionary:
+    return weakref.WeakValueDictionary()
+
+
+def serialize_backend_for_worker(backend: Backend) -> bytes:
+    """Serialize ``backend`` into bytes for a ``concurrent.futures.ProcessPoolExecutor``.
+
+    Uses ``cloudpickle`` rather than stdlib ``pickle``: a ``Backend`` transitively
     holds lambdas, nested name-mangled classes (e.g.
-    :class:`gt4py.next.otf.workflow.StepSequence.__Steps`), :mod:`factory` closures, and
+    ``gt4py.next.otf.workflow.StepSequence.__Steps``), ``factory`` closures, and
     ``module`` references that stdlib pickle refuses but cloudpickle serializes by value.
     This also accommodates factory-constructed backends kept as plain locals (no module-
-    global home). Payload is ~8 KB per backend for the standard runners — negligible
+    global home). Payload is ~14 KB per backend for the standard runners — negligible
     next to typical compile times.
+
+    ``WeakKeyDictionary`` / ``WeakValueDictionary`` instances encountered along the way
+    are reduced to fresh empty containers because stdlib's ``functools.singledispatch``
+    (used by the fingerprinting deconstructors) caches dispatched implementations in a
+    ``WeakKeyDictionary``, and the internal ``weakref.ReferenceType`` cells of any weak
+    mapping are not picklable. They are pure caches — the receiver rebuilds them on the
+    first dispatch lookup.
     """
     try:
-        import cloudpickle  # type: ignore[import-not-found]
+        import cloudpickle  # type: ignore[import-not-found, unused-ignore]
     except ImportError as err:
         raise RuntimeError(
             "Process-pool compilation requires 'cloudpickle' to be installed "
@@ -186,11 +202,24 @@ def serialize_backend_for_worker(backend: Backend) -> bytes:
             "Install it (e.g. `pip install cloudpickle`) or fall back to "
             "GT4PY_BUILD_JOBS_MODE=thread."
         ) from err
-    return cloudpickle.dumps(backend)
+
+    import io
+
+    class _BackendCloudPickler(cloudpickle.CloudPickler):
+        def reducer_override(self, obj: Any) -> Any:
+            if isinstance(obj, weakref.WeakKeyDictionary):
+                return _empty_weak_key_dict, ()
+            if isinstance(obj, weakref.WeakValueDictionary):
+                return _empty_weak_value_dict, ()
+            return super().reducer_override(obj)
+
+    buf = io.BytesIO()
+    _BackendCloudPickler(buf).dump(backend)
+    return buf.getvalue()
 
 
 def deserialize_backend_from_worker(blob: bytes) -> Backend:
-    """Counterpart of :func:`serialize_backend_for_worker`: runs in a worker process."""
-    import cloudpickle  # type: ignore[import-not-found]
+    """Counterpart of ``serialize_backend_for_worker``: runs in a worker process."""
+    import cloudpickle  # type: ignore[import-not-found, unused-ignore]
 
     return cloudpickle.loads(blob)

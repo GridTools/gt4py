@@ -154,15 +154,15 @@ def compiled_program_call_context(
     return metrics.metrics_source_key_setter(metrics_source_key(program_pool, key))
 
 
-#: Pool backing :meth:`CompiledProgramsPool._compile_variant`. Two modes selected by
-#: :attr:`config.BUILD_JOBS_MODE`:
-#:   * ``"thread"``: :class:`concurrent.futures.ThreadPoolExecutor`. The submitted callable
-#:     is the full backend compile; the future yields an :class:`stages.ExecutableProgram`
-#:     directly (calling :meth:`Backend.compile` does build + load in one step).
-#:   * ``"process"``: :class:`concurrent.futures.ProcessPoolExecutor` with ``spawn`` start
+#: Pool backing ``CompiledProgramsPool._compile_variant``. Two modes selected by
+#: ``config.BUILD_JOBS_MODE``:
+#:   * ``"thread"``: ``concurrent.futures.ThreadPoolExecutor``. The submitted callable
+#:     is the full backend compile; the future yields an ``stages.ExecutableProgram``
+#:     directly (calling ``Backend.compile`` does build + load in one step).
+#:   * ``"process"``: ``concurrent.futures.ProcessPoolExecutor`` with ``spawn`` start
 #:     method. Workers run only ``backend.executor`` and return the picklable
-#:     :class:`stages.CompilationArtifact` it produces; the main process calls
-#:     ``artifact.load()`` in :meth:`CompiledProgramsPool._finish_compilation_job`
+#:     ``stages.CompilationArtifact`` it produces; the main process calls
+#:     ``artifact.load()`` in ``CompiledProgramsPool._finish_compilation_job``
 #:     to import the compiled module / reload the SDFG and apply backend decoration.
 _async_compilation_pool: concurrent.futures.Executor | None = None
 
@@ -172,7 +172,7 @@ def _pool_worker_initializer(shared_session_cache_dir: str) -> None:
 
     Runs once in each worker immediately after start-up. Points the worker's
     session-lifetime build cache at the *main process's* temp dir instead of the worker's
-    own one. Each process creates its own :class:`tempfile.TemporaryDirectory` on
+    own one. Each process creates its own ``tempfile.TemporaryDirectory`` on
     ``gt4py.next.otf.compilation.cache`` import which is scrubbed at process exit — so
     if workers wrote ``.so``s under their own dir, those files would vanish as soon as
     the pool is shut down, before the main process had a chance to ``dlopen`` them.
@@ -251,7 +251,7 @@ def _config_snapshot() -> dict[str, Any]:
 
 
 def _apply_config_overrides(overrides: dict[str, Any]) -> None:
-    """Write main-process config values onto the worker's :mod:`gt4py.next.config`."""
+    """Write main-process config values onto the worker's ``gt4py.next.config``."""
     for name, value in overrides.items():
         setattr(config, name, value)
 
@@ -264,27 +264,26 @@ def _process_pool_compile_job(
 ) -> stages.CompilationArtifact:
     """Worker entry point: deserialize the backend and run its compile phase.
 
-    * ``backend_blob`` is a :mod:`cloudpickle`-serialized :class:`~gt4py.next.backend
-      .Backend`. cloudpickle is required because :class:`Backend.executor` transitively
-      holds things stdlib pickle refuses (``factory``-boy closures, nested
-      ``StepSequence.__Steps`` classes, ``module`` references inside DaCe's workflow).
-      Also accommodates factory-constructed backends kept as plain locals.
-    * ``compilable`` is the post-frontend :class:`~gt4py.next.otf.definitions
-      .CompilableProgramDef` (itir + ``CompileTimeArgs`` + offset provider) — pickle-
-      safe by construction. Frontend lowering (DSL ``types.FunctionType`` → itir)
-      runs in the main process because raw Python functions generally do not round-trip
-      through pickle once a decorator has rebound their module attribute to a wrapper.
+    * ``backend_blob`` is a ``cloudpickle``-serialized ``Backend``. cloudpickle is
+      required because ``Backend.executor`` transitively holds things stdlib pickle
+      refuses (``factory``-boy closures, nested ``StepSequence.__Steps`` classes,
+      ``module`` references inside DaCe's workflow). Also accommodates factory-
+      constructed backends kept as plain locals.
+    * ``compilable`` is the post-frontend ``CompilableProgramDef`` (itir +
+      ``CompileTimeArgs`` + offset provider) — pickle-safe by construction. Frontend
+      lowering (DSL ``types.FunctionType`` → itir) runs in the main process because
+      raw Python functions generally do not round-trip through pickle once a decorator
+      has rebound their module attribute to a wrapper.
     * ``config_overrides`` carries main-process values for every uppercase attribute of
-      :mod:`gt4py.next.config` (see :func:`_config_snapshot`). Applied before the build
-      so worker-side reads of ``config.BUILD_CACHE_DIR`` /
+      ``gt4py.next.config`` (see ``_config_snapshot``). Applied before the build so
+      worker-side reads of ``config.BUILD_CACHE_DIR`` /
       ``config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE`` /
       ``config.ADD_GPU_TRACE_MARKERS`` match the main.
 
-    Returns the :class:`~gt4py.next.otf.stages.CompilationArtifact` produced by
-    ``backend.executor`` — a backend-specific picklable descriptor (GTFN:
-    ``CPPCompilationArtifact`` with ``src_dir`` + entry point; DaCe: ``DaCeBuildArtifact``
-    with build folder + binding source). The main process rehydrates it via
-    ``artifact.load()``.
+    Returns the ``CompilationArtifact`` produced by ``backend.executor`` — a backend-
+    specific picklable descriptor (GTFN: ``CPPCompilationArtifact`` with ``src_dir`` +
+    entry point; DaCe: ``DaCeCompilationArtifact`` with build folder + binding source).
+    The main process rehydrates it via ``artifact.load()``.
     """
     from gt4py.next import backend as gtx_backend_mod
 
@@ -479,14 +478,14 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     # store for the async compilation jobs.
     # Each entry is ``(needs_finalize, future)``:
     #   - thread / inline submit: ``needs_finalize = False``, future yields an
-    #     already-ready :class:`~gt4py.next.otf.stages.ExecutableProgram`.
+    #     already-ready ``ExecutableProgram``.
     #   - process-pool submit: ``needs_finalize = True``, future yields the
-    #     :class:`~gt4py.next.otf.stages.CompilationArtifact` produced by
-    #     ``backend.executor``, which :meth:`_finish_compilation_job` rehydrates
-    #     via ``artifact.load()`` in the calling process.
-    _compilation_jobs: dict[
-        CompiledProgramsKey, tuple[bool, concurrent.futures.Future[Any]]
-    ] = dataclasses.field(default_factory=dict, init=False)
+    #     ``CompilationArtifact`` produced by ``backend.executor``, which
+    #     ``_finish_compilation_job`` rehydrates via ``artifact.load()`` in the
+    #     calling process.
+    _compilation_jobs: dict[CompiledProgramsKey, tuple[bool, concurrent.futures.Future[Any]]] = (
+        dataclasses.field(default_factory=dict, init=False)
+    )
 
     @functools.cached_property
     def root(self) -> tuple[str, str]:
@@ -710,8 +709,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         assert key not in self.compiled_programs
         result = compiled_program_future.result()
         if needs_finalize:
-            # Worker produced a :class:`~gt4py.next.otf.stages.CompilationArtifact`
-            # from the ``backend.executor`` compile phase. The artifact's ``load()``
+            # Worker produced a ``CompilationArtifact`` from the ``backend.executor``
+            # compile phase. The artifact's ``load()``
             # (dynamic import of the freshly built module / SDFG reload + decoration)
             # must run in the calling process — it ends up holding a live Python
             # callable that doesn't cross process boundaries.
@@ -796,9 +795,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             # constructed backends with no module-global home.
             backend_blob = gtx_backend.serialize_backend_for_worker(self.backend)
             compilable = self.backend.transforms(
-                definitions.ConcreteProgramDef(
-                    data=self.definition_stage, args=compile_time_args
-                )
+                definitions.ConcreteProgramDef(data=self.definition_stage, args=compile_time_args)
             )
             self._compilation_jobs[key] = (
                 True,
