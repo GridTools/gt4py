@@ -21,13 +21,27 @@ import dace.codegen.compiler as dace_compiler
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import common, config, utils as gtx_utils
+from gt4py.next import common, config
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
 )
+
+
+def _add_tx_markers(sdfg: dace.SDFG) -> None:
+    has_gpu_schedule = any(
+        getattr(node, "schedule", dace.dtypes.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
+        for node, _ in sdfg.all_nodes_recursive()
+    )
+
+    if has_gpu_schedule:
+        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+        for node, _ in sdfg.all_nodes_recursive():
+            # Also adds markers to map scopes that are NOT scheduled on GPU
+            if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
+                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
 
 class CompiledDaceProgram:
@@ -121,13 +135,16 @@ class CompiledDaceProgram:
         assert result is None
 
 
+_live_program_cache: dict[pathlib.Path, CompiledDaceProgram] = {}
+
+
 @dataclasses.dataclass(frozen=True)
-class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
+class DaCeCompilationArtifact:
     """Result of a DaCe compilation: build folder + SDFG bindings + the SDFG itself.
 
     The SDFG is carried inline as JSON because dace's load path
-    (:func:`get_program_handle`) needs an SDFG instance to wrap into the
-    returned :class:`CompiledSDFG`, and the build folder may not contain a
+    (``get_program_handle``) needs an SDFG instance to wrap into the
+    returned ``CompiledSDFG``, and the build folder may not contain a
     ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
     """
 
@@ -137,31 +154,18 @@ class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
     bind_func_name: str
     device_type: core_defs.DeviceType
 
-    # Process-local cache of the live :class:`CompiledDaceProgram`. Populated by
-    # ``DaCeCompiler`` to skip the disk round-trip when the artifact stays in
-    # the same process. Excluded from pickle (``pickle=False`` metadata) so
-    # receivers in other processes see ``None`` and fall through to the
-    # disk-based load.
-    _live_program: CompiledDaceProgram | None = dataclasses.field(
-        init=False,
-        default=None,
-        compare=False,
-        repr=False,
-        metadata=gtx_utils.gt4py_metadata(pickle=False),
-    )
-
     def load(self) -> stages.ExecutableProgram:
         """Wrap the compiled program in gt4py's calling convention.
 
         On a miss, loads the precompiled .so directly via
-        :func:`dace.codegen.compiler.get_program_handle` — no recompilation,
+        ``dace.codegen.compiler.get_program_handle`` — no recompilation,
         no ``dace.config`` re-entry. Must run in the process that will call
         the returned program.
         """
-        program = self._live_program
+        program = _live_program_cache.get(self.build_folder)
         if program is None:
             program = self._load_compiled_program()
-            object.__setattr__(self, "_live_program", program)
+            _live_program_cache[self.build_folder] = program
         return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
     def _load_compiled_program(self) -> CompiledDaceProgram:
@@ -189,12 +193,17 @@ class DaCeCompiler(
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
-    """Run the DaCe build system and produce an on-disk :class:`DaCeCompilationArtifact`."""
+    """Run the DaCe build system and produce an on-disk ``DaCeCompilationArtifact``."""
 
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType
-    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
+    add_gpu_trace_markers: bool = dataclasses.field(
+        default_factory=lambda: config.ADD_GPU_TRACE_MARKERS
+    )
+    cmake_build_type: config.CMakeBuildType = dataclasses.field(
+        default_factory=lambda: config.CMAKE_BUILD_TYPE
+    )
 
     def __call__(
         self,
@@ -208,10 +217,13 @@ class DaCeCompiler(
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+
+            # Add TX markers to the generated GPU code for trace visualization tools.
+            if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
+                _add_tx_markers(sdfg)
+
             sdfg.build_folder = str(sdfg_build_folder)
             with locking.lock(sdfg_build_folder):
-                # Keep the handle so the artifact's load() can skip the disk
-                # round-trip in the same process.
                 sdfg_program = sdfg.compile(validate=False)
 
         assert inp.binding_source is not None
@@ -222,12 +234,8 @@ class DaCeCompiler(
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
         )
-        object.__setattr__(
-            artifact,
-            "_live_program",
-            CompiledDaceProgram(
-                sdfg_program, artifact.bind_func_name, artifact.binding_source_code
-            ),
+        _live_program_cache[artifact.build_folder] = CompiledDaceProgram(
+            sdfg_program, artifact.bind_func_name, artifact.binding_source_code
         )
         return artifact
 

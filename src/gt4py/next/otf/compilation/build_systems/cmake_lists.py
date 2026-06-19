@@ -91,7 +91,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
                 find_package(Python COMPONENTS Interpreter Development REQUIRED)
                 """
-                nb = f"find_package(nanobind CONFIG REQUIRED PATHS {nanobind.cmake_dir()} NO_DEFAULT_PATHS)"
+                nb = f'find_package(nanobind CONFIG REQUIRED HINTS "{nanobind.cmake_dir()}" NO_DEFAULT_PATH)'
                 return py + "\n" + nb
             case "gridtools_cpu" | "gridtools_gpu":
                 import gridtools_cpp

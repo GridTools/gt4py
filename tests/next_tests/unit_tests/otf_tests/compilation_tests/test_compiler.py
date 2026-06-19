@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Minimal contract tests for :class:`compiler.CPPCompilationArtifact`."""
+"""Minimal contract tests for ``CPPCompilationArtifact``."""
 
 import pathlib
 import pickle

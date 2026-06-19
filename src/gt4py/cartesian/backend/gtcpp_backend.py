@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
@@ -26,6 +25,7 @@ from gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.eve import codegen
+from gt4py.storage.cartesian import layout, layout_registry
 
 
 if TYPE_CHECKING:
@@ -146,7 +146,7 @@ class GTCpuIfirstBackend(GTBaseBackend):
     name = "gt:cpu_ifirst"
     GT_BACKEND_T = "cpu_ifirst"
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
-    storage_info = gt_storage.layout.CPUIFirstLayout
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
 
     def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=False)
@@ -159,7 +159,7 @@ class GTCpuKfirstBackend(GTBaseBackend):
     name = "gt:cpu_kfirst"
     GT_BACKEND_T = "cpu_kfirst"
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
-    storage_info = gt_storage.layout.CPUKFirstLayout
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
 
     def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=False)
@@ -177,7 +177,7 @@ class GTGpuBackend(GTBaseBackend):
         **BaseGTBackend.GT_BACKEND_OPTS,
         "device_sync": {"versioning": True, "type": bool},
     }
-    storage_info = gt_storage.layout.GPULayout
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
 
     def generate_extension(self) -> None:
         return super()._generate_extension(uses_cuda=True)

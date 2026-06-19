@@ -82,12 +82,25 @@ BUILD_CACHE_DIR: pathlib.Path = (
 )
 
 
+def _get_build_cache_version_id() -> str:
+    return __import__("gt4py").__version__
+
+
+#: Version ID for the build cache. It should only be overridden by gt4py
+#: developers or advanced users when making changes requiring forced
+#: compatibility with previously cached builds.
+BUILD_CACHE_VERSION_ID: str = (
+    os.environ.get("GT4PY_BUILD_CACHE_VERSION_ID") or _get_build_cache_version_id()
+)
+
+
 #: Whether generated code projects should be kept around between runs.
 #: - SESSION: generated code projects get destroyed when the interpreter shuts down
 #: - PERSISTENT: generated code projects are written to BUILD_CACHE_DIR and persist between runs
 BUILD_CACHE_LIFETIME: BuildCacheLifetime = BuildCacheLifetime[
     os.environ.get("GT4PY_BUILD_CACHE_LIFETIME", "persistent" if DEBUG else "session").upper()
 ]
+
 
 #: Build type to be used when CMake is used to compile generated code.
 #: Might have no effect when CMake is not used as part of the toolchain.
@@ -96,15 +109,18 @@ CMAKE_BUILD_TYPE: CMakeBuildType = CMakeBuildType[
     os.environ.get("GT4PY_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper()
 ]
 
+
 #: Experimental, use at your own risk: assume horizontal dimension has stride 1
 # FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
 UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
     "GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", default=False
 )
 
+
 #: Add GPU trace markers (NVTX, ROC-TX) to the generated code, at compile time.
 # FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
 ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", default=False)
+
 
 #: Number of threads to use to use for compilation (0 = synchronous compilation).
 #: Default:
@@ -114,12 +130,11 @@ ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", de
 BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1, 32)))
 
 #: Executor backing the async compilation pool.
-#: - "thread": use a :class:`concurrent.futures.ThreadPoolExecutor` (default).
-#: - "process": use a :class:`concurrent.futures.ProcessPoolExecutor` with ``spawn`` start
+#: - "thread": use a ``concurrent.futures.ThreadPoolExecutor`` (default).
+#: - "process": use a ``concurrent.futures.ProcessPoolExecutor`` with ``spawn`` start
 #:   method. Requires the backend to be cloudpickle-serializable (standard runners and
-#:   factory-constructed variants are) and its ``executor`` to be a
-#:   :class:`~gt4py.next.otf.recipes.OTFCompileWorkflow` returning a picklable
-#:   :class:`~gt4py.next.otf.stages.CompilationArtifact`. Experimental.
+#:   factory-constructed variants are) and its ``executor`` to be an
+#:   ``OTFCompileWorkflow`` returning a picklable ``CompilationArtifact``. Experimental.
 BUILD_JOBS_MODE: str = os.environ.get("GT4PY_BUILD_JOBS_MODE", "thread").lower()
 
 #: User-defined level to enable metrics at lower or equal level.

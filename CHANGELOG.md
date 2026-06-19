@@ -2,6 +2,46 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.11] - 2026-06-18
+
+### General
+
+- Add minimal harness for coding agents.
+- Improve the infrastructure for development scripts.
+
+### Cartesian
+
+- Add a DaCe GPU backend with `IJK`-loop layout.
+- Change DaCe GPU backends to unit alignment, enabling Fortran-style memory mapping and reducing memory footprint.
+- Change DaCe backends to nest the sequential vertical `K`-loop inside the parallel `IJ`-kernel on parallel targets.
+- Fix format of `extra` flags for device compilation.
+
+### Next
+
+See commit history.
+
+## [1.1.10] - 2026-05-22
+
+### General
+
+- Drop support for NumPy 1.x
+
+### Cartesian
+
+- Front-end improvements to interval parsing.
+- Change field indexation to always require full indexation.
+- Fix array lifetime for frozen stencil SDFGs.
+- Use utf-8 encoding for generated code.
+- Fix hashing used in stencil program cache.
+- Enforce cartesian layout to be given precedence in allocation striding.
+- Bump `pybind11` to `3.0.3` to fix issue in previous `3.x` version.
+- Disable OpenMP for GPU backends.
+- Fix setting of CXX compiler flags.
+
+### Next
+
+See commit history.
+
 ## [1.1.9] - 2026-04-01
 
 ### Cartesian
