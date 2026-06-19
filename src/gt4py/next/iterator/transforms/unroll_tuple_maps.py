@@ -31,6 +31,15 @@ def _tree_map_tuple_body(
 ) -> itir.Expr:
     """Recursively unroll `tree_map_tuple(f)(t1, ..., tN)` into `make_tuple` calls."""
 
+    def tuple_structure(type_: ts.TypeSpec) -> tuple[object, ...] | None:
+        if isinstance(type_, ts.TupleType):
+            return tuple(tuple_structure(el_type) for el_type in type_.types)
+        return None
+
+    expected_structure = tuple_structure(tup_types[0])
+    if any(tuple_structure(tup_type) != expected_structure for tup_type in tup_types[1:]):
+        raise TypeError("'tree_map_tuple' requires all arguments to have the same tuple structure.")
+
     @utils.tree_map(
         collection_type=ts.TupleType,
         result_collection_constructor=lambda _, elts: im.make_tuple(*elts),

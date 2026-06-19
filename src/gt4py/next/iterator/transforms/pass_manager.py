@@ -174,19 +174,6 @@ def apply_common_transforms(
     # nested `TupleType` chains). `expand_tuple_args` runs full type inference, so this is
     # the earliest safe position.
     ir = unroll_tuple_maps.UnrollTupleMaps.apply(ir, uids=uids)
-    # `UnrollTupleMaps` collapses `tuple_get(i, make_tuple(...))` patterns on the fly
-    # for trivial arguments, so no additional `CollapseTuple` cleanup loop is needed.
-    # A single `CollapseTuple` pass still handles any residual patterns produced when
-    # arguments had to be let-bound (non-trivial sub-expressions).
-    ir = CollapseTuple.apply(
-        ir,
-        enabled_transformations=(
-            CollapseTuple.Transformation.PROPAGATE_TUPLE_GET
-            | CollapseTuple.Transformation.COLLAPSE_TUPLE_GET_MAKE_TUPLE
-        ),
-        uids=uids,
-        offset_provider_type=offset_provider_type,
-    )  # type: ignore[assignment]  # always an itir.Program
     ir = dead_code_elimination.dead_code_elimination(
         ir, uids=uids, offset_provider_type=offset_provider_type
     )  # domain inference does not support dead-code
@@ -303,16 +290,7 @@ def apply_fieldview_transforms(
     # `UnrollTupleMaps` requires fully-inferred tuple types; `expand_tuple_args` runs full
     # type inference, so this is the earliest safe position.
     ir = unroll_tuple_maps.UnrollTupleMaps.apply(ir, uids=uids)
-    # See note in `apply_common_transforms` about why a single `CollapseTuple` pass suffices.
-    ir = CollapseTuple.apply(
-        ir,
-        enabled_transformations=(
-            CollapseTuple.Transformation.PROPAGATE_TUPLE_GET
-            | CollapseTuple.Transformation.COLLAPSE_TUPLE_GET_MAKE_TUPLE
-        ),
-        uids=uids,
-        offset_provider_type=offset_provider_type,
-    )  # type: ignore[assignment]  # always an itir.Program
+
     ir = dead_code_elimination.dead_code_elimination(
         ir, offset_provider_type=offset_provider_type, uids=uids
     )
