@@ -171,9 +171,8 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ) as dace_config:
-            # Append a subfolder named after the fingerprint of this compiler instance, so
-            # that builds with different compiler settings (e.g. non-default dace config) do
-            # not clash in the same build folder.
+            # We use the fingeprint of the dace configuration in the cache key to ensure
+            # that the SDFG will be rebuilt if the user changes the configuration.
             sdfg_build_folder = gtx_cache.get_cache_folder(
                 inp,
                 self.cache_lifetime,
