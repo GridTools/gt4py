@@ -158,11 +158,7 @@ def test_non_trivial_arg_is_let_bound():
     ],
 )
 def test_tree_map_tuple_mismatched_structure_raises_type_error(lhs_type, rhs_type):
-    uids = utils.IDGeneratorPool()
-    program = _make_program(
-        [im.sym("a", lhs_type), im.sym("b", rhs_type)],
-        im.call(im.call("tree_map_tuple")(_plus()))(im.ref("a", lhs_type), im.ref("b", rhs_type)),
-    )
+    expr = im.call(im.call("tree_map_tuple")(_plus()))(im.ref("a", lhs_type), im.ref("b", rhs_type))
 
     with pytest.raises(TypeError, match=r"same tuple structure"):
-        UnrollTupleMaps.apply(program, uids=uids)
+        _apply(expr)
