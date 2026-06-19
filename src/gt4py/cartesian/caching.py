@@ -243,7 +243,7 @@ class JITCachingStrategy(CachingStrategy):
                 for k, v in self.builder.backend.extra_cache_info.items()
                 if k in self.builder.backend.extra_cache_validation_keys
             }
-            source = self.builder.module_path.read_text()
+            source = self.builder.module_path.read_text(encoding="utf-8")
             module_shash = gt_utils.shash(source)
 
             if validate_hash:

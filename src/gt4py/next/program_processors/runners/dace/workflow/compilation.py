@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
 import pathlib
 import warnings
@@ -16,6 +17,7 @@ from collections.abc import Callable, MutableSequence, Sequence
 from typing import Any
 
 import dace
+import dace.codegen.compiler as dace_compiler
 import factory
 
 from gt4py._core import definitions as core_defs, locking
@@ -121,10 +123,16 @@ class CompiledDaceProgram:
 
 @dataclasses.dataclass(frozen=True)
 class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
-    """On-disk result of a DaCe compilation: a build folder + the SDFG bindings."""
+    """Result of a DaCe compilation: build folder + SDFG bindings + the SDFG itself.
+
+    The SDFG is carried inline as JSON because dace's load path
+    (:func:`get_program_handle`) needs an SDFG instance to wrap into the
+    returned :class:`CompiledSDFG`, and the build folder may not contain a
+    ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
+    """
 
     build_folder: pathlib.Path
-    sdfg_dump: pathlib.Path
+    sdfg_json: str
     binding_source_code: str
     bind_func_name: str
     device_type: core_defs.DeviceType
@@ -145,9 +153,10 @@ class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
     def load(self) -> stages.ExecutableProgram:
         """Wrap the compiled program in gt4py's calling convention.
 
-        On a miss, re-deserializes the SDFG and re-links the .so via
-        ``compiler.use_cache``. Must run in the process that will call the
-        returned program.
+        On a miss, loads the precompiled .so directly via
+        :func:`dace.codegen.compiler.get_program_handle` — no recompilation,
+        no ``dace.config`` re-entry. Must run in the process that will call
+        the returned program.
         """
         program = self._live_program
         if program is None:
@@ -156,13 +165,15 @@ class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
         return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
     def _load_compiled_program(self) -> CompiledDaceProgram:
-        sdfg = dace.SDFG.from_file(str(self.sdfg_dump))
-        sdfg.build_folder = str(self.build_folder)
-
-        with gtx_wfdcommon.dace_context(device_type=self.device_type):
-            with dace.config.set_temporary("compiler", "use_cache", value=True):
-                sdfg_program = sdfg.compile(validate=False)
-
+        # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
+        #   exposes a load path that doesn't require an SDFG instance to wrap
+        #   into the returned ``CompiledSDFG``.
+        sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
+        folder_version = dace_compiler.get_folder_version(self.build_folder)
+        library_path = dace_compiler.get_binary_name(
+            self.build_folder, sdfg_name=sdfg.name, folder_version=folder_version
+        )
+        sdfg_program = dace_compiler.get_program_handle(library_path, sdfg)
         return CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
 
 
@@ -203,19 +214,10 @@ class DaCeCompiler(
                 # round-trip in the same process.
                 sdfg_program = sdfg.compile(validate=False)
 
-        for dump_name in ("program.sdfgz", "program.sdfg"):
-            sdfg_dump = sdfg_build_folder / dump_name
-            if sdfg_dump.exists():
-                break
-        else:
-            raise RuntimeError(
-                f"No SDFG dump (program.sdfgz / program.sdfg) found in '{sdfg_build_folder}'."
-            )
-
         assert inp.binding_source is not None
         artifact = DaCeCompilationArtifact(
             build_folder=sdfg_build_folder,
-            sdfg_dump=sdfg_dump,
+            sdfg_json=json.dumps(inp.program_source.source_code),
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,

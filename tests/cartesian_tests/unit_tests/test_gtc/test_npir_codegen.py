@@ -317,7 +317,7 @@ def test_full_computation_valid(tmp_path) -> None:
     result = NpirCodegen().visit(computation)
     print(result)
     mod_path = tmp_path / "npir_codegen_1.py"
-    mod_path.write_text(result)
+    mod_path.write_text(result, encoding="utf-8")
 
     sys.path.append(str(tmp_path))
     import npir_codegen_1 as mod
@@ -350,7 +350,7 @@ def test_variable_read_outside_bounds(tmp_path) -> None:
     result = NpirCodegen().visit(computation)
     print(result)
     mod_path = tmp_path / "npir_codegen_2.py"
-    mod_path.write_text(result)
+    mod_path.write_text(result, encoding="utf-8")
 
     sys.path.append(str(tmp_path))
     import npir_codegen_2 as mod

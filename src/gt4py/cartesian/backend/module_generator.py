@@ -121,7 +121,7 @@ class BaseModuleGenerator(abc.ABC):
         self.template = jinja2.Template(
             importlib_resources.files("gt4py.cartesian.backend.templates")
             .joinpath(self.TEMPLATE_RESOURCE)
-            .read_text()
+            .read_text(encoding="utf-8")
         )
 
     def __call__(self, args_data: ModuleData) -> str:
