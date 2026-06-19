@@ -225,6 +225,7 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 
+@runtime_checkable
 class SingleDispatchCallable(Protocol[_P, _T]):
     registry: Mapping[Any, Callable[_P, _T]]
 
@@ -252,8 +253,10 @@ def is_single_dispatch_callable(
 ) -> TypeGuard[SingleDispatchCallable[_P, _T]]:
     return (
         callable(func)
+        and getattr(func, "registry", None) is not None
         and callable(getattr(func, "dispatch", None))
         and callable(getattr(func, "register", None))
+        and callable(getattr(func, "_clear_cache", None))
     )
 
 
