@@ -143,8 +143,8 @@ class DaCeCompilationArtifact:
     """Result of a DaCe compilation: build folder + SDFG bindings + the SDFG itself.
 
     The SDFG is carried inline as JSON because dace's load path
-    (:func:`get_program_handle`) needs an SDFG instance to wrap into the
-    returned :class:`CompiledSDFG`, and the build folder may not contain a
+    (``get_program_handle``) needs an SDFG instance to wrap into the
+    returned ``CompiledSDFG``, and the build folder may not contain a
     ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
     """
 
@@ -158,7 +158,7 @@ class DaCeCompilationArtifact:
         """Wrap the compiled program in gt4py's calling convention.
 
         On a miss, loads the precompiled .so directly via
-        :func:`dace.codegen.compiler.get_program_handle` — no recompilation,
+        ``dace.codegen.compiler.get_program_handle`` — no recompilation,
         no ``dace.config`` re-entry. Must run in the process that will call
         the returned program.
         """
@@ -193,7 +193,7 @@ class DaCeCompiler(
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
-    """Run the DaCe build system and produce an on-disk :class:`DaCeCompilationArtifact`."""
+    """Run the DaCe build system and produce an on-disk ``DaCeCompilationArtifact``."""
 
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime

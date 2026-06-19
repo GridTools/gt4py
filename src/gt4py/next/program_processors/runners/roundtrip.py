@@ -215,7 +215,7 @@ class RoundtripArtifact:
     """Source-string artifact for the roundtrip backend.
 
     The generated Python source is the artifact: picklable, re-execed on
-    :meth:`load`. When ``debug`` is true, ``load`` writes a temporary ``.py``
+    ``load``. When ``debug`` is true, ``load`` writes a temporary ``.py``
     so debuggers/tracebacks resolve to source lines.
     """
 
