@@ -21,7 +21,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import KDim
+from next_tests.integration_tests.cases_utils import KDim
 
 
 @pytest.fixture(

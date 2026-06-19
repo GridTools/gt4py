@@ -19,10 +19,14 @@ in that submodule as opposed to being in this file.
 
 from __future__ import annotations
 
-import textwrap
-from typing import Any, Optional
+import difflib
+import sys
+from typing import Any, ClassVar, Iterable, Optional, Sequence
 
 from gt4py.eve import SourceLocation
+
+# TODO(havogt): import 'Self' from 'typing' directly once the Python floor is >=3.12.
+from gt4py.eve.extended_typing import Self
 from gt4py.next.errors import formatting
 
 
@@ -32,37 +36,129 @@ class GT4PyError(Exception):
         return self.args[0]
 
 
-class DSLError(GT4PyError):
-    location: Optional[SourceLocation]
+def _did_you_mean(name: str, candidates: Iterable[str]) -> list[str]:
+    """Produce a 'Did you mean ...?' hint if `name` closely matches any candidate."""
+    # Never suggest the name the user already wrote (it can appear among the
+    # candidates as a same-named symbol from another SSA generation).
+    matches = difflib.get_close_matches(name, [c for c in candidates if c != name], n=3, cutoff=0.6)
+    if not matches:
+        return []
+    return [f"Did you mean {' or '.join(f'{m!r}' for m in matches)}?"]
 
-    def __init__(self, location: Optional[SourceLocation], message: str) -> None:
+
+class DSLError(GT4PyError):
+    """
+    Error in user code of one of the GT4Py-embedded DSLs.
+
+    Besides the message and the primary source location, a diagnostic can carry
+    optional structured payload that the formatter renders for the user.
+
+    Attributes:
+        label: Short text printed right after the carets, qualifying the marked
+            code (e.g. "this has type 'bool'").
+        related: Further (location, message) pairs that contribute to the error
+            (e.g. the other operand of a type mismatch).
+        notes: Factual background ("Note: ..."), explaining why this is an
+            error.
+        hints: Actionable advice ("Hint: ..."), telling the user what to do
+            instead.
+        code: A stable, machine-readable identifier of the error category, set
+            per subclass; intended for searching documentation and for tooling.
+    """
+
+    code: ClassVar[Optional[str]] = None
+
+    location: Optional[SourceLocation]
+    label: Optional[str]
+    related: list[tuple[SourceLocation, str]]
+    notes: list[str]
+    hints: list[str]
+
+    def __init__(
+        self,
+        location: Optional[SourceLocation],
+        message: str,
+        *,
+        label: Optional[str] = None,
+        related: Sequence[tuple[SourceLocation, str]] = (),
+        notes: Sequence[str] = (),
+        hints: Sequence[str] = (),
+    ) -> None:
         self.location = location
+        self.label = label
+        self.related = list(related)
+        self.notes = list(notes)
+        self.hints = list(hints)
         super().__init__(message)
 
-    def with_location(self, location: Optional[SourceLocation]) -> DSLError:
+    def with_location(self, location: Optional[SourceLocation]) -> Self:
         self.location = location
         return self
 
+    # TODO(havogt): drop this shim and the matching '__notes__' fold-in in
+    #  '__str__' once the Python floor is >=3.11, where 'BaseException.add_note'
+    #  (PEP 678) and its automatic '__notes__' traceback rendering are built in.
+    if sys.version_info < (3, 11):
+
+        def add_note(self, note: str) -> None:
+            if not hasattr(self, "__notes__"):
+                self.__notes__ = []
+            self.__notes__.append(note)
+
     def __str__(self) -> str:
-        if self.location:
-            loc_str = formatting.format_location(self.location, show_caret=True)
-            return f"{self.message}\n{textwrap.indent(loc_str, '  ')}"
-        return self.message
+        body = formatting.format_diagnostic_parts(
+            self.message,
+            self.location,
+            label=self.label,
+            related=self.related,
+            notes=self.notes,
+            hints=self.hints,
+        )
+        if sys.version_info < (3, 11):
+            # On 3.10 the traceback machinery doesn't render '__notes__'; fold
+            # them in so they surface through 'str()' (pytest, IPython, logging)
+            # the way the >=3.11 machinery does automatically.
+            body += "".join(f"\n{note}" for note in getattr(self, "__notes__", []))
+        return body
 
 
 class UnsupportedPythonFeatureError(DSLError):
+    code: ClassVar[str] = "unsupported-syntax"
+
     feature: str
 
-    def __init__(self, location: Optional[SourceLocation], feature: str) -> None:
-        super().__init__(location, f"Unsupported Python syntax: '{feature}'.")
+    def __init__(
+        self,
+        location: Optional[SourceLocation],
+        feature: str,
+        *,
+        notes: Sequence[str] = (),
+        hints: Sequence[str] = (),
+    ) -> None:
+        super().__init__(
+            location, f"Unsupported Python syntax: {feature}.", notes=notes, hints=hints
+        )
         self.feature = feature
 
 
 class UndefinedSymbolError(DSLError):
+    code: ClassVar[str] = "undefined-symbol"
+
     sym_name: str
 
-    def __init__(self, location: Optional[SourceLocation], name: str) -> None:
-        super().__init__(location, f"Name '{name}' is not defined.")
+    def __init__(
+        self,
+        location: Optional[SourceLocation],
+        name: str,
+        *,
+        candidates: Iterable[str] = (),
+    ) -> None:
+        super().__init__(
+            location,
+            f"Undeclared symbol '{name}'.",
+            label="not defined at this point",
+            hints=_did_you_mean(name, candidates),
+        )
         self.sym_name = name
 
 
