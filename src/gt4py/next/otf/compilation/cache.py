@@ -10,9 +10,8 @@
 
 import pathlib
 import tempfile
-from typing import Any
 
-from gt4py.next import config, utils
+from gt4py.next import config, fingerprinting
 from gt4py.next.otf import stages
 
 
@@ -21,8 +20,8 @@ _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 _session_cache_dir_path = pathlib.Path(_session_cache_dir.name)
 
 
-def _cache_folder_name(source: stages.ProgramSource, *ctx: Any) -> str:
-    fingerprint_hex_str = utils.stable_fingerprinter((source, *ctx))
+def _cache_folder_name(source: stages.ProgramSource, ctx_fingerprint: str | None) -> str:
+    fingerprint_hex_str = fingerprinting.strict_fingerprinter((source, ctx_fingerprint))
     return source.entry_point.name + "_" + fingerprint_hex_str
 
 
@@ -40,7 +39,7 @@ def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:
 def get_cache_folder(
     compilable_source: stages.CompilableProject,
     lifetime: config.BuildCacheLifetime,
-    *ctx: Any,
+    ctx_fingerprint: str | None = None,
 ) -> pathlib.Path:
     """
     Construct the path to where the build system project artifact of a compilable source should be cached.
@@ -48,7 +47,7 @@ def get_cache_folder(
     The returned path points to an existing folder in all cases.
     """
     # TODO(ricoh): make dependent on binding source too or add alternative that depends on bindings
-    folder_name = _cache_folder_name(compilable_source.program_source, ctx)
+    folder_name = _cache_folder_name(compilable_source.program_source, ctx_fingerprint)
 
     base_path = get_cache_base_path(lifetime)
     base_path.mkdir(exist_ok=True)

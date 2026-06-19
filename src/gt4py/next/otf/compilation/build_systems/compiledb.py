@@ -72,7 +72,7 @@ class CompiledbFactory(
         )
 
         return CompiledbProject(
-            root_path=cache.get_cache_folder(source, cache_lifetime, self),
+            root_path=cache.get_cache_folder(source, cache_lifetime),
             program_name=name,
             source_files={
                 header_name: source.program_source.source_code,
