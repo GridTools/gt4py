@@ -10,32 +10,19 @@ from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.unroll_tuple_maps import UnrollTupleMaps
+from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
+
 
 IDim = common.Dimension("IDim")
 T = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 i_field = ts.FieldType(dims=[IDim], dtype=T)
 i_tuple_field = ts.TupleType(types=[i_field, i_field])
 
-i_domain = im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value="IDim"), 0, 1))
 
-
-def _make_program(
-    params: list[itir.Sym], expr: itir.Expr, out_type: ts.TypeSpec = i_field
-) -> itir.Program:
-    return itir.Program(
-        id="testee",
-        function_definitions=[],
-        params=[*params, im.sym("out", out_type)],
-        declarations=[],
-        body=[
-            itir.SetAt(
-                expr=expr,
-                domain=i_domain,
-                target=im.ref("out", out_type),
-            )
-        ],
-    )
+def _apply(expr: itir.Expr) -> itir.Expr:
+    expr = itir_type_inference.infer(expr, offset_provider_type={}, allow_undeclared_symbols=True)
+    return UnrollTupleMaps(uids=utils.IDGeneratorPool()).visit(expr)
 
 
 def _neg():
@@ -47,92 +34,54 @@ def _plus():
 
 
 def test_tree_map_tuple_multi_arg():
-    uids = utils.IDGeneratorPool()
-    program = _make_program(
-        [im.sym("a", i_tuple_field), im.sym("b", i_tuple_field)],
+    result = _apply(
         im.call(im.call("tree_map_tuple")(_plus()))(
             im.ref("a", i_tuple_field), im.ref("b", i_tuple_field)
-        ),
-        out_type=i_tuple_field,
+        )
     )
-    result = UnrollTupleMaps.apply(program, uids=uids)
 
-    expected = _make_program(
-        [im.sym("a", i_tuple_field), im.sym("b", i_tuple_field)],
-        im.make_tuple(
-            im.call(_plus())(im.tuple_get(0, "a"), im.tuple_get(0, "b")),
-            im.call(_plus())(im.tuple_get(1, "a"), im.tuple_get(1, "b")),
-        ),
-        out_type=i_tuple_field,
+    expected = im.make_tuple(
+        im.call(_plus())(im.tuple_get(0, "a"), im.tuple_get(0, "b")),
+        im.call(_plus())(im.tuple_get(1, "a"), im.tuple_get(1, "b")),
     )
     assert result == expected
 
 
 def test_tree_map_tuple_nested():
-    uids = utils.IDGeneratorPool()
     nested = ts.TupleType(types=[i_tuple_field, i_tuple_field])
-    program = _make_program(
-        [im.sym("t", nested)],
-        im.call(im.call("tree_map_tuple")(_neg()))(im.ref("t", nested)),
-        out_type=nested,
-    )
-    result = UnrollTupleMaps.apply(program, uids=uids)
+    result = _apply(im.call(im.call("tree_map_tuple")(_neg()))(im.ref("t", nested)))
 
-    expected = _make_program(
-        [im.sym("t", nested)],
+    expected = im.make_tuple(
         im.make_tuple(
-            im.make_tuple(
-                im.call(_neg())(im.tuple_get(0, im.tuple_get(0, "t"))),
-                im.call(_neg())(im.tuple_get(1, im.tuple_get(0, "t"))),
-            ),
-            im.make_tuple(
-                im.call(_neg())(im.tuple_get(0, im.tuple_get(1, "t"))),
-                im.call(_neg())(im.tuple_get(1, im.tuple_get(1, "t"))),
-            ),
+            im.call(_neg())(im.tuple_get(0, im.tuple_get(0, "t"))),
+            im.call(_neg())(im.tuple_get(1, im.tuple_get(0, "t"))),
         ),
-        out_type=nested,
+        im.make_tuple(
+            im.call(_neg())(im.tuple_get(0, im.tuple_get(1, "t"))),
+            im.call(_neg())(im.tuple_get(1, im.tuple_get(1, "t"))),
+        ),
     )
     assert result == expected
 
 
 def test_map_tuple_single_arg():
-    uids = utils.IDGeneratorPool()
-    program = _make_program(
-        [im.sym("t", i_tuple_field)],
-        im.call(im.call("map_tuple")(_neg()))(im.ref("t", i_tuple_field)),
-        out_type=i_tuple_field,
-    )
-    result = UnrollTupleMaps.apply(program, uids=uids)
+    result = _apply(im.call(im.call("map_tuple")(_neg()))(im.ref("t", i_tuple_field)))
 
-    expected = _make_program(
-        [im.sym("t", i_tuple_field)],
-        im.make_tuple(
-            im.call(_neg())(im.tuple_get(0, "t")),
-            im.call(_neg())(im.tuple_get(1, "t")),
-        ),
-        out_type=i_tuple_field,
+    expected = im.make_tuple(
+        im.call(_neg())(im.tuple_get(0, "t")),
+        im.call(_neg())(im.tuple_get(1, "t")),
     )
     assert result == expected
 
 
 def test_map_tuple_does_not_recurse():
-    uids = utils.IDGeneratorPool()
     nested = ts.TupleType(types=[i_tuple_field, i_tuple_field])
     g = im.lambda_("__p")(im.op_as_fieldop("plus")(im.tuple_get(0, "__p"), im.tuple_get(1, "__p")))
-    program = _make_program(
-        [im.sym("t", nested)],
-        im.call(im.call("map_tuple")(g))(im.ref("t", nested)),
-        out_type=i_tuple_field,
-    )
-    result = UnrollTupleMaps.apply(program, uids=uids)
+    result = _apply(im.call(im.call("map_tuple")(g))(im.ref("t", nested)))
 
-    expected = _make_program(
-        [im.sym("t", nested)],
-        im.make_tuple(
-            im.call(g)(im.tuple_get(0, "t")),
-            im.call(g)(im.tuple_get(1, "t")),
-        ),
-        out_type=i_tuple_field,
+    expected = im.make_tuple(
+        im.call(g)(im.tuple_get(0, "t")),
+        im.call(g)(im.tuple_get(1, "t")),
     )
     assert result == expected
 
@@ -140,96 +89,60 @@ def test_map_tuple_does_not_recurse():
 def test_make_tuple_arg_is_collapsed():
     """When the input tuple is a `make_tuple` literal, projection should collapse
     directly to the element (no residual `tuple_get(make_tuple(...))`)."""
-    uids = utils.IDGeneratorPool()
-    program = _make_program(
-        [im.sym("a", i_field), im.sym("b", i_field)],
-        im.call(im.call("tree_map_tuple")(_neg()))(im.make_tuple("a", "b")),
-        out_type=i_tuple_field,
+    result = _apply(
+        im.call(im.call("tree_map_tuple")(_neg()))(
+            im.make_tuple(im.ref("a", i_field), im.ref("b", i_field))
+        )
     )
-    result = UnrollTupleMaps.apply(program, uids=uids)
 
-    expected = _make_program(
-        [im.sym("a", i_field), im.sym("b", i_field)],
-        im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b")),
-        out_type=i_tuple_field,
-    )
+    expected = im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b"))
     assert result == expected
 
 
 def test_nested_make_tuple_arg_is_collapsed():
     """A nested `make_tuple` arg should be fully collapsed at every depth: each
     `tuple_get(i, make_tuple(...))` along the recursion is folded directly."""
-    uids = utils.IDGeneratorPool()
-    nested = ts.TupleType(types=[i_tuple_field, i_tuple_field])
-    program = _make_program(
-        [
-            im.sym("a", i_field),
-            im.sym("b", i_field),
-            im.sym("c", i_field),
-            im.sym("d", i_field),
-        ],
+    result = _apply(
         im.call(im.call("tree_map_tuple")(_neg()))(
-            im.make_tuple(im.make_tuple("a", "b"), im.make_tuple("c", "d"))
-        ),
-        out_type=nested,
+            im.make_tuple(
+                im.make_tuple(im.ref("a", i_field), im.ref("b", i_field)),
+                im.make_tuple(im.ref("c", i_field), im.ref("d", i_field)),
+            )
+        )
     )
-    result = UnrollTupleMaps.apply(program, uids=uids)
 
-    expected = _make_program(
-        [
-            im.sym("a", i_field),
-            im.sym("b", i_field),
-            im.sym("c", i_field),
-            im.sym("d", i_field),
-        ],
-        im.make_tuple(
-            im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b")),
-            im.make_tuple(im.call(_neg())("c"), im.call(_neg())("d")),
-        ),
-        out_type=nested,
+    expected = im.make_tuple(
+        im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b")),
+        im.make_tuple(im.call(_neg())("c"), im.call(_neg())("d")),
     )
     assert result == expected
 
 
 def test_map_tuple_with_make_tuple_arg_is_collapsed():
     """The `make_tuple` short-circuit must also apply for the `map_tuple` builtin."""
-    uids = utils.IDGeneratorPool()
-    program = _make_program(
-        [im.sym("a", i_field), im.sym("b", i_field)],
-        im.call(im.call("map_tuple")(_neg()))(im.make_tuple("a", "b")),
-        out_type=i_tuple_field,
+    result = _apply(
+        im.call(im.call("map_tuple")(_neg()))(
+            im.make_tuple(im.ref("a", i_field), im.ref("b", i_field))
+        )
     )
-    result = UnrollTupleMaps.apply(program, uids=uids)
 
-    expected = _make_program(
-        [im.sym("a", i_field), im.sym("b", i_field)],
-        im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b")),
-        out_type=i_tuple_field,
-    )
+    expected = im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b"))
     assert result == expected
 
 
 def test_non_trivial_arg_is_let_bound():
     """Non-trivial (potentially expensive) tuple expressions must still be
     let-bound to avoid duplicating work across leaf projections."""
-    uids = utils.IDGeneratorPool()
     # `f(t)` is a non-trivial expression returning a tuple
     f = im.lambda_("__t")(im.ref("__t", i_tuple_field))
-    program = _make_program(
-        [im.sym("t", i_tuple_field)],
-        im.call(im.call("tree_map_tuple")(_neg()))(im.call(f)(im.ref("t", i_tuple_field))),
-        out_type=i_tuple_field,
+    result = _apply(
+        im.call(im.call("tree_map_tuple")(_neg()))(im.call(f)(im.ref("t", i_tuple_field)))
     )
-    result = UnrollTupleMaps.apply(program, uids=uids)
 
-    expected = _make_program(
-        [im.sym("t", i_tuple_field)],
-        im.let("_utm_0", im.call(f)("t"))(
-            im.make_tuple(
-                im.call(_neg())(im.tuple_get(0, "_utm_0")),
-                im.call(_neg())(im.tuple_get(1, "_utm_0")),
-            )
-        ),
-        out_type=i_tuple_field,
+    expected = im.let("_utm_0", im.call(f)("t"))(
+        im.make_tuple(
+            im.call(_neg())(im.tuple_get(0, "_utm_0")),
+            im.call(_neg())(im.tuple_get(1, "_utm_0")),
+        )
     )
     assert result == expected
