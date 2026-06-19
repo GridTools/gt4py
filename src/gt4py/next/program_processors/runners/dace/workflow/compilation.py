@@ -21,7 +21,7 @@ import dace.codegen.compiler as dace_compiler
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import common, config, utils as gtx_utils
+from gt4py.next import common, config
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -135,8 +135,11 @@ class CompiledDaceProgram:
         assert result is None
 
 
+_live_program_cache: dict[pathlib.Path, CompiledDaceProgram] = {}
+
+
 @dataclasses.dataclass(frozen=True)
-class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
+class DaCeCompilationArtifact:
     """Result of a DaCe compilation: build folder + SDFG bindings + the SDFG itself.
 
     The SDFG is carried inline as JSON because dace's load path
@@ -151,19 +154,6 @@ class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
     bind_func_name: str
     device_type: core_defs.DeviceType
 
-    # Process-local cache of the live :class:`CompiledDaceProgram`. Populated by
-    # ``DaCeCompiler`` to skip the disk round-trip when the artifact stays in
-    # the same process. Excluded from pickle (``pickle=False`` metadata) so
-    # receivers in other processes see ``None`` and fall through to the
-    # disk-based load.
-    _live_program: CompiledDaceProgram | None = dataclasses.field(
-        init=False,
-        default=None,
-        compare=False,
-        repr=False,
-        metadata=gtx_utils.gt4py_metadata(pickle=False),
-    )
-
     def load(self) -> stages.ExecutableProgram:
         """Wrap the compiled program in gt4py's calling convention.
 
@@ -172,10 +162,10 @@ class DaCeCompilationArtifact(gtx_utils.MetadataBasedPickling):
         no ``dace.config`` re-entry. Must run in the process that will call
         the returned program.
         """
-        program = self._live_program
+        program = _live_program_cache.get(self.build_folder)
         if program is None:
             program = self._load_compiled_program()
-            object.__setattr__(self, "_live_program", program)
+            _live_program_cache[self.build_folder] = program
         return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
     def _load_compiled_program(self) -> CompiledDaceProgram:
@@ -234,8 +224,6 @@ class DaCeCompiler(
 
             sdfg.build_folder = str(sdfg_build_folder)
             with locking.lock(sdfg_build_folder):
-                # Keep the handle so the artifact's load() can skip the disk
-                # round-trip in the same process.
                 sdfg_program = sdfg.compile(validate=False)
 
         assert inp.binding_source is not None
@@ -246,12 +234,8 @@ class DaCeCompiler(
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
         )
-        object.__setattr__(
-            artifact,
-            "_live_program",
-            CompiledDaceProgram(
-                sdfg_program, artifact.bind_func_name, artifact.binding_source_code
-            ),
+        _live_program_cache[artifact.build_folder] = CompiledDaceProgram(
+            sdfg_program, artifact.bind_func_name, artifact.binding_source_code
         )
         return artifact
 
