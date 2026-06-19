@@ -481,7 +481,7 @@ class FieldOffset(runtime.Offset):
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
         elif isinstance(offset_definition, common.Connectivity):
-            assert common.is_neighbor_connectivity(offset_definition)
+            assert common.is_neighbor_table(offset_definition)
             named_index = common.NamedIndex(self.target[-1], offset)
             connectivity = offset_definition[named_index]
         else:
@@ -508,3 +508,12 @@ class FieldOffset(runtime.Offset):
             self._cache[cache_key] = connectivity
 
         return connectivity
+
+
+def is_cartesian_offset(offset: FieldOffset | ts.OffsetType) -> bool:
+    return (
+        len(offset.target) == 1
+        and offset.source == offset.target[0]
+        and offset.source.kind == offset.target[0].kind
+        and offset.target[0].kind != common.DimensionKind.LOCAL
+    )

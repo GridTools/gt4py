@@ -63,6 +63,10 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
+
+    def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> str:
+        return f"gtx.CartesianConnectivity({node.domain.value}, codomain={node.codomain.value})"
+
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
     FunctionDefinition = as_mako(

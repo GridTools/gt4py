@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from typing import Literal
+
 import pytest
 
 from gt4py import cartesian as gt4pyc, storage as gt_storage
@@ -28,8 +30,8 @@ def is_rocm_cupy():
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 @pytest.mark.parametrize("order", ["C", "F"])
-def test_numpy_allocators(backend, order):
-    if backend in ["gt:gpu", "dace:gpu"] and is_rocm_cupy():
+def test_numpy_allocators(backend: str, order: Literal["C"] | Literal["F"]) -> None:
+    if is_rocm_cupy() and backend in ["gt:gpu", "dace:gpu", "dace:gpu_IJK"]:
         pytest.skip(
             f"This test would need GT4Py's custom `__hip_array_interface__` on the cupy array. Using dlpack (via nanobind) would make this test work for ROCm."
         )
@@ -46,8 +48,8 @@ def test_numpy_allocators(backend, order):
 
 
 @pytest.mark.parametrize("backend", PERFORMANCE_BACKENDS)
-def test_bad_layout_warns(backend):
-    if backend in ["gt:gpu", "dace:gpu"] and is_rocm_cupy():
+def test_bad_layout_warns(backend: str) -> None:
+    if is_rocm_cupy() and backend in ["gt:gpu", "dace:gpu", "dace:gpu_IJK"]:
         pytest.skip(
             f"This test would need GT4Py's custom `__hip_array_interface__` on the cupy array. Using dlpack (via nanobind) would make this test work for ROCm."
         )
@@ -74,3 +76,26 @@ def test_bad_layout_warns(backend):
         "provided allocators in `gt4py.storage`.",
     ):
         stencil(field_a=inp, field_b=outp)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_data_dimensions_stride_is_always_higher_than_cartesian(backend):
+    xp = get_array_library(backend)
+
+    # Test a 4D array
+    shape = (2, 2, 2, 2)
+    allocated_array = gt_storage.zeros(
+        backend=backend, shape=shape, dtype=xp.float64, aligned_index=(0, 0, 0, 0)
+    )
+
+    assert allocated_array.strides[3] > max(allocated_array.strides[0:3])
+
+    # Test a 5D array
+    shape = (2, 2, 2, 2, 2)
+    allocated_array = gt_storage.zeros(
+        backend=backend, shape=shape, dtype=xp.float64, aligned_index=(0, 0, 0, 0, 0)
+    )
+
+    assert allocated_array.strides[3] > max(
+        allocated_array.strides[0:3]
+    ) and allocated_array.strides[4] > max(allocated_array.strides[0:3])

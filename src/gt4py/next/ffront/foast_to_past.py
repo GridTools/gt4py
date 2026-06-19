@@ -77,7 +77,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         ...         copy.foast_stage.foast_node.definition.type.returns,
         ...     ),
         ...     kwargs={},
-        ...     offset_provider={"I": IDim},
+        ...     offset_provider={},
         ...     column_axis=None,
         ...     argument_descriptor_contexts={},
         ... )
@@ -190,5 +190,7 @@ def operator_to_program_factory(
         foast_to_itir_step or foast_to_gtir.adapted_foast_to_gtir_factory()
     )
     if cached:
-        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
+        wf = workflow.CachedStep.in_memory(
+            wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        )
     return wf

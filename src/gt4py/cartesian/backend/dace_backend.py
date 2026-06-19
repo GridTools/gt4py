@@ -46,7 +46,7 @@ from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
 from gt4py.eve import codegen
 from gt4py.eve.codegen import MakoTemplate as as_mako
-from gt4py.storage.cartesian import layout
+from gt4py.storage.cartesian import layout, layout_registry
 
 
 if TYPE_CHECKING:
@@ -397,8 +397,20 @@ class SDFGManager:
             flipper = passes.SwapHorizontalMaps()
             flipper.visit(stree)
 
+        K_loop_pushed_down = False  # To keep code clean we bookeep operation
         if layout[2] != 0:
+            K_loop_pushed_down = True
             flipper = passes.PushVerticalMapDown()
+            flipper.visit(stree)
+
+        # Re-order sequential K to maximize parallelism when targeting parallel
+        # backend and hardware options
+        is_threaded = "OMP_NUM_THREADS" in os.environ and int(os.environ["OMP_NUM_THREADS"]) > 1
+        if not K_loop_pushed_down and (
+            self.builder.backend.storage_info["device"] == "gpu"
+            or (self.builder.backend.storage_info["device"] == "cpu" and is_threaded)
+        ):
+            flipper = passes.PushVerticalMapDown(forscope_only=True)
             flipper.visit(stree)
 
         # Create SDFG
@@ -883,12 +895,7 @@ class BaseDaceBackend(BaseGTBackend):
 class DaceCPUBackend(BaseDaceBackend):
     name = "dace:cpu"
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
-    storage_info: ClassVar[layout.LayoutInfo] = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": layout.layout_maker_factory((1, 2, 0)),  # Optimal loop order: K-I-J
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((1, 2, 0))),
-    }
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
@@ -901,12 +908,7 @@ class DaceCPUBackend(BaseDaceBackend):
 class DaceCPUKFirstBackend(BaseDaceBackend):
     name = "dace:cpu_kfirst"
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
-    storage_info: ClassVar[layout.LayoutInfo] = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": layout.layout_maker_factory((0, 1, 2)),  # Optimal loop order: I-J-K
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((0, 1, 2))),
-    }
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
@@ -919,12 +921,7 @@ class DaceCPUKFirstBackend(BaseDaceBackend):
 class DaceCPU_KJI(BaseDaceBackend):
     name = "dace:cpu_KJI"
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
-    storage_info: ClassVar[layout.LayoutInfo] = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": layout.layout_maker_factory((2, 1, 0)),  # Optimal loop order: K-J-I
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((2, 1, 0))),
-    }
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
@@ -935,16 +932,28 @@ class DaceCPU_KJI(BaseDaceBackend):
 
 @register
 class DaceGPUBackend(BaseDaceBackend):
-    """DaCe python backend using gt4py.cartesian.gtc."""
+    """GPU DaCe python with an optimal KJI loop layout"""
 
     name = "dace:gpu"
     languages: ClassVar[dict] = {"computation": "cuda", "bindings": ["python"]}
-    storage_info: ClassVar[layout.LayoutInfo] = {
-        "alignment": 32,
-        "device": "gpu",
-        "layout_map": layout.layout_maker_factory((2, 1, 0)),  # Optimal loop order: K-J-I
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((2, 1, 0))),
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
+    MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
+    options: ClassVar[GTBackendOptions] = {
+        **BaseGTBackend.GT_BACKEND_OPTS,
+        "device_sync": {"versioning": True, "type": bool},
     }
+
+    def generate_extension(self) -> None:
+        return self.make_extension(uses_cuda=True)
+
+
+@register
+class DaceGPUBackendIJK(BaseDaceBackend):
+    """GPU DaCe python with an optimal IJK loop layout"""
+
+    name = "dace:gpu_IJK"
+    languages: ClassVar[dict] = {"computation": "cuda", "bindings": ["python"]}
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options: ClassVar[GTBackendOptions] = {
         **BaseGTBackend.GT_BACKEND_OPTS,

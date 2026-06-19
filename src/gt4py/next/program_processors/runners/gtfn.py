@@ -21,7 +21,7 @@ from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import compiler
+from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
@@ -49,7 +49,7 @@ def convert_args(
 ) -> stages.ExecutableProgram:
     def decorated_program(
         *args: Any,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: dict[str, common.OffsetProviderElem],
         out: Any = None,
     ) -> None:
         # Note: this function is on the hot path and needs to have minimal overhead.
@@ -81,14 +81,11 @@ def convert_args(
 
 
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
+    offset_provider: dict[str, common.OffsetProviderElem], device: core_defs.DeviceType
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
     # Note: this function is on the hot path and needs to have minimal overhead.
     zero_origin = (0, 0)
-    assert all(
-        hasattr(conn, "ndarray") or isinstance(conn, common.Dimension)
-        for conn in offset_provider.values()
-    )
+    assert all(hasattr(conn, "ndarray") for conn in offset_provider.values())
     # Note: the order here needs to agree with the order of the generated bindings.
     # This is currently true only because when hashing offset provider dicts,
     # the keys' order is taken into account. Any modification to the hashing
@@ -146,10 +143,12 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(
+                lambda o: workflow.CachedStep.persistent(
                     o.bare_translation,
-                    hash_function=stages.fingerprint_compilable_program,
-                    cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "gtfn_cache")),
+                    input_fingerprinter=stages.compilable_program_fingerprinter,
+                    cache=filecache.FileCache(
+                        str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
+                    ),
                 )
             ),
         )
@@ -188,12 +187,14 @@ class GTFNBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
+                lambda o: workflow.CachedStep.in_memory(
+                    o.otf_workflow, input_fingerprinter=o.key_function
+                )
             ),
             name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
-        hash_function = stages.compilation_hash
+        key_function = stages.fast_compilable_program_fingerprinter
         otf_workflow = factory.SubFactory(
             GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
         )

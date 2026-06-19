@@ -21,7 +21,7 @@ from gt4py.next.ffront.fbuiltins import where
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import E2V
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     Edge,
     IDim,
     Vertex,
@@ -57,7 +57,7 @@ def exec_alloc_descriptor(request):
 def cartesian_case(request, exec_alloc_descriptor):
     yield cases.Case(
         backend=exec_alloc_descriptor,
-        offset_provider={"Ioff": IDim},
+        offset_provider={},
         default_sizes={IDim: 10},
         grid_type=gtx_common.GridType.CARTESIAN,
         allocator=exec_alloc_descriptor.allocator,
