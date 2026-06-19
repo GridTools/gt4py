@@ -130,19 +130,18 @@ ExecutableProgram: TypeAlias = Callable
 
 
 class CompilationArtifact(Protocol):
-    """The output of an :class:`recipes.OTFCompileWorkflow`.
+    """The output of an ``OTFCompileWorkflow``.
 
     Each backend defines its own concrete artifact dataclass; all share this
     Protocol. Implementations are frozen dataclasses, picklable, and carry no
-    live process-bound state — that is reconstructed by :meth:`load`, which
-    returns a directly-callable :class:`ExecutableProgram` taking gt4py-shaped
+    live process-bound state — that is reconstructed by ``load``, which
+    returns a directly-callable ``ExecutableProgram`` taking gt4py-shaped
     arguments.
 
-    The one current exception is
-    :class:`gt4py.next.program_processors.runners.roundtrip.RoundtripArtifact`
-    when it is configured with a ``dispatch_backend``: that field holds a
-    :class:`gt4py.next.backend.Backend` reference whose role belongs at the
-    runner / load-time seam, not in the artifact itself.
+    The one current exception is ``RoundtripArtifact`` when it is configured
+    with a ``dispatch_backend``: that field holds a ``Backend`` reference
+    whose role belongs at the runner / load-time seam, not in the artifact
+    itself.
     """
 
     def load(self) -> ExecutableProgram: ...

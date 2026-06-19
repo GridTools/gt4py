@@ -9,8 +9,8 @@
 """Tests for the compilation stage of the dace backend workflow.
 
 Covers the GPU TX-marker instrumentation, the picklability of
-:class:`compilation.DaCeCompilationArtifact`, and the process-local
-live-program cache that backs its :meth:`load`.
+``DaCeCompilationArtifact``, and the process-local live-program cache
+that backs its ``load`` method.
 """
 
 import contextlib
