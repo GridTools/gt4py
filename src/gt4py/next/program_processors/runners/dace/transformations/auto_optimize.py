@@ -374,6 +374,7 @@ def gt_auto_optimize(
 
         # We now expand all GT4Py specific library nodes.
         #  We do this such that we have control over all the Maps that are there.
+        # NOTE: `Broadcast` nodes were already expanded in the top level dataflow phase.
         # TODO(edopao,phimuell): It is probably the right place, but maybe there is a better one.
         for node, state in list(sdfg.all_nodes_recursive()):
             if isinstance(node, gtx_library_nodes.GTIR_LIBRARY_NODES):
@@ -471,6 +472,7 @@ def _gt_auto_process_top_level_maps(
     if GT4PyAutoOptHook.TopLevelDataFlowPre in optimization_hooks:
         optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](sdfg)  # type: ignore[call-arg]
 
+    broadcast_nodes_have_been_expanded = False
     while True:
         # First we do scan the entire SDFG to figure out which data is only
         #  used once and can be deleted.
@@ -655,7 +657,33 @@ def _gt_auto_process_top_level_maps(
         # Determine if the SDFG has been modified by comparing the hash.
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
         if old_sdfg_hash == sdfg_hash:
-            break
+            # If broadcast nodes have been expanded already then exit the loop.
+            if broadcast_nodes_have_been_expanded:
+                break
+
+            # Broadcast nodes have not been expanded. Do it now and try again.
+            #  The idea is that the splitter get a chance of integrating them
+            #  into other stencils.
+            sdfg.apply_transformations_repeated(
+                [
+                    gtx_transformations.BrodcastChainRemover(single_use_data=single_use_data),
+                    gtx_transformations.InlineBroadcastAccess(single_use_data=single_use_data),
+                ],
+                validate=False,
+                validate_all=validate_all,
+            )
+            expanded_broadcast_node = False
+            for node, state in list(sdfg.all_nodes_recursive()):
+                if isinstance(node, gtx_library_nodes.Broadcast):
+                    gtx_library_nodes.inplace_broadcast_expander(node, state, state.sdfg)
+                    if validate_all:
+                        sdfg.validate()
+                    expanded_broadcast_node = True
+            broadcast_nodes_have_been_expanded = True
+
+            # There was no broadcast node in the SDFG, so we can exit.
+            if not expanded_broadcast_node:
+                break
 
         # The SDFG was modified by the transformations above. The SDFG was
         #  modified. Call Simplify and try again to further optimize.

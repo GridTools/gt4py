@@ -18,7 +18,10 @@ from dace import (
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtx_lib_nodes,
+    transformations as gtx_transformations,
+)
 from gt4py.next.program_processors.runners.dace.transformations import (
     splitting_tools as gtx_dace_split,
 )
@@ -439,6 +442,11 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
             if len(consumer_edges) == 0:
                 continue
+
+            elif isinstance(data_source, gtx_lib_nodes.Broadcast):
+                # We found a broadcast node there are no restrictions.
+                continue
+
             elif isinstance(data_source, dace_nodes.AccessNode):
                 # TODO(phimuell): Should we also ensure that the domains are tight?
                 if gtx_transformations.utils.is_view(data_source, sdfg):

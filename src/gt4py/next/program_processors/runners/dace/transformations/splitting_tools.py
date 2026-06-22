@@ -14,7 +14,10 @@ import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtx_lib_nodes,
+    transformations as gtx_transformations,
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -811,6 +814,9 @@ def _perform_node_split_impl(
         if isinstance(other_node, dace_nodes.NestedSDFG):
             # There is nothing special to do. In case of a nested SDFG, we will also have to do
             #  stride propagation, but we will postpone that.
+            pass
+
+        elif isinstance(other_node, gtx_lib_nodes.Broadcast):
             pass
 
         elif is_producer_edge and isinstance(other_node, dace_nodes.MapExit):
