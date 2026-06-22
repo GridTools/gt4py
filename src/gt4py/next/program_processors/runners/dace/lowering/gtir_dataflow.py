@@ -1688,7 +1688,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         if isinstance(offset_provider_type, gtx_common.CartesianConnectivityType):
             return self._make_cartesian_shift(it, offset_provider_type, offset_expr)
         else:
-            assert isinstance(offset_value_arg, gtir.OffsetLiteral)
+            # a named offset → unstructured shift; the offset value may be a static
+            # `OffsetLiteral` or a dynamic offset (handled by `_make_unstructured_shift`).
             assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
             assert isinstance(offset_provider_arg.value, str)
             # initially, the storage for the connectivity tables is created as transient;
@@ -1701,27 +1702,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             return self._make_unstructured_shift(
                 it, offset_provider_type, offset_table_node, offset_expr
             )
-            offset_dim = itir_misc.dim_from_axis_literal(offset_provider_arg.codomain)
-            return self._make_cartesian_shift(it, offset_dim, offset_expr)
-
-        # first argument of the shift node is the offset provider
-        assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
-        offset = offset_provider_arg.value
-        assert isinstance(offset, str)
-        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
-
-        # reaching here means a named offset → unstructured shift (cartesian shifts took the
-        # CartesianOffset branch above)
-        # initially, the storage for the connectivity tables is created as transient;
-        # when the tables are used, the storage is changed to non-transient,
-        # so the corresponding arrays are supposed to be allocated by the SDFG caller
-        offset_table = gtx_dace_args.connectivity_identifier(offset)
-        self.sdfg.arrays[offset_table].transient = False
-        offset_table_node = self.state.add_access(offset_table)
-
-        return self._make_unstructured_shift(
-            it, offset_provider_type, offset_table_node, offset_expr
-        )
 
     def _visit_generic_builtin(self, node: gtir.FunCall) -> ValueExpr:
         """
