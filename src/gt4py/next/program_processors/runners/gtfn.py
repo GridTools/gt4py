@@ -168,12 +168,7 @@ class GTFNBackendFactory(factory.Factory):
         )
 
     name = factory.LazyAttribute(lambda o: f"run_gtfn_{o.name_device}{o.name_postfix}")
-    executor = factory.LazyAttribute(
-        lambda o: workflow.CachedStep.in_memory(
-            o.otf_workflow,
-            input_fingerprinter=stages.fast_compilable_program_fingerprinter,
-        )
-    )
+    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
 

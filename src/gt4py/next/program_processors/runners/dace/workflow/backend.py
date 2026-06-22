@@ -16,7 +16,6 @@ import factory
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common, config
-from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
@@ -51,12 +50,7 @@ class DaCeBackendFactory(factory.Factory):
         auto_optimize = factory.Trait(name_postfix="_opt")
 
     name = factory.LazyAttribute(lambda o: f"run_dace_{o.name_device}{o.name_postfix}")
-    executor = factory.LazyAttribute(
-        lambda o: workflow.CachedStep.in_memory(
-            o.otf_workflow,
-            input_fingerprinter=stages.fast_compilable_program_fingerprinter,
-        )
-    )
+    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
 
