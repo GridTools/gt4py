@@ -128,13 +128,6 @@ class CompiledDaceProgram:
         assert result is None
 
 
-def _get_dace_config_nondefaults() -> dict[str, Any]:
-    # device type is not relevant for this function, we just need to enter the context
-    # to get the non-default config values
-    with gtx_wfdcommon.dace_context(device_type=core_defs.DeviceType.CPU):
-        return dace.Config._data.nondefaults()
-
-
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
@@ -159,9 +152,14 @@ class DaCeCompiler(
         default_factory=lambda: config.CMAKE_BUILD_TYPE
     )
     # we store the non-default values of `dace.Config` in order to include it in the stage fingerprint
-    dace_config_nondefaults: dict[str, Any] = dataclasses.field(
-        default_factory=_get_dace_config_nondefaults
-    )
+    dace_config_nondefaults: dict[str, Any] = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        with gtx_wfdcommon.dace_context(
+            device_type=self.device_type,
+            cmake_build_type=self.cmake_build_type,
+        ):
+            object.__setattr__(self, "dace_config_nondefaults", dace.Config._data.nondefaults())
 
     def __call__(
         self,
@@ -170,13 +168,13 @@ class DaCeCompiler(
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
-        ) as dace_config:
-            # We use the fingeprint of the dace configuration in the cache key to ensure
-            # that the SDFG will be rebuilt if the user changes the configuration.
+        ):
+            # We use the fingeprint of the compilation stage to ensure that the SDFG
+            # will be rebuilt if the user changes the backend configuration.
             sdfg_build_folder = gtx_cache.get_cache_folder(
                 inp,
                 self.cache_lifetime,
-                fingerprinting.strict_fingerprinter(dace_config),
+                fingerprinting.strict_fingerprinter(self),
             )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
