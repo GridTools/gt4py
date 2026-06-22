@@ -284,9 +284,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             with_path_arg=True,
         )(target)
 
-        flat_targets_vals = utils.flatten_nested_tuple(nested_target_values)
+        flat_targets_vals = utils.flatten_nested_tuple(nested_target_values)  # type: ignore[arg-type]
 
-        return im.let(*zip(flat_targets, flat_targets_vals))(element_expr)
+        return im.let(*zip(flat_targets, flat_targets_vals))(element_expr)  # type: ignore[arg-type]
 
     def visit_FixedTupleComprehension(
         self, node: foast.FixedTupleComprehension, **kwargs: Any
