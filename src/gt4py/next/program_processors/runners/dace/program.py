@@ -76,8 +76,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             gt4py_program_args=[p.type for p in program.params],
         )
 
-        assert isinstance(self.backend.executor, workflow.CachedStep)
-        otf_workflow = self.backend.executor.step
+        otf_workflow = self.backend.executor
         assert hasattr(otf_workflow, "translation")
         otf_workflow_translation = (
             otf_workflow.translation.step
