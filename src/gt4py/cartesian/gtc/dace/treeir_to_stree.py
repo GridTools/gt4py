@@ -68,7 +68,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
     def visit_HorizontalLoop(self, node: tir.HorizontalLoop, ctx: Context) -> None:
         dace_map = nodes.Map(
-            label=f"horizontal_loop_{id(node)}",
+            label=f"{ctx.tree.name}__h_map_{id(node)}",
             params=[tir.Axis.J.iteration_symbol(), tir.Axis.I.iteration_symbol()],
             ndrange=subsets.Range(
                 [
@@ -87,7 +87,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
     def visit_VerticalLoop(self, node: tir.VerticalLoop, ctx: Context) -> None:
         # For serial loops, create a ForScope and add it to the tree
         if node.loop_order != common.LoopOrder.PARALLEL:
-            for_scope = tn.ForScope(loop=_loop_region_for(node), children=[])
+            for_scope = tn.ForScope(loop=_loop_region_for(node, ctx), children=[])
 
             with ContextPushPop(ctx, for_scope):
                 self.visit(node.children, ctx=ctx)
@@ -96,7 +96,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
 
         # For parallel loops, create a map and add it to the tree
         dace_map = nodes.Map(
-            label=f"vertical_loop_{id(node)}",
+            label=f"{ctx.tree.name}__v_map_{id(node)}",
             params=[node.iteration_variable],
             ndrange=subsets.Range(
                 # -1 because range bounds are inclusive
@@ -140,7 +140,7 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         return ctx.tree
 
 
-def _loop_region_for(node: tir.VerticalLoop) -> LoopRegion:
+def _loop_region_for(node: tir.VerticalLoop, ctx: Context) -> LoopRegion:
     """
     Translates a vertical loop into a Dace LoopRegion to be used in `tn.ForScope`.
 
@@ -152,7 +152,7 @@ def _loop_region_for(node: tir.VerticalLoop) -> LoopRegion:
     iteration_var = node.iteration_variable
 
     return LoopRegion(
-        label=f"vertical_loop_{id(node)}",
+        label=f"{ctx.tree.name}__v_loop_{id(node)}",
         loop_var=iteration_var,
         initialize_expr=CodeBlock(f"{iteration_var} = {node.bounds_k.start}"),
         condition_expr=CodeBlock(f"{iteration_var} {comparison} {node.bounds_k.end}"),
