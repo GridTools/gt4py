@@ -682,7 +682,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_TupleComprehension(
         self, node: foast.TupleComprehension, **kwargs: Any
-    ) -> foast.TupleComprehension:
+    ) -> foast.TupleComprehension | foast.FixedTupleComprehension:
         target = self.visit(node.inner.target, **kwargs)
         iterable = self.visit(node.iterable, **kwargs)
 
@@ -734,10 +734,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
             element_types = cast(list[ts.DataType], iterable.type.types)
             elements = [deduce_mapper(element_type) for element_type in element_types]
-            result = foast.TupleComprehension(
-                inner=elements[0],
+            result = foast.FixedTupleComprehension(
+                elements=elements,
                 iterable=iterable,
-                fixed_length_mappers=elements,
                 location=node.location,
                 type=ts.TupleType(types=[element.element_expr.type for element in elements]),
             )

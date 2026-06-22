@@ -467,6 +467,89 @@ def test_fixed_len_tuple_comprehension_mixed_local_field():
     assert lowered_inlined.expr == reference_inlined
 
 
+def test_fixed_len_tuple_comprehension_mixed_local_field_tuple_target():
+    def foo(
+        a: gtx.Field[[Edge], float64],
+        b: gtx.Field[[Vertex], float64],
+        c: gtx.Field[[Edge], float64],
+        d: gtx.Field[[Vertex], float64],
+    ):
+        return tuple(
+            2.0 * local_el + scalar_el for local_el, scalar_el in ((a(V2E), b), (c(V2E), d))
+        )
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    iterable = "__tuple_comprh_0"
+    two = im.literal("2.0", "float64")
+    local_term = im.op_as_fieldop(im.map_("multiplies"))(
+        im.op_as_fieldop("make_const_list")(two), "local_el"
+    )
+    element_expr = im.op_as_fieldop(im.map_("plus"))(
+        local_term, im.op_as_fieldop("make_const_list")("scalar_el")
+    )
+    tuple_el_0 = im.tuple_get(0, iterable)
+    tuple_el_1 = im.tuple_get(1, iterable)
+    mapped_tuple1 = im.make_tuple(im.as_fieldop_neighbors("V2E", "a"), "b")
+    mapped_tuple2 = im.make_tuple(im.as_fieldop_neighbors("V2E", "c"), "d")
+    reference = im.let(iterable, im.make_tuple(mapped_tuple1, mapped_tuple2))(
+        im.make_tuple(
+            im.let(
+                ("local_el", im.tuple_get(0, tuple_el_0)),
+                ("scalar_el", im.tuple_get(1, tuple_el_0)),
+            )(element_expr),
+            im.let(
+                ("local_el", im.tuple_get(0, tuple_el_1)),
+                ("scalar_el", im.tuple_get(1, tuple_el_1)),
+            )(element_expr),
+        )
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
+
+
+def test_fixed_len_tuple_comprehension_tuple_target_mixed_element_types():
+    def foo(a: gtx.Field[[Edge], float64], b: gtx.Field[[Vertex], float64]):
+        return tuple(2.0 * left + right for left, right in ((a(V2E), b), (b, b)))
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    iterable = "__tuple_comprh_0"
+    two = im.literal("2.0", "float64")
+    local_term = im.op_as_fieldop(im.map_("multiplies"))(
+        im.op_as_fieldop("make_const_list")(two), "left"
+    )
+    local_expr = im.op_as_fieldop(im.map_("plus"))(
+        local_term, im.op_as_fieldop("make_const_list")("right")
+    )
+    regular_expr = im.op_as_fieldop("plus")(im.op_as_fieldop("multiplies")(two, "left"), "right")
+    tuple_el_0 = im.tuple_get(0, iterable)
+    tuple_el_1 = im.tuple_get(1, iterable)
+    reference = im.let(
+        iterable,
+        im.make_tuple(
+            im.make_tuple(im.as_fieldop_neighbors("V2E", "a"), "b"), im.make_tuple("b", "b")
+        ),
+    )(
+        im.make_tuple(
+            im.let(("left", im.tuple_get(0, tuple_el_0)), ("right", im.tuple_get(1, tuple_el_0)))(
+                local_expr
+            ),
+            im.let(("left", im.tuple_get(0, tuple_el_1)), ("right", im.tuple_get(1, tuple_el_1)))(
+                regular_expr
+            ),
+        )
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
+
+
 def test_unary_minus():
     def foo(inp: gtx.Field[[TDim], float64]):
         return -inp
