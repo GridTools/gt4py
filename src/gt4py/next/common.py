@@ -995,7 +995,8 @@ class NeighborConnectivityType(ConnectivityType):
         return self.domain[1]
 
 
-class Connectivity(Field[DimsT, core_defs.IntegralScalar], Generic[DimsT, DimT_co]):
+@runtime_checkable
+class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_co]):
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT_co:
