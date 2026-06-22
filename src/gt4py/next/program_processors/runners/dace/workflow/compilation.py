@@ -169,7 +169,7 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            # We use the fingeprint of the compilation stage to ensure that the SDFG
+            # We use the fingerprint of the compilation stage to ensure that the SDFG
             # will be rebuilt if the user changes the backend configuration.
             sdfg_build_folder = gtx_cache.get_cache_folder(
                 inp,

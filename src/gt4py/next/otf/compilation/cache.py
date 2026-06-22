@@ -44,6 +44,8 @@ def get_cache_folder(
     """
     Construct the path to where the build system project artifact of a compilable source should be cached.
 
+    An optional fingerprint can be provided to distinguish between different contexts
+    that may produce different artifacts for the same compilable source.
     The returned path points to an existing folder in all cases.
     """
     # TODO(ricoh): make dependent on binding source too or add alternative that depends on bindings
