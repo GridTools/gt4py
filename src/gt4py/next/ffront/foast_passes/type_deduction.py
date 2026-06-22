@@ -327,9 +327,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    indexed_type = values.type.types[index]
-                    assert isinstance(indexed_type, ts.DataType)
-                    new_type = indexed_type
+                    new_type = values.type.types[index]
+                    assert isinstance(new_type, ts.DataType)
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
                     )
@@ -743,22 +742,21 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return result
         elif isinstance(iterable.type, ts.VarArgType):
             element_type = iterable.type.element_type
+            new_mapper = deduce_mapper(element_type)
+            element_expr = new_mapper.element_expr
+            return_type = ts.VarArgType(element_type=element_expr.type)
+
+            return foast.TupleComprehension(
+                inner=new_mapper,
+                iterable=iterable,
+                location=node.location,
+                type=return_type,
+            )
         else:
             raise errors.DSLError(
                 iterable.location,
                 f"Iterable in generator expression must be a tuple, got '{iterable.type}'.",
             )
-
-        new_mapper = deduce_mapper(element_type)
-        element_expr = new_mapper.element_expr
-        return_type = ts.VarArgType(element_type=element_expr.type)
-
-        return foast.TupleComprehension(
-            inner=new_mapper,
-            iterable=iterable,
-            location=node.location,
-            type=return_type,
-        )
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)

@@ -12,7 +12,7 @@ import functools
 from typing import Any, Callable, Optional
 
 from gt4py import eve
-from gt4py.eve.extended_typing import Never, TypeGuard
+from gt4py.eve.extended_typing import Never
 from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -31,12 +31,6 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
 from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
-
-
-def _is_sym_or_tuple_of_sym(value: object) -> TypeGuard[itir.Sym | tuple]:
-    return isinstance(value, itir.Sym) or (
-        isinstance(value, tuple) and all(_is_sym_or_tuple_of_sym(element) for element in value)
-    )
 
 
 def foast_to_gtir(inp: ffront_stages.FOASTOperatorDef) -> itir.FunctionDefinition:
@@ -315,7 +309,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> itir.Expr:
         target = self.visit(node.inner.target, **kwargs)
-        assert _is_sym_or_tuple_of_sym(target)  # TODO: is that necessary?
         element_expr = self.visit(node.inner.element_expr, **kwargs)
         if isinstance(target, tuple):
             new_target = next(self.uid_generator["__tuple_comprh"])
