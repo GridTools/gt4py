@@ -121,7 +121,7 @@ def test_inlining_of_scalar_works_integration(testee_prog):
         hijacked_program = program
         return lambda *args, **kwargs: None
 
-    hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", executor=pirate)
+    hacked_gtfn_backend = gtfn.make_gtfn_backend(name_postfix="_custom", executor=pirate)
 
     testee = testee_prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
     testee(

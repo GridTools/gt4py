@@ -12,7 +12,6 @@ import dataclasses
 from typing import Any, Optional
 
 import dace
-import factory
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -465,8 +464,3 @@ class DaCeTranslator(
             code_spec=code_specs.SDFGCodeSpec(),
         )
         return module
-
-
-class DaCeTranslationStepFactory(factory.Factory):
-    class Meta:
-        model = DaCeTranslator

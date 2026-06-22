@@ -9,7 +9,6 @@
 import functools
 from typing import Any
 
-import factory
 import numpy as np
 
 import gt4py._core.definitions as core_defs
@@ -18,7 +17,7 @@ from gt4py._core import filecache
 from gt4py.next import backend, common, config, field_utils
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
-from gt4py.next.otf import recipes, stages, workflow
+from gt4py.next.otf import definitions, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -103,102 +102,107 @@ def extract_connectivity_args(
     return args
 
 
-class GTFNCompileWorkflowFactory(factory.Factory):
-    class Meta:
-        model = recipes.OTFCompileWorkflow
+def make_gtfn_workflow(
+    *,
+    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU,
+    cached_translation: bool = False,
+    enable_itir_transforms: bool = True,
+    use_imperative_backend: bool = False,
+    cmake_build_type: config.CMakeBuildType | None = None,
+) -> recipes.OTFCompileWorkflow:
+    """Build the GTFN translation -> bindings -> compilation -> decoration workflow."""
+    cmake_build_type = config.CMAKE_BUILD_TYPE if cmake_build_type is None else cmake_build_type
+    builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory(
+        cmake_build_type=cmake_build_type
+    )
 
-    class Params:
-        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
-            lambda: config.CMAKE_BUILD_TYPE
-        )
-        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
-            lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
-        )
-
-        cached_translation = factory.Trait(
-            translation=factory.LazyAttribute(
-                lambda o: workflow.CachedStep.persistent(
-                    o.bare_translation,
-                    input_fingerprinter=stages.compilable_program_fingerprinter,
-                    cache=filecache.FileCache(
-                        str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
-                    ),
-                )
+    bare_translation = gtfn_module.GTFNTranslationStep(
+        device_type=device_type,
+        enable_itir_transforms=enable_itir_transforms,
+        use_imperative_backend=use_imperative_backend,
+    )
+    translation: definitions.TranslationStep
+    if cached_translation:
+        translation = workflow.CachedStep.persistent(
+            bare_translation,
+            # mypy cannot solve `CachedStep`'s `HashT` type variable here (it only
+            # appears in the fingerprinter's return), so the `str` fingerprint is
+            # not recognized as a valid `HashT`.
+            input_fingerprinter=stages.compilable_program_fingerprinter,  # type: ignore[arg-type]
+            cache=filecache.FileCache(
+                str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
             ),
         )
+    else:
+        translation = bare_translation
 
-        bare_translation = factory.SubFactory(
-            gtfn_module.GTFNTranslationStepFactory,
-            device_type=factory.SelfAttribute("..device_type"),
-        )
-
-    translation = factory.LazyAttribute(lambda o: o.bare_translation)
-
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
-        nanobind.bind_source
-    )
-    compilation = factory.SubFactory(
-        compiler.CompilerFactory,
-        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
-        builder_factory=factory.SelfAttribute("..builder_factory"),
-    )
-    decoration = factory.LazyAttribute(
-        lambda o: functools.partial(convert_args, device=o.device_type)
+    return recipes.OTFCompileWorkflow(
+        translation=translation,
+        bindings=nanobind.bind_source,
+        compilation=compiler.Compiler(
+            cache_lifetime=config.BUILD_CACHE_LIFETIME,
+            builder_factory=builder_factory,
+        ),
+        decoration=functools.partial(convert_args, device=device_type),
     )
 
 
-class GTFNBackendFactory(factory.Factory):
-    class Meta:
-        model = backend.Backend
-
-    class Params:
-        name_device = "cpu"
-        name_cached = ""
-        name_temps = ""
-        name_postfix = ""
-        gpu = factory.Trait(
-            allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
-            name_device="gpu",
-        )
-        cached = factory.Trait(
-            executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep.in_memory(
-                    o.otf_workflow, input_fingerprinter=o.key_function
-                )
-            ),
-            name_cached="_cached",
-        )
+def make_gtfn_backend(
+    *,
+    gpu: bool = False,
+    cached: bool = False,
+    cached_translation: bool = False,
+    enable_itir_transforms: bool = True,
+    use_imperative_backend: bool = False,
+    name_postfix: str = "",
+    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.ExecutableProgram]
+    | None = None,
+) -> backend.Backend:
+    """Build a GTFN backend for the given device and caching configuration."""
+    allocator: next_allocators.FieldBufferAllocatorProtocol
+    device_type: core_defs.DeviceType
+    if gpu:
+        allocator = next_allocators.StandardGPUFieldBufferAllocator()
+        device_type = core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
+        name_device = "gpu"
+    else:
+        allocator = next_allocators.StandardCPUFieldBufferAllocator()
         device_type = core_defs.DeviceType.CPU
-        key_function = stages.fast_compilable_program_fingerprinter
-        otf_workflow = factory.SubFactory(
-            GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
-        )
+        name_device = "cpu"
 
-    name = factory.LazyAttribute(
-        lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
+    otf_workflow = make_gtfn_workflow(
+        device_type=device_type,
+        cached_translation=cached_translation,
+        enable_itir_transforms=enable_itir_transforms,
+        use_imperative_backend=use_imperative_backend,
     )
 
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
-    allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
+    if executor is None:
+        executor = (
+            workflow.CachedStep.in_memory(
+                otf_workflow, input_fingerprinter=stages.fast_compilable_program_fingerprinter
+            )
+            if cached
+            else otf_workflow
+        )
+
+    name_cached = "_cached" if cached else ""
+    return backend.Backend(
+        name=f"run_gtfn_{name_device}{name_cached}{name_postfix}",
+        executor=executor,
+        allocator=allocator,
+        transforms=backend.DEFAULT_TRANSFORMS,
+    )
 
 
-run_gtfn = GTFNBackendFactory()
+run_gtfn = make_gtfn_backend()
 
-run_gtfn_imperative = GTFNBackendFactory(
-    name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
-)
+run_gtfn_imperative = make_gtfn_backend(name_postfix="_imperative", use_imperative_backend=True)
 
-run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
+run_gtfn_cached = make_gtfn_backend(cached=True, cached_translation=True)
 
-run_gtfn_gpu = GTFNBackendFactory(gpu=True)
+run_gtfn_gpu = make_gtfn_backend(gpu=True)
 
-run_gtfn_gpu_cached = GTFNBackendFactory(
-    gpu=True, cached=True, otf_workflow__cached_translation=True
-)
+run_gtfn_gpu_cached = make_gtfn_backend(gpu=True, cached=True, cached_translation=True)
 
-run_gtfn_no_transforms = GTFNBackendFactory(
-    otf_workflow__bare_translation__enable_itir_transforms=False
-)
+run_gtfn_no_transforms = make_gtfn_backend(enable_itir_transforms=False)

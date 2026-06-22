@@ -11,61 +11,11 @@ from __future__ import annotations
 import warnings
 from typing import Any, Final
 
-import factory
-
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common, config
 from gt4py.next.otf import stages, workflow
-from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
-
-
-class DaCeBackendFactory(factory.Factory):
-    """
-    Workflow factory for the GTIR-DaCe backend.
-
-    Several parameters are inherithed from `backend.Backend`, see below the specific ones.
-
-    Args:
-        auto_optimize: Enables the SDFG transformation pipeline.
-    """
-
-    class Meta:
-        model = backend.Backend
-
-    class Params:
-        name_device = "cpu"
-        name_cached = ""
-        name_postfix = ""
-        gpu = factory.Trait(
-            allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
-            name_device="gpu",
-        )
-        cached = factory.Trait(
-            executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep.in_memory(
-                    o.otf_workflow, input_fingerprinter=o.key_function
-                )
-            ),
-            name_cached="_cached",
-        )
-        device_type = core_defs.DeviceType.CPU
-        key_function = stages.fast_compilable_program_fingerprinter
-        otf_workflow = factory.SubFactory(
-            DaCeWorkflowFactory,
-            device_type=factory.SelfAttribute("..device_type"),
-            auto_optimize=factory.SelfAttribute("..auto_optimize"),
-        )
-        auto_optimize = factory.Trait(name_postfix="_opt")
-
-    name = factory.LazyAttribute(
-        lambda o: f"run_dace_{o.name_device}{o.name_cached}{o.name_postfix}"
-    )
-
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
-    allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
+from gt4py.next.program_processors.runners.dace.workflow.factory import make_dace_workflow
 
 
 def make_dace_backend(
@@ -125,17 +75,44 @@ def make_dace_backend(
         else None
     }
 
-    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
-        gpu=gpu,
-        cached=cached,
+    allocator: next_allocators.FieldBufferAllocatorProtocol
+    device_type: core_defs.DeviceType
+    if gpu:
+        allocator = next_allocators.StandardGPUFieldBufferAllocator()
+        device_type = core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
+        name_device = "gpu"
+    else:
+        allocator = next_allocators.StandardCPUFieldBufferAllocator()
+        device_type = core_defs.DeviceType.CPU
+        name_device = "cpu"
+
+    otf_workflow = make_dace_workflow(
+        device_type=device_type,
         auto_optimize=auto_optimize,
-        otf_workflow__cached_translation=cached,
-        otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
-        otf_workflow__bare_translation__auto_optimize_args=optimization_args,
-        otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
-        otf_workflow__bare_translation__use_metrics=use_metrics,
-        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
-        otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+        cached_translation=cached,
+        async_sdfg_call=(async_sdfg_call if gpu else False),
+        auto_optimize_args=optimization_args,
+        unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
+        use_metrics=use_metrics,
+        disable_field_origin_on_program_arguments=use_zero_origin,
+        use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+    )
+
+    executor = (
+        workflow.CachedStep.in_memory(
+            otf_workflow, input_fingerprinter=stages.fast_compilable_program_fingerprinter
+        )
+        if cached
+        else otf_workflow
+    )
+
+    name_cached = "_cached" if cached else ""
+    name_postfix = "_opt" if auto_optimize else ""
+    return backend.Backend(
+        name=f"run_dace_{name_device}{name_cached}{name_postfix}",
+        executor=executor,
+        allocator=allocator,
+        transforms=backend.DEFAULT_TRANSFORMS,
     )
 
 

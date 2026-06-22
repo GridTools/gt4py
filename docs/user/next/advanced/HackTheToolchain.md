@@ -46,7 +46,11 @@ skip_linting_transforms = SkipLinting(**same_steps)
 skip_linting_transforms.step_order(DUMMY_FOP)
 ```
 
-## Alternative Factory
+## Alternative Workflow Steps
+
+The compiled GTFN workflow is a frozen dataclass built by `make_gtfn_workflow`.
+To swap individual steps, build the default workflow and use `dataclasses.replace`
+to override the steps you care about.
 
 ```python
 class MyCodeGen: ...
@@ -55,16 +59,12 @@ class MyCodeGen: ...
 class Cpp2BindingsGen: ...
 
 
-class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWorkflowFactory):
-    translation: workflow.Workflow[
-        gtx.otf.definitions.CompilableProgramDef, gtx.otf.stages.ProgramSource
-    ] = MyCodeGen()
-    bindings: workflow.Workflow[gtx.otf.stages.ProgramSource, gtx.otf.stages.CompilableProject] = (
-        Cpp2BindingsGen()
-    )
-
-
-PureCpp2WorkflowFactory(cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG)
+base_workflow = gtx.program_processors.runners.gtfn.make_gtfn_workflow(
+    cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG
+)
+pure_cpp2_workflow = dataclasses.replace(
+    base_workflow, translation=MyCodeGen(), bindings=Cpp2BindingsGen()
+)
 ```
 
 ## Invent new Workflow Types

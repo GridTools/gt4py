@@ -28,8 +28,8 @@ from gt4py.next.program_processors.runners import gtfn
 
 
 def test_backend_factory_trait_device():
-    cpu_version = gtfn.GTFNBackendFactory(gpu=False, cached=False)
-    gpu_version = gtfn.GTFNBackendFactory(gpu=True, cached=False)
+    cpu_version = gtfn.make_gtfn_backend(gpu=False, cached=False)
+    gpu_version = gtfn.make_gtfn_backend(gpu=True, cached=False)
 
     assert cpu_version.name == "run_gtfn_cpu"
     assert gpu_version.name == "run_gtfn_gpu"
@@ -49,16 +49,16 @@ def test_backend_factory_trait_device():
 
 
 def test_backend_factory_trait_cached():
-    cached_version = gtfn.GTFNBackendFactory(gpu=False, cached=True)
+    cached_version = gtfn.make_gtfn_backend(gpu=False, cached=True)
     assert isinstance(cached_version.executor, workflow.CachedStep)
     assert cached_version.name == "run_gtfn_cpu_cached"
 
 
 def test_backend_factory_build_cache_config(monkeypatch):
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.SESSION)
-    session_version = gtfn.GTFNBackendFactory()
+    session_version = gtfn.make_gtfn_backend()
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.PERSISTENT)
-    persistent_version = gtfn.GTFNBackendFactory()
+    persistent_version = gtfn.make_gtfn_backend()
 
     assert session_version.executor.compilation.cache_lifetime is config.BuildCacheLifetime.SESSION
     assert (
@@ -69,9 +69,9 @@ def test_backend_factory_build_cache_config(monkeypatch):
 
 def test_backend_factory_build_type_config(monkeypatch):
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.RELEASE)
-    release_version = gtfn.GTFNBackendFactory()
+    release_version = gtfn.make_gtfn_backend()
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.MIN_SIZE_REL)
-    min_size_version = gtfn.GTFNBackendFactory()
+    min_size_version = gtfn.make_gtfn_backend()
 
     assert (
         release_version.executor.compilation.builder_factory.cmake_build_type
