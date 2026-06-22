@@ -478,10 +478,7 @@ class FieldOffset(runtime.Offset):
         offset_definition = common.get_offset(current_offset_provider, self.value)
 
         connectivity: common.Connectivity
-        # TODO: dead-code remove
-        if isinstance(offset_definition, common.Dimension):
-            connectivity = common.CartesianConnectivity(offset_definition, offset)
-        elif isinstance(offset_definition, common.Connectivity):
+        if isinstance(offset_definition, common.Connectivity):
             assert common.is_neighbor_table(offset_definition)
             named_index = common.NamedIndex(self.target[-1], offset)
             connectivity = offset_definition[named_index]
