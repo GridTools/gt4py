@@ -8,7 +8,7 @@
 
 import collections
 import operator
-from typing import Generator, Optional, Type
+from typing import Generator, Iterable, Mapping, Optional, Type
 
 import boltons.typeutils
 
@@ -27,7 +27,7 @@ def iter_attributes(node: Node):
     Yield a tuple of ``(attrib_name, value)`` for each attribute in ``node.attributes``
     that is present on *node*.
     """
-    for attrib_name in node.attributes:
+    for attrib_name in node.attributes:  # type: ignore[attr-defined]
         try:
             yield attrib_name, getattr(node, attrib_name)
         except AttributeError:
@@ -50,20 +50,22 @@ class IRNodeVisitor:
         return visitor(node, **kwargs)
 
     def generic_visit(self, node: Node, **kwargs):
-        items = []
         if isinstance(node, (str, bytes, bytearray)):
-            pass
-        elif isinstance(node, collections.abc.Mapping):
-            items = node.items()
-        elif isinstance(node, collections.abc.Iterable):
-            items = enumerate(node)
-        elif isinstance(node, Node):
-            items = iter_attributes(node)
-        else:
-            pass
+            return
 
-        for _, value in items:
-            self._visit(value, **kwargs)
+        if isinstance(node, Mapping):
+            for value in node.values():
+                self._visit(value, **kwargs)
+            return
+
+        if isinstance(node, Iterable):
+            for value in node:
+                self._visit(value, **kwargs)
+            return
+
+        if isinstance(node, Node):
+            for _, value in iter_attributes(node):
+                self._visit(value, **kwargs)
 
 
 class IRNodeMapper:
@@ -84,8 +86,9 @@ class IRNodeMapper:
     def generic_visit(self, node: Node, **kwargs):
         if isinstance(node, (str, bytes, bytearray)):
             return node
-        elif isinstance(node, collections.abc.Iterable):
-            if isinstance(node, collections.abc.Mapping):
+
+        if isinstance(node, Iterable):
+            if isinstance(node, Mapping):
                 items = node.items()
             else:
                 items = enumerate(node)
@@ -93,20 +96,20 @@ class IRNodeMapper:
             delattr_op = operator.delitem
         elif isinstance(node, Node):
             items = iter_attributes(node)
-            setattr_op = setattr
-            delattr_op = delattr
+            setattr_op = setattr  # type: ignore[assignment]
+            delattr_op = delattr  # type: ignore[assignment]
         else:
             return node
 
-        del_items = []
+        del_items: list = []
         for key, old_value in items:
             new_value = self._visit(old_value, **kwargs)
             if new_value == NOTHING:
                 del_items.append(key)
             elif new_value != old_value:
-                setattr_op(node, key, new_value)
+                setattr_op(node, key, new_value)  # type: ignore[call-overload]
         for key in reversed(del_items):  # reversed, so that keys remain valid in sequences
-            delattr_op(node, key)
+            delattr_op(node, key)  # type: ignore[call-overload]
 
         return node
 
