@@ -240,13 +240,13 @@ class OIRToTreeIR(eve.NodeVisitor):
         if node.level == common.LevelMarker.START:
             if axis_start == "0":
                 return f"({node.offset})"
-            if node.offset == "0":
+            if node.offset == 0:
                 return f"({axis_start})"
             return f"({axis_start}) + ({node.offset})"
 
         if axis_end == "0":
             return f"({node.offset})"
-        if node.offset == "0":
+        if node.offset == 0:
             return f"({axis_end})"
         return f"({axis_end}) + ({node.offset})"
 
