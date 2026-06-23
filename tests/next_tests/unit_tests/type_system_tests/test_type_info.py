@@ -558,7 +558,7 @@ class TestSubstituteTypeVars:
 
     def test_concrete_is_returned_unchanged(self):
         concrete = ts.FieldType(dims=[TDim], dtype=float64_type)
-        assert type_info.substitute_type_vars(concrete, {"T": float32_type}) is concrete
+        assert type_info.substitute_type_vars(concrete, {"T": float32_type}) == concrete
 
     def test_substitute_function_type(self):
         func_type = ts.FunctionType(

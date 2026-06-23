@@ -700,40 +700,6 @@ def bind_type_vars(
     return _merge_bindings(_bind(param, arg) for param, arg in zip(params, args))
 
 
-def tree_map_type_params(
-    fun: Callable[[ts.TypeSpec], ts.TypeSpec], symbol_type: ts.TypeSpec
-) -> ts.TypeSpec:
-    """Rebuild ``symbol_type`` applying ``fun`` to each immediate type-parameter sub-type.
-
-    Leaf types are returned unchanged.
-    """
-    match symbol_type:
-        case ts.FieldType(dims=dims, dtype=dtype):
-            new_dtype = fun(dtype)
-            assert isinstance(new_dtype, (ts.ScalarType, ts.ListType, ts.TypeVarType))
-            return ts.FieldType(dims=dims, dtype=new_dtype)
-        case ts.ListType(element_type=element_type, offset_type=offset_type):
-            new_element_type = fun(element_type)
-            assert isinstance(new_element_type, ts.DataType)
-            return ts.ListType(element_type=new_element_type, offset_type=offset_type)
-        case ts.TupleType(types=types):
-            return ts.TupleType(types=[fun(t) for t in types])
-        case ts.NamedCollectionType(types=types):
-            return ts.NamedCollectionType(
-                types=[fun(t) for t in types],
-                keys=symbol_type.keys,
-                original_python_type=symbol_type.original_python_type,
-            )
-        case ts.FunctionType():
-            return ts.FunctionType(
-                pos_only_args=[fun(t) for t in symbol_type.pos_only_args],
-                pos_or_kw_args={name: fun(t) for name, t in symbol_type.pos_or_kw_args.items()},
-                kw_only_args={name: fun(t) for name, t in symbol_type.kw_only_args.items()},
-                returns=fun(symbol_type.returns),
-            )
-    return symbol_type
-
-
 def substitute_type_vars(
     type_: ts.TypeSpec, binding: xtyping.Mapping[str, ts.ScalarType]
 ) -> ts.TypeSpec:
@@ -753,11 +719,39 @@ def substitute_type_vars(
         ... )
         Field[[I], float64]
     """
-    if not binding or not is_generic(type_):
+    if not binding:
         return type_
-    if isinstance(type_, ts.TypeVarType):
-        return binding.get(type_.name, type_)
-    return tree_map_type_params(lambda t: substitute_type_vars(t, binding), type_)
+
+    def substitute_leaf(leaf: ts.TypeSpec) -> ts.TypeSpec:
+        # `tree_map_type` has already mapped the tuple structure; what is left is to substitute
+        # inside the primitive constituents, i.e. in their dtype / element type / signature.
+        match leaf:
+            case ts.TypeVarType():
+                return binding.get(leaf.name, leaf)
+            case ts.FieldType(dims=dims, dtype=dtype):
+                new_dtype = substitute_type_vars(dtype, binding)
+                assert isinstance(new_dtype, (ts.ScalarType, ts.ListType, ts.TypeVarType))
+                return ts.FieldType(dims=dims, dtype=new_dtype)
+            case ts.ListType(element_type=element_type, offset_type=offset_type):
+                new_element_type = substitute_type_vars(element_type, binding)
+                assert isinstance(new_element_type, ts.DataType)
+                return ts.ListType(element_type=new_element_type, offset_type=offset_type)
+            case ts.FunctionType():
+                return ts.FunctionType(
+                    pos_only_args=[substitute_type_vars(a, binding) for a in leaf.pos_only_args],
+                    pos_or_kw_args={
+                        name: substitute_type_vars(a, binding)
+                        for name, a in leaf.pos_or_kw_args.items()
+                    },
+                    kw_only_args={
+                        name: substitute_type_vars(a, binding)
+                        for name, a in leaf.kw_only_args.items()
+                    },
+                    returns=substitute_type_vars(leaf.returns, binding),
+                )
+        return leaf
+
+    return tree_map_type(substitute_leaf)(type_)
 
 
 def promote(
