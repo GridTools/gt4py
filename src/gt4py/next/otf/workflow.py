@@ -31,6 +31,25 @@ IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
 DataT = TypeVar("DataT")
 ArgT = TypeVar("ArgT")
+StepT = TypeVar("StepT")
+
+
+def with_fields(step: StepT, **fields: Any) -> StepT:
+    """
+    Return a copy of ``step`` with ``fields`` applied, where it declares them.
+
+    Used by the backend/workflow builders to stamp cross-cutting configuration
+    (e.g. ``device_type``) onto a sub-component, whether it was built by default
+    or injected by the caller. Only fields that ``step`` declares as a dataclass
+    are applied; any other ``step`` (e.g. a plain callable) is returned unchanged,
+    so injecting an arbitrary workflow step stays safe.
+    """
+    if dataclasses.is_dataclass(step) and not isinstance(step, type):
+        names = {f.name for f in dataclasses.fields(step)}
+        valid = {key: value for key, value in fields.items() if key in names}
+        if valid:
+            return dataclasses.replace(step, **valid)
+    return step
 
 
 def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:

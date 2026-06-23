@@ -48,9 +48,10 @@ skip_linting_transforms.step_order(DUMMY_FOP)
 
 ## Alternative Workflow Steps
 
-The compiled GTFN workflow is a frozen dataclass built by `make_gtfn_workflow`.
-To swap individual steps, build the default workflow and use `dataclasses.replace`
-to override the steps you care about.
+The builders (`make_gtfn_workflow` / `make_gtfn_backend`) expose only cross-cutting
+configuration (device, caching, build type). To customize a single sub-component,
+**inject** a pre-built step — the builder uses it instead of its default and stamps
+the cross-cutting fields (e.g. `device_type`) onto it.
 
 ```python
 class MyCodeGen: ...
@@ -59,13 +60,22 @@ class MyCodeGen: ...
 class Cpp2BindingsGen: ...
 
 
-base_workflow = gtx.program_processors.runners.gtfn.make_gtfn_workflow(
-    cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG
+# Inject whole custom steps:
+pure_cpp2_workflow = gtx.program_processors.runners.gtfn.make_gtfn_workflow(
+    cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG,
+    translation=MyCodeGen(),
+    bindings=Cpp2BindingsGen(),
 )
-pure_cpp2_workflow = dataclasses.replace(
-    base_workflow, translation=MyCodeGen(), bindings=Cpp2BindingsGen()
+
+# Or inject a configured default step to flip one knob:
+GTFNTranslationStep = gtx.program_processors.runners.gtfn.gtfn_module.GTFNTranslationStep
+no_transforms = gtx.program_processors.runners.gtfn.make_gtfn_backend(
+    translation=GTFNTranslationStep(enable_itir_transforms=False),
 )
 ```
+
+A pre-built backend is itself a frozen dataclass, so you can also override after the
+fact with `dataclasses.replace` (e.g. `dataclasses.replace(backend, executor=...)`).
 
 ## Invent new Workflow Types
 

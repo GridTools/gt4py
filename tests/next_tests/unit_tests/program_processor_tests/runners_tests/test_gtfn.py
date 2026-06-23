@@ -24,7 +24,19 @@ from gt4py.next import config, custom_layout_allocators
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import workflow
+from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
+
+
+def test_backend_inject_translation():
+    # A single-sub-component knob is set by injecting a pre-built step, not via a
+    # maker keyword argument; the cross-cutting device is stamped onto it.
+    backend = gtfn.make_gtfn_backend(
+        gpu=True,
+        translation=gtfn_module.GTFNTranslationStep(use_imperative_backend=True),
+    )
+    assert backend.executor.translation.use_imperative_backend is True
+    assert backend.executor.translation.device_type is core_defs.DeviceType.CUDA
 
 
 def test_backend_factory_trait_device():

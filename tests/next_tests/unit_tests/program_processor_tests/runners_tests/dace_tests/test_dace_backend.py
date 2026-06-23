@@ -17,6 +17,7 @@ from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
+    translation as dace_wf_translation,
 )
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -95,10 +96,13 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
         gpu=on_gpu,
         cached=False,
         auto_optimize=auto_optimize,
-        async_sdfg_call=True,
-        optimization_args=optimization_args,
-        unstructured_horizontal_has_unit_stride=on_gpu,
-        use_metrics=True,
+        translation=dace_wf_translation.make_dace_translator(
+            auto_optimize=auto_optimize,
+            async_sdfg_call=True,
+            optimization_args=optimization_args,
+            unstructured_horizontal_has_unit_stride=on_gpu,
+            use_metrics=True,
+        ),
     )
     testee.with_backend(custom_backend).compile(offset_provider={})
     gtx.wait_for_compilation()

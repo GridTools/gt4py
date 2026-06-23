@@ -106,24 +106,29 @@ def make_gtfn_workflow(
     *,
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU,
     cached_translation: bool = False,
-    enable_itir_transforms: bool = True,
-    use_imperative_backend: bool = False,
     cmake_build_type: config.CMakeBuildType | None = None,
+    translation: definitions.TranslationStep | None = None,
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] | None = None,
+    compilation: workflow.Workflow[stages.CompilableProject, stages.ExecutableProgram]
+    | None = None,
+    decoration: workflow.Workflow[stages.ExecutableProgram, stages.ExecutableProgram] | None = None,
 ) -> recipes.OTFCompileWorkflow:
-    """Build the GTFN translation -> bindings -> compilation -> decoration workflow."""
-    cmake_build_type = config.CMAKE_BUILD_TYPE if cmake_build_type is None else cmake_build_type
-    builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory(
-        cmake_build_type=cmake_build_type
-    )
+    """Build the GTFN translation -> bindings -> compilation -> decoration workflow.
 
-    bare_translation = gtfn_module.GTFNTranslationStep(
+    Cross-cutting configuration (device, translation caching, build type) is passed
+    as keyword arguments. To customize a single step, inject a pre-built one, e.g.
+    ``translation=GTFNTranslationStep(enable_itir_transforms=False)``; its
+    ``device_type`` is set to match ``device_type``.
+    """
+    cmake_build_type = config.CMAKE_BUILD_TYPE if cmake_build_type is None else cmake_build_type
+
+    bare_translation = workflow.with_fields(
+        translation if translation is not None else gtfn_module.GTFNTranslationStep(),
         device_type=device_type,
-        enable_itir_transforms=enable_itir_transforms,
-        use_imperative_backend=use_imperative_backend,
     )
-    translation: definitions.TranslationStep
+    translation_step: definitions.TranslationStep
     if cached_translation:
-        translation = workflow.CachedStep.persistent(
+        translation_step = workflow.CachedStep.persistent(
             bare_translation,
             # mypy cannot solve `CachedStep`'s `HashT` type variable here (it only
             # appears in the fingerprinter's return), so the `str` fingerprint is
@@ -134,16 +139,20 @@ def make_gtfn_workflow(
             ),
         )
     else:
-        translation = bare_translation
+        translation_step = bare_translation
 
     return recipes.OTFCompileWorkflow(
-        translation=translation,
-        bindings=nanobind.bind_source,
-        compilation=compiler.Compiler(
+        translation=translation_step,
+        bindings=bindings if bindings is not None else nanobind.bind_source,
+        compilation=compilation
+        if compilation is not None
+        else compiler.Compiler(
             cache_lifetime=config.BUILD_CACHE_LIFETIME,
-            builder_factory=builder_factory,
+            builder_factory=compiledb.CompiledbFactory(cmake_build_type=cmake_build_type),
         ),
-        decoration=functools.partial(convert_args, device=device_type),
+        decoration=decoration
+        if decoration is not None
+        else functools.partial(convert_args, device=device_type),
     )
 
 
@@ -152,13 +161,17 @@ def make_gtfn_backend(
     gpu: bool = False,
     cached: bool = False,
     cached_translation: bool = False,
-    enable_itir_transforms: bool = True,
-    use_imperative_backend: bool = False,
     name_postfix: str = "",
+    translation: definitions.TranslationStep | None = None,
     executor: workflow.Workflow[definitions.CompilableProgramDef, stages.ExecutableProgram]
     | None = None,
 ) -> backend.Backend:
-    """Build a GTFN backend for the given device and caching configuration."""
+    """Build a GTFN backend for the given device and caching configuration.
+
+    Cross-cutting configuration is passed as keyword arguments. To customize the
+    translation step, inject a pre-built one via ``translation=`` (its device is set
+    to match ``gpu``). Pass ``executor=`` to replace the whole executor workflow.
+    """
     allocator: next_allocators.FieldBufferAllocatorProtocol
     device_type: core_defs.DeviceType
     if gpu:
@@ -170,14 +183,12 @@ def make_gtfn_backend(
         device_type = core_defs.DeviceType.CPU
         name_device = "cpu"
 
-    otf_workflow = make_gtfn_workflow(
-        device_type=device_type,
-        cached_translation=cached_translation,
-        enable_itir_transforms=enable_itir_transforms,
-        use_imperative_backend=use_imperative_backend,
-    )
-
     if executor is None:
+        otf_workflow = make_gtfn_workflow(
+            device_type=device_type,
+            cached_translation=cached_translation,
+            translation=translation,
+        )
         executor = (
             workflow.CachedStep.in_memory(
                 otf_workflow, input_fingerprinter=stages.fast_compilable_program_fingerprinter
@@ -197,7 +208,10 @@ def make_gtfn_backend(
 
 run_gtfn = make_gtfn_backend()
 
-run_gtfn_imperative = make_gtfn_backend(name_postfix="_imperative", use_imperative_backend=True)
+run_gtfn_imperative = make_gtfn_backend(
+    name_postfix="_imperative",
+    translation=gtfn_module.GTFNTranslationStep(use_imperative_backend=True),
+)
 
 run_gtfn_cached = make_gtfn_backend(cached=True, cached_translation=True)
 
@@ -205,4 +219,6 @@ run_gtfn_gpu = make_gtfn_backend(gpu=True)
 
 run_gtfn_gpu_cached = make_gtfn_backend(gpu=True, cached=True, cached_translation=True)
 
-run_gtfn_no_transforms = make_gtfn_backend(enable_itir_transforms=False)
+run_gtfn_no_transforms = make_gtfn_backend(
+    translation=gtfn_module.GTFNTranslationStep(enable_itir_transforms=False),
+)

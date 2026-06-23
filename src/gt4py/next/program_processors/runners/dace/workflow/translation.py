@@ -9,12 +9,13 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Optional
+import warnings
+from typing import Any, Final, Optional
 
 import dace
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import common, config
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import code_specs, definitions, stages, workflow
@@ -345,12 +346,14 @@ class DaCeTranslator(
     ],
     definitions.TranslationStep[code_specs.SDFGCodeSpec],
 ):
-    device_type: core_defs.DeviceType
-    auto_optimize: bool
-    auto_optimize_args: dict[str, Any] | None
-    async_sdfg_call: bool
-    unstructured_horizontal_has_unit_stride: bool
-    use_metrics: bool
+    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    auto_optimize: bool = False
+    auto_optimize_args: dict[str, Any] | None = None
+    async_sdfg_call: bool = False
+    unstructured_horizontal_has_unit_stride: bool = dataclasses.field(
+        default_factory=lambda: config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+    )
+    use_metrics: bool = True
 
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
@@ -464,3 +467,70 @@ class DaCeTranslator(
             code_spec=code_specs.SDFGCodeSpec(),
         )
         return module
+
+
+def make_dace_translator(
+    *,
+    auto_optimize: bool = False,
+    async_sdfg_call: bool = False,
+    optimization_args: dict[str, Any] | None = None,
+    unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
+    use_metrics: bool = True,
+    use_zero_origin: bool = False,
+    use_max_domain_range_on_unstructured_shift: bool | None = None,
+) -> DaCeTranslator:
+    """Build a `DaCeTranslator` with validated auto-optimize configuration.
+
+    Translator-local configuration is set here; the cross-cutting `device_type`
+    and `auto_optimize` are stamped on by the workflow/backend builders, so a
+    caller injecting a translator usually leaves them at their defaults.
+
+    Args:
+        auto_optimize: Enable the SDFG auto-optimize pipeline.
+        async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
+            of GPU kernel execution with the Python driver code.
+        optimization_args: A `dict` containing configuration parameters for
+            the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
+        unstructured_horizontal_has_unit_stride: When the memory layout has unit
+            stride in the horizontal dimension, replace the field stride symbol
+            with '1'.
+        use_metrics: Add SDFG instrumentation to collect the metric for stencil
+            compute time.
+        use_zero_origin: Can be set to `True` when all fields passed as program
+            arguments have zero-based origin. This setting will skip generation
+            of range start-symbols `_range_0` since they can be assumed to be zero.
+
+    Note that `gt_auto_optimize()` parameters that are derived from GT4Py
+    configuration cannot be overriden, and therefore cannot appear in
+    `optimization_args`. Thus, this function will throw an exception if called with
+    any such argument.
+    """
+    # The `gt_optimization_args` set contains the parameters of `gt_auto_optimize()`
+    # that are derived from the gt4py configuration, and therefore cannot be customized.
+    gt_optimization_args: Final[set[str]] = {"gpu", "constant_symbols", "unit_strides_kind"}
+
+    if optimization_args is None:
+        optimization_args = {}
+    elif optimization_args and not auto_optimize:
+        warnings.warn("Optimizations args given, but auto-optimize is disabled.", stacklevel=2)
+    elif intersect_args := gt_optimization_args.intersection(optimization_args.keys()):
+        raise ValueError(
+            f"The following optimization arguments cannot be overriden: {intersect_args}."
+        )
+
+    # Set `unit_strides_kind` based on the gt4py env configuration.
+    optimization_args = optimization_args | {
+        "unit_strides_kind": common.DimensionKind.HORIZONTAL
+        if unstructured_horizontal_has_unit_stride
+        else None
+    }
+
+    return DaCeTranslator(
+        auto_optimize=auto_optimize,
+        auto_optimize_args=optimization_args,
+        async_sdfg_call=async_sdfg_call,
+        unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
+        use_metrics=use_metrics,
+        disable_field_origin_on_program_arguments=use_zero_origin,
+        use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+    )
