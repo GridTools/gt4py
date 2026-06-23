@@ -1331,6 +1331,118 @@ def test_nested_concat_where_two_dimensions():
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
 
 
+def test_concat_where_shift_in_never_selected_branch():
+    # Regression test for https://github.com/GridTools/gt4py/issues/2205.
+    # A `concat_where` accessed on `KDim: [0, 10)` selects the difference `a[K] - a[K+1]` for
+    # `K < 9` and `K >= 10`, and `a[K]` for `K == 9`. The `K >= 10` branch does not overlap the
+    # accessed domain, i.e. it is never selected. Its (empty) domain must not contribute the
+    # shifted access `a[K+1]`, which would otherwise over-extend `a` to `KDim: [0, 11)`.
+    domain = im.domain(common.GridType.CARTESIAN, {KDim: (0, 10)})
+    cond_lt = im.domain(common.GridType.CARTESIAN, {KDim: (itir.InfinityLiteral.NEGATIVE, 9)})
+    cond_ge = im.domain(common.GridType.CARTESIAN, {KDim: (10, itir.InfinityLiteral.POSITIVE)})
+    diff = im.lambda_("t")(im.minus(im.deref("t"), im.deref(im.shift(Koff, 1)("t"))))
+
+    domain_lt = im.domain(common.GridType.CARTESIAN, {KDim: (0, 9)})
+    domain_never = im.domain(common.GridType.CARTESIAN, {KDim: (10, 10)})  # empty
+    domain_eq = im.domain(common.GridType.CARTESIAN, {KDim: (9, 10)})
+
+    testee = im.concat_where(
+        cond_lt,
+        im.as_fieldop(diff)("a"),
+        im.concat_where(cond_ge, im.as_fieldop(diff)("a"), im.as_fieldop("deref")("a")),
+    )
+    expected = im.concat_where(
+        cond_lt,
+        im.as_fieldop(diff, domain_lt)("a"),
+        im.concat_where(
+            cond_ge,
+            im.as_fieldop(diff, domain_never)("a"),
+            im.as_fieldop("deref", domain_eq)("a"),
+        ),
+    )
+    expected_domains = {"a": domain}  # `[0, 10)`, not the over-extended `[0, 11)`
+
+    actual_call, actual_domains = infer_domain.infer_expr(
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider={}
+    )
+
+    folded_call = constant_fold_domain_exprs(actual_call)
+    assert expected == folded_call
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
+def test_concat_where_shift_in_never_selected_branch_shared():
+    # Regression test for https://github.com/GridTools/gt4py/issues/2205, exercising the form
+    # produced by `canonicalize_domain_argument`: the shifted value is bound in a `let` and
+    # referenced from both the selected (`K < 9`) and the never-selected (`K >= 10`) branch. The
+    # never-selected branch contributes an empty domain `[10, 10)` for the let-variable, which
+    # must be dropped from the union instead of being convex-hulled into `[0, 10)` (which would
+    # over-extend `a` to `[0, 11)`).
+    domain = im.domain(common.GridType.CARTESIAN, {KDim: (0, 10)})
+    cond_lt = im.domain(common.GridType.CARTESIAN, {KDim: (itir.InfinityLiteral.NEGATIVE, 9)})
+    cond_ge = im.domain(common.GridType.CARTESIAN, {KDim: (10, itir.InfinityLiteral.POSITIVE)})
+    diff = im.lambda_("t")(im.minus(im.deref("t"), im.deref(im.shift(Koff, 1)("t"))))
+
+    domain_diff = im.domain(common.GridType.CARTESIAN, {KDim: (0, 9)})
+    domain_eq = im.domain(common.GridType.CARTESIAN, {KDim: (9, 10)})
+
+    testee = im.let("diff", im.as_fieldop(diff)("a"))(
+        im.concat_where(
+            cond_lt,
+            "diff",
+            im.concat_where(cond_ge, "diff", im.as_fieldop("deref")("a")),
+        )
+    )
+    expected = im.let("diff", im.as_fieldop(diff, domain_diff)("a"))(
+        im.concat_where(
+            cond_lt,
+            "diff",
+            im.concat_where(cond_ge, "diff", im.as_fieldop("deref", domain_eq)("a")),
+        )
+    )
+    expected_domains = {"a": domain}  # `[0, 10)`, not the over-extended `[0, 11)`
+
+    actual_call, actual_domains = infer_domain.infer_expr(
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider={}
+    )
+
+    folded_call = constant_fold_domain_exprs(actual_call)
+    assert expected == folded_call
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
+def test_concat_where_unstructured_shift_in_never_selected_branch(unstructured_offset_provider):
+    # Regression test for https://github.com/GridTools/gt4py/issues/2205: a never-selected branch
+    # that shifts along the (empty) dimension of an unstructured connectivity must not be
+    # translated at all. Translating the empty `Edge: [1, 1)` range would reduce over an empty
+    # connectivity slice and raise; instead the branch contributes `NEVER`.
+    domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
+    cond = im.domain(common.GridType.UNSTRUCTURED, {Edge: (1, itir.InfinityLiteral.POSITIVE)})
+    e2v = im.lambda_("it")(im.deref(im.shift("E2V", 0)("it")))
+
+    domain_never = im.domain(common.GridType.UNSTRUCTURED, {Edge: (1, 1)})  # empty
+    domain_false = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
+
+    testee = im.concat_where(cond, im.as_fieldop(e2v)("a"), im.as_fieldop("deref")("b"))
+    expected = im.concat_where(
+        cond, im.as_fieldop(e2v, domain_never)("a"), im.as_fieldop("deref", domain_false)("b")
+    )
+    expected_domains = {
+        "a": infer_domain.DomainAccessDescriptor.NEVER,
+        "b": domain_false,
+    }
+
+    actual_call, actual_domains = infer_domain.infer_expr(
+        testee,
+        domain_utils.SymbolicDomain.from_expr(domain),
+        offset_provider=unstructured_offset_provider,
+    )
+
+    folded_call = constant_fold_domain_exprs(actual_call)
+    assert expected == folded_call
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
 def test_broadcast():
     testee = im.call("broadcast")("in_field", im.make_tuple(itir.AxisLiteral(value="IDim")))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10)})
