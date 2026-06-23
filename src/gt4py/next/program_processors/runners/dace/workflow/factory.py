@@ -48,7 +48,7 @@ def make_dace_workflow(
     """
     cmake_build_type = config.CMAKE_BUILD_TYPE if cmake_build_type is None else cmake_build_type
 
-    bare_translation = workflow.with_fields(
+    bare_translation = workflow.with_changes(
         translation
         if translation is not None
         else make_dace_translator(auto_optimize=auto_optimize),

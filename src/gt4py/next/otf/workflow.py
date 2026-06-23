@@ -34,9 +34,9 @@ ArgT = TypeVar("ArgT")
 StepT = TypeVar("StepT")
 
 
-def with_fields(step: StepT, **fields: Any) -> StepT:
+def with_changes(step: StepT, **changes: Any) -> StepT:
     """
-    Return a copy of ``step`` with ``fields`` applied, where it declares them.
+    Return a copy of ``step`` with ``changes`` applied, where it declares them.
 
     Used by the backend/workflow builders to stamp cross-cutting configuration
     (e.g. ``device_type``) onto a sub-component, whether it was built by default
@@ -46,7 +46,7 @@ def with_fields(step: StepT, **fields: Any) -> StepT:
     """
     if dataclasses.is_dataclass(step) and not isinstance(step, type):
         names = {f.name for f in dataclasses.fields(step)}
-        valid = {key: value for key, value in fields.items() if key in names}
+        valid = {key: value for key, value in changes.items() if key in names}
         if valid:
             return dataclasses.replace(step, **valid)
     return step
