@@ -519,13 +519,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 target = parse_target(gen_expr.generators[0].target)
 
                 return foast.TupleComprehension(
-                    elements=[
-                        foast.TupleComprehensionMapper(
-                            target=target,
-                            element_expr=self.visit(gen_expr.elt, **kwargs),
-                            location=self.get_location(node),
-                        )
-                    ],
+                    inner=foast.TupleComprehensionMapper(
+                        target=target,
+                        element_expr=self.visit(gen_expr.elt, **kwargs),
+                        location=self.get_location(node),
+                    ),
                     iterable=self.visit(gen_expr.generators[0].iter, **kwargs),
                     location=self.get_location(node),
                 )

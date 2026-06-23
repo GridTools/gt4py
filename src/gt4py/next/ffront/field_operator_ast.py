@@ -136,13 +136,12 @@ class TupleExpr(Expr):
 class TupleComprehension(Expr):
     """
     tuple(element_expr for target in iterable)
-
     Note: The structure here differs from the one in the Python AST. Here we group target and
     element expression in order to cleanly nest by the symbols being introduced, whereas in
     the Python AST target and iterable are grouped into generator nodes.
     """
 
-    elements: list[TupleComprehensionMapper]
+    inner: TupleComprehensionMapper
     iterable: Expr
 
 
