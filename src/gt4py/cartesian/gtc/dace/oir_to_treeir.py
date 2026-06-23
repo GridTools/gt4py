@@ -238,8 +238,16 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_AxisBound(self, node: common.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:
+            if axis_start == "0":
+                return f"({node.offset})"
+            if node.offset == 0:
+                return f"({axis_start})"
             return f"({axis_start}) + ({node.offset})"
 
+        if axis_end == "0":
+            return f"({node.offset})"
+        if node.offset == 0:
+            return f"({axis_end})"
         return f"({axis_end}) + ({node.offset})"
 
     def visit_RuntimeAxisBound(self, node: common.RuntimeAxisBound, **kwargs: Any) -> None:

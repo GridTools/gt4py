@@ -139,3 +139,22 @@ def test_integer_power_of_integer() -> None:
     tasklet_code = visitor.visit_NativeFuncCall(pow_call, ctx=fake_context, is_target=False)
 
     assert "ipow" not in tasklet_code
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        oir.Literal(value="2", dtype=common.DataType.FLOAT32),
+        oir.Literal(value="2", dtype=common.DataType.FLOAT64),
+    ],
+)
+def test_log10_respects_floating_point_precision(arg: oir.Literal) -> None:
+    log10_call = oir.NativeFuncCall(func=common.NativeFunction.LOG10, args=[arg])
+
+    visitor = oir_to_tasklet.OIRToTasklet()
+    fake_context = oir_to_tasklet.Context(
+        code="asdf", targets=set(), inputs={}, outputs={}, tree=None, scope=None
+    )
+    tasklet_code = visitor.visit_NativeFuncCall(log10_call, ctx=fake_context, is_target=False)
+
+    assert "dace.math.log10" in tasklet_code
