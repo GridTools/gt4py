@@ -479,7 +479,7 @@ url = 'https://gridtools.github.io/pypi/'
 # dace = {index = "gridtools"}
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/GridTools/dace", branch = "dev-sorted_sets"}
+dace = {git = "https://github.com/spcl/dace", branch = "main"}
 
 # -- versioningit --
 [tool.versioningit]
