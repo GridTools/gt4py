@@ -128,13 +128,6 @@ class _PrettyPrinter(TemplatedGenerator):
         return f"{element_expr} for {target}"
 
     def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> str:
-        mapper = self.visit(node.inner, **kwargs)
-        iterable = self.visit(node.iterable, **kwargs)
-        return f"tuple(({mapper} in {iterable}))"
-
-    def visit_FixedTupleComprehension(
-        self, node: foast.FixedTupleComprehension, **kwargs: Any
-    ) -> str:
         mapper = self.visit(node.elements[0], **kwargs)
         iterable = self.visit(node.iterable, **kwargs)
         return f"tuple(({mapper} in {iterable}))"

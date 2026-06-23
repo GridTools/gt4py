@@ -142,13 +142,6 @@ class TupleComprehension(Expr):
     the Python AST target and iterable are grouped into generator nodes.
     """
 
-    inner: TupleComprehensionMapper
-    iterable: Expr
-
-
-class FixedTupleComprehension(Expr):
-    """Fixed-length tuple comprehension with a typed mapper for each iterable element."""
-
     elements: list[TupleComprehensionMapper]
     iterable: Expr
 

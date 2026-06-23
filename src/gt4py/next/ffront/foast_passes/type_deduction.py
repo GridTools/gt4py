@@ -681,8 +681,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_TupleComprehension(
         self, node: foast.TupleComprehension, **kwargs: Any
-    ) -> foast.TupleComprehension | foast.FixedTupleComprehension:
-        target = self.visit(node.inner.target, **kwargs)
+    ) -> foast.TupleComprehension:
+        assert len(node.elements) == 1
+        mapper = node.elements[0]
+        target = self.visit(mapper.target, **kwargs)
         iterable = self.visit(node.iterable, **kwargs)
 
         def deduce_target_type(
@@ -713,7 +715,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             new_target = deduce_target_type(target, element_type, inner_kwargs)
             return foast.TupleComprehensionMapper(
                 target=new_target,
-                element_expr=self.visit(node.inner.element_expr, **inner_kwargs),
+                element_expr=self.visit(mapper.element_expr, **inner_kwargs),
                 location=node.location,
             )
 
@@ -733,7 +735,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
             element_types = cast(list[ts.DataType], iterable.type.types)
             elements = [deduce_mapper(element_type) for element_type in element_types]
-            result = foast.FixedTupleComprehension(
+            result = foast.TupleComprehension(
                 elements=elements,
                 iterable=iterable,
                 location=node.location,
@@ -747,7 +749,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return_type = ts.VarArgType(element_type=element_expr.type)
 
             return foast.TupleComprehension(
-                inner=new_mapper,
+                elements=[new_mapper],
                 iterable=iterable,
                 location=node.location,
                 type=return_type,
