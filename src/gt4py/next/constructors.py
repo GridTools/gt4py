@@ -177,6 +177,14 @@ class FieldConstructor:
         origin: Mapping[common.Dimension, int] | None = None,
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` from an array-like object. See :func:`as_field` for details."""
+        if (
+            not isinstance(domain, str)
+            and isinstance(domain, Sequence)
+            and any(isinstance(d, str) for d in domain)
+        ):
+            raise TypeError(
+                f"Invalid domain {domain!r}: dimensions must be 'Dimension' objects, not strings."
+            )
         if isinstance(domain, Sequence) and all(
             isinstance(dim, common.Dimension) for dim in domain
         ):

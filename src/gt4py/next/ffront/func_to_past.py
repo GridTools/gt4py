@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import ast
 import dataclasses
-import typing
 from typing import Any, cast
 
 from gt4py._core import definitions as core_defs
@@ -63,7 +62,7 @@ def func_to_past(inp: DSLProgramDef) -> PASTProgramDef:
     """
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
-    annotations = typing.get_type_hints(inp.definition)
+    annotations = source_utils.get_type_hints_from_function(inp.definition, source_def)
     return ffront_stages.PASTProgramDef(
         past_node=ProgramParser.apply(source_def, closure_vars, annotations),
         closure_vars=closure_vars,
@@ -111,34 +110,70 @@ class ProgramParser(DialectParser[past.Program]):
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
-        self._check_not_a_reserved_name(node.name, self.get_location(node))
-        closure_symbols: list[past.Symbol] = [
-            past.Symbol(
-                id=name,
-                type=type_translation.from_value(val),
-                namespace=dialect_ast_enums.Namespace.CLOSURE,
-                location=self.get_location(node),
+        loc = self.get_location(node)
+        self._check_not_a_reserved_name(node.name, loc)
+        closure_symbols: list[past.Symbol] = []
+        for name, val in self.closure_vars.items():
+            try:
+                type_ = type_translation.from_value(val)
+            except ValueError as e:
+                hints: tuple[str, ...] = ()
+                if callable(val):
+                    hints = (
+                        "Only functions decorated with '@field_operator' or "
+                        "'@scan_operator' can be called inside a program.",
+                    )
+                raise errors.DSLTypeError(
+                    loc,
+                    f"Unexpected object '{name}' of type '{type(val)}' encountered.",
+                    hints=hints,
+                ) from e
+            closure_symbols.append(
+                past.Symbol(
+                    id=name,
+                    type=type_,
+                    namespace=dialect_ast_enums.Namespace.CLOSURE,
+                    location=loc,
+                )
             )
-            for name, val in self.closure_vars.items()
-        ]
+
+        body: list[past.LocatedNode] = []
+        for stmt in node.body:
+            new_stmt = self.visit(stmt)
+            if not isinstance(new_stmt, past.Call):
+                raise errors.DSLError(
+                    self.get_location(stmt),
+                    "Only calls to GT4Py operators are allowed as statements in a program.",
+                    notes=(
+                        "A program orchestrates operator calls that write into 'out' "
+                        "arguments; computations belong inside field operators.",
+                    ),
+                )
+            body.append(new_stmt)
 
         return past.Program(
             id=node.name,
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
             params=self.visit(node.args),
-            body=[self.visit(node) for node in node.body],
+            body=body,
             closure_vars=closure_symbols,
-            location=self.get_location(node),
+            location=loc,
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[past.DataSymbol]:
+        self._validate_signature(node)
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
-        new_type = type_translation.from_type_hint(annotation)
+        try:
+            new_type = type_translation.from_type_hint(annotation)
+        except ValueError as e:
+            err = errors.InvalidParameterAnnotationError(loc, node.arg, annotation)
+            err.notes.append(str(e))
+            raise err from e
         if not isinstance(new_type, ts.DataType):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
         return past.DataSymbol(id=node.arg, location=loc, type=new_type)
@@ -201,8 +236,18 @@ class ProgramParser(DialectParser[past.Program]):
         )
 
     def visit_Dict(self, node: ast.Dict) -> past.Dict:
+        keys = []
+        for param in node.keys:
+            new_key = self.visit(cast(ast.AST, param))
+            if not isinstance(new_key, (past.Name, past.Attribute)):
+                raise errors.DSLError(
+                    self.get_location(cast(ast.AST, param)),
+                    "Dictionary keys must be dimension objects referenced by name "
+                    "(e.g. 'IDim', not '\"IDim\"').",
+                )
+            keys.append(new_key)
         return past.Dict(
-            keys_=[self.visit(cast(ast.AST, param)) for param in node.keys],
+            keys_=keys,
             values_=[self.visit(param) for param in node.values],
             location=self.get_location(node),
         )
