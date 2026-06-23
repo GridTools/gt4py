@@ -56,18 +56,12 @@ def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArra
 
 
 def _make_builtin(
-    builtin_name: str,
-    array_builtin_name: str | Callable[[ModuleType], Callable],
-    reverse: bool = False,
+    builtin_name: str, array_builtin_name: str, reverse: bool = False
 ) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
         cls_ = _get_nd_array_class(*fields)
         xp = cls_.array_ns
-        op = (
-            array_builtin_name(xp)
-            if callable(array_builtin_name)
-            else getattr(xp, array_builtin_name)
-        )
+        op = _get_builtin(xp, array_builtin_name)
 
         domain_intersection = embedded_common.domain_intersection(
             *[f.domain for f in fields if isinstance(f, common.Field)]
@@ -104,18 +98,24 @@ except ImportError:
         return np.vectorize(math.gamma, otypes=[a.dtype])(a)
 
 
-def _gamma_op(xp: ModuleType) -> Callable:
-    if xp is np:
-        return _np_gamma
-    if cp is not None and xp is cp:
-        import cupyx.scipy.special
+def _get_builtin(xp: ModuleType, name: str) -> Callable:
+    match name:
+        case "gamma":
+            if xp is np:
+                return _np_gamma
+            if cp is not None and xp is cp:
+                import cupyx.scipy.special
 
-        return cupyx.scipy.special.gamma
-    if jnp is not None and xp is jnp:
-        import jax.scipy.special
+                return cupyx.scipy.special.gamma
+            if jnp is not None and xp is jnp:
+                import jax.scipy.special
 
-        return jax.scipy.special.gamma
-    raise NotImplementedError(f"'gamma' is not implemented for array namespace '{xp.__name__}'.")
+                return jax.scipy.special.gamma
+            raise NotImplementedError(
+                f"'gamma' is not implemented for array namespace '{xp.__name__}'."
+            )
+        case _:
+            return getattr(xp, name)
 
 
 _Value: TypeAlias = common.Field | core_defs.ScalarT
@@ -759,14 +759,13 @@ NdArrayField.register_builtin_func(
     fbuiltins.power,
     NdArrayField.__pow__,
 )
-NdArrayField.register_builtin_func(fbuiltins.gamma, _make_builtin("gamma", _gamma_op))
 
 for name in (
     fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
     + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
     + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 ):
-    if name in ["abs", "power", "gamma"]:
+    if name in ["abs", "power"]:
         continue
     NdArrayField.register_builtin_func(getattr(fbuiltins, name), _make_builtin(name, name))
 
