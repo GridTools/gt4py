@@ -1036,7 +1036,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"Field arguments to '{func_name}' must be of same dtype, got '{t_dtype}' != "
                     f"'{f_dtype}'.",
                 )
-            return_dims = promote_dims(cond_dims, type_info.extract_dims(type_info.promote(tb, fb)))
+            return_dims = promote_dims(
+                cond_dims, type_info.extract_dims(tb), type_info.extract_dims(fb)
+            )
             return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
             return return_type
 

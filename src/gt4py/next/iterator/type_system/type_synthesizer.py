@@ -288,7 +288,7 @@ def concat_where(
         dtype = tb_dtype
 
         return_dims = common.promote_dims(
-            domain.dims, type_info.extract_dims(type_info.promote(tb, fb))
+            domain.dims, type_info.extract_dims(tb), type_info.extract_dims(fb)
         )
         return_type = ts.FieldType(dims=return_dims, dtype=dtype)
         return return_type
