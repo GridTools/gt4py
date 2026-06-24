@@ -734,8 +734,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             element_types = cast(list[ts.DataType], iterable.type.types)
             if not all(element_type == element_types[0] for element_type in element_types):
                 raise NotImplementedError(
-                    "Tuple comprehensions over fixed-length tuples with heterogeneous element "
-                    "types are not supported."
+                    "Tuple comprehensions over fixed-length tuples require all iterable "
+                    "elements to have the same type."
                 )
             new_mapper = deduce_mapper(element_types[0])
             result = foast.TupleComprehension(

@@ -524,7 +524,18 @@ def test_fixed_len_tuple_comprehension_mixed_local_field():
 
     with pytest.raises(
         NotImplementedError,
-        match="fixed-length tuples with heterogeneous element types are not supported",
+        match="fixed-length tuples require all iterable elements to have the same type",
+    ):
+        FieldOperatorParser.apply_to_function(foo)
+
+
+def test_fixed_len_tuple_comprehension_mixed_field_domains():
+    def foo(a: gtx.Field[[Edge], float64], b: gtx.Field[[Vertex], float64]):
+        return tuple(2.0 * el for el in (a, b))
+
+    with pytest.raises(
+        NotImplementedError,
+        match="fixed-length tuples require all iterable elements to have the same type",
     ):
         FieldOperatorParser.apply_to_function(foo)
 
@@ -535,7 +546,7 @@ def test_fixed_len_tuple_comprehension_tuple_target_mixed_element_types():
 
     with pytest.raises(
         NotImplementedError,
-        match="fixed-length tuples with heterogeneous element types are not supported",
+        match="fixed-length tuples require all iterable elements to have the same type",
     ):
         FieldOperatorParser.apply_to_function(foo)
 
