@@ -1667,17 +1667,6 @@ class LambdaToDataflow(eve.NodeVisitor):
             node.args[0], node.fun.args
         )
 
-        offset_provider_type: gtx_common.ConnectivityType
-        if isinstance(offset_provider_arg, gtir.CartesianOffset):
-            conn = itir_misc.connectivity_from_cartesian_offset(offset_provider_arg)
-            offset_provider_type = conn.__gt_type__()
-        else:
-            assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
-            assert isinstance(offset_provider_arg.value, str)
-            offset_provider_type = self.subgraph_builder.get_offset_provider_type(
-                offset_provider_arg.value
-            )
-
         # second argument should be the offset value, which could be a symbolic expression or a dynamic offset
         offset_expr = (
             SymbolExpr(offset_value_arg.value, gtir_to_sdfg_types.INDEX_DTYPE)
@@ -1685,13 +1674,19 @@ class LambdaToDataflow(eve.NodeVisitor):
             else self.visit(offset_value_arg)
         )
 
-        if isinstance(offset_provider_type, gtx_common.CartesianConnectivityType):
+        offset_provider_type: gtx_common.ConnectivityType
+        if isinstance(offset_provider_arg, gtir.CartesianOffset):
+            conn = itir_misc.connectivity_from_cartesian_offset(offset_provider_arg)
             return self._make_cartesian_shift(it, offset_provider_type, offset_expr)
         else:
-            # a named offset → unstructured shift; the offset value may be a static
-            # `OffsetLiteral` or a dynamic offset (handled by `_make_unstructured_shift`).
             assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
             assert isinstance(offset_provider_arg.value, str)
+            offset_provider_type = self.subgraph_builder.get_offset_provider_type(
+                offset_provider_arg.value
+            )
+            assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+            # a named offset → unstructured shift; the offset value may be a static
+            # `OffsetLiteral` or a dynamic offset (handled by `_make_unstructured_shift`).
             # initially, the storage for the connectivity tables is created as transient;
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
