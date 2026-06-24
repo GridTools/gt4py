@@ -23,9 +23,7 @@ from next_tests.integration_tests.cases import (
     E2VDim,
     Edge,
     JDim,
-    Joff,
     KDim,
-    Koff,
     V2EDim,
     Vertex,
     cartesian_case,
@@ -147,7 +145,7 @@ def test_reduction_execution_with_offset(unstructured_case_3d):
     @gtx.field_operator
     def fencil_op(edge_f: EKField) -> VKField:
         red = reduction(edge_f)
-        return red(Koff[1])
+        return red(KDim + 1)
 
     @gtx.program
     def fencil(edge_f: EKField, out: VKField):

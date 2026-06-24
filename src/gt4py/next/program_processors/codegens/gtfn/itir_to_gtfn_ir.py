@@ -126,6 +126,26 @@ def _collect_dimensions_from_domain(
     return offset_definitions
 
 
+def _collect_dimensions_from_params(
+    params: Iterable[itir.Sym], grid_type: common.GridType
+) -> dict[str, TagDefinition]:
+    # gtfn references `generated::<dim>_t` for every parameter field dimension; declare a tag
+    # for each here so that dimensions appearing only in argument types (not in any domain or
+    # offset) are still defined. Restricted to cartesian: unstructured dimension tags need the
+    # horizontal/vertical aliases that the domain and connectivity collection provide.
+    offset_definitions: dict[str, TagDefinition] = {}
+    if grid_type != common.GridType.CARTESIAN:
+        return offset_definitions
+    for param in params:
+        if param.type is None:
+            continue
+        for type_ in type_info.primitive_constituents(param.type):
+            if isinstance(type_, ts.FieldType):
+                for dim in type_.dims:
+                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+    return offset_definitions
+
+
 def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
@@ -144,31 +164,27 @@ def _collect_offset_definitions(
     } | {**offset_provider_type}
     offset_definitions = {}
 
-    for offset_name, dim_or_connectivity_type in offset_provider_type.items():
-        if isinstance(dim_or_connectivity_type, common.Dimension):
-            dim: common.Dimension = dim_or_connectivity_type
+    # cartesian shifts (`field(Dim + n)`) are encoded as `CartesianOffset` nodes and don't
+    # occur in the `offset_provider_type`; define a tag for each of their dimensions
+    cartesian_offsets: set[itir.CartesianOffset] = (
+        node.walk_values().if_isinstance(itir.CartesianOffset)
+    ).to_set()
+    for cart_offset in cartesian_offsets:
+        for axis in (cart_offset.domain, cart_offset.codomain):
             if grid_type == common.GridType.CARTESIAN:
-                # create alias from offset to dimension
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
+                offset_definitions[axis.value] = TagDefinition(name=Sym(id=axis.value))
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim.kind == common.DimensionKind.VERTICAL:
+                if axis.kind != common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
-                # create alias from vertical offset to vertical dimension
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value), alias=_vertical_dimension
+                offset_definitions[axis.value] = TagDefinition(
+                    name=Sym(id=axis.value), alias=_vertical_dimension
                 )
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
-        elif isinstance(
-            connectivity_type := dim_or_connectivity_type, common.NeighborConnectivityType
-        ):
+
+    for offset_name, connectivity_type in offset_provider_type.items():
+        if isinstance(connectivity_type, common.NeighborConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
             if offset_name != connectivity_type.neighbor_dim.value:
@@ -184,7 +200,7 @@ def _collect_offset_definitions(
                 )
         else:
             raise AssertionError(
-                "Elements of offset provider need to be either 'Dimension' or 'Connectivity'."
+                "Elements of the offset provider type need to be a 'NeighborConnectivityType'."
             )
     return offset_definitions
 
@@ -369,6 +385,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
+
+    def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> Literal:
+        # render as the (shared) dimension tag
+        assert node.domain == node.codomain, "relocation (staggering) is not supported"
+        return self.visit(node.codomain, **kwargs)
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
         return Literal(value=node.value, type="axis_literal")
@@ -664,6 +685,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {
+            **_collect_dimensions_from_params(node.params, self.grid_type),
             **_collect_dimensions_from_domain(node.body),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider_type),
         }

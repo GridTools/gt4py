@@ -198,7 +198,9 @@ def fuse_as_fieldop(
     return new_node
 
 
-def _arg_inline_predicate(node: itir.Expr, shifts: set[tuple[itir.OffsetLiteral, ...]]) -> bool:
+def _arg_inline_predicate(
+    node: itir.Expr, shifts: set[tuple[itir.OffsetLiteral | itir.CartesianOffset, ...]]
+) -> bool:
     if _is_tuple_expr_of_literals(node):
         return True
 

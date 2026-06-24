@@ -21,7 +21,6 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import (
     astype,
     broadcast,
-    common,
     float32,
     float64,
     int32,
@@ -112,13 +111,17 @@ def test_multivalue_identity():
 
 
 def test_premap():
+    # `field(Off[i])` for a Cartesian offset is deprecated in favor of `field(Dim + i)`.
     def foo(inp: gtx.Field[[TDim], float64]):
         return inp(TOff[1])
 
     parsed = FieldOperatorParser.apply_to_function(foo)
-    lowered = FieldOperatorLowering.apply(parsed)
+    with pytest.warns(DeprecationWarning, match="subscript syntax"):
+        lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.as_fieldop(im.lambda_("__it")(im.deref(im.shift("TOff", 1)("__it"))))("inp")
+    reference = im.as_fieldop(
+        im.lambda_("__it")(im.deref(im.shift(im.cartesian_offset(TDim, TDim), 1)("__it")))
+    )("inp")
 
     assert lowered.expr == reference
 
@@ -131,9 +134,7 @@ def test_premap_cartesian_syntax():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.as_fieldop(
-        im.lambda_("__it")(
-            im.deref(im.shift(common.dimension_to_implicit_offset(TDim.value), 1)("__it"))
-        )
+        im.lambda_("__it")(im.deref(im.shift(im.cartesian_offset(TDim, TDim), 1)("__it")))
     )("inp")
 
     assert lowered.expr == reference
@@ -147,7 +148,9 @@ def test_as_offset():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.as_fieldop(
-        im.lambda_("__it", "__offset")(im.deref(im.shift("TOff", im.deref("__offset"))("__it")))
+        im.lambda_("__it", "__offset")(
+            im.deref(im.shift(im.cartesian_offset(TDim, TDim), im.deref("__offset"))("__it"))
+        )
     )("inp", "offset")
 
     assert lowered.expr == reference
