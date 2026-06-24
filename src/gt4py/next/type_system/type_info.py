@@ -268,6 +268,7 @@ def _scalar_kinds(scalar_types: tuple[type, ...]) -> frozenset[ts.ScalarKind]:
 
 _FLOATING_POINT_KINDS: Final[frozenset[ts.ScalarKind]] = _scalar_kinds(core_defs.FLOAT_TYPES)
 _INTEGRAL_KINDS: Final[frozenset[ts.ScalarKind]] = _scalar_kinds(core_defs.INTEGRAL_TYPES)
+_ARITHMETIC_KINDS: Final[frozenset[ts.ScalarKind]] = _FLOATING_POINT_KINDS | _INTEGRAL_KINDS
 
 
 def _is_field_or_scalar_of_kind(symbol_type: ts.TypeSpec, kinds: Collection[ts.ScalarKind]) -> bool:
@@ -386,16 +387,7 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
         >>> is_arithmetic(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
         True
     """
-    # `is_arithmetic` cannot reuse `_is_field_or_scalar_of_kind`'s "all constraints
-    #  share the kind" rule: a type variable is arithmetic if every constraint is
-    #  arithmetic, even when the constraints mix floating point and integral kinds.
-    if isinstance(symbol_type, ts.TypeVarType):
-        return all(is_arithmetic(c) for c in symbol_type.constraints)
-    if isinstance(symbol_type, (ts.ScalarType, ts.FieldType)) and isinstance(
-        dtype := extract_dtype(symbol_type), ts.TypeVarType
-    ):
-        return is_arithmetic(dtype)
-    return is_floating_point(symbol_type) or is_integral(symbol_type)
+    return _is_field_or_scalar_of_kind(symbol_type, _ARITHMETIC_KINDS)
 
 
 def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.number]:
