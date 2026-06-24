@@ -299,8 +299,9 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         gpu=False,
         cached=False,
         auto_optimize=True,
-        use_metrics=use_metrics,
-        use_zero_origin=use_zero_origin,
+        translation=dace_workflow.translation.make_dace_translator(
+            auto_optimize=True, use_metrics=use_metrics, use_zero_origin=use_zero_origin
+        ),
     )
     monkeypatch.setattr(
         dace_workflow.compilation.DaCeCompiler,
@@ -355,8 +356,9 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         gpu=False,
         cached=False,
         auto_optimize=True,
-        use_metrics=use_metrics,
-        use_zero_origin=use_zero_origin,
+        translation=dace_workflow.translation.make_dace_translator(
+            auto_optimize=True, use_metrics=use_metrics, use_zero_origin=use_zero_origin
+        ),
     )
     monkeypatch.setattr(
         dace_workflow.compilation.DaCeCompiler,

@@ -44,6 +44,7 @@ profiling = [
 scripts = ["pyyaml>=6.0.1", "typer>=0.16.0", "packaging"]
 test = [
   'coverage[toml]>=7.6.1',
+  'factory-boy>=3.3.3',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
   'nox>=2025.02.09',
@@ -103,7 +104,6 @@ dependencies = [
   'dace>=2.0.0a3',
   'deepdiff>=8.1.0',
   'devtools>=0.6',
-  'factory-boy>=3.3.3',
   "filelock>=3.18.0",
   'frozendict>=2.3',
   'gridtools-cpp>=2.3.9,==2.*',
@@ -262,12 +262,6 @@ module = 'gt4py.next.iterator.*'
 [[tool.mypy.overrides]]
 ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
-
-[[tool.mypy.overrides]]
-ignore_missing_imports = true
-implicit_reexport = true
-# factory-boy is broken, see https://github.com/FactoryBoy/factory_boy/pull/1114
-module = "factory.*"
 
 [[tool.mypy.overrides]]
 disallow_incomplete_defs = false

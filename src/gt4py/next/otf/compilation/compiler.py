@@ -12,8 +12,6 @@ import dataclasses
 import pathlib
 from typing import Protocol, TypeVar
 
-import factory
-
 from gt4py._core import locking
 from gt4py.next import config
 from gt4py.next.otf import code_specs, definitions, stages, workflow
@@ -89,11 +87,6 @@ class Compiler(
         func = getattr(m, new_data.entry_point_name)
 
         return func
-
-
-class CompilerFactory(factory.Factory):
-    class Meta:
-        model = Compiler
 
 
 class CompilationError(RuntimeError): ...

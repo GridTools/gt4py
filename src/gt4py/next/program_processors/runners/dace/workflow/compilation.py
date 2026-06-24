@@ -15,7 +15,6 @@ from collections.abc import Callable, MutableSequence, Sequence
 from typing import Any
 
 import dace
-import factory
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import common, config
@@ -179,8 +178,3 @@ class DaCeCompiler(
             self.bind_func_name,
             inp.binding_source,
         )
-
-
-class DaCeCompilationStepFactory(factory.Factory):
-    class Meta:
-        model = DaCeCompiler

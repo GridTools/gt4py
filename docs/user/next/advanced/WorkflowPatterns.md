@@ -491,5 +491,5 @@ gtx.program_processors.runners.gtfn.run_gtfn_gpu.executor.otf_workflow??
 ```
 
 ```python
-gtx.program_processors.runners.gtfn.GTFNBackendFactory??
+gtx.program_processors.runners.gtfn.make_gtfn_backend??
 ```

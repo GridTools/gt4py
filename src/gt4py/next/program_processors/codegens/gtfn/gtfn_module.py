@@ -12,7 +12,6 @@ import dataclasses
 import functools
 from typing import Any, Final, Optional
 
-import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -284,13 +283,8 @@ class GTFNTranslationStep(
         )
 
 
-class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):
-    class Meta:
-        model = GTFNTranslationStep
+translate_program_cpu: Final[definitions.TranslationStep] = GTFNTranslationStep()
 
-
-translate_program_cpu: Final[definitions.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
-
-translate_program_gpu: Final[definitions.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
+translate_program_gpu: Final[definitions.TranslationStep] = GTFNTranslationStep(
     device_type=core_defs.DeviceType.CUDA
 )

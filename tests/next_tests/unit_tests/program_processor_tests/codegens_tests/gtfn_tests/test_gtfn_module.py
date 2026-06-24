@@ -134,12 +134,12 @@ def test_gtfn_file_cache(program_example):
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
-    cached_gtfn_translation_step = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=True
+    cached_gtfn_translation_step = gtfn.make_gtfn_backend(
+        gpu=False, cached=True, cached_translation=True
     ).executor.step.translation
 
-    bare_gtfn_translation_step = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=False
+    bare_gtfn_translation_step = gtfn.make_gtfn_backend(
+        gpu=False, cached=True, cached_translation=False
     ).executor.step.translation
 
     cache_key = cached_gtfn_translation_step.cache_key(compilable_program)
@@ -162,9 +162,7 @@ def test_gtfn_file_cache(program_example):
 # TODO(egparedes): we should switch to use the cached backend by default and then remove this test
 def test_gtfn_file_cache_whole_workflow(cartesian_case_no_backend):
     cartesian_case = cartesian_case_no_backend
-    cartesian_case.backend = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=True
-    )
+    cartesian_case.backend = gtfn.make_gtfn_backend(gpu=False, cached=True, cached_translation=True)
     cartesian_case.allocator = next_allocators.StandardCPUFieldBufferAllocator()
 
     assert cartesian_case.backend is not None

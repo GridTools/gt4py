@@ -46,7 +46,12 @@ skip_linting_transforms = SkipLinting(**same_steps)
 skip_linting_transforms.step_order(DUMMY_FOP)
 ```
 
-## Alternative Factory
+## Alternative Workflow Steps
+
+The builders (`make_gtfn_workflow` / `make_gtfn_backend`) expose only cross-cutting
+configuration (device, caching, build type). To customize a single sub-component,
+**inject** a pre-built step — the builder uses it instead of its default and stamps
+the cross-cutting fields (e.g. `device_type`) onto it.
 
 ```python
 class MyCodeGen: ...
@@ -55,17 +60,22 @@ class MyCodeGen: ...
 class Cpp2BindingsGen: ...
 
 
-class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWorkflowFactory):
-    translation: workflow.Workflow[
-        gtx.otf.definitions.CompilableProgramDef, gtx.otf.stages.ProgramSource
-    ] = MyCodeGen()
-    bindings: workflow.Workflow[gtx.otf.stages.ProgramSource, gtx.otf.stages.CompilableProject] = (
-        Cpp2BindingsGen()
-    )
+# Inject whole custom steps:
+pure_cpp2_workflow = gtx.program_processors.runners.gtfn.make_gtfn_workflow(
+    cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG,
+    translation=MyCodeGen(),
+    bindings=Cpp2BindingsGen(),
+)
 
-
-PureCpp2WorkflowFactory(cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG)
+# Or inject a configured default step to flip one knob:
+GTFNTranslationStep = gtx.program_processors.runners.gtfn.gtfn_module.GTFNTranslationStep
+no_transforms = gtx.program_processors.runners.gtfn.make_gtfn_backend(
+    translation=GTFNTranslationStep(enable_itir_transforms=False),
+)
 ```
+
+A pre-built backend is itself a frozen dataclass, so you can also override after the
+fact with `dataclasses.replace` (e.g. `dataclasses.replace(backend, executor=...)`).
 
 ## Invent new Workflow Types
 
