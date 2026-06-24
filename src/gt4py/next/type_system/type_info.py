@@ -54,6 +54,35 @@ def is_concrete(symbol_type: ts.TypeSpec) -> TypeGuard[ts.TypeSpec]:
     return False
 
 
+def _function_type_arg_groups(
+    function_type: ts.FunctionType,
+) -> tuple[Sequence[ts.TypeSpec], ...]:
+    """The positional, keyword and return sub-type groups of a function type, in canonical order."""
+    return (
+        function_type.pos_only_args,
+        tuple(function_type.pos_or_kw_args.values()),
+        tuple(function_type.kw_only_args.values()),
+        (function_type.returns,),
+    )
+
+
+def _function_type_children(function_type: ts.FunctionType) -> tuple[ts.TypeSpec, ...]:
+    """Return the argument and return sub-types of a function type, in canonical order."""
+    return tuple(child for group in _function_type_arg_groups(function_type) for child in group)
+
+
+def _map_function_type(
+    function_type: ts.FunctionType, transform: Callable[[ts.TypeSpec], ts.TypeSpec]
+) -> ts.FunctionType:
+    """Apply ``transform`` to each argument and return sub-type of a function type."""
+    return ts.FunctionType(
+        pos_only_args=[transform(a) for a in function_type.pos_only_args],
+        pos_or_kw_args={name: transform(a) for name, a in function_type.pos_or_kw_args.items()},
+        kw_only_args={name: transform(a) for name, a in function_type.kw_only_args.items()},
+        returns=transform(function_type.returns),
+    )
+
+
 def _type_params(symbol_type: ts.TypeSpec) -> tuple[ts.TypeSpec, ...]:
     """Return the immediate type-parameter sub-types of ``symbol_type``.
 
@@ -67,12 +96,7 @@ def _type_params(symbol_type: ts.TypeSpec) -> tuple[ts.TypeSpec, ...]:
         case ts.TupleType(types=types) | ts.NamedCollectionType(types=types):
             return tuple(types)
         case ts.FunctionType():
-            return (
-                *symbol_type.pos_only_args,
-                *symbol_type.pos_or_kw_args.values(),
-                *symbol_type.kw_only_args.values(),
-                symbol_type.returns,
-            )
+            return _function_type_children(symbol_type)
     # callable type wrappers (e.g. the field operator types in `ffront`) carry their
     # signature in a `definition` attribute
     if isinstance(definition := getattr(symbol_type, "definition", None), ts.TypeSpec):
@@ -552,17 +576,12 @@ def is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec) -> bool:
         for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
             is_compatible &= is_compatible_type(el_type_a, el_type_b)
     elif isinstance(type_a, ts.FunctionType) and isinstance(type_b, ts.FunctionType):
-        for arg_a, arg_b in zip(type_a.pos_only_args, type_b.pos_only_args, strict=True):
-            is_compatible &= is_compatible_type(arg_a, arg_b)
-        for arg_a, arg_b in zip(
-            type_a.pos_or_kw_args.values(), type_b.pos_or_kw_args.values(), strict=True
+        # zip per group (not flattened) so a positional/keyword arity mismatch is still caught
+        for group_a, group_b in zip(
+            _function_type_arg_groups(type_a), _function_type_arg_groups(type_b), strict=True
         ):
-            is_compatible &= is_compatible_type(arg_a, arg_b)
-        for arg_a, arg_b in zip(
-            type_a.kw_only_args.values(), type_b.kw_only_args.values(), strict=True
-        ):
-            is_compatible &= is_compatible_type(arg_a, arg_b)
-        is_compatible &= is_compatible_type(type_a.returns, type_b.returns)
+            for arg_a, arg_b in zip(group_a, group_b, strict=True):
+                is_compatible &= is_compatible_type(arg_a, arg_b)
     else:
         is_compatible &= is_concretizable(type_a, type_b)
 
@@ -729,18 +748,7 @@ def substitute_type_vars(
                 assert isinstance(new_element_type, ts.DataType)
                 return ts.ListType(element_type=new_element_type, offset_type=offset_type)
             case ts.FunctionType():
-                return ts.FunctionType(
-                    pos_only_args=[substitute_type_vars(a, binding) for a in leaf.pos_only_args],
-                    pos_or_kw_args={
-                        name: substitute_type_vars(a, binding)
-                        for name, a in leaf.pos_or_kw_args.items()
-                    },
-                    kw_only_args={
-                        name: substitute_type_vars(a, binding)
-                        for name, a in leaf.kw_only_args.items()
-                    },
-                    returns=substitute_type_vars(leaf.returns, binding),
-                )
+                return _map_function_type(leaf, lambda a: substitute_type_vars(a, binding))
         return leaf
 
     return tree_map_type(substitute_leaf)(type_)
