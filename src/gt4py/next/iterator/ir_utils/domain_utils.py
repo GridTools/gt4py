@@ -17,7 +17,7 @@ import numpy as np
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im, misc
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
@@ -164,6 +164,7 @@ class SymbolicDomain:
         self: SymbolicDomain,
         shift: tuple[
             itir.OffsetLiteral
+            | itir.CartesianOffset
             | Literal[trace_shifts.Sentinel.VALUE, trace_shifts.Sentinel.ALL_NEIGHBORS],
             ...,
         ],
@@ -180,19 +181,19 @@ class SymbolicDomain:
             return self
         if len(shift) == 2:
             off, val = shift
-            assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
-            connectivity_type = common.get_offset_type(offset_provider_type, off.value)
-
-            if isinstance(connectivity_type, common.Dimension):
+            if isinstance(off, itir.CartesianOffset):
                 if val is trace_shifts.Sentinel.VALUE:
                     raise NotImplementedError("Dynamic offsets not supported.")
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
-                current_dim = connectivity_type
-                # cartesian offset
-                new_ranges[current_dim] = SymbolicRange.translate(
-                    self.ranges[current_dim], val.value
-                )
-            elif isinstance(connectivity_type, common.NeighborConnectivityType):
+                dom = misc.dim_from_axis_literal(off.domain)
+                cod = misc.dim_from_axis_literal(off.codomain)
+                assert dom == cod  # relocation (staggering) is not supported here
+                new_ranges[dom] = SymbolicRange.translate(self.ranges[dom], val.value)
+                return SymbolicDomain(self.grid_type, new_ranges)
+            assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
+            connectivity_type = common.get_offset_type(offset_provider_type, off.value)
+
+            if isinstance(connectivity_type, common.NeighborConnectivityType):
                 # unstructured shift
                 assert (
                     isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
@@ -210,6 +211,7 @@ class SymbolicDomain:
                     )
                 else:
                     assert common.is_offset_provider(offset_provider)
+                    assert not isinstance(val, itir.CartesianOffset)  # offset value, never a node
                     new_range = _unstructured_translate_range_statically(
                         new_ranges[old_dim], off.value, val, offset_provider, self.as_expr()
                     )

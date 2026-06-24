@@ -12,6 +12,7 @@ import collections
 import dataclasses
 import functools
 import itertools
+import math
 from collections.abc import Callable, Sequence
 from types import ModuleType
 
@@ -19,8 +20,17 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import ClassVar, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
-from gt4py.next import common, utils
+from gt4py.eve.extended_typing import (
+    Any,
+    ClassVar,
+    Never,
+    Optional,
+    ParamSpec,
+    TypeAlias,
+    TypeVar,
+    cast,
+)
+from gt4py.next import common
 from gt4py.next.embedded import (
     common as embedded_common,
     context as embedded_context,
@@ -60,7 +70,7 @@ def _make_builtin(
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
         cls_ = _get_nd_array_class(*fields)
         xp = cls_.array_ns
-        op = getattr(xp, array_builtin_name)
+        op = _get_builtin(xp, array_builtin_name)
 
         domain_intersection = embedded_common.domain_intersection(
             *[f.domain for f in fields if isinstance(f, common.Field)]
@@ -89,6 +99,34 @@ def _make_builtin(
     return _builtin_op
 
 
+try:
+    from scipy.special import gamma as _np_gamma
+except ImportError:
+
+    def _np_gamma(a: core_defs.NDArrayObject) -> core_defs.NDArrayObject:
+        return np.vectorize(math.gamma, otypes=[a.dtype])(a)
+
+
+def _get_builtin(xp: ModuleType, name: str) -> Callable:
+    match name:
+        case "gamma":
+            if xp is np:
+                return _np_gamma
+            if xp is cp:
+                import cupyx.scipy.special
+
+                return cupyx.scipy.special.gamma
+            if xp is jnp:
+                import jax.scipy.special
+
+                return jax.scipy.special.gamma
+            raise NotImplementedError(
+                f"'gamma' is not implemented for array namespace '{xp.__name__}'."
+            )
+        case _:
+            return getattr(xp, name)
+
+
 _Value: TypeAlias = common.Field | core_defs.ScalarT
 _P = ParamSpec("_P")
 _R = TypeVar("_R", _Value, tuple[_Value, ...])
@@ -98,7 +136,6 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 class NdArrayField(
     common.MutableField[common.DimsT, core_defs.ScalarT],
     common.FieldBuiltinFuncRegistry,
-    utils.MetadataBasedPickling,
 ):
     """
     Shared field implementation for NumPy-like fields.
@@ -113,6 +150,11 @@ class NdArrayField(
     _ndarray: core_defs.NDArrayObject
 
     array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
+
+    def __getstate__(self) -> dict[str, Any]:
+        # Serialize only the dataclass fields, excluding cached properties
+        # stored in `__dict__` (which may not be picklable).
+        return {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
 
     @classmethod
     def from_array(
@@ -730,14 +772,13 @@ NdArrayField.register_builtin_func(
     fbuiltins.power,
     NdArrayField.__pow__,
 )
-# TODO gamma
 
 for name in (
     fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
     + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
     + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 ):
-    if name in ["abs", "power", "gamma"]:
+    if name in ["abs", "power"]:
         continue
     NdArrayField.register_builtin_func(getattr(fbuiltins, name), _make_builtin(name, name))
 
