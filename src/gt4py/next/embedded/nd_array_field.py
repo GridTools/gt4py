@@ -103,11 +103,11 @@ def _get_builtin(xp: ModuleType, name: str) -> Callable:
         case "gamma":
             if xp is np:
                 return _np_gamma
-            if cp is not None and xp is cp:
+            if xp is cp:
                 import cupyx.scipy.special
 
                 return cupyx.scipy.special.gamma
-            if jnp is not None and xp is jnp:
+            if xp is jnp:
                 import jax.scipy.special
 
                 return jax.scipy.special.gamma
