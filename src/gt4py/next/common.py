@@ -965,20 +965,12 @@ class BufferInfo:
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
     domain: tuple[Dimension, ...]
     codomain: Dimension
-    skip_value: Optional[
-        core_defs.IntegralScalar
-    ]  # TODO(tehrengruber): isn't this a value of the `NeighborConnectivityType` only
+    skip_value: Optional[core_defs.IntegralScalar]
     dtype: core_defs.DType
 
     @property
     def has_skip_values(self) -> bool:
         return self.skip_value is not None
-
-
-@dataclasses.dataclass(frozen=True)
-class CartesianConnectivityType(ConnectivityType):
-    domain: tuple[Dimension]
-    offset: int
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1010,8 +1002,22 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
         Currently, this would just complicate implementation as we do not use this information.
         """
 
-    @abc.abstractmethod
-    def __gt_type__(self) -> ConnectivityType: ...
+    def __gt_type__(self) -> ConnectivityType:
+        if is_neighbor_table(self):
+            return NeighborConnectivityType(
+                domain=self.domain.dims,
+                codomain=self.codomain,
+                dtype=self.dtype,
+                skip_value=self.skip_value,
+                max_neighbors=self.ndarray.shape[1],
+            )
+        else:
+            return ConnectivityType(
+                domain=self.domain.dims,
+                codomain=self.codomain,
+                dtype=self.dtype,
+                skip_value=self.skip_value,
+            )
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
@@ -1099,18 +1105,17 @@ class GatherConnectivity(Connectivity[DimsT, DimT_co]):
     algorithm (`embedded.nd_array_field._gather_premap`) is responsible for laying that table out
     over the output domain. Affine connectivities (cartesian shifts / relocations) are *not*
     `GatherConnectivity`: their `premap` is a compact domain relabel that moves no data and has no
-    `ndarray`.
-
-    Note: in principle a `GatherConnectivity` may have an arbitrary domain, but the only
-    implementation we currently have (`embedded.nd_array_field.NdArrayConnectivityField`) is
-    restricted to a `NeighborTable`. Since there is no use-case for a generic gather yet, we keep
-    that restriction.
+    `ndarray`. The affine-vs-gather distinction has no structural witness (an affine connectivity
+    still has an `ndarray` attribute, it just raises), so it is a nominal type, not a `Protocol`.
     """
 
-    # `ndarray` is a bare annotation (not a `@property`/`@abc.abstractmethod`) on purpose: as an
-    # abstract member it would, via the MRO, shadow the concrete `ndarray` of `NdArrayField` and
-    # force `NdArrayConnectivityField` to stay abstract. The annotation documents the gather
-    # contract for type checkers with no runtime effect.
+    # TODO(havogt): This is a bare annotation, not an `@abc.abstractmethod`, on purpose. Making it
+    #  abstract would force `NdArrayConnectivityField` abstract too: with `GatherConnectivity` ahead
+    #  of `NdArrayField` in the MRO, the abstract `ndarray` shadows `NdArrayField`'s concrete one.
+    #  Reordering the bases would fix that but then `NdArrayField`'s arithmetic operators would
+    #  shadow `Connectivity`'s raising stubs (connectivities would start accepting `+` etc.). A bare
+    #  annotation documents the contract for type checkers with no runtime effect.
+    #  See also the TODO on `Field.ndarray`: ideally `ndarray` would not live on the abstract base.
     ndarray: core_defs.NDArrayObject
 
 
@@ -1141,26 +1146,20 @@ def _connectivity(
     raise NotImplementedError
 
 
-class NeighborTable(GatherConnectivity[DimsT, DimT_co]):
-    """A (horizontal x local) neighbor-table gather connectivity.
+@runtime_checkable
+class NeighborTable(Connectivity, Protocol):
+    # TODO(havogt): work towards encoding this properly in the type
+    def __gt_type__(self) -> NeighborConnectivityType: ...
 
-    Concretely implemented by `embedded.nd_array_field.NdArrayConnectivityField`.
-    """
-
-    def __gt_type__(self) -> NeighborConnectivityType:
-        return NeighborConnectivityType(
-            domain=self.domain.dims,
-            codomain=self.codomain,
-            dtype=self.dtype,
-            skip_value=self.skip_value,
-            max_neighbors=self.ndarray.shape[1],
-        )
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        # Note that this property is currently already there from inheriting from `Field`,
+        # however this seems wrong, therefore we explicitly introduce it here (or it should come
+        # implicitly from the `NdArrayConnectivityField` protocol).
+        ...
 
 
 def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
-    # Structural (duck-typed) check rather than `isinstance(obj, NeighborTable)`: connectivities
-    # that are neighbor-table-shaped but not nominal `NeighborTable` subclasses (e.g.
-    # `embedded.nd_array_field.StridedConnectivityField`) must also qualify.
     if not isinstance(obj, Connectivity):
         return False
     domain_dims = obj.domain.dims
@@ -1171,8 +1170,6 @@ def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
     )
 
 
-# Cartesian shifts are self-describing `CartesianOffset` IR nodes and do not appear in the offset
-# provider; the provider therefore only holds (gather) connectivities.
 OffsetProviderElem: TypeAlias = NeighborTable
 OffsetProviderTypeElem: TypeAlias = NeighborConnectivityType
 # Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
@@ -1275,16 +1272,6 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     @property
     def __gt_origin__(self) -> Never:
         raise TypeError("'CartesianConnectivity' does not support this operation.")
-
-    def __gt_type__(self) -> CartesianConnectivityType:
-        assert len(self.domain.dims) == 1
-        return CartesianConnectivityType(
-            domain=self.domain.dims,
-            codomain=self.codomain,
-            dtype=self.dtype,
-            skip_value=self.skip_value,
-            offset=self.offset,
-        )
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
