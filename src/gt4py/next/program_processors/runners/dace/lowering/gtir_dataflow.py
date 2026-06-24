@@ -1497,11 +1497,10 @@ class LambdaToDataflow(eve.NodeVisitor):
         return offset_provider_arg, offset_value_arg, it
 
     def _make_cartesian_shift(
-        self, it: IteratorExpr, conn: gtx_common.CartesianConnectivityType, offset_expr: DataExpr
+        self, it: IteratorExpr, conn: gtx_common.CartesianConnectivity, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        (old_dim,) = conn.domain
-        new_dim = conn.codomain
+        old_dim, new_dim = conn.domain_dim, conn.codomain
         new_index: SymbolExpr | ValueExpr
         index_expr = it.indices[old_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
@@ -1674,10 +1673,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             else self.visit(offset_value_arg)
         )
 
-        offset_provider_type: gtx_common.ConnectivityType
         if isinstance(offset_provider_arg, gtir.CartesianOffset):
             conn = itir_misc.connectivity_from_cartesian_offset(offset_provider_arg)
-            return self._make_cartesian_shift(it, offset_provider_type, offset_expr)
+            return self._make_cartesian_shift(it, conn, offset_expr)
         else:
             assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
             assert isinstance(offset_provider_arg.value, str)
