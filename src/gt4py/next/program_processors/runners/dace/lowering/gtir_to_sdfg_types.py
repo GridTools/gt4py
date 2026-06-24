@@ -21,7 +21,7 @@ from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins as gtir_builtins
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import gtir_dataflow, gtir_domain
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -87,9 +87,7 @@ class FieldopData:
                 for i, dim in enumerate(self.gt_type.dims)
             ]
             dtype = self.gt_type.dtype
-            # `FieldType.dtype` is widened to include `TypeVarType`, but generic operators are
-            # monomorphized before lowering, so only concrete dtypes reach here.
-            assert isinstance(dtype, (ts.ScalarType, ts.ListType))
+            assert ti.is_concrete_dtype(dtype)
             return gtir_dataflow.IteratorExpr(self.dc_node, dtype, field_origin, it_indices)
 
         raise NotImplementedError(f"Node type {type(self.gt_type)} not supported.")

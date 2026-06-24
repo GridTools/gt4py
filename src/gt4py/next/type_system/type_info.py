@@ -284,6 +284,11 @@ def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType | ts.
     raise ValueError(f"Can not unambiguosly extract data type from '{symbol_type}'.")
 
 
+def is_concrete_dtype(dtype: ts.TypeSpec) -> xtyping.TypeIs[ts.ScalarType | ts.ListType]:
+    """Whether ``dtype`` is a concrete field dtype, i.e. not a (generic) `TypeVarType`."""
+    return isinstance(dtype, (ts.ScalarType, ts.ListType))
+
+
 def _scalar_kinds(scalar_types: tuple[type, ...]) -> frozenset[ts.ScalarKind]:
     # Derived from the canonical scalar-type tuples in `gt4py._core.definitions` so the two
     # stay in sync; the `int`/`float` builtins collapse onto their fixed-width kind.
