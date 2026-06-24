@@ -7,9 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
 import functools
+from typing import TypeVar
 
 from gt4py import eve
-from gt4py.next import utils
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import inference as itir_inference
@@ -71,6 +72,9 @@ _UNROLLERS = {
 }
 
 
+ProgramOrExpr = TypeVar("ProgramOrExpr", bound=itir.Program | itir.Expr)
+
+
 @dataclasses.dataclass
 class UnrollTupleMaps(eve.NodeTranslator):
     """Unroll tuple-map ITIR builtins (`tree_map_tuple`, `map_tuple`) into `make_tuple`."""
@@ -80,8 +84,22 @@ class UnrollTupleMaps(eve.NodeTranslator):
     uids: utils.IDGeneratorPool
 
     @classmethod
-    def apply(cls, program: itir.Program, *, uids: utils.IDGeneratorPool):
-        return cls(uids=uids).visit(program)
+    def apply(
+        cls,
+        node: ProgramOrExpr,
+        *,
+        uids: utils.IDGeneratorPool | None = None,
+        offset_provider_type: common.OffsetProviderType | None = None,
+    ) -> ProgramOrExpr:
+        if node.type is None:
+            node = itir_inference.infer(
+                node,
+                offset_provider_type=offset_provider_type or {},
+                allow_undeclared_symbols=not isinstance(node, itir.Program),
+            )
+        if uids is None:
+            uids = utils.IDGeneratorPool()
+        return cls(uids=uids).visit(node)
 
     def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)

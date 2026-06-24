@@ -12,7 +12,6 @@ from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.unroll_tuple_maps import UnrollTupleMaps
-from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -23,8 +22,7 @@ i_tuple_field = ts.TupleType(types=[i_field, i_field])
 
 
 def _apply(expr: itir.Expr) -> itir.Expr:
-    expr = itir_type_inference.infer(expr, offset_provider_type={}, allow_undeclared_symbols=True)
-    return UnrollTupleMaps(uids=utils.IDGeneratorPool()).visit(expr)
+    return UnrollTupleMaps.apply(expr, uids=utils.IDGeneratorPool(), offset_provider_type={})
 
 
 def _neg():
@@ -74,6 +72,17 @@ def test_map_tuple_single_arg():
         im.call(_neg())(im.tuple_get(1, "t")),
     )
     assert result == expected
+
+
+def test_apply_infers_uninferred_expr():
+    expr = im.call(im.call("tree_map_tuple")(_neg()))(
+        im.make_tuple(im.ref("a", i_field), im.ref("b", i_field))
+    )
+
+    result = UnrollTupleMaps.apply(expr, offset_provider_type={})
+
+    assert expr.type is None
+    assert result == im.make_tuple(im.call(_neg())("a"), im.call(_neg())("b"))
 
 
 def test_map_tuple_does_not_recurse():
