@@ -22,7 +22,7 @@ from gt4py import next as gtx
 from gt4py.next import broadcast, common, neighbor_sum
 from gt4py.next.ffront.experimental import concat_where
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
     mesh_descriptor,
 )
@@ -88,6 +88,7 @@ def test_concat_where_empty_branch(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, N, out=out, ref=a.asnumpy())
 
 
+@pytest.mark.embedded_concat_where_infinite_domain
 def test_concat_where_scalar_broadcast(cartesian_case):
     @gtx.field_operator
     def testee(a: np.int32, b: cases.IJKField, N: np.int32) -> cases.IJKField:
@@ -107,6 +108,7 @@ def test_concat_where_scalar_broadcast(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, cartesian_case.default_sizes[KDim], out=out, ref=ref)
 
 
+@pytest.mark.embedded_concat_where_infinite_domain
 def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
     """Output domain such that the scalar branch is never active."""
 
@@ -263,6 +265,7 @@ def test_dimension_eq_in_middle_of_domain(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
+@pytest.mark.embedded_concat_where_non_contiguous_domain
 def test_dimension_two_conditions_or(cartesian_case):
     @gtx.field_operator
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
@@ -282,11 +285,19 @@ def test_lap_like(cartesian_case):
     def testee(
         inp: cases.IJField, boundary: np.int32, shape: tuple[np.int32, np.int32]
     ) -> cases.IJField:
-        # TODO add support for multi-dimensional concat_where masks
+        # TODO(havogt) add support for multi-dimensional concat_where and non-contiguous unions
         return concat_where(
-            (IDim == 0) | (IDim == shape[0] - 1),
+            (IDim == 0),
             boundary,
-            concat_where((JDim == 0) | (JDim == shape[1] - 1), boundary, inp),
+            concat_where(
+                IDim == shape[0] - 1,
+                boundary,
+                concat_where(
+                    JDim == 0,
+                    boundary,
+                    concat_where(JDim == shape[1] - 1, boundary, inp),
+                ),
+            ),
         )
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()

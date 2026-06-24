@@ -382,9 +382,7 @@ def _convert_as_fieldop_input_to_iterator(
     Convert a field operation input into an iterator type, preserving its dimensions and data type.
     """
     input_dims = _collect_and_check_dimensions(input_)
-    element_type: ts.DataType = type_info.apply_to_primitive_constituents(
-        type_info.extract_dtype, input_
-    )
+    element_type: ts.DataType = type_info.tree_map_type(type_info.extract_dtype)(input_)
 
     return it_ts.IteratorType(
         position_dims=domain.dims, defined_dims=input_dims, element_type=element_type
@@ -438,9 +436,7 @@ def _canonicalize_nb_fields(
             )
         case ts.FieldType():
             input_dims = _collect_and_check_dimensions(input_)
-            element_type: ts.DataType = type_info.apply_to_primitive_constituents(
-                type_info.extract_dtype, input_
-            )
+            element_type: ts.DataType = type_info.tree_map_type(type_info.extract_dtype)(input_)
             defined_dims = []
             neighbor_dim = None
             for dim in input_dims:
@@ -460,7 +456,7 @@ def _canonicalize_nb_fields(
 
 def _resolve_dimensions(
     input_dims: list[common.Dimension],
-    shift_tuple: tuple[itir.OffsetLiteral, ...],
+    shift_tuple: tuple[itir.OffsetLiteral | itir.CartesianOffset, ...],
     offset_provider_type: common.OffsetProviderType,
 ) -> list[common.Dimension]:
     """
@@ -513,10 +509,12 @@ def _resolve_dimensions(
         for off_literal in reversed(
             shift_tuple[::2]
         ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
+            if isinstance(off_literal, itir.CartesianOffset):
+                if off_literal.domain != off_literal.codomain:
+                    raise NotImplementedError("Relocation (staggering) is not supported.")
+                continue  # translation does not change the dimension
             assert isinstance(off_literal.value, str)
             offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
-            if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
-                continue  # No shift applied
             if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
                 if input_dim == offset_type.codomain:  # Check if input fits to offset
                     input_dim = offset_type.domain[0]  # Update input_dim for next iteration
@@ -537,7 +535,7 @@ def as_fieldop(
         # For each stencil parameter all locations it is `deref`ed on
         #  see :func:`gt4py.next.iterator.transforms.trace_stencil`.
         shift_sequences_per_param: list[set[tuple[itir.OffsetLiteral, ...]]] | None,
-    ) -> ts.FieldType | ts.DeferredType:
+    ) -> ts.FieldType | ts.TupleType | ts.DeferredType:
         if any(
             isinstance(el, ts.DeferredType)
             for f in fields
@@ -580,13 +578,11 @@ def as_fieldop(
 
         assert isinstance(stencil_return, ts.DataType)
 
-        return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(
-                dims=domain.dims,
-                dtype=el_type,
-            ),
-            stencil_return,
-        )
+        result = type_info.tree_map_type(
+            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
+        )(stencil_return)
+        assert isinstance(result, (ts.FieldType, ts.TupleType))
+        return result
 
     return applied_as_fieldop
 
@@ -679,13 +675,15 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
             new_position_dims = [*it.position_dims]
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
+                if isinstance(offset_axis, it_ts.CartesianOffsetType):
+                    if offset_axis.domain != offset_axis.codomain:
+                        raise NotImplementedError("Relocation (staggering) is not supported.")
+                    continue  # translation leaves position dims unchanged
                 assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
                     offset_axis.value, str
                 )
                 type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
-                if isinstance(type_, common.Dimension):
-                    pass
-                elif isinstance(type_, common.NeighborConnectivityType):
+                if isinstance(type_, common.NeighborConnectivityType):
                     found = False
                     for i, dim in enumerate(new_position_dims):
                         if dim.value == type_.source_dim.value:

@@ -42,6 +42,10 @@ repos:
       - id: insert-license
         types: [python]
         args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
+      - id: insert-license
+        name: insert-license (dev-script entry points)
+        files: ^scripts/(run|test)$  # extensionless 'uv run' scripts are not detected as python
+        args: [--comment-style, "|#|", --license-filepath, ./HEADER.txt, --fuzzy-match-generates-todo]
 
   # The following hooks use development tools which are already managed by 'uv'.
   # To avoid inconsistencies between the development and the pre-commit
@@ -74,10 +78,24 @@ repos:
         require_serial: true
 
       - <<: *uv-managed-hook
+        id: ruff-check
+        name: ruff checker (dev-script entry points)
+        entry: uv run --group dev --frozen --isolated ruff check --force-exclude --fix
+        files: ^scripts/(run|test)$  # extensionless 'uv run' scripts are not detected as python
+        require_serial: true
+
+      - <<: *uv-managed-hook
         id: ruff-format
         name: ruff formatter
         entry: uv run --group dev --frozen --isolated ruff format --force-exclude
         types_or: [python, pyi, jupyter]
+        require_serial: true
+
+      - <<: *uv-managed-hook
+        id: ruff-format
+        name: ruff formatter (dev-script entry points)
+        entry: uv run --group dev --frozen --isolated ruff format --force-exclude
+        files: ^scripts/(run|test)$  # extensionless 'uv run' scripts are not detected as python
         require_serial: true
 
       - <<: *uv-managed-hook

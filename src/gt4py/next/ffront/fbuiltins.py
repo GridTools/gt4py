@@ -313,34 +313,44 @@ def astype(
 _UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs, "neg": operator.neg}
 UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = [*_UNARY_MATH_NUMBER_BUILTIN_IMPL.keys()]
 
+
+try:
+    from scipy.special import gamma as _gamma  # dtype-preserving ufunc
+except ImportError:
+
+    def _gamma(value: core_defs.ScalarT) -> core_defs.ScalarT:
+        # restore the input scalar type, which `math.gamma` widens to `float`
+        return cast(core_defs.ScalarT, type(value)(math.gamma(value)))
+
+
 _UNARY_MATH_FP_BUILTIN_IMPL: Final = {
-    "sin": math.sin,
-    "cos": math.cos,
-    "tan": math.tan,
-    "arcsin": math.asin,
-    "arccos": math.acos,
-    "arctan": math.atan,
-    "sinh": math.sinh,
-    "cosh": math.cosh,
-    "tanh": math.tanh,
-    "arcsinh": math.asinh,
-    "arccosh": math.acosh,
-    "arctanh": math.atanh,
-    "sqrt": math.sqrt,
-    "exp": math.exp,
-    "log": math.log,
-    "gamma": math.gamma,
-    "cbrt": math.cbrt if hasattr(math, "cbrt") else np.cbrt,  # match.cbrt() only added in 3.11
-    "floor": math.floor,
-    "ceil": math.ceil,
-    "trunc": math.trunc,
+    "sin": np.sin,
+    "cos": np.cos,
+    "tan": np.tan,
+    "arcsin": np.arcsin,
+    "arccos": np.arccos,
+    "arctan": np.arctan,
+    "sinh": np.sinh,
+    "cosh": np.cosh,
+    "tanh": np.tanh,
+    "arcsinh": np.arcsinh,
+    "arccosh": np.arccosh,
+    "arctanh": np.arctanh,
+    "sqrt": np.sqrt,
+    "exp": np.exp,
+    "log": np.log,
+    "gamma": _gamma,
+    "cbrt": np.cbrt,
+    "floor": np.floor,
+    "ceil": np.ceil,
+    "trunc": np.trunc,
 }
 UNARY_MATH_FP_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_BUILTIN_IMPL.keys()]
 
 _UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL: Final = {
-    "isfinite": math.isfinite,
-    "isinf": math.isinf,
-    "isnan": math.isnan,
+    "isfinite": np.isfinite,
+    "isinf": np.isinf,
+    "isnan": np.isnan,
 }
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL.keys()]
 
@@ -358,7 +368,7 @@ def _make_unary_math_builtin(name: str) -> BuiltInFunction:
             value
         )  # default implementation for scalars, Fields are handled via dispatch
 
-        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))  # type: ignore[operator, arg-type] # calling a function of unknown type; trunc not supported for all types
+        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
 
     impl.__name__ = name
     return BuiltInFunction(impl)
@@ -481,7 +491,7 @@ class FieldOffset(runtime.Offset):
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
         elif isinstance(offset_definition, common.Connectivity):
-            assert common.is_neighbor_connectivity(offset_definition)
+            assert common.is_neighbor_table(offset_definition)
             named_index = common.NamedIndex(self.target[-1], offset)
             connectivity = offset_definition[named_index]
         else:
@@ -508,3 +518,12 @@ class FieldOffset(runtime.Offset):
             self._cache[cache_key] = connectivity
 
         return connectivity
+
+
+def is_cartesian_offset(offset: FieldOffset | ts.OffsetType) -> bool:
+    return (
+        len(offset.target) == 1
+        and offset.source == offset.target[0]
+        and offset.source.kind == offset.target[0].kind
+        and offset.target[0].kind != common.DimensionKind.LOCAL
+    )

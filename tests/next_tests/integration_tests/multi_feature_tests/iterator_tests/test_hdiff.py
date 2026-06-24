@@ -11,7 +11,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, fendef, fundef
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.cases import IDim, JDim
@@ -21,8 +21,8 @@ from next_tests.integration_tests.multi_feature_tests.iterator_tests.hdiff_refer
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-I = offset("I")
-J = offset("J")
+I = gtx.CartesianConnectivity(IDim)
+J = gtx.CartesianConnectivity(JDim)
 
 
 @fundef
@@ -55,7 +55,7 @@ def hdiff_sten(inp, coeff):
     )
 
 
-@fendef(offset_provider={"I": IDim, "J": JDim})
+@fendef
 def hdiff(inp, coeff, out, x, y):
     domain = cartesian_domain(named_range(IDim, 0, x), named_range(JDim, 0, y))
     set_at(as_fieldop(hdiff_sten, domain)(inp, coeff), domain, out)

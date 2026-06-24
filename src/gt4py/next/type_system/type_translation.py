@@ -239,7 +239,7 @@ def from_type_hint(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')."
                 ) from error
             if not isinstance(dtype, ts.ScalarType) or dtype.kind == ts.ScalarKind.STRING:
-                raise ValueError("Field dtype argument must be a scalar type (got '{dtype}').")
+                raise ValueError(f"Field dtype argument must be a scalar type (got '{dtype}').")
             return ts.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
