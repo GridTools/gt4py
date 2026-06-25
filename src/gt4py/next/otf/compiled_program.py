@@ -232,16 +232,16 @@ def _apply_config_overrides(overrides: dict[str, Any]) -> None:
 
 # Top-level (must be top-level for pickle).
 def _process_pool_compile_job(
-    backend_blob: bytes,
+    executor_blob: bytes,
     compilable: Any,
     config_overrides: dict[str, Any],
 ) -> stages.CompilationArtifact:
-    """Worker entry point: deserialize the backend and run its compile phase."""
-    from gt4py.next import backend as gtx_backend_mod
+    """Worker entry point: deserialize the executor and run it."""
+    import pickle
 
     _apply_config_overrides(config_overrides)
-    backend = gtx_backend_mod.deserialize_backend_from_worker(backend_blob)
-    return backend.executor(compilable)
+    executor = pickle.loads(executor_blob)
+    return executor(compilable)
 
 
 # Workers re-import this module on spawn; don't let them spin up their own pool.
@@ -740,7 +740,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         elif _should_use_process_pool():
             # Frontend lowering stays main-side: decorators rebind the user's function
             # module attribute, so the raw ``types.FunctionType`` no longer pickles.
-            backend_blob = gtx_backend.serialize_backend_for_worker(self.backend)
+            executor_blob = gtx_backend.serialize_executor_for_worker(self.backend.executor)
             compilable = self.backend.transforms(
                 definitions.ConcreteProgramDef(data=self.definition_stage, args=compile_time_args)
             )
@@ -748,7 +748,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                 True,
                 _async_compilation_pool.submit(
                     _process_pool_compile_job,
-                    backend_blob,
+                    executor_blob,
                     compilable,
                     _config_snapshot(),
                 ),

@@ -554,15 +554,6 @@ wheels = [
 ]
 
 [[package]]
-name = "cloudpickle"
-version = "3.1.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/27/fb/576f067976d320f5f0114a8d9fa1215425441bb35627b1993e5afd8111e5/cloudpickle-3.1.2.tar.gz", hash = "sha256:7fda9eb655c9c230dab534f1983763de5835249750e85fbcef43aaa30a9a2414", size = 22330, upload-time = "2025-11-03T09:25:26.604Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl", hash = "sha256:9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a", size = 22228, upload-time = "2025-11-03T09:25:25.534Z" },
-]
-
-[[package]]
 name = "cmake"
 version = "4.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1720,9 +1711,6 @@ next = [
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
 ]
-process-pool = [
-    { name = "cloudpickle" },
-]
 rocm6 = [
     { name = "cupy" },
 ]
@@ -1864,7 +1852,6 @@ requires-dist = [
     { name = "cached-property", specifier = ">=1.5.1" },
     { name = "clang-format", marker = "extra == 'standard'", specifier = ">=18.1" },
     { name = "click", specifier = ">=8.0.0" },
-    { name = "cloudpickle", marker = "extra == 'process-pool'", specifier = ">=3.0" },
     { name = "cmake", specifier = ">=3.22" },
     { name = "cupy", marker = "extra == 'rocm6'", specifier = ">=13.4.1,<14.0" },
     { name = "cupy-cuda12x", marker = "extra == 'cuda12'", specifier = ">=12.0" },
@@ -1906,7 +1893,7 @@ requires-dist = [
     { name = "versioningit", specifier = ">=3.1.1" },
     { name = "xxhash", specifier = ">=3.5.0" },
 ]
-provides-extras = ["cartesian", "cuda12", "cuda13", "jax", "jax-cuda12", "jax-cuda13", "next", "process-pool", "rocm6", "rocm7", "standard", "testing"]
+provides-extras = ["cartesian", "cuda12", "cuda13", "jax", "jax-cuda12", "jax-cuda13", "next", "rocm6", "rocm7", "standard", "testing"]
 
 [package.metadata.requires-dev]
 build = [

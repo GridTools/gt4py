@@ -9,8 +9,8 @@
 from __future__ import annotations
 
 import dataclasses
-import weakref
-from typing import Any, Generic
+import pickle
+from typing import Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import custom_layout_allocators as next_allocators
@@ -167,49 +167,23 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         return self.allocator
 
 
-def _empty_weak_key_dict() -> weakref.WeakKeyDictionary:
-    return weakref.WeakKeyDictionary()
+def serialize_executor_for_worker(
+    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact],
+) -> bytes:
+    """Pickle ``executor`` for shipment to a worker process.
 
-
-def _empty_weak_value_dict() -> weakref.WeakValueDictionary:
-    return weakref.WeakValueDictionary()
-
-
-def serialize_backend_for_worker(backend: Backend) -> bytes:
-    """Cloudpickle ``backend`` into bytes for a worker process.
-
-    The custom reducer replaces ``WeakKeyDictionary`` / ``WeakValueDictionary``
-    with empty containers: ``functools.singledispatch`` dispatch caches hold
-    ``weakref.ReferenceType`` cells that cloudpickle can't pickle. The receiver
-    rebuilds them on first dispatch.
+    Strips ``CachedStep`` wrappers (outer + on ``OTFCompileWorkflow.translation``):
+    the cache is process-local, the worker is one-shot, and the strip avoids
+    ``functools.singledispatch`` dispatch tables that stdlib pickle can't ship.
     """
-    try:
-        import cloudpickle  # type: ignore[import-not-found, unused-ignore]
-    except ImportError as err:
-        raise RuntimeError(
-            "Process-pool compilation requires 'cloudpickle' to be installed "
-            "(Backend objects are not picklable with the stdlib pickle module). "
-            "Install it (e.g. `pip install cloudpickle`) or fall back to "
-            "GT4PY_BUILD_JOBS_MODE=thread."
-        ) from err
-
-    import io
-
-    class _BackendCloudPickler(cloudpickle.CloudPickler):
-        def reducer_override(self, obj: Any) -> Any:
-            if isinstance(obj, weakref.WeakKeyDictionary):
-                return _empty_weak_key_dict, ()
-            if isinstance(obj, weakref.WeakValueDictionary):
-                return _empty_weak_value_dict, ()
-            return super().reducer_override(obj)
-
-    buf = io.BytesIO()
-    _BackendCloudPickler(buf).dump(backend)
-    return buf.getvalue()
-
-
-def deserialize_backend_from_worker(blob: bytes) -> Backend:
-    """Counterpart of ``serialize_backend_for_worker``: runs in a worker process."""
-    import cloudpickle  # type: ignore[import-not-found, unused-ignore]
-
-    return cloudpickle.loads(blob)
+    if isinstance(executor, workflow.CachedStep):
+        executor = executor.step
+    if dataclasses.is_dataclass(executor):
+        unwrapped_fields = {
+            f.name: getattr(executor, f.name).step
+            for f in dataclasses.fields(executor)
+            if isinstance(getattr(executor, f.name), workflow.CachedStep)
+        }
+        if unwrapped_fields:
+            executor = dataclasses.replace(executor, **unwrapped_fields)
+    return pickle.dumps(executor)
