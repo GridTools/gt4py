@@ -28,14 +28,15 @@ from gt4py.next.program_processors.runners import gtfn
 
 
 def test_backend_factory_trait_device():
-    cpu_version = gtfn.GTFNBackendFactory(gpu=False, cached=False)
-    gpu_version = gtfn.GTFNBackendFactory(gpu=True, cached=False)
+    cpu_version = gtfn.GTFNBackendFactory(gpu=False)
+    gpu_version = gtfn.GTFNBackendFactory(gpu=True)
 
     assert cpu_version.name == "run_gtfn_cpu"
+    assert isinstance(cpu_version.executor.translation, workflow.CachedStep)
+    assert cpu_version.executor.translation.step.device_type is core_defs.DeviceType.CPU
     assert gpu_version.name == "run_gtfn_gpu"
-
-    assert cpu_version.executor.translation.device_type is core_defs.DeviceType.CPU
-    assert gpu_version.executor.translation.device_type is core_defs.DeviceType.CUDA
+    assert isinstance(gpu_version.executor.translation, workflow.CachedStep)
+    assert gpu_version.executor.translation.step.device_type is core_defs.DeviceType.CUDA
 
     assert cpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CPU
     assert gpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CUDA
@@ -46,12 +47,6 @@ def test_backend_factory_trait_device():
     assert custom_layout_allocators.is_field_allocator_for(
         gpu_version.allocator, core_defs.DeviceType.CUDA
     )
-
-
-def test_backend_factory_trait_cached():
-    cached_version = gtfn.GTFNBackendFactory(gpu=False, cached=True)
-    assert isinstance(cached_version.executor, workflow.CachedStep)
-    assert cached_version.name == "run_gtfn_cpu_cached"
 
 
 def test_backend_factory_build_cache_config(monkeypatch):
