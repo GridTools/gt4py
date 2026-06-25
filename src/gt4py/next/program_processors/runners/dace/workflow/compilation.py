@@ -135,12 +135,21 @@ class CompiledDaceProgram:
         assert result is None
 
 
+# Hand off the live `CompiledDaceProgram` from `DaCeCompiler.__call__` to the
+# subsequent `DaCeCompilationArtifact.load()` in the same process. Required for
+# correctness in thread mode: `sdfg.compile()` dlopens the .so internally, so a
+# second `get_program_handle(library_path, ...)` triggers dace's
+# "library already loaded, renaming file" path — which renames the .so on disk
+# and would invalidate `library_path` for any later load.
+# TODO(havogt): drop this hand-off if dace stops renaming the .so on the
+#   second dlopen of an already-loaded library. The cache would then become
+#   a pure (modest) optimization and could be reconsidered on its own merits.
 _live_program_cache: dict[pathlib.Path, CompiledDaceProgram] = {}
 
 
 @dataclasses.dataclass(frozen=True)
 class DaCeCompilationArtifact:
-    """Result of a DaCe compilation: build folder + SDFG bindings + the SDFG itself.
+    """Result of a DaCe compilation: build folder + library path + SDFG bindings + the SDFG itself.
 
     The SDFG is carried inline as JSON because dace's load path
     (``get_program_handle``) needs an SDFG instance to wrap into the
@@ -149,6 +158,7 @@ class DaCeCompilationArtifact:
     """
 
     build_folder: pathlib.Path
+    library_path: pathlib.Path
     sdfg_json: str
     binding_source_code: str
     bind_func_name: str
@@ -173,11 +183,7 @@ class DaCeCompilationArtifact:
         #   exposes a load path that doesn't require an SDFG instance to wrap
         #   into the returned ``CompiledSDFG``.
         sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
-        folder_version = dace_compiler.get_folder_version(self.build_folder)
-        library_path = dace_compiler.get_binary_name(
-            self.build_folder, sdfg_name=sdfg.name, folder_version=folder_version
-        )
-        sdfg_program = dace_compiler.get_program_handle(library_path, sdfg)
+        sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
         return CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
 
 
@@ -213,8 +219,8 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg_build_folder = pathlib.Path(gtx_cache.get_cache_folder(inp, self.cache_lifetime))
-            sdfg_build_folder.mkdir(parents=True, exist_ok=True)
+            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
+            pathlib.Path(sdfg_build_folder).mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
 
@@ -222,13 +228,14 @@ class DaCeCompiler(
             if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
                 _add_tx_markers(sdfg)
 
-            sdfg.build_folder = str(sdfg_build_folder)
+            sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
                 sdfg_program = sdfg.compile(validate=False)
 
         assert inp.binding_source is not None
         artifact = DaCeCompilationArtifact(
-            build_folder=sdfg_build_folder,
+            build_folder=pathlib.Path(sdfg_build_folder),
+            library_path=pathlib.Path(sdfg_program.filename),
             sdfg_json=json.dumps(inp.program_source.source_code),
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
