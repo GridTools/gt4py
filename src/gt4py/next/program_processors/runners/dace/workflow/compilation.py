@@ -135,6 +135,12 @@ class CompiledDaceProgram:
         assert result is None
 
 
+# Hand off the live `CompiledDaceProgram` from `DaCeCompiler.__call__` to the
+# subsequent `DaCeCompilationArtifact.load()` in the same process. Required for
+# correctness in thread mode: `sdfg.compile()` dlopens the .so internally, so a
+# second `get_program_handle(library_path, ...)` triggers dace's
+# "library already loaded, renaming file" path — which renames the .so on disk
+# and would invalidate `library_path` for any later load.
 _live_program_cache: dict[pathlib.Path, CompiledDaceProgram] = {}
 
 
