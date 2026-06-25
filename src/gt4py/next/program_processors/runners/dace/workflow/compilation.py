@@ -141,6 +141,9 @@ class CompiledDaceProgram:
 # second `get_program_handle(library_path, ...)` triggers dace's
 # "library already loaded, renaming file" path — which renames the .so on disk
 # and would invalidate `library_path` for any later load.
+# TODO(havogt): drop this hand-off if dace stops renaming the .so on the
+#   second dlopen of an already-loaded library. The cache would then become
+#   a pure (modest) optimization and could be reconsidered on its own merits.
 _live_program_cache: dict[pathlib.Path, CompiledDaceProgram] = {}
 
 
