@@ -213,8 +213,8 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg_build_folder = pathlib.Path(gtx_cache.get_cache_folder(inp, self.cache_lifetime))
-            sdfg_build_folder.mkdir(parents=True, exist_ok=True)
+            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
+            pathlib.Path(sdfg_build_folder).mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
 
@@ -222,13 +222,13 @@ class DaCeCompiler(
             if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
                 _add_tx_markers(sdfg)
 
-            sdfg.build_folder = str(sdfg_build_folder)
+            sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
                 sdfg_program = sdfg.compile(validate=False)
 
         assert inp.binding_source is not None
         artifact = DaCeCompilationArtifact(
-            build_folder=sdfg_build_folder,
+            build_folder=pathlib.Path(sdfg_build_folder),
             sdfg_json=json.dumps(inp.program_source.source_code),
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
