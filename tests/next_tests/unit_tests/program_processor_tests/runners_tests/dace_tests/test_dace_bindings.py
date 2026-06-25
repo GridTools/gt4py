@@ -297,8 +297,6 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
 
     backend = dace_runner.make_dace_backend(
         gpu=False,
-        cached=False,
-        auto_optimize=True,
         use_metrics=use_metrics,
         use_zero_origin=use_zero_origin,
     )
@@ -353,8 +351,6 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
 
     backend = dace_runner.make_dace_backend(
         gpu=False,
-        cached=False,
-        auto_optimize=True,
         use_metrics=use_metrics,
         use_zero_origin=use_zero_origin,
     )
