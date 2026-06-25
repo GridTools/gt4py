@@ -176,22 +176,12 @@ def _empty_weak_value_dict() -> weakref.WeakValueDictionary:
 
 
 def serialize_backend_for_worker(backend: Backend) -> bytes:
-    """Serialize ``backend`` into bytes for a ``concurrent.futures.ProcessPoolExecutor``.
+    """Cloudpickle ``backend`` into bytes for a worker process.
 
-    Uses ``cloudpickle`` rather than stdlib ``pickle``: a ``Backend`` transitively
-    holds lambdas, nested name-mangled classes (e.g.
-    ``gt4py.next.otf.workflow.StepSequence.__Steps``), ``factory`` closures, and
-    ``module`` references that stdlib pickle refuses but cloudpickle serializes by value.
-    This also accommodates factory-constructed backends kept as plain locals (no module-
-    global home). Payload is ~14 KB per backend for the standard runners — negligible
-    next to typical compile times.
-
-    ``WeakKeyDictionary`` / ``WeakValueDictionary`` instances encountered along the way
-    are reduced to fresh empty containers because stdlib's ``functools.singledispatch``
-    (used by the fingerprinting deconstructors) caches dispatched implementations in a
-    ``WeakKeyDictionary``, and the internal ``weakref.ReferenceType`` cells of any weak
-    mapping are not picklable. They are pure caches — the receiver rebuilds them on the
-    first dispatch lookup.
+    The custom reducer replaces ``WeakKeyDictionary`` / ``WeakValueDictionary``
+    with empty containers: ``functools.singledispatch`` dispatch caches hold
+    ``weakref.ReferenceType`` cells that cloudpickle can't pickle. The receiver
+    rebuilds them on first dispatch.
     """
     try:
         import cloudpickle  # type: ignore[import-not-found, unused-ignore]
