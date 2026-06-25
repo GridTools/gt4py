@@ -107,14 +107,9 @@ dace_determinism_cscs_gh200:
     TEST_VARIANTS: 'cpu cuda12'
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
-    GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
     - *exclude_variants_rules
-    - if: $SUBPACKAGE == 'next' && $DETAIL == 'nomesh'
-      variables:
-        # TODO: investigate why the dace tests seem to hang with multiple jobs
-        GT4PY_BUILD_JOBS: 1
     - when: on_success
 
 dace_determinism_cscs_amd_rocm:
@@ -126,7 +121,6 @@ dace_determinism_cscs_amd_rocm:
   variables:
     TEST_VARIANTS: 'rocm7'
     SLURM_GPUS_PER_NODE: 4
-    GT4PY_BUILD_JOBS: 8
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
     SLURM_PARTITION: mi300
     CMAKE_PREFIX_PATH: /opt/rocm

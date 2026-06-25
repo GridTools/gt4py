@@ -39,6 +39,7 @@ build_cscs_amd_rocm:
   stage: test
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
+    GT4PY_BUILD_JOBS: 1  # Limit pool size to 1 in order to catch the build errors in the unit test they originate from.
     TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6) to test 
     USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
@@ -89,15 +90,12 @@ test_cscs_gh200:
     TEST_VARIANTS: 'cpu cuda12'
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
-    GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
     - *exclude_variants_rules
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
-        # TODO: investigate why the dace tests seem to hang with multiple jobs
-        GT4PY_BUILD_JOBS: 1
         SLURM_TIMELIMIT: "00:15:00"
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'cuda12'
       variables:
@@ -113,7 +111,6 @@ test_cscs_amd_rocm:
   variables:
     TEST_VARIANTS: 'cpu rocm7'
     SLURM_GPUS_PER_NODE: 4
-    GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
     SLURM_PARTITION: mi300
