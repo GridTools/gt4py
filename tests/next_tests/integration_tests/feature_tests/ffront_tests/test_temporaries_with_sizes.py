@@ -11,7 +11,8 @@ from numpy import int32
 from gt4py import next as gtx
 from gt4py.next import backend, common
 from gt4py.next.iterator.transforms import apply_common_transforms
-from gt4py.next.program_processors.runners.gtfn import run_gtfn
+from gt4py.next.program_processors.runners import gtfn
+from gt4py.next import custom_layout_allocators as next_allocators
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -33,8 +34,8 @@ def exec_alloc_descriptor():
     return backend.Backend(
         name="run_gtfn_with_temporaries_and_sizes",
         transforms=backend.DEFAULT_TRANSFORMS,
-        executor=run_gtfn.executor.replace(
-            translation=run_gtfn.executor.translation.replace(
+        executor=gtfn.GTFNCompileWorkflowFactory(
+            translation=gtfn.gtfn_module.GTFNTranslationStepFactory(
                 symbolic_domain_sizes={
                     "Cell": "num_cells",
                     "Edge": "num_edges",
@@ -42,7 +43,7 @@ def exec_alloc_descriptor():
                 }
             )
         ),
-        allocator=run_gtfn.allocator,
+        allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     )
 
 
