@@ -140,7 +140,7 @@ _live_program_cache: dict[pathlib.Path, CompiledDaceProgram] = {}
 
 @dataclasses.dataclass(frozen=True)
 class DaCeCompilationArtifact:
-    """Result of a DaCe compilation: build folder + SDFG bindings + the SDFG itself.
+    """Result of a DaCe compilation: build folder + library path + SDFG bindings + the SDFG itself.
 
     The SDFG is carried inline as JSON because dace's load path
     (``get_program_handle``) needs an SDFG instance to wrap into the
@@ -149,6 +149,7 @@ class DaCeCompilationArtifact:
     """
 
     build_folder: pathlib.Path
+    library_path: pathlib.Path
     sdfg_json: str
     binding_source_code: str
     bind_func_name: str
@@ -173,11 +174,7 @@ class DaCeCompilationArtifact:
         #   exposes a load path that doesn't require an SDFG instance to wrap
         #   into the returned ``CompiledSDFG``.
         sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
-        folder_version = dace_compiler.get_folder_version(self.build_folder)
-        library_path = dace_compiler.get_binary_name(
-            self.build_folder, sdfg_name=sdfg.name, folder_version=folder_version
-        )
-        sdfg_program = dace_compiler.get_program_handle(library_path, sdfg)
+        sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
         return CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
 
 
@@ -229,6 +226,7 @@ class DaCeCompiler(
         assert inp.binding_source is not None
         artifact = DaCeCompilationArtifact(
             build_folder=pathlib.Path(sdfg_build_folder),
+            library_path=pathlib.Path(sdfg_program.filename),
             sdfg_json=json.dumps(inp.program_source.source_code),
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
