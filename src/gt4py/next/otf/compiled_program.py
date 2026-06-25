@@ -157,6 +157,14 @@ def compiled_program_call_context(
 # TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
 _async_compilation_pool: concurrent.futures.Executor | None = None
 
+# Registry of the futures of all async compilation jobs that have been submitted to
+# '_async_compilation_pool'. It is used by 'wait_for_compilation' to surface compilation
+# errors that would otherwise stay hidden in the futures until the program is called.
+# We use a 'WeakSet' such that futures are removed automatically once they are no longer
+# referenced by the owning 'CompiledProgramsPool'.
+_pending_compilation_futures: weakref.WeakSet[concurrent.futures.Future] = weakref.WeakSet()
+_pending_compilation_futures_lock: threading.Lock = threading.Lock()
+
 
 def _init_async_compilation_pool() -> None:
     global _async_compilation_pool
@@ -181,6 +189,14 @@ def wait_for_compilation() -> None:
         _async_compilation_pool.shutdown(wait=True)
         _async_compilation_pool = None
         _init_async_compilation_pool()
+
+    # All jobs are finished now; re-raise the first compilation error (if any), which would
+    # otherwise only surface when the corresponding program is called.
+    with _pending_compilation_futures_lock:
+        futures = list(_pending_compilation_futures)
+        _pending_compilation_futures.clear()
+    for future in futures:
+        future.result()  # re-raises any exception that occurred during compilation
 
 
 def _make_tuple_expr(el_exprs: list[str]) -> str:
@@ -643,7 +659,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if _async_compilation_pool is None:
             self.compiled_programs[key] = compile_call()
         else:
-            self._compilation_jobs[key] = _async_compilation_pool.submit(compile_call)
+            future = _async_compilation_pool.submit(compile_call)
+            self._compilation_jobs[key] = future
+            with _pending_compilation_futures_lock:
+                _pending_compilation_futures.add(future)
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
     #  domains and of scans.

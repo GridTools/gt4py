@@ -892,19 +892,32 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
         assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
 
 
+@pytest.mark.parametrize("executor_fails", [False, True], ids=["success", "failure"])
 @pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
-def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, synchronous):
+def test_wait_for_compilation(
+    cartesian_case, compile_testee, compile_testee_domain, synchronous, executor_fails
+):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    with (
-        mock.patch.object(compiled_program, "_async_compilation_pool", None)
-        if synchronous
-        else contextlib.nullcontext()
-    ):
+    with contextlib.ExitStack() as stack:
+        if synchronous:
+            stack.enter_context(
+                mock.patch.object(compiled_program, "_async_compilation_pool", None)
+            )
+        if executor_fails:
+            # In synchronous mode the executor error surfaces from 'compile', in asynchronous
+            # mode it is deferred to 'wait_for_compilation'.
+            compile_mock = stack.enter_context(
+                mock.patch.object(type(cartesian_case.backend.executor), "__call__")
+            )
+            msg = "executor failed"
+            compile_mock.side_effect = RuntimeError(msg)
+            stack.enter_context(pytest.raises(RuntimeError, match=msg))
+
         compile_testee.compile(offset_provider=cartesian_case.offset_provider)
-        # TODO(havogt): currently only tests that the function call does not crash...
         gtx.wait_for_compilation()
+
         # ... and afterwards compilation still works
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
 
