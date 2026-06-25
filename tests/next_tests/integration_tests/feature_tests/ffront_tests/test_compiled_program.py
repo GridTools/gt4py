@@ -892,33 +892,41 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
         assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
 
 
-@pytest.mark.parametrize("executor_fails", [False, True], ids=["success", "failure"])
+@pytest.mark.parametrize("compile_fails", [False, True], ids=["success", "failure"])
 @pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
 def test_wait_for_compilation(
-    cartesian_case, compile_testee, compile_testee_domain, synchronous, executor_fails
+    cartesian_case, compile_testee, compile_testee_domain, synchronous, compile_fails
 ):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
+
+    msg = "compilation failed"
+
+    class FailingBackend:
+        # Delegates everything to the real backend but raises on 'compile'. This scopes the
+        # failure to this single program's compilation, instead of patching the executor type
+        # which would affect every program in the process.
+        def __getattr__(self, name):
+            return getattr(cartesian_case.backend, name)
+
+        def compile(self, program, compile_time_args):
+            raise RuntimeError(msg)
 
     with contextlib.ExitStack() as stack:
         if synchronous:
             stack.enter_context(
                 mock.patch.object(compiled_program, "_async_compilation_pool", None)
             )
-        if executor_fails:
-            # In synchronous mode the executor error surfaces from 'compile', in asynchronous
-            # mode it is deferred to 'wait_for_compilation'.
-            compile_mock = stack.enter_context(
-                mock.patch.object(type(cartesian_case.backend.executor), "__call__")
-            )
-            msg = "executor failed"
-            compile_mock.side_effect = RuntimeError(msg)
+        if compile_fails:
+            # The pool captures 'backend' when it is first built (on 'compile'), so swap before.
+            # In synchronous mode the error surfaces from 'compile', in asynchronous mode it is
+            # deferred to 'wait_for_compilation'.
+            object.__setattr__(compile_testee, "backend", FailingBackend())
             stack.enter_context(pytest.raises(RuntimeError, match=msg))
 
         compile_testee.compile(offset_provider=cartesian_case.offset_provider)
         gtx.wait_for_compilation()
-
-        # ... and afterwards compilation still works
+        # If it did not throw an error, compilation still works afterwards.
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
 
 
