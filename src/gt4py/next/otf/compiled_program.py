@@ -666,12 +666,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         """
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
-                # Only inject a `StaticArg` descriptor mapping when static arguments were
-                #  actually given.
                 argument_descriptors: ArgStaticDescriptorsByType = {}
                 if static_args:
-                    # Calls from `Program.compile()`/`FieldOperator.compile()` reach this.
-                    # Keep this in sync with `compile` in decorator.py.
+                    #  Calls from `Program.compile()` / `FieldOperator.compile()`.
+                    # Keep this in sync with `_make_compiled_programs_pool()` in decorator.py.
                     argument_descriptors[arguments.StaticArg] = dict(
                         zip(
                             static_args.keys(),
