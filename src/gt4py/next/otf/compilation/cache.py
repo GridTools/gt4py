@@ -47,7 +47,9 @@ def get_cache_folder(
     slug = ext_source.program_source.entry_point.name
     if ext_source.binding_source:
         slug = f"{slug}_bound"
-    folder_name = f"{slug}_{fingerprinter(ext_source)}_{build_context_id}"
+    folder_name = f"{slug}_{fingerprinter(ext_source)}"
+    if build_context_id:
+        folder_name = f"{folder_name}_{build_context_id}"
 
     base_path = get_cache_base_path(lifetime)
     base_path.mkdir(exist_ok=True)
