@@ -60,17 +60,19 @@ class Compiler(
 
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
+    fingerprint_builder_factory: bool = True
     force_recompile: bool = False
 
     def __call__(
         self,
         inp: stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
     ) -> stages.ExecutableProgram:
-        src_dir = cache.get_cache_folder(
-            inp,
-            self.cache_lifetime,
-            build_context_id=fingerprinting.strict_fingerprinter(self.builder_factory),
+        build_context_id = (
+            fingerprinting.strict_fingerprinter(self.builder_factory)
+            if self.fingerprint_builder_factory
+            else ""
         )
+        src_dir = cache.get_cache_folder(inp, self.cache_lifetime, build_context_id)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.

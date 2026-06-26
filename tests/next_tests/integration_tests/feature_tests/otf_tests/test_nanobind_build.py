@@ -25,7 +25,9 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
         compiler.Compiler(
-            cache_lifetime=config.BuildCacheLifetime.SESSION, builder_factory=cmake.CMakeFactory()
+            cache_lifetime=config.BuildCacheLifetime.SESSION,
+            builder_factory=cmake.CMakeFactory(),
+            fingerprint_builder_factory=False,
         )
     )
     compiled_program = build_the_program(example_program_source)
