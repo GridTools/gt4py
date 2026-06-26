@@ -10,7 +10,16 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Final, Generic, Optional, Protocol, TypeAlias, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Final,
+    Generic,
+    Optional,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+    runtime_checkable,
+)
 
 from gt4py.next import common, fingerprinting
 from gt4py.next.iterator import ir as itir
@@ -129,6 +138,7 @@ class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
 ExecutableProgram: TypeAlias = Callable
 
 
+@runtime_checkable
 class CompilationArtifact(Protocol):
     """The output of an ``OTFCompileWorkflow``.
 
