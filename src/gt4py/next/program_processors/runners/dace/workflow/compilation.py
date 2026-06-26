@@ -135,15 +135,11 @@ class CompiledDaceProgram:
         assert result is None
 
 
-# Hand off the live `CompiledDaceProgram` from `DaCeCompiler.__call__` to the
-# subsequent `DaCeCompilationArtifact.load()` in the same process. Required for
-# correctness in thread mode: `sdfg.compile()` dlopens the .so internally, so a
-# second `get_program_handle(library_path, ...)` triggers dace's
-# "library already loaded, renaming file" path — which renames the .so on disk
-# and would invalidate `library_path` for any later load.
-# TODO(havogt): drop this hand-off if dace stops renaming the .so on the
-#   second dlopen of an already-loaded library. The cache would then become
-#   a pure (modest) optimization and could be reconsidered on its own merits.
+# Share the live ``CompiledDaceProgram`` across all ``load()`` calls for the same
+# build folder. ``CompiledDaceProgram.csdfg_argv`` is mutable state populated on
+# first call and reused via ``fast_call()``; if a second ``Backend.compile()`` for
+# the same program returns a fresh instance, that state is lost and ``fast_call``
+# regresses to ``construct_arguments`` every call.
 _live_program_cache: dict[pathlib.Path, CompiledDaceProgram] = {}
 
 
@@ -165,13 +161,6 @@ class DaCeCompilationArtifact:
     device_type: core_defs.DeviceType
 
     def load(self) -> stages.ExecutableProgram:
-        """Wrap the compiled program in gt4py's calling convention.
-
-        On a miss, loads the precompiled .so directly via
-        ``dace.codegen.compiler.get_program_handle`` — no recompilation,
-        no ``dace.config`` re-entry. Must run in the process that will call
-        the returned program.
-        """
         program = _live_program_cache.get(self.build_folder)
         if program is None:
             program = self._load_compiled_program()
@@ -230,21 +219,22 @@ class DaCeCompiler(
 
             sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
-                sdfg_program = sdfg.compile(validate=False)
+                sdfg.compile(validate=False, return_program_handle=False)
+            # ``build_folder_mode`` is set by ``dace_context``; resolve the library
+            # path here so ``get_binary_name`` sees the same mode dace built under.
+            library_path = dace_compiler.get_binary_name(
+                object_folder=sdfg_build_folder, sdfg_name=sdfg.name
+            )
 
         assert inp.binding_source is not None
-        artifact = DaCeCompilationArtifact(
+        return DaCeCompilationArtifact(
             build_folder=pathlib.Path(sdfg_build_folder),
-            library_path=pathlib.Path(sdfg_program.filename),
+            library_path=library_path,
             sdfg_json=json.dumps(inp.program_source.source_code),
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
         )
-        _live_program_cache[artifact.build_folder] = CompiledDaceProgram(
-            sdfg_program, artifact.bind_func_name, artifact.binding_source_code
-        )
-        return artifact
 
 
 class DaCeCompilationStepFactory(factory.Factory):

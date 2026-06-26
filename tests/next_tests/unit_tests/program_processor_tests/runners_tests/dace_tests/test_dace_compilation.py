@@ -98,7 +98,6 @@ def _run_compiler(
             wraps=dace_wf_compilation._add_tx_markers,
         ) as spy,
         mock.patch.object(dace.SDFG, "compile", autospec=True) as compile_mock,
-        mock.patch.object(dace_wf_compilation, "CompiledDaceProgram"),
         mock.patch.object(
             dace_wf_compilation.gtx_wfdcommon,
             "dace_context",
