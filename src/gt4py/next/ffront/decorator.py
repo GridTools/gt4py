@@ -91,7 +91,15 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     """
 
     definition_stage: ffront_stages.DSLDefinitionT
-    backend: Optional[next_backend.Backend]
+    # The backend is excluded from the fingerprint: it does not affect the
+    # lowering (which these program-likes cache by their definition/FOAST stage,
+    # e.g. when they appear in another program's closure variables), the
+    # backend-specific compilation is keyed separately in the backend's own
+    # caches, and fingerprinting the whole backend object graph is both wasteful
+    # and fragile (it may hold non-importable callables, see also test doubles).
+    backend: Optional[next_backend.Backend] = dataclasses.field(
+        metadata=utils.gt4py_metadata(fingerprint=False)
+    )
     compilation_options: options.CompilationOptions
 
     @abc.abstractmethod
@@ -868,23 +876,3 @@ def scan_operator(
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_fieldop_to_fingerprint(obj: FieldOperator, hasher: xtyping.HashlibAlgorithm) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_foast_fieldop_to_fingerprint(
-    obj: FieldOperatorFromFoast, hasher: xtyping.HashlibAlgorithm
-) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.foast_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_program_to_fingerprint(obj: Program, hasher: xtyping.HashlibAlgorithm) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
