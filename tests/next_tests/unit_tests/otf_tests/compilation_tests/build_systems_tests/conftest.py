@@ -95,11 +95,3 @@ def extension_source_example(program_source_example):
             program_source_example, config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
         ),
     )
-
-
-@pytest.fixture
-def clean_example_session_cache(extension_source_example):
-    cache_dir = cache.get_cache_folder(extension_source_example, config.BuildCacheLifetime.SESSION)
-    if cache_dir.exists():
-        shutil.rmtree(cache_dir)
-    yield
