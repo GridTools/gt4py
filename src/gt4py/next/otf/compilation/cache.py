@@ -46,7 +46,7 @@ def get_cache_folder(
     fingerprinter = fingerprinting.strict_fingerprinter
     slug = ext_source.program_source.entry_point.name
     if ext_source.binding_source:
-        slug = f"{slug}_bound"
+        slug = f"{slug}_pyext"
     folder_name = f"{slug}_{fingerprinter(ext_source)}"
     if build_context_id:
         folder_name = f"{folder_name}_{build_context_id}"
