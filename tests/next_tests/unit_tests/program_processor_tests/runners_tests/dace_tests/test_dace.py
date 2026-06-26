@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import field_utils
 import gt4py.next.common as gtx_common
 from gt4py.next.ffront.fbuiltins import where
 
@@ -37,9 +38,9 @@ from gt4py.next.program_processors.runners import dace as dace_backends
 # see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture(
     params=[
-        pytest.param(dace_backends.run_dace_cpu_cached, marks=pytest.mark.requires_dace),
+        pytest.param(dace_backends.run_dace_cpu, marks=pytest.mark.requires_dace),
         pytest.param(
-            dace_backends.run_dace_gpu_cached,
+            dace_backends.run_dace_gpu,
             marks=(pytest.mark.requires_gpu, pytest.mark.requires_dace),
         ),
     ]
@@ -121,6 +122,20 @@ def make_mocks(monkeypatch):
     return mock_fast_call, mock_construct_arguments
 
 
+def run_and_verify_fastcall(
+    mock_fast_call, mock_construct_arguments, prog, numpy_ref, *args, out, offset_provider
+):
+    """Reset the mocks, run the GT4Py program via fastcall and verify its result."""
+    mock_construct_arguments.reset_mock()
+    mock_fast_call.reset_mock()
+    prog(*args, out=out, offset_provider=offset_provider)
+    mock_fast_call.assert_called_once()
+    ref_args = [field_utils.asnumpy(arg) for arg in args]
+    ref = numpy_ref(*ref_args)
+    out_ndarray = field_utils.asnumpy(out)
+    np.testing.assert_allclose(ref, out_ndarray)
+
+
 def test_dace_fastcall(cartesian_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
@@ -139,7 +154,13 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
         t2 = where(a_idx == 2, t1 + a2, t1)
         return t2
 
-    numpy_ref = lambda a, a0, a1, a2: [a[0] + a0, a[1] + a1, a[2] + a2, *a[3:]]
+    numpy_ref = lambda a, a_idx, unused_field, a0, a1, a2, unused_scalar: [
+        a[0] + a0,
+        a[1] + a1,
+        a[2] + a2,
+        *a[3:],
+    ]
+    prog = testee.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.backend)
 
     a = cases.allocate(cartesian_case, testee, "a")()
     a_index = cases.allocate(cartesian_case, testee, "a_idx", strategy=cases.IndexInitializer())()
@@ -149,18 +170,12 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
     mock_fast_call, mock_construct_arguments = make_mocks(monkeypatch)
 
-    # Bind once: cases.verify would re-call with_grid_type().with_backend() every
-    # invocation (creating a fresh CompiledProgramsPool each time and dropping
-    # dace's fast_call csdfg_argv state). Calling the bound program directly is
-    # the recommended pattern this test is checking the behavior of.
-    testee_bound = testee.with_grid_type(cartesian_case.grid_type).with_backend(
-        cartesian_case.backend
-    )
-
     def verify_testee():
-        mock_construct_arguments.reset_mock()
-        mock_fast_call.reset_mock()
-        testee_bound(
+        run_and_verify_fastcall(
+            mock_fast_call,
+            mock_construct_arguments,
+            prog,
+            numpy_ref,
             a,
             a_index,
             unused_field,
@@ -168,8 +183,6 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
             out=out,
             offset_provider=cartesian_case.offset_provider,
         )
-        np.testing.assert_allclose(out.asnumpy(), numpy_ref(a.asnumpy(), *a_offset[0:3]))
-        mock_fast_call.assert_called_once()
 
     # On first run, the SDFG arguments will have to be constructed
     verify_testee()
@@ -202,26 +215,27 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
 
-    (a,), kwfields = cases.get_default_data(unstructured_case, testee)
     numpy_ref = lambda a: a[connectivity_E2V[:, 0]]
-
-    mock_fast_call, mock_construct_arguments = make_mocks(monkeypatch)
-
-    # Bind once: cases.verify would re-call with_grid_type().with_backend() every
-    # invocation (creating a fresh CompiledProgramsPool each time and dropping
-    # dace's fast_call csdfg_argv state). Calling the bound program directly is
-    # the recommended pattern this test is checking the behavior of.
-    testee_bound = testee.with_grid_type(unstructured_case.grid_type).with_backend(
+    prog = testee.with_grid_type(unstructured_case.grid_type).with_backend(
         unstructured_case.backend
     )
 
+    (a,), kwfields = cases.get_default_data(unstructured_case, testee)
+
+    mock_fast_call, mock_construct_arguments = make_mocks(monkeypatch)
+
     def verify_testee():
-        mock_construct_arguments.reset_mock()
-        mock_fast_call.reset_mock()
-        testee_bound(a, **kwfields, offset_provider=unstructured_case.offset_provider)
-        np.testing.assert_allclose(kwfields["out"].asnumpy(), numpy_ref(a.asnumpy()))
-        mock_fast_call.assert_called_once()
+        run_and_verify_fastcall(
+            mock_fast_call,
+            mock_construct_arguments,
+            prog,
+            numpy_ref,
+            a,
+            out=kwfields["out"],
+            offset_provider=unstructured_case.offset_provider,
+        )
 
     verify_testee()
+    mock_construct_arguments.assert_called_once()
     verify_testee()
     mock_construct_arguments.assert_not_called()
