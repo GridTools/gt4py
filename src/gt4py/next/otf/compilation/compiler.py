@@ -39,7 +39,7 @@ CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
 class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
     def __call__(
         self,
-        source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT],
+        source: stages.ExtensionSource[CodeSpecT, TargetCodeSpecT],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[CodeSpecT, TargetCodeSpecT]: ...
 
@@ -47,11 +47,11 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
 @dataclasses.dataclass(frozen=True)
 class Compiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
         stages.ExecutableProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
         stages.ExecutableProgram,
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
@@ -64,7 +64,7 @@ class Compiler(
 
     def __call__(
         self,
-        inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        inp: stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
     ) -> stages.ExecutableProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 

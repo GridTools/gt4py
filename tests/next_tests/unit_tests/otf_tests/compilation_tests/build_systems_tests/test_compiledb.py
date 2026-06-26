@@ -15,9 +15,9 @@ from gt4py.next.otf.compilation import build_data, importer
 from gt4py.next.otf.compilation.build_systems import compiledb
 
 
-def test_default_compiledb_factory(compilable_source_example, clean_example_session_cache):
+def test_default_compiledb_factory(extension_source_example, clean_example_session_cache):
     otf_builder = compiledb.CompiledbFactory()(
-        compilable_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
+        extension_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
     )
 
     # make sure the example project has not been written yet
@@ -35,9 +35,9 @@ def test_default_compiledb_factory(compilable_source_example, clean_example_sess
     assert (otf_builder.root_path / "build.sh").exists()
 
 
-def test_compiledb_project_is_relocatable(compilable_source_example, clean_example_session_cache):
+def test_compiledb_project_is_relocatable(extension_source_example, clean_example_session_cache):
     builder = compiledb.CompiledbFactory()(
-        compilable_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
+        extension_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
     )
 
     # make sure the example project has not been written yet

@@ -307,5 +307,5 @@ def create_bindings(
 
 def bind_source(
     inp: stages.ProgramSource[CodeSpecT],
-) -> stages.CompilableProject[CodeSpecT, code_specs.PythonCodeSpec]:
-    return stages.CompilableProject(program_source=inp, binding_source=create_bindings(inp))
+) -> stages.ExtensionSource[CodeSpecT, code_specs.PythonCodeSpec]:
+    return stages.ExtensionSource(program_source=inp, binding_source=create_bindings(inp))

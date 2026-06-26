@@ -68,10 +68,10 @@ def _make_sdfg_with_gpu_map() -> dace.SDFG:
     return sdfg
 
 
-def _make_compilable_project() -> stages.CompilableProject:
-    """A real `CompilableProject` wrapping the GPU SDFG, as the dace translation step emits.
+def _make_extension_source() -> stages.ExtensionSource:
+    """A real `ExtensionSource` wrapping the GPU SDFG, as the dace translation step emits.
 
-    Using a real project (rather than a `MagicMock`) lets the unmocked `get_cache_folder`
+    Using a real source (rather than a `MagicMock`) lets the unmocked `get_cache_folder`
     fingerprint the program source for the build-folder name.
     """
     program_source = stages.ProgramSource(
@@ -81,7 +81,7 @@ def _make_compilable_project() -> stages.CompilableProject:
         code_spec=code_specs.SDFGCodeSpec(),
     )
     binding_source = stages.BindingSource(source_code="", library_deps=())
-    return stages.CompilableProject(program_source=program_source, binding_source=binding_source)
+    return stages.ExtensionSource(program_source=program_source, binding_source=binding_source)
 
 
 def _run_compiler(
@@ -92,7 +92,7 @@ def _run_compiler(
     Returns the spy wrapping `_add_tx_markers` and the SDFG that was handed to
     ``SDFG.compile`` (i.e. the SDFG after any marker processing).
     """
-    inp = _make_compilable_project()
+    inp = _make_extension_source()
 
     compiler = dace_wf_compilation.DaCeCompiler(
         bind_func_name="bind",
@@ -173,11 +173,10 @@ def test_compiler_skips_tx_markers_for_non_gpu_device(tmp_path):
 def test_compiler_flags_change_build_folder(monkeypatch, device_type, compiler_flags_env):
     """Different compiler flags must produce a different build folder.
 
-    The flags are captured in `dace_config_nondefaults`, which is part of the compiler's
-    fingerprint. The compiler instance is passed to `get_cache_folder` as the `ctx`, whose
-    fingerprint (together with the program source) is hashed into the build-folder name.
-    Changing any flag therefore changes that fingerprint and lands the build in a different
-    folder of the build cache.
+    The flags are captured in `dace_config_nondefaults`, whose fingerprint the compiler
+    passes to `get_cache_folder` as the `build_context_id`. That id is appended to the
+    build-folder name, so changing any flag lands the build in a different folder of the
+    build cache.
     """
     monkeypatch.delenv(compiler_flags_env, raising=False)
     _, sdfg_default = _run_compiler(add_gpu_trace_markers=False, device_type=device_type)

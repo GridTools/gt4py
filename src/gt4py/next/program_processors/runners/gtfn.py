@@ -134,9 +134,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
-        nanobind.bind_source
-    )
+    bindings: workflow.Workflow[stages.ProgramSource, stages.ExtensionSource] = nanobind.bind_source
     compilation = factory.SubFactory(
         compiler.CompilerFactory,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),

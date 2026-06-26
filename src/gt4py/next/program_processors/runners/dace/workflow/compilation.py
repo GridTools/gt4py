@@ -131,11 +131,11 @@ class CompiledDaceProgram:
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
         CompiledDaceProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
         CompiledDaceProgram,
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
@@ -163,7 +163,7 @@ class DaCeCompiler(
 
     def __call__(
         self,
-        inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     ) -> CompiledDaceProgram:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
@@ -174,7 +174,7 @@ class DaCeCompiler(
             sdfg_build_folder = gtx_cache.get_cache_folder(
                 inp,
                 self.cache_lifetime,
-                fingerprinting.strict_fingerprinter(self),
+                build_context_id=fingerprinting.strict_fingerprinter(self.dace_config_nondefaults),
             )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
