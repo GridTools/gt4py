@@ -12,8 +12,6 @@ import dataclasses
 import pathlib
 from typing import Protocol, TypeVar
 
-import factory
-
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config
 from gt4py.next.otf import code_specs, definitions, stages, workflow
@@ -122,11 +120,6 @@ class CPPCompiler(
             entry_point_name=entry_point_name,
             device_type=self.device_type,
         )
-
-
-class CompilerFactory(factory.Factory):
-    class Meta:
-        model = CPPCompiler
 
 
 class CompilationError(RuntimeError): ...
