@@ -135,14 +135,6 @@ class CompiledDaceProgram:
         assert result is None
 
 
-# Share the live ``CompiledDaceProgram`` across all ``load()`` calls for the same
-# build folder. ``CompiledDaceProgram.csdfg_argv`` is mutable state populated on
-# first call and reused via ``fast_call()``; if a second ``Backend.compile()`` for
-# the same program returns a fresh instance, that state is lost and ``fast_call``
-# regresses to ``construct_arguments`` every call.
-_live_program_cache: dict[pathlib.Path, CompiledDaceProgram] = {}
-
-
 @dataclasses.dataclass(frozen=True)
 class DaCeCompilationArtifact:
     """Result of a DaCe compilation: build folder + library path + SDFG bindings + the SDFG itself.
@@ -161,19 +153,13 @@ class DaCeCompilationArtifact:
     device_type: core_defs.DeviceType
 
     def load(self) -> stages.ExecutableProgram:
-        program = _live_program_cache.get(self.build_folder)
-        if program is None:
-            program = self._load_compiled_program()
-            _live_program_cache[self.build_folder] = program
-        return gtx_wfddecoration.convert_args(program, device=self.device_type)
-
-    def _load_compiled_program(self) -> CompiledDaceProgram:
         # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
         #   exposes a load path that doesn't require an SDFG instance to wrap
         #   into the returned ``CompiledSDFG``.
         sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
         sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
-        return CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
+        program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
+        return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
 
 @dataclasses.dataclass(frozen=True)

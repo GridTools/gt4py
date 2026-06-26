@@ -149,20 +149,26 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
     mock_fast_call, mock_construct_arguments = make_mocks(monkeypatch)
 
-    # Reset mock objects and run/verify GT4Py program
+    # Bind once: cases.verify would re-call with_grid_type().with_backend() every
+    # invocation (creating a fresh CompiledProgramsPool each time and dropping
+    # dace's fast_call csdfg_argv state). Calling the bound program directly is
+    # the recommended pattern this test is checking the behavior of.
+    testee_bound = testee.with_grid_type(cartesian_case.grid_type).with_backend(
+        cartesian_case.backend
+    )
+
     def verify_testee():
         mock_construct_arguments.reset_mock()
         mock_fast_call.reset_mock()
-        cases.verify(
-            cartesian_case,
-            testee,
+        testee_bound(
             a,
             a_index,
             unused_field,
             *a_offset,
             out=out,
-            ref=numpy_ref(a.asnumpy(), *a_offset[0:3]),
+            offset_provider=cartesian_case.offset_provider,
         )
+        np.testing.assert_allclose(out.asnumpy(), numpy_ref(a.asnumpy(), *a_offset[0:3]))
         mock_fast_call.assert_called_once()
 
     # On first run, the SDFG arguments will have to be constructed
@@ -201,18 +207,19 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
 
     mock_fast_call, mock_construct_arguments = make_mocks(monkeypatch)
 
-    # Reset mock objects and run/verify GT4Py program
+    # Bind once: cases.verify would re-call with_grid_type().with_backend() every
+    # invocation (creating a fresh CompiledProgramsPool each time and dropping
+    # dace's fast_call csdfg_argv state). Calling the bound program directly is
+    # the recommended pattern this test is checking the behavior of.
+    testee_bound = testee.with_grid_type(unstructured_case.grid_type).with_backend(
+        unstructured_case.backend
+    )
+
     def verify_testee():
         mock_construct_arguments.reset_mock()
         mock_fast_call.reset_mock()
-        cases.verify(
-            unstructured_case,
-            testee,
-            a,
-            **kwfields,
-            offset_provider=unstructured_case.offset_provider,
-            ref=numpy_ref(a.asnumpy()),
-        )
+        testee_bound(a, **kwfields, offset_provider=unstructured_case.offset_provider)
+        np.testing.assert_allclose(kwfields["out"].asnumpy(), numpy_ref(a.asnumpy()))
         mock_fast_call.assert_called_once()
 
     verify_testee()

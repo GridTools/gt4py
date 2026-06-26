@@ -8,9 +8,8 @@
 
 """Tests for the compilation stage of the dace backend workflow.
 
-Covers the GPU TX-marker instrumentation, the picklability of
-``DaCeCompilationArtifact``, and the process-local live-program cache
-that backs its ``load`` method.
+Covers the GPU TX-marker instrumentation and the picklability of
+``DaCeCompilationArtifact``.
 """
 
 import contextlib
@@ -168,61 +167,3 @@ def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
     restored = pickle.loads(pickle.dumps(artifact))
 
     assert restored == artifact
-
-
-def test_dace_compilation_artifact_load_uses_live_program_cache(tmp_path: pathlib.Path):
-    """``load()`` returns the cached live program without touching the disk."""
-    artifact = dace_wf_compilation.DaCeCompilationArtifact(
-        build_folder=tmp_path,
-        library_path=tmp_path / "build" / "libprogram.so",
-        sdfg_json="{}",
-        binding_source_code="def update_sdfg_args(*a, **k): ...",
-        bind_func_name="update_sdfg_args",
-        device_type=core_defs.DeviceType.CPU,
-    )
-    sentinel = mock.MagicMock(name="CompiledDaceProgram")
-
-    with (
-        mock.patch.dict(
-            dace_wf_compilation._live_program_cache, {artifact.build_folder: sentinel}, clear=True
-        ),
-        mock.patch.object(
-            dace_wf_compilation.DaCeCompilationArtifact, "_load_compiled_program"
-        ) as load_mock,
-        mock.patch.object(dace_wf_compilation.gtx_wfddecoration, "convert_args") as convert_mock,
-    ):
-        result = artifact.load()
-
-    load_mock.assert_not_called()
-    convert_mock.assert_called_once_with(sentinel, device=core_defs.DeviceType.CPU)
-    assert result is convert_mock.return_value
-
-
-def test_dace_compilation_artifact_load_falls_back_to_disk_on_cache_miss(
-    tmp_path: pathlib.Path,
-):
-    """On a cold cache, ``load()`` reloads from disk and warms the cache."""
-    artifact = dace_wf_compilation.DaCeCompilationArtifact(
-        build_folder=tmp_path,
-        library_path=tmp_path / "build" / "libprogram.so",
-        sdfg_json="{}",
-        binding_source_code="def update_sdfg_args(*a, **k): ...",
-        bind_func_name="update_sdfg_args",
-        device_type=core_defs.DeviceType.CPU,
-    )
-    reloaded = mock.MagicMock(name="CompiledDaceProgram")
-
-    with (
-        mock.patch.dict(dace_wf_compilation._live_program_cache, {}, clear=True),
-        mock.patch.object(
-            dace_wf_compilation.DaCeCompilationArtifact,
-            "_load_compiled_program",
-            return_value=reloaded,
-        ) as load_mock,
-        mock.patch.object(dace_wf_compilation.gtx_wfddecoration, "convert_args"),
-    ):
-        artifact.load()
-        assert dace_wf_compilation._live_program_cache[artifact.build_folder] is reloaded
-        # Second call must come from the cache.
-        artifact.load()
-        load_mock.assert_called_once()
