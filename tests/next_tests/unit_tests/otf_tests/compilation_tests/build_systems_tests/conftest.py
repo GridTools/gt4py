@@ -91,7 +91,9 @@ def program_source_example():
 def extension_source_example(program_source_example):
     return stages.ExtensionSource(
         program_source=program_source_example,
-        binding_source=nanobind.create_bindings(program_source_example),
+        binding_source=nanobind.create_bindings(
+            program_source_example, config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        ),
     )
 
 

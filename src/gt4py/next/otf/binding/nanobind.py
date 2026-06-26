@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Collection
 from typing import Any, Optional, Sequence, TypeVar, Union
 
@@ -200,7 +201,9 @@ def _tuple_get(index: int, var: str) -> str:
     return f"gridtools::tuple_util::get<{index}>({var})"
 
 
-def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
+def make_argument(
+    name: str, type_: ts.TypeSpec, unstructured_horizontal_has_unit_stride: bool
+) -> str | BufferSID | Tuple:
     if isinstance(type_, ts.FieldType):
         return BufferSID(
             source_buffer=name,
@@ -209,7 +212,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
                     name=dim.value,
                     static_stride=1
                     if (
-                        config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+                        unstructured_horizontal_has_unit_stride
                         and dim.kind == common.DimensionKind.HORIZONTAL
                     )
                     else None,
@@ -219,7 +222,10 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
             scalar_type=type_.dtype,
         )
     elif isinstance(type_, ts.TupleType):
-        elements = [make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
+        elements = [
+            make_argument(_tuple_get(i, name), t, unstructured_horizontal_has_unit_stride)
+            for i, t in enumerate(type_.types)
+        ]
         return Tuple(elems=elements)
     elif isinstance(type_, ts.ScalarType):
         return name
@@ -228,7 +234,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
 
 
 def create_bindings(
-    program_source: stages.ProgramSource[CodeSpecT],
+    program_source: stages.ProgramSource[CodeSpecT], unstructured_horizontal_has_unit_stride: bool
 ) -> stages.BindingSource[CodeSpecT, code_specs.PythonCodeSpec]:
     """
     Generate Python bindings through which a C++ function can be called.
@@ -274,7 +280,9 @@ def create_bindings(
                 expr=FunctionCall(
                     target=program_source.entry_point,
                     args=[
-                        make_argument(param.name, param.type_)
+                        make_argument(
+                            param.name, param.type_, unstructured_horizontal_has_unit_stride
+                        )
                         for param in program_source.entry_point.parameters
                     ],
                 )
@@ -305,7 +313,18 @@ def create_bindings(
     return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "2.0.0"),))
 
 
-def bind_source(
-    inp: stages.ProgramSource[CodeSpecT],
-) -> stages.ExtensionSource[CodeSpecT, code_specs.PythonCodeSpec]:
-    return stages.ExtensionSource(program_source=inp, binding_source=create_bindings(inp))
+@dataclasses.dataclass(frozen=True)
+class ExtensionGenerator:
+    """
+    Generate a Python extension module that contains the bindings for a C++ function.
+    """
+
+    unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+
+    def __call__(
+        self, program_source: stages.ProgramSource[CodeSpecT]
+    ) -> stages.ExtensionSource[CodeSpecT, code_specs.PythonCodeSpec]:
+        binding_source = create_bindings(
+            program_source, self.unstructured_horizontal_has_unit_stride
+        )
+        return stages.ExtensionSource(program_source=program_source, binding_source=binding_source)
