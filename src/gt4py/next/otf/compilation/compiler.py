@@ -15,7 +15,7 @@ from typing import Protocol, TypeVar
 import factory
 
 from gt4py._core import locking
-from gt4py.next import config
+from gt4py.next import config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
 
@@ -66,7 +66,11 @@ class Compiler(
         self,
         inp: stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
     ) -> stages.ExecutableProgram:
-        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
+        src_dir = cache.get_cache_folder(
+            inp,
+            self.cache_lifetime,
+            build_context_id=fingerprinting.strict_fingerprinter(self.builder_factory),
+        )
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
