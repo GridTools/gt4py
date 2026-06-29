@@ -39,6 +39,11 @@ def get_cache_folder(
     """
     Construct the path to where the build system project artifact of an extension source should be cached.
 
+    The folder name is salted with ``config.BUILD_CACHE_VERSION_ID`` (defaulting to the gt4py
+    version, overridable via the ``GT4PY_BUILD_CACHE_VERSION_ID`` env var) so that a change to
+    the build-cache version forces incompatibility with previously cached builds, even when the
+    extension source fingerprint is unchanged.
+
     An optional ``build_context_id`` can be provided to distinguish between different contexts
     that may produce different artifacts for the same extension source.
     The returned path points to an existing folder in all cases.
@@ -47,7 +52,7 @@ def get_cache_folder(
     slug = ext_source.program_source.entry_point.name
     if ext_source.binding_source:
         slug = f"{slug}_pyext"
-    folder_name = f"{slug}_{fingerprinter(ext_source)}"
+    folder_name = f"{slug}_{fingerprinter(ext_source)}_{config.BUILD_CACHE_VERSION_ID}"
     if build_context_id:
         folder_name = f"{folder_name}_{build_context_id}"
 
