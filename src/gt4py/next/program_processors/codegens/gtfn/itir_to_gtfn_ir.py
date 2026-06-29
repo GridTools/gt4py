@@ -29,6 +29,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     FunCall,
     FunctionDefinition,
     IfStmt,
+    InfinityLiteral,
     IntegralConstant,
     Lambda,
     Literal,
@@ -382,6 +383,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> Literal:
         return Literal(value=node.value, type=node.type.kind.name.lower())
+
+    def visit_InfinityLiteral(self, node: itir.InfinityLiteral, **kwargs: Any) -> InfinityLiteral:
+        return (
+            InfinityLiteral.POSITIVE
+            if node == itir.InfinityLiteral.POSITIVE
+            else InfinityLiteral.NEGATIVE
+        )
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)

@@ -548,6 +548,36 @@ def test_domain_preservation(uids: utils.IDGeneratorPool):
     assert actual == expected
 
 
+def test_no_extraction_from_domain_bound(uids: utils.IDGeneratorPool):
+    # Regression test: a scalar `if_` inside a domain bound (e.g. an emptiness guard produced by
+    # domain inference) must not be extracted into a temporary -- only field-typed expressions may
+    # become temporaries (see `_transform_by_pattern`). Previously the `if_` was extracted and
+    # crashed because, being a scalar, it has no `annex.domain`.
+    offset_provider = {}
+    # symbolic condition so the `if_` is not constant-folded away
+    guard = im.if_(im.greater_equal(im.ref("n", index_type), 0), 0, 10)
+    domain = im.domain("cartesian_domain", {IDim: (0, guard)})
+    testee = program_factory(
+        params=[
+            im.sym("inp", i_field_type),
+            im.sym("out", i_field_type),
+            im.sym("n", index_type),
+        ],
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.as_fieldop("deref", domain)("inp"),
+                domain=domain,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+
+    assert testee == actual
+
+
 def test_non_scan_projector(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 2)})
     offset_provider = {}

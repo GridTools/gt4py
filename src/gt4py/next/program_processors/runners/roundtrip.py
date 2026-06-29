@@ -61,6 +61,12 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
                 return f"np.{dtype}(np.nan)"
         return node.value
 
+    def visit_InfinityLiteral(self, node: itir.InfinityLiteral, **kwargs: Any) -> str:
+        if node == itir.InfinityLiteral.POSITIVE:
+            return "gtx.common.Infinity.POSITIVE"
+        assert node == itir.InfinityLiteral.NEGATIVE
+        return "gtx.common.Infinity.NEGATIVE"
+
     NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
