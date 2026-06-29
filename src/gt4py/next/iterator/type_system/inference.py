@@ -492,10 +492,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         return node.type
 
     def visit_InfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
-        return ts.ScalarType(kind=ts.ScalarKind.INT32)
-
-    def visit_NegInfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
-        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+        return ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
 
     def visit_SymRef(
         self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]

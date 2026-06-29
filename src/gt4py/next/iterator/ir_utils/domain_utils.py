@@ -44,10 +44,12 @@ class SymbolicRange:
         return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
 
     def empty(self) -> bool | None:
-        if isinstance(self.start, itir.Literal) and isinstance(self.stop, itir.Literal):
-            start, stop = int(self.start.value), int(self.stop.value)
-            return start >= stop
-        elif self.start == self.stop:
+        # constant fold so that translated bounds like `0 + 1` are recognized as literals
+        start = ConstantFolding.apply(self.start)
+        stop = ConstantFolding.apply(self.stop)
+        if isinstance(start, itir.Literal) and isinstance(stop, itir.Literal):
+            return int(start.value) >= int(stop.value)
+        elif start == stop:
             return True
         return None
 
@@ -80,6 +82,12 @@ def _unstructured_translate_range_statically(
     # expressions beforehand
     assert isinstance(start_expr, itir.Literal) and isinstance(stop_expr, itir.Literal)
     start, stop = int(start_expr.value), int(stop_expr.value)
+
+    if range_.empty():
+        return SymbolicRange(
+            im.literal(str("0"), builtins.INTEGER_INDEX_BUILTIN),
+            im.literal(str("0"), builtins.INTEGER_INDEX_BUILTIN),
+        )
 
     nb_index: slice | int
     if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
@@ -236,16 +244,24 @@ def _reduce_ranges(
     start_reduce_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
     stop_reduce_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
 ) -> SymbolicRange:
-    """Uses start_op and stop_op to fold the start and stop of a list of ranges."""
-    start = functools.reduce(
-        lambda current_expr, el_expr: start_reduce_op(current_expr, el_expr),
-        [range_.start for range_ in ranges],
-    )
-    stop = functools.reduce(
-        lambda current_expr, el_expr: stop_reduce_op(current_expr, el_expr),
-        [range_.stop for range_ in ranges],
-    )
-    # constant fold expression to keep the tree small
+    """
+    Uses start_op and stop_op to fold the start and stop of a list of ranges.
+
+    This function only computes the correct value if the
+    (non-empty) ranges are either overlapping / adjacent or empty, as calculation is by means of the
+    convex hull. Non-static ranges may not be empty for now.
+    """
+    non_empty_ranges = [range_ for range_ in ranges if not range_.empty()]
+    if len(non_empty_ranges) == 0:
+        return ranges[0] # all empty -> empty
+    elif len(non_empty_ranges) == 1:
+        # the reduction of a single range is the range itself
+        return non_empty_ranges[0]
+    else:
+        start = functools.reduce(start_reduce_op, [range_.start for range_ in non_empty_ranges])
+        stop = functools.reduce(stop_reduce_op, [range_.stop for range_ in non_empty_ranges])
+    # constant fold to keep the tree small and so translated bounds (e.g. `0 + 1`) collapse to a
+    # literal (we deliberately do not fold in `translate`)
     start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
     return SymbolicRange(start, stop)
 
