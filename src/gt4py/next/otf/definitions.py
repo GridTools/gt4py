@@ -44,25 +44,23 @@ class TranslationStep(
 
 class BindingStep(Protocol[CodeSpecT, TargetCodeSpecT]):
     """
-    Generate Bindings for program source and package both together (ProgramSource -> CompilableSource).
+    Generate Bindings for program source and package both together (ProgramSource -> ExtensionSource).
 
     In the special cases where bindings are not required, such a step could also simply construct
-    a ``CompilableSource`` from the ``ProgramSource`` with bindings set to ``None``.
+    an ``ExtensionSource`` from the ``ProgramSource`` with bindings set to ``None``.
     """
 
     def __call__(
         self, program_source: stages.ProgramSource[CodeSpecT]
-    ) -> stages.CompilableProject[CodeSpecT, TargetCodeSpecT]: ...
+    ) -> stages.ExtensionSource[CodeSpecT, TargetCodeSpecT]: ...
 
 
 class CompilationStep(
-    workflow.Workflow[
-        stages.CompilableProject[CodeSpecT, TargetCodeSpecT], stages.ExecutableProgram
-    ],
+    workflow.Workflow[stages.ExtensionSource[CodeSpecT, TargetCodeSpecT], stages.ExecutableProgram],
     Protocol[CodeSpecT, TargetCodeSpecT],
 ):
-    """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
+    """Compile program source code and bindings into a python callable (ExtensionSource -> CompiledProgram)."""
 
     def __call__(
-        self, source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT]
+        self, source: stages.ExtensionSource[CodeSpecT, TargetCodeSpecT]
     ) -> stages.ExecutableProgram: ...
