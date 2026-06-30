@@ -10,7 +10,16 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Final, Generic, Optional, Protocol, TypeAlias, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Final,
+    Generic,
+    Optional,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+    runtime_checkable,
+)
 
 from gt4py.next import common, fingerprinting
 from gt4py.next.iterator import ir as itir
@@ -126,6 +135,25 @@ class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
 
 
 ExecutableProgram: TypeAlias = Callable
+
+
+@runtime_checkable
+class CompilationArtifact(Protocol):
+    """The output of an ``OTFCompileWorkflow``.
+
+    Each backend defines its own concrete artifact dataclass; all share this
+    Protocol. Implementations are frozen dataclasses, picklable, and carry no
+    live process-bound state — that is reconstructed by ``load``, which
+    returns a directly-callable ``ExecutableProgram`` taking gt4py-shaped
+    arguments.
+
+    The one current exception is ``RoundtripArtifact`` when it is configured
+    with a ``dispatch_backend``: that field holds a ``Backend`` reference
+    whose role belongs at the runner / load-time seam, not in the artifact
+    itself.
+    """
+
+    def load(self) -> ExecutableProgram: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

@@ -56,11 +56,18 @@ class BindingStep(Protocol[CodeSpecT, TargetCodeSpecT]):
 
 
 class CompilationStep(
-    workflow.Workflow[stages.ExtensionSource[CodeSpecT, TargetCodeSpecT], stages.ExecutableProgram],
+    workflow.Workflow[
+        stages.ExtensionSource[CodeSpecT, TargetCodeSpecT], stages.CompilationArtifact
+    ],
     Protocol[CodeSpecT, TargetCodeSpecT],
 ):
-    """Compile program source code and bindings into a python callable (ExtensionSource -> CompiledProgram)."""
+    """Run the build system and produce a ``stages.CompilationArtifact``.
+
+    Each backend defines its own concrete artifact dataclass (frozen,
+    picklable, with a ``load`` method); they all satisfy the
+    ``stages.CompilationArtifact`` Protocol structurally.
+    """
 
     def __call__(
         self, source: stages.ExtensionSource[CodeSpecT, TargetCodeSpecT]
-    ) -> stages.ExecutableProgram: ...
+    ) -> stages.CompilationArtifact: ...
