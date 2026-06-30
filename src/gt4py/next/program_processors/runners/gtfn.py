@@ -48,7 +48,7 @@ def convert_args(
 ) -> stages.ExecutableProgram:
     def decorated_program(
         *args: Any,
-        offset_provider: dict[str, common.Connectivity | common.Dimension],
+        offset_provider: dict[str, common.OffsetProviderElem],
         out: Any = None,
     ) -> None:
         # Note: this function is on the hot path and needs to have minimal overhead.
@@ -80,14 +80,11 @@ def convert_args(
 
 
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
+    offset_provider: dict[str, common.OffsetProviderElem], device: core_defs.DeviceType
 ) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
     # Note: this function is on the hot path and needs to have minimal overhead.
     zero_origin = (0, 0)
-    assert all(
-        hasattr(conn, "ndarray") or isinstance(conn, common.Dimension)
-        for conn in offset_provider.values()
-    )
+    assert all(hasattr(conn, "ndarray") for conn in offset_provider.values())
     # Note: the order here needs to agree with the order of the generated bindings.
     # This is currently true only because when hashing offset provider dicts,
     # the keys' order is taken into account. Any modification to the hashing
@@ -115,15 +112,18 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
+        unstructured_horizontal_has_unit_stride: bool = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda: config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        )
         builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
 
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(
+                lambda o: workflow.CachedStep.persistent(
                     o.bare_translation,
-                    hash_function=stages.fingerprint_compilable_program,
+                    input_fingerprinter=stages.compilable_program_fingerprinter,
                     cache=filecache.FileCache(
                         str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
                     ),
@@ -137,9 +137,12 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
-
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
-        nanobind.bind_source
+    bindings: workflow.Workflow[stages.ProgramSource, stages.ExtensionSource] = (
+        factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda o: nanobind.ExtensionGenerator(
+                unstructured_horizontal_has_unit_stride=o.unstructured_horizontal_has_unit_stride
+            )
+        )
     )
     compilation = factory.SubFactory(
         compiler.CompilerFactory,
@@ -157,30 +160,21 @@ class GTFNBackendFactory(factory.Factory):
 
     class Params:
         name_device = "cpu"
-        name_cached = ""
-        name_temps = ""
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
-        cached = factory.Trait(
-            executor=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function)
-            ),
-            name_cached="_cached",
-        )
         device_type = core_defs.DeviceType.CPU
-        hash_function = stages.compilation_hash
+        key_function = stages.fast_compilable_program_fingerprinter
         otf_workflow = factory.SubFactory(
-            GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
+            GTFNCompileWorkflowFactory,
+            cached_translation=True,
+            device_type=factory.SelfAttribute("..device_type"),
         )
 
-    name = factory.LazyAttribute(
-        lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
-    )
-
+    name = factory.LazyAttribute(lambda o: f"run_gtfn_{o.name_device}{o.name_postfix}")
     executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
@@ -189,16 +183,11 @@ class GTFNBackendFactory(factory.Factory):
 run_gtfn = GTFNBackendFactory()
 
 run_gtfn_imperative = GTFNBackendFactory(
-    name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
+    name_postfix="_imperative",
+    otf_workflow__translation__use_imperative_backend=True,
 )
-
-run_gtfn_cached = GTFNBackendFactory(cached=True, otf_workflow__cached_translation=True)
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
-
-run_gtfn_gpu_cached = GTFNBackendFactory(
-    gpu=True, cached=True, otf_workflow__cached_translation=True
-)
 
 run_gtfn_no_transforms = GTFNBackendFactory(
     otf_workflow__bare_translation__enable_itir_transforms=False

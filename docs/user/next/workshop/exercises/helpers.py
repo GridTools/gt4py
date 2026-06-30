@@ -14,7 +14,7 @@ from gt4py.next import neighbor_sum, where, Dims
 from gt4py.next import Dimension, DimensionKind, FieldOffset
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.program_processors.runners.gtfn import (
-    run_gtfn_cached as gtfn_cpu,
+    run_gtfn as gtfn_cpu,
     run_gtfn_gpu as gtfn_gpu,
 )
 

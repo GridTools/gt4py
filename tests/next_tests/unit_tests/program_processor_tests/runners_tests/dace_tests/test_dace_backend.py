@@ -21,7 +21,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import KDim
+from next_tests.integration_tests.cases_utils import KDim
 
 
 @pytest.fixture(
@@ -93,7 +93,6 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
 
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
-        cached=False,
         auto_optimize=auto_optimize,
         async_sdfg_call=True,
         optimization_args=optimization_args,

@@ -16,7 +16,7 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: get-versions
         uses: ./.github/actions/get-python-versions
         with:
@@ -27,7 +27,7 @@ jobs:
     needs: [get-python-versions]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Use a deep clone to get the correct version from tags
 

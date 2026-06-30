@@ -60,10 +60,19 @@ register(
 register(
     "dace:gpu",
     LayoutInfo(
-        alignment=32,
+        alignment=1,
         device="gpu",
         layout_map=layout_maker_factory((2, 1, 0)),
         is_optimal_layout=layout_checker_factory(layout_maker_factory((2, 1, 0))),
+    ),
+)
+register(
+    "dace:gpu_IJK",
+    LayoutInfo(
+        alignment=1,
+        device="gpu",
+        layout_map=layout_maker_factory((0, 1, 2)),
+        is_optimal_layout=layout_checker_factory(layout_maker_factory((0, 1, 2))),
     ),
 )
 register(

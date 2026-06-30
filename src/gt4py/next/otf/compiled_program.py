@@ -33,7 +33,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.otf import arguments, stages
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
 
@@ -209,7 +209,7 @@ def _make_param_context_from_func_type(
     """
     params = func_type.pos_or_kw_args | func_type.kw_only_args
     return {
-        param: ffront_type_info.tree_map_type(
+        param: type_info.tree_map_type(
             # note(tehrengruber): Mapping all collections to tuples is and must be the same as in
             #  :ref:`arguments.extract`.
             type_map,
