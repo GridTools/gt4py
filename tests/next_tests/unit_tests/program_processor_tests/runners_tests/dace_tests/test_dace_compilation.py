@@ -85,7 +85,10 @@ def _make_extension_source() -> stages.ExtensionSource:
 
 
 def _run_compiler(
-    *, add_gpu_trace_markers: bool, device_type: core_defs.DeviceType
+    *,
+    add_gpu_trace_markers: bool = False,
+    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.RELEASE,
+    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> tuple[mock.MagicMock, dace.SDFG]:
     """Run `DaCeCompiler` on a GPU SDFG with compilation stubbed out.
 
@@ -99,6 +102,7 @@ def _run_compiler(
         cache_lifetime=config.BuildCacheLifetime.SESSION,
         device_type=device_type,
         add_gpu_trace_markers=add_gpu_trace_markers,
+        cmake_build_type=cmake_build_type,
     )
 
     with (
@@ -124,7 +128,7 @@ def _run_compiler(
     return spy, compiled_sdfg
 
 
-def test_compiler_applies_tx_markers_for_gpu(tmp_path):
+def test_compiler_applies_tx_markers_for_gpu():
     """On a CUDA target with the flag on, the compiler applies the markers to the SDFG."""
     spy, compiled_sdfg = _run_compiler(
         add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CUDA
@@ -140,7 +144,7 @@ def test_compiler_applies_tx_markers_for_gpu(tmp_path):
     assert map_entries and all(me.instrument == _TX for me in map_entries)
 
 
-def test_compiler_skips_tx_markers_when_flag_disabled(tmp_path):
+def test_compiler_skips_tx_markers_when_flag_disabled():
     """With the flag off the compiler must not touch instrumentation, even on CUDA."""
     spy, compiled_sdfg = _run_compiler(
         add_gpu_trace_markers=False, device_type=core_defs.DeviceType.CUDA
@@ -150,7 +154,7 @@ def test_compiler_skips_tx_markers_when_flag_disabled(tmp_path):
     assert compiled_sdfg.instrument == _NONE
 
 
-def test_compiler_skips_tx_markers_for_non_gpu_device(tmp_path):
+def test_compiler_skips_tx_markers_for_non_gpu_device():
     """On a CPU target the markers must not be applied even with the flag on."""
     spy, compiled_sdfg = _run_compiler(
         add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CPU
@@ -179,11 +183,26 @@ def test_compiler_flags_change_build_folder(monkeypatch, device_type, compiler_f
     build cache.
     """
     monkeypatch.delenv(compiler_flags_env, raising=False)
-    _, sdfg_default = _run_compiler(add_gpu_trace_markers=False, device_type=device_type)
+    _, sdfg_default = _run_compiler(device_type=device_type)
 
     monkeypatch.setenv(compiler_flags_env, "-O0 -some-custom-flag")
-    _, sdfg_custom = _run_compiler(add_gpu_trace_markers=False, device_type=device_type)
+    _, sdfg_custom = _run_compiler(device_type=device_type)
 
     # The differing `dace_config_nondefaults` make the two compilers fingerprint differently,
     # so `get_cache_folder` names two distinct build folders.
     assert sdfg_default.build_folder != sdfg_custom.build_folder
+
+
+def test_cmake_build_type_changes_build_folder():
+    """Different cmake build types must produce a different SDFG build folder.
+
+    The cmake build type is part of the DaCe configuration captured in
+    `dace_config_nondefaults`, whose fingerprint is passed to `get_cache_folder`
+    as `build_context_id`. That id is appended to the build-folder name, so
+    changing the build type lands the SDFG build in a different folder of the
+    build cache.
+    """
+    _, sdfg_release = _run_compiler(cmake_build_type=config.CMakeBuildType.RELEASE)
+    _, sdfg_debug = _run_compiler(cmake_build_type=config.CMakeBuildType.DEBUG)
+
+    assert sdfg_release.build_folder != sdfg_debug.build_folder
