@@ -129,9 +129,9 @@ BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1
 #: Executor backing the async compilation pool.
 #: - "thread": use a ``concurrent.futures.ThreadPoolExecutor`` (default).
 #: - "process": use a ``concurrent.futures.ProcessPoolExecutor`` with ``spawn`` start
-#:   method. Requires the backend to be cloudpickle-serializable (standard runners and
-#:   factory-constructed variants are) and its ``executor`` to be an
-#:   ``OTFCompileWorkflow`` returning a picklable ``CompilationArtifact``. Experimental.
+#:   method. Requires the backend's ``executor`` to be stdlib-picklable (standard
+#:   runners and factory-constructed variants are) and to return a picklable
+#:   ``CompilationArtifact``. Experimental.
 BUILD_JOBS_MODE: str = os.environ.get("GT4PY_BUILD_JOBS_MODE", "thread").lower()
 
 #: User-defined level to enable metrics at lower or equal level.
