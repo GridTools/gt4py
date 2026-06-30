@@ -24,9 +24,9 @@ try:
     from gt4py.next.program_processors.runners import dace as dace_backends
 
     DACE_BACKENDS = (
-        [dace_backends.run_dace_cpu_cached, dace_backends.run_dace_gpu_cached]
+        [dace_backends.run_dace_cpu, dace_backends.run_dace_gpu]
         if cp is not None
-        else [dace_backends.run_dace_cpu_cached]
+        else [dace_backends.run_dace_cpu]
     )
 except ImportError:
     DACE_BACKENDS = []
@@ -357,9 +357,9 @@ if __name__ == "__main__":
             backend_name = (arg.split("=", 1)[-1]).strip()
             match backend_name:
                 case "dace-cpu":
-                    backends.append(dace_backends.run_dace_cpu_cached)
+                    backends.append(dace_backends.run_dace_cpu)
                 case "dace-gpu":
-                    backends.append(dace_backends.run_dace_gpu_cached)
+                    backends.append(dace_backends.run_dace_gpu)
                 case "gtfn-cpu":
                     backends.append(gtfn_cpu)
                 case "gtfn-gpu":

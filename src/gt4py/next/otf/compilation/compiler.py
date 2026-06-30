@@ -15,7 +15,7 @@ from typing import Protocol, TypeVar
 import factory
 
 from gt4py._core import locking
-from gt4py.next import config
+from gt4py.next import config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
 
@@ -39,7 +39,7 @@ CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
 class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
     def __call__(
         self,
-        source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT],
+        source: stages.ExtensionSource[CodeSpecT, TargetCodeSpecT],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[CodeSpecT, TargetCodeSpecT]: ...
 
@@ -47,11 +47,11 @@ class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
 @dataclasses.dataclass(frozen=True)
 class Compiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
         stages.ExecutableProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
         stages.ExecutableProgram,
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
@@ -60,13 +60,19 @@ class Compiler(
 
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
+    fingerprint_builder_factory: bool = True
     force_recompile: bool = False
 
     def __call__(
         self,
-        inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        inp: stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
     ) -> stages.ExecutableProgram:
-        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
+        build_context_id = (
+            fingerprinting.strict_fingerprinter(self.builder_factory)
+            if self.fingerprint_builder_factory
+            else ""
+        )
+        src_dir = cache.get_cache_folder(inp, self.cache_lifetime, build_context_id)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
