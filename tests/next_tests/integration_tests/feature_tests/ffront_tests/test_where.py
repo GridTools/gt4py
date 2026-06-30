@@ -7,16 +7,27 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+
 import numpy as np
-from typing import Tuple
 import pytest
-from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
+
 from gt4py import next as gtx
-from gt4py.next import float64, int32
-from gt4py.next.ffront.fbuiltins import where, broadcast
+from gt4py.next import common, float64, int32, neighbor_sum
+from gt4py.next.ffront.fbuiltins import broadcast, where
+
 from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import (
+    E2V,
+    E2VDim,
+    IDim,
+    JDim,
+    KDim,
+    cartesian_case,
+    unstructured_case,
+)
 from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 
@@ -114,6 +125,41 @@ def test_with_tuples(cartesian_case):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+def test_with_tuples_and_local_condition(unstructured_case):
+    @gtx.field_operator
+    def testee(
+        a: cases.VField,
+        b: cases.VField,
+        c: cases.VField,
+        d: cases.VField,
+    ) -> tuple[cases.EField, cases.EField]:
+        cond = a(E2V) > c(E2V)
+        t = where(cond, (a(E2V), b(E2V)), (c(E2V), d(E2V)))
+        return neighbor_sum(t[0], axis=E2VDim), neighbor_sum(t[1], axis=E2VDim)
+
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c, d: (
+            np.sum(
+                np.where(a[e2v_table] > c[e2v_table], a[e2v_table], c[e2v_table]),
+                axis=1,
+                initial=0,
+                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(a[e2v_table] > c[e2v_table], b[e2v_table], d[e2v_table]),
+                axis=1,
+                initial=0,
+                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
 def test_conditional_nested_tuple(cartesian_case):
     @gtx.field_operator
     def conditional_nested_tuple(
@@ -124,7 +170,9 @@ def test_conditional_nested_tuple(cartesian_case):
         return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
     size = cartesian_case.default_sizes[IDim]
-    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=size))
+    mask = cartesian_case.as_field(
+        [IDim], np.random.default_rng().choice(a=[False, True], size=size)
+    )
     a = cases.allocate(cartesian_case, conditional_nested_tuple, "a")()
     b = cases.allocate(cartesian_case, conditional_nested_tuple, "b")()
 
@@ -158,7 +206,9 @@ def test_conditional(cartesian_case):
         return where(mask, a, b)
 
     size = cartesian_case.default_sizes[IDim]
-    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    mask = cartesian_case.as_field(
+        [IDim], np.random.default_rng().choice(a=[False, True], size=size)
+    )
     a = cases.allocate(cartesian_case, conditional, "a")()
     b = cases.allocate(cartesian_case, conditional, "b")()
     out = cases.allocate(cartesian_case, conditional, cases.RETURN)()
@@ -180,7 +230,9 @@ def test_conditional_promotion(cartesian_case):
         return where(mask, a, 10.0)
 
     size = cartesian_case.default_sizes[IDim]
-    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    mask = cartesian_case.as_field(
+        [IDim], np.random.default_rng().choice(a=[False, True], size=size)
+    )
     a = cases.allocate(cartesian_case, conditional_promotion, "a")()
     out = cases.allocate(cartesian_case, conditional_promotion, cases.RETURN)()
     ref = np.where(mask.asnumpy(), a.asnumpy(), 10.0)
@@ -214,7 +266,9 @@ def test_conditional_shifted(cartesian_case):
         conditional_shifted(mask, a, b, out=out)
 
     size = cartesian_case.default_sizes[IDim] + 1
-    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    mask = cartesian_case.as_field(
+        [IDim], np.random.default_rng().choice(a=[False, True], size=size)
+    )
     a = cases.allocate(cartesian_case, conditional_program, "a").extend({IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, conditional_program, "b").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, conditional_shifted, cases.RETURN)()

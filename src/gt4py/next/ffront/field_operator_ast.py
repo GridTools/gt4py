@@ -98,6 +98,35 @@ class TupleExpr(Expr):
     elts: list[Expr]
 
 
+# TODO(tehrengruber): extend this to supported nested tuple comprehension.
+#  e.g. `tuple(element_expr for child in nested_tuple for grand_child in child)`
+#  would be represented by:
+#  ```
+#  class TupleComprehension(Expr):                              # ruff: noqa: ERA001
+#    inner: TupleComprehensionMapper | NestedTupleCompr         # ruff: noqa: ERA001
+#  class NestedTupleCompr(Expr, SymbolTableTrait):              # ruff: noqa: ERA001
+#    params: tuple[DataSymbol]                                  # ruff: noqa: ERA001
+#    body: TupleComprehension                                   # ruff: noqa: ERA001
+#  ```
+class TupleComprehension(Expr):
+    """
+    tuple(element_expr for target in iterable)
+    Note: The structure here differs from the one in the Python AST. Here we group target and
+    element expression in order to cleanly nest by the symbols being introduced, whereas in
+    the Python AST target and iterable are grouped into generator nodes.
+    """
+
+    inner: TupleComprehensionMapper
+    iterable: Expr
+
+
+# This is essentially a lambda. The difference is that for a lambda we might not know the type of
+# the args; therefore this is named differently at the moment.
+class TupleComprehensionMapper(LocatedNode, SymbolTableTrait):
+    target: Any  # TODO(tehrengruber): should be NestedTuple[DataSymbol], but this breaks in eve
+    element_expr: Expr
+
+
 class UnaryOp(Expr):
     op: dialect_ast_enums.UnaryOperator
     operand: Expr

@@ -5,13 +5,13 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
 import textwrap
 from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
+from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import errors
 from gt4py.next.common import Dimension, DimensionKind, promote_dims
 from gt4py.next.ffront import (
@@ -24,6 +24,7 @@ from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.iterator import builtins
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.utils import tree_map
 
 
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
@@ -453,6 +454,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         f"Tuples need to be indexed with literal integers, got '{node.index}'.",
                     ) from ex
                 new_type = types[index]
+            case ts.VarArgType(element_type=element_type):
+                new_type = (
+                    element_type  # TODO: we only temporarily allow any index for vararg types
+                )
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
@@ -714,6 +719,90 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_elts = self.visit(node.elts, **kwargs)
         new_type = ts.TupleType(types=[element.type for element in new_elts])
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
+
+    def visit_TupleComprehension(
+        self, node: foast.TupleComprehension, **kwargs: Any
+    ) -> foast.TupleComprehension:
+        target = self.visit(node.inner.target, **kwargs)
+        iterable = self.visit(node.iterable, **kwargs)
+
+        def deduce_target_type(
+            target: NestedTuple[foast.Symbol] | foast.Symbol,
+            element_type: ts.TypeSpec,
+            inner_kwargs: dict[str, Any],
+        ) -> NestedTuple[foast.Symbol] | foast.Symbol:
+            @tree_map(with_path_arg=True)
+            def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> foast.Symbol:
+                try:
+                    type_ = element_type
+                    for i in path:
+                        if not isinstance(type_, ts.TupleType) or len(type_.types) <= i:
+                            raise IndexError()
+                        type_ = type_.types[i]
+                    return self.visit(target_el, refine_type=type_, **inner_kwargs)
+                except IndexError:
+                    raise errors.DSLError(
+                        target_el.location, f"Cannot unpack non-iterable '{type_}' object."
+                    ) from None
+
+            return process_target(target)
+
+        def deduce_mapper(
+            element_type: ts.DataType,
+        ) -> foast.TupleComprehensionMapper:
+            inner_kwargs = {**kwargs, "symtable": kwargs["symtable"].new_child()}
+            new_target = deduce_target_type(target, element_type, inner_kwargs)
+            return foast.TupleComprehensionMapper(
+                target=new_target,
+                element_expr=self.visit(node.inner.element_expr, **inner_kwargs),
+                location=node.location,
+            )
+
+        if isinstance(iterable.type, ts.TupleType):
+            if len(iterable.type.types) == 0:
+                raise errors.DSLError(
+                    iterable.location,
+                    "Cannot iterate over an empty tuple in a tuple comprehension.",
+                )
+            if not all(
+                isinstance(element_type, ts.DataType) for element_type in iterable.type.types
+            ):
+                raise errors.DSLError(
+                    iterable.location,
+                    "Tuple comprehension iterable elements must be data types.",
+                )
+
+            element_types = cast(list[ts.DataType], iterable.type.types)
+            if not all(element_type == element_types[0] for element_type in element_types):
+                raise NotImplementedError(
+                    "Tuple comprehensions over fixed-length tuples require all iterable "
+                    "elements to have the same type."
+                )
+            new_mapper = deduce_mapper(element_types[0])
+            result = foast.TupleComprehension(
+                inner=new_mapper,
+                iterable=iterable,
+                location=node.location,
+                type=ts.TupleType(types=[new_mapper.element_expr.type for _ in element_types]),
+            )
+            return result
+        elif isinstance(iterable.type, ts.VarArgType):
+            element_type = iterable.type.element_type
+            new_mapper = deduce_mapper(element_type)
+            element_expr = new_mapper.element_expr
+            return_type = ts.VarArgType(element_type=element_expr.type)
+
+            return foast.TupleComprehension(
+                inner=new_mapper,
+                iterable=iterable,
+                location=node.location,
+                type=return_type,
+            )
+        else:
+            raise errors.DSLError(
+                iterable.location,
+                f"Iterable in generator expression must be a tuple, got '{iterable.type}'.",
+            )
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
@@ -998,7 +1087,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"Field arguments to '{func_name}' must be of same dtype, got '{t_dtype}' != "
                     f"'{f_dtype}'.",
                 )
-            return_dims = promote_dims(cond_dims, type_info.extract_dims(type_info.promote(tb, fb)))
+            return_dims = promote_dims(
+                cond_dims, type_info.extract_dims(tb), type_info.extract_dims(fb)
+            )
             return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
             return return_type
 

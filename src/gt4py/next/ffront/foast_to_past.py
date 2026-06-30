@@ -113,9 +113,10 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
             *partial_program_type.definition.kw_only_args.keys(),
         ]
         assert isinstance(type_, ts.CallableType)
-        assert arg_types[-1] == type_info.return_type(
+        return_type = type_info.return_type(
             type_, with_args=list(arg_types), with_kwargs=kwarg_types
         )
+        assert type_info.is_concretizable(return_type, arg_types[-1])
         assert args_names[-1] == "out"
 
         params_decl: list[past.Symbol] = [

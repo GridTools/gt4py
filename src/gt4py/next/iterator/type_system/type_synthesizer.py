@@ -288,7 +288,7 @@ def concat_where(
         dtype = tb_dtype
 
         return_dims = common.promote_dims(
-            domain.dims, type_info.extract_dims(type_info.promote(tb, fb))
+            domain.dims, type_info.extract_dims(tb), type_info.extract_dims(fb)
         )
         return_type = ts.FieldType(dims=return_dims, dtype=dtype)
         return return_type
@@ -402,10 +402,12 @@ def _canonicalize_nb_fields(
 
 
 def _canonicalize_nb_fields(
-    input_: ts.ScalarType
-    | ts.FieldType
-    | ts.TupleType
-    | tuple[ts.ScalarType | ts.FieldType | ts.TupleType, ...],
+    input_: (
+        ts.ScalarType
+        | ts.FieldType
+        | ts.TupleType
+        | tuple[ts.ScalarType | ts.FieldType | ts.TupleType, ...]
+    ),
 ) -> ts.ScalarType | ts.FieldType | ts.TupleType:
     """
     Transform neighbor / sparse field type by removal of local dimension and addition of corresponding `ListType` dtype.
@@ -625,6 +627,19 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         offset_type = offset_types[0]
         assert all(offset_type == arg for arg in offset_types)
         return ts.ListType(element_type=el_type, offset_type=offset_type)
+
+    return applied_map
+
+
+@_register_builtin_type_synthesizer
+def map_tuple(op: TypeSynthesizer) -> TypeSynthesizer:
+    @type_synthesizer
+    def applied_map(
+        arg: ts.TupleType, offset_provider_type: common.OffsetProviderType
+    ) -> ts.TupleType:
+        return ts.TupleType(
+            types=[op(arg_, offset_provider_type=offset_provider_type) for arg_ in arg.types]
+        )
 
     return applied_map
 
