@@ -228,7 +228,7 @@ _dace_compile_call = dace_workflow.compilation.DaCeCompiler.__call__
 
 def mocked_compile_call(
     self,
-    inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+    inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     binding_source_ref: str,
 ):
     assert len(inp.library_deps) == 0
@@ -245,7 +245,7 @@ def mocked_compile_call(
 
 def mocked_compile_call_cartesian(
     self,
-    inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+    inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     use_metrics: bool,
     use_zero_origin: bool,
 ):
@@ -257,7 +257,7 @@ def mocked_compile_call_cartesian(
 
 def mocked_compile_call_unstructured(
     self,
-    inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+    inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     use_metrics: bool,
     use_zero_origin: bool,
 ):
