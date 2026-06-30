@@ -137,6 +137,9 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
+        unstructured_horizontal_has_unit_stride: bool = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda: config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        )
         builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
@@ -159,8 +162,12 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
-        nanobind.bind_source
+    bindings: workflow.Workflow[stages.ProgramSource, stages.ExtensionSource] = (
+        factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda o: nanobind.ExtensionGenerator(
+                unstructured_horizontal_has_unit_stride=o.unstructured_horizontal_has_unit_stride
+            )
+        )
     )
     compilation = factory.SubFactory(
         GTFNCompilerFactory,

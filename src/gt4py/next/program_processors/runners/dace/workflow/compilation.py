@@ -21,7 +21,7 @@ import dace.codegen.compiler as dace_compiler
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import common, config
+from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -165,11 +165,11 @@ class DaCeCompilationArtifact:
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
         DaCeCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
         DaCeCompilationArtifact,
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
@@ -185,17 +185,32 @@ class DaCeCompiler(
     cmake_build_type: config.CMakeBuildType = dataclasses.field(
         default_factory=lambda: config.CMAKE_BUILD_TYPE
     )
+    # we store the non-default values of `dace.Config` in order to include it in the stage fingerprint
+    dace_config_nondefaults: dict[str, Any] = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        with gtx_wfdcommon.dace_context(
+            device_type=self.device_type,
+            cmake_build_type=self.cmake_build_type,
+        ):
+            object.__setattr__(self, "dace_config_nondefaults", dace.Config._data.nondefaults())
 
     def __call__(
         self,
-        inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
     ) -> DaCeCompilationArtifact:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
-            pathlib.Path(sdfg_build_folder).mkdir(parents=True, exist_ok=True)
+            # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
+            # user changes the backend configuration (PR #2650).
+            sdfg_build_folder = gtx_cache.get_cache_folder(
+                inp,
+                self.cache_lifetime,
+                build_context_id=fingerprinting.strict_fingerprinter(self.dace_config_nondefaults),
+            )
+            sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
 
@@ -214,7 +229,7 @@ class DaCeCompiler(
 
         assert inp.binding_source is not None
         return DaCeCompilationArtifact(
-            build_folder=pathlib.Path(sdfg_build_folder),
+            build_folder=sdfg_build_folder,
             library_path=library_path,
             sdfg_json=json.dumps(inp.program_source.source_code),
             binding_source_code=inp.binding_source.source_code,

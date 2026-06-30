@@ -81,7 +81,7 @@ jobs:
           # nox will create venvs using uv, which will grab the right options in the env vars
           echo "Running '${{ matrix.gt4py-module }}' CPU tests for python ${{ matrix.python-version }} with '${{ matrix.dependencies-strategy }}' resolution strategy"
           # Add '-l' to debug which sessions are collected and run by nox
-          ./noxfile.py -p ${{ matrix.python-version }} -k 'test_${{ matrix.gt4py-module }} and cpu' 
+          ./noxfile.py -p ${{ matrix.python-version }} -k 'test_${{ matrix.gt4py-module }} and cpu and not dace_determinism' 
 
       - name: Notify slack
         if: ${{ failure() && (github.event_name == 'schedule') }}

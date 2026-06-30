@@ -20,5 +20,5 @@ class OTFCompileWorkflow(
     """The typical compiled backend steps composed into a workflow."""
 
     translation: definitions.TranslationStep
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject]
-    compilation: workflow.Workflow[stages.CompilableProject, stages.CompilationArtifact]
+    bindings: workflow.Workflow[stages.ProgramSource, stages.ExtensionSource]
+    compilation: workflow.Workflow[stages.ExtensionSource, stages.CompilationArtifact]
