@@ -12,10 +12,8 @@ import dataclasses
 import pathlib
 from typing import Protocol, TypeVar
 
-import factory
-
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import config
+from gt4py.next import config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
 
@@ -36,7 +34,7 @@ CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
 class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
     def __call__(
         self,
-        source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT],
+        source: stages.ExtensionSource[CodeSpecT, TargetCodeSpecT],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[CodeSpecT, TargetCodeSpecT]: ...
 
@@ -71,11 +69,11 @@ class CPPCompilationArtifact:
 @dataclasses.dataclass(frozen=True)
 class CPPCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
         CPPCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
         CPPCompilationArtifact,
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
@@ -88,13 +86,19 @@ class CPPCompiler(
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
     device_type: core_defs.DeviceType
+    fingerprint_builder_factory: bool = True
     force_recompile: bool = False
 
     def __call__(
         self,
-        inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        inp: stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
     ) -> CPPCompilationArtifact:
-        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
+        build_context_id = (
+            fingerprinting.strict_fingerprinter(self.builder_factory)
+            if self.fingerprint_builder_factory
+            else ""
+        )
+        src_dir = cache.get_cache_folder(inp, self.cache_lifetime, build_context_id)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
@@ -122,11 +126,6 @@ class CPPCompiler(
             entry_point_name=entry_point_name,
             device_type=self.device_type,
         )
-
-
-class CompilerFactory(factory.Factory):
-    class Meta:
-        model = CPPCompiler
 
 
 class CompilationError(RuntimeError): ...

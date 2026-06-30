@@ -315,6 +315,14 @@ def cache_key(self, inp):
   force incompatibility with previously cached builds when the toolchain changes
   in a way the fingerprint alone would not capture.
 
+The same `config.BUILD_CACHE_VERSION_ID` salt is applied a second time, further
+down the toolchain, by `cache.get_cache_folder` (which names the on-disk
+build-system project folder). Both the in-memory/file cache key and the on-disk
+build folder are thus version-busted independently, so neither path can reuse a
+stale artifact across a version-id change. `get_cache_folder` folds the salt in
+centrally — callers only pass the context-specific `build_context_id` (e.g. a
+build factory or the non-default DaCe config) and need not repeat the salt.
+
 ## Consequences
 
 What becomes easier:
@@ -443,6 +451,8 @@ registry entries. Using `optree` itself was evaluated and rejected:
   `GT4PY_CLASS_METADATA_NS`, the per-field fingerprinting opt-out helper.
 - `src/gt4py/next/ffront/stages.py` — `semantic_fingerprinter`.
 - `src/gt4py/next/otf/workflow.py` — `CachedStep.cache_key`.
+- `src/gt4py/next/otf/compilation/cache.py` — `get_cache_folder` (build-folder
+  name; also salted with `BUILD_CACHE_VERSION_ID`).
 - `src/gt4py/next/config.py` — `BUILD_CACHE_VERSION_ID`.
 - ADR [0011 - On The Fly Compilation](0011-On_The_Fly_Compilation.md) and
   [0017 - Toolchain Configuration](0017-Toolchain-Configuration.md) for the OTF
