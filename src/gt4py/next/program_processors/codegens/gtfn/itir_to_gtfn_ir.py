@@ -172,7 +172,17 @@ def _collect_offset_definitions(
         ]
         for dim in dims:
             dim = common.as_non_staggered(dim)
-            offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+            if grid_type == common.GridType.CARTESIAN:
+                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+            else:
+                assert grid_type == common.GridType.UNSTRUCTURED
+                if dim.kind != common.DimensionKind.VERTICAL:
+                    raise ValueError(
+                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
+                    )
+                offset_definitions[dim.value] = TagDefinition(
+                    name=Sym(id=dim.value), alias=_vertical_dimension
+                )
 
     for offset_name, connectivity_type in offset_provider_type.items():
         if isinstance(connectivity_type, common.NeighborConnectivityType):
