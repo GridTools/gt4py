@@ -247,9 +247,9 @@ def _reduce_ranges(
     """
     Uses start_op and stop_op to fold the start and stop of a list of ranges.
 
-    This function only computes the correct value if the
-    (non-empty) ranges are either overlapping / adjacent or empty, as calculation is by means of the
-    convex hull. Non-static ranges may not be empty for now.
+    This function only computes the correct value if the (non-empty) ranges are either
+    overlapping / adjacent or empty, as calculation is by means of the convex hull. Non-static
+    ranges may not be empty for now.
     """
     non_empty_ranges = [range_ for range_ in ranges if not range_.empty()]
     if len(non_empty_ranges) == 0:
