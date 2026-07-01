@@ -35,16 +35,16 @@ class CMakeBuildType(enum.Enum):
 
 
 class BuildJobsMode(enum.Enum):
-    """How :data:`BUILD_JOBS` parallel compilation jobs are executed."""
+    """How ``BUILD_JOBS`` parallel compilation jobs are executed."""
 
     #: Run compilation in the calling thread (no concurrency).
     SERIAL = "serial"
-    #: Run compilation in a :class:`concurrent.futures.ThreadPoolExecutor`.
+    #: Run compilation in a ``ThreadPoolExecutor``.
     THREAD = "thread"
-    #: Run compilation in a :class:`concurrent.futures.ProcessPoolExecutor`
-    #: with the ``spawn`` start method. Requires the backend's ``executor`` to
-    #: be stdlib-picklable (standard runners and factory-constructed variants
-    #: are) and to return a picklable ``CompilationArtifact``. Experimental.
+    #: Run compilation in a ``ProcessPoolExecutor`` with the ``spawn`` start
+    #: method. Requires the backend's ``executor`` to be stdlib-picklable
+    #: (standard runners and factory-constructed variants are) and to return a
+    #: picklable ``CompilationArtifact``. Experimental.
     PROCESS = "process"
 
 
@@ -145,7 +145,7 @@ BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1
 #:   also used when ``GT4PY_BUILD_JOBS<=0``).
 #: - ``BuildJobsMode.THREAD``: ``ThreadPoolExecutor``.
 #: - ``BuildJobsMode.PROCESS`` (default): ``ProcessPoolExecutor`` with ``spawn``
-#:   start method. See :class:`BuildJobsMode` for the picklability requirements.
+#:   start method. See ``BuildJobsMode`` for the picklability requirements.
 BUILD_JOBS_MODE: BuildJobsMode = BuildJobsMode[
     os.environ.get("GT4PY_BUILD_JOBS_MODE", "process").upper()
 ]

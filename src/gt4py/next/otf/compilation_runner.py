@@ -28,9 +28,8 @@ class CompilationRunner(Protocol):
     ) -> concurrent.futures.Future[stages.ExecutableProgram]:
         """Compile ``definition_stage`` with ``backend``.
 
-        The returned future always yields a fully loaded
-        :class:`~gt4py.next.otf.stages.ExecutableProgram`; the runner is
-        responsible for any cross-process hydration.
+        The returned future always yields a fully loaded ``ExecutableProgram``;
+        the runner is responsible for any cross-process hydration.
         """
         ...
 
@@ -64,7 +63,7 @@ class SerialRunner:
 
 
 class ThreadRunner:
-    """Compiles in a :class:`concurrent.futures.ThreadPoolExecutor`.
+    """Compiles in a ``ThreadPoolExecutor``.
 
     ``Backend.compile`` performs build and load in one step, so the future
     yields the loaded ``ExecutableProgram`` directly.
@@ -132,12 +131,12 @@ def _process_pool_compile_job(
 
 
 class ProcessRunner:
-    """Compiles in a :class:`concurrent.futures.ProcessPoolExecutor` (``spawn``).
+    """Compiles in a ``ProcessPoolExecutor`` (``spawn``).
 
     The worker runs ``backend.executor`` (post-translation compile) and returns a
-    picklable :class:`~gt4py.next.otf.stages.CompilationArtifact`; the main
-    process rehydrates it via ``artifact.load()`` (in a done-callback) so the
-    returned future yields a live ``ExecutableProgram``.
+    picklable ``CompilationArtifact``; the main process rehydrates it via
+    ``artifact.load()`` (in a done-callback) so the returned future yields a live
+    ``ExecutableProgram``.
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
