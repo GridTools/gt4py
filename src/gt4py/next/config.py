@@ -34,6 +34,20 @@ class CMakeBuildType(enum.Enum):
     MIN_SIZE_REL = "MinSizeRel"
 
 
+class BuildJobsMode(enum.Enum):
+    """How :data:`BUILD_JOBS` parallel compilation jobs are executed."""
+
+    #: Run compilation in the calling thread (no concurrency).
+    INLINE = "inline"
+    #: Run compilation in a :class:`concurrent.futures.ThreadPoolExecutor`.
+    THREAD = "thread"
+    #: Run compilation in a :class:`concurrent.futures.ProcessPoolExecutor`
+    #: with the ``spawn`` start method. Requires the backend's ``executor`` to
+    #: be stdlib-picklable (standard runners and factory-constructed variants
+    #: are) and to return a picklable ``CompilationArtifact``. Experimental.
+    PROCESS = "process"
+
+
 def env_flag_to_bool(name: str, default: bool) -> bool:
     """Convert environment variable string variable to a bool value."""
     flag_value = os.environ.get(name, None)
@@ -127,12 +141,14 @@ ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", de
 BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1, 32)))
 
 #: Executor backing the async compilation pool.
-#: - "thread": use a ``concurrent.futures.ThreadPoolExecutor`` (default).
-#: - "process": use a ``concurrent.futures.ProcessPoolExecutor`` with ``spawn`` start
-#:   method. Requires the backend's ``executor`` to be stdlib-picklable (standard
-#:   runners and factory-constructed variants are) and to return a picklable
-#:   ``CompilationArtifact``. Experimental.
-BUILD_JOBS_MODE: str = os.environ.get("GT4PY_BUILD_JOBS_MODE", "thread").lower()
+#: - ``BuildJobsMode.INLINE``: compile in the calling thread (default when
+#:   ``GT4PY_BUILD_JOBS<=0``).
+#: - ``BuildJobsMode.THREAD`` (default): ``ThreadPoolExecutor``.
+#: - ``BuildJobsMode.PROCESS``: ``ProcessPoolExecutor`` with ``spawn`` start
+#:   method. See :class:`BuildJobsMode` for the picklability requirements.
+BUILD_JOBS_MODE: BuildJobsMode = BuildJobsMode[
+    os.environ.get("GT4PY_BUILD_JOBS_MODE", "thread").upper()
+]
 
 #: User-defined level to enable metrics at lower or equal level.
 #: Enabling metrics collection will do extra synchronization and will have

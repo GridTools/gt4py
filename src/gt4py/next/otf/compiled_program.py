@@ -32,7 +32,7 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
-from gt4py.next.otf import arguments, definitions, stages
+from gt4py.next.otf import arguments, compilation_runner, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
@@ -154,101 +154,6 @@ def compiled_program_call_context(
     return metrics.metrics_source_key_setter(metrics_source_key(program_pool, key))
 
 
-_async_compilation_pool: concurrent.futures.Executor | None = None
-
-
-def _pool_worker_initializer(shared_session_cache_dir: str) -> None:
-    """Point the worker's session-lifetime build cache at the main process's temp dir.
-
-    Each worker would otherwise create its own ``TemporaryDirectory`` and scrub it on
-    exit — taking the compiled artifacts with it before main can ``dlopen`` them.
-    """
-    import pathlib
-
-    from gt4py.next.otf.compilation import cache as _cache
-
-    _cache._session_cache_dir_path = pathlib.Path(shared_session_cache_dir)
-
-
-def _is_worker_process() -> bool:
-    import multiprocessing
-
-    return multiprocessing.parent_process() is not None
-
-
-def _init_async_compilation_pool() -> None:
-    global _async_compilation_pool
-    if _async_compilation_pool is not None or config.BUILD_JOBS <= 0:
-        return
-
-    mode = config.BUILD_JOBS_MODE
-    if mode == "thread":
-        _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(
-            max_workers=config.BUILD_JOBS
-        )
-    elif mode == "process":
-        import multiprocessing
-
-        from gt4py.next.otf.compilation import cache as _cache
-
-        # spawn (not fork): fork-after-threads / fork-with-CUDA is unsafe.
-        ctx = multiprocessing.get_context("spawn")
-        _async_compilation_pool = concurrent.futures.ProcessPoolExecutor(
-            max_workers=config.BUILD_JOBS,
-            mp_context=ctx,
-            initializer=_pool_worker_initializer,
-            initargs=(str(_cache._session_cache_dir_path),),
-        )
-    else:
-        raise ValueError(
-            f"Unsupported GT4PY_BUILD_JOBS_MODE={mode!r}; expected 'thread' or 'process'."
-        )
-
-
-def _should_use_process_pool() -> bool:
-    return isinstance(_async_compilation_pool, concurrent.futures.ProcessPoolExecutor)
-
-
-def _config_snapshot() -> dict[str, Any]:
-    """Capture main's ``gt4py.next.config`` values to ship to a worker.
-
-    ``spawn`` workers only inherit the OS environment at startup, so post-import
-    changes to ``config.X`` are invisible without explicit shipment.
-    """
-    overrides: dict[str, Any] = {}
-    for name, value in vars(config).items():
-        if not name.isupper() or name.startswith("_"):
-            continue
-        if callable(value) or isinstance(value, type):
-            continue
-        overrides[name] = value
-    return overrides
-
-
-def _apply_config_overrides(overrides: dict[str, Any]) -> None:
-    for name, value in overrides.items():
-        setattr(config, name, value)
-
-
-# Top-level (must be top-level for pickle).
-def _process_pool_compile_job(
-    executor_blob: bytes,
-    compilable: Any,
-    config_overrides: dict[str, Any],
-) -> stages.CompilationArtifact:
-    """Worker entry point: deserialize the executor and run it."""
-    import pickle
-
-    _apply_config_overrides(config_overrides)
-    executor = pickle.loads(executor_blob)
-    return executor(compilable)
-
-
-# Workers re-import this module on spawn; don't let them spin up their own pool.
-if not _is_worker_process():
-    _init_async_compilation_pool()
-
-
 def wait_for_compilation() -> None:
     """
     Waits for all ongoing compilations to finish.
@@ -256,11 +161,7 @@ def wait_for_compilation() -> None:
     This is useful to ensure that all compiled programs are ready before
     proceeding with further operations. E.g. when the first call is included in timings.
     """
-    global _async_compilation_pool
-    if _async_compilation_pool is not None:
-        _async_compilation_pool.shutdown(wait=True)
-        _async_compilation_pool = None
-        _init_async_compilation_pool()
+    compilation_runner.reset_default_runner()
 
 
 def _make_tuple_expr(el_exprs: list[str]) -> str:
@@ -420,23 +321,21 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
+    #: Runner used to compile program variants. Defaults to the process-wide runner
+    #: built from :mod:`gt4py.next.config` (see
+    #: :func:`gt4py.next.otf.compilation_runner.get_default_runner`).
+    compilation_runner: compilation_runner.CompilationRunner = dataclasses.field(
+        default_factory=compilation_runner.get_default_runner
+    )
 
     # store for the compiled programs
     compiled_programs: dict[CompiledProgramsKey, stages.ExecutableProgram] = dataclasses.field(
         default_factory=dict, init=False
     )
 
-    # store for the async compilation jobs.
-    # Each entry is ``(needs_finalize, future)``:
-    #   - thread / inline submit: ``needs_finalize = False``, future yields an
-    #     already-ready ``ExecutableProgram``.
-    #   - process-pool submit: ``needs_finalize = True``, future yields the
-    #     ``CompilationArtifact`` produced by ``backend.executor``, which
-    #     ``_finish_compilation_job`` rehydrates via ``artifact.load()`` in the
-    #     calling process.
-    _compilation_jobs: dict[CompiledProgramsKey, tuple[bool, concurrent.futures.Future[Any]]] = (
-        dataclasses.field(default_factory=dict, init=False)
-    )
+    _compilation_jobs: dict[
+        CompiledProgramsKey, concurrent.futures.Future[stages.ExecutableProgram]
+    ] = dataclasses.field(default_factory=dict, init=False)
 
     @functools.cached_property
     def root(self) -> tuple[str, str]:
@@ -655,18 +554,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if key not in self._compilation_jobs:
             return False
 
-        needs_finalize, compiled_program_future = self._compilation_jobs.pop(key)
+        compiled_program_future = self._compilation_jobs.pop(key)
         assert isinstance(compiled_program_future, concurrent.futures.Future)
         assert key not in self.compiled_programs
-        result = compiled_program_future.result()
-        if needs_finalize:
-            # Worker produced a ``CompilationArtifact`` from the ``backend.executor``
-            # compile phase. The artifact's ``load()``
-            # (dynamic import of the freshly built module / SDFG reload + decoration)
-            # must run in the calling process — it ends up holding a live Python
-            # callable that doesn't cross process boundaries.
-            result = result.load()
-        self.compiled_programs[key] = result
+        self.compiled_programs[key] = compiled_program_future.result()
         return True
 
     def _compile_variant(
@@ -732,35 +623,15 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             offset_provider=offset_provider,
         )
 
-        if _async_compilation_pool is None:
-            # Synchronous: full compile (executor + load) inline.
-            self.compiled_programs[key] = self.backend.compile(
-                self.definition_stage, compile_time_args=compile_time_args
-            )
-        elif _should_use_process_pool():
-            # Frontend lowering stays main-side: decorators rebind the user's function
-            # module attribute, so the raw ``types.FunctionType`` no longer pickles.
-            executor_blob = gtx_backend.serialize_executor_for_worker(self.backend.executor)
-            compilable = self.backend.transforms(
-                definitions.ConcreteProgramDef(data=self.definition_stage, args=compile_time_args)
-            )
-            self._compilation_jobs[key] = (
-                True,
-                _async_compilation_pool.submit(
-                    _process_pool_compile_job,
-                    executor_blob,
-                    compilable,
-                    _config_snapshot(),
-                ),
-            )
+        future = self.compilation_runner.submit(
+            self.backend, self.definition_stage, compile_time_args
+        )
+        if future.done():
+            # Inline runner: materialize now so compile() raises eagerly and the
+            # result is available immediately, matching synchronous semantics.
+            self.compiled_programs[key] = future.result()
         else:
-            compile_call = functools.partial(
-                self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
-            )
-            self._compilation_jobs[key] = (
-                False,
-                _async_compilation_pool.submit(compile_call),
-            )
+            self._compilation_jobs[key] = future
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
     #  domains and of scans.
