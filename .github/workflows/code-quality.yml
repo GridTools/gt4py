@@ -15,7 +15,7 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: get-versions
         uses: ./.github/actions/get-python-versions
         with:
@@ -25,7 +25,7 @@ jobs:
     needs: [get-python-versions]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -53,7 +53,7 @@ jobs:
     needs: [get-python-versions]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
