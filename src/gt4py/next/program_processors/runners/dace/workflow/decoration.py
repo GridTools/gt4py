@@ -9,28 +9,32 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, config, utils as gtx_utils
+from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import sdfg_callable
-from gt4py.next.program_processors.runners.dace.workflow import (
-    common as gtx_wfdcommon,
-    compilation as gtx_wfdcompilation,
-)
+from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
+
+
+if TYPE_CHECKING:
+    # Type-only: a top-level import would cycle with ``compilation``.
+    from gt4py.next.program_processors.runners.dace.workflow.compilation import CompiledDaceProgram
 
 
 def convert_args(
-    fun: gtx_wfdcompilation.CompiledDaceProgram,
+    fun: CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
 ) -> stages.ExecutableProgram:
     # Retieve metrics level from GT4Py environment variable.
     collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
-    collect_time_arg = np.array([1], dtype=np.float64)
+    collect_time_arg = np.array(
+        [1], dtype=gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE.as_numpy_dtype()
+    )
     # We use the callback function provided by the compiled program to update the SDFG arglist.
     update_sdfg_call_args = functools.partial(
         fun.update_sdfg_ctype_arglist, device, fun.sdfg_argtypes
@@ -64,7 +68,7 @@ def convert_args(
                 filter_args=False,
             )
             this_call_args |= {
-                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: config.COLLECT_METRICS_LEVEL,
+                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: metrics.get_current_level(),
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
             fun.construct_arguments(**this_call_args)

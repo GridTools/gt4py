@@ -15,6 +15,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next import fingerprinting
 from gt4py.next.otf import arguments, code_specs, stages, definitions
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
@@ -91,7 +92,7 @@ def test_hash_and_diskcache(program_example, tmp_path):
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
-    hash = stages.fingerprint_compilable_program(compilable_program)
+    hash = fingerprinting.strict_fingerprinter(compilable_program)
 
     cache = filecache.FileCache(tmp_path)
     cache[hash] = compilable_program
@@ -104,27 +105,27 @@ def test_hash_and_diskcache(program_example, tmp_path):
     del reopened_cache[hash]  # delete data
 
     # hash creation is deterministic
-    assert hash == stages.fingerprint_compilable_program(compilable_program)
-    assert hash == stages.fingerprint_compilable_program(compilable_program_from_cache)
+    assert hash == fingerprinting.strict_fingerprinter(compilable_program)
+    assert hash == fingerprinting.strict_fingerprinter(compilable_program_from_cache)
 
     # hash is different if program changes
     altered_program_id = copy.deepcopy(compilable_program)
     altered_program_id.data.id = "example2"
-    assert stages.fingerprint_compilable_program(
+    assert fingerprinting.strict_fingerprinter(
         compilable_program
-    ) != stages.fingerprint_compilable_program(altered_program_id)
+    ) != fingerprinting.strict_fingerprinter(altered_program_id)
 
     altered_program_offset_provider = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_offset_provider.args, "offset_provider", {"Koff": KDim})
-    assert stages.fingerprint_compilable_program(
+    assert fingerprinting.strict_fingerprinter(
         compilable_program
-    ) != stages.fingerprint_compilable_program(altered_program_offset_provider)
+    ) != fingerprinting.strict_fingerprinter(altered_program_offset_provider)
 
     altered_program_column_axis = copy.deepcopy(compilable_program)
     object.__setattr__(altered_program_column_axis.args, "column_axis", KDim)
-    assert stages.fingerprint_compilable_program(
+    assert fingerprinting.strict_fingerprinter(
         compilable_program
-    ) != stages.fingerprint_compilable_program(altered_program_column_axis)
+    ) != fingerprinting.strict_fingerprinter(altered_program_column_axis)
 
 
 def test_gtfn_file_cache(program_example):
@@ -133,15 +134,15 @@ def test_gtfn_file_cache(program_example):
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
-    cached_gtfn_translation_step = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=True
-    ).executor.step.translation
+    cached_gtfn_translation_step = gtfn.GTFNCompileWorkflowFactory(
+        cached_translation=True
+    ).translation
 
-    bare_gtfn_translation_step = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=False
-    ).executor.step.translation
+    bare_gtfn_translation_step = gtfn.GTFNCompileWorkflowFactory(
+        cached_translation=False
+    ).translation
 
-    cache_key = stages.fingerprint_compilable_program(compilable_program)
+    cache_key = cached_gtfn_translation_step.cache_key(compilable_program)
 
     # ensure the actual cached step in the backend generates the cache item for the test
     if cache_key in (translation_cache := cached_gtfn_translation_step.cache):
@@ -156,29 +157,3 @@ def test_gtfn_file_cache(program_example):
         bare_gtfn_translation_step(compilable_program)
         == cached_gtfn_translation_step.cache[cache_key]
     )
-
-
-# TODO(egparedes): we should switch to use the cached backend by default and then remove this test
-def test_gtfn_file_cache_whole_workflow(cartesian_case_no_backend):
-    cartesian_case = cartesian_case_no_backend
-    cartesian_case.backend = gtfn.GTFNBackendFactory(
-        gpu=False, cached=True, otf_workflow__cached_translation=True
-    )
-    cartesian_case.allocator = next_allocators.StandardCPUFieldBufferAllocator()
-
-    assert cartesian_case.backend is not None
-    assert cartesian_case.allocator is not None
-
-    @gtx.field_operator
-    def testee(a: cases.IJKField) -> cases.IJKField:
-        field_tuple = (a, a)
-        field_0 = field_tuple[0]
-        field_1 = field_tuple[1]
-        return field_0
-
-    # first call: this generates the cache file
-    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
-    # clearing the OTFCompileWorkflow cache such that the OTFCompileWorkflow step is executed again
-    object.__setattr__(cartesian_case.backend.executor, "cache", {})
-    # second call: the cache file is used
-    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)

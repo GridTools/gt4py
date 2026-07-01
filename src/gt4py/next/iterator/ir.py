@@ -7,30 +7,26 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
-import functools
-import pickle
 import typing
 from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, concepts, utils as eve_utils
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
-from gt4py.next import common
+from gt4py.next import common, fingerprinting
 from gt4py.next.iterator.builtins import BUILTINS
 from gt4py.next.type_system import type_specifications as ts
 
 
 DimensionKind = common.DimensionKind
 
-
-#: A custom pickler which ignores "location" and "type" attribute of IR nodes.
-_semantic_node_pickler: type[pickle.Pickler] = concepts.skipping_fields_node_pickler(
-    "location", "type"
-)
-
-#: Generates an unique fingerprint for IR nodes ignoring their location and type attributes.
-semantic_fingerprint: concepts.NodeFingerprinter = functools.partial(
-    eve_utils.content_hash, pickler=_semantic_node_pickler
+# Generate an unique fingerprint for `eve.Node`s ignoring the "location" and "type" attribute.
+# TODO(tehrengruber): this is a workaround for the fact that `eve.Node`s type can be
+# set after creation, in the type inference passes.
+lenient_ir_fingerprinter: fingerprinting.Fingerprinter = fingerprinting.make_fingerprinter(
+    deconstructor=fingerprinting.make_lenient_data_deconstructor(
+        {concepts.Node: fingerprinting.skipping_fields_node_deconstructor("location", "type")}
+    )
 )
 
 
@@ -40,12 +36,6 @@ class Node(eve.Node):
 
     # TODO(tehrengruber): include in comparison if value is not None
     type: Optional[ts.TypeSpec] = eve.field(default=None, repr=False, compare=False)
-
-    def fingerprint(self) -> str:
-        """
-        Generates a unique hash string for this node that is location and type agnostic.
-        """
-        return semantic_fingerprint(self)
 
     def __str__(self) -> str:
         from gt4py.next.iterator.pretty_printer import pformat
