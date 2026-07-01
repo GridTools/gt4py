@@ -291,7 +291,9 @@ class let:
                 "Invalid arguments: expected a variable name and an init form or a list thereof."
             )
 
-    def __call__(self, form) -> itir.FunCall:
+    def __call__(self, form) -> itir.Expr:
+        if not self.vars:  # no bindings: the `let` is a no-op
+            return ensure_expr(form)
         return call(lambda_(*self.vars)(form))(*self.init_forms)
 
 

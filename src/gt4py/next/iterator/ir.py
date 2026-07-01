@@ -73,6 +73,11 @@ class NoneLiteral(Expr):
 
 
 class InfinityLiteral(Expr):
+    """
+    Infinity value appearing in concat_where domain selectors and domain bounds (to guard domain
+    operators on empty ranges).
+    """
+
     # TODO(tehrengruber): self referential `ClassVar` not supported in eve.
     if TYPE_CHECKING:
         POSITIVE: ClassVar[InfinityLiteral]

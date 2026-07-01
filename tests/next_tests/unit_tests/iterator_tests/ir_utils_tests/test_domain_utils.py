@@ -6,13 +6,16 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import pytest
 import numpy as np
-from gt4py.next import common
+import pytest
+
+from gt4py.next import common, constructors
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
-from gt4py.next import common, constructors
+from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
+from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
+
 
 I = common.Dimension("I")
 J = common.Dimension("J")
@@ -33,13 +36,43 @@ right_infinity_range = domain_utils.SymbolicRange(0, itir.InfinityLiteral.POSITI
 left_infinity_range = domain_utils.SymbolicRange(itir.InfinityLiteral.NEGATIVE, 0)
 
 
-def _make_domain(ranges: dict[common.Dimension, tuple[int, int]]):
+#: Concrete bound values for the three input domains. Used directly for the static-domain case and,
+#: for the symbolic case, as the values the symbolic bounds are bound to when evaluating the result.
+_DOMAIN_VALUES = {
+    0: {I: (0, 10), J: (0, 10)},
+    1: {I: (5, 15), J: (2, 8)},
+    2: {I: (3, 7), J: (4, 20)},
+}
+
+
+def _make_domain(i: int, static_domains: bool):
+    values = _DOMAIN_VALUES[i]
+    if static_domains:
+        # `itir.Literal` bounds (via `im.domain`) so that emptiness is decidable
+        return domain_utils.SymbolicDomain.from_expr(im.domain(common.GridType.CARTESIAN, values))
     return domain_utils.SymbolicDomain(
         grid_type=common.GridType.CARTESIAN,
         ranges={
-            dim: domain_utils.SymbolicRange(start, stop) for dim, (start, stop) in ranges.items()
+            dim: domain_utils.SymbolicRange(
+                im.ref(f"start_{dim.value}_{i}"), im.ref(f"end_{dim.value}_{i}")
+            )
+            for dim in values
         },
     )
+
+
+def _evaluate(domain: domain_utils.SymbolicDomain) -> itir.Expr:
+    # Wrap the domain expression in a `let` binding every symbolic bound to its concrete value, then
+    # inline the `let`s and constant-fold. For symbolic domains this collapses the guarded result to
+    # the same concrete domain as the static case; for static domains the bindings are unused so it
+    # is effectively a no-op. This lets both cases be checked against the same concrete `expected`.
+    bindings = {
+        f"{side}_{dim.value}_{i}": value
+        for i, ranges in _DOMAIN_VALUES.items()
+        for dim, bounds in ranges.items()
+        for side, value in (("start", bounds[0]), ("end", bounds[1]))
+    }
+    return ConstantFolding.apply(InlineLambdas.apply(im.let(*bindings.items())(domain.as_expr())))
 
 
 def test_domain_op_preconditions():
@@ -60,15 +93,13 @@ def test_domain_op_preconditions():
         domain_utils._reduce_domains(domain_a, domain_c, range_reduce_op=domain_utils._range_union)
 
 
-def test_domain_union():
-    domain0 = _make_domain({I: (0, 10), J: (0, 10)})
-    domain1 = _make_domain({I: (5, 15), J: (2, 8)})
-    domain2 = _make_domain({I: (3, 7), J: (4, 20)})
-
+@pytest.mark.parametrize("static_domains", [True, False])
+def test_domain_union(static_domains):
+    domains = [_make_domain(i, static_domains) for i in range(3)]
+    result = domain_utils.domain_union(*domains)
     # the union is the convex hull per dimension: (min of starts, max of stops)
     expected = im.domain(common.GridType.CARTESIAN, {I: (0, 15), J: (0, 20)})
-    result = domain_utils.domain_union(domain0, domain1, domain2)
-    assert result.as_expr() == expected
+    assert _evaluate(result) == expected
 
 
 def test_domain_union_drops_empty_domains():
@@ -118,29 +149,27 @@ def test_unstructured_translate_empty_range():
     assert set(translated.ranges.keys()) == {Edge}
 
 
-def test_domain_intersection():
-    domain0 = _make_domain({I: (0, 10), J: (0, 10)})
-    domain1 = _make_domain({I: (5, 15), J: (2, 8)})
-    domain2 = _make_domain({I: (3, 7), J: (4, 20)})
-
+@pytest.mark.parametrize("static_domains", [True, False])
+def test_domain_intersection(static_domains):
+    domains = [_make_domain(i, static_domains) for i in range(3)]
+    result = domain_utils.domain_intersection(*domains)
     # the intersection is per dimension: (max of starts, min of stops)
     expected = im.domain(common.GridType.CARTESIAN, {I: (5, 7), J: (4, 8)})
-    result = domain_utils.domain_intersection(domain0, domain1, domain2)
-    assert result.as_expr() == expected
+    assert _evaluate(result) == expected
 
 
-def test_domain_union_then_intersection():
-    # Cross-operation case: the union result flows into the intersection.
-    domain0 = _make_domain({I: (0, 10), J: (0, 10)})
-    domain1 = _make_domain({I: (5, 15), J: (2, 8)})
-    domain2 = _make_domain({I: (3, 7), J: (4, 20)})
-
-    union_result = domain_utils.domain_union(domain0, domain1)  # {I: (0, 15), J: (0, 10)}
-    result = domain_utils.domain_intersection(union_result, domain2)
+@pytest.mark.parametrize("static_domains", [True, False])
+def test_domain_union_then_intersection(static_domains):
+    # Cross-operation case: the union result flows into the intersection. For symbolic domains the
+    # (possibly empty) union is re-guarded so it folds to the intersection's neutral (the universe)
+    # instead of surviving `max`/`min` and wrongly constraining the result.
+    domains = [_make_domain(i, static_domains) for i in range(3)]
+    union_result = domain_utils.domain_union(domains[0], domains[1])  # {I: (0, 15), J: (0, 10)}
+    result = domain_utils.domain_intersection(union_result, domains[2])
 
     # intersection of the union `{I: (0, 15), J: (0, 10)}` with `domain2`
     expected = im.domain(common.GridType.CARTESIAN, {I: (3, 7), J: (4, 10)})
-    assert result.as_expr() == expected
+    assert _evaluate(result) == expected
 
 
 @pytest.mark.parametrize(

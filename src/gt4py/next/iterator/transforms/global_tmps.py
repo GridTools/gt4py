@@ -156,9 +156,20 @@ def _transform_by_pattern(
     # hide projector from extraction
     projector, expr = ir_utils_misc.extract_projector(stmt.expr)
 
+    def wrapped_predicate(expr: itir.Expr, num_occurences: int) -> bool:
+        if not isinstance(expr, itir.Lambda):  # TODO: e.g. test_tuple_different_domain
+            type_inference.reinfer(expr)
+        assert isinstance(expr.type, ts.TypeSpec) or isinstance(expr, itir.Lambda)
+        if isinstance(expr.type, ts.TypeSpec) and not type_info.is_type_or_tuple_of_type(
+            expr.type, ts.FieldType
+        ):
+            return False
+
+        return predicate(expr, num_occurences)
+
     new_expr, extracted_fields, _ = cse.extract_subexpression(
         expr,
-        predicate=predicate,
+        predicate=wrapped_predicate,
         prefixed_uids=uids["__tmp_subexpr"],
         # TODO(tehrengruber): extracting the deepest expression first would allow us to fuse
         #  the extracted expressions resulting in fewer kernel calls & better data-locality.

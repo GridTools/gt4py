@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import typing
 from typing import Callable, ClassVar, Optional, Union
 
 from gt4py.eve import Coerced, SymbolName, datamodels
@@ -43,6 +44,22 @@ class CastExpr(Expr):
 class Literal(Expr):
     value: str
     type: str
+
+
+class InfinityLiteral(Expr):
+    # TODO(tehrengruber): self referential `ClassVar` not supported in eve.
+    if typing.TYPE_CHECKING:
+        POSITIVE: ClassVar[InfinityLiteral]
+        NEGATIVE: ClassVar[InfinityLiteral]
+
+    name: typing.Literal["POSITIVE", "NEGATIVE"]
+
+    def __str__(self) -> str:
+        return f"{type(self).__name__}.{self.name}"
+
+
+InfinityLiteral.NEGATIVE = InfinityLiteral(name="NEGATIVE")
+InfinityLiteral.POSITIVE = InfinityLiteral(name="POSITIVE")
 
 
 class IntegralConstant(Expr):

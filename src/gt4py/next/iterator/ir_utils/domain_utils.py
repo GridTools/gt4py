@@ -34,24 +34,58 @@ _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS: set[str] = set()
 class SymbolicRange:
     start: itir.Expr
     stop: itir.Expr
+    #: Groups of `let` bindings that are in scope for both `start` and `stop`. Each group is a
+    #: simultaneous `let` (its bindings are mutually independent); the groups are nested, with the
+    #: first tuple element the outermost `let`, so a later group's values may reference an earlier
+    #: group's symbols. They let chained reductions (see `_reduce_ranges`) reference previously
+    #: computed bounds by a unique symbol (`__sd_start_0`, `__sd_start_1`, ...) instead of
+    #: duplicating them, which would otherwise blow up the expression size exponentially. Sharing one
+    #: group between `start` and `stop` keeps each bound stored exactly once. Materialized by
+    #: `as_expr`; the unique names make the nesting unambiguous (no shadowing).
+    bindings: tuple[dict[str, itir.Expr], ...] = ()
 
-    def __post_init__(self) -> None:
-        # TODO(havogt): added this defensive checks as code seems to make this reasonable assumption
-        assert self.start is not itir.InfinityLiteral.POSITIVE
-        assert self.stop is not itir.InfinityLiteral.NEGATIVE
+    # See: Fix_concat_where_start_stop_invariant.md
+    #def __post_init__(self) -> None:
+    #    # TODO(havogt): added this defensive checks as code seems to make this reasonable assumption
+    #    assert self.start is not itir.InfinityLiteral.POSITIVE
+    #    assert self.stop is not itir.InfinityLiteral.NEGATIVE
+
+    def __hash__(self) -> int:
+        # `bindings` holds (mutable, unhashable) dicts; hash their items instead so `SymbolicRange`
+        # stays hashable (it is hashed e.g. via `frozenset` in `SymbolicDomain.__hash__`).
+        return hash((self.start, self.stop, tuple(tuple(g.items()) for g in self.bindings)))
 
     def translate(self, distance: int) -> SymbolicRange:
-        return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
+        # constant fold so that translated literal bounds stay literal (otherwise `empty()` would
+        # treat e.g. `0 + 1` as symbolic and `_reduce_ranges` would needlessly guard them)
+        return SymbolicRange(
+            ConstantFolding.apply(im.plus(self.start, distance)),  # type: ignore[arg-type]  # always an itir.Expr
+            ConstantFolding.apply(im.plus(self.stop, distance)),  # type: ignore[arg-type]  # always an itir.Expr
+            self.bindings,
+        )
 
     def empty(self) -> bool | None:
-        # constant fold so that translated bounds like `0 + 1` are recognized as literals
-        start = ConstantFolding.apply(self.start)
-        stop = ConstantFolding.apply(self.stop)
-        if isinstance(start, itir.Literal) and isinstance(stop, itir.Literal):
-            return int(start.value) >= int(stop.value)
-        elif start == stop:
+        # an "inward" infinity (`start == +inf` or `stop == -inf`) is the degenerate empty range
+        if self.start is itir.InfinityLiteral.POSITIVE or self.stop is itir.InfinityLiteral.NEGATIVE:
+            return True
+        # an "outward" infinity (`start == -inf` or `stop == +inf`) is always non-empty as the
+        # opposite bound is finite (or the opposite outward infinity)
+        if self.start is itir.InfinityLiteral.NEGATIVE or self.stop is itir.InfinityLiteral.POSITIVE:
+            return False
+        if isinstance(self.start, itir.Literal) and isinstance(self.stop, itir.Literal):
+            start, stop = int(self.start.value), int(self.stop.value)
+            return start >= stop
+        elif self.start == self.stop:
             return True
         return None
+
+    def as_expr(self) -> tuple[itir.Expr, itir.Expr]:
+        """Materialize `start` and `stop`, wrapping the shared `bindings` groups as nested `let`s."""
+        start, stop = self.start, self.stop
+        # groups are outermost-first; wrap the innermost (last) group first
+        for group in reversed(self.bindings):
+            start, stop = im.let(*group.items())(start), im.let(*group.items())(stop)
+        return start, stop
 
 
 _GRID_TYPE_MAPPING = {
@@ -164,7 +198,7 @@ class SymbolicDomain:
 
     def as_expr(self) -> itir.FunCall:
         converted_ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] = {
-            key: (value.start, value.stop) for key, value in self.ranges.items()
+            key: value.as_expr() for key, value in self.ranges.items()
         }
         return im.domain(self.grid_type, converted_ranges)
 
@@ -243,34 +277,96 @@ def _reduce_ranges(
     *ranges: SymbolicRange,
     start_reduce_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
     stop_reduce_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
+    neutral_reduce_val: SymbolicRange,
 ) -> SymbolicRange:
     """
-    Uses start_op and stop_op to fold the start and stop of a list of ranges.
+    Fold the start and stop of a list of ranges with `start_reduce_op` / `stop_reduce_op`.
 
-    This function only computes the correct value if the
-    (non-empty) ranges are either overlapping / adjacent or empty, as calculation is by means of the
-    convex hull. Non-static ranges may not be empty for now.
+    The reduction is seeded with `neutral_reduce_val`, the operation's identity range (the empty
+    range for union, the universe range for intersection); an empty input range therefore folds to
+    that same neutral and leaves the result unchanged.
+
+    This function only computes the correct value if the ranges are either overlapping / adjacent
+    or empty as calculation is by means of the convex hull (and some special handling for empty
+    ranges).
     """
-    non_empty_ranges = [range_ for range_ in ranges if not range_.empty()]
+    # symbolic ranges, i.e., `empty()` is `None` must not be dropped; they are guarded below
+    non_empty_ranges = [range_ for range_ in ranges if range_.empty() is not True]
     if len(non_empty_ranges) == 0:
-        return ranges[0] # all empty -> empty
-    elif len(non_empty_ranges) == 1:
-        # the reduction of a single range is the range itself
-        return non_empty_ranges[0]
-    else:
-        start = functools.reduce(start_reduce_op, [range_.start for range_ in non_empty_ranges])
-        stop = functools.reduce(stop_reduce_op, [range_.stop for range_ in non_empty_ranges])
-    # constant fold to keep the tree small and so translated bounds (e.g. `0 + 1`) collapse to a
-    # literal (we deliberately do not fold in `translate`)
-    start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
-    return SymbolicRange(start, stop)
+        return ranges[0]
+    if len(non_empty_ranges) == 1:
+        return non_empty_ranges[0]  # the reduction of a single range is the range itself
+
+    def guarded(start_expr: itir.Expr, stop_expr: itir.Expr, bound: itir.Expr, neutral: itir.Expr):
+        # an empty range contributes the reduction's `neutral` element instead of `bound`
+        return im.if_(im.greater_equal(start_expr, stop_expr), neutral, bound)
+
+    def next_binding_index(groups: tuple[dict[str, itir.Expr], ...]) -> int:
+        # A fresh index above the highest existing one never collides with a symbol in scope.
+        indices = [
+            int(name.removeprefix("__sd_start_"))
+            for group in groups
+            for name in group
+            if name.startswith("__sd_start_")
+        ]
+        return max(indices, default=-1) + 1
+
+    # Carry all inputs' binding groups as the outer (nested) `let`s; the bounds bound here go into
+    # one fresh innermost group, so `start` and `stop` share them (stored once) and the guards
+    # reference cheap symbols instead of duplicating the (chained, possibly large) sub-expressions --
+    # keeping the result size linear. By contract we are the only allocator of `__sd_*` symbols, so
+    # equal names carry equal values and merging the (outermost-first aligned) groups is safe.
+    depth = max(len(range_.bindings) for range_ in non_empty_ranges)
+    outer_groups = tuple(
+        {name: value for range_ in non_empty_ranges if d < len(range_.bindings)
+         for name, value in range_.bindings[d].items()}
+        for d in range(depth)
+    )
+
+    new_group: dict[str, itir.Expr] = {}
+    i = next_binding_index(outer_groups)
+    acc_start, acc_stop = neutral_reduce_val.start, neutral_reduce_val.stop
+    for range_ in non_empty_ranges:
+        if range_.empty() is None:
+            start_name, stop_name = f"__sd_start_{i}", f"__sd_stop_{i}"
+            i += 1
+            # `range_.start`/`range_.stop` reference the range's own (outer) groups, which are in
+            # scope as this new group is the innermost one
+            new_group[start_name], new_group[stop_name] = range_.start, range_.stop
+            start_ref, stop_ref = im.ref(start_name), im.ref(stop_name)
+            r_start = guarded(start_ref, stop_ref, start_ref, neutral_reduce_val.start)
+            r_stop = guarded(start_ref, stop_ref, stop_ref, neutral_reduce_val.stop)
+        else:
+            r_start, r_stop = range_.start, range_.stop
+        acc_start = start_reduce_op(acc_start, r_start)
+        acc_stop = stop_reduce_op(acc_stop, r_stop)
+
+    groups = (*outer_groups, new_group) if new_group else outer_groups
+    # constant fold only the final result (binding values come from inputs that were already folded)
+    return SymbolicRange(
+        ConstantFolding.apply(acc_start),  # type: ignore[arg-type]  # always an itir.Expr
+        ConstantFolding.apply(acc_stop),  # type: ignore[arg-type]  # always an itir.Expr
+        groups,
+    )
 
 
 _range_union = functools.partial(
-    _reduce_ranges, start_reduce_op=im.minimum, stop_reduce_op=im.maximum
+    _reduce_ranges,
+    start_reduce_op=im.minimum,
+    stop_reduce_op=im.maximum,
+    # neutral element of union is the empty range `[+inf, -inf[`
+    neutral_reduce_val=SymbolicRange(
+        itir.InfinityLiteral.POSITIVE, itir.InfinityLiteral.NEGATIVE
+    ),
 )
 _range_intersection = functools.partial(
-    _reduce_ranges, start_reduce_op=im.maximum, stop_reduce_op=im.minimum
+    _reduce_ranges,
+    start_reduce_op=im.maximum,
+    stop_reduce_op=im.minimum,
+    # neutral element of intersection is the universe range `]-inf, +inf[`
+    neutral_reduce_val=SymbolicRange(
+        itir.InfinityLiteral.NEGATIVE, itir.InfinityLiteral.POSITIVE
+    ),
 )
 
 

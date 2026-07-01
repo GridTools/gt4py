@@ -11,6 +11,7 @@ from typing import Any, Collection, Final, Union
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import common
+from gt4py.next.iterator import builtins as itir_builtins
 from gt4py.next.otf import cpp_utils
 from gt4py.next.program_processors.codegens.gtfn import gtfn_im_ir, gtfn_ir, gtfn_ir_common
 
@@ -91,6 +92,15 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             return qualified_fun_name
 
         return node.id
+
+    def visit_InfinityLiteral(self, node: gtfn_ir.InfinityLiteral, **kwargs: Any) -> str:
+        # `±∞` only appears in (integer) domain bounds; use the limit of the index type.
+        cpptype = cpp_utils.pytype_to_cpptype(itir_builtins.INTEGER_INDEX_BUILTIN)
+        if node == gtfn_ir.InfinityLiteral.POSITIVE:
+            return f"std::numeric_limits<{cpptype}>::max()"
+        else:
+            assert node == gtfn_ir.InfinityLiteral.NEGATIVE
+            return f"std::numeric_limits<{cpptype}>::min()"
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
         # TODO(tehrengruber): isn't this wrong and int32 should be casted to an actual int32?
