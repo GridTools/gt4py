@@ -873,8 +873,10 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
 
 
 def test_synchronous_compilation(cartesian_case, compile_testee):
-    # This test is not perfect: only tests that compilation works if '_async_compilation_pool' is not initialized.
-    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+    with mock.patch.object(
+        compiled_program.compilation_runner, "get_default_runner"
+    ) as get_runner:
+        get_runner.return_value = compiled_program.compilation_runner.SerialRunner()
         a = cases.allocate(cartesian_case, compile_testee, "a")()
         b = cases.allocate(cartesian_case, compile_testee, "b")()
 
@@ -892,20 +894,23 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
         assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
 
 
-@pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
-def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, synchronous):
+@pytest.mark.parametrize("mode", list(config.BuildJobsMode), ids=lambda m: m.name.lower())
+def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, mode):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    with (
-        mock.patch.object(compiled_program, "_async_compilation_pool", None)
-        if synchronous
-        else contextlib.nullcontext()
+    with mock.patch.object(config, "BUILD_JOBS_MODE", mode), mock.patch.object(
+        config, "BUILD_JOBS", 1
     ):
+        runner = compiled_program.compilation_runner.from_config()
+
+    with mock.patch.object(
+        compiled_program.compilation_runner, "get_default_runner"
+    ) as get_runner:
+        get_runner.return_value = runner
         compile_testee.compile(offset_provider=cartesian_case.offset_provider)
-        # TODO(havogt): currently only tests that the function call does not crash...
         gtx.wait_for_compilation()
-        # ... and afterwards compilation still works
+        # afterwards compilation still works
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
 
 
