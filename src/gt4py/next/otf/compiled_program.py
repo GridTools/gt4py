@@ -627,8 +627,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             self.backend, self.definition_stage, compile_time_args
         )
         if future.done():
-            # Inline runner: materialize now so compile() raises eagerly and the
-            # result is available immediately, matching synchronous semantics.
+            # Eager so compile() raises now; otherwise the error stays in the
+            # already-resolved future until the next call touches this key.
             self.compiled_programs[key] = future.result()
         else:
             self._compilation_jobs[key] = future

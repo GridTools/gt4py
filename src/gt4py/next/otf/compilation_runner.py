@@ -39,7 +39,7 @@ class CompilationRunner(Protocol):
         ...
 
 
-class InlineRunner:
+class SerialRunner:
     """Runs compilation in the calling thread; the returned future is already done."""
 
     def submit(
@@ -138,9 +138,6 @@ class ProcessRunner:
     picklable :class:`~gt4py.next.otf.stages.CompilationArtifact`; the main
     process rehydrates it via ``artifact.load()`` (in a done-callback) so the
     returned future yields a live ``ExecutableProgram``.
-
-    Frontend lowering stays main-side: decorators rebind the user's function
-    module attribute, so the raw ``types.FunctionType`` is not shipped.
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
@@ -166,7 +163,7 @@ class ProcessRunner:
         compilable = backend.transforms(
             definitions.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
         )
-        executor_blob = next_backend.serialize_executor_for_worker(backend.executor)
+        executor_blob = pickle.dumps(backend.executor)
         artifact_future = self._pool.submit(
             _process_pool_compile_job,
             executor_blob,
@@ -194,8 +191,8 @@ class ProcessRunner:
 
 def from_config() -> CompilationRunner:
     mode = config.BUILD_JOBS_MODE
-    if mode is config.BuildJobsMode.INLINE or config.BUILD_JOBS <= 0:
-        return InlineRunner()
+    if mode is config.BuildJobsMode.SERIAL or config.BUILD_JOBS <= 0:
+        return SerialRunner()
     if mode is config.BuildJobsMode.THREAD:
         return ThreadRunner(max_workers=config.BUILD_JOBS)
     if mode is config.BuildJobsMode.PROCESS:

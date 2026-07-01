@@ -38,7 +38,7 @@ class BuildJobsMode(enum.Enum):
     """How :data:`BUILD_JOBS` parallel compilation jobs are executed."""
 
     #: Run compilation in the calling thread (no concurrency).
-    INLINE = "inline"
+    SERIAL = "serial"
     #: Run compilation in a :class:`concurrent.futures.ThreadPoolExecutor`.
     THREAD = "thread"
     #: Run compilation in a :class:`concurrent.futures.ProcessPoolExecutor`
@@ -141,13 +141,13 @@ ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", de
 BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1, 32)))
 
 #: Executor backing the async compilation pool.
-#: - ``BuildJobsMode.INLINE``: compile in the calling thread (default when
-#:   ``GT4PY_BUILD_JOBS<=0``).
-#: - ``BuildJobsMode.THREAD`` (default): ``ThreadPoolExecutor``.
-#: - ``BuildJobsMode.PROCESS``: ``ProcessPoolExecutor`` with ``spawn`` start
-#:   method. See :class:`BuildJobsMode` for the picklability requirements.
+#: - ``BuildJobsMode.SERIAL``: compile in the calling thread (no concurrency;
+#:   also used when ``GT4PY_BUILD_JOBS<=0``).
+#: - ``BuildJobsMode.THREAD``: ``ThreadPoolExecutor``.
+#: - ``BuildJobsMode.PROCESS`` (default): ``ProcessPoolExecutor`` with ``spawn``
+#:   start method. See :class:`BuildJobsMode` for the picklability requirements.
 BUILD_JOBS_MODE: BuildJobsMode = BuildJobsMode[
-    os.environ.get("GT4PY_BUILD_JOBS_MODE", "thread").upper()
+    os.environ.get("GT4PY_BUILD_JOBS_MODE", "process").upper()
 ]
 
 #: User-defined level to enable metrics at lower or equal level.

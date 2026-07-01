@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import dataclasses
-import pickle
 from typing import Generic
 
 from gt4py._core import definitions as core_defs
@@ -165,25 +164,3 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         self,
     ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
         return self.allocator
-
-
-def serialize_executor_for_worker(
-    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact],
-) -> bytes:
-    """Pickle ``executor`` for shipment to a worker process.
-
-    Strips ``CachedStep`` wrappers (outer + on ``OTFCompileWorkflow.translation``):
-    the cache is process-local, the worker is one-shot, and the strip avoids
-    ``functools.singledispatch`` dispatch tables that stdlib pickle can't ship.
-    """
-    if isinstance(executor, workflow.CachedStep):
-        executor = executor.step
-    if dataclasses.is_dataclass(executor):
-        unwrapped_fields = {
-            f.name: getattr(executor, f.name).step
-            for f in dataclasses.fields(executor)
-            if isinstance(getattr(executor, f.name), workflow.CachedStep)
-        }
-        if unwrapped_fields:
-            executor = dataclasses.replace(executor, **unwrapped_fields)
-    return pickle.dumps(executor)
