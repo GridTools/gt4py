@@ -16,7 +16,7 @@ from gt4py.next.iterator.transforms import (
     global_tmps,
     infer_domain,
     collapse_tuple as ct,
-    constant_folding as cf
+    constant_folding as cf,
 )
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
@@ -380,7 +380,9 @@ def test_tuple_different_domain(uids: utils.IDGeneratorPool):
 
     actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     actual = ct.CollapseTuple.apply(actual, uids=uids)
-    actual = cf.ConstantFolding.apply(actual, enabled_transformations=cf.ConstantFolding.Transformation.FOLD_ARITHMETIC_BUILTINS)
+    actual = cf.ConstantFolding.apply(
+        actual, enabled_transformations=cf.ConstantFolding.Transformation.FOLD_ARITHMETIC_BUILTINS
+    )
     assert actual == expected
 
 
@@ -497,7 +499,9 @@ def test_tuple_different_domain_nested(uids: utils.IDGeneratorPool):
 
     actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     actual = ct.CollapseTuple.apply(actual, uids=uids)
-    actual = cf.ConstantFolding.apply(actual, enabled_transformations=cf.ConstantFolding.Transformation.FOLD_ARITHMETIC_BUILTINS)
+    actual = cf.ConstantFolding.apply(
+        actual, enabled_transformations=cf.ConstantFolding.Transformation.FOLD_ARITHMETIC_BUILTINS
+    )
     assert actual == expected
 
 

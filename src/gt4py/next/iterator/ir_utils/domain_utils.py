@@ -253,7 +253,7 @@ def _reduce_ranges(
     """
     non_empty_ranges = [range_ for range_ in ranges if not range_.empty()]
     if len(non_empty_ranges) == 0:
-        return ranges[0] # all empty -> empty
+        return ranges[0]  # all empty -> empty
     elif len(non_empty_ranges) == 1:
         # the reduction of a single range is the range itself
         return non_empty_ranges[0]
