@@ -66,7 +66,6 @@ def test_copy_half_field(cartesian_case):
 
 @pytest.mark.uses_cartesian_shift
 def test_cartesian_shift_plus(cartesian_case):
-    # TODO: center inlining probably doesn't work
     @gtx.field_operator
     def testee(a: cases.IField) -> cases.IField:
         return a(IDim + 1)  # always pass an I-index to an IField
@@ -80,7 +79,6 @@ def test_cartesian_shift_plus(cartesian_case):
 
 @pytest.mark.uses_cartesian_shift
 def test_cartesian_half_shift_plus(cartesian_case):
-    # TODO: center inlining probably doesn't work
     @gtx.field_operator
     def testee(a: cases.IField) -> cases.IHalfField:
         return a(IHalfDim + 0.5)  # always pass an I-index to an IField
@@ -94,7 +92,6 @@ def test_cartesian_half_shift_plus(cartesian_case):
 
 @pytest.mark.uses_cartesian_shift
 def test_cartesian_half_shift_back(cartesian_case):
-    # TODO: center inlining probably doesn't work
     @gtx.field_operator
     def testee(a: cases.IHalfField) -> cases.IHalfField:
         return a(IDim + 0.5)(IHalfDim - 0.5)  # always pass an I-index to an IField
@@ -107,7 +104,6 @@ def test_cartesian_half_shift_back(cartesian_case):
 
 @pytest.mark.uses_cartesian_shift
 def test_cartesian_half_shift_plus1(cartesian_case):
-    # TODO: center inlining probably doesn't work
     @gtx.field_operator
     def testee(a: cases.IHalfField) -> cases.IHalfField:
         return a(IHalfDim + 1)  # always pass an IHalf-index to an IHalfField
@@ -121,7 +117,6 @@ def test_cartesian_half_shift_plus1(cartesian_case):
 
 @pytest.mark.uses_cartesian_shift
 def test_cartesian_half_shift_minus(cartesian_case):
-    # TODO: center inlining probably doesn't work
     @gtx.field_operator
     def testee(a: cases.IField) -> cases.IHalfField:
         return a(IHalfDim - 0.5)  # always pass an I-index to an IField
@@ -135,7 +130,6 @@ def test_cartesian_half_shift_minus(cartesian_case):
 
 @pytest.mark.uses_cartesian_shift
 def test_cartesian_half_shift_half2center(cartesian_case):
-    # TODO: center inlining probably doesn't work
     @gtx.field_operator
     def testee(a: cases.IHalfField) -> cases.IField:
         return 2 * a(IDim + 0.5)  # always pass an IHalf-index to an IHalfField

@@ -185,13 +185,11 @@ class SymbolicDomain:
                 domain = common.Dimension(value=off.domain.value, kind=off.domain.kind)
                 codomain = common.Dimension(value=off.codomain.value, kind=off.codomain.kind)
                 connectivity = common.CartesianConnectivity(domain, codomain=codomain)
-            elif isinstance(off, itir.OffsetLiteral):
-                assert isinstance(off.value, str)
+            else:
+                assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
                 # `get_offset` accepts both `OffsetProvider` and `OffsetProviderType`, but is typed
                 # for the former only (the two overlap, so an overload is not possible).
                 connectivity = common.get_offset(offset_provider, off.value)  # type: ignore[arg-type]
-            else:
-                raise AssertionError()
 
             if isinstance(connectivity, common.CartesianConnectivity):
                 if val is trace_shifts.Sentinel.VALUE:
