@@ -173,7 +173,9 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
-    metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
+    metrics_level = sdfg.add_symbol(
+        gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL_DTYPE
+    )
 
     #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
     # Even when the target device is GPU, it can happen that dace emits code without
