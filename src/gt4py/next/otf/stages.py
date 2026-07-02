@@ -10,7 +10,16 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Final, Generic, Optional, Protocol, TypeAlias, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Final,
+    Generic,
+    Optional,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+    runtime_checkable,
+)
 
 from gt4py.next import common, fingerprinting
 from gt4py.next.iterator import ir as itir
@@ -90,9 +99,8 @@ class BindingSource(Generic[CodeSpecT, TargetCodeSpecT]):
     library_deps: tuple[interface.LibraryDependency, ...]
 
 
-# TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableProject(Generic[CodeSpecT, TargetCodeSpecT]):
+class ExtensionSource(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
@@ -117,7 +125,7 @@ TargetCodeSpecT_co = TypeVar("TargetCodeSpecT_co", bound=code_specs.SourceCodeSp
 
 class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
     """
-    Use source code extracted from a ``CompilableSource`` to configure and build a GT4Py program.
+    Use source code extracted from an ``ExtensionSource`` to configure and build a GT4Py program.
 
     Should only be considered an OTF stage if used as an endpoint, as this only runs commands on source files
     and is not responsible for importing the results into Python.
@@ -127,6 +135,25 @@ class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
 
 
 ExecutableProgram: TypeAlias = Callable
+
+
+@runtime_checkable
+class CompilationArtifact(Protocol):
+    """The output of an ``OTFCompileWorkflow``.
+
+    Each backend defines its own concrete artifact dataclass; all share this
+    Protocol. Implementations are frozen dataclasses, picklable, and carry no
+    live process-bound state — that is reconstructed by ``load``, which
+    returns a directly-callable ``ExecutableProgram`` taking gt4py-shaped
+    arguments.
+
+    The one current exception is ``RoundtripArtifact`` when it is configured
+    with a ``dispatch_backend``: that field holds a ``Backend`` reference
+    whose role belongs at the runner / load-time seam, not in the artifact
+    itself.
+    """
+
+    def load(self) -> ExecutableProgram: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

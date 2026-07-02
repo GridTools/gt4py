@@ -17,10 +17,7 @@ from gt4py._core import definitions as core_defs, filecache
 from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.runners.dace.workflow import (
-    bindings as bindings_step,
-    decoration as decoration_step,
-)
+from gt4py.next.program_processors.runners.dace.workflow import bindings as bindings_step
 from gt4py.next.program_processors.runners.dace.workflow.compilation import (
     DaCeCompilationStepFactory,
 )
@@ -77,10 +74,4 @@ class DaCeWorkflowFactory(factory.Factory):
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
-    )
-    decoration = factory.LazyAttribute(
-        lambda o: functools.partial(
-            decoration_step.convert_args,
-            device=o.device_type,
-        )
     )

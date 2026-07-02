@@ -93,7 +93,6 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
 
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
-        cached=False,
         auto_optimize=auto_optimize,
         async_sdfg_call=True,
         optimization_args=optimization_args,

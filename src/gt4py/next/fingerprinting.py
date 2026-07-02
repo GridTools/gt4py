@@ -50,6 +50,7 @@ import sys
 import types
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from typing import Any, Final, Optional, TypeAlias, TypeVar
+from unittest import mock
 
 import xxhash
 
@@ -81,6 +82,17 @@ class Deconstruction(Collection[_T]):
 
     def __len__(self) -> int:
         return len(self.pieces)
+
+    @staticmethod
+    def from_id(obj: Any) -> EmptyDeconstruction:
+        """
+        Builder for objects identified by their `id()`.
+
+        Note that this builder should only be used in special cases, e.g. for mock
+        objects in test sessions, because `id()` is not a stable identifier across
+        processes or sessions.
+        """
+        return EmptyDeconstruction(b"id\0" + str(id(obj)).encode())
 
     @staticmethod
     def from_reference(obj: Any, *, strict: bool = True) -> EmptyDeconstruction:
@@ -276,6 +288,11 @@ def object_deconstruct_fallback(obj: Any) -> Deconstruction:
             cls,
             ((f.name, getattr(obj, f.name)) for f in fields),
         )
+
+    if issubclass(cls, mock.Mock):
+        # Workaround for mock objects, which override their own `__class__` attribute
+        # and therefore cannot be correctly dispatched by `functools.singledispatch`.
+        return Deconstruction.from_id(obj)
 
     try:
         # Like `pickle.Pickler`, give precedence to reducers registered in

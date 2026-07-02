@@ -114,12 +114,19 @@ def test_inlining_of_scalar_works_integration(testee_prog):
 
     hijacked_program = None
 
+    @dataclasses.dataclass(frozen=True)
+    class _NoOpArtifact:
+        """A trivial CompilationArtifact that loads to a no-op callable."""
+
+        def load(self):
+            return lambda *args, **kwargs: None
+
     def pirate(program: toolchain.ConcreteArtifact):
-        # Replaces the gtfn otf_workflow: and steals the compilable program,
-        # then returns a dummy "CompiledProgram" that does nothing.
+        # Replaces the gtfn otf_workflow: steals the compilable program, then
+        # returns a dummy artifact whose materialization is a no-op callable.
         nonlocal hijacked_program
         hijacked_program = program
-        return lambda *args, **kwargs: None
+        return _NoOpArtifact()
 
     hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", executor=pirate)
 

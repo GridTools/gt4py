@@ -8,7 +8,8 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-import uuid
+from __future__ import annotations
+
 from typing import Optional, Sequence, TypeVar, Union
 
 import dace
@@ -17,26 +18,12 @@ from dace.libraries import standard as dace_stdlib
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import library_nodes as gtx_lib
 
 
 _PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
-
-
-def unique_name(name: str) -> str:
-    """Adds a unique string to `name`.
-
-    Note:
-        The names generates by this function are rather unstable and it should
-        not be used if a particular order should be enforced. This function is
-        marked for deprecation.
-    """
-    maximal_length = 200
-    unique_sufix = str(uuid.uuid1()).replace("-", "_")
-    if len(name) > (maximal_length - len(unique_sufix)):
-        name = name[: (maximal_length - len(unique_sufix) - 1)]
-    return f"{name}_{unique_sufix}"
 
 
 def gt_make_transients_persistent(
@@ -585,7 +572,7 @@ def find_upstream_nodes(
     state: dace.SDFGState,
     start_connector: Optional[str] = None,
     limit_node: Optional[dace_nodes.Node] = None,
-) -> set[dace_nodes.Node]:
+) -> OrderedSet[dace_nodes.Node]:
     """Finds all upstream nodes, i.e. all producers, of `start`.
 
     Note that `start` and `limit_node` are not part of the returned set.
@@ -598,7 +585,7 @@ def find_upstream_nodes(
         limit_node: Consider this node as "limiting wall", i.e. do not explore
             beyond it.
     """
-    seen: set[dace_nodes.Node] = set()
+    seen: OrderedSet[dace_nodes.Node] = OrderedSet()
 
     to_visit = [
         iedge.src
