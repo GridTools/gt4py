@@ -78,6 +78,7 @@ def constructed_outside_dataclass_program(
         constructed_outside_dataclass_program,
     ],
 )
+@pytest.mark.uses_tuple_args
 def test_named_tuple_like_constructed_outside(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -136,6 +137,8 @@ def constructed_inside_dataclass_program(
         constructed_inside_dataclass_program,
     ],
 )
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_named_collection_constructed_inside(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -192,6 +195,8 @@ def constructed_inside_dataclass_program_with_domain(
         constructed_inside_dataclass_program_with_domain,
     ],
 )
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_named_collection_with_multiple_output_domains(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -256,6 +261,8 @@ def nested_mixed_named_collections_program(
     nested_mixed_named_collections(inp, out=out)
 
 
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_nested_mixed_named_collections(cartesian_case):
     inp = cases.allocate(cartesian_case, nested_mixed_named_collections_program, "inp")()
     out = cases.allocate(cartesian_case, nested_mixed_named_collections_program, "out")()
@@ -318,6 +325,8 @@ def scan_named_tuple_wrapper(inp: gtx.Field[[KDim], gtx.float32]) -> gtx.Field[[
     "testee",
     [scan_named_tuple_wrapper, scan_dataclass_wrapper],
 )
+@pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
 def test_scan(cartesian_case, testee):
     inp = cases.allocate(cartesian_case, testee, "inp")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
@@ -358,6 +367,9 @@ def scan_with_scalar_named_collection_wrapper(
     return scan_with_scalar_named_collection(inp, scalar=scalar)
 
 
+@pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_args
 def test_scan_with_scalar_named_collection(cartesian_case):
     inp = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, "inp")()
     out = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, cases.RETURN)()
@@ -404,6 +416,7 @@ def test_locally_defined_named_collection(cartesian_case):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_tuple_args
 def test_where_nested(cartesian_case):
     @gtx.field_operator
     def testee(
@@ -444,6 +457,7 @@ def test_where_nested(cartesian_case):
 
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_concat_where
+@pytest.mark.uses_tuple_args
 def test_concat_where(cartesian_case):
     @gtx.field_operator
     def testee(
@@ -477,6 +491,7 @@ def test_concat_where(cartesian_case):
 
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_concat_where
+@pytest.mark.uses_tuple_args
 def test_concat_where_nested(cartesian_case):
     @gtx.field_operator
     def testee(

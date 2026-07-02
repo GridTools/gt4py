@@ -20,8 +20,16 @@ SDFG_ARG_METRIC_LEVEL: Final[str] = "gt_metrics_level"
 """Name of SDFG argument to input the GT4Py metrics level."""
 
 
+SDFG_ARG_METRIC_LEVEL_DTYPE: Final[dace.dtypes.typeclass] = dace.int32
+"""DaCe datatype of `SDFG_ARG_METRIC_LEVEL` argument."""
+
+
 SDFG_ARG_METRIC_COMPUTE_TIME: Final[str] = "gt_compute_time"
 """Name of SDFG argument to return the total compute time to GT4Py."""
+
+
+SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
+"""DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
 
 
 def set_dace_config(

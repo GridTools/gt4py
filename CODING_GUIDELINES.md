@@ -93,6 +93,8 @@ raise TypeError(f"Wrong argument type: 'int' expected, got '{type(arg)}'")
 
 The terseness vs. helpfulness tradeoff should be more in favor of terseness for internal error messages and more in favor of helpfulness for `DSLError` and it's subclassses, where additional sentences are encouraged if they point out likely hidden sources of the problem or common fixes.
 
+For `gt4py.next` user-facing DSL diagnostics (`DSLError` and subclasses), see [`docs/development/next/error-messages.md`](docs/development/next/error-messages.md): it covers structured diagnostics (source spans, notes, hints), the unsupported-construct catalogue, and the regression-test requirement.
+
 ### Docstrings
 
 We generate the API documentation automatically from the docstrings using [Sphinx] and some extensions such as [Sphinx-autodoc] and [Sphinx-napoleon]. These follow the Google Python Style Guide docstring conventions to automatically format the generated documentation. A complete overview can be found here: [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google).
@@ -160,7 +162,7 @@ Each test suite should follow the following structure:
   __init__.py  # each subpackage test should be a python package
   integration_tests/
     __init__.py
-    feature_test/
+    feature_tests/
       __init__.py
       <starting_end>_tests/
         __init__.py
@@ -188,12 +190,14 @@ Temporarily it may be allowed to split unit tests for a module into multiple `te
 
 Temporarily, tests for testing utilities can be placed next to the module containing them, with the name `test_util_<module>.py`. This should be taken as a hint that the tested utils should be moved into the library.
 
+Place each test in the file for the feature it is the *subject* of (the behaviour whose regression it would catch); a feature it merely uses as a vehicle is recorded via a test marker where the subpackage provides them, not by moving the test.
+
 #### Integration Tests Utils
 
 Integrations tests come with their own utilities, found in `cases.py`, for better test automation and simplification:
 
 - Predefined field type annotations, e.g. `IJKField = Field[[IDim, JDim, KDim], np.int64]`.
-- Test fixtures: `cartesian_case` for structured, e.g. `IDim` x `JDim`; `unstructured_case`, e.g. `EdgeDim`.
+- Test fixtures: `cartesian_case` for structured, e.g. `IDim` x `JDim`; `unstructured_case`, e.g. `EdgeDim`. The fixtures themselves (`exec_alloc_descriptor`, `mesh_descriptor`, grid descriptors and the dimension/offset aliases) live in the sibling `cases_utils.py`.
 - Parameter allocations for objects, derived directly from the decorator's function definition:
   ```
      input_param = cases.allocate(case_fixture, decorator_name, "input_label")()

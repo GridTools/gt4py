@@ -12,7 +12,7 @@ import gt4py.next as gtx
 from gt4py.next import broadcast, float64, int32
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, JDim, Joff, cartesian_case
+from next_tests.integration_tests.cases import IDim, JDim, cartesian_case
 from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
 )
@@ -55,7 +55,7 @@ def test_broadcast_shifted(cartesian_case):
     @gtx.field_operator
     def simple_broadcast(inp: cases.IField) -> cases.IJField:
         bcasted = broadcast(inp, (IDim, JDim))
-        return bcasted(Joff[1])
+        return bcasted(JDim + 1)
 
     cases.verify_with_default_data(
         cartesian_case, simple_broadcast, ref=lambda inp: inp[:, np.newaxis]
@@ -74,6 +74,7 @@ def test_zero_dims_fields(cartesian_case):
     cases.verify(cartesian_case, implicit_broadcast_scalar, inp, out=out, ref=np.array(1))
 
 
+@pytest.mark.uses_zero_dimensional_fields
 def test_implicit_broadcast_mixed_dim(cartesian_case):
     @gtx.field_operator
     def fieldop_implicit_broadcast(

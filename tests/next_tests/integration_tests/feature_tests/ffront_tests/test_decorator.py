@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# TODO(dropd): Remove as soon as `gt4py.next.ffront.decorator` is type checked.
 import collections
 import unittest.mock as mock
 
@@ -15,12 +14,11 @@ import pytest
 from gt4py import next as gtx
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
-from gt4py.next import common as gtx_common
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case
+from next_tests.integration_tests.cases import IField, KDim, cartesian_case, unstructured_case
 from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
-    simple_cartesian_grid,
+    mesh_descriptor,
 )
 
 
@@ -79,51 +77,6 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
             assert set(source.metrics.keys()) == set(expected_names)
 
 
-def test_offset_provider_cache(cartesian_case):
-    if cartesian_case.backend is None:
-        pytest.skip("Precompiled program with embedded execution is not possible.")
-
-    @gtx.field_operator
-    def testee_op(a: cases.IField) -> cases.IField:
-        return a
-
-    @gtx.program(backend=cartesian_case.backend)
-    def testee(a: cases.IField, out: cases.IField):
-        testee_op(a, out=out)
-
-    testee.compile(
-        offset_provider=cartesian_case.offset_provider,
-    )
-
-    grid = simple_cartesian_grid()
-    grid_offset_provider = {"Ioff": grid.offset_provider["Ioff"]}
-
-    mock_offset_provider_to_type = mock.MagicMock()
-    impl_offset_provider_to_type = gtx_common.offset_provider_to_type
-
-    def mocked_offset_provider_to_type(
-        offset_provider: gtx_common.OffsetProvider | gtx_common.OffsetProviderType,
-    ) -> gtx_common.OffsetProviderType:
-        mock_offset_provider_to_type.__call__(offset_provider)
-        return impl_offset_provider_to_type(offset_provider)
-
-    with mock.patch("gt4py.next.common.offset_provider_to_type", mocked_offset_provider_to_type):
-        args_1, kwargs_1 = cases.get_default_data(cartesian_case, testee)
-        testee(*args_1, offset_provider=cartesian_case.offset_provider, **kwargs_1)
-        mock_offset_provider_to_type.assert_called()
-        mock_offset_provider_to_type.reset_mock()
-
-        args_2, kwargs_2 = cases.get_default_data(cartesian_case, testee)
-        testee(*args_2, offset_provider=grid_offset_provider, **kwargs_2)
-        mock_offset_provider_to_type.assert_called()
-        mock_offset_provider_to_type.reset_mock()
-
-        args_3, kwargs_3 = cases.get_default_data(cartesian_case, testee)
-        testee(*args_3, offset_provider=cartesian_case.offset_provider, **kwargs_3)
-        mock_offset_provider_to_type.assert_not_called()
-        mock_offset_provider_to_type.reset_mock()
-
-
 def test_docstring(cartesian_case):
     @gtx.field_operator
     def fieldop_with_docstring(a: cases.IField) -> cases.IField:
@@ -138,3 +91,56 @@ def test_docstring(cartesian_case):
     a = cases.allocate(cartesian_case, test_docstring, "a")()
 
     cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
+
+
+def test_default_backend_is_respected_field_operator(cartesian_case):
+    """Test that manually calling the field operator without setting the backend raises an error."""
+
+    # Important not to set the backend here!
+    @gtx.field_operator
+    def copy(a: IField) -> IField:
+        return a
+
+    a = cases.allocate(cartesian_case, copy, "a")()
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # Calling this should fail if the default backend is respected
+        # due to `exec_alloc_descriptor` fixture (dependency of `cartesian_case`)
+        # setting the default backend to something invalid.
+        _ = copy(a, out=a, offset_provider={})
+
+
+@pytest.mark.uses_scan
+def test_default_backend_is_respected_scan_operator(cartesian_case):
+    """Test that manually calling the scan operator without setting the backend raises an error."""
+
+    # Important not to set the backend here!
+    @gtx.scan_operator(axis=KDim, init=0.0, forward=True)
+    def sum(state: float, a: float) -> float:
+        return state + a
+
+    a = gtx.ones({KDim: 10}, allocator=cartesian_case.allocator)
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # see comment in field_operator test
+        _ = sum(a, out=a, offset_provider={})
+
+
+def test_default_backend_is_respected_program(cartesian_case):
+    """Test that manually calling the program without setting the backend raises an error."""
+
+    @gtx.field_operator
+    def copy(a: IField) -> IField:
+        return a
+
+    # Important not to set the backend here!
+    @gtx.program
+    def copy_program(a: IField, b: IField) -> IField:
+        copy(a, out=b)
+
+    a = cases.allocate(cartesian_case, copy_program, "a")()
+    b = cases.allocate(cartesian_case, copy_program, "b")()
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # see comment in field_operator test
+        _ = copy_program(a, b, offset_provider={})

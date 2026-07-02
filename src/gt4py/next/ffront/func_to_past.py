@@ -82,7 +82,9 @@ def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSLProgramDef
     """
     wf = workflow.make_step(func_to_past)
     if cached:
-        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
+        wf = workflow.CachedStep.in_memory(
+            wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        )
     return wf
 
 

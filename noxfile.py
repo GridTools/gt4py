@@ -14,7 +14,7 @@
 #   the PEP 723 'requires-python' metadata.
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
+# dependencies = ["nox>=2025.02.09", "uv>=0.6.10", "tomli; python_version < '3.11'"]
 # ///
 
 from __future__ import annotations
@@ -25,7 +25,12 @@ from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
 
 import nox
-import tomllib
+
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    import tomli as tomllib
 
 
 # This is needed because uv now fails to create an env when it already exists.
@@ -342,6 +347,92 @@ def test_typing_exports(session: nox.Session) -> None:
         "typing_tests",
         "typing_tests",
         *session.posargs,
+    )
+
+
+# -- DaCe codegen determinism check --
+#
+# The `test_next_dace_determinism` session below runs gt4py's pytest selection
+# twice with an isolated GT4PY_BUILD_CACHE_DIR per run, then verifies the
+# DaCe-generated source files are byte-identical between the two runs. A diff is
+# a determinism bug somewhere in the gt4py + dace toolchain for that selection.
+#
+# The orchestration (run twice + compare) and the hashing/comparison library
+# both live in `scripts/python/dace_determinism.py`, exposed as its
+# `ci-check` and `check` subcommands. This session installs the `scripts`
+# dependency group into the session venv and executes that script with the
+# venv's own python (a gt4py-capable interpreter) — it does not import the
+# module.
+#
+# Only `dace` codegen is checked (`internal` doesn't go through dace), so the
+# codegen parameter is dropped from this session's signature.
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["next", "dace", "determinism"])
+@nox.parametrize(
+    "meshlib",
+    [
+        nox.param("nomesh", id="nomesh", tags=["nomesh"]),
+        nox.param("atlas", id="atlas", tags=["atlas"]),
+    ],
+)
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+def test_next_dace_determinism(
+    session: nox.Session,
+    device: DeviceOption,
+    meshlib: Literal["nomesh", "atlas"],
+) -> None:
+    """Run selected 'gt4py.next' DaCe tests twice and verify codegen
+    is byte-identical between the two runs."""
+
+    codegen_settings = CodeGenDaceTestSettings["dace"]
+    device_settings = DeviceTestSettings[device]
+    extras = [
+        "standard",
+        "testing",
+        *codegen_settings.get("extras", []),
+        *device_settings.get("extras", []),
+    ]
+    groups = ["test", *codegen_settings.get("groups", []), *device_settings.get("groups", [])]
+    mesh_markers: list[str] = []
+
+    match meshlib:
+        case "nomesh":
+            mesh_markers.append("not requires_atlas")
+        case "atlas":
+            mesh_markers.append("requires_atlas")
+            groups.append("frameworks")
+
+    # The `scripts` group provides `typer`, needed by the dace-determinism CLI.
+    install_session_venv(session, extras=extras, groups=[*groups, "scripts"])
+
+    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
+
+    # Execute the determinism script with the session venv's own python (resolved
+    # by nox from "python"); the script runs the pytest selection twice via
+    # `sys.executable` and compares the generated sources. A non-zero exit fails
+    # the session; the script writes report.txt + diffs/ under the workdir.
+    pytest_args = [
+        "--cache-clear",
+        "-sv",
+        "-n",
+        "auto",
+        "--dist",
+        "loadgroup",
+        "-m",
+        f"{markers}",
+        str(pathlib.Path("tests") / "next_tests"),
+    ]
+    session.run(
+        "python",
+        str(pathlib.Path("scripts") / "python" / "dace_determinism.py"),
+        "ci-check",
+        "--workdir",
+        str(REPO_ROOT / "_dace_deterministic_codegen"),
+        "--",
+        *pytest_args,
+        *session.posargs,
+        env=session.env,
     )
 
 

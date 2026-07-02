@@ -2,6 +2,24 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.11] - 2026-06-18
+
+### General
+
+- Add minimal harness for coding agents.
+- Improve the infrastructure for development scripts.
+
+### Cartesian
+
+- Add a DaCe GPU backend with `IJK`-loop layout.
+- Change DaCe GPU backends to unit alignment, enabling Fortran-style memory mapping and reducing memory footprint.
+- Change DaCe backends to nest the sequential vertical `K`-loop inside the parallel `IJ`-kernel on parallel targets.
+- Fix format of `extra` flags for device compilation.
+
+### Next
+
+See commit history.
+
 ## [1.1.10] - 2026-05-22
 
 ### General
