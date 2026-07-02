@@ -126,6 +126,9 @@ def _run_compiler(
         mock.patch.object(
             dace_wf_compilation.core_defs, "CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA
         ),
+        mock.patch(
+            "gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", return_value="xyz"
+        ),
     ):
         compiler(inp)
         compiled_sdfg = compile_mock.call_args.args[0]
