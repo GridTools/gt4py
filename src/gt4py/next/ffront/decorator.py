@@ -144,8 +144,6 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
 
         if static_params:
-            # Static parameter names come from either JIT compilation options or
-            # `entry_point.compile(..., **static_args)` while initializing the pool.
             argument_descriptor_mapping[arguments.StaticArg] = static_params
 
         if static_domains:
