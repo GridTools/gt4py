@@ -196,6 +196,7 @@ def _make_compile_job(
     definition_stage: Any,
     compile_time_args: arguments.CompileTimeArgs,
 ) -> compilation_runner.CompileJob:
+    """Prepare the compilation of `definition_stage` with `backend` as a job for a runner."""
     name = getattr(backend, "name", type(backend).__name__)
     if getattr(type(backend), "compile", None) is not gtx_backend.Backend.compile:
         # A customized `compile` is opaque: it cannot be decomposed into the

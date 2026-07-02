@@ -460,20 +460,26 @@ def make_deconstructor(
     The returned deconstructor produces one level of an object as a
     `Deconstruction` (an `EmptyDeconstruction` for terminal
     objects) whose `state` is a byte tag (a domain-separation tag, optionally
-    followed by a payload).
-    Per-type deconstructors are dispatched on the object's MRO; `overrides`
-    take precedence over the default rules. Objects without a matching
-    deconstructor are handled by `fallback` (by default deconstructed through
-    their fields for dataclasses and datamodels, or via the standard
-    ``__reduce_ex__`` protocol).
+    followed by a payload). Per-type deconstructors are dispatched on the
+    object's MRO.
 
-    ``name`` and ``module`` set the returned dispatcher's identity (like the
-    ``module`` argument of ``collections.namedtuple``): pass the name and
-    module under which the deconstructor will be stored to make it picklable
-    by reference (e.g. for shipping an executor carrying it to a process-pool
-    worker). Without them the dispatcher carries the identity that
-    ``functools.singledispatch`` copies from ``fallback``, so pickle would
-    resolve it to the plain fallback function instead.
+    Args:
+        overrides: Per-type deconstructors taking precedence over the default
+            rules.
+        fallback: Handles objects without a matching deconstructor (by default
+            deconstructed through their fields for dataclasses and datamodels,
+            or via the standard ``__reduce_ex__`` protocol).
+        name: Sets the returned dispatcher's ``__name__`` / ``__qualname__``
+            (like the ``module`` argument of ``collections.namedtuple``). Pass
+            the name under which the deconstructor will be stored to make it
+            picklable by reference (e.g. for shipping an executor carrying it
+            to a process-pool worker); without it the dispatcher carries the
+            identity that ``functools.singledispatch`` copies from `fallback`,
+            so pickle would resolve it to the plain fallback function instead.
+        module: Sets the returned dispatcher's ``__module__``; see `name`.
+
+    Returns:
+        A single-dispatch deconstructor with the registered implementations.
     """
     deconstructor = eve_utils.singledispatcher(
         fallback,

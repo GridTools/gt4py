@@ -6,12 +6,15 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+"""Runners executing prepared compilation jobs serially, in threads, or in worker processes."""
+
 from __future__ import annotations
 
 import atexit
 import concurrent.futures
 import dataclasses
 import multiprocessing
+import pathlib
 import pickle
 import threading
 import warnings
@@ -24,30 +27,26 @@ from gt4py.next.otf.compilation import cache as _cache
 
 @dataclasses.dataclass(frozen=True)
 class OffloadableWork:
-    """The decomposed standard compilation workflow of a `CompileJob`.
+    """Decomposed standard compilation workflow of a `CompileJob`, prepared main-side."""
 
-    Both halves are prepared main-side by the caller: `compilable` is the
-    already-lowered program (pickle-safe by construction), `executor` is the
-    backend's artifact-producing step. A runner may execute the executor
-    anywhere, including another process.
-    """
-
+    #: The already-lowered program; pickle-safe by construction.
     compilable: definitions.CompilableProgramDef
+    #: The backend's artifact-producing step. A runner may execute it anywhere,
+    #: including another process; its picklability is the runner's concern.
     executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact]
 
 
 @dataclasses.dataclass(frozen=True)
 class CompileJob:
-    """One compilation, fully prepared by the caller.
+    """One compilation, fully prepared by the caller."""
 
-    `run` compiles in the current thread and is always valid. `offload` is set
-    when the job follows the standard transforms/executor workflow and may
-    therefore be executed in another process; it is None when the backend
-    customizes `compile` and the job can only run as-is.
-    """
-
+    #: Label used in user-facing messages.
     name: str
+    #: Compiles in the current thread; always valid.
     run: Callable[[], stages.ExecutableProgram]
+    #: The decomposed standard workflow, for runners that can execute it in
+    #: another process; ``None`` when the backend customizes ``compile`` and
+    #: the job can only run as-is.
     offload: OffloadableWork | None = None
 
 
@@ -56,8 +55,9 @@ class CompilationRunner(Protocol):
     def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
         """Schedule `job`.
 
-        The returned future always yields a fully loaded ``ExecutableProgram``;
-        the runner is responsible for any cross-process hydration.
+        Returns:
+            A future yielding the fully loaded ``ExecutableProgram``; the
+            runner is responsible for any cross-process hydration.
         """
         ...
 
@@ -106,8 +106,6 @@ def _pool_worker_initializer(shared_session_cache_dir: str) -> None:
     Each worker would otherwise create its own ``TemporaryDirectory`` and scrub it
     on exit — taking the compiled artifacts with it before main can ``dlopen`` them.
     """
-    import pathlib
-
     _cache._session_cache_dir_path = pathlib.Path(shared_session_cache_dir)
 
 
@@ -218,6 +216,7 @@ class ProcessRunner:
 
 
 def from_config() -> CompilationRunner:
+    """Create a runner as configured by `config.BUILD_JOBS_MODE` and `config.BUILD_JOBS`."""
     mode = config.BUILD_JOBS_MODE
     if mode is config.BuildJobsMode.SERIAL or config.BUILD_JOBS <= 0:
         return SerialRunner()
@@ -255,6 +254,11 @@ def get_default_runner() -> CompilationRunner:
 
 
 def reset_default_runner() -> None:
+    """Shut down and discard the default runner, waiting for its ongoing jobs.
+
+    The next `get_default_runner` call creates a fresh runner from the
+    current configuration.
+    """
     global _default_runner
     with _default_runner_lock:
         if _default_runner is not None:
