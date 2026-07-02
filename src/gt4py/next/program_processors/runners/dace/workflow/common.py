@@ -72,7 +72,7 @@ def set_dace_config(
     dace.Config.set("cache", value="single")
 
     # Disable auto-detection of the CUDA architecture, and instead use the one provided by GT4Py.
-    if device_type == core_defs.CUPY_DEVICE_TYPE:
+    if core_defs.CUPY_DEVICE_TYPE is not None:
         dace.Config.set(
             "compiler.extra_cmake_args",
             value=f"-DLOCAL_CUDA_ARCHITECTURES={gtx_cmake.get_device_arch()}",
