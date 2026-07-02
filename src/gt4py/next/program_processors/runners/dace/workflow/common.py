@@ -133,6 +133,13 @@ def set_dace_config(
         dace.Config.set("compiler.cuda.backend", value="hip")
     elif device_type == core_defs.DeviceType.CUDA:
         dace.Config.set("compiler.cuda.backend", value="cuda")
+        if cuda_archs := os.environ.get("CUDAARCHS", "").strip():
+            # DaCe's CMake otherwise compiles and runs a probe on the local GPU —
+            # creating a CUDA context in the compiling process — to determine the
+            # architecture; when no device is visible (e.g. in a process-pool
+            # worker) the probe falls back to this list.
+            # TODO(havogt): we should move DaCe config to accept a cuda_arch without detection.
+            dace.Config.set("compiler.cuda.cuda_arch", value=cuda_archs.replace(";", ","))
 
     # Instrumentation of SDFG timers
     dace.Config.set("instrumentation", "report_each_invocation", value=False)

@@ -8,6 +8,7 @@
 
 import dataclasses
 import multiprocessing
+import os
 import unittest.mock as mock
 
 import pytest
@@ -99,6 +100,57 @@ def test_make_compile_job_is_opaque_for_customized_compile():
     assert job.offload is None
     assert callable(job.run())
     assert backend.compile_called
+
+
+def test_detect_cuda_archs_prefers_cudaarchs_env():
+    with mock.patch.dict(os.environ, {"CUDAARCHS": "80;90"}):
+        assert compilation_runner._detect_cuda_archs() == "80;90"
+
+
+def test_detect_cuda_archs_queries_device():
+    cp = mock.Mock()
+    cp.cuda.Device.return_value.compute_capability = "90"
+    with (
+        mock.patch.dict(os.environ),
+        mock.patch.object(compilation_runner.core_defs, "cp", cp),
+        mock.patch.object(
+            compilation_runner.core_defs,
+            "CUPY_DEVICE_TYPE",
+            compilation_runner.core_defs.DeviceType.CUDA,
+        ),
+    ):
+        os.environ.pop("CUDAARCHS", None)
+        assert compilation_runner._detect_cuda_archs() == "90"
+
+
+def test_detect_cuda_archs_none_without_cupy():
+    with (
+        mock.patch.dict(os.environ),
+        mock.patch.object(compilation_runner.core_defs, "cp", None),
+    ):
+        os.environ.pop("CUDAARCHS", None)
+        assert compilation_runner._detect_cuda_archs() is None
+
+
+def test_pool_worker_initializer_hides_gpus_when_archs_known(tmp_path):
+    with (
+        mock.patch.dict(os.environ),
+        mock.patch.object(compilation_runner._cache, "_session_cache_dir_path"),
+    ):
+        compilation_runner._pool_worker_initializer(str(tmp_path), "90")
+        assert os.environ["CUDAARCHS"] == "90"
+        assert os.environ["CUDA_VISIBLE_DEVICES"] == ""
+        assert compilation_runner._cache._session_cache_dir_path == tmp_path
+
+
+def test_pool_worker_initializer_leaves_gpus_visible_without_archs(tmp_path):
+    with (
+        mock.patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "3"}),
+        mock.patch.object(compilation_runner._cache, "_session_cache_dir_path"),
+    ):
+        compilation_runner._pool_worker_initializer(str(tmp_path), None)
+        assert os.environ["CUDA_VISIBLE_DEVICES"] == "3"
+        assert "CUDAARCHS" not in os.environ or os.environ["CUDAARCHS"] == ""
 
 
 def test_default_runner_is_created_lazily_and_reset_makes_a_fresh_one():

@@ -14,12 +14,14 @@ import atexit
 import concurrent.futures
 import dataclasses
 import multiprocessing
+import os
 import pathlib
 import pickle
 import threading
 import warnings
 from typing import Any, Callable, Protocol, runtime_checkable
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as _cache
@@ -100,13 +102,43 @@ class ThreadRunner:
         self._pool.shutdown(wait=wait)
 
 
-def _pool_worker_initializer(shared_session_cache_dir: str) -> None:
-    """Point the worker's session-lifetime build cache at the main process's temp dir.
+def _detect_cuda_archs() -> str | None:
+    """CUDA architecture for worker builds (CMake style, e.g. ``"90"``), or None.
 
-    Each worker would otherwise create its own ``TemporaryDirectory`` and scrub it
-    on exit — taking the compiled artifacts with it before main can ``dlopen`` them.
+    An already-set ``CUDAARCHS`` takes precedence. The device attribute query
+    initializes the CUDA runtime but does not create a context in this process.
+    """
+    if archs := os.environ.get("CUDAARCHS", "").strip():
+        return archs
+    if (
+        core_defs.cp is None  # type: ignore[attr-defined] # conditional export for optional cupy
+        or core_defs.CUPY_DEVICE_TYPE is not core_defs.DeviceType.CUDA
+    ):
+        return None
+    try:
+        return core_defs.cp.cuda.Device(0).compute_capability  # type: ignore[attr-defined]
+    except Exception:  # no usable device; cupy raises library-specific errors
+        return None
+
+
+def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | None) -> None:
+    """Prepare a worker process for building without touching the parent's GPU.
+
+    Points the worker's session-lifetime build cache at the main process's temp
+    dir: each worker would otherwise create its own ``TemporaryDirectory`` and
+    scrub it on exit — taking the compiled artifacts with it before main can
+    ``dlopen`` them.
+
+    When the CUDA architectures are known, hides all GPUs from the worker and
+    exports ``CUDAARCHS`` instead: GPU builds otherwise probe the device for its
+    architecture (gt4py's cmake build system via cupy, dace's CMake via a
+    ``try_run`` binary), each probe creating a CUDA context on the GPU of the
+    parent — which may be running kernels concurrently.
     """
     _cache._session_cache_dir_path = pathlib.Path(shared_session_cache_dir)
+    if cuda_archs is not None:
+        os.environ["CUDAARCHS"] = cuda_archs
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 
 def _config_snapshot() -> dict[str, Any]:
@@ -169,7 +201,7 @@ class ProcessRunner:
             max_workers=max_workers,
             mp_context=ctx,
             initializer=_pool_worker_initializer,
-            initargs=(shared_session_cache_dir,),
+            initargs=(shared_session_cache_dir, _detect_cuda_archs()),
         )
 
     def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
