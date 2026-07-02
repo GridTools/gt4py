@@ -632,9 +632,19 @@ def index(dim: common.Dimension) -> itir.FunCall:
     return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
 
 
-def map_(op):
-    """Create a `map_` call."""
-    return call(call("map_")(op))
+def map_list(op):
+    """Create a `map_list` call."""
+    return call(call("map_list")(op))
+
+
+def tree_map_tuple(op):
+    """Create a `tree_map_tuple` call: tree_map_tuple(op)(tup1, tup2, ...)."""
+    return call(call("tree_map_tuple")(op))
+
+
+def map_tuple(op):
+    """Create a `map_tuple` call: map_tuple(op)(tup)."""
+    return call(call("map_tuple")(op))
 
 
 def reduce(op, expr):

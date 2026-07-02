@@ -429,23 +429,15 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return self._lower_and_map("if_", *node.args)
 
         cond_ = self.visit(node.args[0])
+        true_ = self.visit(node.args[1])
+        false_ = self.visit(node.args[2])
         cond_symref_name = f"__cond_{itir.lenient_ir_fingerprinter(cond_)}"
 
-        def create_if(
-            true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
-        ) -> itir.FunCall:
-            return _map(
-                "if_",
-                (im.ref(cond_symref_name), true_, false_),
-                (node.args[0].type, *arg_types),
+        result = im.tree_map_tuple(
+            im.lambda_("__a", "__b")(
+                im.op_as_fieldop("if_")(im.ref(cond_symref_name), im.ref("__a"), im.ref("__b"))
             )
-
-        result = lowering_utils.process_elements(
-            create_if,
-            (self.visit(node.args[1]), self.visit(node.args[2])),
-            node.type,
-            arg_types=(node.args[1].type, node.args[2].type),
-        )
+        )(true_, false_)
 
         return im.let(cond_symref_name, cond_)(result)
 
@@ -551,7 +543,7 @@ def _map(
     original_arg_types: tuple[ts.TypeSpec, ...],
 ) -> itir.FunCall:
     """
-    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
+    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_list`ing lists.
     """
     if all(
         isinstance(t, (ts.ScalarType, ts.DimensionType, ts.DomainType))
@@ -564,7 +556,7 @@ def _map(
             promote_to_list(arg_type)(larg)
             for arg_type, larg in zip(original_arg_types, lowered_args)
         )
-        op = im.map_(op)
+        op = im.map_list(op)
 
     return im.op_as_fieldop(op)(*lowered_args)
 

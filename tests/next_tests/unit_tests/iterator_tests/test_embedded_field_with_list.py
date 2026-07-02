@@ -17,7 +17,7 @@ from gt4py.next.iterator.builtins import (
     deref,
     if_,
     make_const_list,
-    map_,
+    map_list,
     neighbors,
     plus,
 )
@@ -70,7 +70,7 @@ def test_write_const_list():
 def test_write_map_neighbors_and_const_list():
     def testee(inp):
         domain = runtime.UnstructuredDomain({E: range(2)})
-        return as_fieldop(lambda x, y: map_(plus)(deref(x), deref(y)), domain)(
+        return as_fieldop(lambda x, y: map_list(plus)(deref(x), deref(y)), domain)(
             as_fieldop(lambda it: neighbors(E2V, it), domain)(inp),
             as_fieldop(lambda: make_const_list(42.0), domain)(),
         )
@@ -86,7 +86,7 @@ def test_write_map_neighbors_and_const_list():
 def test_write_map_conditional_neighbors_and_const_list():
     def testee(inp, mask):
         domain = runtime.UnstructuredDomain({E: range(2)})
-        return as_fieldop(lambda m, x, y: map_(if_)(deref(m), deref(x), deref(y)), domain)(
+        return as_fieldop(lambda m, x, y: map_list(if_)(deref(m), deref(x), deref(y)), domain)(
             as_fieldop(lambda it: make_const_list(deref(it)), domain)(mask),
             as_fieldop(lambda it: neighbors(E2V, it), domain)(inp),
             as_fieldop(lambda it: make_const_list(deref(it)), domain)(42.0),
@@ -106,7 +106,7 @@ def test_write_map_conditional_neighbors_and_const_list():
 def test_write_non_mapped_conditional_neighbors_and_const_list():
     """
     This test-case demonstrates a non-supported pattern:
-    Current ITIR requires the `if_` to be `map_`ed, see `test_write_map_conditional_neighbors_and_const_list`.
+    Current ITIR requires the `if_` to be `map_list`ed, see `test_write_map_conditional_neighbors_and_const_list`.
     We keep it here for documenting corner cases of the `itir.List` implementation for future discussions.
     """
 
@@ -134,7 +134,7 @@ def test_write_non_mapped_conditional_neighbors_and_const_list():
 def test_write_map_const_list_and_const_list():
     def testee():
         domain = runtime.UnstructuredDomain({E: range(2)})
-        return as_fieldop(lambda x, y: map_(plus)(deref(x), deref(y)), domain)(
+        return as_fieldop(lambda x, y: map_list(plus)(deref(x), deref(y)), domain)(
             as_fieldop(lambda: make_const_list(1.0), domain)(),
             as_fieldop(lambda: make_const_list(42.0), domain)(),
         )

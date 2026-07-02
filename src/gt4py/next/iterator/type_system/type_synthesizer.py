@@ -20,7 +20,6 @@ from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
-from gt4py.next.utils import tree_map
 
 
 def _type_synth_arg_cache_key(type_or_synth: TypeOrTypeSynthesizer) -> int:
@@ -203,7 +202,7 @@ def if_(
     pred: ts.ScalarType | ts.DeferredType, true_branch: ts.DataType, false_branch: ts.DataType
 ) -> ts.DataType:
     if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
-        return tree_map(
+        return utils.tree_map(
             collection_type=ts.TupleType,
             result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
         )(functools.partial(if_, pred))(true_branch, false_branch)
@@ -611,7 +610,7 @@ def scan(
 
 
 @_register_builtin_type_synthesizer
-def map_(op: TypeSynthesizer) -> TypeSynthesizer:
+def map_list(op: TypeSynthesizer) -> TypeSynthesizer:
     @type_synthesizer
     def applied_map(
         *args: ts.ListType, offset_provider_type: common.OffsetProviderType
@@ -627,6 +626,67 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         return ts.ListType(element_type=el_type, offset_type=offset_type)
 
     return applied_map
+
+
+def _tuple_map_synthesizer(
+    builtin_name: str, *, recursive: bool
+) -> Callable[..., TypeOrTypeSynthesizer]:
+    """Shared implementation for `tree_map_tuple` (recursive) and `map_tuple` (top-level)."""
+
+    def tuple_structure(type_: ts.TypeSpec) -> tuple[object, ...] | None:
+        if isinstance(type_, ts.TupleType):
+            return tuple(tuple_structure(el_type) for el_type in type_.types)
+        return None
+
+    def ensure_same_tuple_structure(args: tuple[ts.TupleType, ...]) -> None:
+        expected_structure = tuple_structure(args[0])
+        if any(tuple_structure(arg) != expected_structure for arg in args[1:]):
+            raise TypeError(
+                f"'{builtin_name}' requires all arguments to have the same tuple structure."
+            )
+
+    def factory(op: TypeSynthesizer) -> TypeSynthesizer:
+        @type_synthesizer
+        def applied_map(
+            *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
+        ) -> ts.TupleType:
+            if not args:
+                raise TypeError(f"'{builtin_name}' requires at least one argument.")
+            if not recursive and len(args) != 1:
+                raise TypeError(f"'{builtin_name}' requires exactly one argument, got {len(args)}.")
+            if not all(isinstance(a, ts.TupleType) for a in args):
+                raise TypeError(
+                    f"'{builtin_name}' requires all top-level arguments to be TupleType, "
+                    f"got {[type(a).__name__ for a in args]}."
+                )
+            if recursive:
+                ensure_same_tuple_structure(args)
+
+            def leaf_op(*leaf_types: ts.TypeSpec) -> ts.TypeSpec:
+                return op(*leaf_types, offset_provider_type=offset_provider_type)  # type: ignore[return-value]
+
+            if recursive:
+                return utils.tree_map(  # type: ignore[return-value]
+                    leaf_op,
+                    collection_type=ts.TupleType,
+                    result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
+                )(*args)
+
+            # Non-recursive: apply `op` once per top-level element.
+            (arg,) = args
+            return ts.TupleType(types=[leaf_op(el) for el in arg.types])
+
+        return applied_map
+
+    return factory
+
+
+tree_map_tuple = _register_builtin_type_synthesizer(
+    _tuple_map_synthesizer("tree_map_tuple", recursive=True), fun_names=["tree_map_tuple"]
+)
+map_tuple = _register_builtin_type_synthesizer(
+    _tuple_map_synthesizer("map_tuple", recursive=False), fun_names=["map_tuple"]
+)
 
 
 @_register_builtin_type_synthesizer
