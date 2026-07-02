@@ -78,7 +78,7 @@ def copy_stencil(field_a: Field3D, field_b: Field3D):
 
 @gtscript.function
 def a_gtscript_function(b):
-    return sqrt(abs(b[0, 1, 0]))
+    return sqrt(abs(b[0, 0, 0]))
 
 
 @register
