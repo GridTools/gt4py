@@ -10,26 +10,51 @@ from __future__ import annotations
 
 import atexit
 import concurrent.futures
+import dataclasses
 import multiprocessing
 import pickle
 import threading
 import warnings
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
-from gt4py.next import backend as next_backend, config
-from gt4py.next.otf import arguments, definitions, stages
+from gt4py.next import config
+from gt4py.next.otf import definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as _cache
+
+
+@dataclasses.dataclass(frozen=True)
+class OffloadableWork:
+    """The decomposed standard compilation workflow of a `CompileJob`.
+
+    Both halves are prepared main-side by the caller: `compilable` is the
+    already-lowered program (pickle-safe by construction), `executor` is the
+    backend's artifact-producing step. A runner may execute the executor
+    anywhere, including another process.
+    """
+
+    compilable: definitions.CompilableProgramDef
+    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact]
+
+
+@dataclasses.dataclass(frozen=True)
+class CompileJob:
+    """One compilation, fully prepared by the caller.
+
+    `run` compiles in the current thread and is always valid. `offload` is set
+    when the job follows the standard transforms/executor workflow and may
+    therefore be executed in another process; it is None when the backend
+    customizes `compile` and the job can only run as-is.
+    """
+
+    name: str
+    run: Callable[[], stages.ExecutableProgram]
+    offload: OffloadableWork | None = None
 
 
 @runtime_checkable
 class CompilationRunner(Protocol):
-    def submit(
-        self,
-        backend: next_backend.Backend,
-        definition_stage: Any,
-        compile_time_args: arguments.CompileTimeArgs,
-    ) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        """Compile ``definition_stage`` with ``backend``.
+    def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
+        """Schedule `job`.
 
         The returned future always yields a fully loaded ``ExecutableProgram``;
         the runner is responsible for any cross-process hydration.
@@ -41,14 +66,12 @@ class CompilationRunner(Protocol):
         ...
 
 
-def _compile_in_calling_thread(
-    backend: next_backend.Backend,
-    definition_stage: Any,
-    compile_time_args: arguments.CompileTimeArgs,
+def _run_in_calling_thread(
+    job: CompileJob,
 ) -> concurrent.futures.Future[stages.ExecutableProgram]:
     future: concurrent.futures.Future[stages.ExecutableProgram] = concurrent.futures.Future()
     try:
-        future.set_result(backend.compile(definition_stage, compile_time_args=compile_time_args))
+        future.set_result(job.run())
     except BaseException as exception:  # re-raised via the future
         future.set_exception(exception)
     return future
@@ -57,37 +80,21 @@ def _compile_in_calling_thread(
 class SerialRunner:
     """Runs compilation in the calling thread; the returned future is already done."""
 
-    def submit(
-        self,
-        backend: next_backend.Backend,
-        definition_stage: Any,
-        compile_time_args: arguments.CompileTimeArgs,
-    ) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        return _compile_in_calling_thread(backend, definition_stage, compile_time_args)
+    def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
+        return _run_in_calling_thread(job)
 
     def shutdown(self, wait: bool = True) -> None:
         return None
 
 
 class ThreadRunner:
-    """Compiles in a ``ThreadPoolExecutor``.
-
-    ``Backend.compile`` performs build and load in one step, so the future
-    yields the loaded ``ExecutableProgram`` directly.
-    """
+    """Compiles in a ``ThreadPoolExecutor``."""
 
     def __init__(self, max_workers: int) -> None:
         self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 
-    def submit(
-        self,
-        backend: next_backend.Backend,
-        definition_stage: Any,
-        compile_time_args: arguments.CompileTimeArgs,
-    ) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        return self._pool.submit(
-            backend.compile, definition_stage, compile_time_args=compile_time_args
-        )
+    def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
+        return self._pool.submit(job.run)
 
     def shutdown(self, wait: bool = True) -> None:
         self._pool.shutdown(wait=wait)
@@ -140,21 +147,25 @@ def _process_pool_compile_job(
 class ProcessRunner:
     """Compiles in a ``ProcessPoolExecutor`` (``spawn``).
 
-    The worker runs ``backend.executor`` (post-translation compile) and returns a
+    The worker runs the job's executor (post-lowering compile) and returns a
     picklable ``CompilationArtifact``; the main process rehydrates it via
     ``artifact.load()`` (in a done-callback) so the returned future yields a live
     ``ExecutableProgram``.
 
-    Backends that cannot be offloaded — a customized ``compile`` or an executor
-    that stdlib ``pickle`` cannot serialize — are compiled in the calling thread
+    Jobs that cannot be offloaded — no decomposed workflow or an executor that
+    stdlib ``pickle`` cannot serialize — are compiled in the calling thread
     instead (with a warning), so they behave as under ``SerialRunner``.
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
         # spawn (not fork): the parent may already hold running threads (BLAS/OpenMP,
         # this pool's own manager thread), CUDA contexts and MPI state, none of which
-        # survive fork safely. Fork also would not relax the picklability requirement:
-        # ProcessPoolExecutor pickles every submitted task regardless of start method.
+        # survive fork safely. The gtfn GPU build even touches CUDA at *compile* time
+        # (`build_systems/cmake.py` queries `cp.cuda.Device(0).compute_capability`
+        # when `CUDAARCHS` is unset), so a forked worker with an inherited CUDA
+        # context would fail right there. Fork also would not relax the picklability
+        # requirement: ProcessPoolExecutor pickles every submitted task regardless
+        # of start method.
         ctx = multiprocessing.get_context("spawn")
         self._pool = concurrent.futures.ProcessPoolExecutor(
             max_workers=max_workers,
@@ -164,42 +175,29 @@ class ProcessRunner:
         )
 
     @staticmethod
-    def _executor_blob_for_offload(backend: next_backend.Backend) -> tuple[bytes | None, str]:
-        # The transforms/executor split in `submit` replicates `Backend.compile`;
-        # it is only faithful if the backend does not customize `compile`.
-        if getattr(type(backend), "compile", None) is not next_backend.Backend.compile:
-            return None, "it customizes 'compile'"
+    def _executor_blob_for_offload(job: CompileJob) -> tuple[bytes | None, str]:
+        if job.offload is None:
+            return None, "it does not use the standard compilation workflow (customized 'compile')"
         try:
-            return pickle.dumps(backend.executor), ""
+            return pickle.dumps(job.offload.executor), ""
         except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
             return None, f"its executor is not picklable ({error!s})"
 
-    def submit(
-        self,
-        backend: next_backend.Backend,
-        definition_stage: Any,
-        compile_time_args: arguments.CompileTimeArgs,
-    ) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        executor_blob, reason = self._executor_blob_for_offload(backend)
+    def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
+        executor_blob, blocker = self._executor_blob_for_offload(job)
         if executor_blob is None:
             warnings.warn(
-                f"Compiling backend '{getattr(backend, 'name', type(backend).__name__)}' "
-                f"in the calling thread instead of a worker process because {reason}.",
+                f"Compiling '{job.name}' in the calling thread instead of a worker process "
+                f"because {blocker}.",
                 stacklevel=2,
             )
-            return _compile_in_calling_thread(backend, definition_stage, compile_time_args)
+            return _run_in_calling_thread(job)
 
-        # Frontend lowering stays main-side: decorators rebind the user's
-        # function module attribute, so the raw ``types.FunctionType`` does not
-        # cross the process boundary. The worker receives the lowered,
-        # pickle-safe ``CompilableProgramDef`` and runs only ``backend.executor``.
-        compilable = backend.transforms(
-            definitions.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
-        )
+        assert job.offload is not None
         artifact_future = self._pool.submit(
             _process_pool_compile_job,
             executor_blob=executor_blob,
-            compilable=compilable,
+            compilable=job.offload.compilable,
             config_overrides=_config_snapshot(),
         )
         loaded: concurrent.futures.Future[stages.ExecutableProgram] = concurrent.futures.Future()

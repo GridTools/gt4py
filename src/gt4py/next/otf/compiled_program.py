@@ -32,7 +32,7 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
-from gt4py.next.otf import arguments, compilation_runner, stages
+from gt4py.next.otf import arguments, compilation_runner, definitions as otf_definitions, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
@@ -162,6 +162,36 @@ def wait_for_compilation() -> None:
     proceeding with further operations. E.g. when the first call is included in timings.
     """
     compilation_runner.reset_default_runner()
+
+
+def _make_compile_job(
+    backend: gtx_backend.Backend,
+    definition_stage: Any,
+    compile_time_args: arguments.CompileTimeArgs,
+) -> compilation_runner.CompileJob:
+    name = getattr(backend, "name", type(backend).__name__)
+    if getattr(type(backend), "compile", None) is not gtx_backend.Backend.compile:
+        # A customized `compile` is opaque: it cannot be decomposed into the
+        # standard transforms/executor workflow, so the job can only run as-is.
+        return compilation_runner.CompileJob(
+            name=name,
+            run=functools.partial(
+                backend.compile, definition_stage, compile_time_args=compile_time_args
+            ),
+        )
+    # Frontend lowering happens here, main-side: decorators rebind the user's
+    # function module attribute, so the raw `types.FunctionType` must not cross
+    # a process boundary; the lowered `CompilableProgramDef` is pickle-safe.
+    compilable = backend.transforms(
+        otf_definitions.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
+    )
+    return compilation_runner.CompileJob(
+        name=name,
+        run=lambda: backend.executor(compilable).load(),
+        offload=compilation_runner.OffloadableWork(
+            compilable=compilable, executor=backend.executor
+        ),
+    )
 
 
 def _make_tuple_expr(el_exprs: list[str]) -> str:
@@ -623,7 +653,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         )
 
         runner = self.compilation_runner or compilation_runner.get_default_runner()
-        future = runner.submit(self.backend, self.definition_stage, compile_time_args)
+        future = runner.submit(
+            _make_compile_job(self.backend, self.definition_stage, compile_time_args)
+        )
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.

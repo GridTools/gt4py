@@ -13,7 +13,7 @@ import unittest.mock as mock
 import pytest
 
 from gt4py.next import backend as next_backend, config
-from gt4py.next.otf import compilation_runner
+from gt4py.next.otf import compilation_runner, compiled_program
 
 
 @pytest.fixture
@@ -29,23 +29,51 @@ class _NoOpArtifact:
         return lambda *args, **kwargs: None
 
 
-def _make_backend(executor):
-    return next_backend.Backend(
-        name="test_backend", executor=executor, allocator=None, transforms=lambda inp: inp
+def _decomposed_job(executor):
+    compilable = "compilable"
+    return compilation_runner.CompileJob(
+        name="test_job",
+        run=lambda: executor(compilable).load(),
+        offload=compilation_runner.OffloadableWork(compilable=compilable, executor=executor),
     )
 
 
 def test_process_runner_falls_back_on_unpicklable_executor(process_runner):
-    backend = _make_backend(executor=lambda compilable: _NoOpArtifact())
+    job = _decomposed_job(executor=lambda compilable: _NoOpArtifact())
 
     with pytest.warns(UserWarning, match="not picklable"):
-        future = process_runner.submit(backend, definition_stage=None, compile_time_args=None)
+        future = process_runner.submit(job)
 
     assert future.done()
     assert callable(future.result())
 
 
-def test_process_runner_falls_back_on_customized_compile(process_runner):
+def test_process_runner_falls_back_on_non_offloadable_job(process_runner):
+    job = compilation_runner.CompileJob(name="opaque", run=lambda: _NoOpArtifact().load())
+
+    with pytest.warns(UserWarning, match="standard compilation workflow"):
+        future = process_runner.submit(job)
+
+    assert future.done()
+    assert callable(future.result())
+
+
+def test_make_compile_job_decomposes_standard_backend():
+    backend = next_backend.Backend(
+        name="test_backend",
+        executor=lambda compilable: _NoOpArtifact(),
+        allocator=None,
+        transforms=lambda inp: inp,
+    )
+
+    job = compiled_program._make_compile_job(backend, definition_stage=None, compile_time_args=None)
+
+    assert job.offload is not None
+    assert job.offload.executor is backend.executor
+    assert callable(job.run())
+
+
+def test_make_compile_job_is_opaque_for_customized_compile():
     class _WrapperBackend:
         def __init__(self, wrapped):
             self._wrapped = wrapped
@@ -57,14 +85,20 @@ def test_process_runner_falls_back_on_customized_compile(process_runner):
             self.compile_called = True
             return self._wrapped.compile(program, compile_time_args=compile_time_args)
 
-    backend = _WrapperBackend(_make_backend(executor=lambda compilable: _NoOpArtifact()))
+    backend = _WrapperBackend(
+        next_backend.Backend(
+            name="test_backend",
+            executor=lambda compilable: _NoOpArtifact(),
+            allocator=None,
+            transforms=lambda inp: inp,
+        )
+    )
 
-    with pytest.warns(UserWarning, match="customizes 'compile'"):
-        future = process_runner.submit(backend, definition_stage=None, compile_time_args=None)
+    job = compiled_program._make_compile_job(backend, definition_stage=None, compile_time_args=None)
 
-    assert future.done()
+    assert job.offload is None
+    assert callable(job.run())
     assert backend.compile_called
-    assert callable(future.result())
 
 
 def test_default_runner_is_created_lazily_and_reset_makes_a_fresh_one():
