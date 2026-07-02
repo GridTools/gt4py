@@ -10,13 +10,11 @@ from typing import Optional
 
 import pytest
 
-from gt4py.next import (
-    Dimension,
-    DimensionKind,
-)
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next import Dimension, DimensionKind
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.iterator.type_system import type_specifications as ts_it
+from gt4py.next.type_system import type_info, type_specifications as ts
+
 
 TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
 
@@ -558,7 +556,26 @@ class TestSubstituteTypeVars:
 
     def test_concrete_is_returned_unchanged(self):
         concrete = ts.FieldType(dims=[TDim], dtype=float64_type)
-        assert type_info.substitute_type_vars(concrete, {"T": float32_type}) == concrete
+        assert type_info.substitute_type_vars(concrete, {"T": float32_type}) is concrete
+
+    def test_substitute_operator_wrapper_type(self):
+        # wrapper types (e.g. `FieldOperatorType`) carry their signature in a `definition`
+        # field; the generic traversal substitutes through them without special-casing
+        fieldop_type = ts_ffront.FieldOperatorType(
+            definition=ts.FunctionType(
+                pos_only_args=[ts.FieldType(dims=[TDim], dtype=float_var)],
+                pos_or_kw_args={},
+                kw_only_args={},
+                returns=ts.FieldType(dims=[TDim], dtype=float_var),
+            )
+        )
+        substituted = type_info.substitute_type_vars(fieldop_type, {"T": float32_type})
+        assert isinstance(substituted, ts_ffront.FieldOperatorType)
+        assert substituted.definition.pos_only_args[0] == ts.FieldType(
+            dims=[TDim], dtype=float32_type
+        )
+        assert substituted.definition.returns == ts.FieldType(dims=[TDim], dtype=float32_type)
+        assert not type_info.is_generic(substituted)
 
     def test_substitute_function_type(self):
         func_type = ts.FunctionType(

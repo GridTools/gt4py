@@ -14,7 +14,7 @@ from typing import Any, Final, Literal, Sequence, Type, TypeGuard, TypeVar, cast
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils
+from gt4py.eve import datamodels as eve_datamodels, extended_typing as xtyping, utils
 from gt4py.next import common, utils as next_utils
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
@@ -66,42 +66,72 @@ def _function_type_arg_groups(
     )
 
 
-def _function_type_children(function_type: ts.FunctionType) -> tuple[ts.TypeSpec, ...]:
-    """Return the argument and return sub-types of a function type, in canonical order."""
-    return tuple(child for group in _function_type_arg_groups(function_type) for child in group)
+_TypeSpecT = TypeVar("_TypeSpecT", bound=ts.TypeSpec)
 
 
-def _map_function_type(
-    function_type: ts.FunctionType, transform: Callable[[ts.TypeSpec], ts.TypeSpec]
-) -> ts.FunctionType:
-    """Apply ``transform`` to each argument and return sub-type of a function type."""
-    return ts.FunctionType(
-        pos_only_args=[transform(a) for a in function_type.pos_only_args],
-        pos_or_kw_args={name: transform(a) for name, a in function_type.pos_or_kw_args.items()},
-        kw_only_args={name: transform(a) for name, a in function_type.kw_only_args.items()},
-        returns=transform(function_type.returns),
-    )
-
-
-def _type_params(symbol_type: ts.TypeSpec) -> tuple[ts.TypeSpec, ...]:
-    """Return the immediate type-parameter sub-types of ``symbol_type``.
-
-    These are its dtype, element type, tuple elements, or function argument / return types.
+def _map_field_value(value: Any, transform: Callable[[ts.TypeSpec], ts.TypeSpec]) -> Any:
     """
-    match symbol_type:
-        case ts.FieldType(dtype=dtype):
-            return (dtype,)
-        case ts.ListType(element_type=element_type):
-            return (element_type,)
-        case ts.TupleType(types=types) | ts.NamedCollectionType(types=types):
-            return tuple(types)
-        case ts.FunctionType():
-            return _function_type_children(symbol_type)
-    # callable type wrappers (e.g. the field operator types in `ffront`) carry their
-    # signature in a `definition` attribute
-    if isinstance(definition := getattr(symbol_type, "definition", None), ts.TypeSpec):
-        return (definition,)
-    return ()
+    Apply ``transform`` to the `TypeSpec` instances inside a datamodel field value.
+
+    Preserves the container structure and the identity of the value if nothing changes.
+    """
+    if isinstance(value, ts.TypeSpec):
+        return transform(value)
+    if isinstance(value, (list, tuple)):
+        new_items = [transform(v) if isinstance(v, ts.TypeSpec) else v for v in value]
+        if all(new is old for new, old in zip(new_items, value)):
+            return value
+        return type(value)(new_items)
+    if isinstance(value, dict):
+        new_values = {
+            k: transform(v) if isinstance(v, ts.TypeSpec) else v for k, v in value.items()
+        }
+        if all(new is old for new, old in zip(new_values.values(), value.values())):
+            return value
+        return new_values
+    return value
+
+
+def iter_type_children(symbol_type: ts.TypeSpec) -> Iterator[ts.TypeSpec]:
+    """
+    Iterate over the immediate `TypeSpec` children of ``symbol_type``, in field order.
+
+    The children are derived generically from the datamodel fields of the type: every field
+    value that is a `TypeSpec`, or a list / tuple / dict containing `TypeSpec` values, is a
+    child. E.g. the dtype of a `FieldType`, the element types of the collection types, the
+    argument and return types of a `FunctionType`, and the signature (``definition``) of the
+    callable wrapper types (field operators etc.) -- including `TypeSpec` subclasses defined
+    outside this module, without requiring registration here.
+    """
+    for name in type(symbol_type).__datamodel_fields__.keys():
+        value = getattr(symbol_type, name)
+        if isinstance(value, ts.TypeSpec):
+            yield value
+        elif isinstance(value, (list, tuple)):
+            yield from (v for v in value if isinstance(v, ts.TypeSpec))
+        elif isinstance(value, dict):
+            yield from (v for v in value.values() if isinstance(v, ts.TypeSpec))
+
+
+def map_type_children(
+    symbol_type: _TypeSpecT, transform: Callable[[ts.TypeSpec], ts.TypeSpec]
+) -> _TypeSpecT:
+    """
+    Reconstruct ``symbol_type`` with ``transform`` applied to each immediate `TypeSpec` child.
+
+    The children are the same as in :func:`iter_type_children`; all other fields are kept
+    unchanged. If no child changes (by identity), ``symbol_type`` itself is returned.
+    Together with :func:`iter_type_children` this forms the generic one-level traversal API
+    on which recursive algorithms over the type system are built (`is_generic`,
+    `substitute_type_vars`, ...).
+    """
+    changes: dict[str, Any] = {}
+    for name in type(symbol_type).__datamodel_fields__.keys():
+        value = getattr(symbol_type, name)
+        new_value = _map_field_value(value, transform)
+        if new_value is not value:
+            changes[name] = new_value
+    return eve_datamodels.evolve(symbol_type, **changes) if changes else symbol_type
 
 
 def is_generic(symbol_type: ts.TypeSpec) -> bool:
@@ -129,7 +159,7 @@ def is_generic(symbol_type: ts.TypeSpec) -> bool:
     """
     if isinstance(symbol_type, (ts.DeferredType, ts.TypeVarType)):
         return True
-    return any(is_generic(p) for p in _type_params(symbol_type))
+    return any(is_generic(child) for child in iter_type_children(symbol_type))
 
 
 def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
@@ -723,6 +753,7 @@ def substitute_type_vars(
     Replace all type variables in ``type_`` that are bound in ``binding``.
 
     Unbound type variables and all other generic parts (e.g. `DeferredType`) are kept as-is.
+    Fully concrete (sub-)types are returned unchanged (by identity).
 
     Examples:
         >>> var = ts.TypeVarType(name="T", constraints=(ts.ScalarType(kind=ts.ScalarKind.FLOAT64),))
@@ -738,25 +769,12 @@ def substitute_type_vars(
     if not binding:
         return type_
 
-    def substitute_leaf(leaf: ts.TypeSpec) -> ts.TypeSpec:
-        # `tree_map_type` has already mapped the tuple structure; what is left is to substitute
-        # inside the primitive constituents, i.e. in their dtype / element type / signature.
-        match leaf:
-            case ts.TypeVarType():
-                return binding.get(leaf.name, leaf)
-            case ts.FieldType(dims=dims, dtype=dtype):
-                new_dtype = substitute_type_vars(dtype, binding)
-                assert isinstance(new_dtype, (ts.ScalarType, ts.ListType, ts.TypeVarType))
-                return ts.FieldType(dims=dims, dtype=new_dtype)
-            case ts.ListType(element_type=element_type, offset_type=offset_type):
-                new_element_type = substitute_type_vars(element_type, binding)
-                assert isinstance(new_element_type, ts.DataType)
-                return ts.ListType(element_type=new_element_type, offset_type=offset_type)
-            case ts.FunctionType():
-                return _map_function_type(leaf, lambda a: substitute_type_vars(a, binding))
-        return leaf
+    def substitute(current: ts.TypeSpec) -> ts.TypeSpec:
+        if isinstance(current, ts.TypeVarType):
+            return binding.get(current.name, current)
+        return map_type_children(current, substitute)
 
-    return tree_map_type(substitute_leaf)(type_)
+    return substitute(type_)
 
 
 def promote(
