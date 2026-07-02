@@ -227,6 +227,8 @@ _T = TypeVar("_T")
 
 @runtime_checkable
 class SingleDispatchCallable(Protocol[_P, _T]):
+    __name__: str
+    __qualname__: str
     registry: Mapping[Any, Callable[_P, _T]]
 
     def dispatch(self, cls: Any) -> Callable[_P, _T]: ...

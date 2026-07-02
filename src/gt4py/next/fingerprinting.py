@@ -451,6 +451,8 @@ def make_deconstructor(
     overrides: Optional[Mapping[type, Deconstructor]] = None,
     *,
     fallback: Deconstructor,
+    name: Optional[str] = None,
+    module: Optional[str] = None,
 ) -> Deconstructor:
     """
     Create a deconstructor, optionally with customized per-type deconstruction.
@@ -464,43 +466,61 @@ def make_deconstructor(
     deconstructor are handled by `fallback` (by default deconstructed through
     their fields for dataclasses and datamodels, or via the standard
     ``__reduce_ex__`` protocol).
-    """
 
-    return eve_utils.singledispatcher(
+    ``name`` and ``module`` set the returned dispatcher's identity (like the
+    ``module`` argument of ``collections.namedtuple``): pass the name and
+    module under which the deconstructor will be stored to make it picklable
+    by reference (e.g. for shipping an executor carrying it to a process-pool
+    worker). Without them the dispatcher carries the identity that
+    ``functools.singledispatch`` copies from ``fallback``, so pickle would
+    resolve it to the plain fallback function instead.
+    """
+    deconstructor = eve_utils.singledispatcher(
         fallback,
         implementations={**_COMMON_DECONSTRUCTORS, **(overrides or {})},
     )
+    if name is not None:
+        deconstructor.__name__ = deconstructor.__qualname__ = name
+    if module is not None:
+        deconstructor.__module__ = module
+    return deconstructor
 
 
 def make_strict_data_deconstructor(
     overrides: Optional[Mapping[type, Deconstructor]] = None,
+    *,
+    name: Optional[str] = None,
+    module: Optional[str] = None,
 ) -> Deconstructor:
     """Build a strict deconstructor with the standard per-type rules.
 
-    A deconstructor built with custom ``overrides`` has no module-level home
-    and is therefore not picklable by reference; only the process-wide
-    singletons (:data:`strict_fingerprint_deconstructor`,
-    :data:`lenient_fingerprint_deconstructor`) round-trip through stdlib
-    ``pickle`` (e.g. when an executor carrying one is shipped to a
-    process-pool worker).
+    See `make_deconstructor` for the meaning of ``name`` and ``module``; a
+    deconstructor created without them is not picklable by reference.
     """
     return make_deconstructor(
         overrides=STRICT_DECONSTRUCTORS | dict(overrides or {}),
         fallback=metadata_based_deconstructor_fallback,
+        name=name,
+        module=module,
     )
 
 
 def make_lenient_data_deconstructor(
     overrides: Optional[Mapping[type, Deconstructor]] = None,
+    *,
+    name: Optional[str] = None,
+    module: Optional[str] = None,
 ) -> Deconstructor:
     """Build a lenient deconstructor with the standard per-type rules.
 
-    See :func:`make_strict_data_deconstructor` for the picklability constraint
-    on custom ``overrides``.
+    See `make_deconstructor` for the meaning of ``name`` and ``module``; a
+    deconstructor created without them is not picklable by reference.
     """
     return make_deconstructor(
         overrides=LENIENT_DECONSTRUCTORS | dict(overrides or {}),
         fallback=metadata_based_deconstructor_fallback,
+        name=name,
+        module=module,
     )
 
 
@@ -675,14 +695,9 @@ Fingerprinter: TypeAlias = Callable[[Any], str]
 #: fallback). Identifies types, functions and modules by their qualified name,
 #: rejecting non-importable ones, and honors the
 #: ``gt4py_metadata(fingerprint=False)`` opt-out.
-strict_fingerprint_deconstructor: Final[Deconstructor] = make_strict_data_deconstructor()
-# ``functools.singledispatch`` (inside ``singledispatcher``) copies the wrapped
-# fallback's ``__qualname__``/``__name__`` onto the dispatcher, so pickle-by-reference
-# resolves to the *original* plain function instead of this singleton. Restore the
-# dispatcher's own identity so it round-trips through stdlib ``pickle`` (e.g. when an
-# executor carrying this deconstructor is shipped to a process-pool worker).
-strict_fingerprint_deconstructor.__qualname__ = "strict_fingerprint_deconstructor"
-strict_fingerprint_deconstructor.__name__ = "strict_fingerprint_deconstructor"
+strict_fingerprint_deconstructor: Final[Deconstructor] = make_strict_data_deconstructor(
+    name="strict_fingerprint_deconstructor", module=__name__
+)
 
 
 def fingerprint_aggregator(deconstruction: Deconstruction[str]) -> str:
@@ -733,9 +748,9 @@ strict_fingerprinter: Fingerprinter = make_fingerprinter(
 # unverified qualified name for dynamically-created types/modules, instead of
 # raising.
 
-lenient_fingerprint_deconstructor: Final[Deconstructor] = make_lenient_data_deconstructor()
-lenient_fingerprint_deconstructor.__qualname__ = "lenient_fingerprint_deconstructor"
-lenient_fingerprint_deconstructor.__name__ = "lenient_fingerprint_deconstructor"
+lenient_fingerprint_deconstructor: Final[Deconstructor] = make_lenient_data_deconstructor(
+    name="lenient_fingerprint_deconstructor", module=__name__
+)
 
 #: Fingerprinter for in-memory (single-process) cache keys: like
 #: `strict_fingerprinter`, but tolerant of non-importable callables, types
