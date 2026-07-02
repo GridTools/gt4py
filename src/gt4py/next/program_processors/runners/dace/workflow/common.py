@@ -72,10 +72,11 @@ def set_dace_config(
     dace.Config.set("cache", value="single")
 
     # Disable auto-detection of the CUDA architecture, and instead use the one provided by GT4Py.
-    dace.Config.set(
-        "compiler.extra_cmake_args",
-        value=f"-DLOCAL_CUDA_ARCHITECTURES={gtx_cmake.get_device_arch()}",
-    )
+    if device_type == core_defs.CUPY_DEVICE_TYPE:
+        dace.Config.set(
+            "compiler.extra_cmake_args",
+            value=f"-DLOCAL_CUDA_ARCHITECTURES={gtx_cmake.get_device_arch()}",
+        )
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
