@@ -8,9 +8,12 @@
 
 from __future__ import annotations
 
+import atexit
 import concurrent.futures
 import multiprocessing
 import pickle
+import threading
+import warnings
 from typing import Any, Protocol, runtime_checkable
 
 from gt4py.next import backend as next_backend, config
@@ -38,6 +41,19 @@ class CompilationRunner(Protocol):
         ...
 
 
+def _compile_in_calling_thread(
+    backend: next_backend.Backend,
+    definition_stage: Any,
+    compile_time_args: arguments.CompileTimeArgs,
+) -> concurrent.futures.Future[stages.ExecutableProgram]:
+    future: concurrent.futures.Future[stages.ExecutableProgram] = concurrent.futures.Future()
+    try:
+        future.set_result(backend.compile(definition_stage, compile_time_args=compile_time_args))
+    except BaseException as exception:  # re-raised via the future
+        future.set_exception(exception)
+    return future
+
+
 class SerialRunner:
     """Runs compilation in the calling thread; the returned future is already done."""
 
@@ -47,16 +63,7 @@ class SerialRunner:
         definition_stage: Any,
         compile_time_args: arguments.CompileTimeArgs,
     ) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        future: concurrent.futures.Future[stages.ExecutableProgram] = (
-            concurrent.futures.Future()
-        )
-        try:
-            future.set_result(
-                backend.compile(definition_stage, compile_time_args=compile_time_args)
-            )
-        except BaseException as exception:  # noqa: BLE001 - re-raised via the future
-            future.set_exception(exception)
-        return future
+        return _compile_in_calling_thread(backend, definition_stage, compile_time_args)
 
     def shutdown(self, wait: bool = True) -> None:
         return None
@@ -137,10 +144,17 @@ class ProcessRunner:
     picklable ``CompilationArtifact``; the main process rehydrates it via
     ``artifact.load()`` (in a done-callback) so the returned future yields a live
     ``ExecutableProgram``.
+
+    Backends that cannot be offloaded — a customized ``compile`` or an executor
+    that stdlib ``pickle`` cannot serialize — are compiled in the calling thread
+    instead (with a warning), so they behave as under ``SerialRunner``.
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
-        # spawn (not fork): fork-after-threads / fork-with-CUDA is unsafe.
+        # spawn (not fork): the parent may already hold running threads (BLAS/OpenMP,
+        # this pool's own manager thread), CUDA contexts and MPI state, none of which
+        # survive fork safely. Fork also would not relax the picklability requirement:
+        # ProcessPoolExecutor pickles every submitted task regardless of start method.
         ctx = multiprocessing.get_context("spawn")
         self._pool = concurrent.futures.ProcessPoolExecutor(
             max_workers=max_workers,
@@ -149,12 +163,32 @@ class ProcessRunner:
             initargs=(shared_session_cache_dir,),
         )
 
+    @staticmethod
+    def _executor_blob_for_offload(backend: next_backend.Backend) -> tuple[bytes | None, str]:
+        # The transforms/executor split in `submit` replicates `Backend.compile`;
+        # it is only faithful if the backend does not customize `compile`.
+        if getattr(type(backend), "compile", None) is not next_backend.Backend.compile:
+            return None, "it customizes 'compile'"
+        try:
+            return pickle.dumps(backend.executor), ""
+        except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
+            return None, f"its executor is not picklable ({error!s})"
+
     def submit(
         self,
         backend: next_backend.Backend,
         definition_stage: Any,
         compile_time_args: arguments.CompileTimeArgs,
     ) -> concurrent.futures.Future[stages.ExecutableProgram]:
+        executor_blob, reason = self._executor_blob_for_offload(backend)
+        if executor_blob is None:
+            warnings.warn(
+                f"Compiling backend '{getattr(backend, 'name', type(backend).__name__)}' "
+                f"in the calling thread instead of a worker process because {reason}.",
+                stacklevel=2,
+            )
+            return _compile_in_calling_thread(backend, definition_stage, compile_time_args)
+
         # Frontend lowering stays main-side: decorators rebind the user's
         # function module attribute, so the raw ``types.FunctionType`` does not
         # cross the process boundary. The worker receives the lowered,
@@ -162,23 +196,20 @@ class ProcessRunner:
         compilable = backend.transforms(
             definitions.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
         )
-        executor_blob = pickle.dumps(backend.executor)
         artifact_future = self._pool.submit(
             _process_pool_compile_job,
-            executor_blob,
-            compilable,
-            _config_snapshot(),
+            executor_blob=executor_blob,
+            compilable=compilable,
+            config_overrides=_config_snapshot(),
         )
-        loaded: concurrent.futures.Future[stages.ExecutableProgram] = (
-            concurrent.futures.Future()
-        )
+        loaded: concurrent.futures.Future[stages.ExecutableProgram] = concurrent.futures.Future()
 
         def _load(
             artifact_future: concurrent.futures.Future[stages.CompilationArtifact],
         ) -> None:
             try:
                 loaded.set_result(artifact_future.result().load())
-            except BaseException as exception:  # noqa: BLE001 - re-raised via the future
+            except BaseException as exception:  # re-raised via the future
                 loaded.set_exception(exception)
 
         artifact_future.add_done_callback(_load)
@@ -203,6 +234,7 @@ def from_config() -> CompilationRunner:
 
 
 _default_runner: CompilationRunner | None = None
+_default_runner_lock = threading.Lock()
 
 
 def _is_worker_process() -> bool:
@@ -210,19 +242,29 @@ def _is_worker_process() -> bool:
 
 
 def get_default_runner() -> CompilationRunner:
+    """Return the process-wide runner, creating it from `gt4py.next.config` on first use.
+
+    Created lazily so that merely importing gt4py never spins up multiprocessing
+    machinery (which would leak into unrelated host processes, e.g. mypy loading
+    the gt4py mypy plugin). In a worker process the default is always serial:
+    nested worker pools must not spawn recursively.
+    """
     global _default_runner
-    if _default_runner is None:
-        _default_runner = from_config()
-    return _default_runner
+    with _default_runner_lock:
+        if _default_runner is None:
+            _default_runner = SerialRunner() if _is_worker_process() else from_config()
+        return _default_runner
 
 
 def reset_default_runner() -> None:
     global _default_runner
-    if _default_runner is not None:
-        _default_runner.shutdown(wait=True)
-        _default_runner = None
+    with _default_runner_lock:
+        if _default_runner is not None:
+            _default_runner.shutdown(wait=True)
+            _default_runner = None
 
 
-# Workers re-import this module on spawn; don't let them spin up their own pool.
-if not _is_worker_process():
-    get_default_runner()
+# Shut down worker pools while the interpreter is still intact; relying on
+# garbage collection at teardown leaks the pool's semaphores (with a
+# ``resource_tracker`` warning on stderr).
+atexit.register(reset_default_runner)

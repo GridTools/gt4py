@@ -44,7 +44,9 @@ class BuildJobsMode(enum.Enum):
     #: Run compilation in a ``ProcessPoolExecutor`` with the ``spawn`` start
     #: method. Requires the backend's ``executor`` to be stdlib-picklable
     #: (standard runners and factory-constructed variants are) and to return a
-    #: picklable ``CompilationArtifact``. Experimental.
+    #: picklable ``CompilationArtifact``; backends that don't qualify (or that
+    #: customize ``Backend.compile``) are compiled in the calling thread
+    #: instead, with a warning. Experimental.
     PROCESS = "process"
 
 

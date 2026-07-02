@@ -873,9 +873,7 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
 
 
 def test_synchronous_compilation(cartesian_case, compile_testee):
-    with mock.patch.object(
-        compiled_program.compilation_runner, "get_default_runner"
-    ) as get_runner:
+    with mock.patch.object(compiled_program.compilation_runner, "get_default_runner") as get_runner:
         get_runner.return_value = compiled_program.compilation_runner.SerialRunner()
         a = cases.allocate(cartesian_case, compile_testee, "a")()
         b = cases.allocate(cartesian_case, compile_testee, "b")()
@@ -899,14 +897,13 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    with mock.patch.object(config, "BUILD_JOBS_MODE", mode), mock.patch.object(
-        config, "BUILD_JOBS", 1
+    with (
+        mock.patch.object(config, "BUILD_JOBS_MODE", mode),
+        mock.patch.object(config, "BUILD_JOBS", 1),
     ):
         runner = compiled_program.compilation_runner.from_config()
 
-    with mock.patch.object(
-        compiled_program.compilation_runner, "get_default_runner"
-    ) as get_runner:
+    with mock.patch.object(compiled_program.compilation_runner, "get_default_runner") as get_runner:
         get_runner.return_value = runner
         compile_testee.compile(offset_provider=cartesian_case.offset_provider)
         gtx.wait_for_compilation()

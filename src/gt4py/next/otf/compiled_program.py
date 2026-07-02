@@ -24,7 +24,7 @@ from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
+from gt4py.next import backend as gtx_backend, common, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
@@ -321,12 +321,11 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
-    #: Runner used to compile program variants. Defaults to the process-wide runner
-    #: built from :mod:`gt4py.next.config` (see
-    #: :func:`gt4py.next.otf.compilation_runner.get_default_runner`).
-    compilation_runner: compilation_runner.CompilationRunner = dataclasses.field(
-        default_factory=compilation_runner.get_default_runner
-    )
+    #: Runner used to compile program variants. ``None`` means the process-wide
+    #: default (see `gt4py.next.otf.compilation_runner.get_default_runner`),
+    #: resolved at each submission so the pool never holds on to a runner that
+    #: `wait_for_compilation` has already shut down.
+    compilation_runner: compilation_runner.CompilationRunner | None = None
 
     # store for the compiled programs
     compiled_programs: dict[CompiledProgramsKey, stages.ExecutableProgram] = dataclasses.field(
@@ -623,9 +622,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             offset_provider=offset_provider,
         )
 
-        future = self.compilation_runner.submit(
-            self.backend, self.definition_stage, compile_time_args
-        )
+        runner = self.compilation_runner or compilation_runner.get_default_runner()
+        future = runner.submit(self.backend, self.definition_stage, compile_time_args)
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.
