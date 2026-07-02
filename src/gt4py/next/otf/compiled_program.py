@@ -24,7 +24,7 @@ from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
+from gt4py.next import backend as gtx_backend, common, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
@@ -32,7 +32,7 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
-from gt4py.next.otf import arguments, stages
+from gt4py.next.otf import arguments, compilation_runner, definitions as otf_definitions, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
@@ -154,19 +154,11 @@ def compiled_program_call_context(
     return metrics.metrics_source_key_setter(metrics_source_key(program_pool, key))
 
 
-# TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
-_async_compilation_pool: concurrent.futures.Executor | None = None
-
-
-def _init_async_compilation_pool() -> None:
-    global _async_compilation_pool
-    if _async_compilation_pool is None and config.BUILD_JOBS > 0:
-        _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(
-            max_workers=config.BUILD_JOBS
-        )
-
-
-_init_async_compilation_pool()
+# In-flight compilations (future -> "program (backend)" label). Weak keys: a
+# future disappears here once its pool consumed or dropped it.
+_ongoing_compilations: weakref.WeakKeyDictionary[
+    concurrent.futures.Future[stages.ExecutableProgram], str
+] = weakref.WeakKeyDictionary()
 
 
 def wait_for_compilation() -> None:
@@ -175,12 +167,61 @@ def wait_for_compilation() -> None:
 
     This is useful to ensure that all compiled programs are ready before
     proceeding with further operations. E.g. when the first call is included in timings.
+
+    Raises:
+        Exception: The exception of the failed compilation. If several
+            compilations failed, a `RuntimeError` summarizing all of them
+            (chaining the first). Each failure is raised only once; the
+            original exception is raised again when the failed program
+            variant is called. Failures of programs that have been garbage
+            collected in the meantime are not reported (they could never
+            raise at call time either).
     """
-    global _async_compilation_pool
-    if _async_compilation_pool is not None:
-        _async_compilation_pool.shutdown(wait=True)
-        _async_compilation_pool = None
-        _init_async_compilation_pool()
+    compilation_runner.reset_default_runner()
+    failures: list[tuple[str, BaseException]] = []
+    for future, label in list(_ongoing_compilations.items()):
+        if (error := future.exception()) is not None:  # waits for completion
+            failures.append((label, error))
+            del _ongoing_compilations[future]
+    if len(failures) == 1:
+        raise failures[0][1]
+    if failures:
+        # TODO(havogt): raise ExceptionGroup once Python 3.10 is dropped.
+        raise RuntimeError(
+            "Multiple compilations failed: "
+            + "; ".join(f"'{label}': {error!r}" for label, error in failures)
+        ) from failures[0][1]
+
+
+def _make_compile_job(
+    backend: gtx_backend.Backend,
+    definition_stage: Any,
+    compile_time_args: arguments.CompileTimeArgs,
+) -> compilation_runner.CompileJob:
+    """Prepare the compilation of `definition_stage` with `backend` as a job for a runner."""
+    name = getattr(backend, "name", type(backend).__name__)
+    if getattr(type(backend), "compile", None) is not gtx_backend.Backend.compile:
+        # A customized `compile` is opaque: it cannot be decomposed into the
+        # standard transforms/executor workflow, so the job can only run as-is.
+        return compilation_runner.CompileJob(
+            name=name,
+            run=functools.partial(
+                backend.compile, definition_stage, compile_time_args=compile_time_args
+            ),
+        )
+    # Frontend lowering happens here, main-side: decorators rebind the user's
+    # function module attribute, so the raw `types.FunctionType` must not cross
+    # a process boundary; the lowered `CompilableProgramDef` is pickle-safe.
+    compilable = backend.transforms(
+        otf_definitions.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
+    )
+    return compilation_runner.CompileJob(
+        name=name,
+        run=lambda: backend.executor(compilable).load(),
+        offload=compilation_runner.OffloadableWork(
+            compilable=compilable, executor=backend.executor
+        ),
+    )
 
 
 def _make_tuple_expr(el_exprs: list[str]) -> str:
@@ -340,13 +381,17 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
+    #: Runner used to compile program variants. ``None`` means the process-wide
+    #: default (see `gt4py.next.otf.compilation_runner.get_default_runner`),
+    #: resolved at each submission so the pool never holds on to a runner that
+    #: `wait_for_compilation` has already shut down.
+    compilation_runner: compilation_runner.CompilationRunner | None = None
 
     # store for the compiled programs
     compiled_programs: dict[CompiledProgramsKey, stages.ExecutableProgram] = dataclasses.field(
         default_factory=dict, init=False
     )
 
-    # store for the async compilation jobs
     _compilation_jobs: dict[
         CompiledProgramsKey, concurrent.futures.Future[stages.ExecutableProgram]
     ] = dataclasses.field(default_factory=dict, init=False)
@@ -629,9 +674,6 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             kwargs=kwarg_types,
             argument_descriptor_contexts=argument_descriptor_contexts,
         )
-        compile_call = functools.partial(
-            self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
-        )
         compile_variant_hook(
             self,
             key=key,
@@ -640,10 +682,19 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             offset_provider=offset_provider,
         )
 
-        if _async_compilation_pool is None:
-            self.compiled_programs[key] = compile_call()
+        runner = self.compilation_runner or compilation_runner.get_default_runner()
+        future = runner.submit(
+            _make_compile_job(self.backend, self.definition_stage, compile_time_args)
+        )
+        if future.done():
+            # Eager so compile() raises now; otherwise the error stays in the
+            # already-resolved future until the next call touches this key.
+            self.compiled_programs[key] = future.result()
         else:
-            self._compilation_jobs[key] = _async_compilation_pool.submit(compile_call)
+            self._compilation_jobs[key] = future
+            _ongoing_compilations[future] = (
+                f"{self.definition_stage.definition.__name__} ({getattr(self.backend, 'name', type(self.backend).__name__)})"
+            )
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
     #  domains and of scans.

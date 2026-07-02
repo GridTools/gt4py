@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import inspect
+import threading
 import warnings
 from typing import Optional, NamedTuple
 from unittest import mock
@@ -19,6 +20,7 @@ from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import errors, config
 from gt4py.next.otf import compiled_program, options, arguments
+from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
@@ -873,8 +875,8 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
 
 
 def test_synchronous_compilation(cartesian_case, compile_testee):
-    # This test is not perfect: only tests that compilation works if '_async_compilation_pool' is not initialized.
-    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+    with mock.patch.object(compiled_program.compilation_runner, "get_default_runner") as get_runner:
+        get_runner.return_value = compiled_program.compilation_runner.SerialRunner()
         a = cases.allocate(cartesian_case, compile_testee, "a")()
         b = cases.allocate(cartesian_case, compile_testee, "b")()
 
@@ -892,21 +894,95 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
         assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
 
 
-@pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
-def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, synchronous):
+@pytest.mark.parametrize("mode", list(config.BuildJobsMode), ids=lambda m: m.name.lower())
+def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, mode):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     with (
-        mock.patch.object(compiled_program, "_async_compilation_pool", None)
-        if synchronous
-        else contextlib.nullcontext()
+        mock.patch.object(config, "BUILD_JOBS_MODE", mode),
+        mock.patch.object(config, "BUILD_JOBS", 1),
     ):
+        runner = compiled_program.compilation_runner.from_config()
+
+    with mock.patch.object(compiled_program.compilation_runner, "get_default_runner") as get_runner:
+        get_runner.return_value = runner
         compile_testee.compile(offset_provider=cartesian_case.offset_provider)
-        # TODO(havogt): currently only tests that the function call does not crash...
         gtx.wait_for_compilation()
-        # ... and afterwards compilation still works
+        # afterwards compilation still works
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+
+
+def test_compile_local_program_offloads_to_worker_process(cartesian_case, compile_testee):
+    """Programs defined in a local scope (as `compile_testee` is) must offload cleanly.
+
+    Only the lowered, pickle-safe program crosses the process boundary — never
+    the raw definition function, which is unpicklable for local definitions.
+    A fallback to in-thread compilation would mean the boundary leaked.
+    """
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    runner = compiled_program.compilation_runner.ProcessRunner(
+        max_workers=1,
+        shared_session_cache_dir=str(compilation_cache._session_cache_dir_path),
+    )
+    try:
+        with mock.patch.object(
+            compiled_program.compilation_runner, "get_default_runner"
+        ) as get_runner:
+            get_runner.return_value = runner
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error", message=".*in the calling thread.*")
+                compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+                gtx.wait_for_compilation()
+    finally:
+        runner.shutdown(wait=True)
+
+    a = cases.allocate(cartesian_case, compile_testee, "a")()
+    b = cases.allocate(cartesian_case, compile_testee, "b")()
+    if isinstance(compile_testee, gtx.ffront.decorator.FieldOperator):
+        out = cases.allocate(cartesian_case, compile_testee, cases.RETURN)()
+    else:
+        out = cases.allocate(cartesian_case, compile_testee, "out")()
+
+    compile_testee(a, b, out=out, offset_provider=cartesian_case.offset_provider)
+    assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
+
+
+def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    # Failing only once the gate opens keeps the future pending until after
+    # submission; an instant failure would raise eagerly at `compile()` already.
+    gate = threading.Event()
+
+    class FailingBackend:
+        def __getattr__(self, name):
+            return getattr(cartesian_case.backend, name)
+
+        def compile(self, program, compile_time_args):
+            gate.wait()
+            raise ValueError("compilation went boom")
+
+    runner = compiled_program.compilation_runner.ThreadRunner(max_workers=1)
+    try:
+        with mock.patch.object(
+            compiled_program.compilation_runner, "get_default_runner"
+        ) as get_runner:
+            get_runner.return_value = runner
+            # The program must stay referenced: failure tracking is weak, so the
+            # failed future of a garbage-collected program is not reported.
+            testee = compile_testee.with_backend(FailingBackend())
+            testee.compile(offset_provider=cartesian_case.offset_provider)
+            gate.set()
+            with pytest.raises(ValueError, match="compilation went boom"):
+                gtx.wait_for_compilation()
+            # each failure is reported only once
+            gtx.wait_for_compilation()
+    finally:
+        runner.shutdown(wait=True)
 
 
 @pytest.mark.uses_tuple_args

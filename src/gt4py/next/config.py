@@ -34,6 +34,22 @@ class CMakeBuildType(enum.Enum):
     MIN_SIZE_REL = "MinSizeRel"
 
 
+class BuildJobsMode(enum.Enum):
+    """How ``BUILD_JOBS`` parallel compilation jobs are executed."""
+
+    #: Run compilation in the calling thread (no concurrency).
+    SERIAL = "serial"
+    #: Run compilation in a ``ThreadPoolExecutor``.
+    THREAD = "thread"
+    #: Run compilation in a ``ProcessPoolExecutor`` with the ``spawn`` start
+    #: method. Requires the backend's ``executor`` to be stdlib-picklable
+    #: (standard runners and factory-constructed variants are) and to return a
+    #: picklable ``CompilationArtifact``; backends that don't qualify (or that
+    #: customize ``Backend.compile``) are compiled in the calling thread
+    #: instead, with a warning. Experimental.
+    PROCESS = "process"
+
+
 def env_flag_to_bool(name: str, default: bool) -> bool:
     """Convert environment variable string variable to a bool value."""
     flag_value = os.environ.get(name, None)
@@ -126,6 +142,15 @@ ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", de
 #: - if the number is huge (e.g. HPC system) we limit to a smaller number
 BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1, 32)))
 
+#: Executor backing the async compilation pool.
+#: - ``BuildJobsMode.SERIAL``: compile in the calling thread (no concurrency;
+#:   also used when ``GT4PY_BUILD_JOBS<=0``).
+#: - ``BuildJobsMode.THREAD``: ``ThreadPoolExecutor``.
+#: - ``BuildJobsMode.PROCESS`` (default): ``ProcessPoolExecutor`` with ``spawn``
+#:   start method. See ``BuildJobsMode`` for the picklability requirements.
+BUILD_JOBS_MODE: BuildJobsMode = BuildJobsMode[
+    os.environ.get("GT4PY_BUILD_JOBS_MODE", "process").upper()
+]
 
 #: User-defined level to enable metrics at lower or equal level.
 #: Enabling metrics collection will do extra synchronization and will have
