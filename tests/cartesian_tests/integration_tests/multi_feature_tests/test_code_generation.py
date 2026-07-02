@@ -1761,23 +1761,18 @@ def test_reset_mask_2d(backend: str) -> None:
     "backend",
     [
         "dace:cpu",
-        "gt:cpu_kfirst",
+        "gt:gpu",
         "debug",
         pytest.param(
-            "gt:cpu_kfirst",
+            "dace:gpu",
             marks=pytest.mark.xfail(
-                raises=NotImplementedError,
+                raises=SystemExit,
                 reason="But in _gbar symbol insert in DaCe with nested SDFG",
             ),
         ),
     ],
 )
 def test_offset_j_in_temporaries(backend: str):
-    domain = (5, 5, 5)
-
-    input = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
-    output = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
-
     @gtscript.function
     def a_gtscript_function(b):
         return sqrt(abs(b[0, 1, 0]))
@@ -1791,7 +1786,7 @@ def test_offset_j_in_temporaries(backend: str):
             tan_res = tan(abs_res)
 
             # This is an offset in J on a temporary, it will
-            # require a global kernel sync in KJI
+            # require a global kernel sync in KJI for GPU
             sqrt_res = a_gtscript_function(tan_res)
 
             field_out = (
