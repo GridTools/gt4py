@@ -934,9 +934,10 @@ def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compi
             compiled_program.compilation_runner, "get_default_runner"
         ) as get_runner:
             get_runner.return_value = runner
-            compile_testee.with_backend(FailingBackend()).compile(
-                offset_provider=cartesian_case.offset_provider
-            )
+            # The program must stay referenced: failure tracking is weak, so the
+            # failed future of a garbage-collected program is not reported.
+            testee = compile_testee.with_backend(FailingBackend())
+            testee.compile(offset_provider=cartesian_case.offset_provider)
             gate.set()
             with pytest.raises(ValueError, match="compilation went boom"):
                 gtx.wait_for_compilation()

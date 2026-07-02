@@ -173,7 +173,9 @@ def wait_for_compilation() -> None:
             compilations failed, a `RuntimeError` summarizing all of them
             (chaining the first). Each failure is raised only once; the
             original exception is raised again when the failed program
-            variant is called.
+            variant is called. Failures of programs that have been garbage
+            collected in the meantime are not reported (they could never
+            raise at call time either).
     """
     compilation_runner.reset_default_runner()
     failures: list[tuple[str, BaseException]] = []
