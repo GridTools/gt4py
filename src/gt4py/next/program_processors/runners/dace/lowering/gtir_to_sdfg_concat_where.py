@@ -143,6 +143,7 @@ def _translate_concat_where_branch(
     if isinstance(output_type.dtype, ts.ScalarType):
         all_dims = gtx_common.order_dimensions(output_type.dims)
     else:
+        assert isinstance(output_type.dtype, ts.ListType)
         assert output_type.dtype.offset_type
         all_dims = gtx_common.order_dimensions([*output_type.dims, output_type.dtype.offset_type])
 
