@@ -172,17 +172,15 @@ class ProcessRunner:
             initargs=(shared_session_cache_dir,),
         )
 
-    @staticmethod
-    def _executor_blob_for_offload(job: CompileJob) -> tuple[bytes | None, str]:
-        if job.offload is None:
-            return None, "it does not use the standard compilation workflow (customized 'compile')"
-        try:
-            return pickle.dumps(job.offload.executor), ""
-        except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
-            return None, f"its executor is not picklable ({error!s})"
-
     def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        executor_blob, blocker = self._executor_blob_for_offload(job)
+        executor_blob: bytes | None = None
+        if job.offload is None:
+            blocker = "it does not use the standard compilation workflow (customized 'compile')"
+        else:
+            try:
+                executor_blob = pickle.dumps(job.offload.executor)
+            except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
+                blocker = f"its executor is not picklable ({error!s})"
         if executor_blob is None:
             warnings.warn(
                 f"Compiling '{job.name}' in the calling thread instead of a worker process "
