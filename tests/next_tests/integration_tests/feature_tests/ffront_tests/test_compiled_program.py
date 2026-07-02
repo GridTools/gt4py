@@ -20,6 +20,7 @@ from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import errors, config
 from gt4py.next.otf import compiled_program, options, arguments
+from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
@@ -910,6 +911,43 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
         gtx.wait_for_compilation()
         # afterwards compilation still works
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+
+
+def test_compile_local_program_offloads_to_worker_process(cartesian_case, compile_testee):
+    """Programs defined in a local scope (as `compile_testee` is) must offload cleanly.
+
+    Only the lowered, pickle-safe program crosses the process boundary — never
+    the raw definition function, which is unpicklable for local definitions.
+    A fallback to in-thread compilation would mean the boundary leaked.
+    """
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    runner = compiled_program.compilation_runner.ProcessRunner(
+        max_workers=1,
+        shared_session_cache_dir=str(compilation_cache._session_cache_dir_path),
+    )
+    try:
+        with mock.patch.object(
+            compiled_program.compilation_runner, "get_default_runner"
+        ) as get_runner:
+            get_runner.return_value = runner
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error", message=".*in the calling thread.*")
+                compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+                gtx.wait_for_compilation()
+    finally:
+        runner.shutdown(wait=True)
+
+    a = cases.allocate(cartesian_case, compile_testee, "a")()
+    b = cases.allocate(cartesian_case, compile_testee, "b")()
+    if isinstance(compile_testee, gtx.ffront.decorator.FieldOperator):
+        out = cases.allocate(cartesian_case, compile_testee, cases.RETURN)()
+    else:
+        out = cases.allocate(cartesian_case, compile_testee, "out")()
+
+    compile_testee(a, b, out=out, offset_provider=cartesian_case.offset_provider)
+    assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
 
 
 def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compile_testee):
