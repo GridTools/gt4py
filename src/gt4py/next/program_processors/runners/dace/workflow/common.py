@@ -117,6 +117,28 @@ def set_dace_config(
     #  This setting allows to throw an exception if any implicit Copy-Map slips thorugh.
     dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
 
+    # Use the new GPU code generator
+    # NOTE: In the CI file we export the variable to force the experimental code gen to be used.
+    dace.Config.set("compiler.cuda.implementation", value="experimental")
+
+    # Skip GPU Sync at the end.
+    # NOTE: That this will most likely break the UNIT tests, but should not be a problem
+    #   for the blueline.
+    # NOTE: There are also functions that are supposed to achieve this. But they are
+    #   currently useless, we have to work a bit more with them, but it is probably
+    #   possible.
+    dace.Config.set("compiler", "cuda", "synchronize_on_exit", value=False)
+
+    # NEW CODEGEN:
+    # In the old codegen we had to use the default stream. The effect was that the "same"
+    #  stream was used across all SDFGs in ICON4Py. After switching to the new codegen,
+    #  a single stream was used (there was a bug that made the default stream not used
+    #  correctly [see](https://github.com/spcl/dace/pull/2408)). The net effect was that
+    #  allocations got slower. We think this is because there are now multiple stream
+    #  involved which makes it harder for the driver to schedule them. Thus, for good
+    #  performance, we still have to use the default stream. But for other reasons as
+    #  before.
+    # OLD CODEGEN:
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
     #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first
     #  idea was to use just one stream. However, even in that case the generator

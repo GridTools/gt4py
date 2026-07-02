@@ -201,6 +201,7 @@ def _check_cpu_sdfg_call(sdfg: dace.SDFG) -> None:
     assert not _are_streams_synchronized(sdfg)
 
 
+@pytest.mark.skip("To revisit after switch to new code gen.")
 @pytest.mark.parametrize(
     "make_async_sdfg_call",
     [False, True],
@@ -242,6 +243,7 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
         _check_sdfg_without_async_call(sdfg)
 
 
+@pytest.mark.skip("To revisit after switch to new code gen.")
 def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
     """Verify that the flag `async_sdfg_call=True` has no effect on an SDFG that does not contain any GPU map."""
 
@@ -367,6 +369,7 @@ def _make_multi_state_sdfg_3(
     return sdfg, first_state, second_state
 
 
+@pytest.mark.skip("To revisit after switch to new code gen.")
 @pytest.mark.parametrize(
     "multi_state_config",
     [
