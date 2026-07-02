@@ -154,14 +154,41 @@ def compiled_program_call_context(
     return metrics.metrics_source_key_setter(metrics_source_key(program_pool, key))
 
 
+# In-flight compilations (future -> "program (backend)" label). Weak keys: a
+# future disappears here once its pool consumed or dropped it.
+_ongoing_compilations: weakref.WeakKeyDictionary[
+    concurrent.futures.Future[stages.ExecutableProgram], str
+] = weakref.WeakKeyDictionary()
+
+
 def wait_for_compilation() -> None:
     """
     Waits for all ongoing compilations to finish.
 
     This is useful to ensure that all compiled programs are ready before
     proceeding with further operations. E.g. when the first call is included in timings.
+
+    Raises:
+        Exception: The exception of the failed compilation. If several
+            compilations failed, a `RuntimeError` summarizing all of them
+            (chaining the first). Each failure is raised only once; the
+            original exception is raised again when the failed program
+            variant is called.
     """
     compilation_runner.reset_default_runner()
+    failures: list[tuple[str, BaseException]] = []
+    for future, label in list(_ongoing_compilations.items()):
+        if (error := future.exception()) is not None:  # waits for completion
+            failures.append((label, error))
+            del _ongoing_compilations[future]
+    if len(failures) == 1:
+        raise failures[0][1]
+    if failures:
+        # TODO(havogt): raise ExceptionGroup once Python 3.10 is dropped.
+        raise RuntimeError(
+            "Multiple compilations failed: "
+            + "; ".join(f"'{label}': {error!r}" for label, error in failures)
+        ) from failures[0][1]
 
 
 def _make_compile_job(
@@ -662,6 +689,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             self.compiled_programs[key] = future.result()
         else:
             self._compilation_jobs[key] = future
+            _ongoing_compilations[future] = (
+                f"{self.definition_stage.definition.__name__} ({getattr(self.backend, 'name', type(self.backend).__name__)})"
+            )
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
     #  domains and of scans.

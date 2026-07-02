@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import inspect
+import threading
 import warnings
 from typing import Optional, NamedTuple
 from unittest import mock
@@ -909,6 +910,40 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
         gtx.wait_for_compilation()
         # afterwards compilation still works
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+
+
+def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    # Failing only once the gate opens keeps the future pending until after
+    # submission; an instant failure would raise eagerly at `compile()` already.
+    gate = threading.Event()
+
+    class FailingBackend:
+        def __getattr__(self, name):
+            return getattr(cartesian_case.backend, name)
+
+        def compile(self, program, compile_time_args):
+            gate.wait()
+            raise ValueError("compilation went boom")
+
+    runner = compiled_program.compilation_runner.ThreadRunner(max_workers=1)
+    try:
+        with mock.patch.object(
+            compiled_program.compilation_runner, "get_default_runner"
+        ) as get_runner:
+            get_runner.return_value = runner
+            compile_testee.with_backend(FailingBackend()).compile(
+                offset_provider=cartesian_case.offset_provider
+            )
+            gate.set()
+            with pytest.raises(ValueError, match="compilation went boom"):
+                gtx.wait_for_compilation()
+            # each failure is reported only once
+            gtx.wait_for_compilation()
+    finally:
+        runner.shutdown(wait=True)
 
 
 @pytest.mark.uses_tuple_args
