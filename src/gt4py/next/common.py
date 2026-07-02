@@ -86,10 +86,10 @@ class Dimension:
     def __call__(self, val: int) -> NamedIndex:
         return NamedIndex(self, val)
 
-    def __add__(self, offset: int) -> Connectivity:
-        return CartesianConnectivity(self, offset)
+    def __add__(self, offset: int | float) -> Connectivity:
+        return connectivity_for_cartesian_shift(self, offset)
 
-    def __sub__(self, offset: int) -> Connectivity:
+    def __sub__(self, offset: int | float) -> Connectivity:
         return self + (-offset)
 
     def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
@@ -1336,7 +1336,13 @@ def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
     """Find the canonical ordering of the dimensions in `dims`."""
     if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
         raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
-    return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
+    return sorted(
+        dims,
+        key=lambda dim: (
+            _DIM_KIND_ORDER[dim.kind],
+            as_non_staggered(dim).value,
+        ),
+    )
 
 
 def check_dims(dims: Sequence[Dimension]) -> None:
@@ -1424,3 +1430,32 @@ class FieldBuiltinFuncRegistry:
 #: Equivalent to the `_FillValue` attribute in the UGRID Conventions
 #: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
 _DEFAULT_SKIP_VALUE: Final[int] = -1
+_STAGGERED_PREFIX = "_Staggered"
+
+
+def is_staggered(dim: Dimension) -> bool:
+    return dim.value.startswith(_STAGGERED_PREFIX)
+
+
+def flip_staggered(dim: Dimension) -> Dimension:
+    if is_staggered(dim):
+        return Dimension(dim.value[len(_STAGGERED_PREFIX) :], dim.kind)
+    else:
+        return Dimension(f"{_STAGGERED_PREFIX}{dim.value}", dim.kind)
+
+
+def as_non_staggered(dim: Dimension) -> Dimension:
+    if is_staggered(dim):
+        return flip_staggered(dim)
+    return dim
+
+
+def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> CartesianConnectivity:
+    if isinstance(offset, float):
+        integral_offset, half = divmod(offset, 1)
+        assert half == 0.5
+        if not is_staggered(dim):
+            integral_offset += 1
+        return CartesianConnectivity(dim, int(integral_offset), codomain=flip_staggered(dim))
+    else:
+        return CartesianConnectivity(dim, offset, codomain=dim)

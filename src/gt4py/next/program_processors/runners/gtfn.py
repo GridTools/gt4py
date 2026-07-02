@@ -16,7 +16,7 @@ import numpy as np
 import gt4py._core.definitions as core_defs
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import filecache
-from gt4py.next import backend, common, config, field_utils
+from gt4py.next import backend, common, config
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import recipes, stages, workflow
@@ -91,15 +91,10 @@ def extract_connectivity_args(
     # the keys' order is taken into account. Any modification to the hashing
     # of offset providers may break this assumption here.
     args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
-        (ndarray, zero_origin)
+        (conn.ndarray, zero_origin)
         for conn in offset_provider.values()
-        if (ndarray := getattr(conn, "ndarray", None)) is not None
+        if common.is_neighbor_table(conn)
     ]
-    assert all(
-        common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
-        for conn in offset_provider.values()
-        if hasattr(conn, "ndarray")
-    )
 
     return args
 
