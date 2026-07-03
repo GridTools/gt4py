@@ -149,11 +149,9 @@ def test_detect_cuda_archs_prefers_cudaarchs_env():
 
 
 def test_detect_cuda_archs_queries_device():
-    cp = mock.Mock()
-    cp.cuda.Device.return_value.compute_capability = "90"
     with (
         mock.patch.dict(os.environ),
-        mock.patch.object(compilation_runner.core_defs, "cp", cp),
+        mock.patch.object(compilation_runner.gtx_cmake, "get_device_arch", return_value="90"),
         mock.patch.object(
             compilation_runner.core_defs,
             "CUPY_DEVICE_TYPE",
@@ -164,10 +162,10 @@ def test_detect_cuda_archs_queries_device():
         assert compilation_runner._detect_cuda_archs() == "90"
 
 
-def test_detect_cuda_archs_none_without_cupy():
+def test_detect_cuda_archs_none_without_cuda_device_type():
     with (
         mock.patch.dict(os.environ),
-        mock.patch.object(compilation_runner.core_defs, "cp", None),
+        mock.patch.object(compilation_runner.core_defs, "CUPY_DEVICE_TYPE", None),
     ):
         os.environ.pop("CUDAARCHS", None)
         assert compilation_runner._detect_cuda_archs() is None

@@ -25,6 +25,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as _cache
+from gt4py.next.otf.compilation.build_systems import cmake as gtx_cmake
 
 
 @dataclasses.dataclass(frozen=True)
@@ -110,15 +111,9 @@ def _detect_cuda_archs() -> str | None:
     """
     if archs := os.environ.get("CUDAARCHS", "").strip():
         return archs
-    if (
-        core_defs.cp is None  # type: ignore[attr-defined] # conditional export for optional cupy
-        or core_defs.CUPY_DEVICE_TYPE is not core_defs.DeviceType.CUDA
-    ):
+    if core_defs.CUPY_DEVICE_TYPE is not core_defs.DeviceType.CUDA:
         return None
-    try:
-        return core_defs.cp.cuda.Device(0).compute_capability  # type: ignore[attr-defined]
-    except Exception:  # no usable device; cupy raises library-specific errors
-        return None
+    return gtx_cmake.get_device_arch()
 
 
 def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | None) -> None:

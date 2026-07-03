@@ -75,10 +75,14 @@ def set_dace_config(
     # TODO(edopao): revisit this workaround once it is possible to disable GPU detection in DaCe.
     # (see https://github.com/spcl/dace/pull/2424)
     if core_defs.CUPY_DEVICE_TYPE is not None:
-        dace.Config.set(
-            "compiler.extra_cmake_args",
-            value=f"-DLOCAL_CUDA_ARCHITECTURES={gtx_cmake.get_device_arch()}",
-        )
+        # `CUDAARCHS` takes precedence: in a process-pool worker no device is
+        # visible, so `get_device_arch` cannot answer there.
+        device_arch = os.environ.get("CUDAARCHS", "").strip() or gtx_cmake.get_device_arch()
+        if device_arch:
+            dace.Config.set(
+                "compiler.extra_cmake_args",
+                value=f"-DLOCAL_CUDA_ARCHITECTURES={device_arch}",
+            )
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
@@ -143,13 +147,6 @@ def set_dace_config(
         dace.Config.set("compiler.cuda.backend", value="hip")
     elif device_type == core_defs.DeviceType.CUDA:
         dace.Config.set("compiler.cuda.backend", value="cuda")
-        if cuda_archs := os.environ.get("CUDAARCHS", "").strip():
-            # DaCe's CMake otherwise compiles and runs a probe on the local GPU —
-            # creating a CUDA context in the compiling process — to determine the
-            # architecture; when no device is visible (e.g. in a process-pool
-            # worker) the probe falls back to this list.
-            # TODO(havogt): we should move DaCe config to accept a cuda_arch without detection.
-            dace.Config.set("compiler.cuda.cuda_arch", value=cuda_archs.replace(";", ","))
 
     # Instrumentation of SDFG timers
     dace.Config.set("instrumentation", "report_each_invocation", value=False)
