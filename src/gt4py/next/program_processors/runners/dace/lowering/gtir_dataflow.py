@@ -13,6 +13,7 @@ import copy
 import dataclasses
 from typing import (
     Any,
+    ClassVar,
     Dict,
     Final,
     Iterable,
@@ -409,6 +410,15 @@ class LambdaToDataflow(eve.NodeVisitor):
     a map scope and applied on the field domain. Therefore, all in/out edges
     must traverse the entry/exit map nodes.
     """
+
+    _BUILTIN_HANDLERS: ClassVar[dict[str, str]] = {
+        "deref": "_visit_deref",
+        "if_": "_visit_if",
+        "neighbors": "_visit_neighbors",
+        "list_get": "_visit_list_get",
+        "make_tuple": "_visit_make_tuple",
+        "tuple_get": "_visit_tuple_get",
+    }
 
     sdfg: dace.SDFG
     state: dace.SDFGState
@@ -1790,46 +1800,31 @@ class LambdaToDataflow(eve.NodeVisitor):
         tuple_fields = self.visit(node.args[1])
         return tuple_fields[index]
 
+    def _visit_let(self, node: gtir.FunCall) -> MaybeNestedInTuple[IteratorExpr | DataExpr]:
+        assert isinstance(node.fun, gtir.Lambda)
+        let_node = node.fun
+        let_args = [self.visit(arg) for arg in node.args]
+        for p, arg in zip(let_node.params, let_args, strict=True):
+            self.symbol_map[str(p.id)] = arg
+        return self.visit(let_node.expr)
+
     def visit_FunCall(self, node: gtir.FunCall) -> MaybeNestedInTuple[IteratorExpr | DataExpr]:
-        if cpm.is_call_to(node, "deref"):
-            return self._visit_deref(node)
-
-        elif cpm.is_call_to(node, "if_"):
-            return self._visit_if(node)
-
-        elif cpm.is_call_to(node, "neighbors"):
-            return self._visit_neighbors(node)
-
-        elif cpm.is_call_to(node, "list_get"):
-            return self._visit_list_get(node)
-
-        elif cpm.is_call_to(node, "make_tuple"):
-            return self._visit_make_tuple(node)
-
-        elif cpm.is_call_to(node, "tuple_get"):
-            return self._visit_tuple_get(node)
-
-        elif cpm.is_applied_map(node):
+        # Pattern-matched builtins (structural, not name-based on node.fun)
+        if cpm.is_applied_map(node):
             return self._visit_map(node)
-
-        elif cpm.is_applied_reduce(node):
+        if cpm.is_applied_reduce(node):
             return self._visit_reduce(node)
-
-        elif cpm.is_applied_shift(node):
+        if cpm.is_applied_shift(node):
             return self._visit_shift(node)
-
-        elif cpm.is_let(node):
-            let_node = node.fun
-            let_args = [self.visit(arg) for arg in node.args]
-            for p, arg in zip(node.fun.params, let_args, strict=True):
-                self.symbol_map[str(p.id)] = arg
-            return self.visit(let_node.expr)
-
-        elif isinstance(node.fun, gtir.SymRef):
+        if cpm.is_let(node):
+            return self._visit_let(node)
+        # Name-matched builtins (node.fun is a SymRef)
+        if isinstance(node.fun, gtir.SymRef):
+            name = str(node.fun.id)
+            if handler_name := self._BUILTIN_HANDLERS.get(name):
+                return getattr(self, handler_name)(node)
             return self._visit_generic_builtin(node)
-
-        else:
-            raise NotImplementedError(f"Invalid 'FunCall' node: {node}.")
+        raise NotImplementedError(f"Invalid 'FunCall' node: {node}.")
 
     def visit_Lambda(self, node: gtir.Lambda) -> MaybeNestedInTuple[DataflowOutputEdge]:
         def _visit_Lambda_impl(
