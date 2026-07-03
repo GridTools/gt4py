@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
+import sympy
 
 dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
@@ -94,7 +95,7 @@ def _make_if_block_with_tasklet(
         inputs={b1_name, b2_name, cond_name},
         outputs={output_name},
     )
-    nested_sdfg.symbol_mapping["multiplier"] = 2.0
+    nested_sdfg.symbol_mapping["multiplier"] = sympy.Number(2.0)
     return nested_sdfg
 
 
