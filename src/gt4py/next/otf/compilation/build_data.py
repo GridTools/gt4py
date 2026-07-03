@@ -80,9 +80,9 @@ def read_data(path: pathlib.Path) -> Optional[BuildData]:
         return BuildData.from_json(json.loads((path / _DATAFILE_NAME).read_text()))
     except (OSError, ValueError, KeyError, AttributeError):
         # Missing file (OSError/FileNotFoundError), or one left truncated/corrupt
-        # by an interrupted write (json.JSONDecodeError is a ValueError; a bad
-        # status name raises KeyError/AttributeError) is treated as "no build
-        # data" so the caller rebuilds rather than crashing.
+        # by an interrupted write (json.JSONDecodeError is a ValueError; a missing
+        # dict key raises KeyError, a bad status name AttributeError) is treated
+        # as "no build data" so the caller rebuilds rather than crashing.
         return None
 
 

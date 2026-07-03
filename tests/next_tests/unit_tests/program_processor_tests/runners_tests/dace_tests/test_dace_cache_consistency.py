@@ -8,20 +8,19 @@
 
 """Crash-consistency of the dace build-folder cache.
 
-With ``compiler.use_cache=True`` (set by the dace workflow) DaCe reuses a build
-folder whenever the compiled library merely *exists* (``lib_path.is_file()``) and
-then ``dlopen``s it. An ``sdfg.compile()`` interrupted mid-link leaves a
-truncated, unloadable ``lib<name>.so`` behind; the next run accepts the HIT and
-crashes on load instead of rebuilding.
+With ``compiler.use_cache=True`` (set by the dace workflow) dace reuses a build
+folder whenever the compiled library merely *exists* and never validates it. An
+``sdfg.compile()`` interrupted mid-link leaves a truncated, unloadable
+``lib<name>.so`` behind; the next run accepts the HIT and every subsequent
+``load()`` crashes on ``dlopen`` until the folder is cleaned manually.
 
-A *missing* library already self-heals (``is_file()`` is False, and DaCe
-regenerates because ``SDFG.regenerate_code`` defaults to True), so only the
-truncated-but-present case is a bug. Reproducing it in-process requires releasing
-the ``dlopen`` handle first (via ``ReloadableDLL.unload()``): otherwise glibc
-returns the cached handle and never re-reads the corrupted file from disk -- which
-is exactly why the failure only bites on a fresh "re-run" process in practice.
+The compile step therefore records a completion marker after each successful
+compile; a library without the marker is treated as stale and dropped, forcing
+a rebuild.
 """
 
+import ctypes
+import pathlib
 import shutil
 
 import pytest
@@ -30,7 +29,7 @@ import pytest
 dace = pytest.importorskip("dace")
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config
+from gt4py.next import config, fingerprinting
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache as gtx_cache
@@ -56,7 +55,7 @@ def _make_compilable_sdfg(name: str) -> dace.SDFG:
     return sdfg
 
 
-def _make_input(name: str) -> stages.CompilableProject:
+def _make_input(name: str) -> stages.ExtensionSource:
     sdfg = _make_compilable_sdfg(name)
     program_source = stages.ProgramSource(
         entry_point=interface.Function(name=sdfg.name, parameters=()),
@@ -64,7 +63,7 @@ def _make_input(name: str) -> stages.CompilableProject:
         library_deps=(),
         code_spec=code_specs.SDFGCodeSpec(),
     )
-    return stages.CompilableProject(
+    return stages.ExtensionSource(
         program_source=program_source,
         binding_source=stages.BindingSource(
             source_code="def bind(*args, **kwargs):\n    return None\n",
@@ -82,46 +81,45 @@ def _compiler() -> dace_wf_compilation.DaCeCompiler:
     )
 
 
+def _build_folder(
+    comp: dace_wf_compilation.DaCeCompiler, inp: stages.ExtensionSource
+) -> pathlib.Path:
+    return gtx_cache.get_cache_folder(
+        inp,
+        config.BuildCacheLifetime.SESSION,
+        build_context_id=fingerprinting.strict_fingerprinter(comp.dace_config_nondefaults),
+    )
+
+
 @pytest.fixture
-def fresh_dace_input():
-    """Yield a factory returning a CompilableProject with a wiped build folder.
+def clean_build_folder(request):
+    def factory(
+        comp: dace_wf_compilation.DaCeCompiler, inp: stages.ExtensionSource
+    ) -> pathlib.Path:
+        folder = _build_folder(comp, inp)
+        shutil.rmtree(folder, ignore_errors=True)
+        request.addfinalizer(lambda: shutil.rmtree(folder, ignore_errors=True))
+        return folder
 
-    Each program gets a unique name (hence a unique build folder), wiped before
-    and after, so a partial artifact from an earlier run never leaks in.
-    """
-    folders = []
-
-    def factory(name: str) -> stages.CompilableProject:
-        inp = _make_input(name)
-        folder = gtx_cache.get_cache_folder(inp, config.BuildCacheLifetime.SESSION)
-        if folder.exists():
-            shutil.rmtree(folder)
-        folders.append(folder)
-        return inp
-
-    yield factory
-
-    for folder in folders:
-        if folder.exists():
-            shutil.rmtree(folder)
+    return factory
 
 
-def test_dace_recovers_from_truncated_library(fresh_dace_input):
-    """F4: a truncated (but present) ``lib<name>.so`` is accepted by DaCe's
-    ``is_file()`` cache hit and ``dlopen``ed. The compile step must recover by
-    rebuilding instead of crashing on load."""
-    name = "f4_truncated"
-    inp = fresh_dace_input(name)
+def test_dace_recovers_from_truncated_library(clean_build_folder):
+    """F4: a truncated (but present) ``lib<name>.so`` is accepted by dace's
+    existence-only cache hit. The compile step must detect the incomplete build
+    (missing completion marker) and rebuild instead of handing out a library
+    that fails to ``dlopen``."""
+    inp = _make_input("f4_truncated")
     comp = _compiler()
+    build_folder = clean_build_folder(comp, inp)
 
-    program = comp(inp)  # real compile -> the .so is loaded into this process
-    program.sdfg_program._lib.unload()  # release the dlopen handle so the file is re-read
-    del program
+    artifact = comp(inp)
+    assert artifact.library_path.is_file()
 
-    build_folder = gtx_cache.get_cache_folder(inp, config.BuildCacheLifetime.SESSION)
-    library = build_folder / f"lib{name}.so"
-    assert library.is_file()
-    library.write_bytes(b"\x00" * 64)  # truncate -> present but unloadable
+    # Simulate a build interrupted mid-link: truncated library, no completion marker.
+    artifact.library_path.write_bytes(b"\x00" * 64)
+    (build_folder / dace_wf_compilation._COMPILE_COMPLETE_MARKER).unlink()
 
-    recovered = comp(inp)  # must rebuild, not raise OSError on dlopen
-    assert recovered.sdfg_program is not None
+    recovered = comp(inp)
+
+    ctypes.CDLL(str(recovered.library_path))  # raises OSError if still truncated

@@ -187,17 +187,13 @@ and asserting a clean rebuild instead of an exception).
   `.so` path appears but before linking finishes.
 - **On disk**: `build/<name>.so` (or `lib…`) exists, truncated/partial.
 - **Today**: next `sdfg.compile()` → `lib_path.is_file()` True
-  (`sdfg.py:2572`) → `load_precompiled_sdfg` → DaCe raises `RuntimeError`
-  (`file format not recognized`) from the failed `dlopen`. gt4py wraps this in
-  nothing, so it **propagates**. No self-heal. (A *missing* library, by
+  (`sdfg.py:2572`) → the compile step silently accepts the truncated library
+  (since #2587 it never loads it: `return_program_handle=False`); every later
+  `DaCeCompilationArtifact.load()` raises `RuntimeError` (`file format not recognized`) from the failed `dlopen`. No self-heal. (A *missing* library, by
   contrast, already self-heals — see *Implementation findings*.)
-- **Test caveat**: a truncated library cannot be reproduced by
-  compile-then-truncate in the *same* process — glibc caches the `dlopen` handle
-  and never re-reads the file. The test releases the handle first
-  (`CompiledSDFG._lib.unload()`), which is why the failure only bites a fresh
-  *re-run* process in practice.
-- **Test**: compile once; truncate the produced `.so`; run the dace compilation
-  step again; assert clean rebuild (this needs a real compiler, so it is an
+- **Test**: compile once; truncate the produced `.so` and remove the completion
+  marker (mimicking a kill mid-link); run the dace compilation step again;
+  assert clean rebuild (this needs a real compiler, so it is an
   integration-level test gated like the other dace build tests).
 
 ### F5 — Partial source / config state (both, **already handled**)
@@ -344,23 +340,30 @@ A stale `COMPILED`-but-missing folder now rebuilds instead of raising. (Optional
 hardening: on the final `import_from_path`, treat an `ImportError` as one-shot
 self-heal — wipe + rebuild once — to also cover the truncated-but-present `.so`.)
 
-### 3. dace build folder — self-heal on load failure (fixes F4)
+### 3. dace build folder — completion marker written last (fixes F4)
 
 gt4py cannot change DaCe's existence-only gate, but it owns the wrapper around
-`sdfg.compile()`. No commit marker is needed (see *Implementation findings*
-below): a *missing* library already self-heals (`is_file()` is False and
-`SDFG.regenerate_code` defaults to `True`, so DaCe regenerates), so the only
+`sdfg.compile()`. A *missing* library already self-heals (`is_file()` is False
+and `SDFG.regenerate_code` defaults to `True`, so DaCe regenerates), so the only
 crash-inconsistent state is a **truncated-but-present** library that the
-`use_cache` gate accepts and then fails to load. The wrapper therefore:
+`use_cache` gate accepts.
 
-- Records whether a cached library (`lib<name>.*`) was present *before*
-  compiling.
-- Wraps `sdfg.compile()`; on `RuntimeError`/`OSError` (DaCe raises `RuntimeError`
-  from the failed `dlopen`), if a cached library *was* present, the load of a
-  stale/corrupt artifact failed: delete the cached `lib<name>.*` /
-  `libdacestub_<name>.*` and recompile **once** (DaCe then regenerates). If no
-  cached library was present, the error is a genuine compilation failure and is
-  re-raised.
+Since #2587 split compilation from loading, the compile step calls
+`sdfg.compile(return_program_handle=False)` — **no `dlopen` happens at compile
+time**, and the later `DaCeCompilationArtifact.load()` (possibly in another
+process) has neither the build lock nor the dace config context needed to
+recompile. Self-heal-on-load-failure is therefore no longer viable; the fix is
+the commit-marker pattern, applied inside the locked compile step:
+
+- After a completed `sdfg.compile()`, touch a `.gt4py_compile_complete` marker
+  in the build folder (**written last**; an interrupted `touch` just means no
+  marker).
+- Before compiling, if the marker is **absent** the previous build was
+  interrupted: delete the cached `lib<name>.*` / `libdacestub_<name>.*` so
+  DaCe's `is_file()` gate misses and it rebuilds. The marker is also removed
+  before every compile, so an interrupted *re*build (e.g. after external
+  cleanup deleted the library) cannot leave a stale marker next to a truncated
+  library.
 
 Deleting only the library files (rather than `shutil.rmtree` of the whole
 folder) keeps the `locking.lock` file — which lives *inside* the build folder —
@@ -405,9 +408,10 @@ Trade-offs / what to watch:
   reproducible, and validate-on-read catches a torn write on the *next* read. A
   hard power cut may still require regenerating the last in-flight entry.
 - **Broad `except` on read** must be scoped so it cannot mask a real bug as an
-  infinite rebuild loop: log at WARNING on eviction, and only self-heal-retry the
-  dace compile **once**.
-- **Orphan temp files** (`.<name>.*.tmp`, interrupted between mkstemp and
+  infinite rebuild loop. Corrupt entries are evicted silently: `_core` has no
+  established logging, and a per-entry warning would spam N-rank MPI runs; a
+  persistent failure still surfaces as a rebuild-then-error, not a loop.
+- **Orphan temp files** (`.<name>.*.tmp`, interrupted between write and
   replace) accumulate; a cheap sweep of stale `*.tmp` on cache-dir touch (as
   sccache does on `init`) keeps them bounded. Low priority.
 - **NFS/Lustre**: `os.replace` atomicity holds for same-directory renames on
@@ -425,8 +429,8 @@ Trade-offs / what to watch:
 3. `build_data`: atomic writes + broaden `read_data` (§2) — fixes F2.
 4. `Compiler.__call__`: single `_is_usable` predicate with self-heal (§2) —
    fixes F3.
-5. dace `compilation.py`: self-heal on load failure around `sdfg.compile()`
-   (§3) — fixes F4.
+5. dace `compilation.py`: completion marker written last + pre-clean around
+   `sdfg.compile()` (§3) — fixes F4.
 
 Each step is independently shippable; (2) alone already removes the most-reported
 symptom (truncated translation pickle).
@@ -445,9 +449,10 @@ valid entry, corrupt it to mimic an interruption, assert clean recovery**.
   rebuilds to `COMPILED` with the module present.
 - F3: build; `unlink` the module while leaving status `COMPILED`; assert rebuild
   rather than `CompilationError`.
-- F4: compile a real CPU SDFG; release the `dlopen` handle
-  (`CompiledSDFG._lib.unload()`); truncate `lib<name>.so`; assert the compile
-  step recovers instead of raising `RuntimeError`.
+- F4: compile a real CPU SDFG; truncate `lib<name>.so` and remove the completion
+  marker (mimicking a kill mid-link); assert the compile step rebuilds and the
+  resulting library `dlopen`s cleanly. (Since #2587 the compile step never loads
+  the library in-process, so no `dlopen`-handle gymnastics are needed.)
 - Regression for F5: the existing `INITIALIZED`/`CONFIGURED` resume tests still
   pass unchanged.
 
@@ -459,23 +464,27 @@ Decision above):
 1. **A truncated shared library cannot be reproduced in-process by
    compile-then-truncate**: glibc caches the `dlopen` handle, so the truncated
    file is never re-read. The failure only manifests on a fresh *re-run* process
-   (the user's actual scenario). The dace test releases the handle via
-   `CompiledSDFG._lib.unload()`; the gtfn truncated-module case (a C-extension
+   (the user's actual scenario). The gtfn truncated-module case (a C-extension
    `.so`, which Python cannot cleanly unload in-process) is **not** unit-tested —
-   the realistic, in-process **F3-missing** case is covered instead.
-2. **The dace fix needs no commit marker.** `SDFG.regenerate_code` defaults to
-   `True` (`dace/sdfg/sdfg.py:550`), so a *missing* library always regenerates
-   and self-heals; only the truncated-but-present library is a bug. The fix is
-   therefore just "self-heal on load failure" (§3), simpler than the marker +
-   pre-clean originally proposed.
-3. **DaCe raises `RuntimeError`** (not `OSError`) from the failed `dlopen`, so
-   the self-heal `except` catches `(RuntimeError, OSError)`.
+   the realistic, in-process **F3-missing** case is covered instead. The dace
+   test is unaffected: since #2587 the compile step never loads the library
+   in-process.
+2. **A missing dace library self-heals without help.** `SDFG.regenerate_code`
+   defaults to `True` (`dace/sdfg/sdfg.py:550`), so a *missing* library always
+   regenerates; only the truncated-but-present library is a bug.
+3. **#2587 (compile/load split) forced the marker design.** An earlier revision
+   of this fix self-healed on load failure inside the combined compile+load
+   step. With `sdfg.compile(return_program_handle=False)` no load happens at
+   compile time, and `DaCeCompilationArtifact.load()` cannot recompile (no
+   build lock, no dace config context) — so §3 uses the commit-marker pattern
+   originally proposed here.
 
 ## Resolved decisions
 
-1. **Marker vs. whole-dir rename** → neither for dace: self-heal on load failure
-   suffices (finding #2). gtfn keeps its `COMPILED` status as the commit marker
-   (now atomic + tolerant). Whole-dir rename remains a documented future option.
+1. **Marker vs. whole-dir rename** → marker for dace (`.gt4py_compile_complete`,
+   written last; forced by the #2587 compile/load split, finding #3). gtfn keeps
+   its `COMPILED` status as the commit marker (now atomic + tolerant). Whole-dir
+   rename remains a documented future option.
 2. **Location of `atomic_write_*`** → `gt4py._core/cache_utils.py`, alongside
    `FileCache`/`locking`.
 3. **fsync** → not implemented (per maintainer); atomic rename covers

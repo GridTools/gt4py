@@ -10,17 +10,12 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Protocol, TypeVar
+from typing import Protocol, TypeGuard, TypeVar
 
-import factory
-
-from gt4py._core import locking
-from gt4py.next import config
+from gt4py._core import definitions as core_defs, locking
+from gt4py.next import config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
-
-
-T = TypeVar("T")
 
 
 def is_compiled(data: build_data.BuildData) -> bool:
@@ -31,11 +26,14 @@ def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
     return (src_dir / data.module).exists()
 
 
-def is_usable(data: build_data.BuildData | None, src_dir: pathlib.Path) -> bool:
-    """A cached build is reusable only if it is marked compiled *and* its module
-    artifact is actually present. An interrupted run (or external cleanup) can
-    leave a ``COMPILED`` marker without the artifact; such a build folder must be
-    rebuilt, not reused."""
+def is_usable(
+    data: build_data.BuildData | None, src_dir: pathlib.Path
+) -> TypeGuard[build_data.BuildData]:
+    """Check that a cached build is marked compiled *and* its module artifact is present.
+
+    An interrupted run (or external cleanup) can leave a ``COMPILED`` marker
+    without the artifact; such a build folder must be rebuilt, not reused.
+    """
     return data is not None and is_compiled(data) and module_exists(data, src_dir)
 
 
@@ -47,34 +45,71 @@ CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
 class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
     def __call__(
         self,
-        source: stages.CompilableProject[CodeSpecT, TargetCodeSpecT],
+        source: stages.ExtensionSource[CodeSpecT, TargetCodeSpecT],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[CodeSpecT, TargetCodeSpecT]: ...
 
 
 @dataclasses.dataclass(frozen=True)
-class Compiler(
+class CPPCompilationArtifact:
+    """On-disk result of a CPP-style compilation: a Python extension module.
+
+    The default ``load`` is an ``importlib`` import + entry-point lookup;
+    backends override to apply their own calling convention.
+    """
+
+    src_dir: pathlib.Path
+    module: pathlib.Path
+    entry_point_name: str
+    device_type: core_defs.DeviceType
+
+    def load(self) -> stages.ExecutableProgram:
+        """Import the .so and return the raw entry point.
+
+        Must run in the process that will call the returned program: the
+        module is registered in that process's ``sys.modules`` under the
+        ``gt4py.__compiled_programs__.`` prefix.
+        """
+        m = importer.import_from_path(
+            self.src_dir / self.module,
+            sys_modules_prefix="gt4py.__compiled_programs__.",
+        )
+        return getattr(m, self.entry_point_name)
+
+
+@dataclasses.dataclass(frozen=True)
+class CPPCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        stages.ExecutableProgram,
+        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        CPPCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-        stages.ExecutableProgram,
+        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        CPPCompilationArtifact,
     ],
     definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
 ):
-    """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
+    """Drive a CPP-style build system into a ``CPPCompilationArtifact``.
+
+    Backends override ``_make_artifact`` to use their own artifact subclass.
+    """
 
     cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
+    device_type: core_defs.DeviceType
+    fingerprint_builder_factory: bool = True
     force_recompile: bool = False
 
     def __call__(
         self,
-        inp: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
-    ) -> stages.ExecutableProgram:
-        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
+        inp: stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+    ) -> CPPCompilationArtifact:
+        build_context_id = (
+            fingerprinting.strict_fingerprinter(self.builder_factory)
+            if self.fingerprint_builder_factory
+            else ""
+        )
+        src_dir = cache.get_cache_folder(inp, self.cache_lifetime, build_context_id)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
@@ -88,19 +123,18 @@ class Compiler(
                 raise CompilationError(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
-            assert new_data is not None  # guaranteed by `is_usable`
 
-        m = importer.import_from_path(
-            src_dir / new_data.module, sys_modules_prefix="gt4py.__compiled_programs__."
+        return self._make_artifact(src_dir, new_data.module, new_data.entry_point_name)
+
+    def _make_artifact(
+        self, src_dir: pathlib.Path, module: pathlib.Path, entry_point_name: str
+    ) -> CPPCompilationArtifact:
+        return CPPCompilationArtifact(
+            src_dir=src_dir,
+            module=module,
+            entry_point_name=entry_point_name,
+            device_type=self.device_type,
         )
-        func = getattr(m, new_data.entry_point_name)
-
-        return func
-
-
-class CompilerFactory(factory.Factory):
-    class Meta:
-        model = Compiler
 
 
 class CompilationError(RuntimeError): ...
