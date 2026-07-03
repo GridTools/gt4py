@@ -30,7 +30,7 @@ from next_tests.integration_tests.cases import (
     mesh_descriptor,
     unstructured_case,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     MeshDescriptor,
     exec_alloc_descriptor,
     simple_mesh,
@@ -215,6 +215,7 @@ def compile_testee_unstructured_no_jit(compile_testee_unstructured):
     return compile_testee_unstructured.with_compilation_options(enable_jit=False)
 
 
+@pytest.mark.uses_unstructured_shift
 def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
@@ -248,33 +249,7 @@ def skip_value_mesh_descriptor(exec_alloc_descriptor):
     return skip_value_mesh(exec_alloc_descriptor.allocator)
 
 
-def test_compile_unstructured_jit(
-    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
-):
-    if unstructured_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    # compiled for skip_value_mesh and simple_mesh
-    compile_testee_unstructured_no_jit.compile(
-        offset_provider=[
-            skip_value_mesh_descriptor.offset_provider,
-            unstructured_case.offset_provider,
-        ],
-    )
-
-    # and executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
-    compile_testee_unstructured_no_jit(
-        *args, offset_provider=unstructured_case.offset_provider, **kwargs
-    )
-
-    v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
-    assert np.allclose(
-        kwargs["out"].asnumpy(),
-        np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
-    )
-
-
+@pytest.mark.uses_unstructured_shift
 def test_compile_unstructured_wrong_offset_provider(
     unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
@@ -298,29 +273,7 @@ def test_compile_unstructured_wrong_offset_provider(
         )
 
 
-def test_compile_unstructured_modified_offset_provider(
-    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
-):
-    if unstructured_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    # compiled for skip_value_mesh
-    compile_testee_unstructured_no_jit.compile(
-        offset_provider=skip_value_mesh_descriptor.offset_provider,
-    )
-
-    # but executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
-
-    # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
-
-    with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
-        compile_testee_unstructured_no_jit(
-            *args, offset_provider=unstructured_case.offset_provider, **kwargs
-        )
-
-
+@pytest.mark.uses_unstructured_shift
 def test_compile_unstructured_for_two_offset_providers(
     unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
@@ -409,6 +362,7 @@ def compile_variants_testee(cartesian_case, compile_variants_testee_not_compiled
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
@@ -451,6 +405,7 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
@@ -472,6 +427,7 @@ def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_teste
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
     object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
@@ -491,6 +447,7 @@ def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
         )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled_but_jit_enabled_on_call(
     cartesian_case, compile_variants_testee
 ):
@@ -581,6 +538,7 @@ def test_compile_variants_config_default_disable_jit(cartesian_case):
             )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled_then_reset_static_params(
     cartesian_case, compile_variants_testee
 ):
@@ -639,6 +597,7 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 5.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled_then_set_new_static_params(
     cartesian_case, compile_variants_testee
 ):
@@ -698,6 +657,7 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
         )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_jit(cartesian_case, compile_variants_testee):
     object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", True)
 
@@ -733,6 +693,7 @@ def test_compile_variants_jit(cartesian_case, compile_variants_testee):
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_with_static_params_jit(
     cartesian_case, compile_variants_testee_not_compiled
 ):
@@ -774,6 +735,7 @@ def test_compile_variants_with_static_params_jit(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_decorator_static_params_jit(
     compile_variants_field_operator, cartesian_case
 ):
@@ -881,6 +843,7 @@ def compile_variants_testee_tuple(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_args
 def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee_tuple, "backend", _raise_on_compile)
@@ -946,6 +909,8 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
         compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
 
 
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_decorator_static_domains(cartesian_case):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")

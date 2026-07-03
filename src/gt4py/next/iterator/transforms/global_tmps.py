@@ -169,24 +169,24 @@ def _transform_by_pattern(
     if extracted_fields:
         tmp_stmts: list[itir.Stmt] = []
 
+        as_tuple = lambda _, elts: tuple(elts)  # noqa: E731
+
         # for each extracted expression generate:
         #  - one or more `Temporary` declarations (depending on whether the expression is a field
         #    or a tuple thereof)
         #  - one `SetAt` statement that materializes the expression into the temporary
         for tmp_sym, tmp_expr in extracted_fields.items():
             assert isinstance(tmp_expr.type, ts.TypeSpec)
-            tmp_names: str | tuple[str | tuple, ...] = type_info.apply_to_primitive_constituents(
+            tmp_names: str | tuple[str | tuple, ...] = type_info.tree_map_type(
                 lambda x: next(uids["__tmp"]),
-                tmp_expr.type,
-                tuple_constructor=lambda *elements: tuple(elements),
-            )
+                result_collection_constructor=as_tuple,
+            )(tmp_expr.type)
             tmp_dtypes: (
                 ts.ScalarType | ts.ListType | tuple[ts.ScalarType | ts.ListType | tuple, ...]
-            ) = type_info.apply_to_primitive_constituents(
+            ) = type_info.tree_map_type(
                 type_info.extract_dtype,
-                tmp_expr.type,
-                tuple_constructor=lambda *elements: elements,
-            )
+                result_collection_constructor=as_tuple,
+            )(tmp_expr.type)
 
             tmp_domains: SymbolicDomain | tuple[SymbolicDomain | tuple, ...] = tmp_expr.annex.domain
 
@@ -214,12 +214,11 @@ def _transform_by_pattern(
 
             # The following propagates the domains to the tuple structure of `tmp_expr.type`.
             # `tmp_domains` might not have this structure because domain inference was not able to infer the tuple structure.
-            tmp_domains = type_info.apply_to_primitive_constituents(
+            tmp_domains = type_info.tree_map_type(
                 get_domain,
-                tmp_expr.type,
+                result_collection_constructor=as_tuple,
                 with_path_arg=True,
-                tuple_constructor=lambda *elements: tuple(elements),
-            )
+            )(tmp_expr.type)
 
             declarations.extend(
                 itir.Temporary(id=tmp_name, domain=domain.as_expr(), dtype=dtype)

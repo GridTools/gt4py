@@ -191,8 +191,11 @@ class StridedConnectivityField(common.Connectivity):
 
 
 # Offsets
-OffsetPart: TypeAlias = Tag | common.IntIndex
-CompleteOffset: TypeAlias = tuple[Tag, common.IntIndex]
+# A cartesian shift can be passed as a `common.CartesianConnectivity` tag (carrying its source
+# axis, codomain, and integer offset); named offsets use a string `Tag` resolved via the offset
+# provider.
+OffsetPart: TypeAlias = Tag | common.CartesianConnectivity | common.IntIndex
+CompleteOffset: TypeAlias = tuple[Tag | common.CartesianConnectivity, common.IntIndex]
 OffsetProviderElem: TypeAlias = common.OffsetProviderElem
 OffsetProvider: TypeAlias = common.OffsetProvider
 
@@ -404,7 +407,9 @@ def lift(stencil):
             def __init__(
                 self, stencil, args, *, offsets: Optional[list[OffsetPart]] = None, elem=None
             ) -> None:
-                assert not offsets or all(isinstance(o, (int, str)) for o in offsets)
+                assert not offsets or all(
+                    isinstance(o, (int, str, common.CartesianConnectivity)) for o in offsets
+                )
                 self.stencil = stencil
                 self.args = args
                 self.offsets = offsets or []
@@ -533,7 +538,7 @@ for math_builtin_name in builtins.ARITHMETIC_BUILTINS | builtins.TYPE_BUILTINS:
     globals()[math_builtin_name] = decorator(impl)
 
 
-def _named_range(axis: str, range_: Iterable[int]) -> Iterable[CompleteOffset]:
+def _named_range(axis: str, range_: Iterable[int]) -> Iterable[tuple[Tag, common.IntIndex]]:
     return ((axis, i) for i in range_)
 
 
@@ -545,7 +550,11 @@ def _domain_iterator(domain: dict[Tag, range]) -> Iterable[ConcretePosition]:
 
 
 def execute_shift(
-    pos: Position, tag: Tag, index: common.IntIndex, *, offset_provider: OffsetProvider
+    pos: Position,
+    tag: Tag | common.CartesianConnectivity,
+    index: common.IntIndex,
+    *,
+    offset_provider: OffsetProvider,
 ) -> MaybePosition:
     assert pos is not None
     if isinstance(tag, SparseTag):
@@ -578,15 +587,19 @@ def execute_shift(
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
         return cast(IncompletePosition, pos) | {tag: new_entry}
 
-    offset_implementation = common.get_offset(offset_provider, tag)
-    if isinstance(offset_implementation, common.Dimension):
+    # a `CartesianConnectivity` tag is a self-describing cartesian shift (e.g. from a
+    # `CartesianOffset` IR node); named offsets are resolved through the offset provider
+    if isinstance(tag, common.CartesianConnectivity):
+        assert tag.domain_dim == tag.codomain  # relocation (staggering) is not supported here
         new_pos = copy.copy(pos)
-        if common.is_int_index(value := new_pos[offset_implementation.value]):
-            new_pos[offset_implementation.value] = value + index
+        key = tag.domain_dim.value
+        if common.is_int_index(value := new_pos[key]):
+            new_pos[key] = value + index + tag.offset
         else:
             raise AssertionError()
         return new_pos
-    elif common.is_neighbor_table(offset_implementation):
+    offset_implementation = common.get_offset(offset_provider, tag)
+    if common.is_neighbor_table(offset_implementation):
         source_dim = offset_implementation.__gt_type__().source_dim
         assert source_dim.value in pos
         new_pos = pos.copy()
@@ -612,7 +625,8 @@ def _is_list_of_complete_offsets(
     complete_offsets: list[tuple[Any, Any]],
 ) -> TypeGuard[list[CompleteOffset]]:
     return all(
-        isinstance(tag, Tag) and isinstance(offset, (int, np.integer))
+        isinstance(tag, (Tag, common.CartesianConnectivity))
+        and isinstance(offset, (int, np.integer))
         for tag, offset in complete_offsets
     )
 
@@ -1374,7 +1388,9 @@ def constant_field(value: Any, dtype_like: Optional[core_defs.DTypeLike] = None)
 
 
 @builtins.shift.register(EMBEDDED)
-def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIterator]:
+def shift(
+    *offsets: Union[runtime.Offset, OffsetPart],
+) -> Callable[[ItIterator], ItIterator]:
     def impl(it: ItIterator) -> ItIterator:
         return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
 

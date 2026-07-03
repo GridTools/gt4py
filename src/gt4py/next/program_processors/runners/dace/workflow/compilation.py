@@ -9,19 +9,25 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
+import pathlib
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
 from typing import Any
 
 import dace
+import dace.codegen.compiler as dace_compiler
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import common, config
+from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
-from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
+from gt4py.next.program_processors.runners.dace.workflow import (
+    common as gtx_wfdcommon,
+    decoration as gtx_wfddecoration,
+)
 
 
 def _add_tx_markers(sdfg: dace.SDFG) -> None:
@@ -32,11 +38,10 @@ def _add_tx_markers(sdfg: dace.SDFG) -> None:
 
     if has_gpu_schedule:
         sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for node, _ in sdfg.all_nodes_recursive(
-            # Also adds markers to scopes and maps that are NOT scheduled on GPU
-            predicate=lambda x, _: isinstance(x, (dace.nodes.MapEntry, dace.sdfg.state.SDFGState))
-        ):
-            node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+        for node, _ in sdfg.all_nodes_recursive():
+            # Also adds markers to map scopes that are NOT scheduled on GPU
+            if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
+                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
 
 class CompiledDaceProgram:
@@ -70,7 +75,7 @@ class CompiledDaceProgram:
         self,
         program: dace.CompiledSDFG,
         bind_func_name: str,
-        binding_source: stages.BindingSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        binding_source_code: str,
     ):
         self.sdfg_program = program
 
@@ -79,9 +84,10 @@ class CompiledDaceProgram:
         # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
         self.sdfg_argtypes = list(program.sdfg.arglist().values())
 
-        # Note that `binding_source` contains Python code tailored to this specific SDFG.
-        # Here we dinamically compile this function and add it to the compiled program.
-        exec(binding_source.source_code, global_namespace := {})  # type: ignore[var-annotated]
+        # The binding source code is Python tailored to this specific SDFG.
+        # We dynamically compile that function and add it to the compiled program.
+        global_namespace: dict[str, Any] = {}
+        exec(binding_source_code, global_namespace)
         self.update_sdfg_ctype_arglist = global_namespace[bind_func_name]
         # For debug purpose, we set a unique module name on the compiled function.
         self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
@@ -130,18 +136,45 @@ class CompiledDaceProgram:
 
 
 @dataclasses.dataclass(frozen=True)
+class DaCeCompilationArtifact:
+    """Result of a DaCe compilation: build folder + library path + SDFG bindings + the SDFG itself.
+
+    The SDFG is carried inline as JSON because dace's load path
+    (``get_program_handle``) needs an SDFG instance to wrap into the
+    returned ``CompiledSDFG``, and the build folder may not contain a
+    ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
+    """
+
+    build_folder: pathlib.Path
+    library_path: pathlib.Path
+    sdfg_json: str
+    binding_source_code: str
+    bind_func_name: str
+    device_type: core_defs.DeviceType
+
+    def load(self) -> stages.ExecutableProgram:
+        # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
+        #   exposes a load path that doesn't require an SDFG instance to wrap
+        #   into the returned ``CompiledSDFG``.
+        sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
+        sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
+        program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
+        return gtx_wfddecoration.convert_args(program, device=self.device_type)
+
+
+@dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-        CompiledDaceProgram,
+        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        DaCeCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-        CompiledDaceProgram,
+        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        DaCeCompilationArtifact,
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
-    """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
+    """Run the DaCe build system and produce an on-disk ``DaCeCompilationArtifact``."""
 
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
@@ -152,16 +185,31 @@ class DaCeCompiler(
     cmake_build_type: config.CMakeBuildType = dataclasses.field(
         default_factory=lambda: config.CMAKE_BUILD_TYPE
     )
+    # we store the non-default values of `dace.Config` in order to include it in the stage fingerprint
+    dace_config_nondefaults: dict[str, Any] = dataclasses.field(init=False)
 
-    def __call__(
-        self,
-        inp: stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-    ) -> CompiledDaceProgram:
+    def __post_init__(self) -> None:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg_build_folder = gtx_cache.get_cache_folder(inp, self.cache_lifetime)
+            object.__setattr__(self, "dace_config_nondefaults", dace.Config._data.nondefaults())
+
+    def __call__(
+        self,
+        inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+    ) -> DaCeCompilationArtifact:
+        with gtx_wfdcommon.dace_context(
+            device_type=self.device_type,
+            cmake_build_type=self.cmake_build_type,
+        ):
+            # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
+            # user changes the backend configuration (PR #2650).
+            sdfg_build_folder = gtx_cache.get_cache_folder(
+                inp,
+                self.cache_lifetime,
+                build_context_id=fingerprinting.strict_fingerprinter(self.dace_config_nondefaults),
+            )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             sdfg = dace.SDFG.from_json(inp.program_source.source_code)
@@ -172,13 +220,21 @@ class DaCeCompiler(
 
             sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
-                sdfg_program = sdfg.compile(validate=False)
+                sdfg.compile(validate=False, return_program_handle=False)
+            # ``build_folder_mode`` is set by ``dace_context``; resolve the library
+            # path here so ``get_binary_name`` sees the same mode dace built under.
+            library_path = dace_compiler.get_binary_name(
+                object_folder=sdfg_build_folder, sdfg_name=sdfg.name
+            )
 
         assert inp.binding_source is not None
-        return CompiledDaceProgram(
-            sdfg_program,
-            self.bind_func_name,
-            inp.binding_source,
+        return DaCeCompilationArtifact(
+            build_folder=sdfg_build_folder,
+            library_path=library_path,
+            sdfg_json=json.dumps(inp.program_source.source_code),
+            binding_source_code=inp.binding_source.source_code,
+            bind_func_name=self.bind_func_name,
+            device_type=self.device_type,
         )
 
 
