@@ -83,8 +83,16 @@ def _connectivity_file_ref(value: common.Connectivity) -> _ConnectivityFileRef:
         fd, path = tempfile.mkstemp(suffix=".npy", prefix="connectivity_", dir=dump_dir)
         os.close(fd)
         np.save(path, value.asnumpy())
+
+        def _prune(ref: weakref.ref, key: int = id(value)) -> None:
+            # Only the registry entry: the file may still be referenced by
+            # in-flight jobs and is reclaimed with the session cache dir. The
+            # guard protects a reused id already re-registered by a new owner.
+            if (current := _connectivity_files.get(key)) is not None and current[0] is ref:
+                del _connectivity_files[key]
+
         try:
-            _connectivity_files[id(value)] = (weakref.ref(value), path)
+            _connectivity_files[id(value)] = (weakref.ref(value, _prune), path)
         except TypeError:  # not weakref-able: correct but re-dumped per job
             pass
     else:

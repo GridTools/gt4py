@@ -6,7 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import concurrent.futures
 import dataclasses
+import gc
 import multiprocessing
 import os
 import pickle
@@ -141,6 +143,31 @@ def test_offloaded_job_ships_connectivities_as_file_refs():
     assert restored.domain == conn.domain
     assert restored.codomain == conn.codomain
     assert restored.skip_value == conn.skip_value
+
+
+def test_connectivity_file_registry_prunes_on_gc():
+    Vertex = gtx.Dimension("Vertex")
+    Edge = gtx.Dimension("Edge")
+    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+    conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
+
+    compile_jobs._connectivity_file_ref(conn)
+    key = id(conn)
+    assert key in compile_jobs._connectivity_files
+
+    del conn
+    gc.collect()
+    assert key not in compile_jobs._connectivity_files
+
+
+def test_wait_for_compilation_untracks_successful_futures():
+    future = concurrent.futures.Future()
+    future.set_result(lambda: None)
+    compiled_program._ongoing_compilations[future] = "testee (backend)"
+
+    compiled_program.wait_for_compilation()
+
+    assert future not in compiled_program._ongoing_compilations
 
 
 def test_detect_cuda_archs_prefers_cudaarchs_env():

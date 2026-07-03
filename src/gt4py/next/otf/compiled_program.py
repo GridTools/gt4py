@@ -182,7 +182,7 @@ def wait_for_compilation() -> None:
     for future, label in list(_ongoing_compilations.items()):
         if (error := future.exception()) is not None:  # waits for completion
             failures.append((label, error))
-            del _ongoing_compilations[future]
+        del _ongoing_compilations[future]
     if len(failures) == 1:
         raise failures[0][1]
     if failures:
