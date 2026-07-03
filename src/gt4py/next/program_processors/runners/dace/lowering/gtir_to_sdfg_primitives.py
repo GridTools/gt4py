@@ -38,10 +38,6 @@ from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_scan impor
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
-if TYPE_CHECKING:
-    from gt4py.next.program_processors.runners.dace.lowering import gtir_to_sdfg_fieldview
-
-
 class PrimitiveTranslator(Protocol):
     @abc.abstractmethod
     def __call__(
