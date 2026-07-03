@@ -48,7 +48,7 @@ def test_keyerror_on_missing(temp_cache):
         _ = temp_cache["does_not_exist"]
 
 
-# --- Crash consistency (failure mode F1: truncated translation pickle) ---
+# --- Crash consistency ---
 # An interrupted write (Ctrl-C / SIGKILL / OOM during ``pickle.dump``) can leave a
 # truncated entry on disk. ``__contains__`` still reports a HIT, but reading must
 # behave like a cache miss (raise ``KeyError``) instead of propagating an

@@ -26,16 +26,16 @@ answers "is there an entry for this input?" — not whether the entry's payload
 is complete. Both backends use two independent fingerprint-keyed layers, each
 with its own present-but-broken states:
 
-| #   | Layer                           | Broken state after an interruption                       | Old behavior on re-run                                                               |
-| --- | ------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| F1  | translation cache (`FileCache`) | truncated pickle                                         | `EOFError`/`UnpicklingError` aborts                                                  |
-| F2  | gtfn build folder               | truncated `gt4py.json`                                   | `JSONDecodeError` aborts                                                             |
-| F3  | gtfn build folder               | status `COMPILED`, module deleted (e.g. scratch cleanup) | `CompilationError`                                                                   |
-| F4  | dace build folder               | truncated `lib<name>.so` (kill mid-link)                 | accepted by dace's existence-only `use_cache` gate; `dlopen` fails on every `load()` |
-| F6  | compiledb template (shared)     | truncated `compile_commands.json`                        | `JSONDecodeError` for *every* program with that configuration                        |
+| Layer                           | Broken state after an interruption                       | Old behavior on re-run                                                               |
+| ------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| translation cache (`FileCache`) | truncated pickle                                         | `EOFError`/`UnpicklingError` aborts                                                  |
+| gtfn build folder               | truncated `gt4py.json`                                   | `JSONDecodeError` aborts                                                             |
+| gtfn build folder               | status `COMPILED`, module deleted (e.g. scratch cleanup) | `CompilationError`                                                                   |
+| dace build folder               | truncated `lib<name>.so` (kill mid-link)                 | accepted by dace's existence-only `use_cache` gate; `dlopen` fails on every `load()` |
+| compiledb template (shared)     | truncated `compile_commands.json`                        | `JSONDecodeError` for *every* program with that configuration                        |
 
-(F5 — a build interrupted before `COMPILED` — already resumes correctly via the
-gtfn status machine and must keep doing so.)
+(A build interrupted *before* reaching `COMPILED` already resumes correctly via
+the gtfn status machine and must keep doing so.)
 
 The file lock is orthogonal: it serializes concurrent builders but a killed
 lock holder releases the lock and leaves its partial entry behind. Mature
@@ -54,19 +54,19 @@ validate-on-read absorbs the rare torn write.
 
 Per layer:
 
-- **Translation cache (F1)** — `FileCache.__setitem__` publishes atomically;
+- **Translation cache** — `FileCache.__setitem__` publishes atomically;
   `__getitem__` treats any unpicklable entry (`EOFError`, `UnpicklingError`,
   `OSError`, and `AttributeError`/`ImportError` from version skew) as a miss,
   evicting the file and raising `KeyError` so `CachedStep` recomputes.
-- **gtfn build folder (F2, F3)** — `build_data.write_data` publishes
-  atomically, so the `COMPILED` status is a proper commit marker written last;
-  `read_data` returns `None` for unreadable metadata. The cache-HIT gate is a
-  single predicate `is_usable(data, src_dir)` = status `COMPILED` *and* module
-  file present; anything else rebuilds (preserving the F5 resume states).
-- **compiledb template (F6)** — published atomically; `_cc_find_compiledb`
+- **gtfn build folder** — `build_data.write_data` publishes atomically, so the
+  `COMPILED` status is a proper commit marker written last; `read_data` returns
+  `None` for unreadable metadata. The cache-HIT gate is a single predicate
+  `is_usable(data, src_dir)` = status `COMPILED` *and* module file present;
+  anything else rebuilds (preserving the partial-build resume states).
+- **compiledb template** — published atomically; `_cc_find_compiledb`
   validates the JSON on HIT and evicts an unreadable template so it is
   regenerated under the existing lock.
-- **dace build folder (F4)** — dace's `use_cache` gate accepts a library on
+- **dace build folder** — dace's `use_cache` gate accepts a library on
   mere existence, and the compile step never loads it
   (`sdfg.compile(return_program_handle=False)` since #2587), so a truncated
   library survives until `DaCeCompilationArtifact.load()` — which has neither
@@ -83,8 +83,8 @@ Per layer:
 - **Lock-only / status quo**: gives no crash consistency (see Context).
 - **Whole-directory atomic publish**: strongest guarantee, but fights the
   in-place CMake/Ninja incremental builds, dace's `build_folder` binding, and
-  the F5 resume behavior. Remains an option if marker + self-heal proves
-  insufficient.
+  the partial-build resume behavior. Remains an option if marker + self-heal
+  proves insufficient.
 - **`fsync` on every write**: protects only against power loss, not the
   reported process-kill cases; rejected as default (a knob can be added if
   power-loss corruption is ever observed).

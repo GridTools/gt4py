@@ -23,6 +23,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, fingerprinting
+from gt4py.next.otf import stages
 from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 
@@ -35,7 +36,7 @@ def _compiler() -> compiler.CPPCompiler:
     )
 
 
-def _src_dir(comp: compiler.CPPCompiler, extension_source) -> pathlib.Path:
+def _src_dir(comp: compiler.CPPCompiler, extension_source: stages.ExtensionSource) -> pathlib.Path:
     return cache.get_cache_folder(
         extension_source,
         config.BuildCacheLifetime.SESSION,
@@ -52,7 +53,7 @@ def clean_session_cache(extension_source_example):
 
 
 def test_compiler_recovers_from_corrupt_build_data(extension_source_example, clean_session_cache):
-    """F2: an interrupted write truncates ``gt4py.json``. The next compile must
+    """An interrupted write truncates ``gt4py.json``. The next compile must
     treat unreadable build metadata as 'not built' and rebuild, not crash in
     ``json.loads``."""
     comp = _compiler()
@@ -70,7 +71,7 @@ def test_compiler_recovers_from_corrupt_build_data(extension_source_example, cle
 
 
 def test_compiler_recovers_from_missing_module(extension_source_example, clean_session_cache):
-    """F3: ``gt4py.json`` says COMPILED but the module artifact is gone (scratch
+    """``gt4py.json`` says COMPILED but the module artifact is gone (scratch
     cleanup, partial ``rm``). The compiler must rebuild instead of raising
     ``CompilationError``."""
     comp = _compiler()
@@ -90,7 +91,7 @@ def test_compiler_recovers_from_missing_module(extension_source_example, clean_s
 def test_compiler_recovers_from_corrupt_compiledb_template(
     extension_source_example, clean_session_cache
 ):
-    """F6: the compiledb *template* (``compile_commands.json`` in the prototype
+    """The compiledb *template* (``compile_commands.json`` in the prototype
     folder) is shared by every program built with the same configuration. Its
     HIT check is existence-only, so a write interrupted mid-generation poisons
     all subsequent builds. A corrupt template must be regenerated, not trusted."""

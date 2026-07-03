@@ -219,7 +219,7 @@ def test_cached_step_rejection_follows_fingerprinter_not_cache():
 
 
 def test_cached_step_persistent_recovers_from_corrupt_entry(tmp_path):
-    """F1: a write interrupted mid-``pickle.dump`` leaves a truncated entry that
+    """A write interrupted mid-``pickle.dump`` leaves a truncated entry that
     ``__contains__`` reports as a HIT. Reading it must behave like a cache miss
     and recompute, not propagate an unpickling error out of ``CachedStep``."""
     cached = workflow.CachedStep.persistent(

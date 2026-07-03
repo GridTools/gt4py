@@ -105,11 +105,11 @@ def clean_build_folder(request):
 
 
 def test_dace_recovers_from_truncated_library(clean_build_folder):
-    """F4: a truncated (but present) ``lib<name>.so`` is accepted by dace's
+    """A truncated (but present) ``lib<name>.so`` is accepted by dace's
     existence-only cache hit. The compile step must detect the incomplete build
     (missing completion marker) and rebuild instead of handing out a library
     that fails to ``dlopen``."""
-    inp = _make_input("f4_truncated")
+    inp = _make_input("truncated_library")
     comp = _compiler()
     build_folder = clean_build_folder(comp, inp)
 
