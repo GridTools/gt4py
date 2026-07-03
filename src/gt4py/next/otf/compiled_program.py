@@ -15,8 +15,6 @@ import contextvars
 import dataclasses
 import functools
 import itertools
-import os
-import tempfile
 import threading
 import types
 import warnings
@@ -24,11 +22,9 @@ import weakref
 from collections.abc import Callable, Hashable, Sequence
 from typing import Any, Generic, TypeAlias, TypeVar
 
-import numpy as np
-
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, constructors, errors, utils as gtx_utils
+from gt4py.next import backend as gtx_backend, common, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
@@ -36,8 +32,7 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
-from gt4py.next.otf import arguments, compilation_runner, definitions as otf_definitions, stages
-from gt4py.next.otf.compilation import cache as compilation_cache
+from gt4py.next.otf import arguments, compilation_runner, compile_jobs, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
@@ -196,120 +191,6 @@ def wait_for_compilation() -> None:
             "Multiple compilations failed: "
             + "; ".join(f"'{label}': {error!r}" for label, error in failures)
         ) from failures[0][1]
-
-
-def _connectivity_from_file(
-    path: str,
-    domain: common.Domain,
-    codomain: common.Dimension,
-    skip_value: core_defs.IntegralScalar | None,
-) -> common.Connectivity:
-    """Rehydrate a `_ConnectivityFileRef`: memory-mapped, so unpickling the same
-    file in many worker processes shares the physical pages instead of copying."""
-    data = np.load(path, mmap_mode="r")
-    return constructors.as_connectivity(
-        domain=domain, codomain=codomain, data=data, skip_value=skip_value
-    )
-
-
-@dataclasses.dataclass(frozen=True)
-class _ConnectivityFileRef:
-    """Stand-in for a connectivity table in an offloaded compile job.
-
-    Pickles as a reference to an ``.npy`` file in the session cache dir and
-    unpickles as the memory-mapped `Connectivity` itself, so the table crosses
-    the process boundary through the page cache instead of the pickle stream.
-    """
-
-    path: str
-    domain: common.Domain
-    codomain: common.Dimension
-    skip_value: core_defs.IntegralScalar | None
-
-    def __reduce__(self) -> tuple[Callable, tuple]:
-        return (
-            _connectivity_from_file,
-            (self.path, self.domain, self.codomain, self.skip_value),
-        )
-
-
-#: Files already written for a connectivity, keyed by its id (validated against
-#: a weakref, since ids can be reused): the same mesh is typically shared by all
-#: programs of a run and must be dumped only once.
-_connectivity_files: dict[int, tuple[weakref.ref, str]] = {}
-
-
-def _connectivity_file_ref(value: common.Connectivity) -> _ConnectivityFileRef:
-    entry = _connectivity_files.get(id(value))
-    if entry is None or entry[0]() is not value:
-        dump_dir = compilation_cache._session_cache_dir_path / "connectivities"
-        dump_dir.mkdir(parents=True, exist_ok=True)
-        fd, path = tempfile.mkstemp(suffix=".npy", prefix="connectivity_", dir=dump_dir)
-        os.close(fd)
-        np.save(path, value.asnumpy())
-        try:
-            _connectivity_files[id(value)] = (weakref.ref(value), path)
-        except TypeError:  # not weakref-able: correct but re-dumped per job
-            pass
-    else:
-        path = entry[1]
-    return _ConnectivityFileRef(
-        path=path, domain=value.domain, codomain=value.codomain, skip_value=value.skip_value
-    )
-
-
-def _offset_provider_with_file_refs(
-    offset_provider: common.OffsetProvider,
-) -> common.OffsetProvider:
-    return {
-        name: value
-        if isinstance(value, common.Dimension)
-        else xtyping.cast(common.OffsetProviderElem, _connectivity_file_ref(value))
-        for name, value in offset_provider.items()
-    }
-
-
-def _make_compile_job(
-    backend: gtx_backend.Backend,
-    definition_stage: Any,
-    compile_time_args: arguments.CompileTimeArgs,
-) -> compilation_runner.CompileJob:
-    """Prepare the compilation of `definition_stage` with `backend` as a job for a runner."""
-    name = getattr(backend, "name", type(backend).__name__)
-    if getattr(type(backend), "compile", None) is not gtx_backend.Backend.compile:
-        # A customized `compile` is opaque: it cannot be decomposed into the
-        # standard transforms/executor workflow, so the job can only run as-is.
-        return compilation_runner.CompileJob(
-            name=name,
-            run=functools.partial(
-                backend.compile, definition_stage, compile_time_args=compile_time_args
-            ),
-        )
-    # Frontend lowering happens here, main-side: decorators rebind the user's
-    # function module attribute, so the raw `types.FunctionType` must not cross
-    # a process boundary; the lowered `CompilableProgramDef` is pickle-safe.
-    compilable = backend.transforms(
-        otf_definitions.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
-    )
-    offload_compilable = compilable
-    if compilable.args.offset_provider:
-        # The offloaded copy must not carry the connectivity buffers: they may
-        # live on a device the worker cannot see, and shipping them through the
-        # pickle queue would serialize the full tables once per job.
-        offload_compilable = dataclasses.replace(
-            compilable,
-            args=dataclasses.replace(
-                compilable.args,
-                offset_provider=_offset_provider_with_file_refs(compilable.args.offset_provider),
-            ),
-        )
-    return compilation_runner.CompileJob(
-        name=name,
-        run=lambda: backend.executor(compilable).load(),
-        offload=compilation_runner.OffloadableWork(
-            compilable=offload_compilable, executor=backend.executor
-        ),
-    )
 
 
 def _make_tuple_expr(el_exprs: list[str]) -> str:
@@ -772,7 +653,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
         runner = self.compilation_runner or compilation_runner.get_default_runner()
         future = runner.submit(
-            _make_compile_job(self.backend, self.definition_stage, compile_time_args)
+            compile_jobs.make_compile_job(self.backend, self.definition_stage, compile_time_args)
         )
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the

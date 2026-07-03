@@ -17,7 +17,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import backend as next_backend, config
-from gt4py.next.otf import arguments, compilation_runner, compiled_program
+from gt4py.next.otf import arguments, compilation_runner, compile_jobs, compiled_program
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ def test_make_compile_job_decomposes_standard_backend():
         transforms=lambda inp: inp,
     )
 
-    job = compiled_program._make_compile_job(
+    job = compile_jobs.make_compile_job(
         backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
     )
 
@@ -100,7 +100,7 @@ def test_make_compile_job_is_opaque_for_customized_compile():
         )
     )
 
-    job = compiled_program._make_compile_job(
+    job = compile_jobs.make_compile_job(
         backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
     )
 
@@ -124,14 +124,14 @@ def test_offloaded_job_ships_connectivities_as_file_refs():
         transforms=lambda inp: inp,
     )
 
-    job = compiled_program._make_compile_job(
+    job = compile_jobs.make_compile_job(
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
 
     ref = job.offload.compilable.args.offset_provider["V2E"]
-    assert isinstance(ref, compiled_program._ConnectivityFileRef)
+    assert isinstance(ref, compile_jobs._ConnectivityFileRef)
     # the same connectivity is dumped only once
-    job2 = compiled_program._make_compile_job(
+    job2 = compile_jobs.make_compile_job(
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
     assert job2.offload.compilable.args.offset_provider["V2E"].path == ref.path
