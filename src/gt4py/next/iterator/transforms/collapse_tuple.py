@@ -193,6 +193,7 @@ class CollapseTuple(
         enabled_transformations: Optional[Transformation] = None,
         # allow sym references without a symbol declaration, mostly for testing
         allow_undeclared_symbols: bool = False,
+        recursive: bool = True,
         uids: utils.IDGeneratorPool,
     ) -> itir.Node:
         """
@@ -205,6 +206,9 @@ class CollapseTuple(
             remove_letified_make_tuple_elements: Run `InlineLambdas` as a post-processing step
                 to remove left-overs from `LETIFY_MAKE_TUPLE_ELEMENTS` transformation.
                 `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
+            recursive: If `True` (default) transform the given node and all its children (until a
+                fixed point is reached). If `False` only transform the given node itself to a fixed
+                point, without recursing into its children.
         """
         enabled_transformations = enabled_transformations or cls.enabled_transformations
         offset_provider_type = offset_provider_type or {}
@@ -230,10 +234,15 @@ class CollapseTuple(
                 allow_undeclared_symbols=allow_undeclared_symbols,
             )
 
-        new_node = cls(
+        instance = cls(
             enabled_transformations=enabled_transformations,
             uids=uids,
-        ).visit(node, within_stencil=within_stencil)
+        )
+        if recursive:
+            new_node = instance.visit(node, within_stencil=within_stencil)
+        else:
+            # only transform the node itself (to a fixed point) without recursing into its children
+            new_node = instance.fp_transform(node, within_stencil=within_stencil)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
