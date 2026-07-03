@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import os
 import pathlib
 import subprocess
@@ -22,7 +23,12 @@ from gt4py.next.otf.compilation import build_data, cache, common, compiler
 from gt4py.next.otf.compilation.build_systems import cmake_lists
 
 
+@functools.cache
 def get_device_arch() -> str | None:
+    # Cached: the device does not change within a process, and querying early is
+    # load-bearing — on a saturated GPU (e.g. many test processes sharing one
+    # device) a late query can fail with cudaErrorMemoryAllocation even though
+    # an early one succeeded.
     if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA:
         # use `cp` from core_defs to avoid trying to re-import cupy
         try:
