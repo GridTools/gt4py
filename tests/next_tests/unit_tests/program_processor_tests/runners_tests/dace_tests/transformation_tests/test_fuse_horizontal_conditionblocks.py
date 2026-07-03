@@ -95,6 +95,9 @@ def _make_if_block_with_tasklet(
         inputs={b1_name, b2_name, cond_name},
         outputs={output_name},
     )
+    # TODO(edoapo): The typecast to sympy is needed because the constructor of the `symbol_mapping`
+    # dict property converts the values to symbolic expressions, but the assignment of entries
+    # in the dict does not. Update this line when dace provides better type conversion.
     nested_sdfg.symbol_mapping["multiplier"] = sympy.Number(2.0)
     return nested_sdfg
 
