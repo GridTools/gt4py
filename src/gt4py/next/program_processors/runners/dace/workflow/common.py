@@ -71,7 +71,9 @@ def set_dace_config(
     #   creating any further sub-folder to compile the SDFG.
     dace.Config.set("cache", value="single")
 
-    # Disable auto-detection of the CUDA architecture, and instead use the one provided by GT4Py.
+    # Workaround to disable detection of the CUDA architecture in DaCe, and instead use the one provided by GT4Py.
+    # TODO(edopao): revisit this workaround once it is possible to disable GPU detection in DaCe.
+    # (see https://github.com/spcl/dace/pull/2424)
     if core_defs.CUPY_DEVICE_TYPE is not None:
         dace.Config.set(
             "compiler.extra_cmake_args",
