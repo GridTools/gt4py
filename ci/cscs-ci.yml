@@ -90,6 +90,8 @@ test_cscs_gh200:
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
+    # GH200 is sm_90; pinning it skips every CUDA-arch device query.
+    CUDAARCHS: '90'
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
@@ -99,6 +101,11 @@ test_cscs_gh200:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
         SLURM_TIMELIMIT: "00:15:00"
+    - if: $SUBPACKAGE == 'next' && $VARIANT == 'internal' && $DETAIL == 'nomesh'
+      variables:
+        # runs within seconds of the 5-minute default since compilation moved
+        # to worker processes
+        SLURM_TIMELIMIT: "00:10:00"
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'cuda12'
       variables:
         SLURM_TIMELIMIT: "00:10:00"
