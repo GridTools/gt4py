@@ -23,11 +23,17 @@ from gt4py.cartesian.gtscript import (
     J,
     K,
     IJ,
+    IJK,
     computation,
     horizontal,
     interval,
     region,
     sin,
+    tan,
+    isfinite,
+    isinf,
+    isnan,
+    sqrt,
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
@@ -1753,3 +1759,50 @@ def test_reset_mask_2d(backend: str) -> None:
     test_set_2d_mask(output, input, mask_2d)
 
     assert (mask_2d == 0).all()
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "debug",
+        "dace:cpu",
+        pytest.param(
+            "dace:gpu",
+            marks=[
+                pytest.mark.requires_gpu,
+                pytest.mark.xfail(
+                    raises=SystemExit,
+                    reason="DaCe issue: Missing `_gbar` symbol for global sync inside nested SDFG.",
+                ),
+            ],
+        ),
+        pytest.param("gt:gpu", marks=[pytest.mark.requires_gpu]),
+    ],
+)
+def test_offset_j_in_temporaries(backend: str):
+    @gtscript.function
+    def a_gtscript_function(b):
+        return sqrt(abs(b[0, 1, 0]))
+
+    @gtscript.stencil(backend=backend)
+    def test_stencil_offset_j_in_temporaries(
+        field_in: Field[IJK, np.float64],  # type: ignore
+        field_out: Field[IJK, np.float64],  # type: ignore
+    ) -> None:
+        with computation(PARALLEL), interval(...):
+            abs_res = abs(field_in)
+            tan_res = tan(abs_res)
+
+            # This is an offset in J on a temporary, it will
+            # require a global kernel sync in KJI for GPU
+            sqrt_res = a_gtscript_function(tan_res)
+
+            field_out = (
+                sqrt_res
+                if isfinite(sqrt_res)
+                else field_in
+                if isinf(sqrt_res)
+                else field_out
+                if isnan(sqrt_res)
+                else 0.0
+            )

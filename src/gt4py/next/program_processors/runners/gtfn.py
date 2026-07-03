@@ -6,7 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import functools
+import dataclasses
+import pathlib
 from typing import Any
 
 import factory
@@ -103,6 +104,30 @@ def extract_connectivity_args(
     return args
 
 
+@dataclasses.dataclass(frozen=True)
+class GTFNCompilationArtifact(compiler.CPPCompilationArtifact):
+    def load(self) -> stages.ExecutableProgram:
+        return convert_args(super().load(), device=self.device_type)
+
+
+@dataclasses.dataclass(frozen=True)
+class GTFNCompiler(compiler.CPPCompiler):
+    def _make_artifact(
+        self, src_dir: pathlib.Path, module: pathlib.Path, entry_point_name: str
+    ) -> GTFNCompilationArtifact:
+        return GTFNCompilationArtifact(
+            src_dir=src_dir,
+            module=module,
+            entry_point_name=entry_point_name,
+            device_type=self.device_type,
+        )
+
+
+class GTFNCompilerFactory(factory.Factory):
+    class Meta:
+        model = GTFNCompiler
+
+
 class GTFNCompileWorkflowFactory(factory.Factory):
     class Meta:
         model = recipes.OTFCompileWorkflow
@@ -111,6 +136,9 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
+        )
+        unstructured_horizontal_has_unit_stride: bool = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda: config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
         )
         builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
@@ -134,16 +162,18 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableProject] = (
-        nanobind.bind_source
+    bindings: workflow.Workflow[stages.ProgramSource, stages.ExtensionSource] = (
+        factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda o: nanobind.ExtensionGenerator(
+                unstructured_horizontal_has_unit_stride=o.unstructured_horizontal_has_unit_stride
+            )
+        )
     )
     compilation = factory.SubFactory(
-        compiler.CompilerFactory,
+        GTFNCompilerFactory,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         builder_factory=factory.SelfAttribute("..builder_factory"),
-    )
-    decoration = factory.LazyAttribute(
-        lambda o: functools.partial(convert_args, device=o.device_type)
+        device_type=factory.SelfAttribute("..device_type"),
     )
 
 
