@@ -382,7 +382,7 @@ class DaCeTranslator(
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
-        sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
+        sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
             ir,

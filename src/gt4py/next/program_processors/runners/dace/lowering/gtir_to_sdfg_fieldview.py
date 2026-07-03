@@ -1411,7 +1411,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return gtir_to_sdfg_primitives.translate_symbol_ref(node, ctx, self)
 
 
-def build_sdfg_from_gtir(
+def lower_program_to_sdfg(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
     column_axis: Optional[gtx_common.Dimension] = None,

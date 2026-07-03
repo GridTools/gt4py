@@ -29,7 +29,7 @@ from gt4py.next.iterator.ir_utils import (
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
-    gtir_to_sdfg,
+    gtir_to_sdfg_fieldview,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
 )
@@ -37,8 +37,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 def _translate_concat_where_branch(
-    ctx: gtir_to_sdfg.SubgraphContext,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    ctx: gtir_to_sdfg_fieldview.SubgraphContext,
+    sdfg_builder: gtir_to_sdfg_fieldview.SDFGBuilder,
     source_expr: gtir.Expr,
     is_lower: bool,
     concat_dim: gtx_common.Dimension,
@@ -195,8 +195,8 @@ def _translate_concat_where_branch(
 
 def translate_concat_where(
     node: gtir.Node,
-    ctx: gtir_to_sdfg.SubgraphContext,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    ctx: gtir_to_sdfg_fieldview.SubgraphContext,
+    sdfg_builder: gtir_to_sdfg_fieldview.SDFGBuilder,
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
     Lowers a `concat_where` expression to a dataflow where two memlets write
