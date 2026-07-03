@@ -31,10 +31,18 @@ DEFAULT_STORAGE_TYPE = {
 """Default dace residency types per device type."""
 
 
-def _resolve_default_map_schedule(
-    device_type: dtypes.DeviceType,
+def _resolve_loop_schedule(
+    device_type: dtypes.DeviceType, loop_order: common.LoopOrder
 ) -> dtypes.ScheduleType:
-    """Default kernel target per device type."""
+    """Optimal kernel schedule type based on syntax and target device.
+
+    Current strategy:
+        - respect OIR syntax: sequential on all non-parallel keyword
+        - maximize local parallel usage per target
+    """
+    if loop_order != common.LoopOrder.PARALLEL:
+        return dtypes.ScheduleType.Sequential
+
     if device_type == dtypes.DeviceType.GPU:
         return dtypes.ScheduleType.GPU_Device
 
@@ -44,7 +52,7 @@ def _resolve_default_map_schedule(
     if not gt_config.build_settings["openmp"]["use_openmp"]:
         return dtypes.ScheduleType.Sequential
 
-    return dtypes.ScheduleType.Default
+    return dtypes.ScheduleType.CPU_Multicore
 
 
 class OIRToTreeIR(eve.NodeVisitor):
@@ -148,7 +156,9 @@ class OIRToTreeIR(eve.NodeVisitor):
         loop = tir.HorizontalLoop(
             bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
             bounds_j=tir.Bounds(start=axis_start_j, end=axis_end_j),
-            schedule=_resolve_default_map_schedule(self._device_type),
+            schedule=_resolve_loop_schedule(
+                self._device_type, common.LoopOrder.PARALLEL
+            ),  # Horizontal is always parallel
             children=[],
             parent=ctx.current_scope,
         )
@@ -258,19 +268,6 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return tir.Bounds(start=start, end=end)
 
-    def _vertical_loop_schedule(self) -> dtypes.ScheduleType:
-        """
-        Defines the vertical loop schedule.
-
-        Current strategy is to
-          - keep the vertical loop on the host for both, CPU and GPU targets
-          - and run it in parallel on CPU and sequential on GPU.
-        """
-        if self._device_type == dtypes.DeviceType.GPU:
-            return dtypes.ScheduleType.Sequential
-
-        return _resolve_default_map_schedule(self._device_type)
-
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, ctx: tir.Context, loop_order: common.LoopOrder
     ) -> None:
@@ -285,7 +282,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
             loop_order=loop_order,
             bounds_k=bounds,
-            schedule=self._vertical_loop_schedule(),
+            schedule=_resolve_loop_schedule(self._device_type, loop_order),
             children=[],
             parent=ctx.current_scope,
         )
