@@ -142,9 +142,7 @@ def _create_field_operator_impl(
         assert output_edge.result.gt_dtype.offset_type is not None
         local_dim = output_edge.result.gt_dtype.offset_type
         # construct the full subset according to the canonical field domain
-        extended_dims = gtx_common.order_dimensions(
-            [*field_dims, output_edge.result.gt_dtype.offset_type]
-        )
+        extended_dims = gtx_common.order_dimensions([*field_dims, local_dim])
         local_idx = extended_dims.index(local_dim)
 
         field_shape.insert(local_idx, dataflow_output_desc.shape[0])

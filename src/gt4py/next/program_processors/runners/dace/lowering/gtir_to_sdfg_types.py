@@ -82,10 +82,7 @@ class FieldopData:
                     dim: gtir_to_sdfg_iterator.SymbolExpr(index, INDEX_DTYPE)
                     for dim, index in zip(domain_dims, domain_indices)
                 }
-            field_origin = [
-                (dim, dace.symbolic.SymExpr(0) if self.origin is None else self.origin[i])
-                for i, dim in enumerate(self.gt_type.dims)
-            ]
+            field_origin = [(dim, self.origin[i]) for i, dim in enumerate(self.gt_type.dims)]
             return gtir_to_sdfg_iterator.IteratorExpr(
                 self.dc_node, self.gt_type.dtype, field_origin, it_indices
             )
