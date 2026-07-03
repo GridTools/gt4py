@@ -14,6 +14,8 @@ import json
 import pathlib
 from typing import Final, Optional
 
+from gt4py._core import cache_utils
+
 
 _DATAFILE_NAME: Final = "gt4py.json"
 
@@ -76,12 +78,16 @@ def contains_data(path: pathlib.Path) -> bool:
 def read_data(path: pathlib.Path) -> Optional[BuildData]:
     try:
         return BuildData.from_json(json.loads((path / _DATAFILE_NAME).read_text()))
-    except FileNotFoundError:
+    except (OSError, ValueError, KeyError, AttributeError):
+        # Missing file (OSError/FileNotFoundError), or one left truncated/corrupt
+        # by an interrupted write (json.JSONDecodeError is a ValueError; a bad
+        # status name raises KeyError/AttributeError) is treated as "no build
+        # data" so the caller rebuilds rather than crashing.
         return None
 
 
 def write_data(data: BuildData, path: pathlib.Path) -> None:
-    (path / _DATAFILE_NAME).write_text(json.dumps(data.to_json()))
+    cache_utils.atomic_write_text(path / _DATAFILE_NAME, json.dumps(data.to_json()))
 
 
 def update_status(new_status: BuildStatus, path: pathlib.Path) -> None:

@@ -31,6 +31,14 @@ def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
     return (src_dir / data.module).exists()
 
 
+def is_usable(data: build_data.BuildData | None, src_dir: pathlib.Path) -> bool:
+    """A cached build is reusable only if it is marked compiled *and* its module
+    artifact is actually present. An interrupted run (or external cleanup) can
+    leave a ``COMPILED`` marker without the artifact; such a build folder must be
+    rebuilt, not reused."""
+    return data is not None and is_compiled(data) and module_exists(data, src_dir)
+
+
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
 TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
 CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
@@ -71,17 +79,16 @@ class Compiler(
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
         with locking.lock(src_dir):
-            data = build_data.read_data(src_dir)
-
-            if not data or not is_compiled(data) or self.force_recompile:
+            if self.force_recompile or not is_usable(build_data.read_data(src_dir), src_dir):
                 self.builder_factory(inp, self.cache_lifetime).build()
 
             new_data = build_data.read_data(src_dir)
 
-            if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
+            if not is_usable(new_data, src_dir):
                 raise CompilationError(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
+            assert new_data is not None  # guaranteed by `is_usable`
 
         m = importer.import_from_path(
             src_dir / new_data.module, sys_modules_prefix="gt4py.__compiled_programs__."

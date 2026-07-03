@@ -171,7 +171,24 @@ class DaCeCompiler(
 
             sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
-                sdfg_program = sdfg.compile(validate=False)
+                # With `compiler.use_cache=True` DaCe reuses the build folder
+                # whenever the compiled library merely *exists*, then loads it. An
+                # interrupted compile can leave a truncated, unloadable library
+                # that is accepted on existence and fails to load. If a cached
+                # library was present and loading failed, drop it and rebuild once;
+                # a genuine compilation failure (no cached library) is re-raised.
+                had_cached_library = any(sdfg_build_folder.glob(f"lib{sdfg.name}.*"))
+                try:
+                    sdfg_program = sdfg.compile(validate=False)
+                except (RuntimeError, OSError):
+                    if not had_cached_library:
+                        raise
+                    for stale in (
+                        *sdfg_build_folder.glob(f"lib{sdfg.name}.*"),
+                        *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),
+                    ):
+                        stale.unlink(missing_ok=True)
+                    sdfg_program = sdfg.compile(validate=False)
 
         assert inp.binding_source is not None
         return CompiledDaceProgram(

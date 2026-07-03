@@ -12,7 +12,7 @@ import pathlib
 import pickle
 from typing import Any, Hashable
 
-from gt4py._core import locking
+from gt4py._core import cache_utils, locking
 from gt4py.eve import utils as eve_utils
 
 
@@ -36,14 +36,20 @@ class FileCache:
         if key not in self:
             raise KeyError(key)
         with locking.lock(path := self._get_path(key)):
-            with open(path, "rb") as f:
-                return pickle.load(f)
+            try:
+                with open(path, "rb") as f:
+                    return pickle.load(f)
+            except (EOFError, pickle.UnpicklingError, OSError, AttributeError, ImportError) as e:
+                # An interrupted write can leave a truncated/corrupt entry that
+                # `__contains__` still reports as present. Treat it as a miss and
+                # drop the unusable entry so the caller recomputes it.
+                path.unlink(missing_ok=True)
+                raise KeyError(key) from e
 
     def __setitem__(self, key: Hashable, value: Any) -> None:
         self.path.mkdir(parents=True, exist_ok=True)
         with locking.lock(path := self._get_path(key)):
-            with open(path, "wb") as f:
-                pickle.dump(value, f, protocol=5)
+            cache_utils.atomic_write_bytes(path, pickle.dumps(value, protocol=5))
 
     def __delitem__(self, key: Hashable) -> None:
         if key not in self:

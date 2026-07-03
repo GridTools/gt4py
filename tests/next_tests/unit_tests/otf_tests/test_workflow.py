@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
+import pathlib
 
 import pytest
 
@@ -215,3 +216,21 @@ def test_cached_step_rejection_follows_fingerprinter_not_cache():
     )
     with pytest.raises(TypeError, match="not importable"):
         cached.cache_key(5)
+
+
+def test_cached_step_persistent_recovers_from_corrupt_entry(tmp_path):
+    """F1: a write interrupted mid-``pickle.dump`` leaves a truncated entry that
+    ``__contains__`` reports as a HIT. Reading it must behave like a cache miss
+    and recompute, not propagate an unpickling error out of ``CachedStep``."""
+    cached = workflow.CachedStep.persistent(
+        step=_StepWithValue(v=1),
+        input_fingerprinter=_identity,
+        cache=tmp_path,
+    )
+    assert cached(5) == 6
+
+    pkls = list(pathlib.Path(tmp_path).glob("*.pkl"))
+    assert len(pkls) == 1
+    pkls[0].write_bytes(pkls[0].read_bytes()[:4])  # truncate as if killed mid-write
+
+    assert cached(5) == 6  # recomputed, not crashed
