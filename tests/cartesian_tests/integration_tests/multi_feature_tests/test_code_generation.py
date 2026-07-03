@@ -29,7 +29,11 @@ from gt4py.cartesian.gtscript import (
     interval,
     region,
     sin,
-    atanh,
+    tan,
+    isfinite,
+    isinf,
+    isnan,
+    sqrt,
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
@@ -1760,16 +1764,19 @@ def test_reset_mask_2d(backend: str) -> None:
 @pytest.mark.parametrize(
     "backend",
     [
-        "dace:cpu",
-        "gt:gpu",
         "debug",
+        "dace:cpu",
         pytest.param(
             "dace:gpu",
-            marks=pytest.mark.xfail(
-                raises=SystemExit,
-                reason="But in _gbar symbol insert in DaCe with nested SDFG",
-            ),
+            marks=[
+                pytest.mark.requires_gpu,
+                pytest.mark.xfail(
+                    raises=SystemExit,
+                    reason="DaCe issue: Missing `_gbar` symbol for global sync inside nested SDFG.",
+                ),
+            ],
         ),
+        pytest.param("gt:gpu", marks=[pytest.mark.requires_gpu]),
     ],
 )
 def test_offset_j_in_temporaries(backend: str):
@@ -1779,7 +1786,8 @@ def test_offset_j_in_temporaries(backend: str):
 
     @gtscript.stencil(backend=backend)
     def test_stencil_offset_j_in_temporaries(
-        field_in: Field[IJK, np.float64], field_out: Field[IJK, np.float64]
+        field_in: Field[IJK, np.float64],  # type: ignore
+        field_out: Field[IJK, np.float64],  # type: ignore
     ) -> None:
         with computation(PARALLEL), interval(...):
             abs_res = abs(field_in)
