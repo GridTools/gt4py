@@ -138,6 +138,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
 
+        # The argument descriptor mapping built here must be kept in sync with the descriptors
+        # created in the explicitly-triggered-compilation code path
+        # `CompiledProgramsPool.compile()`.
         argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
 
         if static_params:
