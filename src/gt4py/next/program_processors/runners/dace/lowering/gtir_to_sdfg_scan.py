@@ -431,7 +431,7 @@ def _lower_lambda_to_nested_sdfg(
         _parse_scan_fieldop_arg(im.ref(p.id), compute_ctx, sdfg_builder, field_domain)
         for p in lambda_node.params
     ]
-    # stil inside the 'compute' state, generate the dataflow representing the stencil
+    # still inside the 'compute' state, generate the dataflow representing the stencil
     # to be applied on the horizontal domain
     lambda_input_edges, lambda_result = gtir_to_sdfg_iterator.translate_lambda_to_dataflow(
         compute_ctx.sdfg, compute_ctx.state, sdfg_builder, lambda_node, stencil_args
