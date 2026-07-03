@@ -24,8 +24,7 @@ from typing import Any, Callable, Protocol, runtime_checkable
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import definitions, stages, workflow
-from gt4py.next.otf.compilation import cache as _cache
-from gt4py.next.otf.compilation.build_systems import cmake as gtx_cmake
+from gt4py.next.otf.compilation import cache as _cache, common as compilation_common
 
 
 @dataclasses.dataclass(frozen=True)
@@ -106,14 +105,12 @@ class ThreadRunner:
 def _detect_cuda_archs() -> str | None:
     """CUDA architecture for worker builds (CMake style, e.g. ``"90"``), or None.
 
-    An already-set ``CUDAARCHS`` takes precedence. The device attribute query
-    initializes the CUDA runtime but does not create a context in this process.
+    CUDA-only: the worker initializer communicates the value via ``CUDAARCHS``,
+    which has no HIP counterpart with settled semantics yet.
     """
-    if archs := os.environ.get("CUDAARCHS", "").strip():
-        return archs
     if core_defs.CUPY_DEVICE_TYPE is not core_defs.DeviceType.CUDA:
         return None
-    return gtx_cmake.get_device_arch()
+    return compilation_common.get_device_arch()
 
 
 def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | None) -> None:

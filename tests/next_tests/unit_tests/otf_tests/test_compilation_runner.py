@@ -144,14 +144,23 @@ def test_offloaded_job_ships_connectivities_as_file_refs():
 
 
 def test_detect_cuda_archs_prefers_cudaarchs_env():
-    with mock.patch.dict(os.environ, {"CUDAARCHS": "80;90"}):
+    with (
+        mock.patch.dict(os.environ, {"CUDAARCHS": "80;90"}),
+        mock.patch.object(
+            compilation_runner.core_defs,
+            "CUPY_DEVICE_TYPE",
+            compilation_runner.core_defs.DeviceType.CUDA,
+        ),
+    ):
         assert compilation_runner._detect_cuda_archs() == "80;90"
 
 
 def test_detect_cuda_archs_queries_device():
     with (
         mock.patch.dict(os.environ),
-        mock.patch.object(compilation_runner.gtx_cmake, "get_device_arch", return_value="90"),
+        mock.patch.object(
+            compilation_runner.compilation_common, "get_device_arch", return_value="90"
+        ),
         mock.patch.object(
             compilation_runner.core_defs,
             "CUPY_DEVICE_TYPE",
