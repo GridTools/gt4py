@@ -204,6 +204,19 @@ and asserting a clean rebuild instead of an exception).
   to scope it out — F5 is **not** a defect, and the fix must preserve this
   resume behavior.
 
+### F6 — Truncated compiledb *template* (gtfn, shared across programs)
+
+- **Window**: killed during the final `compile_commands.json` write of
+  `_cc_create_compiledb`.
+- **On disk**: the *prototype* folder's `compile_commands.json` exists,
+  truncated. Unlike F1–F4 this entry is **shared**: every program built with the
+  same configuration (deps, build type, cmake flags) consults it.
+- **Today**: `_cc_find_compiledb` HIT = existence-only; the next program build
+  crashes in `json.loads` — and keeps crashing for **all** programs with that
+  configuration until the template is deleted manually.
+- **Test**: build once; overwrite the template with invalid JSON; wipe the
+  program's own build folder; build again — must regenerate the template.
+
 **Concurrency is orthogonal.** `locking.lock` (`_core/locking.py`) correctly
 serializes concurrent builders of the same key (MPI ranks, xdist workers) but
 gives **zero** crash consistency: a killed lock holder releases the lock and
@@ -340,6 +353,12 @@ A stale `COMPILED`-but-missing folder now rebuilds instead of raising. (Optional
 hardening: on the final `import_from_path`, treat an `ImportError` as one-shot
 self-heal — wipe + rebuild once — to also cover the truncated-but-present `.so`.)
 
+The shared compiledb **template** gets the same two-layer treatment (fixes F6):
+`_cc_create_compiledb` publishes `compile_commands.json` via `atomic_write_text`,
+and `_cc_find_compiledb` validates the JSON on HIT, evicting an unreadable
+template so it is regenerated (under the existing lock) instead of poisoning
+every program built with that configuration.
+
 ### 3. dace build folder — completion marker written last (fixes F4)
 
 gt4py cannot change DaCe's existence-only gate, but it owns the wrapper around
@@ -455,6 +474,9 @@ valid entry, corrupt it to mimic an interruption, assert clean recovery**.
   the library in-process, so no `dlopen`-handle gymnastics are needed.)
 - Regression for F5: the existing `INITIALIZED`/`CONFIGURED` resume tests still
   pass unchanged.
+- F6: build; overwrite the shared compiledb template with invalid JSON; wipe the
+  program's build folder; assert the next build regenerates the template rather
+  than raising `JSONDecodeError`.
 
 ## Implementation findings
 

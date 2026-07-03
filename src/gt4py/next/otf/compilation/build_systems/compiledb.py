@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from typing import Optional, TypeVar
 
-from gt4py._core import locking
+from gt4py._core import cache_utils, locking
 from gt4py.next import config, errors, fingerprinting
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
@@ -294,6 +294,14 @@ def _cc_get_compiledb(
 def _cc_find_compiledb(path: pathlib.Path) -> Optional[pathlib.Path]:
     compile_db_path = path / "compile_commands.json"
     if compile_db_path.exists():
+        try:
+            json.loads(compile_db_path.read_text())
+        except (OSError, ValueError):
+            # The template is shared by every program built with the same
+            # configuration; one left truncated/corrupt by an interrupted write
+            # would poison all of them. Drop it so the caller regenerates.
+            compile_db_path.unlink(missing_ok=True)
+            return None
         return compile_db_path
     return None
 
@@ -368,6 +376,6 @@ def _cc_create_compiledb(
         )
 
     compile_db_path = path / "compile_commands.json"
-    compile_db_path.write_text(json.dumps(compile_db))
+    cache_utils.atomic_write_text(compile_db_path, json.dumps(compile_db))
 
     return compile_db_path

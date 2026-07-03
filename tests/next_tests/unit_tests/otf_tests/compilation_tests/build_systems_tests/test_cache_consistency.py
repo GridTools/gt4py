@@ -85,3 +85,34 @@ def test_compiler_recovers_from_missing_module(extension_source_example, clean_s
     new_data = build_data.read_data(src_dir)
     assert (src_dir / new_data.module).exists()
     assert callable(artifact.load())
+
+
+def test_compiler_recovers_from_corrupt_compiledb_template(
+    extension_source_example, clean_session_cache
+):
+    """F6: the compiledb *template* (``compile_commands.json`` in the prototype
+    folder) is shared by every program built with the same configuration. Its
+    HIT check is existence-only, so a write interrupted mid-generation poisons
+    all subsequent builds. A corrupt template must be regenerated, not trusted."""
+    comp = _compiler()
+    comp(extension_source_example)
+    factory_ = comp.builder_factory
+
+    template = compiledb._cc_get_compiledb(
+        renew_compiledb=False,
+        prototype_program_source=compiledb._cc_prototype_program_source(
+            deps=extension_source_example.library_deps,
+            build_type=factory_.cmake_build_type,
+            cmake_flags=factory_.cmake_extra_flags or [],
+            code_spec=extension_source_example.program_source.code_spec,
+        ),
+        build_type=factory_.cmake_build_type,
+        cmake_flags=factory_.cmake_extra_flags or [],
+        cache_lifetime=config.BuildCacheLifetime.SESSION,
+    )
+    template.write_text("{ truncated")
+    shutil.rmtree(_src_dir(comp, extension_source_example))  # force a fresh program build
+
+    artifact = comp(extension_source_example)  # must regenerate the template, not raise
+
+    assert callable(artifact.load())
