@@ -9,12 +9,15 @@
 import dataclasses
 import multiprocessing
 import os
+import pickle
 import unittest.mock as mock
 
+import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.next import backend as next_backend, config
-from gt4py.next.otf import compilation_runner, compiled_program
+from gt4py.next.otf import arguments, compilation_runner, compiled_program
 
 
 @pytest.fixture
@@ -67,7 +70,9 @@ def test_make_compile_job_decomposes_standard_backend():
         transforms=lambda inp: inp,
     )
 
-    job = compiled_program._make_compile_job(backend, definition_stage=None, compile_time_args=None)
+    job = compiled_program._make_compile_job(
+        backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
+    )
 
     assert job.offload is not None
     assert job.offload.executor is backend.executor
@@ -95,11 +100,47 @@ def test_make_compile_job_is_opaque_for_customized_compile():
         )
     )
 
-    job = compiled_program._make_compile_job(backend, definition_stage=None, compile_time_args=None)
+    job = compiled_program._make_compile_job(
+        backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
+    )
 
     assert job.offload is None
     assert callable(job.run())
     assert backend.compile_called
+
+
+def test_offloaded_job_ships_connectivities_as_file_refs():
+    Vertex = gtx.Dimension("Vertex")
+    Edge = gtx.Dimension("Edge")
+    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+    conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
+    compile_time_args = dataclasses.replace(
+        arguments.CompileTimeArgs.empty(), offset_provider={"V2E": conn}
+    )
+    backend = next_backend.Backend(
+        name="test_backend",
+        executor=lambda compilable: _NoOpArtifact(),
+        allocator=None,
+        transforms=lambda inp: inp,
+    )
+
+    job = compiled_program._make_compile_job(
+        backend, definition_stage=None, compile_time_args=compile_time_args
+    )
+
+    ref = job.offload.compilable.args.offset_provider["V2E"]
+    assert isinstance(ref, compiled_program._ConnectivityFileRef)
+    # the same connectivity is dumped only once
+    job2 = compiled_program._make_compile_job(
+        backend, definition_stage=None, compile_time_args=compile_time_args
+    )
+    assert job2.offload.compilable.args.offset_provider["V2E"].path == ref.path
+    # unpickling (as in a worker) yields the memory-mapped connectivity
+    restored = pickle.loads(pickle.dumps(ref))
+    assert np.array_equal(restored.asnumpy(), conn.asnumpy())
+    assert restored.domain == conn.domain
+    assert restored.codomain == conn.codomain
+    assert restored.skip_value == conn.skip_value
 
 
 def test_detect_cuda_archs_prefers_cudaarchs_env():
