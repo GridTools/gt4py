@@ -239,10 +239,10 @@ class CollapseTuple(
             uids=uids,
         )
         if recursive:
-            new_node = instance.visit(node, within_stencil=within_stencil)
+            new_node = instance.visit(node, within_stencil=within_stencil, recurse=True)
         else:
             # only transform the node itself (to a fixed point) without recursing into its children
-            new_node = instance.fp_transform(node, within_stencil=within_stencil)
+            new_node = instance.fp_transform(node, within_stencil=within_stencil, recurse=False)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
@@ -357,9 +357,10 @@ class CollapseTuple(
             #  -> `foo(make_tuple(trivial_expr1, trivial_expr2))`
             eligible_params = [_is_trivial_make_tuple_call(arg) for arg in node.args]
             if any(eligible_params):
-                return self.visit(
-                    inline_lambdas.inline_lambda(node, eligible_params=eligible_params), **kwargs
-                )
+                inlined = inline_lambdas.inline_lambda(node, eligible_params=eligible_params)
+                if kwargs["recurse"]:
+                    return self.visit(inlined, **kwargs)
+                return inlined
         return None
 
     def transform_propagate_to_if_on_tuples(
@@ -631,7 +632,8 @@ class CollapseTuple(
             flags=inline_lifts.InlineLifts.Flag.INLINE_DEREF_LIFT
             | inline_lifts.InlineLifts.Flag.PROPAGATE_SHIFT
         ).visit(new_body)
-        new_body = self.visit(new_body, **kwargs)
+        if kwargs["recurse"]:
+            new_body = self.visit(new_body, **kwargs)
         new_stencil = restore_scan(im.lambda_(*new_params)(new_body))
 
         return im.let(*remapped_args.items())(im.as_fieldop(new_stencil, domain)(*new_args))
