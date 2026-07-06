@@ -192,9 +192,9 @@ def tuple_structure(symbol_type: ts.TypeSpec) -> tuple[object, ...] | None:
         >>> tuple_structure(ts.TupleType(types=[f64, ts.TupleType(types=[f64, f64])]))
         (None, (None, None))
     """
-    return tree_map_type(
-        lambda _: None, result_collection_constructor=lambda _, elts: tuple(elts)
-    )(symbol_type)
+    return tree_map_type(lambda _: None, result_collection_constructor=lambda _, elts: tuple(elts))(
+        symbol_type
+    )
 
 
 def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:

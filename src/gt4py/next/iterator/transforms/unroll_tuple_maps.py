@@ -33,9 +33,7 @@ def _tree_map_tuple_body(
     """Recursively unroll `tree_map_tuple(f)(t1, ..., tN)` into `make_tuple` calls."""
 
     expected_structure = type_info.tuple_structure(tup_types[0])
-    if any(
-        type_info.tuple_structure(tup_type) != expected_structure for tup_type in tup_types[1:]
-    ):
+    if any(type_info.tuple_structure(tup_type) != expected_structure for tup_type in tup_types[1:]):
         raise TypeError("'tree_map_tuple' requires all arguments to have the same tuple structure.")
 
     @utils.tree_map(
