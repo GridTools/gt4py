@@ -633,14 +633,9 @@ def _tuple_map_synthesizer(
 ) -> Callable[..., TypeOrTypeSynthesizer]:
     """Shared implementation for `tree_map_tuple` (recursive) and `map_tuple` (top-level)."""
 
-    def tuple_structure(type_: ts.TypeSpec) -> tuple[object, ...] | None:
-        if isinstance(type_, ts.TupleType):
-            return tuple(tuple_structure(el_type) for el_type in type_.types)
-        return None
-
     def ensure_same_tuple_structure(args: tuple[ts.TupleType, ...]) -> None:
-        expected_structure = tuple_structure(args[0])
-        if any(tuple_structure(arg) != expected_structure for arg in args[1:]):
+        expected_structure = type_info.tuple_structure(args[0])
+        if any(type_info.tuple_structure(arg) != expected_structure for arg in args[1:]):
             raise TypeError(
                 f"'{builtin_name}' requires all arguments to have the same tuple structure."
             )

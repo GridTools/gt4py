@@ -14,7 +14,7 @@ from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import inference as itir_inference
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def _collapsing_tuple_get(expr: itir.Expr, i: int) -> itir.Expr:
@@ -32,13 +32,10 @@ def _tree_map_tuple_body(
 ) -> itir.Expr:
     """Recursively unroll `tree_map_tuple(f)(t1, ..., tN)` into `make_tuple` calls."""
 
-    def tuple_structure(type_: ts.TypeSpec) -> tuple[object, ...] | None:
-        if isinstance(type_, ts.TupleType):
-            return tuple(tuple_structure(el_type) for el_type in type_.types)
-        return None
-
-    expected_structure = tuple_structure(tup_types[0])
-    if any(tuple_structure(tup_type) != expected_structure for tup_type in tup_types[1:]):
+    expected_structure = type_info.tuple_structure(tup_types[0])
+    if any(
+        type_info.tuple_structure(tup_type) != expected_structure for tup_type in tup_types[1:]
+    ):
         raise TypeError("'tree_map_tuple' requires all arguments to have the same tuple structure.")
 
     @utils.tree_map(
@@ -88,7 +85,7 @@ class UnrollTupleMaps(eve.NodeTranslator):
         cls,
         node: ProgramOrExpr,
         *,
-        uids: utils.IDGeneratorPool | None = None,
+        uids: utils.IDGeneratorPool | None,
         offset_provider_type: common.OffsetProviderType | None = None,
     ) -> ProgramOrExpr:
         if node.type is None:
@@ -104,8 +101,7 @@ class UnrollTupleMaps(eve.NodeTranslator):
     def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)
 
-        builtin_name = next((name for name in _UNROLLERS if cpm.is_call_to(node.fun, name)), None)
-        if builtin_name is None:
+        if not cpm.is_call_to(node.fun, ("map_tuple", "tree_map_tuple")):
             return node
 
         assert isinstance(node.fun, itir.FunCall)
@@ -133,7 +129,7 @@ class UnrollTupleMaps(eve.NodeTranslator):
                 let_bindings.append((ref_name, tup))
                 substituted_exprs.append(im.ref(ref_name))
 
-        body = _UNROLLERS[builtin_name](f, substituted_exprs, tup_types)
+        body = _UNROLLERS[node.fun.fun.id](f, substituted_exprs, tup_types)
 
         result = im.let(*let_bindings)(body) if let_bindings else body
         itir_inference.reinfer(result)

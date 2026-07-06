@@ -442,6 +442,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.let(cond_symref_name, cond_)(result)
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        # TODO(tehrengruber): Use `tree_map_tuple` when the domain inference is able to handle
+        #  lambda functions (with the results domain depending on the caller / args)
         domain, true_branch, false_branch = self.visit(node.args, **kwargs)
         return im.concat_where(domain, true_branch, false_branch)
 

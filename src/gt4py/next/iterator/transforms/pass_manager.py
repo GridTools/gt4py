@@ -170,8 +170,6 @@ def apply_common_transforms(
     ir = inline_lifts.InlineLifts().visit(ir)
 
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
-    # `UnrollTupleMaps` requires fully-inferred tuple types (relies on `reinfer` to see
-    # nested `TupleType` chains), so the offset_provider is passed for on-demand inference.
     ir = unroll_tuple_maps.UnrollTupleMaps.apply(
         ir, uids=uids, offset_provider_type=offset_provider_type
     )
@@ -288,8 +286,6 @@ def apply_fieldview_transforms(
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     # required for dead-code-elimination and `prune_empty_concat_where` pass
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
-    # `UnrollTupleMaps` requires fully-inferred tuple types, so the offset_provider is passed for
-    # on-demand inference.
     ir = unroll_tuple_maps.UnrollTupleMaps.apply(
         ir, uids=uids, offset_provider_type=offset_provider_type
     )
