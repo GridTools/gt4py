@@ -203,7 +203,7 @@ class nabla_setup:
         m_pp = self.fs_nodes.create_field(name="m_pp", levels=1, dtype=np.float64)
         rzs = np.array(m_pp, copy=False)
 
-        rcoords_deg = np.array(self.mesh.nodes.field("lonlat"))
+        rcoords_deg = np.array(self.mesh.nodes.field("lonlat"), copy=False)
 
         for jnode in range(0, self.nodes_size):
             for i in range(0, 2):
