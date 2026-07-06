@@ -152,8 +152,16 @@ def test_map_tuple_with_make_tuple_arg_is_collapsed(_unary_fun):
 def test_non_trivial_arg_is_let_bound(_unary_fun):
     """Non-trivial (potentially expensive) tuple expressions must still be
     let-bound to avoid duplicating work across leaf projections."""
-    # `f(t)` is a non-trivial expression returning a tuple
-    f = im.lambda_("__t")(im.ref("__t", i_tuple_field))
+    # `f(t)` is a non-trivial expression returning a tuple.
+    f = im.ref(
+        "f",
+        ts.FunctionType(
+            pos_only_args=[i_tuple_field],
+            pos_or_kw_args={},
+            kw_only_args={},
+            returns=i_tuple_field,
+        ),
+    )
     result = _apply(
         im.call(im.call("tree_map_tuple")(_unary_fun))(im.call(f)(im.ref("t", i_tuple_field)))
     )
