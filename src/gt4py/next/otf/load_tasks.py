@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Preparation of runner-ready compile jobs from a backend and a program definition.
+"""Preparation of runner-ready load tasks from a backend and a program definition.
 
 This is the layer between the compiled-programs pool and the compilation
 runners: it decides what runs main-side (frontend lowering, since the raw
@@ -30,7 +30,7 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import backend as gtx_backend, common, constructors
-from gt4py.next.otf import arguments, compilation_runner, definitions as otf_definitions
+from gt4py.next.otf import arguments, definitions as otf_definitions, runners
 from gt4py.next.otf.compilation import cache as compilation_cache
 
 
@@ -50,12 +50,12 @@ def _connectivity_from_file(
 
 @dataclasses.dataclass(frozen=True)
 class _ConnectivityFileRef:
-    """Lazy stand-in for a connectivity table in the offloadable part of a compile job.
+    """Lazy stand-in for a connectivity table in the compilation part of a load task.
 
     Construction is pure. On first pickling the table is dumped (memoized) to an
     ``.npy`` file in the session cache dir, and unpickling yields the memory-mapped
     `Connectivity`, so the table crosses the process boundary through the page
-    cache instead of the pickle stream. A job that is never shipped to a worker
+    cache instead of the pickle stream. A task that is never shipped to a worker
     never dumps anything.
     """
 
@@ -74,8 +74,9 @@ class _ConnectivityFileRef:
 
 
 #: Files already written for a connectivity, keyed by its id (validated against
-#: a weakref, since ids can be reused): the same mesh is typically shared by all
-#: tasks of a run and must be dumped only once.
+#: a weakref, since ids can be reused). Main-process only, consulted when a
+#: task's connectivity is first pickled: the same mesh object appears in the
+#: tasks of many programs and variants and must be dumped only once per run.
 _connectivity_files: dict[int, tuple[weakref.ref, str]] = {}
 
 
@@ -94,14 +95,14 @@ def _dump_connectivity(value: common.Connectivity) -> str:
 
     def _prune(ref: weakref.ref, key: int = id(value)) -> None:
         # Only the registry entry: the file may still be referenced by
-        # in-flight jobs and is reclaimed with the session cache dir. The
+        # in-flight tasks and is reclaimed with the session cache dir. The
         # guard protects a reused id already re-registered by a new owner.
         if (current := _connectivity_files.get(key)) is not None and current[0] is ref:
             del _connectivity_files[key]
 
     try:
         _connectivity_files[id(value)] = (weakref.ref(value, _prune), path)
-    except TypeError:  # not weakref-able: correct but re-dumped per job
+    except TypeError:  # not weakref-able: correct but re-dumped per task
         pass
     return path
 
@@ -117,19 +118,19 @@ def _offset_provider_with_file_refs(
     }
 
 
-def make_compile_job(
+def make_load_task(
     backend: gtx_backend.Backend,
     definition_stage: Any,
     compile_time_args: arguments.CompileTimeArgs,
-) -> compilation_runner.CompileJob:
-    """Prepare the compilation of `definition_stage` with `backend` as a job for a runner."""
+) -> runners.LoadTask:
+    """Prepare the compilation of `definition_stage` with `backend` as a task for a runner."""
     name = getattr(backend, "name", type(backend).__name__)
     if getattr(type(backend), "compile", None) is not gtx_backend.Backend.compile:
         # A customized `compile` is opaque: it cannot be decomposed into the
         # standard transforms/executor workflow, so the job can only run as-is.
-        return compilation_runner.CompileJob(
+        return runners.LoadTask(
             name=name,
-            run=functools.partial(
+            compile_and_load=functools.partial(
                 backend.compile, definition_stage, compile_time_args=compile_time_args
             ),
         )
@@ -143,9 +144,9 @@ def make_compile_job(
     if compilable.args.offset_provider:
         # The offloadable copy must not carry the connectivity buffers: they may
         # live on a device the worker cannot see, and shipping them through the
-        # pickle queue would serialize the full tables once per job. The lazy
+        # pickle queue would serialize the full tables once per task. The lazy
         # file references keep this pure — nothing is dumped unless a runner
-        # actually pickles the job.
+        # actually pickles the task.
         offload_compilable = dataclasses.replace(
             compilable,
             args=dataclasses.replace(
@@ -153,10 +154,10 @@ def make_compile_job(
                 offset_provider=_offset_provider_with_file_refs(compilable.args.offset_provider),
             ),
         )
-    return compilation_runner.CompileJob(
+    return runners.LoadTask(
         name=name,
-        run=lambda: backend.executor(compilable).load(),
-        offload=compilation_runner.OffloadableWork(
+        compile_and_load=lambda: backend.executor(compilable).load(),
+        compilation=runners.CompilationTask(
             compilable=offload_compilable, executor=backend.executor
         ),
     )

@@ -15,7 +15,7 @@ dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next.otf import compilation_runner
+from gt4py.next.otf import runners
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
 )
@@ -103,7 +103,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     # The monkeypatched transformation functions exist only in this process, so
     # compilation must not be offloaded to a worker.
     with mock.patch.object(
-        compilation_runner, "get_default_runner", return_value=compilation_runner.SerialRunner()
+        runners, "get_default_runner", return_value=runners.SerialRunner()
     ):
         testee.with_backend(custom_backend).compile(offset_provider={})
         gtx.wait_for_compilation()

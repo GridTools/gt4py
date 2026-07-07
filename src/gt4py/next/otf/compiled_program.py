@@ -32,7 +32,7 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
-from gt4py.next.otf import arguments, compilation_runner, compile_jobs, stages
+from gt4py.next.otf import arguments, load_tasks, runners, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
@@ -177,7 +177,7 @@ def wait_for_compilation() -> None:
             collected in the meantime are not reported (they could never
             raise at call time either).
     """
-    compilation_runner.reset_default_runner()
+    runners.reset_default_runner()
     failures: list[tuple[str, BaseException]] = []
     for future, label in list(_ongoing_compilations.items()):
         if (error := future.exception()) is not None:  # waits for completion
@@ -351,10 +351,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
     #: Runner used to compile program variants. ``None`` means the process-wide
-    #: default (see `gt4py.next.otf.compilation_runner.get_default_runner`),
+    #: default (see `gt4py.next.otf.runners.get_default_runner`),
     #: resolved at each submission so the pool never holds on to a runner that
     #: `wait_for_compilation` has already shut down.
-    compilation_runner: compilation_runner.CompilationRunner | None = None
+    compilation_runner: runners.Runner | None = None
 
     # store for the compiled programs
     compiled_programs: dict[CompiledProgramsKey, stages.ExecutableProgram] = dataclasses.field(
@@ -651,9 +651,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             offset_provider=offset_provider,
         )
 
-        runner = self.compilation_runner or compilation_runner.get_default_runner()
+        runner = self.compilation_runner or runners.get_default_runner()
         future = runner.submit(
-            compile_jobs.make_compile_job(self.backend, self.definition_stage, compile_time_args)
+            load_tasks.make_load_task(self.backend, self.definition_stage, compile_time_args)
         )
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the

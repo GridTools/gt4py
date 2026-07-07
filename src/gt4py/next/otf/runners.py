@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Runners executing prepared compilation jobs serially, in threads, or in worker processes."""
+"""Runners executing prepared load tasks serially, in threads, or in worker processes."""
 
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ from gt4py.next.otf.compilation import cache as _cache, common as compilation_co
 
 
 @dataclasses.dataclass(frozen=True)
-class OffloadableWork:
-    """Decomposed standard compilation workflow of a `CompileJob`, prepared main-side."""
+class CompilationTask:
+    """Decomposed compilation part of a `LoadTask`, prepared main-side."""
 
     #: The already-lowered program; pickle-safe by construction.
     compilable: definitions.CompilableProgramDef
@@ -39,23 +39,23 @@ class OffloadableWork:
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileJob:
-    """One compilation, fully prepared by the caller."""
+class LoadTask:
+    """A task yielding a loaded `ExecutableProgram`, fully prepared by the caller."""
 
     #: Label used in user-facing messages.
     name: str
-    #: Compiles in the current thread; always valid.
-    run: Callable[[], stages.ExecutableProgram]
-    #: The decomposed standard workflow, for runners that can execute it in
+    #: The whole pipeline executed in the current thread; always valid.
+    compile_and_load: Callable[[], stages.ExecutableProgram]
+    #: The decomposed compilation part, for runners that can execute it in
     #: another process; ``None`` when the backend customizes ``compile`` and
-    #: the job can only run as-is.
-    offload: OffloadableWork | None = None
+    #: the task can only run as-is.
+    compilation: CompilationTask | None = None
 
 
 @runtime_checkable
-class CompilationRunner(Protocol):
-    def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        """Schedule `job`.
+class Runner(Protocol):
+    def submit(self, task: LoadTask) -> concurrent.futures.Future[stages.ExecutableProgram]:
+        """Schedule `task`.
 
         Returns:
             A future yielding the fully loaded ``ExecutableProgram``; the
@@ -69,11 +69,11 @@ class CompilationRunner(Protocol):
 
 
 def _run_in_calling_thread(
-    job: CompileJob,
+    task: LoadTask,
 ) -> concurrent.futures.Future[stages.ExecutableProgram]:
     future: concurrent.futures.Future[stages.ExecutableProgram] = concurrent.futures.Future()
     try:
-        future.set_result(job.run())
+        future.set_result(task.compile_and_load())
     except BaseException as exception:  # re-raised via the future
         future.set_exception(exception)
     return future
@@ -82,8 +82,8 @@ def _run_in_calling_thread(
 class SerialRunner:
     """Runs compilation in the calling thread; the returned future is already done."""
 
-    def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        return _run_in_calling_thread(job)
+    def submit(self, task: LoadTask) -> concurrent.futures.Future[stages.ExecutableProgram]:
+        return _run_in_calling_thread(task)
 
     def shutdown(self, wait: bool = True) -> None:
         return None
@@ -95,8 +95,8 @@ class ThreadRunner:
     def __init__(self, max_workers: int) -> None:
         self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 
-    def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        return self._pool.submit(job.run)
+    def submit(self, task: LoadTask) -> concurrent.futures.Future[stages.ExecutableProgram]:
+        return self._pool.submit(task.compile_and_load)
 
     def shutdown(self, wait: bool = True) -> None:
         self._pool.shutdown(wait=wait)
@@ -126,6 +126,11 @@ def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | No
     architecture (gt4py's cmake build system via cupy, dace's CMake via a
     ``try_run`` binary), each probe creating a CUDA context on the GPU of the
     parent — which may be running kernels concurrently.
+
+    TODO(havogt): once DaCe can disable its GPU detection
+    (https://github.com/spcl/dace/pull/2424), dace builds no longer need
+    ``CUDAARCHS``; the device hiding and gt4py's own cmake query keep it
+    necessary for gtfn.
     """
     _cache._session_cache_dir_path = pathlib.Path(shared_session_cache_dir)
     if cuda_archs is not None:
@@ -155,7 +160,7 @@ def _apply_config_overrides(overrides: dict[str, Any]) -> None:
 
 
 # Top-level (must be top-level for pickle).
-def _process_pool_compile_job(
+def _run_compilation_task_in_worker(
     executor_blob: bytes,
     compilable: Any,
     config_overrides: dict[str, Any],
@@ -169,13 +174,13 @@ def _process_pool_compile_job(
 class ProcessRunner:
     """Compiles in a ``ProcessPoolExecutor`` (``spawn``).
 
-    The worker runs the job's executor (post-lowering compile) and returns a
+    The worker runs the task's executor (post-lowering compile) and returns a
     picklable ``CompilationArtifact``; the main process rehydrates it via
     ``artifact.load()`` (in a done-callback) so the returned future yields a live
     ``ExecutableProgram``.
 
-    Jobs that cannot be offloaded — no decomposed workflow or an executor that
-    stdlib ``pickle`` cannot serialize — are compiled in the calling thread
+    Tasks that cannot be offloaded — no decomposed compilation or an executor
+    that stdlib ``pickle`` cannot serialize — are compiled in the calling thread
     instead (with a warning), so they behave as under ``SerialRunner``.
     """
 
@@ -196,28 +201,28 @@ class ProcessRunner:
             initargs=(shared_session_cache_dir, _detect_cuda_archs()),
         )
 
-    def submit(self, job: CompileJob) -> concurrent.futures.Future[stages.ExecutableProgram]:
+    def submit(self, task: LoadTask) -> concurrent.futures.Future[stages.ExecutableProgram]:
         executor_blob: bytes | None = None
-        if job.offload is None:
+        if task.compilation is None:
             blocker = "it does not use the standard compilation workflow (customized 'compile')"
         else:
             try:
-                executor_blob = pickle.dumps(job.offload.executor)
+                executor_blob = pickle.dumps(task.compilation.executor)
             except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
                 blocker = f"its executor is not picklable ({error!s})"
         if executor_blob is None:
             warnings.warn(
-                f"Compiling '{job.name}' in the calling thread instead of a worker process "
+                f"Compiling '{task.name}' in the calling thread instead of a worker process "
                 f"because {blocker}.",
                 stacklevel=2,
             )
-            return _run_in_calling_thread(job)
+            return _run_in_calling_thread(task)
 
-        assert job.offload is not None
+        assert task.compilation is not None
         artifact_future = self._pool.submit(
-            _process_pool_compile_job,
+            _run_compilation_task_in_worker,
             executor_blob=executor_blob,
-            compilable=job.offload.compilable,
+            compilable=task.compilation.compilable,
             config_overrides=_config_snapshot(),
         )
         loaded: concurrent.futures.Future[stages.ExecutableProgram] = concurrent.futures.Future()
@@ -237,7 +242,7 @@ class ProcessRunner:
         self._pool.shutdown(wait=wait)
 
 
-def from_config() -> CompilationRunner:
+def from_config() -> Runner:
     """Create a runner as configured by `config.BUILD_JOBS_MODE` and `config.BUILD_JOBS`."""
     mode = config.BUILD_JOBS_MODE
     if mode is config.BuildJobsMode.SERIAL or config.BUILD_JOBS <= 0:
@@ -252,7 +257,7 @@ def from_config() -> CompilationRunner:
     raise ValueError(f"Unsupported BUILD_JOBS_MODE={mode!r}.")
 
 
-_default_runner: CompilationRunner | None = None
+_default_runner: Runner | None = None
 _default_runner_lock = threading.Lock()
 
 
@@ -260,7 +265,7 @@ def _is_worker_process() -> bool:
     return multiprocessing.parent_process() is not None
 
 
-def get_default_runner() -> CompilationRunner:
+def get_default_runner() -> Runner:
     """Return the process-wide runner, creating it from `gt4py.next.config` on first use.
 
     Created lazily so that merely importing gt4py never spins up multiprocessing

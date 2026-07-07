@@ -875,8 +875,8 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
 
 
 def test_synchronous_compilation(cartesian_case, compile_testee):
-    with mock.patch.object(compiled_program.compilation_runner, "get_default_runner") as get_runner:
-        get_runner.return_value = compiled_program.compilation_runner.SerialRunner()
+    with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+        get_runner.return_value = compiled_program.runners.SerialRunner()
         a = cases.allocate(cartesian_case, compile_testee, "a")()
         b = cases.allocate(cartesian_case, compile_testee, "b")()
 
@@ -903,9 +903,9 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
         mock.patch.object(config, "BUILD_JOBS_MODE", mode),
         mock.patch.object(config, "BUILD_JOBS", 1),
     ):
-        runner = compiled_program.compilation_runner.from_config()
+        runner = compiled_program.runners.from_config()
 
-    with mock.patch.object(compiled_program.compilation_runner, "get_default_runner") as get_runner:
+    with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
         get_runner.return_value = runner
         compile_testee.compile(offset_provider=cartesian_case.offset_provider)
         gtx.wait_for_compilation()
@@ -923,14 +923,12 @@ def test_compile_local_program_offloads_to_worker_process(cartesian_case, compil
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
-    runner = compiled_program.compilation_runner.ProcessRunner(
+    runner = compiled_program.runners.ProcessRunner(
         max_workers=1,
         shared_session_cache_dir=str(compilation_cache._session_cache_dir_path),
     )
     try:
-        with mock.patch.object(
-            compiled_program.compilation_runner, "get_default_runner"
-        ) as get_runner:
+        with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
             get_runner.return_value = runner
             with warnings.catch_warnings():
                 warnings.filterwarnings("error", message=".*in the calling thread.*")
@@ -966,11 +964,9 @@ def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compi
             gate.wait()
             raise ValueError("compilation went boom")
 
-    runner = compiled_program.compilation_runner.ThreadRunner(max_workers=1)
+    runner = compiled_program.runners.ThreadRunner(max_workers=1)
     try:
-        with mock.patch.object(
-            compiled_program.compilation_runner, "get_default_runner"
-        ) as get_runner:
+        with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
             get_runner.return_value = runner
             # The program must stay referenced: failure tracking is weak, so the
             # failed future of a garbage-collected program is not reported.

@@ -19,12 +19,12 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import backend as next_backend, config
-from gt4py.next.otf import arguments, compilation_runner, compile_jobs, compiled_program
+from gt4py.next.otf import arguments, compiled_program, load_tasks, runners
 
 
 @pytest.fixture
 def process_runner(tmp_path):
-    runner = compilation_runner.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path))
+    runner = runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path))
     yield runner
     runner.shutdown(wait=True)
 
@@ -35,36 +35,36 @@ class _NoOpArtifact:
         return lambda *args, **kwargs: None
 
 
-def _decomposed_job(executor):
+def _decomposed_task(executor):
     compilable = "compilable"
-    return compilation_runner.CompileJob(
-        name="test_job",
-        run=lambda: executor(compilable).load(),
-        offload=compilation_runner.OffloadableWork(compilable=compilable, executor=executor),
+    return runners.LoadTask(
+        name="test_task",
+        compile_and_load=lambda: executor(compilable).load(),
+        compilation=runners.CompilationTask(compilable=compilable, executor=executor),
     )
 
 
 def test_process_runner_falls_back_on_unpicklable_executor(process_runner):
-    job = _decomposed_job(executor=lambda compilable: _NoOpArtifact())
+    task = _decomposed_task(executor=lambda compilable: _NoOpArtifact())
 
     with pytest.warns(UserWarning, match="not picklable"):
-        future = process_runner.submit(job)
+        future = process_runner.submit(task)
 
     assert future.done()
     assert callable(future.result())
 
 
-def test_process_runner_falls_back_on_non_offloadable_job(process_runner):
-    job = compilation_runner.CompileJob(name="opaque", run=lambda: _NoOpArtifact().load())
+def test_process_runner_falls_back_on_non_offloadable_task(process_runner):
+    task = runners.LoadTask(name="opaque", compile_and_load=lambda: _NoOpArtifact().load())
 
     with pytest.warns(UserWarning, match="standard compilation workflow"):
-        future = process_runner.submit(job)
+        future = process_runner.submit(task)
 
     assert future.done()
     assert callable(future.result())
 
 
-def test_make_compile_job_decomposes_standard_backend():
+def test_make_load_task_decomposes_standard_backend():
     backend = next_backend.Backend(
         name="test_backend",
         executor=lambda compilable: _NoOpArtifact(),
@@ -72,16 +72,16 @@ def test_make_compile_job_decomposes_standard_backend():
         transforms=lambda inp: inp,
     )
 
-    job = compile_jobs.make_compile_job(
+    task = load_tasks.make_load_task(
         backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
     )
 
-    assert job.offload is not None
-    assert job.offload.executor is backend.executor
-    assert callable(job.run())
+    assert task.compilation is not None
+    assert task.compilation.executor is backend.executor
+    assert callable(task.compile_and_load())
 
 
-def test_make_compile_job_is_opaque_for_customized_compile():
+def test_make_load_task_is_opaque_for_customized_compile():
     class _WrapperBackend:
         def __init__(self, wrapped):
             self._wrapped = wrapped
@@ -102,16 +102,16 @@ def test_make_compile_job_is_opaque_for_customized_compile():
         )
     )
 
-    job = compile_jobs.make_compile_job(
+    task = load_tasks.make_load_task(
         backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
     )
 
-    assert job.offload is None
-    assert callable(job.run())
+    assert task.compilation is None
+    assert callable(task.compile_and_load())
     assert backend.compile_called
 
 
-def test_offloaded_job_ships_connectivities_as_file_refs():
+def test_offloaded_task_ships_connectivities_as_file_refs():
     Vertex = gtx.Dimension("Vertex")
     Edge = gtx.Dimension("Edge")
     V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
@@ -126,27 +126,27 @@ def test_offloaded_job_ships_connectivities_as_file_refs():
         transforms=lambda inp: inp,
     )
 
-    job = compile_jobs.make_compile_job(
+    task = load_tasks.make_load_task(
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
 
-    ref = job.offload.compilable.args.offset_provider["V2E"]
-    assert isinstance(ref, compile_jobs._ConnectivityFileRef)
-    # job preparation is pure: nothing is dumped until a runner ships the job
-    assert id(conn) not in compile_jobs._connectivity_files
+    ref = task.compilation.compilable.args.offset_provider["V2E"]
+    assert isinstance(ref, load_tasks._ConnectivityFileRef)
+    # task preparation is pure: nothing is dumped until a runner ships the task
+    assert id(conn) not in load_tasks._connectivity_files
     # unpickling (as in a worker) yields the memory-mapped connectivity
     restored = pickle.loads(pickle.dumps(ref))
     assert np.array_equal(restored.asnumpy(), conn.asnumpy())
     assert restored.domain == conn.domain
     assert restored.codomain == conn.codomain
     assert restored.skip_value == conn.skip_value
-    # the same connectivity is dumped only once across jobs
-    path = compile_jobs._connectivity_files[id(conn)][1]
-    job2 = compile_jobs.make_compile_job(
+    # the same connectivity is dumped only once across tasks
+    path = load_tasks._connectivity_files[id(conn)][1]
+    task2 = load_tasks.make_load_task(
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
-    pickle.dumps(job2.offload.compilable.args.offset_provider["V2E"])
-    assert compile_jobs._connectivity_files[id(conn)][1] == path
+    pickle.dumps(task2.compilation.compilable.args.offset_provider["V2E"])
+    assert load_tasks._connectivity_files[id(conn)][1] == path
 
 
 def test_connectivity_file_registry_prunes_on_gc():
@@ -155,13 +155,13 @@ def test_connectivity_file_registry_prunes_on_gc():
     V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
     conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
 
-    compile_jobs._dump_connectivity(conn)
+    load_tasks._dump_connectivity(conn)
     key = id(conn)
-    assert key in compile_jobs._connectivity_files
+    assert key in load_tasks._connectivity_files
 
     del conn
     gc.collect()
-    assert key not in compile_jobs._connectivity_files
+    assert key not in load_tasks._connectivity_files
 
 
 def test_wait_for_compilation_untracks_successful_futures():
@@ -178,71 +178,69 @@ def test_detect_cuda_archs_prefers_cudaarchs_env():
     with (
         mock.patch.dict(os.environ, {"CUDAARCHS": "80;90"}),
         mock.patch.object(
-            compilation_runner.core_defs,
+            runners.core_defs,
             "CUPY_DEVICE_TYPE",
-            compilation_runner.core_defs.DeviceType.CUDA,
+            runners.core_defs.DeviceType.CUDA,
         ),
     ):
-        assert compilation_runner._detect_cuda_archs() == "80;90"
+        assert runners._detect_cuda_archs() == "80;90"
 
 
 def test_detect_cuda_archs_queries_device():
     with (
         mock.patch.dict(os.environ),
+        mock.patch.object(runners.compilation_common, "get_device_arch", return_value="90"),
         mock.patch.object(
-            compilation_runner.compilation_common, "get_device_arch", return_value="90"
-        ),
-        mock.patch.object(
-            compilation_runner.core_defs,
+            runners.core_defs,
             "CUPY_DEVICE_TYPE",
-            compilation_runner.core_defs.DeviceType.CUDA,
+            runners.core_defs.DeviceType.CUDA,
         ),
     ):
         os.environ.pop("CUDAARCHS", None)
-        assert compilation_runner._detect_cuda_archs() == "90"
+        assert runners._detect_cuda_archs() == "90"
 
 
 def test_detect_cuda_archs_none_without_cuda_device_type():
     with (
         mock.patch.dict(os.environ),
-        mock.patch.object(compilation_runner.core_defs, "CUPY_DEVICE_TYPE", None),
+        mock.patch.object(runners.core_defs, "CUPY_DEVICE_TYPE", None),
     ):
         os.environ.pop("CUDAARCHS", None)
-        assert compilation_runner._detect_cuda_archs() is None
+        assert runners._detect_cuda_archs() is None
 
 
 def test_pool_worker_initializer_hides_gpus_when_archs_known(tmp_path):
     with (
         mock.patch.dict(os.environ),
-        mock.patch.object(compilation_runner._cache, "_session_cache_dir_path"),
+        mock.patch.object(runners._cache, "_session_cache_dir_path"),
     ):
-        compilation_runner._pool_worker_initializer(str(tmp_path), "90")
+        runners._pool_worker_initializer(str(tmp_path), "90")
         assert os.environ["CUDAARCHS"] == "90"
         assert os.environ["CUDA_VISIBLE_DEVICES"] == ""
-        assert compilation_runner._cache._session_cache_dir_path == tmp_path
+        assert runners._cache._session_cache_dir_path == tmp_path
 
 
 def test_pool_worker_initializer_leaves_gpus_visible_without_archs(tmp_path):
     with (
         mock.patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "3"}),
-        mock.patch.object(compilation_runner._cache, "_session_cache_dir_path"),
+        mock.patch.object(runners._cache, "_session_cache_dir_path"),
     ):
         # `patch.dict` only layers on top of the inherited environment; pin the
         # precondition so an ambient CUDAARCHS (e.g. set by CI) cannot leak in.
         os.environ.pop("CUDAARCHS", None)
-        compilation_runner._pool_worker_initializer(str(tmp_path), None)
+        runners._pool_worker_initializer(str(tmp_path), None)
         assert os.environ["CUDA_VISIBLE_DEVICES"] == "3"
         assert "CUDAARCHS" not in os.environ
 
 
 def test_default_runner_is_created_lazily_and_reset_makes_a_fresh_one():
     with mock.patch.object(config, "BUILD_JOBS_MODE", config.BuildJobsMode.SERIAL):
-        compilation_runner.reset_default_runner()
-        first = compilation_runner.get_default_runner()
-        assert compilation_runner.get_default_runner() is first
-        compilation_runner.reset_default_runner()
-        assert compilation_runner.get_default_runner() is not first
-        compilation_runner.reset_default_runner()
+        runners.reset_default_runner()
+        first = runners.get_default_runner()
+        assert runners.get_default_runner() is first
+        runners.reset_default_runner()
+        assert runners.get_default_runner() is not first
+        runners.reset_default_runner()
 
 
 def test_default_runner_is_serial_in_worker_process():
@@ -250,6 +248,6 @@ def test_default_runner_is_serial_in_worker_process():
         mock.patch.object(config, "BUILD_JOBS_MODE", config.BuildJobsMode.PROCESS),
         mock.patch.object(multiprocessing, "parent_process", return_value=mock.Mock()),
     ):
-        compilation_runner.reset_default_runner()
-        assert isinstance(compilation_runner.get_default_runner(), compilation_runner.SerialRunner)
-        compilation_runner.reset_default_runner()
+        runners.reset_default_runner()
+        assert isinstance(runners.get_default_runner(), runners.SerialRunner)
+        runners.reset_default_runner()
