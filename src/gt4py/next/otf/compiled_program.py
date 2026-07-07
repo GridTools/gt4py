@@ -177,6 +177,10 @@ def wait_for_compilation() -> None:
             collected in the meantime are not reported (they could never
             raise at call time either).
     """
+    # TODO(havogt): reconsider tearing down the default runner here: a pure wait
+    # on the tracked futures would keep the workers warm between compilation
+    # phases, but the teardown is currently what releases the idle worker
+    # processes after the last phase.
     runners.reset_default_runner()
     failures: list[tuple[str, BaseException]] = []
     for future, label in list(_ongoing_compilations.items()):

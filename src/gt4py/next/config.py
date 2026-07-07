@@ -46,7 +46,7 @@ class BuildJobsMode(enum.Enum):
     #: (standard runners and factory-constructed variants are) and to return a
     #: picklable ``CompilationArtifact``; backends that don't qualify (or that
     #: customize ``Backend.compile``) are compiled in the calling thread
-    #: instead, with a warning. Experimental.
+    #: instead, with a warning.
     PROCESS = "process"
 
 
