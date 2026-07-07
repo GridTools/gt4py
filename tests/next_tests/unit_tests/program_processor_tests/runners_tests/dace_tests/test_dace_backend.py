@@ -102,9 +102,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     )
     # The monkeypatched transformation functions exist only in this process, so
     # compilation must not be offloaded to a worker.
-    with mock.patch.object(
-        runners, "get_default_runner", return_value=runners.SerialRunner()
-    ):
+    with mock.patch.object(runners, "get_default_runner", return_value=runners.SerialRunner()):
         testee.with_backend(custom_backend).compile(offset_provider={})
         gtx.wait_for_compilation()
 
