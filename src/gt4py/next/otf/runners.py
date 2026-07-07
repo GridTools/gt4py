@@ -40,7 +40,11 @@ class CompilationTask:
 
 @dataclasses.dataclass(frozen=True)
 class LoadTask:
-    """A task yielding a loaded `ExecutableProgram`, fully prepared by the caller."""
+    """A task yielding a loaded `ExecutableProgram`, fully prepared by the caller.
+
+    Completing a `LoadTask` yields a loaded `ExecutableProgram`; where the load
+    executes is the runner's concern.
+    """
 
     #: Label used in user-facing messages.
     name: str
