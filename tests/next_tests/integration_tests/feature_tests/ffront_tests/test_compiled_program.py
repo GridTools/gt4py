@@ -126,6 +126,25 @@ def test_compile(cartesian_case, compile_testee):
     assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
 
 
+def test_precompile_and_jit_have_same_arg_descr_mapping(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    empty_static_args = {}
+    precompiled_testee = compile_testee.with_backend(cartesian_case.backend)
+    precompiled_testee.compile(offset_provider=cartesian_case.offset_provider, **empty_static_args)
+    precompiled_arg_descr_mapping = (
+        precompiled_testee._compiled_programs.argument_descriptor_mapping
+    )
+
+    jit_testee = compile_testee.with_backend(cartesian_case.backend)
+    args, kwargs = cases.get_default_data(cartesian_case, jit_testee)
+    jit_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    jit_arg_descr_mapping = jit_testee._compiled_programs.argument_descriptor_mapping
+
+    assert precompiled_arg_descr_mapping == jit_arg_descr_mapping
+
+
 def test_compile_twice_same_program_errors(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
