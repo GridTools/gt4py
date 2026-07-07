@@ -130,11 +130,6 @@ def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | No
     architecture (gt4py's cmake build system via cupy, dace's CMake via a
     ``try_run`` binary), each probe creating a CUDA context on the GPU of the
     parent — which may be running kernels concurrently.
-
-    TODO(havogt): once DaCe can disable its GPU detection
-    (https://github.com/spcl/dace/pull/2424), dace builds no longer need
-    ``CUDAARCHS``; the device hiding and gt4py's own cmake query keep it
-    necessary for gtfn.
     """
     _cache._session_cache_dir_path = pathlib.Path(shared_session_cache_dir)
     if cuda_archs is not None:
