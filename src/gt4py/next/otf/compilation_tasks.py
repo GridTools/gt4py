@@ -145,12 +145,16 @@ def make_compilation_task(
     if getattr(type(backend), "compile", None) is not gtx_backend.Backend.compile:
         # A customized `compile` is opaque: it cannot be decomposed into the
         # standard transforms/executor workflow (and yields an already-loaded
-        # program instead of an artifact), so the task can only run as-is.
+        # program instead of an artifact), so the executor closes over
+        # everything and ignores the compilable.
         return runners.CompilationTask(
             name=name,
-            compile=lambda: _PreloadedArtifact(
+            construct_compilable=lambda with_refs: None,
+            executor=lambda _: _PreloadedArtifact(
                 backend.compile(definition_stage, compile_time_args=compile_time_args)
             ),
+            no_offload_reason="it does not use the standard compilation workflow"
+            " (customized 'compile')",
         )
     # Frontend lowering happens here, main-side: decorators rebind the user's
     # function module attribute, so the raw `types.FunctionType` must not cross
@@ -174,9 +178,5 @@ def make_compilation_task(
         )
 
     return runners.CompilationTask(
-        name=name,
-        compile=lambda: backend.executor(compilable),
-        offloadable=runners.OffloadableCompilation(
-            construct_compilable=construct_compilable, executor=backend.executor
-        ),
+        name=name, construct_compilable=construct_compilable, executor=backend.executor
     )

@@ -23,21 +23,8 @@ from typing import Any, Callable, Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf import definitions, stages, workflow
+from gt4py.next.otf import stages
 from gt4py.next.otf.compilation import cache as _cache, common as compilation_common
-
-
-@dataclasses.dataclass(frozen=True)
-class OffloadableCompilation:
-    """Decomposed compilation for execution in another process, prepared main-side."""
-
-    #: Constructs the lowered program to compile; with ``with_refs`` the
-    #: connectivity buffers are replaced by file references for crossing the
-    #: process boundary.
-    construct_compilable: Callable[[bool], definitions.CompilableProgramDef]
-    #: The backend's artifact-producing step. A runner may execute it anywhere,
-    #: including another process; its picklability is the runner's concern.
-    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,12 +36,17 @@ class CompilationTask:
 
     #: Label used in user-facing messages.
     name: str
-    #: Compiles in the current thread; always valid.
-    compile: Callable[[], stages.CompilationArtifact]
-    #: The decomposed form, for runners that can execute the compilation in
-    #: another process; ``None`` when the backend customizes ``compile`` and
-    #: the task can only run as-is.
-    offloadable: OffloadableCompilation | None = None
+    #: Constructs the program to compile; with ``with_refs`` the connectivity
+    #: buffers are replaced by file references for crossing a process boundary.
+    construct_compilable: Callable[[bool], Any]
+    #: The artifact-producing step. A runner may execute it anywhere, including
+    #: another process; its picklability is the runner's concern.
+    executor: Callable[[Any], stages.CompilationArtifact]
+    #: Reason this task is known not to be shippable to another process, if any.
+    no_offload_reason: str | None = None
+
+    def compile(self, with_refs: bool = False) -> stages.CompilationArtifact:
+        return self.executor(self.construct_compilable(with_refs))
 
 
 @runtime_checkable
@@ -188,7 +180,7 @@ class ProcessRunner:
     The worker runs the task's executor (post-lowering compile) and returns
     the picklable ``CompilationArtifact``.
 
-    Tasks that cannot be offloaded — no decomposed compilation or an executor
+    Tasks that cannot be offloaded — a known ``no_offload_reason`` or an executor
     that stdlib ``pickle`` cannot serialize — are compiled in the calling thread
     instead (with a warning), so they behave as under ``SerialRunner``.
     """
@@ -213,27 +205,25 @@ class ProcessRunner:
     def submit(
         self, task: CompilationTask
     ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+        reason = task.no_offload_reason
         executor_blob: bytes | None = None
-        if task.offloadable is None:
-            blocker = "it does not use the standard compilation workflow (customized 'compile')"
-        else:
+        if reason is None:
             try:
-                executor_blob = pickle.dumps(task.offloadable.executor)
+                executor_blob = pickle.dumps(task.executor)
             except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
-                blocker = f"its executor is not picklable ({error!s})"
+                reason = f"its executor is not picklable ({error!s})"
         if executor_blob is None:
             warnings.warn(
                 f"Compiling '{task.name}' in the calling thread instead of a worker process "
-                f"because {blocker}.",
+                f"because {reason}.",
                 stacklevel=2,
             )
             return _run_in_calling_thread(task)
 
-        assert task.offloadable is not None
         return self._pool.submit(
             _run_compilation_task_in_worker,
             executor_blob=executor_blob,
-            compilable=task.offloadable.construct_compilable(True),
+            compilable=task.construct_compilable(True),
             config_overrides=_config_snapshot(),
         )
 

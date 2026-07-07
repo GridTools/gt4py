@@ -36,13 +36,10 @@ class _NoOpArtifact:
 
 
 def _decomposed_task(executor):
-    compilable = "compilable"
     return runners.CompilationTask(
         name="test_task",
-        compile=lambda: executor(compilable),
-        offloadable=runners.OffloadableCompilation(
-            construct_compilable=lambda with_refs: compilable, executor=executor
-        ),
+        construct_compilable=lambda with_refs: "compilable",
+        executor=executor,
     )
 
 
@@ -57,7 +54,12 @@ def test_process_runner_falls_back_on_unpicklable_executor(process_runner):
 
 
 def test_process_runner_falls_back_on_non_offloadable_task(process_runner):
-    task = runners.CompilationTask(name="opaque", compile=lambda: _NoOpArtifact())
+    task = runners.CompilationTask(
+        name="opaque",
+        construct_compilable=lambda with_refs: None,
+        executor=lambda _: _NoOpArtifact(),
+        no_offload_reason="it does not use the standard compilation workflow",
+    )
 
     with pytest.warns(UserWarning, match="standard compilation workflow"):
         future = process_runner.submit(task)
@@ -78,8 +80,8 @@ def test_make_compilation_task_decomposes_standard_backend():
         backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
     )
 
-    assert task.offloadable is not None
-    assert task.offloadable.executor is backend.executor
+    assert task.no_offload_reason is None
+    assert task.executor is backend.executor
     assert callable(task.compile().load())
 
 
@@ -108,7 +110,7 @@ def test_make_compilation_task_is_opaque_for_customized_compile():
         backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
     )
 
-    assert task.offloadable is None
+    assert task.no_offload_reason is not None
     assert callable(task.compile().load())
     assert backend.compile_called
 
@@ -133,8 +135,8 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
     )
 
     # without refs the original compilable is used as is
-    assert task.offloadable.construct_compilable(False).args.offset_provider["V2E"] is conn
-    shipped = task.offloadable.construct_compilable(True)
+    assert task.construct_compilable(False).args.offset_provider["V2E"] is conn
+    shipped = task.construct_compilable(True)
     ref = shipped.args.offset_provider["V2E"]
     assert isinstance(ref, compilation_tasks._ConnectivityFileRef)
     # task preparation is pure: nothing is dumped until a runner ships the task
@@ -150,7 +152,7 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
     task2 = compilation_tasks.make_compilation_task(
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
-    pickle.dumps(task2.offloadable.construct_compilable(True).args.offset_provider["V2E"])
+    pickle.dumps(task2.construct_compilable(True).args.offset_provider["V2E"])
     assert compilation_tasks._connectivity_files[id(conn)][1] == path
 
 
