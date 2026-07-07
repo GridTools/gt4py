@@ -12,6 +12,7 @@ import datetime
 import enum
 import os
 import pathlib
+import sys
 import warnings
 from typing import Final
 
@@ -69,6 +70,15 @@ def env_flag_to_bool(name: str, default: bool) -> bool:
             raise ValueError(
                 "Invalid GT4Py environment flag value: use '0 | false | off' or '1 | true | on'."
             )
+
+
+def _process_cpu_count() -> int:
+    """Number of CPUs available to this process (respecting the affinity mask)."""
+    if sys.version_info >= (3, 13):
+        return os.process_cpu_count() or 1
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0))
+    return os.cpu_count() or 1
 
 
 def env_flag_to_int(name: str, default: int) -> int:
@@ -140,12 +150,11 @@ UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
 ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", default=False)
 
 
-#: Number of threads to use to use for compilation (0 = synchronous compilation).
-#: Default:
-#: - use os.cpu_count(), TODO(havogt): in Python >= 3.13 use `process_cpu_count()`
-#: - if os.cpu_count() is None we are conservative and use 1 job,
-#: - if the number is huge (e.g. HPC system) we limit to a smaller number
-BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(os.cpu_count() or 1, 32)))
+#: Number of parallel compilation jobs (0 = synchronous compilation).
+#: Defaults to the number of CPUs available to this process (respecting the
+#: affinity mask, e.g. under Slurm cpusets or container CPU limits), capped
+#: at 32 for huge (e.g. HPC) nodes.
+BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(_process_cpu_count(), 32)))
 
 #: Executor backing the async compilation pool.
 #: - ``BuildJobsMode.SERIAL``: compile in the calling thread (no concurrency;
