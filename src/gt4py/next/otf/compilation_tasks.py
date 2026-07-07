@@ -6,11 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Preparation of runner-ready load tasks from a backend and a program definition.
+"""Preparation of runner-ready compilation tasks from a backend and a program definition.
 
 This is the layer between the compiled-programs pool and the compilation
 runners: it decides what runs main-side (frontend lowering, since the raw
-user function cannot cross a process boundary), whether the job can be
+user function cannot cross a process boundary), whether the task can be
 decomposed for offloading at all, and what may cross the process boundary
 (connectivity tables travel as memory-mapped file references, a stopgap
 until `CompileTimeArgs.offset_provider` becomes type-only).
@@ -19,7 +19,6 @@ until `CompileTimeArgs.offset_provider` becomes type-only).
 from __future__ import annotations
 
 import dataclasses
-import functools
 import os
 import pathlib
 import tempfile
@@ -31,7 +30,7 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import backend as gtx_backend, common, constructors
-from gt4py.next.otf import arguments, definitions as otf_definitions, runners
+from gt4py.next.otf import arguments, definitions as otf_definitions, runners, stages
 
 
 def _connectivity_from_file(
@@ -126,20 +125,31 @@ def _offset_provider_with_file_refs(
     }
 
 
-def make_load_task(
+@dataclasses.dataclass(frozen=True)
+class _PreloadedArtifact:
+    """Wraps the already-loaded program of a backend with a customized ``compile``."""
+
+    program: stages.ExecutableProgram
+
+    def load(self) -> stages.ExecutableProgram:
+        return self.program
+
+
+def make_compilation_task(
     backend: gtx_backend.Backend,
     definition_stage: Any,
     compile_time_args: arguments.CompileTimeArgs,
-) -> runners.LoadTask:
+) -> runners.CompilationTask:
     """Prepare the compilation of `definition_stage` with `backend` as a task for a runner."""
     name = getattr(backend, "name", type(backend).__name__)
     if getattr(type(backend), "compile", None) is not gtx_backend.Backend.compile:
         # A customized `compile` is opaque: it cannot be decomposed into the
-        # standard transforms/executor workflow, so the job can only run as-is.
-        return runners.LoadTask(
+        # standard transforms/executor workflow (and yields an already-loaded
+        # program instead of an artifact), so the task can only run as-is.
+        return runners.CompilationTask(
             name=name,
-            compile_and_load=functools.partial(
-                backend.compile, definition_stage, compile_time_args=compile_time_args
+            compile=lambda: _PreloadedArtifact(
+                backend.compile(definition_stage, compile_time_args=compile_time_args)
             ),
         )
     # Frontend lowering happens here, main-side: decorators rebind the user's
@@ -148,24 +158,25 @@ def make_load_task(
     compilable = backend.transforms(
         otf_definitions.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
     )
-    offload_compilable = compilable
-    if compilable.args.offset_provider:
-        # The offloadable copy must not carry the connectivity buffers: they may
+
+    def construct_compilable(with_refs: bool) -> otf_definitions.CompilableProgramDef:
+        if not with_refs or not compilable.args.offset_provider:
+            return compilable
+        # The shipped copy must not carry the connectivity buffers: they may
         # live on a device the worker cannot see, and shipping them through the
-        # pickle queue would serialize the full tables once per task. The lazy
-        # file references keep this pure — nothing is dumped unless a runner
-        # actually pickles the task.
-        offload_compilable = dataclasses.replace(
+        # pickle queue would serialize the full tables once per task.
+        return dataclasses.replace(
             compilable,
             args=dataclasses.replace(
                 compilable.args,
                 offset_provider=_offset_provider_with_file_refs(compilable.args.offset_provider),
             ),
         )
-    return runners.LoadTask(
+
+    return runners.CompilationTask(
         name=name,
-        compile_and_load=lambda: backend.executor(compilable).load(),
-        compilation=runners.CompilationTask(
-            compilable=offload_compilable, executor=backend.executor
+        compile=lambda: backend.executor(compilable),
+        offloadable=runners.OffloadableCompilation(
+            construct_compilable=construct_compilable, executor=backend.executor
         ),
     )

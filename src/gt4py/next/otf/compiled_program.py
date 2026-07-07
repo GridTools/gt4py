@@ -32,7 +32,7 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
-from gt4py.next.otf import arguments, load_tasks, runners, stages
+from gt4py.next.otf import arguments, compilation_tasks, runners, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
@@ -157,7 +157,7 @@ def compiled_program_call_context(
 # In-flight compilations (future -> "program (backend)" label). Weak keys: a
 # future disappears here once its pool consumed or dropped it.
 _ongoing_compilations: weakref.WeakKeyDictionary[
-    concurrent.futures.Future[stages.ExecutableProgram], str
+    concurrent.futures.Future[stages.CompilationArtifact], str
 ] = weakref.WeakKeyDictionary()
 
 
@@ -362,7 +362,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     )
 
     _compilation_jobs: dict[
-        CompiledProgramsKey, concurrent.futures.Future[stages.ExecutableProgram]
+        CompiledProgramsKey, concurrent.futures.Future[stages.CompilationArtifact]
     ] = dataclasses.field(default_factory=dict, init=False)
 
     @functools.cached_property
@@ -582,10 +582,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if key not in self._compilation_jobs:
             return False
 
-        compiled_program_future = self._compilation_jobs.pop(key)
-        assert isinstance(compiled_program_future, concurrent.futures.Future)
+        artifact_future = self._compilation_jobs.pop(key)
+        assert isinstance(artifact_future, concurrent.futures.Future)
         assert key not in self.compiled_programs
-        self.compiled_programs[key] = compiled_program_future.result()
+        self.compiled_programs[key] = artifact_future.result().load()
         return True
 
     def _compile_variant(
@@ -653,12 +653,14 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
         runner = self.compilation_runner or runners.get_default_runner()
         future = runner.submit(
-            load_tasks.make_load_task(self.backend, self.definition_stage, compile_time_args)
+            compilation_tasks.make_compilation_task(
+                self.backend, self.definition_stage, compile_time_args
+            )
         )
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.
-            self.compiled_programs[key] = future.result()
+            self.compiled_programs[key] = future.result().load()
         else:
             self._compilation_jobs[key] = future
             _ongoing_compilations[future] = (

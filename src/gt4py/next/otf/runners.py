@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Runners executing prepared load tasks serially, in threads, or in worker processes."""
+"""Runners executing prepared compilation tasks serially, in threads, or in worker processes."""
 
 from __future__ import annotations
 
@@ -28,42 +28,44 @@ from gt4py.next.otf.compilation import cache as _cache, common as compilation_co
 
 
 @dataclasses.dataclass(frozen=True)
-class CompilationTask:
-    """Decomposed compilation part of a `LoadTask`, prepared main-side."""
+class OffloadableCompilation:
+    """Decomposed compilation for execution in another process, prepared main-side."""
 
-    #: The already-lowered program; pickle-safe by construction.
-    compilable: definitions.CompilableProgramDef
+    #: Constructs the lowered program to compile; with ``with_refs`` the
+    #: connectivity buffers are replaced by file references for crossing the
+    #: process boundary.
+    construct_compilable: Callable[[bool], definitions.CompilableProgramDef]
     #: The backend's artifact-producing step. A runner may execute it anywhere,
     #: including another process; its picklability is the runner's concern.
     executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact]
 
 
 @dataclasses.dataclass(frozen=True)
-class LoadTask:
-    """A task yielding a loaded `ExecutableProgram`, fully prepared by the caller.
+class CompilationTask:
+    """A task yielding a `CompilationArtifact`, fully prepared by the caller.
 
-    Completing a `LoadTask` yields a loaded `ExecutableProgram`; where the load
-    executes is the runner's concern.
+    Loading the artifact is the caller's concern; a runner never loads.
     """
 
     #: Label used in user-facing messages.
     name: str
-    #: The whole pipeline executed in the current thread; always valid.
-    compile_and_load: Callable[[], stages.ExecutableProgram]
-    #: The decomposed compilation part, for runners that can execute it in
+    #: Compiles in the current thread; always valid.
+    compile: Callable[[], stages.CompilationArtifact]
+    #: The decomposed form, for runners that can execute the compilation in
     #: another process; ``None`` when the backend customizes ``compile`` and
     #: the task can only run as-is.
-    compilation: CompilationTask | None = None
+    offloadable: OffloadableCompilation | None = None
 
 
 @runtime_checkable
 class Runner(Protocol):
-    def submit(self, task: LoadTask) -> concurrent.futures.Future[stages.ExecutableProgram]:
+    def submit(
+        self, task: CompilationTask
+    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
         """Schedule `task`.
 
         Returns:
-            A future yielding the fully loaded ``ExecutableProgram``; the
-            runner is responsible for any cross-process hydration.
+            A future yielding the ``CompilationArtifact``.
         """
         ...
 
@@ -73,11 +75,11 @@ class Runner(Protocol):
 
 
 def _run_in_calling_thread(
-    task: LoadTask,
-) -> concurrent.futures.Future[stages.ExecutableProgram]:
-    future: concurrent.futures.Future[stages.ExecutableProgram] = concurrent.futures.Future()
+    task: CompilationTask,
+) -> concurrent.futures.Future[stages.CompilationArtifact]:
+    future: concurrent.futures.Future[stages.CompilationArtifact] = concurrent.futures.Future()
     try:
-        future.set_result(task.compile_and_load())
+        future.set_result(task.compile())
     except BaseException as exception:  # re-raised via the future
         future.set_exception(exception)
     return future
@@ -86,7 +88,9 @@ def _run_in_calling_thread(
 class SerialRunner:
     """Runs compilation in the calling thread; the returned future is already done."""
 
-    def submit(self, task: LoadTask) -> concurrent.futures.Future[stages.ExecutableProgram]:
+    def submit(
+        self, task: CompilationTask
+    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
         return _run_in_calling_thread(task)
 
     def shutdown(self, wait: bool = True) -> None:
@@ -99,8 +103,10 @@ class ThreadRunner:
     def __init__(self, max_workers: int) -> None:
         self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 
-    def submit(self, task: LoadTask) -> concurrent.futures.Future[stages.ExecutableProgram]:
-        return self._pool.submit(task.compile_and_load)
+    def submit(
+        self, task: CompilationTask
+    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+        return self._pool.submit(task.compile)
 
     def shutdown(self, wait: bool = True) -> None:
         self._pool.shutdown(wait=wait)
@@ -179,10 +185,8 @@ def _run_compilation_task_in_worker(
 class ProcessRunner:
     """Compiles in a ``ProcessPoolExecutor`` (``spawn``).
 
-    The worker runs the task's executor (post-lowering compile) and returns a
-    picklable ``CompilationArtifact``; the main process rehydrates it via
-    ``artifact.load()`` (in a done-callback) so the returned future yields a live
-    ``ExecutableProgram``.
+    The worker runs the task's executor (post-lowering compile) and returns
+    the picklable ``CompilationArtifact``.
 
     Tasks that cannot be offloaded — no decomposed compilation or an executor
     that stdlib ``pickle`` cannot serialize — are compiled in the calling thread
@@ -206,13 +210,15 @@ class ProcessRunner:
             initargs=(shared_session_cache_dir, _detect_cuda_archs()),
         )
 
-    def submit(self, task: LoadTask) -> concurrent.futures.Future[stages.ExecutableProgram]:
+    def submit(
+        self, task: CompilationTask
+    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
         executor_blob: bytes | None = None
-        if task.compilation is None:
+        if task.offloadable is None:
             blocker = "it does not use the standard compilation workflow (customized 'compile')"
         else:
             try:
-                executor_blob = pickle.dumps(task.compilation.executor)
+                executor_blob = pickle.dumps(task.offloadable.executor)
             except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
                 blocker = f"its executor is not picklable ({error!s})"
         if executor_blob is None:
@@ -223,25 +229,13 @@ class ProcessRunner:
             )
             return _run_in_calling_thread(task)
 
-        assert task.compilation is not None
-        artifact_future = self._pool.submit(
+        assert task.offloadable is not None
+        return self._pool.submit(
             _run_compilation_task_in_worker,
             executor_blob=executor_blob,
-            compilable=task.compilation.compilable,
+            compilable=task.offloadable.construct_compilable(True),
             config_overrides=_config_snapshot(),
         )
-        loaded: concurrent.futures.Future[stages.ExecutableProgram] = concurrent.futures.Future()
-
-        def _load(
-            artifact_future: concurrent.futures.Future[stages.CompilationArtifact],
-        ) -> None:
-            try:
-                loaded.set_result(artifact_future.result().load())
-            except BaseException as exception:  # re-raised via the future
-                loaded.set_exception(exception)
-
-        artifact_future.add_done_callback(_load)
-        return loaded
 
     def shutdown(self, wait: bool = True) -> None:
         self._pool.shutdown(wait=wait)

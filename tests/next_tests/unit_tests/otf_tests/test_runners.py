@@ -19,7 +19,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import backend as next_backend, config
-from gt4py.next.otf import arguments, compiled_program, load_tasks, runners
+from gt4py.next.otf import arguments, compilation_tasks, compiled_program, runners
 
 
 @pytest.fixture
@@ -37,10 +37,12 @@ class _NoOpArtifact:
 
 def _decomposed_task(executor):
     compilable = "compilable"
-    return runners.LoadTask(
+    return runners.CompilationTask(
         name="test_task",
-        compile_and_load=lambda: executor(compilable).load(),
-        compilation=runners.CompilationTask(compilable=compilable, executor=executor),
+        compile=lambda: executor(compilable),
+        offloadable=runners.OffloadableCompilation(
+            construct_compilable=lambda with_refs: compilable, executor=executor
+        ),
     )
 
 
@@ -51,20 +53,20 @@ def test_process_runner_falls_back_on_unpicklable_executor(process_runner):
         future = process_runner.submit(task)
 
     assert future.done()
-    assert callable(future.result())
+    assert callable(future.result().load())
 
 
 def test_process_runner_falls_back_on_non_offloadable_task(process_runner):
-    task = runners.LoadTask(name="opaque", compile_and_load=lambda: _NoOpArtifact().load())
+    task = runners.CompilationTask(name="opaque", compile=lambda: _NoOpArtifact())
 
     with pytest.warns(UserWarning, match="standard compilation workflow"):
         future = process_runner.submit(task)
 
     assert future.done()
-    assert callable(future.result())
+    assert callable(future.result().load())
 
 
-def test_make_load_task_decomposes_standard_backend():
+def test_make_compilation_task_decomposes_standard_backend():
     backend = next_backend.Backend(
         name="test_backend",
         executor=lambda compilable: _NoOpArtifact(),
@@ -72,16 +74,16 @@ def test_make_load_task_decomposes_standard_backend():
         transforms=lambda inp: inp,
     )
 
-    task = load_tasks.make_load_task(
+    task = compilation_tasks.make_compilation_task(
         backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
     )
 
-    assert task.compilation is not None
-    assert task.compilation.executor is backend.executor
-    assert callable(task.compile_and_load())
+    assert task.offloadable is not None
+    assert task.offloadable.executor is backend.executor
+    assert callable(task.compile().load())
 
 
-def test_make_load_task_is_opaque_for_customized_compile():
+def test_make_compilation_task_is_opaque_for_customized_compile():
     class _WrapperBackend:
         def __init__(self, wrapped):
             self._wrapped = wrapped
@@ -102,12 +104,12 @@ def test_make_load_task_is_opaque_for_customized_compile():
         )
     )
 
-    task = load_tasks.make_load_task(
+    task = compilation_tasks.make_compilation_task(
         backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
     )
 
-    assert task.compilation is None
-    assert callable(task.compile_and_load())
+    assert task.offloadable is None
+    assert callable(task.compile().load())
     assert backend.compile_called
 
 
@@ -126,14 +128,17 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
         transforms=lambda inp: inp,
     )
 
-    task = load_tasks.make_load_task(
+    task = compilation_tasks.make_compilation_task(
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
 
-    ref = task.compilation.compilable.args.offset_provider["V2E"]
-    assert isinstance(ref, load_tasks._ConnectivityFileRef)
+    # without refs the original compilable is used as is
+    assert task.offloadable.construct_compilable(False).args.offset_provider["V2E"] is conn
+    shipped = task.offloadable.construct_compilable(True)
+    ref = shipped.args.offset_provider["V2E"]
+    assert isinstance(ref, compilation_tasks._ConnectivityFileRef)
     # task preparation is pure: nothing is dumped until a runner ships the task
-    assert id(conn) not in load_tasks._connectivity_files
+    assert id(conn) not in compilation_tasks._connectivity_files
     # unpickling (as in a worker) yields the memory-mapped connectivity
     restored = pickle.loads(pickle.dumps(ref))
     assert np.array_equal(restored.asnumpy(), conn.asnumpy())
@@ -141,12 +146,12 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
     assert restored.codomain == conn.codomain
     assert restored.skip_value == conn.skip_value
     # the same connectivity is dumped only once across tasks
-    path = load_tasks._connectivity_files[id(conn)][1]
-    task2 = load_tasks.make_load_task(
+    path = compilation_tasks._connectivity_files[id(conn)][1]
+    task2 = compilation_tasks.make_compilation_task(
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
-    pickle.dumps(task2.compilation.compilable.args.offset_provider["V2E"])
-    assert load_tasks._connectivity_files[id(conn)][1] == path
+    pickle.dumps(task2.offloadable.construct_compilable(True).args.offset_provider["V2E"])
+    assert compilation_tasks._connectivity_files[id(conn)][1] == path
 
 
 def test_connectivity_file_registry_prunes_on_gc():
@@ -155,13 +160,13 @@ def test_connectivity_file_registry_prunes_on_gc():
     V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
     conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
 
-    load_tasks._dump_connectivity(conn)
+    compilation_tasks._dump_connectivity(conn)
     key = id(conn)
-    assert key in load_tasks._connectivity_files
+    assert key in compilation_tasks._connectivity_files
 
     del conn
     gc.collect()
-    assert key not in load_tasks._connectivity_files
+    assert key not in compilation_tasks._connectivity_files
 
 
 def test_wait_for_compilation_untracks_successful_futures():
