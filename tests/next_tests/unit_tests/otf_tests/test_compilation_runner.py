@@ -132,17 +132,21 @@ def test_offloaded_job_ships_connectivities_as_file_refs():
 
     ref = job.offload.compilable.args.offset_provider["V2E"]
     assert isinstance(ref, compile_jobs._ConnectivityFileRef)
-    # the same connectivity is dumped only once
-    job2 = compile_jobs.make_compile_job(
-        backend, definition_stage=None, compile_time_args=compile_time_args
-    )
-    assert job2.offload.compilable.args.offset_provider["V2E"].path == ref.path
+    # job preparation is pure: nothing is dumped until a runner ships the job
+    assert id(conn) not in compile_jobs._connectivity_files
     # unpickling (as in a worker) yields the memory-mapped connectivity
     restored = pickle.loads(pickle.dumps(ref))
     assert np.array_equal(restored.asnumpy(), conn.asnumpy())
     assert restored.domain == conn.domain
     assert restored.codomain == conn.codomain
     assert restored.skip_value == conn.skip_value
+    # the same connectivity is dumped only once across jobs
+    path = compile_jobs._connectivity_files[id(conn)][1]
+    job2 = compile_jobs.make_compile_job(
+        backend, definition_stage=None, compile_time_args=compile_time_args
+    )
+    pickle.dumps(job2.offload.compilable.args.offset_provider["V2E"])
+    assert compile_jobs._connectivity_files[id(conn)][1] == path
 
 
 def test_connectivity_file_registry_prunes_on_gc():
@@ -151,7 +155,7 @@ def test_connectivity_file_registry_prunes_on_gc():
     V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
     conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
 
-    compile_jobs._connectivity_file_ref(conn)
+    compile_jobs._dump_connectivity(conn)
     key = id(conn)
     assert key in compile_jobs._connectivity_files
 

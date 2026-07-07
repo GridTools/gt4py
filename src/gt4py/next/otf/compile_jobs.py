@@ -50,56 +50,60 @@ def _connectivity_from_file(
 
 @dataclasses.dataclass(frozen=True)
 class _ConnectivityFileRef:
-    """Stand-in for a connectivity table in an offloaded compile job.
+    """Lazy stand-in for a connectivity table in the offloadable part of a compile job.
 
-    Pickles as a reference to an ``.npy`` file in the session cache dir and
-    unpickles as the memory-mapped `Connectivity` itself, so the table crosses
-    the process boundary through the page cache instead of the pickle stream.
+    Construction is pure. On first pickling the table is dumped (memoized) to an
+    ``.npy`` file in the session cache dir, and unpickling yields the memory-mapped
+    `Connectivity`, so the table crosses the process boundary through the page
+    cache instead of the pickle stream. A job that is never shipped to a worker
+    never dumps anything.
     """
 
-    path: str
-    domain: common.Domain
-    codomain: common.Dimension
-    skip_value: core_defs.IntegralScalar | None
+    connectivity: common.Connectivity
 
     def __reduce__(self) -> tuple[Callable, tuple]:
         return (
             _connectivity_from_file,
-            (self.path, self.domain, self.codomain, self.skip_value),
+            (
+                _dump_connectivity(self.connectivity),
+                self.connectivity.domain,
+                self.connectivity.codomain,
+                self.connectivity.skip_value,
+            ),
         )
 
 
 #: Files already written for a connectivity, keyed by its id (validated against
 #: a weakref, since ids can be reused): the same mesh is typically shared by all
-#: programs of a run and must be dumped only once.
+#: tasks of a run and must be dumped only once.
 _connectivity_files: dict[int, tuple[weakref.ref, str]] = {}
 
 
-def _connectivity_file_ref(value: common.Connectivity) -> _ConnectivityFileRef:
+def _dump_connectivity(value: common.Connectivity) -> str:
     entry = _connectivity_files.get(id(value))
-    if entry is None or entry[0]() is not value:
-        dump_dir = compilation_cache._session_cache_dir_path / "connectivities"
-        dump_dir.mkdir(parents=True, exist_ok=True)
-        fd, path = tempfile.mkstemp(suffix=".npy", prefix="connectivity_", dir=dump_dir)
-        os.close(fd)
-        np.save(path, value.asnumpy())
+    if entry is not None and entry[0]() is value:
+        return entry[1]
+    dump_dir = compilation_cache._session_cache_dir_path / "connectivities"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    # One writer per path and files are write-once: `mkstemp` uniqueness is what
+    # makes concurrent dumps and the workers' mmap readers safe. A racing double
+    # dump costs a duplicate file (reclaimed with the session dir), nothing else.
+    fd, path = tempfile.mkstemp(suffix=".npy", prefix="connectivity_", dir=dump_dir)
+    os.close(fd)
+    np.save(path, value.asnumpy())
 
-        def _prune(ref: weakref.ref, key: int = id(value)) -> None:
-            # Only the registry entry: the file may still be referenced by
-            # in-flight jobs and is reclaimed with the session cache dir. The
-            # guard protects a reused id already re-registered by a new owner.
-            if (current := _connectivity_files.get(key)) is not None and current[0] is ref:
-                del _connectivity_files[key]
+    def _prune(ref: weakref.ref, key: int = id(value)) -> None:
+        # Only the registry entry: the file may still be referenced by
+        # in-flight jobs and is reclaimed with the session cache dir. The
+        # guard protects a reused id already re-registered by a new owner.
+        if (current := _connectivity_files.get(key)) is not None and current[0] is ref:
+            del _connectivity_files[key]
 
-        try:
-            _connectivity_files[id(value)] = (weakref.ref(value, _prune), path)
-        except TypeError:  # not weakref-able: correct but re-dumped per job
-            pass
-    else:
-        path = entry[1]
-    return _ConnectivityFileRef(
-        path=path, domain=value.domain, codomain=value.codomain, skip_value=value.skip_value
-    )
+    try:
+        _connectivity_files[id(value)] = (weakref.ref(value, _prune), path)
+    except TypeError:  # not weakref-able: correct but re-dumped per job
+        pass
+    return path
 
 
 def _offset_provider_with_file_refs(
@@ -108,7 +112,7 @@ def _offset_provider_with_file_refs(
     return {
         name: value
         if isinstance(value, common.Dimension)
-        else xtyping.cast(common.OffsetProviderElem, _connectivity_file_ref(value))
+        else xtyping.cast(common.OffsetProviderElem, _ConnectivityFileRef(value))
         for name, value in offset_provider.items()
     }
 
@@ -137,9 +141,11 @@ def make_compile_job(
     )
     offload_compilable = compilable
     if compilable.args.offset_provider:
-        # The offloaded copy must not carry the connectivity buffers: they may
+        # The offloadable copy must not carry the connectivity buffers: they may
         # live on a device the worker cannot see, and shipping them through the
-        # pickle queue would serialize the full tables once per job.
+        # pickle queue would serialize the full tables once per job. The lazy
+        # file references keep this pure — nothing is dumped unless a runner
+        # actually pickles the job.
         offload_compilable = dataclasses.replace(
             compilable,
             args=dataclasses.replace(
