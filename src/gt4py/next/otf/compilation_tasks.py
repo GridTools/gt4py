@@ -12,8 +12,7 @@ This is the layer between the compiled-programs pool and the compilation
 runners: it decides what runs main-side (frontend lowering, since the raw
 user function cannot cross a process boundary), whether the task can be
 decomposed for offloading at all, and what may cross the process boundary
-(connectivity tables travel as memory-mapped file references, a stopgap
-until `CompileTimeArgs.offset_provider` becomes type-only).
+(connectivity tables travel as memory-mapped file references).
 """
 
 from __future__ import annotations
