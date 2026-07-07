@@ -21,6 +21,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import os
+import pathlib
 import tempfile
 import weakref
 from typing import Any, Callable
@@ -31,7 +32,6 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import backend as gtx_backend, common, constructors
 from gt4py.next.otf import arguments, definitions as otf_definitions, runners
-from gt4py.next.otf.compilation import cache as compilation_cache
 
 
 def _connectivity_from_file(
@@ -79,17 +79,25 @@ class _ConnectivityFileRef:
 #: tasks of many programs and variants and must be dumped only once per run.
 _connectivity_files: dict[int, tuple[weakref.ref, str]] = {}
 
+_dump_dir: tempfile.TemporaryDirectory | None = None
+
+
+def _get_dump_dir() -> pathlib.Path:
+    """Directory holding the connectivity shipping buffers; removed at process exit."""
+    global _dump_dir
+    if _dump_dir is None:
+        _dump_dir = tempfile.TemporaryDirectory(prefix="gt4py_connectivities_")
+    return pathlib.Path(_dump_dir.name)
+
 
 def _dump_connectivity(value: common.Connectivity) -> str:
     entry = _connectivity_files.get(id(value))
     if entry is not None and entry[0]() is value:
         return entry[1]
-    dump_dir = compilation_cache._session_cache_dir_path / "connectivities"
-    dump_dir.mkdir(parents=True, exist_ok=True)
     # One writer per path and files are write-once: `mkstemp` uniqueness is what
     # makes concurrent dumps and the workers' mmap readers safe. A racing double
     # dump costs a duplicate file (reclaimed with the session dir), nothing else.
-    fd, path = tempfile.mkstemp(suffix=".npy", prefix="connectivity_", dir=dump_dir)
+    fd, path = tempfile.mkstemp(suffix=".npy", prefix="connectivity_", dir=_get_dump_dir())
     os.close(fd)
     np.save(path, value.asnumpy())
 
