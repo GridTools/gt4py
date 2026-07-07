@@ -9,8 +9,6 @@
 from __future__ import annotations
 
 import ast
-import textwrap
-import typing
 from typing import Any, Type
 
 import gt4py.eve as eve
@@ -71,14 +69,21 @@ def func_to_foast(inp: DSLFieldOperatorDef) -> FOASTOperatorDef:
     """
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
-    annotations = typing.get_type_hints(inp.definition)
+    annotations = source_utils.get_type_hints_from_function(inp.definition, source_def)
     try:
         foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
         loc = foast_definition_node.location
-        operator_attribute_nodes = {
-            key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
-            for key, value in inp.attributes.items()
-        }
+        operator_attribute_nodes = {}
+        for key, value in inp.attributes.items():
+            try:
+                type_ = type_translation.from_value(value)
+            except Exception as e:
+                raise errors.DSLTypeError(
+                    loc,
+                    f"Argument '{key}' to operator '{foast_definition_node.id}' has a type "
+                    f"not supported by GT4Py: '{type(value).__name__}'.",
+                ) from e
+            operator_attribute_nodes[key] = foast.Constant(value=value, type=type_, location=loc)
         untyped_foast_node = inp.node_class(
             id=foast_definition_node.id,
             definition=foast_definition_node,
@@ -229,13 +234,19 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.DataSymbol]:
+        self._validate_signature(node)
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
-        new_type = type_translation.from_type_hint(annotation)
+        try:
+            new_type = type_translation.from_type_hint(annotation)
+        except ValueError as e:
+            err = errors.InvalidParameterAnnotationError(loc, node.arg, annotation)
+            err.notes.append(str(e))
+            raise err from e
         if not isinstance(new_type, ts.DataType):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
         return foast.DataSymbol(id=node.arg, location=loc, type=new_type)
@@ -251,6 +262,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ] = []
 
             for elt in target.elts:
+                if isinstance(elt, ast.Tuple):
+                    raise errors.DSLError(
+                        self.get_location(elt),
+                        "Nested tuple unpacking is not supported.",
+                        hints=("Unpack the inner tuple in a separate assignment.",),
+                    )
                 if isinstance(elt, ast.Starred):
                     new_targets.append(
                         foast.Starred(
@@ -312,8 +329,19 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
 
             context = {**fbuiltins.BUILTINS, **self.closure_vars}
-            annotation = eval(node.annotation.value, context)
-            target_type = type_translation.from_type_hint(annotation, globalns=context)
+            try:
+                annotation = eval(node.annotation.value, context)
+                target_type = type_translation.from_type_hint(annotation, globalns=context)
+            except Exception as e:
+                raise errors.DSLError(
+                    self.get_location(node),
+                    f"Invalid type annotation '{node.annotation.value}': {e}.",
+                    notes=(
+                        "Inside a GT4Py function, annotations can only use GT4Py "
+                        "builtins and names that are also referenced in the function "
+                        "body.",
+                    ),
+                ) from e
         else:
             target_type = ts.DeferredType()
 
@@ -455,14 +483,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             refactored = UnchainComparesPass.apply(node)
             raise errors.DSLError(
                 loc,
-                textwrap.dedent(
-                    f"""
-                    Comparison chains are not allowed. Please replace
-                        {ast.unparse(node)}
-                    by
-                        {ast.unparse(refactored)}
-                    """,
-                ),
+                "Comparison chains are not allowed.",
+                hints=(f"Replace '{ast.unparse(node)}' by '{ast.unparse(refactored)}'.",),
             )
         return foast.Compare(
             op=self.visit(node.ops[0]),
@@ -492,14 +514,21 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
         if len(node.args) > 0:
             arg = node.args[0]
+            func_name = self._func_name(node)
             if not (
                 isinstance(arg, ast.Constant)
                 or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
             ):
                 raise errors.DSLError(
-                    self.get_location(node),
-                    f"'{self._func_name(node)}()' only takes literal arguments.",
+                    self.get_location(node), f"'{func_name}()' only takes literal arguments."
                 )
+            try:
+                fbuiltins.BUILTINS[func_name](ast.literal_eval(arg))
+            except Exception as e:
+                raise errors.DSLError(
+                    self.get_location(node),
+                    f"'{ast.unparse(arg)}' is not a valid literal for '{func_name}': {e}.",
+                ) from e
 
     def _func_name(self, node: ast.Call) -> str:
         return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.
@@ -522,9 +551,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         loc = self.get_location(node)
         try:
             type_ = type_translation.from_value(node.value)
-        except ValueError:
+        except ValueError as e:
             raise errors.DSLError(
-                loc, f"Constants of type {type(node.value)} are not permitted."
+                loc,
+                f"Invalid constant of type '{type(node.value).__name__}'.",
+                notes=(str(e),),
             ) from None
 
         return foast.Constant(value=node.value, location=loc, type=type_)

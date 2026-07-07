@@ -30,7 +30,13 @@ class NodeYielder(ast.NodeTransformer):
         """Override generic visit to deal with generators."""
         for field, old_value in ast.iter_fields(node):
             if isinstance(old_value, list):
-                new_values = [i for j in old_value for i in self.visit(j)]
+                # fields may contain non-AST values, e.g. the names of a `global`
+                # statement; those must be kept as-is, not visited.
+                new_values = [
+                    i
+                    for j in old_value
+                    for i in (self.visit(j) if isinstance(j, ast.AST) else (j,))
+                ]
                 old_value[:] = new_values
             elif isinstance(old_value, ast.AST):
                 new_node, *_ = list(self.visit(old_value)) or (None,)

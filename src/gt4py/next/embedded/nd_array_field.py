@@ -176,7 +176,10 @@ class NdArrayField(
         if dtype is not None:
             assert array.dtype.type == core_defs.dtype(dtype).scalar_type
 
-        assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
+        if not issubclass(array.dtype.type, core_defs.SCALAR_TYPES):
+            raise ValueError(
+                f"Cannot construct 'Field' from array with unsupported dtype '{array.dtype}'."
+            )
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
@@ -540,7 +543,8 @@ class NdArrayConnectivityField(
         if dtype is not None:
             assert array.dtype.type == core_defs.dtype(dtype).scalar_type
 
-        assert issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES)
+        if not issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES):
+            raise ValueError(f"Neighbor tables must have an integral dtype, got '{array.dtype}'.")
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim

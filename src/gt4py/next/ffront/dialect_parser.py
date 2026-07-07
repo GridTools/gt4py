@@ -8,13 +8,13 @@
 
 import ast
 import textwrap
-import typing
 from dataclasses import dataclass
 from typing import Callable, ClassVar, Collection
 
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.extended_typing import Any, Generic, TypeVar
 from gt4py.next import errors
+from gt4py.next.ffront import source_utils
 from gt4py.next.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from gt4py.next.ffront.ast_passes.remove_docstrings import RemoveDocstrings
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
@@ -67,6 +67,20 @@ _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
     ast.ClassDef: ("class definition", ()),
     ast.JoinedStr: ("f-string", ("Strings cannot be computed inside GT4Py functions.",)),
     ast.Match: ("'match' statement", ("Use 'if'/'elif' chains or 'where' instead.",)),
+    ast.Global: (
+        "'global' statement",
+        (
+            "Variables from the surrounding scope are read-only inside GT4Py functions; "
+            "pass values as parameters and return results instead.",
+        ),
+    ),
+    ast.Nonlocal: (
+        "'nonlocal' statement",
+        (
+            "Variables from the surrounding scope are read-only inside GT4Py functions; "
+            "pass values as parameters and return results instead.",
+        ),
+    ),
 }
 
 
@@ -136,7 +150,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     def apply_to_function(cls, function: Callable) -> DialectRootT:
         src = SourceDefinition.from_function(function)
         closure_vars = get_closure_vars_from_function(function)
-        annotations = typing.get_type_hints(function)
+        annotations = source_utils.get_type_hints_from_function(function, src)
         return cls.apply(src, closure_vars, annotations)
 
     @classmethod
@@ -158,6 +172,35 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             notes=("Only a subset of Python is valid inside GT4Py functions.",),
             hints=hints,
         )
+
+    def _validate_signature(self, node: ast.arguments) -> None:
+        """Reject parameter-list features that have no DSL semantics with a clear diagnostic."""
+        if node.posonlyargs:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(node.posonlyargs[0]),
+                "positional-only parameters",
+                hints=("Remove the '/' marker from the parameter list.",),
+            )
+        if node.kwonlyargs:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(node.kwonlyargs[0]),
+                "keyword-only parameters",
+                hints=("Remove the '*' marker from the parameter list.",),
+            )
+        if node.vararg is not None:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(node.vararg), "'*args' parameters"
+            )
+        if node.kwarg is not None:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(node.kwarg), "'**kwargs' parameters"
+            )
+        if defaults := [d for d in [*node.defaults, *node.kw_defaults] if d is not None]:
+            raise errors.UnsupportedPythonFeatureError(
+                self.get_location(defaults[0]),
+                "default values for parameters",
+                hints=("Pass the value explicitly at every call site instead.",),
+            )
 
     def _check_not_a_reserved_name(self, name: str, location: SourceLocation) -> None:
         if name in self.reserved_names:

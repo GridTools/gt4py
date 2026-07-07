@@ -261,9 +261,25 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         f"Got '{arg_types[0]}' and '{arg_types[1]}'."
                     )
                 return_type = arg_types[0]
+            elif isinstance(new_func.type, ts_ffront.ProgramType):
+                raise errors.DSLError(
+                    node.location,
+                    f"Program '{node.func.id}' cannot be called from within another program.",
+                    label="this is a '@program'",
+                    hints=(
+                        "Call the field operators directly, or compose the programs "
+                        "from plain Python.",
+                    ),
+                )
             else:
-                raise AssertionError(
-                    "Only calls to 'FieldOperator', 'ScanOperator' or 'minimum' and 'maximum' builtins allowed."
+                raise errors.DSLError(
+                    node.location,
+                    f"'{node.func.id}' cannot be called inside a program.",
+                    label=f"this has type '{new_func.type}'",
+                    notes=(
+                        "Inside a program, only field operators, scan operators and the "
+                        "builtins 'minimum' and 'maximum' can be called.",
+                    ),
                 )
 
         except ValueError as ex:

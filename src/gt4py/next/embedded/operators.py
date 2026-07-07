@@ -118,11 +118,22 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
         # without checking if the types are consistent. However, these errors are caught in linting if enabled.
         container_extracted_out = arguments.extract(out)
         assert xtyping.is_maybe_nested_in_tuple_of(container_extracted_out, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
-        out_domain = (
-            utils.tree_map(common.domain)(domain)
-            if domain is not None
-            else _get_out_domain(container_extracted_out)
-        )
+        try:
+            out_domain = (
+                utils.tree_map(common.domain)(domain)
+                if domain is not None
+                else _get_out_domain(container_extracted_out)
+            )
+        except ValueError as err:
+            raise errors.DSLTypeError(
+                None,
+                f"Invalid 'domain' argument: {err}",
+                hints=(
+                    "Pass a mapping from dimensions to ranges, e.g. "
+                    "'domain={IDim: (0, 10)}' (or a tuple thereof matching a tuple "
+                    "'out' argument).",
+                ),
+            ) from err
 
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 
