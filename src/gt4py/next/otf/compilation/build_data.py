@@ -14,7 +14,7 @@ import json
 import pathlib
 from typing import Final, Optional
 
-from gt4py._core import cache_utils
+from gt4py._core import file_utils
 
 
 _DATAFILE_NAME: Final = "gt4py.json"
@@ -87,7 +87,7 @@ def read_data(path: pathlib.Path) -> Optional[BuildData]:
 
 
 def write_data(data: BuildData, path: pathlib.Path) -> None:
-    cache_utils.atomic_write_text(path / _DATAFILE_NAME, json.dumps(data.to_json()))
+    file_utils.atomic_write_text(path / _DATAFILE_NAME, json.dumps(data.to_json()))
 
 
 def update_status(new_status: BuildStatus, path: pathlib.Path) -> None:

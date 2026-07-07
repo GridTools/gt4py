@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Helpers for crash-consistent on-disk caches."""
+"""Helpers for atomic file writes."""
 
 from __future__ import annotations
 

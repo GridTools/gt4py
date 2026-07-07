@@ -45,7 +45,7 @@ here.
 
 ## Decision
 
-A shared helper `gt4py._core.cache_utils.atomic_write_bytes/_text` writes to a
+A shared helper `gt4py._core.file_utils.atomic_write_bytes/_text` writes to a
 uniquely-named sibling temp file and `os.replace`s it into place, so a reader
 sees old-or-new content, never a torn file. The temp file is created with a
 plain `open` so the result keeps umask-derived permissions. No `fsync`: it only

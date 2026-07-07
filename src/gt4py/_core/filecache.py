@@ -12,7 +12,7 @@ import pathlib
 import pickle
 from typing import Any, Hashable
 
-from gt4py._core import cache_utils, locking
+from gt4py._core import file_utils, locking
 from gt4py.eve import utils as eve_utils
 
 
@@ -49,7 +49,7 @@ class FileCache:
     def __setitem__(self, key: Hashable, value: Any) -> None:
         self.path.mkdir(parents=True, exist_ok=True)
         with locking.lock(path := self._get_path(key)):
-            cache_utils.atomic_write_bytes(path, pickle.dumps(value, protocol=5))
+            file_utils.atomic_write_bytes(path, pickle.dumps(value, protocol=5))
 
     def __delitem__(self, key: Hashable) -> None:
         if key not in self:

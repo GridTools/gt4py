@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from typing import Optional, TypeVar
 
-from gt4py._core import cache_utils, locking
+from gt4py._core import file_utils, locking
 from gt4py.next import config, errors, fingerprinting
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
@@ -376,6 +376,6 @@ def _cc_create_compiledb(
         )
 
     compile_db_path = path / "compile_commands.json"
-    cache_utils.atomic_write_text(compile_db_path, json.dumps(compile_db))
+    file_utils.atomic_write_text(compile_db_path, json.dumps(compile_db))
 
     return compile_db_path
