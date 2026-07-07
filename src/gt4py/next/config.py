@@ -16,6 +16,11 @@ import warnings
 from typing import Final
 
 
+# Module-level UPPERCASE values are snapshotted and shipped verbatim to
+# compilation worker processes (see `gt4py.next.otf.runners`); keep them
+# picklable.
+
+
 class BuildCacheLifetime(enum.Enum):
     SESSION = 1
     PERSISTENT = 2

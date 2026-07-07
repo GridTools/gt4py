@@ -924,12 +924,15 @@ def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_dom
     ):
         runner = compiled_program.runners.from_config()
 
-    with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
-        get_runner.return_value = runner
-        compile_testee.compile(offset_provider=cartesian_case.offset_provider)
-        gtx.wait_for_compilation()
-        # afterwards compilation still works
-        compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+    try:
+        with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+            get_runner.return_value = runner
+            compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+            gtx.wait_for_compilation()
+            # afterwards compilation still works
+            compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+    finally:
+        runner.shutdown(wait=True)
 
 
 def test_compile_local_program_offloads_to_worker_process(cartesian_case, compile_testee):

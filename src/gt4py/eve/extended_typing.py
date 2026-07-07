@@ -227,6 +227,9 @@ _T = TypeVar("_T")
 
 @runtime_checkable
 class SingleDispatchCallable(Protocol[_P, _T]):
+    # `functools.singledispatch` copies the wrapped function's identity onto
+    # the dispatcher; declaring these attributes allows callers to overwrite
+    # it (e.g. to give a dispatcher its own pickle identity).
     __name__: str
     __qualname__: str
     registry: Mapping[Any, Callable[_P, _T]]

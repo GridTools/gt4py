@@ -354,12 +354,6 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
-    #: Runner used to compile program variants. ``None`` means the process-wide
-    #: default (see `gt4py.next.otf.runners.get_default_runner`),
-    #: resolved at each submission so the pool never holds on to a runner that
-    #: `wait_for_compilation` has already shut down.
-    compilation_runner: runners.Runner | None = None
-
     # store for the compiled programs
     compiled_programs: dict[CompiledProgramsKey, stages.ExecutableProgram] = dataclasses.field(
         default_factory=dict, init=False
@@ -655,7 +649,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             offset_provider=offset_provider,
         )
 
-        runner = self.compilation_runner or runners.get_default_runner()
+        # The default runner is resolved at each submission, so the pool never
+        # holds on to a runner that `wait_for_compilation` has already shut down.
+        runner = runners.get_default_runner()
         future = runner.submit(
             compilation_tasks.make_compilation_task(
                 self.backend, self.definition_stage, compile_time_args

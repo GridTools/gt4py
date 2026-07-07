@@ -284,5 +284,9 @@ def reset_default_runner() -> None:
 
 # Shut down worker pools while the interpreter is still intact; relying on
 # garbage collection at teardown leaks the pool's semaphores (with a
-# ``resource_tracker`` warning on stderr).
+# ``resource_tracker`` warning on stderr). Ordering: the temporary directories
+# workers read from (session cache, connectivity dumps) are removed by
+# ``weakref.finalize``, whose exit hook is registered no later than the import
+# of `otf.compilation.cache` above — atexit runs LIFO, so this shutdown runs
+# before those directories disappear.
 atexit.register(reset_default_runner)
