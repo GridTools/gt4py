@@ -8,7 +8,6 @@
 
 
 import dataclasses
-import warnings
 from typing import Any, Callable, Optional
 
 from gt4py import eve
@@ -302,23 +301,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     new_index = constant_folding.ConstantFolding.apply(self.visit(index, **kwargs))
                     assert isinstance(new_index, itir.Literal)
                     assert isinstance(offset_name.type, ts.OffsetType)
-                    if fbuiltins.is_cartesian_offset(offset_name.type):
-                        # Deprecated: Cartesian shift via the subscript syntax `field(Off[i])`.
-                        # We deduce the dimension from the offset type and emit a self-describing
-                        # `CartesianOffset` (cf. the `Dim + idx` and `as_offset` cases).
-                        warnings.warn(
-                            f"Cartesian shifts via the subscript syntax 'field({offset_name.id}[i])' "
-                            f"are deprecated; use 'field({offset_name.type.source.value} + i)' instead.",
-                            DeprecationWarning,
-                            stacklevel=2,
-                        )
-                        dim = offset_name.type.source
-                        shift_offset: itir.CartesianOffset | str = im.cartesian_offset(dim)
-                    else:
-                        # Unstructured neighbor selection, resolved through the offset provider.
-                        shift_offset = offset_name.id
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(im.deref(im.shift(shift_offset, new_index)("__it")))
+                        im.lambda_("__it")(im.deref(im.shift(offset_name.id, new_index)("__it")))
                     )(current_expr)
                 # `field(Dim + idx)`
                 case foast.BinOp(
