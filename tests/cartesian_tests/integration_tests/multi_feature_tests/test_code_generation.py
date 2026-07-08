@@ -1765,10 +1765,11 @@ def test_reset_mask_2d(backend: str) -> None:
     "backend",
     [
         "debug",
-        "dace:cpu",
+        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
         pytest.param(
             "dace:gpu",
             marks=[
+                pytest.mark.requires_dace,
                 pytest.mark.requires_gpu,
                 pytest.mark.xfail(
                     raises=SystemExit,
