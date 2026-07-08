@@ -65,14 +65,12 @@ def _unstructured_translate_range_statically(
     tag: str,
     val: itir.OffsetLiteral
     | Literal[trace_shifts.Sentinel.VALUE, trace_shifts.Sentinel.ALL_NEIGHBORS],
-    offset_provider: common.OffsetProvider,
+    connectivity: common.NeighborTable,
     expr: itir.Expr | None = None,
 ) -> SymbolicRange:
     """
     Translate `range_` using static connectivity information from `offset_provider`.
     """
-    assert common.is_offset_provider(offset_provider)
-    connectivity = offset_provider[tag]
     assert common.is_neighbor_table(connectivity)
     skip_value = connectivity.skip_value
 
@@ -188,45 +186,42 @@ class SymbolicDomain:
         if len(shift) == 2:
             off, val = shift
 
-            connectivity: common.Connectivity
             if isinstance(off, itir.CartesianOffset):
-                domain = common.Dimension(value=off.domain.value, kind=off.domain.kind)
-                codomain = common.Dimension(value=off.codomain.value, kind=off.codomain.kind)
-                connectivity = common.CartesianConnectivity(domain, codomain=codomain)
-            else:
-                assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
-                # `get_offset` accepts both `OffsetProvider` and `OffsetProviderType`, but is typed
-                # for the former only (the two overlap, so an overload is not possible).
-                connectivity = common.get_offset(offset_provider, off.value)  # type: ignore[arg-type]
-
-            if isinstance(connectivity, common.CartesianConnectivity):
+                # cartesian shift: extract the (co)domain directly from the `CartesianOffset`
                 if val is trace_shifts.Sentinel.VALUE:
-                    raise NotImplementedError("Dynamic offsets not supported.")
+                    raise NotImplementedError("Dynamic cartesian offsets not supported.")
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
-                assert len(connectivity.domain.dims) == 1
 
-                old_dim = connectivity.domain_dim
-                new_dim = connectivity.codomain
+                old_dim = common.Dimension(value=off.domain.value, kind=off.domain.kind)
+                new_dim = common.Dimension(value=off.codomain.value, kind=off.codomain.kind)
 
                 assert new_dim not in new_ranges or old_dim == new_dim
 
-                new_range = SymbolicRange.translate(
-                    self.ranges[old_dim], connectivity.offset + val.value
-                )
+                new_range = SymbolicRange.translate(self.ranges[old_dim], val.value)
                 new_ranges = dict(
                     (dim, range_) if dim != old_dim else (new_dim, new_range)
                     for dim, range_ in new_ranges.items()
                 )
-            elif common.is_neighbor_table(connectivity):
-                # unstructured shift
+            else:
+                assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
                 assert (
                     isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
                 ) or val in [
                     trace_shifts.Sentinel.ALL_NEIGHBORS,
                     trace_shifts.Sentinel.VALUE,
                 ]
-                old_dim = connectivity.domain.dims[0]
-                new_dim = connectivity.codomain
+
+                connectivity: common.NeighborTable | common.NeighborConnectivityType
+                if common.is_offset_provider(offset_provider):
+                    connectivity = common.get_offset(offset_provider, off.value)
+                    old_dim = connectivity.domain.dims[0]
+                    new_dim = connectivity.codomain
+                else:
+                    assert common.is_offset_provider_type(offset_provider)
+                    connectivity = common.get_offset_type(offset_provider, off.value)
+                    old_dim = connectivity.domain[0]
+                    new_dim = connectivity.codomain
+
                 assert new_dim not in new_ranges or old_dim == new_dim
                 if symbolic_domain_sizes is not None and new_dim.value in symbolic_domain_sizes:
                     new_range = SymbolicRange(
@@ -234,19 +229,19 @@ class SymbolicDomain:
                         im.ensure_expr(symbolic_domain_sizes[new_dim.value]),
                     )
                 else:
-                    assert common.is_offset_provider(offset_provider)
-                    assert not isinstance(val, itir.CartesianOffset)  # offset value, never a node
-                    assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
+                    assert common.is_neighbor_table(connectivity)
                     new_range = _unstructured_translate_range_statically(
-                        new_ranges[old_dim], off.value, val, offset_provider, self.as_expr()
+                        new_ranges[old_dim],
+                        off.value,
+                        val,  # type: ignore[arg-type] # mypy not smart enough
+                        connectivity,
+                        self.as_expr(),
                     )
 
                 new_ranges = dict(
                     (dim, range_) if dim != old_dim else (new_dim, new_range)
                     for dim, range_ in new_ranges.items()
                 )
-            else:
-                raise AssertionError()
 
             return SymbolicDomain(self.grid_type, new_ranges)
         elif len(shift) > 2:

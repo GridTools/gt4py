@@ -269,6 +269,34 @@ def test_unstructured_translate(shift_chain, expected_end_domain):
     assert end_domain == expected_end_domain
 
 
+@pytest.mark.parametrize("as_type", [False, True])
+def test_unstructured_translate_with_symbolic_domain_sizes(as_type):
+    # With `symbolic_domain_sizes` the translated range is taken from the provided size
+    # expression instead of the connectivity table. This makes `translate` work for a type-only
+    # `OffsetProviderType` (which has no table) as well as a runtime `OffsetProvider`.
+    offset_provider = {
+        "V2E": constructors.as_connectivity(
+            domain={Vertex: (0, 4), V2EDim: 1},
+            codomain=Edge,
+            data=np.asarray([0, 1, 2, 3], dtype=fbuiltins.IndexType).reshape((4, 1)),
+        )
+    }
+    if as_type:
+        offset_provider = common.offset_provider_to_type(offset_provider)
+
+    domain = domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 4)})
+    )
+    translated = domain.translate(
+        [itir.OffsetLiteral(value="V2E"), itir.OffsetLiteral(value=0)],
+        offset_provider,
+        symbolic_domain_sizes={"Edge": im.ref("num_edges")},
+    )
+
+    expected = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, im.ref("num_edges"))})
+    assert translated.as_expr() == expected
+
+
 def test_non_contiguous_domain_warning(monkeypatch):
     monkeypatch.setattr(domain_utils, "_NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS", set())
 
