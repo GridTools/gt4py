@@ -66,7 +66,7 @@ CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
 class CMakeFactory(
     compiler.BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
 ):
-    """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
+    """Create a CMakeProject from an ``ExtensionSource`` stage object with given CMake settings."""
 
     cmake_generator_name: str = "Ninja"
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
@@ -74,7 +74,7 @@ class CMakeFactory(
 
     def __call__(
         self,
-        source: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        source: stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> CMakeProject:
         if not source.binding_source:

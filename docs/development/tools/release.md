@@ -11,7 +11,7 @@ Currently, GT4Py releases are published in PyPI (and TestPyPI) and also as commi
 3. Update the default fallback version used by `version-in-git` when `git` version information is not available at build or run-time.
 
    ```bash
-   ./scripts-cli.py update package-version {M}.{m}.{p}  # e.g. 1.2.3
+   ./scripts/run update package-version {M}.{m}.{p}  # e.g. 1.2.3
    ```
 
 4. Commit the changes with the following message:

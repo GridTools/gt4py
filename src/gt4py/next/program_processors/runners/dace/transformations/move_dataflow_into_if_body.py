@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import collections
 import copy
 import functools
@@ -24,6 +26,7 @@ from dace.sdfg import (
     type_inference as dace_type_inference,
     utils as dace_sutils,
 )
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -717,8 +720,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         state: dace.SDFGState,
         if_block: dace_nodes.NestedSDFG,
-        raw_relocatable_dataflow: dict[str, set[dace_nodes.Node]],
-        non_relocatable_dataflow: dict[str, set[dace_nodes.Node]],
+        raw_relocatable_dataflow: dict[str, OrderedSet[dace_nodes.Node]],
+        non_relocatable_dataflow: dict[str, OrderedSet[dace_nodes.Node]],
         connector_usage_location: dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]],
         enclosing_map: dace_nodes.MapEntry,
     ) -> set[dace_nodes.Node]:

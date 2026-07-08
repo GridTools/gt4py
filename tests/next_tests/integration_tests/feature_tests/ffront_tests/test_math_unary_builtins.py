@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import math
+
 import numpy as np
 import pytest
 
@@ -19,6 +21,7 @@ from gt4py.next import (
     exp,
     float64,
     floor,
+    gamma,
     int32,
     isfinite,
     isinf,
@@ -208,6 +211,16 @@ def test_exp_log(cartesian_case):
 
     cases.verify_with_default_data(
         cartesian_case, exp_log_fieldop, ref=lambda inp1, inp2: np.log(inp1) - np.exp(inp2)
+    )
+
+
+def test_gamma(cartesian_case):
+    @gtx.field_operator
+    def gamma_fieldop(inp1: cases.IFloatField) -> cases.IFloatField:
+        return gamma(inp1)
+
+    cases.verify_with_default_data(
+        cartesian_case, gamma_fieldop, ref=lambda inp1: np.vectorize(math.gamma)(inp1)
     )
 
 

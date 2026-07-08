@@ -82,6 +82,18 @@ BUILD_CACHE_DIR: pathlib.Path = (
 )
 
 
+def _get_build_cache_version_id() -> str:
+    return __import__("gt4py").__version__
+
+
+#: Version ID for the build cache. It should only be overridden by gt4py
+#: developers or advanced users when making changes requiring forced
+#: compatibility with previously cached builds.
+BUILD_CACHE_VERSION_ID: str = (
+    os.environ.get("GT4PY_BUILD_CACHE_VERSION_ID") or _get_build_cache_version_id()
+)
+
+
 #: Whether generated code projects should be kept around between runs.
 #: - SESSION: generated code projects get destroyed when the interpreter shuts down
 #: - PERSISTENT: generated code projects are written to BUILD_CACHE_DIR and persist between runs
@@ -92,21 +104,18 @@ BUILD_CACHE_LIFETIME: BuildCacheLifetime = BuildCacheLifetime[
 
 #: Build type to be used when CMake is used to compile generated code.
 #: Might have no effect when CMake is not used as part of the toolchain.
-# FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
 CMAKE_BUILD_TYPE: CMakeBuildType = CMakeBuildType[
     os.environ.get("GT4PY_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper()
 ]
 
 
 #: Experimental, use at your own risk: assume horizontal dimension has stride 1
-# FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
 UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
     "GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", default=False
 )
 
 
 #: Add GPU trace markers (NVTX, ROC-TX) to the generated code, at compile time.
-# FIXME[#2447](egparedes): compile-time setting, should be included in the build cache key.
 ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", default=False)
 
 
@@ -139,9 +148,10 @@ if SKIP_DACE_WARNINGS:
     # NOTE: Ideally we would suppress the warnings using context managers directly in
     #   the backend. However, because this is not thread safe in Python versions before
     #   3.14, we have to do it here.
-    warnings.filterwarnings(action="ignore", module="^dace(\..+)?")
+    warnings.filterwarnings(action="ignore", module=r"^dace(\..+)?")
     warnings.filterwarnings(
-        action="ignore", module="^gt4py.next.program_processors.runners.dace.transformations(\..+)?"
+        action="ignore",
+        module=r"^gt4py.next.program_processors.runners.dace.transformations(\..+)?",
     )
 
 

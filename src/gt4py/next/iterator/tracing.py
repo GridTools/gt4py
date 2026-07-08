@@ -143,6 +143,17 @@ def make_node(o):
         return o
     if isinstance(o, common.Dimension):
         return AxisLiteral(value=o.value, kind=o.kind)
+    if isinstance(o, common.Infinity):
+        if o is common.Infinity.POSITIVE:
+            return itir.InfinityLiteral.POSITIVE
+        else:
+            assert o is common.Infinity.NEGATIVE
+            return itir.InfinityLiteral.NEGATIVE
+    if isinstance(o, common.CartesianConnectivity):
+        # TODO(havogt): `itir.CartesianOffset` cannot represent `offset != 0` (embedded honors
+        #  it, see `execute_shift`); decide whether to fold it into the shift value or forbid it.
+        assert o.offset == 0
+        return im.cartesian_offset(o.domain_dim, o.codomain)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)
