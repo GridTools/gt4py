@@ -53,7 +53,8 @@ Symmetrically, let `ihalf_field` be defined on `I − ½` (i.e. on `IHalf`). The
 `i = domain.start + idx`, which is *interpreted* as sitting at `i − ½`. In the
 example above, `IHalf(0)` therefore sits at `0 − ½ = −½`, i.e. it is the index of
 the edge just below the cell `I(0)`. The memory layout is identical to any normal
-field; the "half" is purely how the index is interpreted geometrically.
+field; the "half" is purely how the index is interpreted geometrically. This
+index arithmetic is encoded in `common.connectivity_for_cartesian_shift`.
 
 ## Encoding
 
