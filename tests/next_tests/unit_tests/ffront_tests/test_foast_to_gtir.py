@@ -21,6 +21,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import (
     astype,
     broadcast,
+    errors,
     float32,
     float64,
     int32,
@@ -108,6 +109,15 @@ def test_multivalue_identity():
     reference = im.make_tuple("inp1", "inp2")
 
     assert lowered.expr == reference
+
+
+def test_premap_cartesian_invalid_fractional_offset():
+    # only integer or half-integer offsets are valid for a Cartesian shift.
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return inp(TDim + 0.25)
+
+    with pytest.raises(errors.DSLError, match="Invalid offset"):
+        FieldOperatorParser.apply_to_function(foo)
 
 
 def test_premap_cartesian_syntax():

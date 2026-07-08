@@ -588,6 +588,12 @@ def dimension_promotion_cases() -> list[
             "There are more than one dimension with DimensionKind 'LOCAL'.",
         ),
         ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, V2E, KDim], None),
+        # a dimension and its staggered counterpart must not be promoted into the same field
+        (
+            [[IDim], [common.flip_staggered(IDim)]],
+            None,
+            "staggered counterpart must not appear together",
+        ),
     ]
     return [
         ([[el for el in arg] for arg in args], [el for el in result] if result else result, msg)

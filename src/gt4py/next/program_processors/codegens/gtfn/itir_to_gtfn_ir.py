@@ -151,36 +151,28 @@ def _collect_offset_definitions(
     grid_type: common.GridType,
     offset_provider_type: common.OffsetProviderType,
 ) -> dict[str, TagDefinition]:
-    used_offset_tags: set[str] = (
-        node.walk_values()
-        .if_isinstance(itir.OffsetLiteral)
-        .filter(lambda offset_literal: isinstance(offset_literal.value, str))
-        .getattr("value")
-    ).to_set()
-    # implicit offsets don't occur in the `offset_provider_type`, get them from the used offset tags
-    offset_provider_type = {
-        offset_name: common.get_offset_type(offset_provider_type, offset_name)
-        for offset_name in used_offset_tags
-    } | {**offset_provider_type}
     offset_definitions = {}
+    offset_provider_type = {**offset_provider_type}
 
-    # cartesian shifts (`field(Dim + n)`) are encoded as `CartesianOffset` nodes and don't
-    # occur in the `offset_provider_type`; define a tag for each of their dimensions
     cartesian_offsets: set[itir.CartesianOffset] = (
         node.walk_values().if_isinstance(itir.CartesianOffset)
     ).to_set()
     for cart_offset in cartesian_offsets:
-        for axis in (cart_offset.domain, cart_offset.codomain):
+        dims = [
+            common.Dimension(value=v.value, kind=v.kind)
+            for v in (cart_offset.domain, cart_offset.codomain)
+        ]
+        for dim in dims:
             if grid_type == common.GridType.CARTESIAN:
-                offset_definitions[axis.value] = TagDefinition(name=Sym(id=axis.value))
+                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
-                if axis.kind != common.DimensionKind.VERTICAL:
+                if dim.kind != common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
-                offset_definitions[axis.value] = TagDefinition(
-                    name=Sym(id=axis.value), alias=_vertical_dimension
+                offset_definitions[dim.value] = TagDefinition(
+                    name=Sym(id=dim.value), alias=_vertical_dimension
                 )
 
     for offset_name, connectivity_type in offset_provider_type.items():
@@ -203,6 +195,23 @@ def _collect_offset_definitions(
                 "Elements of the offset provider type need to be a 'NeighborConnectivityType'."
             )
     return offset_definitions
+
+
+def _add_staggered_aliases(
+    offset_definitions: dict[str, TagDefinition],
+) -> dict[str, TagDefinition]:
+    """Turn every staggered dimension tag into a alias of its base dimension."""
+    result: dict[str, TagDefinition] = {}
+    aliases: dict[str, TagDefinition] = {}
+    for name, tag_def in offset_definitions.items():
+        if tag_def.alias is None and common.is_staggered(common.Dimension(value=name)):
+            base_name = common.as_non_staggered(common.Dimension(value=name)).value
+            # ensure the base tag exists (as alias target and loop dimension) in this position
+            result.setdefault(base_name, TagDefinition(name=Sym(id=base_name)))
+            aliases[name] = TagDefinition(name=Sym(id=name), alias=SymRef(id=base_name))
+        else:
+            result[name] = tag_def
+    return {**result, **aliases}
 
 
 def _literal_as_integral_constant(node: itir.Literal) -> IntegralConstant:
@@ -387,12 +396,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return OffsetLiteral(value=node.value)
 
     def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> Literal:
-        # render as the (shared) dimension tag
-        assert node.domain == node.codomain, "relocation (staggering) is not supported"
         return self.visit(node.codomain, **kwargs)
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
-        return Literal(value=node.value, type="axis_literal")
+        assert isinstance(node.type, ts.DimensionType)
+        return Literal(value=node.type.dim.value, type="axis_literal")
 
     def _make_domain(self, node: itir.FunCall) -> tuple[TaggedValues, TaggedValues]:
         tags = []
@@ -689,6 +697,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             **_collect_dimensions_from_domain(node.body),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider_type),
         }
+        offset_definitions = _add_staggered_aliases(offset_definitions)
         return Program(
             id=SymbolName(node.id),
             params=self.visit(node.params),
