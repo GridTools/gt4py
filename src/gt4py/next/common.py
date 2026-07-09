@@ -1446,10 +1446,12 @@ _STAGGERED_PREFIX = "_Staggered"
 
 
 def is_staggered(dim: Dimension) -> bool:
+    """Return whether `dim` is a staggered dimension."""
     return dim.value.startswith(_STAGGERED_PREFIX)
 
 
 def flip_staggered(dim: Dimension) -> Dimension:
+    """Return the staggered counterpart of `dim`."""
     if is_staggered(dim):
         return Dimension(dim.value[len(_STAGGERED_PREFIX) :], dim.kind)
     else:
@@ -1457,17 +1459,31 @@ def flip_staggered(dim: Dimension) -> Dimension:
 
 
 def as_non_staggered(dim: Dimension) -> Dimension:
+    """Return the non-staggered base dimension of `dim` (`dim` itself if already non-staggered)."""
     if is_staggered(dim):
         return flip_staggered(dim)
     return dim
 
 
 def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> CartesianConnectivity:
-    if isinstance(offset, float):
-        integral_offset, half = divmod(offset, 1)
-        assert half == 0.5
+    """
+    Build the connectivity that shifts `dim` by `offset`.
+
+    An integer `offset` shifts within `dim` (the codomain stays `dim`). A half-integer `offset`
+    (fractional part `0.5`) shifts to the staggered counterpart of `dim` (the codomain becomes
+    `flip_staggered(dim)`).
+
+    The half-integer case encodes the convention that a staggered index sits half a cell *below*
+    its base index (see ADR 0024): `IHalf(0)` is the edge below `I(0)`. Because of this asymmetry,
+    shifting out of a non-staggered dimension needs a `+1` index correction that shifting out of a
+    staggered dimension does not, e.g. `I + 0.5` maps `I(i)` to `IHalf(i+1)` (position `i+½`) while
+    `IHalf + 0.5` maps `IHalf(i)` to `I(i)`.
+    """
+    integral_offset, staggered_offset = divmod(offset, 1)
+    if staggered_offset == 0.5:
         if not is_staggered(dim):
             integral_offset += 1
         return CartesianConnectivity(dim, int(integral_offset), codomain=flip_staggered(dim))
     else:
-        return CartesianConnectivity(dim, offset, codomain=dim)
+        assert staggered_offset == 0
+        return CartesianConnectivity(dim, int(integral_offset), codomain=dim)

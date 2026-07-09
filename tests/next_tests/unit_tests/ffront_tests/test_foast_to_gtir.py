@@ -112,7 +112,7 @@ def test_multivalue_identity():
 
 
 def test_premap_cartesian_invalid_fractional_offset():
-    # only integer or half-integer offsets are valid for a Cartesian shift.
+    # only integer or half-integer offsets are valid; expect a located DSLError.
     def foo(inp: gtx.Field[[TDim], float64]):
         return inp(TDim + 0.25)
 
@@ -120,18 +120,29 @@ def test_premap_cartesian_invalid_fractional_offset():
         FieldOperatorParser.apply_to_function(foo)
 
 
+def test_premap_cartesian_non_literal_offset():
+    def foo(inp: gtx.Field[[TDim], float64], i: int):
+        return inp(TDim + i)
+
+    with pytest.raises(errors.DSLError, match="literal right-hand side"):
+        FieldOperatorParser.apply_to_function(foo)
+
+
 def test_premap_cartesian_syntax():
+    # an integer offset shifts within the dimension; '1.0' is equivalent to '1'.
     def foo(inp: gtx.Field[[TDim], float64]):
         return inp(TDim + 1)
 
-    parsed = FieldOperatorParser.apply_to_function(foo)
-    lowered = FieldOperatorLowering.apply(parsed)
+    def foo_float(inp: gtx.Field[[TDim], float64]):
+        return inp(TDim + 1.0)
 
     reference = im.as_fieldop(
         im.lambda_("__it")(im.deref(im.shift(im.cartesian_offset(TDim, TDim), 1)("__it")))
     )("inp")
 
-    assert lowered.expr == reference
+    for f in (foo, foo_float):
+        lowered = FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(f))
+        assert lowered.expr == reference
 
 
 def test_as_offset():

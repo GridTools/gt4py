@@ -680,13 +680,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         ):
             # e.g. `IDim+1` or `IDim+0.5`
             if not isinstance(right, foast.Constant):
-                raise NotImplementedError(
-                    "Cartesian offsets are only supported with literal rhs, e.g. `IDim + 1`, but not `IDim + expr`."
+                raise errors.DSLError(
+                    right.location,
+                    "Cartesian offsets are only supported with a literal right-hand side, "
+                    "e.g. 'IDim + 1', but not 'IDim + expr'.",
                 )
             offset_index = right.value
             if node.op == dialect_ast_enums.BinaryOperator.SUB:
                 offset_index *= -1
-            if offset_index % 1 not in (0, 0.5):
+            if not isinstance(offset_index, (int, float)) or offset_index % 1 not in (0, 0.5):
                 raise errors.DSLError(
                     right.location,
                     f"Invalid offset '{right.value}' for a Cartesian shift of dimension "
