@@ -462,11 +462,26 @@ class DaCeTranslator(
             # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
             #   We compute the hash in order to refresh `cfg_list` on the SDFG,
             #   which makes the JSON serialization stable.
-            source_code=sdfg.to_json(hash=True),
+            # `guid` is a per-element identity token: it does not affect code generation, and
+            #   `SDFG.from_json()` assigns fresh ids anyway. Keeping it would make the compile
+            #   cache key depend on element creation order, so two structurally identical
+            #   lowerings of the same program would not share a cached build.
+            source_code=_drop_element_ids(sdfg.to_json(hash=True)),
             library_deps=tuple(),
             code_spec=code_specs.SDFGCodeSpec(),
         )
         return module
+
+
+def _drop_element_ids(json_obj: Any) -> Any:
+    """Recursively remove `guid` keys from a serialized SDFG."""
+    if isinstance(json_obj, dict):
+        return {k: _drop_element_ids(v) for k, v in json_obj.items() if k != "guid"}
+    if isinstance(json_obj, list):
+        return [_drop_element_ids(v) for v in json_obj]
+    if isinstance(json_obj, tuple):
+        return tuple(_drop_element_ids(v) for v in json_obj)
+    return json_obj
 
 
 class DaCeTranslationStepFactory(factory.Factory):
