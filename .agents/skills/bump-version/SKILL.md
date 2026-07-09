@@ -19,7 +19,7 @@ Confirm before starting:
 - **Version** to bump to, e.g. `1.1.12`. The project uses a CalVer-style
   sequence (`1.1.N`); the natural next value is `previous + 1`. Read the
   latest release from PyPI, not the local tree, to keep the bump idempotent.
-  If a `releasing_v*` branch or an open "Releasing v*" PR already exists,
+  If a `releasing_v*` branch or an open "Releasing v\*" PR already exists,
   use the version from that in-flight release instead of PyPI. Confirm with
   the user if the bump is not a simple `+1`.
 - **Date** in ISO form `YYYY-MM-DD`. Default to today.
