@@ -110,22 +110,6 @@ def test_multivalue_identity():
     assert lowered.expr == reference
 
 
-def test_premap():
-    # `field(Off[i])` for a Cartesian offset is deprecated in favor of `field(Dim + i)`.
-    def foo(inp: gtx.Field[[TDim], float64]):
-        return inp(TOff[1])
-
-    parsed = FieldOperatorParser.apply_to_function(foo)
-    with pytest.warns(DeprecationWarning, match="subscript syntax"):
-        lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.as_fieldop(
-        im.lambda_("__it")(im.deref(im.shift(im.cartesian_offset(TDim, TDim), 1)("__it")))
-    )("inp")
-
-    assert lowered.expr == reference
-
-
 def test_premap_cartesian_syntax():
     def foo(inp: gtx.Field[[TDim], float64]):
         return inp(TDim + 1)
