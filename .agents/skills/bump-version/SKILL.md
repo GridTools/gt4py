@@ -19,7 +19,9 @@ Confirm before starting:
 - **Version** to bump to, e.g. `1.1.12`. The project uses a CalVer-style
   sequence (`1.1.N`); the natural next value is `previous + 1`. Read the
   latest release from PyPI, not the local tree, to keep the bump idempotent.
-  Confirm with the user if the bump is not a simple `+1`.
+  If a `releasing_v*` branch or an open "Releasing v*" PR already exists,
+  use the version from that in-flight release instead of PyPI. Confirm with
+  the user if the bump is not a simple `+1`.
 - **Date** in ISO form `YYYY-MM-DD`. Default to today.
 - **Changelog entries** grouped under `General`, `Cartesian`, and `Next`.
   Do not invent entries. Each bullet should read like user-facing release
@@ -41,6 +43,7 @@ File-location tie-breakers:
 - `src/gt4py/cartesian/` → `### Cartesian`
 - `src/gt4py/next/` → `### Next`
 - `src/gt4py/eve/` → `### General`
+- `src/gt4py/storage/` → `### General`
 
 ### Section contents
 
@@ -132,7 +135,7 @@ Confirm all three occurrences use the same `X.Y.Z`:
 If `releasing_vX.Y.Z` already exists, commit on that branch and push; do not
 open a duplicate PR.
 
-Before pushing, run:
+Stage the three changed files, then run:
 
 ```
 uv run pre-commit run
