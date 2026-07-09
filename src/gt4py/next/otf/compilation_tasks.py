@@ -51,10 +51,9 @@ class _ConnectivityFileRef:
     """Lazy stand-in for a connectivity table in the compilation part of a load task.
 
     Construction is pure. On first pickling the table is dumped (memoized) to an
-    ``.npy`` file in the session cache dir, and unpickling yields the memory-mapped
-    `Connectivity`, so the table crosses the process boundary through the page
-    cache instead of the pickle stream. A task that is never shipped to a worker
-    never dumps anything.
+    ``.npy`` file, and unpickling yields the memory-mapped `Connectivity`, so the
+    table crosses the process boundary through the page cache instead of the
+    pickle stream. A task that is never shipped to a worker never dumps anything.
     """
 
     connectivity: common.Connectivity
@@ -94,15 +93,15 @@ def _dump_connectivity(value: common.Connectivity) -> str:
         return entry[1]
     # One writer per path and files are write-once: `mkstemp` uniqueness is what
     # makes concurrent dumps and the workers' mmap readers safe. A racing double
-    # dump costs a duplicate file (reclaimed with the session dir), nothing else.
+    # dump costs a duplicate file, nothing else.
     fd, path = tempfile.mkstemp(suffix=".npy", prefix="connectivity_", dir=_get_dump_dir())
     os.close(fd)
     np.save(path, value.asnumpy())
 
     def _prune(ref: weakref.ref, key: int = id(value)) -> None:
         # Only the registry entry: the file may still be referenced by
-        # in-flight tasks and is reclaimed with the session cache dir. The
-        # guard protects a reused id already re-registered by a new owner.
+        # in-flight tasks. The guard protects a reused id already
+        # re-registered by a new owner.
         if (current := _connectivity_files.get(key)) is not None and current[0] is ref:
             del _connectivity_files[key]
 
