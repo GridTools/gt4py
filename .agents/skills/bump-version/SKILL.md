@@ -23,9 +23,8 @@ same new version number `X.Y.Z`:
 Ask the user (or confirm from context) before starting:
 
 - **Version** to bump to, e.g. `1.1.12`. The project uses a CalVer-style
-  sequence (`1.1.N`); the previous versions were `1.1.7`, `1.1.10`,
-  `1.1.11`, so the natural next value is `previous + 1`. Confirm the
-  bump with the user if it is anything other than a simple `+1`.
+  sequence (`1.1.N`); the natural next value is `previous + 1`. Confirm
+  the bump with the user if it is anything other than a simple `+1`.
   The **current version must always be read from the latest release on
   PyPI**, not from the local working tree or branch. Before determining
   the target version, query PyPI for the latest `gt4py` release. This
@@ -36,7 +35,9 @@ Ask the user (or confirm from context) before starting:
   wants a different date.
 - **Changelog entries** for the new version. Collect these from the
   user or from the commit history since the last bump. Group them under
-  the section headings below.
+  the section headings below. Each bullet should read like a release note for
+  GT4Py users: describe the impact or benefit and avoid implementation details,
+  internal class names, or backend-specific mechanics.
 
 If you cannot obtain the version or the changelog content, stop and ask
 — do not invent changelog entries.
@@ -155,8 +156,7 @@ Notable changes to this project will be documented in this file. The format is b
 ```
 
 Insert a new changelog block **immediately after that header line and
-its blank line**, before the previous (`## [1.1.11] - ...`) block. The
-block format is:
+its blank line**, before the previous release block. The block format is:
 
 ```
 ## [X.Y.Z] - YYYY-MM-DD
@@ -249,8 +249,7 @@ follow the Conventional Commits convention used elsewhere. So:
 - **Commit message / PR title**: `Releasing vX.Y.Z` — note the `v`
   prefix in the title, even though the version string inside the files
   has **no** `v` prefix.
-- **PR body**: a short body like `Bump version to X.Y.Z and update
-  CHANGELOG.` is fine but not required.
+- **PR body**: a short body like `Bump version to X.Y.Z and update CHANGELOG.` is fine but not required.
 - **Target**: `main` (per AGENTS.md, all PRs target `main`).
 
 If a PR or local branch already exists for `releasing_vX.Y.Z`, do not
