@@ -140,7 +140,7 @@ class CompiledDaceProgram:
 
 @dataclasses.dataclass(frozen=True)
 class DaCeCompilationArtifact:
-    """Result of a DaCe compilation: build folder + library path + SDFG bindings + the SDFG itself.
+    """Result of a DaCe compilation: library path + SDFG bindings + the SDFG itself.
 
     The SDFG is carried inline as JSON because dace's load path
     (``get_program_handle``) needs an SDFG instance to wrap into the

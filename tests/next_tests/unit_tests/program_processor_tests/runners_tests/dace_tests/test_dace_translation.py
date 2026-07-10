@@ -477,7 +477,7 @@ def test_translation_source_code_invariant_under_guid_change():
     before storing the SDFG JSON in `ProgramSource.source_code`. This test
     mocks `build_sdfg_from_gtir` so that the second lowering returns the same
     SDFG with all `guid` values incremented by one, and verifies that the
-    resulting `source_code` is byte-for-byte identical.
+    resulting `source_code` strings are identical.
     """
     compilable_program = _make_simple_field_operator_compilable_program()
 
