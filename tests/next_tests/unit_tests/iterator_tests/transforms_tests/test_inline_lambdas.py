@@ -10,7 +10,7 @@ import pytest
 
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
+from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
 
 
 test_data = [
@@ -98,6 +98,23 @@ def test_inline_lambda_args():
     )
     inlined = InlineLambdas.apply(testee, opcount_preserving=True, force_inline_lambda_args=True)
     assert inlined == expected
+
+
+def test_deterministic_symbol_renaming():
+    # `a` and `a_` both clash with the symbols referenced by the argument, and both are
+    # parameters of the inner lambda, so their new names survive the inlining. Renaming
+    # goes through `unique_symbol`, which appends `_` until the name is free, so the name
+    # each symbol ends up with depends on the order the clashes are processed in.
+    # (λ(p) → (λ(a, a_) → a + a_ + p)(p, p))(a + a_)
+    testee = im.call(
+        im.lambda_("p")(im.call(im.lambda_("a", "a_")(im.plus(im.plus("a", "a_"), "p")))("p", "p"))
+    )(im.plus("a", "a_"))
+    # (λ(a__, a___) → a__ + a___ + (a + a_))(a + a_, a + a_)
+    expected = im.call(
+        im.lambda_("a__", "a___")(im.plus(im.plus("a__", "a___"), im.plus("a", "a_")))
+    )(im.plus("a", "a_"), im.plus("a", "a_"))
+
+    assert inline_lambda(testee) == expected
 
 
 def test_type_preservation():
