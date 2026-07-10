@@ -14,7 +14,7 @@ import os
 import pathlib
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any
+from typing import Any, Final
 
 import dace
 import dace.codegen.compiler as dace_compiler
@@ -28,6 +28,9 @@ from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
 )
+
+
+_COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
 def _add_tx_markers(sdfg: dace.SDFG) -> None:
@@ -220,7 +223,23 @@ class DaCeCompiler(
 
             sdfg.build_folder = sdfg_build_folder
             with locking.lock(sdfg_build_folder):
+                # With `compiler.use_cache=True` dace reuses a cached library on mere
+                # *existence*, without validating it; an interrupted build can leave a
+                # truncated, unloadable library behind. The marker is written only
+                # after a completed compile: no marker -> drop the stale library so
+                # dace rebuilds it instead of handing it out.
+                marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
+                if not marker.exists():
+                    for stale in (
+                        dace_compiler.get_binary_name(
+                            object_folder=sdfg_build_folder, sdfg_name=sdfg.name
+                        ),
+                        *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),
+                    ):
+                        stale.unlink(missing_ok=True)
+                marker.unlink(missing_ok=True)
                 sdfg.compile(validate=False, return_program_handle=False)
+                marker.touch()
             # ``build_folder_mode`` is set by ``dace_context``; resolve the library
             # path here so ``get_binary_name`` sees the same mode dace built under.
             library_path = dace_compiler.get_binary_name(

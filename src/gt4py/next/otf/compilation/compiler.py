@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Protocol, TypeVar
+from typing import Protocol, TypeGuard, TypeVar
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config, fingerprinting
@@ -24,6 +24,17 @@ def is_compiled(data: build_data.BuildData) -> bool:
 
 def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
     return (src_dir / data.module).exists()
+
+
+def is_usable(
+    data: build_data.BuildData | None, src_dir: pathlib.Path
+) -> TypeGuard[build_data.BuildData]:
+    """Check that a cached build is marked compiled *and* its module artifact is present.
+
+    An interrupted run (or external cleanup) can leave a ``COMPILED`` marker
+    without the artifact; such a build folder must be rebuilt, not reused.
+    """
+    return data is not None and is_compiled(data) and module_exists(data, src_dir)
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
@@ -103,14 +114,12 @@ class CPPCompiler(
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
         with locking.lock(src_dir):
-            data = build_data.read_data(src_dir)
-
-            if not data or not is_compiled(data) or self.force_recompile:
+            if self.force_recompile or not is_usable(build_data.read_data(src_dir), src_dir):
                 self.builder_factory(inp, self.cache_lifetime).build()
 
             new_data = build_data.read_data(src_dir)
 
-            if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
+            if not is_usable(new_data, src_dir):
                 raise CompilationError(
                     f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
                 )
