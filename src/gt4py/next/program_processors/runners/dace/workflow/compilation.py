@@ -148,7 +148,6 @@ class DaCeCompilationArtifact:
     ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
     """
 
-    build_folder: pathlib.Path
     library_path: pathlib.Path
     sdfg_json: str
     binding_source_code: str
@@ -247,7 +246,6 @@ class DaCeCompiler(
 
         assert inp.binding_source is not None
         return DaCeCompilationArtifact(
-            build_folder=sdfg_build_folder,
             library_path=library_path,
             sdfg_json=json.dumps(inp.program_source.source_code),
             binding_source_code=inp.binding_source.source_code,
