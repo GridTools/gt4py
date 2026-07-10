@@ -111,7 +111,10 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDe
             for name, descr in static_arg_descriptors.items()
             if not any(el is None for el in utils.flatten_nested_tuple(descr))  # type: ignore[arg-type]
         }
-        body = remap_symbols.RemapSymbolRefs().visit(itir_program.body, symbol_map=static_args)
+        body = [
+            remap_symbols.RemapSymbolRefs.apply(stmt, symbol_map=static_args)
+            for stmt in itir_program.body
+        ]  # type: ignore[arg-type]
         itir_program = itir.Program(
             id=itir_program.id,
             function_definitions=itir_program.function_definitions,
