@@ -5,51 +5,21 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-import functools
-import math
-from functools import reduce
-from typing import TypeAlias
-
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import (
-    astype,
-    broadcast,
-    common,
-    errors,
-    float32,
-    float64,
-    int32,
-    int64,
-    minimum,
-    neighbor_sum,
-    utils as gt_utils,
-)
-from gt4py.next.ffront.experimental import as_offset
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
-    C2E,
-    E2V,
-    V2E,
-    E2VDim,
-    Edge,
     IDim,
     IHalfDim,
     JDim,
     KDim,
-    V2EDim,
-    Vertex,
+    KHalfDim,
     cartesian_case,
-    unstructured_case,
-    unstructured_case_3d,
 )
-from next_tests.integration_tests.cases_utils import (
-    exec_alloc_descriptor,
-    mesh_descriptor,
-)
+from next_tests.integration_tests.cases_utils import exec_alloc_descriptor
 
 
 @pytest.mark.uses_cartesian_shift
@@ -139,3 +109,34 @@ def test_cartesian_half_shift_half2center(cartesian_case):
     out = cases.allocate(cartesian_case, testee, cases.RETURN, sizes={IDim: size})()
 
     cases.verify(cartesian_case, testee, a, out=out, ref=2 * a[:], offset_provider={})
+
+
+@pytest.mark.uses_cartesian_shift
+def test_cartesian_half_shift_vertical(cartesian_case):
+    # vertical (K) staggering: identical mechanism, different dimension kind.
+    @gtx.field_operator
+    def testee(a: cases.KField) -> gtx.Field[[KHalfDim], np.int32]:
+        return a(KHalfDim + 0.5)
+
+    size = cartesian_case.default_sizes[KDim]
+    a = cases.allocate(cartesian_case, testee, "a", sizes={KDim: size})()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN, sizes={KHalfDim: size})()
+
+    cases.verify(cartesian_case, testee, a, out=out, ref=a, offset_provider={})
+
+
+@pytest.mark.uses_cartesian_shift
+def test_cartesian_half_shift_multi_dim(cartesian_case):
+    # staggering one axis of a multi-dimensional field leaves the other axis untouched.
+    @gtx.field_operator
+    def testee(a: cases.IJField) -> gtx.Field[[IHalfDim, JDim], np.int32]:
+        return a(IHalfDim + 0.5)
+
+    isize = cartesian_case.default_sizes[IDim]
+    jsize = cartesian_case.default_sizes[JDim]
+    a = cases.allocate(cartesian_case, testee, "a", sizes={IDim: isize, JDim: jsize})()
+    out = cases.allocate(
+        cartesian_case, testee, cases.RETURN, sizes={IHalfDim: isize, JDim: jsize}
+    )()
+
+    cases.verify(cartesian_case, testee, a, out=out, ref=a, offset_provider={})

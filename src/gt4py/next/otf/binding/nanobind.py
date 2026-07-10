@@ -209,7 +209,7 @@ def make_argument(
             source_buffer=name,
             dimensions=[
                 DimensionSpec(
-                    name=common.as_non_staggered(dim).value,
+                    name=dim.value,
                     static_stride=1
                     if (
                         unstructured_horizontal_has_unit_stride

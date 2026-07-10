@@ -159,7 +159,7 @@ def _collect_offset_definitions(
     ).to_set()
     for cart_offset in cartesian_offsets:
         dims = [
-            common.Dimension(value=v.value, kind=v.kind)
+            ir_utils_misc.dim_from_axis_literal(v)
             for v in (cart_offset.domain, cart_offset.codomain)
         ]
         for dim in dims:

@@ -17,7 +17,7 @@ import numpy as np
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im, misc
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 
@@ -187,13 +187,12 @@ class SymbolicDomain:
             off, val = shift
 
             if isinstance(off, itir.CartesianOffset):
-                # cartesian shift: extract the (co)domain directly from the `CartesianOffset`
                 if val is trace_shifts.Sentinel.VALUE:
                     raise NotImplementedError("Dynamic cartesian offsets not supported.")
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
 
-                old_dim = common.Dimension(value=off.domain.value, kind=off.domain.kind)
-                new_dim = common.Dimension(value=off.codomain.value, kind=off.codomain.kind)
+                old_dim = misc.dim_from_axis_literal(off.domain)
+                new_dim = misc.dim_from_axis_literal(off.codomain)
 
                 assert new_dim not in new_ranges or old_dim == new_dim
 

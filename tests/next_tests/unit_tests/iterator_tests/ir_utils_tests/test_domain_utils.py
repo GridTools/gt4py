@@ -15,6 +15,7 @@ from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 from gt4py.next import common, constructors
 
 I = common.Dimension("I")
+IHalf = common.flip_staggered(I)
 J = common.Dimension("J")
 K = common.Dimension("J", kind=common.DimensionKind.VERTICAL)
 Vertex = common.Dimension("Vertex")
@@ -295,6 +296,19 @@ def test_unstructured_translate_with_symbolic_domain_sizes(as_type):
 
     expected = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, im.ref("num_edges"))})
     assert translated.as_expr() == expected
+
+
+def test_translate_staggered_cartesian_offset():
+    shift = (im.cartesian_offset(I, IHalf), im.ensure_offset(1))
+
+    domain = domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.CARTESIAN, {I: (0, 10)})
+    )
+    translated = domain.translate(shift, {})
+
+    assert translated == domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.CARTESIAN, {IHalf: (im.plus(0, 1), im.plus(10, 1))})
+    )
 
 
 def test_non_contiguous_domain_warning(monkeypatch):

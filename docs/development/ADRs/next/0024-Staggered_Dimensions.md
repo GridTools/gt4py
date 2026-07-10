@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Till Ehrengruber (@tehrengruber)
 - **Created**: 2026-07-08
-- **Updated**: 2026-07-08
+- **Updated**: 2026-07-09
 
 A **staggered dimension** is a dimension sitting at the **half-integer**
 positions of a base dimension. For example, in a cell-centered 2D Cartesian grid
@@ -69,6 +69,33 @@ in more than one form: as a `common.Dimension` instance, but also as an
 "staggered" flag to `Dimension` would have required threading it through every one
 of these representations and every place that constructs, compares, or lowers a
 dimension — a large, invasive change touching the frontend, the IR, and all
-backends. Carrying the marker in the name instead means it round-trips through all
-representations for free. The leading underscore marks the prefix as internal: it
-is an implementation detail, not part of the user-facing API.
+backends. Carrying the marker in the name instead means the frontend and IR pass
+it through unchanged, without any of those formats having to learn about
+staggering. The leading underscore marks the prefix as internal — user code goes
+through the `is_staggered` / `flip_staggered` / `as_non_staggered` helpers
+(exported from `gt4py.next`) rather than manipulating the name directly.
+
+## Dimension Constraints
+
+**A dimension and its staggered counterpart must not appear together** in the
+same field or domain. This follows directly from the geometric meaning of
+staggered dimension and is enforced by `check_dims` (`common.py`), which
+raises otherwise. Other functions may rely on this, e.g `order_dims` just orders 
+by the `as_non_staggered` name.
+
+## gtfn backend
+
+In gtfn a staggered dimension is emitted as a C++ `using` alias of its base
+dimension's tag (`_add_staggered_aliases` in `itir_to_gtfn_ir.py`): e.g.
+`_StaggeredIDim_t` becomes an alias of `IDim_t`, and `visit_AxisLiteral`
+correspondingly emits the base dimension name.
+
+The reason is that gtfn lowers a shift to an integer offset along a SID axis, and
+a half-integer shift produces exactly such an offset (see
+`connectivity_for_cartesian_shift`). But a staggered shift also *relocates* the
+field onto the staggered dimension, a different axis identity. If the staggered
+dimension had its own tag, reproducing that would require not just shifting the
+SID but also *renaming* its axis from the base tag to the staggered tag — which
+the gtfn shift primitive cannot do. Aliasing the two tags makes the base and its
+staggered counterpart a single axis, so the relocation collapses into the plain
+offset shift and no axis has to be renamed.

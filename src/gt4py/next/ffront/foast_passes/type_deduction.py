@@ -693,9 +693,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     right.location,
                     f"Invalid offset '{right.value}' for a Cartesian shift of dimension "
                     f"'{left.type.dim.value}'.",
-                    label="expected an integer offset (to shift within the dimension) or a "
-                    "half-integer offset such as '0.5' or '-1.5' (to shift to the staggered "
-                    "dimension)",
+                    hints=[
+                        "Use an integer offset to shift within the dimension, or a half-integer "
+                        "offset such as '0.5' or '-1.5' to shift to the staggered dimension."
+                    ],
                 )
             conn = common.connectivity_for_cartesian_shift(left.type.dim, offset_index)
             return ts.OffsetType(source=conn.codomain, target=(conn.domain_dim,))
