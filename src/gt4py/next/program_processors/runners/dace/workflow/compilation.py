@@ -206,6 +206,8 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+
             # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
             # user changes the backend configuration (PR #2650).
             sdfg_build_folder = gtx_cache.get_cache_folder(
@@ -214,14 +216,18 @@ class DaCeCompiler(
                 build_context_id=fingerprinting.strict_fingerprinter(self.dace_config_nondefaults),
             )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
-
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            sdfg.build_folder = sdfg_build_folder
 
             # Add TX markers to the generated GPU code for trace visualization tools.
             if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
                 _add_tx_markers(sdfg)
 
-            sdfg.build_folder = sdfg_build_folder
+            # ``build_folder_mode`` is set by ``dace_context``; resolve the library
+            # path here so ``get_binary_name`` sees the same mode dace built under.
+            library_path = dace_compiler.get_binary_name(
+                object_folder=sdfg_build_folder, sdfg_name=sdfg.name
+            )
+
             with locking.lock(sdfg_build_folder):
                 # With `compiler.use_cache=True` dace reuses a cached library on mere
                 # *existence*, without validating it; an interrupted build can leave a
@@ -231,20 +237,13 @@ class DaCeCompiler(
                 marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
                 if not marker.exists():
                     for stale in (
-                        dace_compiler.get_binary_name(
-                            object_folder=sdfg_build_folder, sdfg_name=sdfg.name
-                        ),
+                        library_path,
                         *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),
                     ):
                         stale.unlink(missing_ok=True)
                 marker.unlink(missing_ok=True)
                 sdfg.compile(validate=False, return_program_handle=False)
                 marker.touch()
-            # ``build_folder_mode`` is set by ``dace_context``; resolve the library
-            # path here so ``get_binary_name`` sees the same mode dace built under.
-            library_path = dace_compiler.get_binary_name(
-                object_folder=sdfg_build_folder, sdfg_name=sdfg.name
-            )
 
         assert inp.binding_source is not None
         return DaCeCompilationArtifact(
