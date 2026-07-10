@@ -16,7 +16,19 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
@@ -526,6 +538,14 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     terminate with a join state; the join state will represent the head state for next statement,
     from where to continue building the SDFG.
     """
+
+    _BUILTIN_HANDLERS: ClassVar[dict[str, str]] = {
+        "concat_where": "_visit_concat_where",
+        "if_": "_visit_if",
+        "index": "_visit_index",
+        "make_tuple": "_visit_make_tuple",
+        "tuple_get": "_visit_tuple_get",
+    }
 
     offset_provider_type: gtx_common.OffsetProviderType
     column_axis: Optional[gtx_common.Dimension]
@@ -1151,60 +1171,104 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         else:
             return target_state
 
+    def _visit_as_fieldop(
+        self, node: gtir.FunCall, ctx: SubgraphContext
+    ) -> gtir_to_sdfg_types.FieldopResult:
+        return gtir_to_sdfg_primitives.translate_as_fieldop(node, ctx, self)
+
+    def _visit_concat_where(
+        self, node: gtir.FunCall, ctx: SubgraphContext
+    ) -> gtir_to_sdfg_types.FieldopResult:
+        return gtir_to_sdfg_concat_where.translate_concat_where(node, ctx, self)
+
+    def _visit_if(
+        self, node: gtir.FunCall, ctx: SubgraphContext
+    ) -> gtir_to_sdfg_types.FieldopResult:
+        return gtir_to_sdfg_primitives.translate_if(node, ctx, self)
+
+    def _visit_index(
+        self, node: gtir.FunCall, ctx: SubgraphContext
+    ) -> gtir_to_sdfg_types.FieldopResult:
+        return gtir_to_sdfg_primitives.translate_index(node, ctx, self)
+
+    def _visit_make_tuple(
+        self, node: gtir.FunCall, ctx: SubgraphContext
+    ) -> gtir_to_sdfg_types.FieldopResult:
+        return gtir_to_sdfg_primitives.translate_make_tuple(node, ctx, self)
+
+    def _visit_tuple_get(
+        self, node: gtir.FunCall, ctx: SubgraphContext
+    ) -> gtir_to_sdfg_types.FieldopResult:
+        return gtir_to_sdfg_primitives.translate_tuple_get(node, ctx, self)
+
+    def _visit_scalar_expr(
+        self, node: gtir.FunCall, ctx: SubgraphContext
+    ) -> gtir_to_sdfg_types.FieldopResult:
+        return gtir_to_sdfg_primitives.translate_scalar_expr(node, ctx, self)
+
+    def _visit_let(
+        self,
+        node: gtir.FunCall,
+        ctx: SubgraphContext,
+    ) -> gtir_to_sdfg_types.FieldopResult:
+        """Translates a let-expression (a ``FunCall`` with a ``Lambda`` callee).
+
+        Scalar arguments whose dependencies are all DaCe symbols are passed to
+        the nested SDFG by symbol mapping; all other arguments are lowered to
+        dataflow that produces a data node.
+        """
+        assert isinstance(node.fun, gtir.Lambda)
+        # Special handling of scalar arguments of a let-lambda that can be lowered
+        # as symbolic expressions: when all the GTIR-symbols the scalar expression
+        # depends on are dace symbols, the argument can be passed to the nested
+        # SDFG by means of symbol mapping.
+        symbolic_args = {}
+        for p, lambda_arg in zip(node.fun.params, node.args, strict=True):
+            if not isinstance(lambda_arg.type, ts.ScalarType):
+                continue
+            # Convert the scalar argument to a dace symbolic expression if all
+            # of its dependencies are symbols to.
+            try:
+                symbolic_expr = gtir_to_sdfg_utils.get_symbolic(lambda_arg)
+            except TypeError:
+                # sympy parsing failed, it can happen with 'cast_' expressions
+                if not any(
+                    eve.walk_values(lambda_arg).map(lambda node: cpm.is_call_to(node, "cast_"))
+                ):
+                    raise
+                continue
+            if all(str(s) in ctx.sdfg.symbols for s in symbolic_expr.free_symbols):
+                symbolic_args[str(p.id)] = symbolic_expr
+        # All other lambda arguments are lowered to some dataflow that produces a data node.
+        args = {
+            param: (
+                gtir_to_sdfg_types.SymbolicData(param.type, symbolic_args[gt_symbol_name])  # type: ignore[arg-type]
+                if (gt_symbol_name := str(param.id)) in symbolic_args
+                else self.visit(arg, ctx=ctx)
+            )
+            for param, arg in zip(node.fun.params, node.args, strict=True)
+        }
+        return self.visit(node.fun, ctx=ctx, args=args)
+
     def visit_FunCall(
         self,
         node: gtir.FunCall,
         ctx: SubgraphContext,
     ) -> gtir_to_sdfg_types.FieldopResult:
-        # use specialized dataflow builder classes for each builtin function
-        if cpm.is_call_to(node, "concat_where"):
-            return gtir_to_sdfg_concat_where.translate_concat_where(node, ctx, self)
-        elif cpm.is_call_to(node, "if_"):
-            return gtir_to_sdfg_primitives.translate_if(node, ctx, self)
-        elif cpm.is_call_to(node, "index"):
-            return gtir_to_sdfg_primitives.translate_index(node, ctx, self)
-        elif cpm.is_call_to(node, "make_tuple"):
-            return gtir_to_sdfg_primitives.translate_make_tuple(node, ctx, self)
-        elif cpm.is_call_to(node, "tuple_get"):
-            return gtir_to_sdfg_primitives.translate_tuple_get(node, ctx, self)
-        elif cpm.is_applied_as_fieldop(node):
-            return gtir_to_sdfg_primitives.translate_as_fieldop(node, ctx, self)
-        elif isinstance(node.fun, gtir.Lambda):
-            # Special handling of scalar arguments of a let-lambda that can be lowered
-            # as symbolic expressions: when all the GTIR-symbols the scalar expression
-            # depends on are dace symbols, the argument can be passed to the nested
-            # SDFG by means of symbol mapping.
-            symbolic_args = {}
-            for p, lambda_arg in zip(node.fun.params, node.args, strict=True):
-                if not isinstance(lambda_arg.type, ts.ScalarType):
-                    continue
-                # Convert the scalar argument to a dace symbolic expression if all
-                # of its dependencies are symbols to.
-                try:
-                    symbolic_expr = gtir_to_sdfg_utils.get_symbolic(lambda_arg)
-                except TypeError:
-                    # sympy parsing failed, it can happen with 'cast_' expressions
-                    if not any(
-                        eve.walk_values(lambda_arg).map(lambda node: cpm.is_call_to(node, "cast_"))
-                    ):
-                        raise
-                    continue
-                if all(str(s) in ctx.sdfg.symbols for s in symbolic_expr.free_symbols):
-                    symbolic_args[str(p.id)] = symbolic_expr
-            # All other lambda arguments are lowered to some dataflow that produces a data node.
-            args = {
-                param: (
-                    gtir_to_sdfg_types.SymbolicData(param.type, symbolic_args[gt_symbol_name])  # type: ignore[arg-type]
-                    if (gt_symbol_name := str(param.id)) in symbolic_args
-                    else self.visit(arg, ctx=ctx)
-                )
-                for param, arg in zip(node.fun.params, node.args, strict=True)
-            }
-            return self.visit(node.fun, ctx=ctx, args=args)
-        elif isinstance(node.type, ts.ScalarType):
-            return gtir_to_sdfg_primitives.translate_scalar_expr(node, ctx, self)
-        else:
-            raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
+        # Pattern-matched builtins (structural, not name-based)
+        if isinstance(node.fun, gtir.Lambda):
+            return self._visit_let(node, ctx)
+        if cpm.is_applied_as_fieldop(node):
+            return self._visit_as_fieldop(node, ctx)
+        # Name-matched builtins
+        if isinstance(node.fun, gtir.SymRef):
+            name = str(node.fun.id)
+            if handler_name := self._BUILTIN_HANDLERS.get(name):
+                return getattr(self, handler_name)(node, ctx)
+        # Fallback: scalar-valued expressions (e.g. math builtins like plus, cast_)
+        if isinstance(node.type, ts.ScalarType):
+            return self._visit_scalar_expr(node, ctx)
+        raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
     def visit_Lambda(
         self,
@@ -1347,7 +1411,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return gtir_to_sdfg_primitives.translate_symbol_ref(node, ctx, self)
 
 
-def build_sdfg_from_gtir(
+def lower_program_to_sdfg(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
     column_axis: Optional[gtx_common.Dimension] = None,

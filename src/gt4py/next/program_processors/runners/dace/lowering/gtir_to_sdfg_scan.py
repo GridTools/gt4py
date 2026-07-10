@@ -39,9 +39,9 @@ from gt4py.next.iterator.ir_utils import (
 )
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.program_processors.runners.dace.lowering import (
-    gtir_dataflow,
     gtir_domain,
-    gtir_to_sdfg,
+    gtir_to_sdfg_fieldview,
+    gtir_to_sdfg_iterator,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
 )
@@ -50,10 +50,10 @@ from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 def _parse_scan_fieldop_arg(
     node: gtir.Expr,
-    ctx: gtir_to_sdfg.SubgraphContext,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    ctx: gtir_to_sdfg_fieldview.SubgraphContext,
+    sdfg_builder: gtir_to_sdfg_fieldview.SDFGBuilder,
     field_domain: gtir_domain.FieldopDomain,
-) -> MaybeNestedInTuple[gtir_dataflow.MemletExpr]:
+) -> MaybeNestedInTuple[gtir_to_sdfg_iterator.MemletExpr]:
     """Helper method to visit an expression passed as argument to a scan field operator.
 
     On the innermost level, a scan operator is lowered to a loop region which computes
@@ -65,16 +65,16 @@ def _parse_scan_fieldop_arg(
 
     def _parse_fieldop_arg_impl(
         arg: gtir_to_sdfg_types.FieldopData,
-    ) -> gtir_dataflow.MemletExpr:
+    ) -> gtir_to_sdfg_iterator.MemletExpr:
         arg_expr = arg.get_local_view(field_domain, ctx.sdfg)
-        if isinstance(arg_expr, gtir_dataflow.MemletExpr):
+        if isinstance(arg_expr, gtir_to_sdfg_iterator.MemletExpr):
             return arg_expr
         # In scan field operator, the arguments to the vertical stencil are passed by value.
         # Therefore, the full field shape is passed as `MemletExpr` rather than `IteratorExpr`.
         field_type = ts.FieldType(
             dims=[dim for dim, _ in arg_expr.field_domain], dtype=arg_expr.gt_dtype
         )
-        return gtir_dataflow.MemletExpr(
+        return gtir_to_sdfg_iterator.MemletExpr(
             arg_expr.field, field_type, arg_expr.get_memlet_subset(ctx.sdfg)
         )
 
@@ -88,9 +88,9 @@ def _parse_scan_fieldop_arg(
 
 
 def _create_scan_field_operator_impl(
-    ctx: gtir_to_sdfg.SubgraphContext,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    output_edge: gtir_dataflow.DataflowOutputEdge | None,
+    ctx: gtir_to_sdfg_fieldview.SubgraphContext,
+    sdfg_builder: gtir_to_sdfg_fieldview.SDFGBuilder,
+    output_edge: gtir_to_sdfg_iterator.DataflowOutputEdge | None,
     output_domain: infer_domain.NonTupleDomainAccess,
     output_type: ts.FieldType,
     map_exit: dace_nodes.MapExit | None,
@@ -203,12 +203,12 @@ def _create_scan_field_operator_impl(
 
 
 def _create_scan_field_operator(
-    ctx: gtir_to_sdfg.SubgraphContext,
+    ctx: gtir_to_sdfg_fieldview.SubgraphContext,
     field_domain: gtir_domain.FieldopDomain,
     node_type: ts.FieldType | ts.TupleType,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
-    output: MaybeNestedInTuple[gtir_dataflow.DataflowOutputEdge | None],
+    sdfg_builder: gtir_to_sdfg_fieldview.SDFGBuilder,
+    input_edges: Iterable[gtir_to_sdfg_iterator.DataflowInputEdge],
+    output: MaybeNestedInTuple[gtir_to_sdfg_iterator.DataflowOutputEdge | None],
     output_domain: infer_domain.DomainAccess,
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
@@ -294,14 +294,14 @@ def _scan_output_name(input_name: str) -> str:
 
 def _lower_lambda_to_nested_sdfg(
     lambda_node: gtir.Lambda,
-    ctx: gtir_to_sdfg.SubgraphContext,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    ctx: gtir_to_sdfg_fieldview.SubgraphContext,
+    sdfg_builder: gtir_to_sdfg_fieldview.SDFGBuilder,
     field_domain: gtir_domain.FieldopDomain,
     init_data: gtir_to_sdfg_types.FieldopResult,
     lambda_params: Sequence[gtir.Sym],
     scan_forward: bool,
     scan_carry_symbol: gtir.Sym,
-) -> tuple[gtir_to_sdfg.SubgraphContext, gtir_to_sdfg_types.FieldopResult]:
+) -> tuple[gtir_to_sdfg_fieldview.SubgraphContext, gtir_to_sdfg_types.FieldopResult]:
     """
     Helper method to lower the lambda node representing the scan stencil dataflow
     inside a separate SDFG.
@@ -421,7 +421,7 @@ def _lower_lambda_to_nested_sdfg(
     # The 'update' state writes the value computed by the stencil into the scan carry variable,
     # in order to make it available to the next vertical level.
     compute_state = scan_loop.add_state("scan_compute")
-    compute_ctx = gtir_to_sdfg.SubgraphContext(
+    compute_ctx = gtir_to_sdfg_fieldview.SubgraphContext(
         lambda_ctx.sdfg, compute_state, lambda_ctx.scope_symbols
     )
     update_state = scan_loop.add_state_after(compute_state, "scan_update")
@@ -431,9 +431,9 @@ def _lower_lambda_to_nested_sdfg(
         _parse_scan_fieldop_arg(im.ref(p.id), compute_ctx, sdfg_builder, field_domain)
         for p in lambda_node.params
     ]
-    # stil inside the 'compute' state, generate the dataflow representing the stencil
+    # still inside the 'compute' state, generate the dataflow representing the stencil
     # to be applied on the horizontal domain
-    lambda_input_edges, lambda_result = gtir_dataflow.translate_lambda_to_dataflow(
+    lambda_input_edges, lambda_result = gtir_to_sdfg_iterator.translate_lambda_to_dataflow(
         compute_ctx.sdfg, compute_ctx.state, sdfg_builder, lambda_node, stencil_args
     )
     # connect the dataflow input directly to the source data nodes, without passing through a map node;
@@ -476,7 +476,7 @@ def _lower_lambda_to_nested_sdfg(
     output_column_index = dace.symbolic.pystr_to_symbolic(scan_loop_var) - scan_domain.start
 
     def connect_scan_output(
-        scan_output_edge: gtir_dataflow.DataflowOutputEdge,
+        scan_output_edge: gtir_to_sdfg_iterator.DataflowOutputEdge,
         scan_output_shape: list[dace.symbolic.SymExpr],
         scan_carry_sym: gtir.Sym,
     ) -> gtir_to_sdfg_types.FieldopData:
@@ -534,13 +534,13 @@ def _lower_lambda_to_nested_sdfg(
 
 
 def _handle_dataflow_result_of_nested_sdfg(
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    sdfg_builder: gtir_to_sdfg_fieldview.SDFGBuilder,
     nsdfg_node: dace_nodes.NestedSDFG,
-    inner_ctx: gtir_to_sdfg.SubgraphContext,
-    outer_ctx: gtir_to_sdfg.SubgraphContext,
+    inner_ctx: gtir_to_sdfg_fieldview.SubgraphContext,
+    outer_ctx: gtir_to_sdfg_fieldview.SubgraphContext,
     inner_data: gtir_to_sdfg_types.FieldopData,
     output_domain: infer_domain.NonTupleDomainAccess,
-) -> gtir_dataflow.DataflowOutputEdge | None:
+) -> gtir_to_sdfg_iterator.DataflowOutputEdge | None:
     assert isinstance(inner_data.gt_type, ts.FieldType)
     inner_dataname = inner_data.dc_node.data
     inner_desc = inner_ctx.sdfg.data(inner_dataname)
@@ -622,14 +622,14 @@ def _handle_dataflow_result_of_nested_sdfg(
         None,
         dace.Memlet.from_array(outer_dataname, outer_desc),
     )
-    output_expr = gtir_dataflow.ValueExpr(outer_node, inner_data.gt_type.dtype)
-    return gtir_dataflow.DataflowOutputEdge(outer_ctx.state, output_expr)
+    output_expr = gtir_to_sdfg_iterator.ValueExpr(outer_node, inner_data.gt_type.dtype)
+    return gtir_to_sdfg_iterator.DataflowOutputEdge(outer_ctx.state, output_expr)
 
 
 def translate_scan(
     node: gtir.Node,
-    ctx: gtir_to_sdfg.SubgraphContext,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+    ctx: gtir_to_sdfg_fieldview.SubgraphContext,
+    sdfg_builder: gtir_to_sdfg_fieldview.SDFGBuilder,
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
     Generates the dataflow subgraph for the `as_fieldop` builtin with a scan operator.
@@ -710,7 +710,7 @@ def translate_scan(
         for gt_symbol, arg in zip(stencil_expr.params[1:], lambda_args, strict=True)
     ]
 
-    lambda_arg_nodes, symbolic_args = gtir_to_sdfg.flatten_tuple_args(lambda_args_mapping)
+    lambda_arg_nodes, symbolic_args = gtir_to_sdfg_fieldview.flatten_tuple_args(lambda_args_mapping)
 
     # The lambda expression of a scan field operator should never capture symbols
     # from the ouside scope, therefore we call `add_nested_sdfg()` with `capture_outer_data=False`.
@@ -739,7 +739,7 @@ def translate_scan(
     for input_connector, memlet in input_memlets.items():
         src_node = lambda_arg_nodes[input_connector]
         assert src_node is not None
-        input_edge = gtir_dataflow.MemletInputEdge(
+        input_edge = gtir_to_sdfg_iterator.MemletInputEdge(
             ctx.state, src_node.dc_node, memlet.src_subset, nsdfg_node, input_connector
         )
         input_edges.append(input_edge)
