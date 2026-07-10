@@ -424,10 +424,11 @@ class ITIRTypeInference(eve.NodeTranslator):
         assert isinstance(domain, ts.DomainType)
         assert domain.dims != "unknown"
         assert node.dtype
-        return type_info.apply_to_primitive_constituents(
-            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype),
-            node.dtype,
+        result = type_info.tree_map_type(lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype))(
+            node.dtype
         )
+        assert isinstance(result, (ts.FieldType, ts.TupleType))
+        return result
 
     def visit_IfStmt(self, node: itir.IfStmt, *, ctx) -> None:
         cond = self.visit(node.cond, ctx=ctx)
@@ -444,10 +445,12 @@ class ITIRTypeInference(eve.NodeTranslator):
             # the target can have fewer elements than the expr in which case the output from the
             # expression is simply discarded.
             expr_type = functools.reduce(
-                lambda tuple_type, i: tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
-                # `ts.DeferredType` only occurs for scans returning a tuple
-                if not isinstance(tuple_type, ts.DeferredType)
-                else ts.DeferredType(constraint=None),
+                lambda tuple_type, i: (
+                    tuple_type.types[i]  # type: ignore[attr-defined]  # format ensured by primitive_constituents
+                    # `ts.DeferredType` only occurs for scans returning a tuple
+                    if not isinstance(tuple_type, ts.DeferredType)
+                    else ts.DeferredType(constraint=None)
+                ),
                 path,
                 node.expr.type,
             )
@@ -473,15 +476,23 @@ class ITIRTypeInference(eve.NodeTranslator):
             assert isinstance(node.value, str)
             return it_ts.OffsetLiteralType(value=node.value)
 
+    def visit_CartesianOffset(
+        self, node: itir.CartesianOffset, *, ctx
+    ) -> it_ts.CartesianOffsetType | ts.DeferredType:
+        self.visit(node.domain, ctx=ctx)
+        self.visit(node.codomain, ctx=ctx)
+        domain, codomain = node.domain.type, node.codomain.type
+        if domain is None or codomain is None:
+            return ts.DeferredType(constraint=it_ts.CartesianOffsetType)
+        assert isinstance(domain, ts.DimensionType) and isinstance(codomain, ts.DimensionType)
+        return it_ts.CartesianOffsetType(domain=domain.dim, codomain=codomain.dim)
+
     def visit_Literal(self, node: itir.Literal, **kwargs) -> ts.ScalarType:
         assert isinstance(node.type, ts.ScalarType)
         return node.type
 
     def visit_InfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
-        return ts.ScalarType(kind=ts.ScalarKind.INT32)
-
-    def visit_NegInfinityLiteral(self, node: itir.InfinityLiteral, **kwargs) -> ts.ScalarType:
-        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+        return ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
 
     def visit_SymRef(
         self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]

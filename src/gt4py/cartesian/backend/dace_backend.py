@@ -14,7 +14,7 @@ import pathlib
 import re
 from typing import TYPE_CHECKING, ClassVar
 
-from dace import SDFG, DebugInfo, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
+from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
@@ -46,7 +46,7 @@ from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
 from gt4py.eve import codegen
 from gt4py.eve.codegen import MakoTemplate as as_mako
-from gt4py.storage.cartesian import layout
+from gt4py.storage.cartesian import layout, layout_registry
 
 
 if TYPE_CHECKING:
@@ -95,6 +95,7 @@ def _sdfg_add_arrays_and_edges(
     inputs: set[str] | dict[str, dtypes.typeclass],
     outputs: set[str] | dict[str, dtypes.typeclass],
     origins: dict[str, tuple[int, ...]],
+    domain: tuple[int, ...],
 ) -> None:
     for name, array in inner_sdfg.arrays.items():
         if array.transient:
@@ -113,6 +114,7 @@ def _sdfg_add_arrays_and_edges(
                 strides=array.strides,
                 shape=shape,
                 storage=array.storage,
+                lifetime=array.lifetime,
             )
 
             # Calculate memlet ranges taking the origin into account
@@ -128,12 +130,20 @@ def _sdfg_add_arrays_and_edges(
                 if axis not in axes:
                     continue
                 o = origin[index]
-                e = field_info[name].boundary.lower_indices[cartesian_index]
+                lower, upper = field_info[name].boundary[cartesian_index]
                 s = inner_sdfg.arrays[name].shape[index]
-                ranges.append(
-                    # s - 1 because ranges are inclusive
-                    (o - max(0, e), o - max(0, e) + s - 1, 1)
-                )
+                if axis == CartesianSpace.Axis.K.name:
+                    d = domain[cartesian_index]
+                    ranges.append(
+                        # max(0, lower) because ...
+                        # d - 1 because ranges are inclusive
+                        (o - max(0, lower), o + upper + d - 1, 1)
+                    )
+                else:
+                    ranges.append(
+                        # s - 1 because ranges are inclusive
+                        (o - max(0, lower), o - max(0, lower) + s - 1, 1)
+                    )
                 index += 1
 
             # Add data dimensions to the range
@@ -145,10 +155,7 @@ def _sdfg_add_arrays_and_edges(
 
             if name in inputs:
                 state.add_edge(
-                    state.add_read(
-                        name,
-                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
-                    ),
+                    state.add_read(name),
                     None,
                     nsdfg,
                     name,
@@ -158,10 +165,7 @@ def _sdfg_add_arrays_and_edges(
                 state.add_edge(
                     nsdfg,
                     name,
-                    state.add_write(
-                        name,
-                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
-                    ),
+                    state.add_write(name),
                     None,
                     Memlet(name, subset=subsets.Range(ranges)),
                 )
@@ -174,10 +178,7 @@ def _sdfg_add_arrays_and_edges(
             )
             if name in inputs:
                 state.add_edge(
-                    state.add_read(
-                        name,
-                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
-                    ),
+                    state.add_read(name),
                     None,
                     nsdfg,
                     name,
@@ -187,10 +188,7 @@ def _sdfg_add_arrays_and_edges(
                 state.add_edge(
                     nsdfg,
                     name,
-                    state.add_write(
-                        name,
-                        DebugInfo(123456),  # fake DebugInfo to avoid calls to `inspect`
-                    ),
+                    state.add_write(name),
                     None,
                     Memlet(name),
                 )
@@ -267,22 +265,15 @@ def freeze_origin_domain_sdfg(
     wrapper_sdfg = SDFG("frozen_" + inner_sdfg.name)
     state = wrapper_sdfg.add_state("frozen_" + inner_sdfg.name + "_state")
 
-    inputs = set()
-    outputs = set()
-    for node, parent in inner_sdfg.all_nodes_recursive():
-        if not isinstance(node, nodes.AccessNode) or inner_sdfg.arrays[node.data].transient:
-            continue
+    # gather inputs & outputs (i.e. reads/writes without transients)
+    inputs, outputs = inner_sdfg.read_and_write_sets()
+    inputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, inputs))
+    outputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, outputs))
 
-        if node.has_reads(parent):
-            inputs.add(node.data)
-        if node.has_writes(parent):
-            outputs.add(node.data)
-
-    # fake DebugInfo to avoid calls to `inspect`
-    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs, debuginfo=DebugInfo(123456))
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
-        field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
+        field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin, domain
     )
 
     # in special case of empty domain, remove entire SDFG.
@@ -302,10 +293,6 @@ def freeze_origin_domain_sdfg(
 
     _sdfg_specialize_symbols(wrapper_sdfg, domain)
     _specialize_transient_strides(wrapper_sdfg, layout_info)
-
-    for _, _, array in wrapper_sdfg.arrays_recursive():
-        if array.transient:
-            array.lifetime = dtypes.AllocationLifetime.SDFG
 
     wrapper_sdfg.arg_names = arg_names
 
@@ -419,8 +406,20 @@ class SDFGManager:
             flipper = passes.SwapHorizontalMaps()
             flipper.visit(stree)
 
+        K_loop_pushed_down = False  # To keep code clean we bookeep operation
         if layout[2] != 0:
+            K_loop_pushed_down = True
             flipper = passes.PushVerticalMapDown()
+            flipper.visit(stree)
+
+        # Re-order sequential K to maximize parallelism when targeting parallel
+        # backend and hardware options
+        is_threaded = "OMP_NUM_THREADS" in os.environ and int(os.environ["OMP_NUM_THREADS"]) > 1
+        if not K_loop_pushed_down and (
+            self.builder.backend.storage_info["device"] == "gpu"
+            or (self.builder.backend.storage_info["device"] == "cpu" and is_threaded)
+        ):
+            flipper = passes.PushVerticalMapDown(forscope_only=True)
             flipper.visit(stree)
 
         # Create SDFG
@@ -617,6 +616,11 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
                 value=gt_config.DACE_DEFAULT_BLOCK_SIZE,
             )
             config.Config.set("compiler", "cpu", "openmp_sections", value=False)
+            # The default, "inspect", will inspect the python stack for every object that's added
+            # to the SDFG, which doesn't provide a DebugInfo object. Those calls add up over time
+            # and - in our case - end up with line information pointing to the GT4Py-DaCe bridge.
+            # We thus decided to turn off lineinfo in the DaCe config.
+            config.Config.set("compiler", "lineinfo", value="none")
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
@@ -900,12 +904,7 @@ class BaseDaceBackend(BaseGTBackend):
 class DaceCPUBackend(BaseDaceBackend):
     name = "dace:cpu"
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
-    storage_info: ClassVar[layout.LayoutInfo] = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": layout.layout_maker_factory((1, 2, 0)),  # Optimal loop order: K-I-J
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((1, 2, 0))),
-    }
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
@@ -918,12 +917,7 @@ class DaceCPUBackend(BaseDaceBackend):
 class DaceCPUKFirstBackend(BaseDaceBackend):
     name = "dace:cpu_kfirst"
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
-    storage_info: ClassVar[layout.LayoutInfo] = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": layout.layout_maker_factory((0, 1, 2)),  # Optimal loop order: I-J-K
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((0, 1, 2))),
-    }
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
@@ -936,12 +930,7 @@ class DaceCPUKFirstBackend(BaseDaceBackend):
 class DaceCPU_KJI(BaseDaceBackend):
     name = "dace:cpu_KJI"
     languages: ClassVar[dict] = {"computation": "c++", "bindings": ["python"]}
-    storage_info: ClassVar[layout.LayoutInfo] = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": layout.layout_maker_factory((2, 1, 0)),  # Optimal loop order: K-J-I
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((2, 1, 0))),
-    }
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
@@ -952,16 +941,28 @@ class DaceCPU_KJI(BaseDaceBackend):
 
 @register
 class DaceGPUBackend(BaseDaceBackend):
-    """DaCe python backend using gt4py.cartesian.gtc."""
+    """GPU DaCe python with an optimal KJI loop layout"""
 
     name = "dace:gpu"
     languages: ClassVar[dict] = {"computation": "cuda", "bindings": ["python"]}
-    storage_info: ClassVar[layout.LayoutInfo] = {
-        "alignment": 32,
-        "device": "gpu",
-        "layout_map": layout.layout_maker_factory((2, 1, 0)),  # Optimal loop order: K-J-I
-        "is_optimal_layout": layout.layout_checker_factory(layout.layout_maker_factory((2, 1, 0))),
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
+    MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
+    options: ClassVar[GTBackendOptions] = {
+        **BaseGTBackend.GT_BACKEND_OPTS,
+        "device_sync": {"versioning": True, "type": bool},
     }
+
+    def generate_extension(self) -> None:
+        return self.make_extension(uses_cuda=True)
+
+
+@register
+class DaceGPUBackendIJK(BaseDaceBackend):
+    """GPU DaCe python with an optimal IJK loop layout"""
+
+    name = "dace:gpu_IJK"
+    languages: ClassVar[dict] = {"computation": "cuda", "bindings": ["python"]}
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options: ClassVar[GTBackendOptions] = {
         **BaseGTBackend.GT_BACKEND_OPTS,

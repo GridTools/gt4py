@@ -16,7 +16,6 @@ import collections.abc
 import dataclasses
 import enum
 import functools
-import hashlib
 import io
 import itertools
 import operator
@@ -229,6 +228,18 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
 
     """
     return lambda obj: getitem_(obj, key, default=default)
+
+
+def get_fully_qualified_name(obj: type | types.FunctionType | types.ModuleType) -> str:
+    """
+    Get the fully qualified name of an object.
+
+    This is useful for creating unique identifiers for objects that can be used
+    in fingerprinting or other identification scenarios.
+    """
+    if isinstance(obj, types.ModuleType):
+        return obj.__name__
+    return f"{obj.__module__}.{obj.__qualname__}"
 
 
 _P = ParamSpec("_P")
@@ -521,6 +532,7 @@ def lru_cache(
 
             inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
             inner.cache_info = cached_func.cache_info  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+            inner.cache_clear = cached_func.cache_clear  # type: ignore[attr-defined]  # mypy not aware of functools.cache_clear behavior
 
             return typing.cast(Callable[_P, _T], inner)
 
@@ -629,79 +641,138 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
     return "__noninstantiable__" in cls.__dict__
 
 
+def singledispatcher(
+    default: Callable[P, T] | None = None, *, implementations: dict[type, Callable[[Any], Any]]
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Create a single-dispatch callable from a default and a registry of implementations.
+
+    This is a thin wrapper around :func:`functools.singledispatch` that allows
+    constructing a dispatcher from an existing mapping rather than decorating
+    individual functions.
+
+    Args:
+        default: The default implementation used when no type-specific handler
+            is found. If ``None``, the implementation registered for ``object``
+            in `implementations` is used as the default.
+        implementations: A mapping from types to their registered handler
+            functions. If `default` is ``None``, ``object`` must be present.
+
+    Returns:
+        A single-dispatch callable with the registered implementations.
+
+    Examples:
+        >>> def default_impl(x: Any) -> str:
+        ...     return f"default: {x}"
+        >>> def int_impl(x: int) -> str:
+        ...     return f"int: {x}"
+        >>> dispatch = singledispatcher(default_impl, implementations={int: int_impl})
+        >>> dispatch(3.14)
+        'default: 3.14'
+        >>> dispatch(42)
+        'int: 42'
+
+    """
+    if default is None:
+        if object not in implementations:
+            raise ValueError("A default implementation for 'object' must be provided.")
+        default = cast(Callable[P, T], implementations[object])
+    else:
+        if not callable(default):
+            raise ValueError(f"Default implementation must be callable, got '{default}'.")
+        if object in implementations:
+            raise ValueError(
+                "Default implementation for 'object' is already provided in 'implementations'."
+            )
+
+    assert callable(default)  # for mypy
+
+    if xtyping.is_single_dispatch_callable(default):
+        # `default` is itself a single-dispatch callable (e.g. a dispatcher used
+        # as the fallback to chain dispatchers). `functools.singledispatch`
+        # copies the wrapped callable's ``__dict__`` -- which, for a dispatcher,
+        # holds ``register``/``registry`` -- onto the new dispatcher via
+        # ``update_wrapper``, aliasing the two. Registering the implementations
+        # below would then silently mutate ``default`` itself. Forward through a
+        # plain function (empty ``__dict__``) so the new dispatcher keeps its own
+        # independent registry.
+        inner_default = default
+
+        def default(*args: Any, **kwargs: Any) -> T:  # deliberately shadowing the parameter
+            return inner_default(*args, **kwargs)
+
+    result = functools.singledispatch(default)
+    for cls, func in implementations.items():
+        result.register(cls)(func)
+    return cast(xtyping.SingleDispatchCallable[P, T], result)
+
+
+def merge_dispatchers(
+    *dispatchers: xtyping.SingleDispatchCallable[P, T], default: Callable[P, T] | None = None
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Merge multiple single-dispatch callables into one.
+
+    The resulting dispatcher will have the union of the registered
+    implementations of the input dispatchers. If `default` is provided
+    it will be used as the default implementation for the merged
+    dispatcher, otherwise the default implementation of the last
+    dispatcher will be used.
+    """
+    if not dispatchers:
+        raise ValueError("At least one dispatcher must be provided.")
+
+    merged_registry: dict[Any, Any] = {}
+    for d in dispatchers:
+        if not xtyping.is_single_dispatch_callable(d):
+            raise TypeError(
+                f"Expected only single-dispatch callables, got '{d}' of type '{type(d)}'"
+            )
+        merged_registry.update(d.registry)
+
+    if default is not None:
+        merged_registry.pop(object, None)  # remove default implementation from registry if present
+
+    return singledispatcher(default, implementations=merged_registry)
+
+
+#: Pickle protocol pinned for `content_hash` so the serialized byte stream (and
+#: therefore the resulting hash) is reproducible across Python versions,
+#: regardless of changes to `pickle.DEFAULT_PROTOCOL`.
+_CONTENT_HASH_PICKLE_PROTOCOL: int = 5
+
+
 def content_hash(
     *args: Any,
-    hash_algorithm: str | xtyping.HashlibAlgorithm | None = None,
-    pickler: type = pickle.Pickler,
+    hash_algorithm: xtyping.HashlibAlgorithm | None = None,
+    pickler_type: type[pickle.Pickler] = pickle.Pickler,
 ) -> str:
     """Stable content-based hash function using instance serialization data.
 
     It provides a customizable hash function for any kind of data.
     Unlike the builtin `hash` function, it is stable (same hash value across
-    interpreter reboots) and it does not use hash customizations on user
-    classes (it uses `pickle` internally to get a byte stream).
+    interpreter reboots and Python versions) and it does not use hash
+    customizations on user classes (it uses `pickle` internally to get a byte
+    stream). The pickle protocol is pinned (:data:`CONTENT_HASH_PICKLE_PROTOCOL`)
+    so the byte stream does not depend on the running Python's default protocol.
 
     Arguments:
         hash_algorithm: object implementing the `hash algorithm` interface
-            from :mod:`hashlib` or canonical name (`str`) of the
-            hash algorithm as defined in :mod:`hashlib`.
-            Defaults to :class:`xxhash.xxh64`.
+            from :mod:`hashlib`. Defaults to :class:`xxhash.xxh64`.
 
     """
-    hasher: xtyping.HashlibAlgorithm
     if hash_algorithm is None:
-        hasher = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
-    elif isinstance(hash_algorithm, str):
-        hasher = hashlib.new(hash_algorithm)
-    else:
-        hasher = hash_algorithm
+        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
+    assert hash_algorithm is not None
 
     buf = io.BytesIO()
-    pickler(buf).dump(args)
+    pickler_type(buf, protocol=_CONTENT_HASH_PICKLE_PROTOCOL).dump(args)
 
-    hasher.update(buf.getvalue())
-    result = hasher.hexdigest()
+    hash_algorithm.update(buf.getvalue())
+    result = hash_algorithm.hexdigest()
     assert isinstance(result, str)
 
     return result
-
-
-def custom_pickler(
-    reducer: Callable[[Any], tuple | types.NotImplementedType],
-    name: str | None = None,
-) -> type[pickle.Pickler]:
-    """
-    Create a custom pickler class using the provided function as reducer override.
-    """
-    pickler = type(
-        name or f"CustomReducePickler_{name or id(reducer)}",
-        (pickle.Pickler,),
-        {"reducer_override": staticmethod(reducer)},
-    )
-
-    return pickler
-
-
-def custom_pickler_from_reducers(
-    custom_reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
-    name: str | None = None,
-) -> type[pickle.Pickler]:
-    """
-    Create a pickler with the provided reducers registered in reducer override.
-
-    Since it uses `functools.singledispatch` for the implementation of the
-    reducer override, the custom reducers are used for the types in the keys
-    AND any of its subclasses. This explicitly deviates from the behavior of
-    the `dispatch_table` dict, to allow easy pickle customization of entire class
-    hierarchies.
-    """
-    reducer = functools.singledispatch(
-        cast(Callable[[Any], tuple | types.NotImplementedType], lambda _: NotImplemented)
-    )
-    for cls, func in custom_reducers.items():
-        reducer.register(cls)(func)
-
-    return custom_pickler(reducer, name=name)
 
 
 ddiff = deepdiff.diff.DeepDiff

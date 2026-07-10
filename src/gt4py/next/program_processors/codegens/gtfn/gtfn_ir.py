@@ -126,8 +126,10 @@ class SidComposite(Expr):
         if not all(
             isinstance(el, (SidFromScalar, SidComposite))
             or _is_tuple_expr_of(
-                lambda expr: isinstance(expr, (SymRef, Literal))
-                or (isinstance(expr, FunCall) and expr.fun == SymRef(id="index")),
+                lambda expr: (
+                    isinstance(expr, (SymRef, Literal))
+                    or (isinstance(expr, FunCall) and expr.fun == SymRef(id="index"))
+                ),
                 el,
             )
             for el in value
@@ -184,11 +186,13 @@ class StencilExecution(Stmt):
     ) -> None:
         for inp in inputs:
             if not _is_tuple_expr_of(
-                lambda expr: isinstance(expr, (SymRef, SidComposite, SidFromScalar))
-                or (
-                    isinstance(expr, FunCall)
-                    and isinstance(expr.fun, SymRef)
-                    and expr.fun.id == "index"
+                lambda expr: (
+                    isinstance(expr, (SymRef, SidComposite, SidFromScalar))
+                    or (
+                        isinstance(expr, FunCall)
+                        and isinstance(expr.fun, SymRef)
+                        and expr.fun.id == "index"
+                    )
                 ),
                 inp,
             ):

@@ -2,6 +2,10 @@
 _build
 _local
 
+### Coding agents ####
+*.local.md
+.claude/settings.local.json
+
 ### GT4Py ####
 /src/__init__.py
 /tests/__init__.py

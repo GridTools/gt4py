@@ -88,16 +88,10 @@ def program_source_example():
 
 
 @pytest.fixture
-def compilable_source_example(program_source_example):
-    return stages.CompilableProject(
+def extension_source_example(program_source_example):
+    return stages.ExtensionSource(
         program_source=program_source_example,
-        binding_source=nanobind.create_bindings(program_source_example),
+        binding_source=nanobind.create_bindings(
+            program_source_example, config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        ),
     )
-
-
-@pytest.fixture
-def clean_example_session_cache(compilable_source_example):
-    cache_dir = cache.get_cache_folder(compilable_source_example, config.BuildCacheLifetime.SESSION)
-    if cache_dir.exists():
-        shutil.rmtree(cache_dir)
-    yield

@@ -1,0 +1,130 @@
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
+#
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+"""
+Unified dev-scripts entry point.
+
+Implemented as a ``typer`` app with sub-command registration. Python
+sub-commands are auto-discovered from the ``scripts/python`` package (every
+public module exposing a global ``cli`` ``typer.Typer`` app). Shell scripts
+under ``scripts/sh`` are auto-discovered and wrapped with a uniform
+argument-forwarding interface.
+
+Dependencies for all sub-commands are defined in the 'scripts' dependency
+group of the root 'pyproject.toml'.
+
+Usage:
+    ./scripts/run --help
+    ./scripts/run <sub-command> --help
+"""
+
+from __future__ import annotations
+
+import importlib
+import pathlib
+import pkgutil
+import subprocess
+import sys
+from typing import Annotated
+
+import typer
+
+
+if __name__ == "__main__":
+    try:
+        # First try to import the 'python' folder inside './scripts'
+        # and check that it is indeed the expected one.
+        import python
+
+        python_scripts_dir = str(pathlib.Path(__file__).resolve().absolute().parent / "python")
+        if not (len(python.__path__) == 1 and python.__path__[0] == python_scripts_dir):
+            print(
+                "ERROR: The 'scripts/python' package path does not match the expected path.\n"
+                "Please check the structure of the repository.\n",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        # Then add the 'python' folder to sys.path to mimic the `sys.path` of the
+        # command modules run directly as scripts.
+        sys.path.insert(0, python_scripts_dir)
+        from helpers import common
+
+    except ImportError as e:
+        print(
+            f"ERROR: '{e.name}' package cannot be imported.\n"
+            "Make sure 'uv' is installed in your system and run directly this script "
+            "as an executable file, to let 'uv' create a temporary venv with all the "
+            "required dependencies.\n",
+            file=sys.stderr,
+        )
+        sys.exit(127)
+
+    # Build the CLI app and register all sub-commands from scripts
+    app = typer.Typer(
+        name="scripts",
+        help="GT4Py dev-scripts toolbox.",
+        no_args_is_help=True,
+    )
+
+    # -- Python sub-commands --
+    # Assemble the CLI from all public top-level command modules in 'scripts/python'.
+    # iter_modules (non-recursive) avoids importing infrastructure sub-packages like helpers/.
+    for _, name, ispkg in pkgutil.iter_modules([str(common.PY_SCRIPTS_DIR)]):
+        if not name.startswith("_") and not ispkg:
+            module = importlib.import_module(f"python.{name}")
+            if hasattr(module, "cli") and isinstance(module.cli, typer.Typer):
+                app.add_typer(module.cli, name=module.cli.info.name or name)
+
+    # -- Shell sub-commands (auto-discovered wrappers) --
+    def _extract_shell_help(script_path: pathlib.Path) -> str | None:
+        """Extract help text from lines with a ``[help]`` marker in a shell script."""
+        help_lines: list[str] = []
+        with open(script_path, encoding="utf-8") as fh:
+            for line in fh:
+                comment_body = line.strip().lstrip("#").lstrip()
+                if comment_body.startswith("[help]"):
+                    text = comment_body[len("[help]") :].strip()
+                    if text:
+                        help_lines.append(text)
+        return "\n".join(help_lines) if help_lines else None
+
+    def _make_shell_runner(script_path: pathlib.Path):
+        """Factory: returns a Typer-compatible function that delegates to a bash script."""
+
+        def _run(
+            args: Annotated[
+                list[str] | None,
+                typer.Argument(help="Arguments forwarded to the shell script."),
+            ] = None,
+        ):
+            cmd = ["bash", str(script_path), *(args or [])]
+            result = subprocess.run(cmd, cwd=common.SCRIPTS_DIR)
+            raise SystemExit(result.returncode)
+
+        _run.__doc__ = _extract_shell_help(script_path) or (
+            f"Run {script_path.relative_to(common.SCRIPTS_DIR)}."
+        )
+        return _run
+
+    _sh_dir = common.SCRIPTS_DIR / "sh"
+    if _sh_dir.is_dir():
+        for _sh_file in sorted(_sh_dir.glob("*.sh")):
+            if _sh_file.name.startswith("_"):
+                continue  # skip shared libraries like _lib.sh
+            _cmd_name = _sh_file.stem.replace("_", "-")
+            app.command(_cmd_name)(_make_shell_runner(_sh_file))
+
+    # Run the CLI app
+    app()
+
+else:
+    raise ImportError("This module is not meant to be imported. Please run it as a script.")

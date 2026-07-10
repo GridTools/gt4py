@@ -225,7 +225,13 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 
+@runtime_checkable
 class SingleDispatchCallable(Protocol[_P, _T]):
+    # `functools.singledispatch` copies the wrapped function's identity onto
+    # the dispatcher; declaring these attributes allows callers to overwrite
+    # it (e.g. to give a dispatcher its own pickle identity).
+    __name__: str
+    __qualname__: str
     registry: Mapping[Any, Callable[_P, _T]]
 
     def dispatch(self, cls: Any) -> Callable[_P, _T]: ...
@@ -252,8 +258,10 @@ def is_single_dispatch_callable(
 ) -> TypeGuard[SingleDispatchCallable[_P, _T]]:
     return (
         callable(func)
+        and getattr(func, "registry", None) is not None
         and callable(getattr(func, "dispatch", None))
         and callable(getattr(func, "register", None))
+        and callable(getattr(func, "_clear_cache", None))
     )
 
 
@@ -776,7 +784,9 @@ def infer_type(
     if isinstance(value, (StdGenericAliasType, _TypingSpecialFormType)):
         return value
 
-    if value in (None, type(None)):
+    # note: identity check instead of `in`, which would use `__eq__` and fail
+    # for values with non-boolean equality (e.g. NumPy arrays)
+    if value is None or value is type(None):
         return type(None) if none_as_type else None
 
     if isinstance(value, type):

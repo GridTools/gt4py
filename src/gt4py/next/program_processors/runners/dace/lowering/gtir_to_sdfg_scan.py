@@ -22,6 +22,7 @@ This is likely to change in the future, to enable GTIR optimizations for scan.
 
 from __future__ import annotations
 
+import copy
 from typing import Iterable, Sequence
 
 import dace
@@ -265,15 +266,13 @@ def _create_scan_field_operator(
     )
 
     return gtx_utils.tree_map(
-        lambda edge, domain, sym: (
-            _create_scan_field_operator_impl(
-                ctx,
-                sdfg_builder,
-                edge,
-                domain,
-                sym.type,
-                map_exit,
-            )
+        lambda edge, domain, sym: _create_scan_field_operator_impl(
+            ctx,
+            sdfg_builder,
+            edge,
+            domain,
+            sym.type,
+            map_exit,
         )
     )(output, output_domain, dummy_output_symbol)
 
@@ -516,7 +515,9 @@ def _lower_lambda_to_nested_sdfg(
             update_state.add_access(scan_result_data),
             update_state.add_access(scan_carry_data),
             dace.Memlet(
-                data=scan_result_data, subset=scan_result_subset, other_subset=scan_result_subset
+                data=scan_result_data,
+                subset=copy.deepcopy(scan_result_subset),
+                other_subset=copy.deepcopy(scan_result_subset),
             ),
         )
 

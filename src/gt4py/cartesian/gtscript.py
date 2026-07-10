@@ -786,12 +786,12 @@ def computation(order):
 
 def interval(*args):
     """Define the interval of computation in the 'K' sequential axis."""
-    pass
+    return _ComputationContextManager()
 
 
 def horizontal(*args):
     """Define a block of code that is restricted to a set of regions in the parallel axes."""
-    pass
+    return _ComputationContextManager()
 
 
 class _Region:

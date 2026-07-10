@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import warnings
 from typing import Any, Iterable, Optional
 
@@ -427,7 +429,9 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-        edge_reassignments: dict[dace_graph.MultiConnectorEdge, OrderedSet[dace_graph.MultiConnectorEdge]],
+        edge_reassignments: dict[
+            dace_graph.MultiConnectorEdge, OrderedSet[dace_graph.MultiConnectorEdge]
+        ],
     ) -> bool:
         """Checks if the decomposition results in a valid SDFG.
 

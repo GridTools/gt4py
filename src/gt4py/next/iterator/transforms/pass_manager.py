@@ -5,6 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import warnings
 from typing import Optional, Protocol
 
 from gt4py.next import common, utils
@@ -52,7 +53,7 @@ def _max_domain_range_sizes(offset_provider: common.OffsetProvider) -> dict[str,
     """
     sizes: dict[str, int] = {}
     for provider in offset_provider.values():
-        if common.is_neighbor_connectivity(provider):
+        if common.is_neighbor_table(provider):
             src_dim = provider.__gt_type__().source_dim.value
             codomain_dim = provider.__gt_type__().codomain.value
             sizes[src_dim] = max(sizes.get(src_dim, 0), provider.ndarray.shape[0])
@@ -113,15 +114,15 @@ def _process_symbolic_domains_option(
 
     if use_max_domain_range_on_unstructured_shift is None:
         use_max_domain_range_on_unstructured_shift = _has_dynamic_domains(ir)
+    elif use_max_domain_range_on_unstructured_shift:
+        if not _has_dynamic_domains(ir):
+            warnings.warn(
+                "You are using static domains together with "
+                "'use_max_domain_range_on_unstructured_shift'. This is "
+                "likely not what you wanted.",
+                stacklevel=2,
+            )
     if use_max_domain_range_on_unstructured_shift:
-        # TODO(havogt): ICON4Py uses this codepath as default for now. Once we use the minimal domain range, we should re-enable this warning.
-        # if not _has_dynamic_domains(ir):
-        #     warnings.warn(
-        #         "You are using static domains together with "
-        #         "'use_max_domain_range_on_unstructured_shift'. This is "
-        #         "likely not what you wanted.",
-        #         stacklevel=2,  # noqa: ERA001
-        #     )  # noqa: ERA001, RUF100
         assert not symbolic_domain_sizes, "Options are mutually exclusive."
         symbolic_domain_sizes = _max_domain_range_sizes(offset_provider)  # type: ignore[assignment]
     return symbolic_domain_sizes

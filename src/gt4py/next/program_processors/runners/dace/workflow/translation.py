@@ -9,13 +9,14 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 from typing import Any, Optional
 
 import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import code_specs, definitions, stages, workflow
@@ -29,7 +30,7 @@ from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wf
 from gt4py.next.type_system import type_specifications as ts
 
 
-def remove_guid(data):
+def remove_guid(data: Any) -> Any:
     """
     Recursively traverse a dict and remove all keys named 'guid'.
 
@@ -40,11 +41,7 @@ def remove_guid(data):
         The data structure with all 'guid' keys removed
     """
     if isinstance(data, dict):
-        return {
-            key: remove_guid(value)
-            for key, value in data.items()
-            if key != 'guid'
-        }
+        return {key: remove_guid(value) for key, value in data.items() if key != "guid"}
     elif isinstance(data, list):
         return [remove_guid(item) for item in data]
     elif isinstance(data, tuple):
@@ -54,12 +51,13 @@ def remove_guid(data):
     else:
         raise RuntimeError("Unsupported data type")
 
-import json
-def remove_guid_and_save_to_file(sdfg, filename):
+
+def remove_guid_and_save_to_file(sdfg: dace.SDFG, filename: str) -> None:
     cleaned_data = remove_guid(sdfg.to_json())
 
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         json.dump(cleaned_data, f, indent=2)
+
 
 def find_constant_symbols(
     ir: itir.Program,
@@ -205,7 +203,9 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
-    metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
+    metrics_level = sdfg.add_symbol(
+        gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL_DTYPE
+    )
 
     #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
     # Even when the target device is GPU, it can happen that dace emits code without
@@ -222,33 +222,31 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         has_side_effects = True
 
     else:
-        sync_code = ""
+        sync_code = "/* The SDFG execution should already be synchronized */"
         has_side_effects = False
 
     #### 2. Timestamp the SDFG entry point.
+    start_block = sdfg.start_block
     entry_if_region, begin_state = _make_if_region_for_metrics_collection(
-        "program_entry", metrics_level, sdfg
+        "metrics_entry", metrics_level, sdfg
     )
-
-    for source_state in sdfg.source_nodes():
-        if source_state is entry_if_region:
-            continue
-        sdfg.add_edge(entry_if_region, source_state, dace.InterstateEdge())
-        source_state.is_start_block = False
-    assert sdfg.out_degree(entry_if_region) > 0
-    entry_if_region.is_start_block = True
+    sdfg.add_edge(entry_if_region, start_block, dace.InterstateEdge())
+    sdfg.start_block = sdfg.node_id(entry_if_region)
+    assert sdfg.start_block is entry_if_region
 
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
         outputs={"time"},
-        code="""\
+        code=f"""\
+{sync_code}
 auto now = std::chrono::high_resolution_clock::now();
 time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
     ).count();
         """,
         language=dace.dtypes.Language.CPP,
+        side_effects=has_side_effects,
     )
     begin_state.add_edge(
         tlet_start_timer,
@@ -260,13 +258,12 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
 
     #### 3. Collect the SDFG end timestamp and produce the compute metric.
     exit_if_region, end_state = _make_if_region_for_metrics_collection(
-        "program_exit", metrics_level, sdfg
+        "metrics_exit", metrics_level, sdfg
     )
-
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is exit_if_region:
+    for sink_node in sdfg.sink_nodes():
+        if sink_node is exit_if_region:
             continue
-        sdfg.add_edge(sink_state, exit_if_region, dace.InterstateEdge())
+        sdfg.add_edge(sink_node, exit_if_region, dace.InterstateEdge())
     assert sdfg.in_degree(exit_if_region) > 0
 
     # Populate the branch that computes the stencil time metric
@@ -274,8 +271,8 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
         outputs={"duration"},
-        code=sync_code
-        + """
+        code=f"""\
+{sync_code}
 auto now = std::chrono::high_resolution_clock::now();
 auto run_cpp_end_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
@@ -300,16 +297,6 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         dace.Memlet(f"{output}[0]"),
     )
 
-    if gpu and _has_gpu_schedule(sdfg) and config.ADD_GPU_TRACE_MARKERS:
-        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for node, _ in sdfg.all_nodes_recursive():
-            if isinstance(
-                node, dace.nodes.MapEntry
-            ):  # Add ranges to scopes and maps that are NOT scheduled to the GPU
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-            elif isinstance(node, dace.sdfg.state.SDFGState):
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-
     # Check SDFG validity after applying the above changes.
     # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
     #  the wrapper provided by `DataflowBuilder`, that modifies the tasklet connectors
@@ -325,8 +312,6 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     This means that `CompiledSDFG.fast_call()` will return only after all computations
     have _finished_ and the results are available. This function only has an effect for
     work that runs on the GPU. Furthermore, all work is scheduled on the default stream.
-
-    Todo: Revisit this function once DaCe changes its behaviour in this regard.
     """
 
     if not gpu:
@@ -352,10 +337,10 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     #  because that code is only run at the `exit()` stage, not after a call. Thus we
     #  will generate an SDFGState that contains a Tasklet with the sync call.
     sync_state = sdfg.add_state("sync_state")
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is sync_state:
+    for sink_node in sdfg.sink_nodes():
+        if sink_node is sync_state:
             continue
-        sdfg.add_edge(sink_state, sync_state, dace.InterstateEdge())
+        sdfg.add_edge(sink_node, sync_state, dace.InterstateEdge())
     assert sdfg.in_degree(sync_state) > 0
 
     # NOTE: Since the synchronization is done through the Tasklet explicitly,
@@ -409,7 +394,10 @@ class DaCeTranslator(
         *args: Any,
         **kwargs: Any,
     ) -> dace.SDFG:
-        with gtx_wfdcommon.dace_context(device_type=self.device_type), dace.sdfg.nodes.reset_node_id_counter():
+        with (
+            gtx_wfdcommon.dace_context(device_type=self.device_type),
+            dace.sdfg.nodes.reset_node_id_counter(),
+        ):
             return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
     def _generate_sdfg_without_configuring_dace(

@@ -12,7 +12,7 @@ import abc
 from typing import Any
 
 from gt4py.cartesian import utils as gt_utils
-from gt4py.cartesian.definitions import BuildOptions, StencilID
+from gt4py.cartesian.definitions import BuildOptions
 from gt4py.cartesian.gtc import gtir
 from gt4py.cartesian.type_hints import AnnotatedStencilFunc, AnyStencilFunc
 
@@ -20,37 +20,6 @@ from gt4py.cartesian.type_hints import AnnotatedStencilFunc, AnyStencilFunc
 class Frontend(abc.ABC):
     name: str
     """Frontend name."""
-
-    @classmethod
-    @abc.abstractmethod
-    def get_stencil_id(
-        cls,
-        qualified_name: str,
-        definition: AnyStencilFunc,
-        externals: dict[str, Any],
-        options_id: str,
-    ) -> StencilID:
-        """
-        Create a StencilID object that contains a unique hash for the stencil.
-
-        Notes
-        -----
-        This method seems to no longer be used through StencilBuilder.
-
-        Returns
-        -------
-        StencilID:
-            An object that contains the qualified name and unique hash.
-
-        Raises
-        ------
-        GTSyntaxError
-            If there is a parsing error.
-
-        TypeError
-            If there is a error resolving external types.
-        """
-        pass
 
     @classmethod
     @abc.abstractmethod

@@ -18,6 +18,7 @@ from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes import oir_optimizations
 from gt4py.eve import codegen
 from gt4py.storage import layout
+from gt4py.storage.cartesian import layout_registry
 
 
 if TYPE_CHECKING:
@@ -33,8 +34,8 @@ class DebugBackend(backend.BaseBackend):
         "oir_pipeline": {"versioning": True, "type": passes.OirPipeline},
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
-    storage_info = layout.NaiveCPULayout
-    languages: ClassVar[dict[str, Any]] = {"computation": "python", "bindings": ["python"]}
+    storage_info: ClassVar[layout.LayoutInfo] = layout_registry.from_name(name)
+    languages: ClassVar[dict] = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = py_common.PythonModuleGenerator
 
     def _generate_computation(self) -> dict[str, str | dict]:

@@ -20,8 +20,11 @@ from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 from dace.utils import print_sdfg_hash
 
-from gt4py.next import common as gtx_common, config as gtx_config, utils as gtx_utils
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtx_library_nodes,
+    transformations as gtx_transformations,
+)
 
 
 class GT4PyAutoOptHook(enum.Enum):
@@ -237,11 +240,6 @@ def gt_auto_optimize(
     optimization_hooks = optimization_hooks or {}
 
     with dace.config.temporary_config():
-        # Do not print the transformation progress, unless enabled through env variable.
-        dace.Config.set(
-            "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
-        )
-
         # Do not store which transformations were applied inside the SDFG.
         dace.Config.set("store_history", value=False)
 
@@ -384,6 +382,15 @@ def gt_auto_optimize(
                     f"Could not restore the demoted field '{demoted_field}' back to a global.",
                     stacklevel=0,
                 )
+
+        # We now expand all GT4Py specific library nodes.
+        #  We do this such that we have control over all the Maps that are there.
+        # TODO(edopao,phimuell): It is probably the right place, but maybe there is a better one.
+        for node, state in list(sdfg.all_nodes_recursive()):
+            if isinstance(node, gtx_library_nodes.GTIR_LIBRARY_NODES):
+                node.expand(state)
+                if validate_all:
+                    sdfg.validate()
 
         sdfg = _gt_auto_configure_maps_and_strides(
             sdfg=sdfg,
@@ -696,7 +703,7 @@ def _gt_auto_process_dataflow_inside_maps(
     scan_loop_unrolling_factor: int,
     fuse_tasklets: bool,
     validate_all: bool,
-    uids: gtx_utils.IDGeneratorPool
+    uids: gtx_utils.IDGeneratorPool,
 ) -> dace.SDFG:
     """Optimizes the dataflow inside the top level Maps of the SDFG inplace.
 
@@ -742,7 +749,7 @@ def _gt_auto_process_dataflow_inside_maps(
     # Constants (tasklets are needed to write them into a variable) should not be
     #  arguments to a kernel but be present inside the body.
     sdfg.apply_transformations_once_everywhere(
-        gtx_transformations.GT4PyMoveTaskletIntoMap,
+        gtx_transformations.GT4PyMoveTaskletIntoMap(uids=uids),
         validate=False,
         validate_all=validate_all,
     )
@@ -768,11 +775,10 @@ def _gt_auto_process_dataflow_inside_maps(
 
     # Make sure that this runs before MoveDataflowIntoIfBody because atm it doesn't handle
     # NestedSDFGs inside the ConditionalBlocks it fuses.
-    sdfg.save("/home/tille/Development/icon4py/graupel_before_fuse_horizontal_condblocks.json")
     sdfg.apply_transformations_repeated(
         gtx_transformations.FuseHorizontalConditionBlocks(uids=uids),
-        validate=True,
-        validate_all=True,
+        validate=False,
+        validate_all=validate_all,
     )
 
     # Move dataflow into the branches of the `if` such that they are only evaluated

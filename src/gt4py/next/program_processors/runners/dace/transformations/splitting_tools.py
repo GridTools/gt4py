@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 import dataclasses
 from typing import Any, Iterable, Optional, Sequence, Union
@@ -680,7 +682,7 @@ def _perform_node_split(
     sdfg: dace.SDFG,
     node_to_split: dace_nodes.AccessNode,
     new_access_nodes: dict[dace_sbs.Subset, dace_nodes.AccessNode],
-    assignment: dict[dace_sbs.Subset, set[EdgeConnectionSpec]],
+    assignment: dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]],
     allow_to_bypass_nodes: bool,
     already_reconfigured_nodes: set[tuple[dace_nodes.Node, str]],
 ) -> None:
@@ -860,7 +862,7 @@ def _perform_node_split_with_bypass_impl(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     node_to_split: dace_nodes.AccessNode,
-    edges_to_relocate: set[EdgeConnectionSpec],
+    edges_to_relocate: OrderedSet[EdgeConnectionSpec],
     already_reconfigured_nodes: set[tuple[dace_nodes.Node, str]],
 ) -> list[dace_graph.MultiConnectorEdge]:
     """Performs the splitting but the edge might go directly to the consumer."""

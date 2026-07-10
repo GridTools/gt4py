@@ -34,7 +34,7 @@ E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 
 
 def assert_close(expected, actual):
-    assert math.isclose(expected, actual), "expected={}, actual={}".format(expected, actual)
+    assert np.allclose(expected, actual), "expected={}, actual={}".format(expected, actual)
 
 
 class nabla_setup:
@@ -99,7 +99,7 @@ class nabla_setup:
 
     @property
     def is_pole_edge_field(self) -> gtx.Field:
-        edge_flags = np.array(self.mesh.edges.flags())
+        edge_flags = np.array(self.mesh.edges.flags(), copy=False)
 
         pole_edge_field = np.zeros((self.edges_size,), dtype=bool)
         for e in range(self.edges_size):
@@ -109,7 +109,7 @@ class nabla_setup:
     @property
     def sign_field(self) -> gtx.Field:
         node2edge_sign = np.zeros((self.nodes_size, self.edges_per_node))
-        edge_flags = np.array(self.mesh.edges.flags())
+        edge_flags = np.array(self.mesh.edges.flags(), copy=False)
 
         for jnode in range(0, self.nodes_size):
             node_edge_con = self.mesh.nodes.edge_connectivity
@@ -203,7 +203,7 @@ class nabla_setup:
         m_pp = self.fs_nodes.create_field(name="m_pp", levels=1, dtype=np.float64)
         rzs = np.array(m_pp, copy=False)
 
-        rcoords_deg = np.array(self.mesh.nodes.field("lonlat"))
+        rcoords_deg = np.array(self.mesh.nodes.field("lonlat"), copy=False)
 
         for jnode in range(0, self.nodes_size):
             for i in range(0, 2):

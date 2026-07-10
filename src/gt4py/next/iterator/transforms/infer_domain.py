@@ -486,21 +486,23 @@ def infer_expr(
 
     if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
         additional_dims = gtx_utils.tree_map(
-            lambda d: _extract_vertical_dims(d)
-            if isinstance(d, domain_utils.SymbolicDomain)
-            else {}
+            lambda d: (
+                _extract_vertical_dims(d) if isinstance(d, domain_utils.SymbolicDomain) else {}
+            )
         )(domain)
     else:
         additional_dims = gtx_utils.tree_map(lambda d: {})(domain)
 
     domain = gtx_utils.tree_map(
-        lambda d, t, a: _filter_domain_dimensions(
-            d,
-            type_info.extract_dims(t),
-            additional_dims=a,
+        lambda d, t, a: (
+            _filter_domain_dimensions(
+                d,
+                type_info.extract_dims(t),
+                additional_dims=a,
+            )
+            if not isinstance(t, ts.DeferredType) and isinstance(d, domain_utils.SymbolicDomain)
+            else d
         )
-        if not isinstance(t, ts.DeferredType) and isinstance(d, domain_utils.SymbolicDomain)
-        else d
     )(domain, el_types, additional_dims)
 
     expr, accessed_domains = _infer_expr(

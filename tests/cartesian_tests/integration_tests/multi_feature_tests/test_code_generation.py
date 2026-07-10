@@ -23,11 +23,17 @@ from gt4py.cartesian.gtscript import (
     J,
     K,
     IJ,
+    IJK,
     computation,
     horizontal,
     interval,
     region,
     sin,
+    tan,
+    isfinite,
+    isinf,
+    isnan,
+    sqrt,
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
@@ -935,12 +941,7 @@ def test_pruned_args_match(backend):
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
-def test_K_offset_write(backend):
-    if backend in ["gt:gpu", "dace:gpu"]:
-        pytest.skip(
-            f"{backend} backend is not capable of K offset write, bug remains unsolved: https://github.com/GridTools/gt4py/issues/1684"
-        )
-
+def test_K_offset_write_simple(backend: str) -> None:
     arraylib = get_array_library(backend)
     array_shape = (1, 1, 4)
     K_values = arraylib.arange(start=40, stop=44)
@@ -960,9 +961,18 @@ def test_K_offset_write(backend):
     B = gt_storage.zeros(
         backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
+
     simple(A, B)
+
     assert (B[:, :, 0] == 0).all()
     assert (B[:, :, 1:3] == K_values[0:2]).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_K_offset_write_forward(backend: str) -> None:
+    arraylib = get_array_library(backend)
+    array_shape = (1, 1, 4)
+    K_values = arraylib.arange(start=40, stop=44)
 
     # Order of operations: FORWARD with negative offset
     # means while A is update B will have non-updated values of A
@@ -980,16 +990,29 @@ def test_K_offset_write(backend):
     B = gt_storage.zeros(
         backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
+
     forward(A, B, 2.0)
+
     assert (A[:, :, :3] == 2.0).all()
     assert (A[:, :, 3] == K_values[3]).all()
     assert (B[:, :, 0] == 0).all()
     assert (B[:, :, 1:] == K_values[1:]).all()
 
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_K_offset_write_backward(backend: str) -> None:
+    arraylib = get_array_library(backend)
+    array_shape = (1, 1, 4)
+    K_values = arraylib.arange(start=40, stop=44)
+
     # Order of operations: BACKWARD with negative offset
     # means A is update B will get the updated values of A
+    # Because of the interval, B[0] is never written
     @gtscript.stencil(backend=backend)
     def backward(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):  # type: ignore
+        with computation(BACKWARD), interval(-1, None):
+            A = scalar
+
         with computation(BACKWARD), interval(1, None):
             A[0, 0, -1] = scalar
             B[0, 0, 0] = A
@@ -998,13 +1021,15 @@ def test_K_offset_write(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     A[:, :, :] = K_values
-    B = gt_storage.empty(
+    B = gt_storage.zeros(
         backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
+
     backward(A, B, 2.0)
-    assert (A[:, :, :3] == 2.0).all()
-    assert (A[:, :, 3] == K_values[3]).all()
-    assert (B[:, :, :] == A[:, :, :]).all()
+
+    assert (A[:, :, :] == 2.0).all()
+    assert (B[:, :, 0] == 0.0).all()
+    assert (B[:, :, 1:] == 2.0).all()
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -1734,3 +1759,50 @@ def test_reset_mask_2d(backend: str) -> None:
     test_set_2d_mask(output, input, mask_2d)
 
     assert (mask_2d == 0).all()
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "debug",
+        "dace:cpu",
+        pytest.param(
+            "dace:gpu",
+            marks=[
+                pytest.mark.requires_gpu,
+                pytest.mark.xfail(
+                    raises=SystemExit,
+                    reason="DaCe issue: Missing `_gbar` symbol for global sync inside nested SDFG.",
+                ),
+            ],
+        ),
+        pytest.param("gt:gpu", marks=[pytest.mark.requires_gpu]),
+    ],
+)
+def test_offset_j_in_temporaries(backend: str):
+    @gtscript.function
+    def a_gtscript_function(b):
+        return sqrt(abs(b[0, 1, 0]))
+
+    @gtscript.stencil(backend=backend)
+    def test_stencil_offset_j_in_temporaries(
+        field_in: Field[IJK, np.float64],  # type: ignore
+        field_out: Field[IJK, np.float64],  # type: ignore
+    ) -> None:
+        with computation(PARALLEL), interval(...):
+            abs_res = abs(field_in)
+            tan_res = tan(abs_res)
+
+            # This is an offset in J on a temporary, it will
+            # require a global kernel sync in KJI for GPU
+            sqrt_res = a_gtscript_function(tan_res)
+
+            field_out = (
+                sqrt_res
+                if isfinite(sqrt_res)
+                else field_in
+                if isinf(sqrt_res)
+                else field_out
+                if isnan(sqrt_res)
+                else 0.0
+            )

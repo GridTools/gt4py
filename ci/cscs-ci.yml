@@ -9,83 +9,37 @@
 #
 
 include:
-  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
-  - local: 'ci/cscs-ci-ext-config.yml'
+  - local: 'ci/cscs-ci-base.yml'
 
-# Note:
-#   block-name-with-dashes      -> defined in remote cscs-ci ext include
-#   block_name_with_underscores -> defined in this file or other file in this repo
-
-variables:  # Default values for base variables (can be overridden in jobs definitions)
-  CUDA_VERSION: '12.6.2'
-  ROCM_VERSION: '6.2.4'
-  UBUNTU_VERSION: '24.04'
-  UV_VERSION: '0.6.12'
-
-.test_python_versions: &test_python_versions ['3.10', '3.13']
-
-stages:
-  - build
-  - test
+.test_python_versions: &test_python_versions ['3.10', '3.14']
 
 # -- Build stage --
-# The build job creates the base image for the CSCS CI only if the external
-# dependencies or the pipeline definition change. The actual repository is
-# cloned at the test stage.
-.build_common:
-  stage: build
+build_cscs_gh200:
   extends:
-    - .dynamic-image-name # Creates a tag (exported as DOCKER_TAG) depending on the files in WATCH_FILECHANGES
-  variables:
-    # jfrog.svc.cscs.ch/dockerhub/ubuntu is the cached version of docker.io/ubuntu
-    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION}
-    # CSCS_REBUILD_POLICY: 'always' => rebuild even if target tag exists already
-    CSCS_REBUILD_POLICY: if-not-exists  # default, i.e. we could also skip the variable
-    DOCKERFILE: ci/Dockerfile
-    # We pass the build arguments to the Dockerfile as a JSON array of names.
-    # The actual values will be taken from environment variables with the same
-    # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
-    # To override the defaults, just define these variables in the actual job.
-    DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
-    PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}  # The $DOCKER_TAG tag is added in the before_script of .dynamic-image-name
-    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci.yml ci/cscs-ci-ext-config.yml uv.lock'
+    - .container-builder-cscs-gh200
+    - .build_settings
+    - .build_extra_cuda
+  needs: []
   parallel:
     matrix:
       - PY_VERSION: *test_python_versions
 
-.build_extra_cuda:
-  variables:
-    # jfrog.svc.cscs.ch/dockerhub/nvidia is the cached version of docker.io/nvidia
-    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
-    EXTRA_UV_SYNC_ARGS: "--extra cuda12"
-
-.build_extra_rocm:
-  variables:
-    # jfrog.svc.cscs.ch/dockerhub/rocm is the cached version of docker.io/rocm
-    BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
-    EXTRA_UV_SYNC_ARGS: "--extra rocm6_0"
-    EXTRA_UV_ENV_VARS: "CUPY_INSTALL_USE_HIP=1 HCC_AMDGPU_TARGET=gfx942 ROCM_HOME=/opt/rocm"
-
-build_cscs_gh200:
-  extends:
-    - .container-builder-cscs-gh200
-    - .build_common
-    - .build_extra_cuda
-  needs: []
-
 build_cscs_amd_rocm:
   extends:
     - .container-builder-cscs-zen2
-    - .build_common
+    - .build_settings
     - .build_extra_rocm
   needs: []
+  parallel:
+    matrix:
+      - PY_VERSION: *test_python_versions
 
 # -- Test stage --
 .test_common:
   stage: test
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
-    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6_0) to test 
+    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm6) to test 
     USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
@@ -93,17 +47,17 @@ build_cscs_amd_rocm:
     matrix:
       - SUBPACKAGE: [cartesian]
         VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'rocm6_0', 'cpu']
+        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
         VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'rocm6_0', 'cpu']
+        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
         DETAIL: ["nomesh", "atlas"]
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: [storage]
-        VARIANT: ['cuda12', 'rocm6_0', 'cpu']
+        VARIANT: ['cuda12', 'rocm7', 'cpu']
         PY_VERSION: *test_python_versions
   rules: &exclude_variants_rules
     # Extended jobs should reference this list anchor at the proper position of their
@@ -112,7 +66,7 @@ build_cscs_amd_rocm:
       when: never
     - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
       when: never
-    - if: '($SUBVARIANT == "rocm6_0" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm6_0")) && ($TEST_VARIANTS !~ /(^|\s)rocm6_0(\s|$)/)'
+    - if: '($SUBVARIANT == "rocm7" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm7")) && ($TEST_VARIANTS !~ /(^|\s)rocm7(\s|$)/)'
       when: never
 
   script:
@@ -136,6 +90,8 @@ test_cscs_gh200:
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'shared'
     GT4PY_BUILD_JOBS: 8
+    # GH200 is sm_90; pinning it skips every CUDA-arch device query.
+    CUDAARCHS: '90'
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
@@ -145,6 +101,9 @@ test_cscs_gh200:
         # TODO: investigate why the dace tests seem to hang with multiple jobs
         GT4PY_BUILD_JOBS: 1
         SLURM_TIMELIMIT: "00:15:00"
+    - if: $SUBPACKAGE == 'next' && $VARIANT == 'internal' && $DETAIL == 'nomesh'
+      variables:
+        SLURM_TIMELIMIT: "00:10:00"
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'cuda12'
       variables:
         SLURM_TIMELIMIT: "00:10:00"
@@ -152,12 +111,12 @@ test_cscs_gh200:
 
 test_cscs_amd_rocm:
   extends:
-    - .tds-container-runner-beverin-mi200
+    - .container-runner-beverin-mi200
     - .test_common
   needs:
     - build_cscs_amd_rocm
   variables:
-    TEST_VARIANTS: 'cpu rocm6_0'
+    TEST_VARIANTS: 'cpu rocm7'
     SLURM_GPUS_PER_NODE: 4
     GT4PY_BUILD_JOBS: 8
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
@@ -174,4 +133,3 @@ test_cscs_amd_rocm:
     - when: on_success
       variables:
         CXX: /opt/rocm/bin/hipcc
-

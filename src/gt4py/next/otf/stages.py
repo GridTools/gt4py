@@ -10,48 +10,57 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable
-from typing import Generic, Optional, Protocol, TypeAlias, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Final,
+    Generic,
+    Optional,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+    runtime_checkable,
+)
 
-from gt4py.eve import utils
-from gt4py.next import common
+from gt4py.next import common, fingerprinting
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import code_specs, definitions
+from gt4py.next.otf import code_specs
 from gt4py.next.otf.binding import interface
 
 
-def compilation_hash(program_def: definitions.CompilableProgramDef) -> int:
-    """Given closure compute a hash uniquely determining if we need to recompile."""
-    offset_provider = program_def.args.offset_provider
-    return hash(
+if TYPE_CHECKING:
+    # Imported only for typing to avoid the import cycle with `otf.definitions`,
+    # which imports this module.
+    from gt4py.next.otf import definitions
+
+
+def fast_compilable_program_fingerprinter(program_def: definitions.CompilableProgramDef) -> str:
+    """
+    In-memory executor cache key: changes whenever the program needs recompilation.
+
+    The program is identified by its location- and type-agnostic semantic
+    fingerprint, while the offset providers are identified by the identity of
+    their connectivities, in iteration order. The order matters because the
+    generated bindings bake in the offset-provider order (see
+    ``extract_connectivity_args``), and the by-identity (rather than by-content)
+    comparison keeps this in-memory key cheap by not hashing the connectivity
+    tables.
+    """
+    prog_def_args = program_def.args
+    offset_provider = prog_def_args.offset_provider
+    return fingerprinting.lenient_fingerprinter(
         (
-            program_def.data,
-            # As the frontend types contain lists they are not hashable. As a workaround we just
-            # use content_hash here.
-            utils.content_hash(tuple(arg for arg in program_def.args.args)),
+            itir.lenient_ir_fingerprinter(program_def.data),
+            prog_def_args.args,
+            prog_def_args.kwargs,
             common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
-            program_def.args.column_axis,
+            prog_def_args.column_axis,
         )
     )
 
 
-def fingerprint_compilable_program(program_def: definitions.CompilableProgramDef) -> str:
-    """
-    Generates a unique hash string for a stencil source program representing
-    the program, sorted offset_provider, and column_axis.
-    """
-    program: itir.Program = program_def.data
-    offset_provider: common.OffsetProvider = program_def.args.offset_provider
-    column_axis: Optional[common.Dimension] = program_def.args.column_axis
-
-    program_hash = utils.content_hash(
-        (
-            program.fingerprint(),
-            sorted(offset_provider.items(), key=lambda el: el[0]),
-            column_axis,
-        )
-    )
-
-    return program_hash
+compilable_program_fingerprinter: Final[fingerprinting.Fingerprinter] = (
+    fingerprinting.strict_fingerprinter
+)
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
@@ -90,9 +99,8 @@ class BindingSource(Generic[CodeSpecT, TargetCodeSpecT]):
     library_deps: tuple[interface.LibraryDependency, ...]
 
 
-# TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableProject(Generic[CodeSpecT, TargetCodeSpecT]):
+class ExtensionSource(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
@@ -117,7 +125,7 @@ TargetCodeSpecT_co = TypeVar("TargetCodeSpecT_co", bound=code_specs.SourceCodeSp
 
 class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
     """
-    Use source code extracted from a ``CompilableSource`` to configure and build a GT4Py program.
+    Use source code extracted from an ``ExtensionSource`` to configure and build a GT4Py program.
 
     Should only be considered an OTF stage if used as an endpoint, as this only runs commands on source files
     and is not responsible for importing the results into Python.
@@ -127,6 +135,25 @@ class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
 
 
 ExecutableProgram: TypeAlias = Callable
+
+
+@runtime_checkable
+class CompilationArtifact(Protocol):
+    """The output of an ``OTFCompileWorkflow``.
+
+    Each backend defines its own concrete artifact dataclass; all share this
+    Protocol. Implementations are frozen dataclasses, picklable, and carry no
+    live process-bound state — that is reconstructed by ``load``, which
+    returns a directly-callable ``ExecutableProgram`` taking gt4py-shaped
+    arguments.
+
+    The one current exception is ``RoundtripArtifact`` when it is configured
+    with a ``dispatch_backend``: that field holds a ``Backend`` reference
+    whose role belongs at the runner / load-time seam, not in the artifact
+    itself.
+    """
+
+    def load(self) -> ExecutableProgram: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

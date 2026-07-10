@@ -37,7 +37,7 @@ def _make_if_block(
     b2_type: dace.typeclass = dace.float64,
     output_type: dace.typeclass = dace.float64,
 ) -> dace_nodes.NestedSDFG:
-    inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
+    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
     for name in {b1_name, b2_name, cond_name, output_name}:
@@ -47,7 +47,7 @@ def _make_if_block(
             transient=False,
         )
 
-    if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
+    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
@@ -91,7 +91,7 @@ def _make_if_block_with_different_number_of_outputs_in_branches(
     output1_type: dace.typeclass = dace.float64,
     output2_type: dace.typeclass = dace.float64,
 ) -> dace_nodes.NestedSDFG:
-    inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
+    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {
         b1_name: b1_type,
@@ -108,7 +108,7 @@ def _make_if_block_with_different_number_of_outputs_in_branches(
             transient=False,
         )
 
-    if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
+    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
@@ -158,7 +158,7 @@ def _make_if_block_with_two_args(
     b4_type: dace.typeclass = dace.float64,
     output_type: dace.typeclass = dace.float64,
 ) -> dace_nodes.NestedSDFG:
-    inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
+    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {
         b1_name: b1_type,
@@ -176,7 +176,7 @@ def _make_if_block_with_two_args(
             transient=False,
         )
 
-    if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
+    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
@@ -217,13 +217,13 @@ def _make_if_block_with_two_args(
 
 def _perform_test(
     sdfg: dace.SDFG,
-    explected_applies: int,
+    expected_applies: int,
     if_block: Optional[dace_nodes.NestedSDFG] = None,
 ) -> dace.SDFG:
     if if_block is not None:
         # The test should be applied in a specific location.
-        assert 0 <= explected_applies <= 1
-        can_be_applied_ref = explected_applies != 0
+        assert 0 <= expected_applies <= 1
+        can_be_applied_ref = expected_applies != 0
         can_be_applied_res = gtx_transformations.MoveDataflowIntoIfBody.can_be_applied_to(
             sdfg=sdfg,
             if_block=if_block,
@@ -232,7 +232,7 @@ def _perform_test(
         return sdfg
 
     # General case, run the SDFG first and then compare the result.
-    if explected_applies != 0:
+    if expected_applies != 0:
         ref, res = util.make_sdfg_args(sdfg)
         util.compile_and_run_sdfg(sdfg, **ref)
 
@@ -241,9 +241,9 @@ def _perform_test(
         validate=True,
         validate_all=True,
     )
-    assert nb_apply == explected_applies
+    assert nb_apply == expected_applies
 
-    if explected_applies == 0:
+    if expected_applies == 0:
         return sdfg
 
     util.compile_and_run_sdfg(sdfg, **res)
@@ -264,7 +264,7 @@ def test_if_mover_independent_branches():
         d = b
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("independent_branches"))
+    sdfg = dace.SDFG(util.unique_name("independent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -345,7 +345,7 @@ def test_if_mover_independent_branches():
     mx.add_out_connector("OUT_d")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -375,7 +375,7 @@ def test_if_mover_independent_branches():
 
 
 def test_if_mover_invalid_if_block():
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("invalid"))
+    sdfg = dace.SDFG(util.unique_name("invalid"))
     state = sdfg.add_state(is_start_block=True)
 
     input_names = ["a", "b", "c", "d"]
@@ -467,7 +467,7 @@ def test_if_mover_invalid_if_block():
     mx.add_out_connector("OUT_d")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=0)
+    _perform_test(sdfg, expected_applies=0)
 
 
 def test_if_mover_dependent_branch_1():
@@ -484,7 +484,7 @@ def test_if_mover_dependent_branch_1():
         d = b
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -582,7 +582,7 @@ def test_if_mover_dependent_branch_1():
     mx.add_out_connector("OUT_d")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -625,7 +625,7 @@ def test_if_mover_dependent_branch_2():
         d = b1
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches_2"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches_2"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -695,7 +695,7 @@ def test_if_mover_dependent_branch_2():
     mx.add_in_connector("IN_d")
     mx.add_out_connector("OUT_d")
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
@@ -725,7 +725,7 @@ def test_if_mover_dependent_branch_3():
     Very similar test to `test_if_mover_dependent_branch_1()`, but the common data
     is an AccessNode outside the Map.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     gnames = ["a", "b", "c", "d", "cond"]
@@ -801,7 +801,7 @@ def test_if_mover_dependent_branch_3():
     assert util.count_nodes(state, dace_nodes.MapEntry) == 2
     assert util.count_nodes(state, dace_nodes.AccessNode) == 7
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     # It is unspecific if `IN_b1` or `IN_b2` remains, but `b` should have only one connector.
     assert any(iconn in me.in_connectors for iconn in ["IN_b1", "IN_b2"])
@@ -831,7 +831,7 @@ def test_if_mover_dependent_branch_4():
         f = s
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -951,16 +951,21 @@ def test_if_mover_dependent_branch_4():
     mx.add_out_connector("OUT_f")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
-    # # Examine the structure of the SDFG.
+    # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1"])
     assert len(sdfg.arrays) == len(top_ac)
+    assert all(state.out_degree(ac) == 1 for ac in [s1, c1])
+    assert all(oedge.dst_conn == "__arg4" for oedge in state.out_edges(s1))
 
     top_tlet: list[dace_nodes.Tasklet] = util.count_nodes(state, dace_nodes.Tasklet, True)
     assert len(top_tlet) == 2
     assert {"tasklet_cond", "tasklet_s1"} == {tlet.label for tlet in top_tlet}
+
+    all_mapped_in_data = [iedge.data.data for iedge in state.in_edges(if_block)]
+    assert len(all_mapped_in_data) == len(set(all_mapped_in_data))
 
     inner_ac: list[dace_nodes.AccessNode] = util.count_nodes(
         if_block.sdfg, dace_nodes.AccessNode, True
@@ -970,12 +975,12 @@ def test_if_mover_dependent_branch_4():
         .union(input_names)
         .union(["__arg1", "__arg2", "__arg3", "__arg4", "__output1", "__output2"])
     )
-    expected_data.difference_update(["c1", "c", "d", "f", "s"])
+    expected_data.difference_update(["c1", "c", "d", "f", "s", "s1"])
     assert expected_data == {ac.data for ac in inner_ac}
-    assert len([ac for ac in inner_ac if ac.data == "s1"]) == 1
+    assert len([ac for ac in inner_ac if ac.data == "__arg4"]) == 2
     assert len([ac for ac in inner_ac if ac.data == "__output1"]) == 2
     assert len([ac for ac in inner_ac if ac.data == "__output2"]) == 2
-    assert len(expected_data) + 3 == len(inner_ac)
+    assert len(expected_data) + 4 == len(inner_ac)
     assert if_block.sdfg.arrays.keys() == expected_data.union(["__cond"])
 
     inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
@@ -986,9 +991,6 @@ def test_if_mover_dependent_branch_4():
     assert {tlet.label for tlet in inner_tlet} == expected_tlet
 
 
-@pytest.mark.xfail(
-    reason="This test is currently expected to fail. For the explanation see: https://github.com/GridTools/gt4py/pull/2514#discussion_r2906948120"
-)
 def test_if_mover_dependent_branch_5():
     """
     Essentially tests the following situation:
@@ -1008,7 +1010,7 @@ def test_if_mover_dependent_branch_5():
         f = s
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_dependent_branches"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_dependent_branches"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1134,16 +1136,21 @@ def test_if_mover_dependent_branch_5():
     mx.add_out_connector("OUT_f")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=2)
+    _perform_test(sdfg, expected_applies=1)
 
-    # # Examine the structure of the SDFG.
+    # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1"])
     assert len(sdfg.arrays) == len(top_ac)
+    assert all(state.out_degree(ac) == 1 for ac in [s1, c1])
+    assert all(oedge.dst_conn == "__arg4" for oedge in state.out_edges(s1))
 
     top_tlet: list[dace_nodes.Tasklet] = util.count_nodes(state, dace_nodes.Tasklet, True)
     assert len(top_tlet) == 2
     assert {"tasklet_cond", "tasklet_s1"} == {tlet.label for tlet in top_tlet}
+
+    all_mapped_in_data = [iedge.data.data for iedge in state.in_edges(if_block)]
+    assert len(all_mapped_in_data) == len(set(all_mapped_in_data))
 
     inner_ac: list[dace_nodes.AccessNode] = util.count_nodes(
         if_block.sdfg, dace_nodes.AccessNode, True
@@ -1153,18 +1160,26 @@ def test_if_mover_dependent_branch_5():
         .union(input_names)
         .union(["__arg1", "__arg2", "__arg3", "__arg4", "__output1", "__output2"])
     )
-    expected_data.difference_update(["c1", "c", "d", "f", "s"])
+    expected_data.difference_update(["c1", "c", "d", "f", "s", "s1"])
     assert expected_data == {ac.data for ac in inner_ac}
-    assert len([ac for ac in inner_ac if ac.data == "s1"]) == 1
+    assert len([ac for ac in inner_ac if ac.data == "__arg4"]) == 2
     assert len([ac for ac in inner_ac if ac.data == "__output1"]) == 2
     assert len([ac for ac in inner_ac if ac.data == "__output2"]) == 2
-    assert len(expected_data) + 3 == len(inner_ac)
+    assert len(expected_data) + 4 == len(inner_ac)
     assert if_block.sdfg.arrays.keys() == expected_data.union(["__cond"])
 
     inner_tlet: list[dace_nodes.Tasklet] = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
-    assert len(inner_tlet) == 5
+    assert len(inner_tlet) == 6
     expected_tlet = {
-        tlet.label for tlet in [tasklet_a1, tasklet_a2, tasklet_b1, tasklet_b2, tasklet_node_reuse]
+        tlet.label
+        for tlet in [
+            tasklet_a1,
+            tasklet_a2,
+            tasklet_a2a,
+            tasklet_b1,
+            tasklet_b2,
+            tasklet_node_reuse,
+        ]
     }
     assert {tlet.label for tlet in inner_tlet} == expected_tlet
 
@@ -1184,7 +1199,7 @@ def test_if_mover_dependent_branch_6():
         e = e1
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_"))
     state = sdfg.add_state(is_start_block=True)
 
     gnames = ["a", "b", "c", "d", "e", "cond"]
@@ -1279,7 +1294,7 @@ def test_if_mover_dependent_branch_6():
     assert util.count_nodes(state, dace_nodes.MapEntry) == 2
     assert util.count_nodes(state, dace_nodes.AccessNode) == 9
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
     # Simplify the SDFG to remove double `b` AccessNode in the false branch.
     sdfg.simplify()
 
@@ -1338,7 +1353,7 @@ def test_if_mover_no_ops():
     ```
     I.e. there is no gain from moving something inside the body.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_no_ops"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_no_ops"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1385,7 +1400,7 @@ def test_if_mover_no_ops():
     sdfg.validate()
 
     # This might change if we will move the read fully inside the branches.
-    _perform_test(sdfg, explected_applies=0)
+    _perform_test(sdfg, expected_applies=0)
 
 
 def test_if_mover_one_branch_is_nothing():
@@ -1398,7 +1413,7 @@ def test_if_mover_one_branch_is_nothing():
     I.e. in one case something can be moved in but there is nothing to move for the
     other branch.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_one_branch_is_nothing"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_one_branch_is_nothing"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1468,7 +1483,7 @@ def test_if_mover_one_branch_is_nothing():
     mx.add_out_connector("OUT_d")
     sdfg.validate()
 
-    _perform_test(sdfg, explected_applies=1)
+    _perform_test(sdfg, expected_applies=1)
 
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
     assert {ac.data for ac in top_ac} == set(input_names).union(["c1"])
@@ -1488,7 +1503,7 @@ def test_if_mover_chain():
     e = aa if cc else bb
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_chain_of_blocks"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_chain_of_blocks"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1590,19 +1605,19 @@ def test_if_mover_chain():
     #  because it is limited by the top one.
     _perform_test(
         sdfg,
-        explected_applies=0,
+        expected_applies=0,
         if_block=bot_if_block,
     )
 
     # But we are able to inline both.
     _perform_test(
         sdfg,
-        explected_applies=2,
+        expected_applies=2,
     )
 
 
 def test_if_mover_symbolic_tasklet():
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_symbols_in_tasklets"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_symbols_in_tasklets"))
     state = sdfg.add_state(is_start_block=True)
 
     for i in [1, 2]:
@@ -1693,10 +1708,10 @@ def test_if_mover_symbolic_tasklet():
 
     sdfg = _perform_test(
         sdfg,
-        explected_applies=1,
+        expected_applies=1,
     )
-    expected_symb = {"symbol_1", "symbol_2"}
 
+    expected_symb = {"symbol_1", "symbol_2"}
     assert if_block.sdfg.symbols.keys() == expected_symb.union(["__i"])
     assert all(if_block.sdfg.symbols[sym] == dace.float64 for sym in expected_symb)
     assert if_block.sdfg.symbols["__i"] in {dace.int32, dace.int64}
@@ -1717,7 +1732,7 @@ def test_if_mover_access_node_between():
     e = aa if cc else bb
     ```
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_chain_of_blocks"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_chain_of_blocks"))
     state = sdfg.add_state(is_start_block=True)
 
     # Inputs
@@ -1808,14 +1823,14 @@ def test_if_mover_access_node_between():
     #  block that in turn has dataflow that could be relocated.
     _perform_test(
         sdfg,
-        explected_applies=0,
+        expected_applies=0,
         if_block=bot_if_block,
     )
 
     # But we are able to process them that way, starting from the bottom.
     _perform_test(
         sdfg,
-        explected_applies=2,
+        expected_applies=2,
     )
 
     expected_top_level_data: set[str] = {"a", "b", "c", "d", "e", "f", "c2"}
@@ -1863,7 +1878,7 @@ def test_if_mover_symbol_aliasing():
     however, with different meanings. Thus the relocation will lead to invalid
     behaviour and should be rejected.
     """
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_mover_symbol_alias"))
+    sdfg = dace.SDFG(util.unique_name("if_mover_symbol_alias"))
     state = sdfg.add_state(is_start_block=True)
 
     scalar_names = ["cond", "a1", "b2"]
@@ -1951,5 +1966,433 @@ def test_if_mover_symbol_aliasing():
     #  to account for the access on the Memlets of the `{true, false}_tlet`.
     _perform_test(
         sdfg=sdfg,
-        explected_applies=0,
+        expected_applies=0,
     )
+
+
+@pytest.mark.parametrize("outer_slice_variable", [True, False])
+def test_if_mover_slice_input(outer_slice_variable: bool):
+    def _make_nested_sdfg(cond_name: str, iter_name: str) -> dace.SDFG:
+        sdfg = dace.SDFG("If_block")
+
+        sdfg.add_scalar("arg1", dtype=dace.float64, transient=False)
+        sdfg.add_scalar("out", dtype=dace.float64, transient=False)
+        sdfg.add_scalar(cond_name, dtype=dace.bool_, transient=False)
+        sdfg.add_array("arg2", shape=(10,), dtype=dace.float64, transient=False)
+        sdfg.add_symbol(iter_name, stype=dace.int32)
+
+        then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=sdfg)
+        tstate = then_body.add_state("true_branch", is_start_block=True)
+        tstate.add_edge(
+            tstate.add_access("arg1"),
+            None,
+            tstate.add_access("out"),
+            None,
+            dace.Memlet("arg1[0] -> [0]"),
+        )
+
+        else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=sdfg)
+        fstate = else_body.add_state("false_branch", is_start_block=True)
+        f_tasklet = fstate.add_tasklet(
+            "f_tasklet", inputs={"__in"}, outputs={"__out"}, code="__out = __in + 1.0"
+        )
+        fstate.add_edge(
+            fstate.add_access("arg2"), None, f_tasklet, "__in", dace.Memlet(f"arg2[{iter_name}]")
+        )
+        fstate.add_edge(f_tasklet, "__out", fstate.add_access("out"), None, dace.Memlet("out[0]"))
+
+        if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
+        sdfg.add_node(if_region, is_start_block=True)
+        if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
+        if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}"), else_body)
+
+        sdfg.validate()
+        return sdfg
+
+    def _make_outer_sdfg(
+        cond_name: str,
+        iter_name: str,
+        outer_slice_variable: bool,
+    ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.NestedSDFG]:
+        sdfg = dace.SDFG(util.unique_name("if_mover_slicing"))
+        state = sdfg.add_state(is_start_block=True)
+
+        # Inputs
+        input_names = list("abcd")
+        for name in input_names:
+            sdfg.add_array(
+                name,
+                shape=((10, 10) if name.startswith("b") else (10,)),
+                dtype=dace.float64,
+                transient=False,
+            )
+
+        # Temporaries
+        temporary_names = ["a1", "c1"]
+        for name in temporary_names:
+            sdfg.add_scalar(
+                name, dtype=dace.bool_ if name.startswith("c") else dace.float64, transient=True
+            )
+        a1, c1 = (state.add_access(name) for name in temporary_names)
+
+        me, mx = state.add_map("map", ndrange={iter_name: "0:10"})
+        for name in input_names[:-1]:
+            state.add_edge(
+                state.add_access(name),
+                None,
+                me,
+                f"IN_{name}",
+                dace.Memlet(data=name, subset=("0:10, 0:10" if name == "b" else "0:10")),
+            )
+            me.add_scope_connectors(name)
+
+        state.add_edge(
+            mx, "OUT_d", state.add_access("d"), None, dace.Memlet(data="d", subset="0:10")
+        )
+        mx.add_scope_connectors("d")
+
+        # First branch.
+        tasklet_a1 = state.add_tasklet(
+            "tasklet_a1",
+            inputs={"__in1", "__in2"},
+            outputs={"__out"},
+            code="__out = __in1 + __in2",
+        )
+
+        state.add_edge(me, "OUT_a", tasklet_a1, "__in1", dace.Memlet(f"a[{iter_name}]"))
+        state.add_edge(
+            me, "OUT_b", tasklet_a1, "__in2", dace.Memlet(f"b[{iter_name}, {iter_name}]")
+        )
+        state.add_edge(tasklet_a1, "__out", a1, None, dace.Memlet("a1[0]"))
+
+        # Second branch
+        if outer_slice_variable:
+            sdfg.add_array("slice_b", shape=(10,), dtype=dace.float64, transient=True)
+            slice_b = state.add_access("slice_b")
+            state.add_edge(
+                me, "OUT_b", slice_b, None, dace.Memlet(f"b[{iter_name}, 0:10] -> [0:10]")
+            )
+
+        # Condition
+        tasklet_c1 = state.add_tasklet(
+            "tasklet_c1",
+            inputs={"__in"},
+            outputs={"__out"},
+            code="__out = __in > 0.5",
+        )
+        state.add_edge(me, "OUT_c", tasklet_c1, "__in", dace.Memlet(f"c[{iter_name}]"))
+        state.add_edge(tasklet_c1, "__out", c1, None, dace.Memlet("c1[0]"))
+
+        # Nested SDFG
+        nsdfg = state.add_nested_sdfg(
+            sdfg=_make_nested_sdfg(cond_name=cond_name, iter_name=iter_name),
+            inputs={"arg1", "arg2", cond_name},
+            outputs={"out"},
+            symbol_mapping={iter_name: iter_name},
+        )
+        state.add_edge(a1, None, nsdfg, "arg1", dace.Memlet("a1[0]"))
+        state.add_edge(c1, None, nsdfg, cond_name, dace.Memlet("c1[0]"))
+
+        if outer_slice_variable:
+            state.add_edge(slice_b, None, nsdfg, "arg2", dace.Memlet("slice_b[0:10]"))
+        else:
+            state.add_edge(me, "OUT_b", nsdfg, "arg2", dace.Memlet(f"b[{iter_name}, 0:10]"))
+
+        state.add_edge(nsdfg, "out", mx, "IN_d", dace.Memlet(f"d[{iter_name}]"))
+
+        sdfg.validate()
+        return sdfg, state, nsdfg
+
+    iter_name = "__i"
+    cond_name = "cond"
+
+    sdfg, state, nsdfg = _make_outer_sdfg(
+        cond_name=cond_name, iter_name=iter_name, outer_slice_variable=outer_slice_variable
+    )
+
+    tlet_before = util.count_nodes(sdfg, dace_nodes.Tasklet, True)
+
+    assert iter_name in nsdfg.symbol_mapping
+    assert len(tlet_before) == 2
+    assert {"tasklet_a1", "tasklet_c1"} == {tlet.label for tlet in tlet_before}
+    assert state.in_degree(nsdfg) == 3
+    assert {"a1", "c1", ("slice_b" if outer_slice_variable else "b")} == {
+        ie.data.data for ie in state.in_edges(nsdfg)
+    }
+    assert "b" not in nsdfg.in_connectors
+
+    _perform_test(
+        sdfg=sdfg,
+        expected_applies=1,
+    )
+
+    tlet_after = util.count_nodes(sdfg, dace_nodes.Tasklet, True)
+    inner_ac = util.count_nodes(nsdfg.sdfg, dace_nodes.AccessNode, True)
+
+    assert len(tlet_after) == 1
+    assert tlet_after[0].label == "tasklet_c1"
+    assert "b" in nsdfg.in_connectors
+
+    if outer_slice_variable:
+        assert nsdfg.sdfg.arrays["arg1"].transient
+        assert nsdfg.sdfg.arrays["arg2"].transient
+        assert nsdfg.sdfg.arrays["slice_b"].transient
+        assert not nsdfg.sdfg.arrays["b"].transient
+        assert not nsdfg.sdfg.arrays["a"].transient
+
+        # In this case the slicing was done inside.
+        assert state.in_degree(nsdfg) == 3
+        assert {"c1", "b", "a"} == {ie.data.data for ie in state.in_edges(nsdfg)}
+
+        assert len([ac for ac in inner_ac if ac.data == "b"]) == 2
+        assert len([ac for ac in inner_ac if ac.data == "slice_b"]) == 1
+
+    else:
+        assert nsdfg.sdfg.arrays["arg1"].transient
+        assert not nsdfg.sdfg.arrays["arg2"].transient
+        assert not nsdfg.sdfg.arrays["b"].transient
+        assert not nsdfg.sdfg.arrays["a"].transient
+
+        assert state.in_degree(nsdfg) == 4
+        assert {"c1", "b", "a"} == {ie.data.data for ie in state.in_edges(nsdfg)}
+        assert sum(1 for ie in state.in_edges(nsdfg) if ie.data.data == "a") == 1
+
+        # It would be possible to have only one edge that goes into the nested SDFG.
+        #  However, we would need to perform some more modifications.
+        assert len([ie for ie in state.in_edges(nsdfg) if ie.data.data == "b"]) == 2
+        assert len([ac for ac in inner_ac if ac.data == "b"]) == 1
+
+
+def test_if_mover_symbol_clashes_with_inner_data():
+    """Tests that relocation is rejected when a tasklet free symbol clashes
+    with a data descriptor inside the nested SDFG.
+
+    The tasklet ``__out = my_var`` uses ``my_var`` as a free variable that refers
+    to the outer SDFG symbol. The nested SDFG also has ``my_var`` as an input
+    scalar data descriptor. If the transformation relocated the tasklet, the
+    free variable reference would silently resolve to the inner data descriptor
+    instead of the outer symbol, producing incorrect results. The transformation
+    must detect this conflict via ``_check_for_data_and_symbol_conflicts`` and
+    refuse to apply.
+    """
+    sdfg = dace.SDFG(util.unique_name("symbol_data_clash"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # `my_var` is a symbol in the outer SDFG, not a data container.
+    sdfg.add_symbol("my_var", dace.float64)
+
+    for name in ["b", "out"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_scalar("val", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("cond", dtype=dace.bool_, transient=True)
+
+    me, mx = state.add_map("map", ndrange={"__i": "0:10"})
+
+    # Build the nested SDFG. It contains `my_var` as a non-transient input scalar
+    # data descriptor — the same name as the symbol in the outer SDFG. This
+    # creates the name conflict that the transformation must detect.
+    # The two input connectors are named `my_var` (true branch) and `other_var`
+    # (false branch).
+    inner_sdfg = dace.SDFG("if_body_with_my_var")
+    for name in ["my_var", "other_var", "__output"]:
+        inner_sdfg.add_scalar(name, dtype=dace.float64, transient=False)
+    inner_sdfg.add_scalar("__cond", dtype=dace.bool_, transient=False)
+
+    if_region = dace.sdfg.state.ConditionalBlock("if_region")
+    inner_sdfg.add_node(if_region, is_start_block=True)
+
+    then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
+    tstate = then_body.add_state("true_branch", is_start_block=True)
+    tstate.add_nedge(
+        tstate.add_access("my_var"),
+        tstate.add_access("__output"),
+        dace.Memlet("my_var[0] -> [0]"),
+    )
+
+    else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
+    fstate = else_body.add_state("false_branch", is_start_block=True)
+    fstate.add_nedge(
+        fstate.add_access("other_var"),
+        fstate.add_access("__output"),
+        dace.Memlet("other_var[0] -> [0]"),
+    )
+
+    if_region.add_branch(dace.sdfg.state.CodeBlock("__cond"), then_body)
+    if_region.add_branch(dace.sdfg.state.CodeBlock("not __cond"), else_body)
+
+    if_block = state.add_nested_sdfg(
+        sdfg=inner_sdfg,
+        inputs={"my_var", "other_var", "__cond"},
+        outputs={"__output"},
+    )
+
+    # Tasklet with no input connectors that reads the outer symbol `my_var` as a
+    # free variable. This is the node the transformation would try to relocate.
+    tlet_sym = state.add_tasklet(  # noqa: F841  [only needed to verify can_be_applied]
+        "symbol_to_scalar",
+        inputs={},
+        outputs={"__out"},
+        code="__out = my_var",
+    )
+    val_ac = state.add_access("val")
+    cond_ac = state.add_access("cond")
+
+    # Place `tlet_sym` inside the map via an empty memlet from `me`.
+    state.add_nedge(me, tlet_sym, dace.Memlet())
+    state.add_edge(tlet_sym, "__out", val_ac, None, dace.Memlet("val[0]"))
+    state.add_edge(val_ac, None, if_block, "my_var", dace.Memlet("val[0]"))
+
+    # `other_var` is a direct pass-through from `b` via the map.
+    state.add_edge(state.add_access("b"), None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_b", if_block, "other_var", dace.Memlet("b[__i]"))
+    me.add_scope_connectors("b")
+
+    # Condition: a tasklet that writes True to `cond` when `__i` is even.
+    cond_tlet = state.add_tasklet(
+        "cond_tasklet",
+        inputs={},
+        outputs={"__out"},
+        code="__out = (__i % 2 == 0)",
+    )
+    state.add_nedge(me, cond_tlet, dace.Memlet())
+    state.add_edge(cond_tlet, "__out", cond_ac, None, dace.Memlet("cond[0]"))
+    state.add_edge(cond_ac, None, if_block, "__cond", dace.Memlet("cond[0]"))
+
+    # Output path.
+    state.add_edge(if_block, "__output", mx, "IN_out", dace.Memlet("out[__i]"))
+    state.add_edge(mx, "OUT_out", state.add_access("out"), None, dace.Memlet("out[0:10]"))
+    mx.add_scope_connectors("out")
+
+    sdfg.validate()
+
+    # The transformation must NOT apply. The free symbol `my_var` in `tlet_sym`
+    # has the same name as the input data descriptor `my_var` inside the nested
+    # SDFG. Relocating `tlet_sym` would silently replace the outer-symbol
+    # reference with a read of the inner scalar, producing wrong results.
+    _perform_test(sdfg, expected_applies=0, if_block=if_block)
+
+
+def test_if_mover_two_accessnodes_same_outer_data():
+    """
+    Trigger the AssertionError at the
+    ``assert (outer_data, branch_state) not in rename_map`` guard inside
+    ``_replicate_dataflow_into_branch`` when two *distinct* AccessNode objects
+    both carrying the same outer array name feed different input connectors of
+    a relocated Tasklet.
+
+    Concretely the outer SDFG looks like (inside a Map):
+
+    ```
+    outer_a1("a") ──► IN_a1 ─┐
+                             ├─► tasklet_compute(a[__i]+a[__i]) ──► a_out ──► if_block.arg_true
+    outer_a2("a") ──► IN_a2 ─┘
+    ```
+
+    ``tasklet_compute`` is relocatable (feeds only the true branch).
+    When ``_replicate_dataflow_into_branch`` processes its two incoming edges:
+
+    - Edge 1: ``outer_a1`` is unknown → goes through the ``else`` branch,
+      creates a new connector ``"a"`` and records
+      ``rename_map[("a", true_state)] = "a"``.
+
+    - Edge 2: ``outer_a2`` is a *different* Python object, so
+      ``(outer_a2, true_state)`` is not in ``node_map``.  But ``"a"`` is now
+      in ``fully_mapped_in_data``, so the code enters the
+      ``elif outer_data in fully_mapped_in_data`` branch and hits
+      ``assert (outer_data, branch_state) not in rename_map`` → crash.
+    """
+    sdfg = dace.SDFG(util.unique_name("two_accessnodes_same_outer_data"))
+    state = sdfg.add_state(is_start_block=True)
+
+    # Outer arrays
+    for name in ["a", "b", "cond_in", "d"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+
+    # Transients
+    sdfg.add_scalar("a_out", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("b_out", dtype=dace.float64, transient=True)
+    sdfg.add_scalar("cond_val", dtype=dace.bool_, transient=True)
+
+    me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
+
+    # Output
+    mx.add_in_connector("IN_d")
+    mx.add_out_connector("OUT_d")
+    state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
+
+    # "a" fed into the map via *two separate* outer AccessNode objects, each
+    # with its own MapEntry connector pair — the key requirement for the bug.
+    outer_a1 = state.add_access("a")
+    outer_a2 = state.add_access("a")
+    for outer_an, suffix in [(outer_a1, "1"), (outer_a2, "2")]:
+        me.add_in_connector(f"IN_a{suffix}")
+        me.add_out_connector(f"OUT_a{suffix}")
+        state.add_edge(outer_an, None, me, f"IN_a{suffix}", dace.Memlet("a[0:10]"))
+
+    # Tasklet that reads "a" via both map connectors (stencil-like).
+    # This is the node that will be relocated into the true branch.
+    tasklet_a = state.add_tasklet(
+        "tasklet_a",
+        inputs={"__in1", "__in2"},
+        outputs={"__out"},
+        code="__out = __in1 + __in2",
+    )
+    state.add_edge(me, "OUT_a1", tasklet_a, "__in1", dace.Memlet("a[__i]"))
+    state.add_edge(me, "OUT_a2", tasklet_a, "__in2", dace.Memlet("a[__i]"))
+    a_out_an = state.add_access("a_out")
+    state.add_edge(tasklet_a, "__out", a_out_an, None, dace.Memlet("a_out[0]"))
+
+    # Independent false-branch computation (different data, no sharing with "a")
+    me.add_in_connector("IN_b")
+    me.add_out_connector("OUT_b")
+    state.add_edge(state.add_access("b"), None, me, "IN_b", dace.Memlet("b[0:10]"))
+    tasklet_b = state.add_tasklet(
+        "tasklet_b", inputs={"__in"}, outputs={"__out"}, code="__out = __in"
+    )
+    state.add_edge(me, "OUT_b", tasklet_b, "__in", dace.Memlet("b[__i]"))
+    b_out_an = state.add_access("b_out")
+    state.add_edge(tasklet_b, "__out", b_out_an, None, dace.Memlet("b_out[0]"))
+
+    # Non-relocatable condition
+    me.add_in_connector("IN_cond_in")
+    me.add_out_connector("OUT_cond_in")
+    state.add_edge(
+        state.add_access("cond_in"), None, me, "IN_cond_in", dace.Memlet("cond_in[0:10]")
+    )
+    tasklet_cond = state.add_tasklet(
+        "tasklet_cond", inputs={"__in"}, outputs={"__out"}, code="__out = __in > 0.5"
+    )
+    cond_an = state.add_access("cond_val")
+    state.add_edge(me, "OUT_cond_in", tasklet_cond, "__in", dace.Memlet("cond_in[__i]"))
+    state.add_edge(tasklet_cond, "__out", cond_an, None, dace.Memlet("cond_val[0]"))
+
+    # if_block: true branch = arg_true, false branch = arg_false
+    if_block = _make_if_block(
+        state=state,
+        outer_sdfg=sdfg,
+        b1_name="arg_true",
+        b2_name="arg_false",
+        cond_name="__cond",
+        output_name="__output",
+    )
+    state.add_edge(a_out_an, None, if_block, "arg_true", dace.Memlet("a_out[0]"))
+    state.add_edge(b_out_an, None, if_block, "arg_false", dace.Memlet("b_out[0]"))
+    state.add_edge(cond_an, None, if_block, "__cond", dace.Memlet("cond_val[0]"))
+    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+
+    sdfg.validate()
+
+    # Before the fix ``apply()`` crashes with AssertionError:
+    #   assert ("a", true_state) not in rename_map
+    # because the first incoming edge of ``tasklet_a`` (from outer_a1) stores
+    # the entry and the second edge (from outer_a2) finds it already set.
+    _perform_test(sdfg, expected_applies=1)
+
+    # After a successful transformation both "a" tasklets should be inside the
+    # if_block and only the condition tasklet should remain outside.
+    top_tlet = util.count_nodes(state, dace_nodes.Tasklet, True)
+    assert len(top_tlet) == 1
+    assert top_tlet[0].label == "tasklet_cond"
+
+    inner_tlet = util.count_nodes(if_block.sdfg, dace_nodes.Tasklet, True)
+    assert {t.label for t in inner_tlet} == {"tasklet_a", "tasklet_b"}
