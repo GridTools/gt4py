@@ -17,6 +17,7 @@ import multiprocessing
 import os
 import pathlib
 import pickle
+import sys
 import threading
 import warnings
 from typing import Any, Callable, Protocol, runtime_checkable
@@ -167,8 +168,13 @@ def _run_compilation_task_in_worker(
     executor_blob: bytes,
     compilable: Any,
     config_overrides: dict[str, Any],
+    recursion_limit: int,
 ) -> stages.CompilationArtifact:
     """Worker entry point: deserialize the executor and run it."""
+    # `sys.setrecursionlimit` is per-process: a limit the parent raised for
+    # deeply nested IR would silently reset to the interpreter default in a
+    # `spawn` worker. Adopt the parent's limit, but never lower the worker's.
+    sys.setrecursionlimit(max(recursion_limit, sys.getrecursionlimit()))
     _apply_config_overrides(config_overrides)
     executor = pickle.loads(executor_blob)
     return executor(compilable)
@@ -225,6 +231,7 @@ class ProcessRunner:
             executor_blob=executor_blob,
             compilable=task.construct_compilable(True),
             config_overrides=_config_snapshot(),
+            recursion_limit=sys.getrecursionlimit(),
         )
 
     def shutdown(self, wait: bool = True) -> None:

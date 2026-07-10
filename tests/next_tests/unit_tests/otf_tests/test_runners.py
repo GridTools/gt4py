@@ -12,6 +12,7 @@ import gc
 import multiprocessing
 import os
 import pickle
+import sys
 import unittest.mock as mock
 
 import numpy as np
@@ -51,6 +52,34 @@ def test_process_runner_falls_back_on_unpicklable_executor(process_runner):
 
     assert future.done()
     assert callable(future.result().load())
+
+
+def _recurse(depth: int) -> None:
+    if depth > 0:
+        _recurse(depth - 1)
+
+
+@dataclasses.dataclass(frozen=True)
+class _RecursingExecutor:
+    depth: int
+
+    def __call__(self, compilable):
+        _recurse(self.depth)
+        return _NoOpArtifact()
+
+
+def test_process_runner_propagates_recursion_limit(process_runner):
+    """A raised ``sys.setrecursionlimit`` must reach the worker: it is per-process,
+    and ``spawn`` workers start back at the interpreter default, so deep-IR
+    compiles that succeed in the parent would otherwise fail worker-side."""
+    old_limit = sys.getrecursionlimit()
+    depth = old_limit + 1000
+    sys.setrecursionlimit(depth + 1000)
+    try:
+        future = process_runner.submit(_decomposed_task(executor=_RecursingExecutor(depth)))
+        assert callable(future.result(timeout=120).load())
+    finally:
+        sys.setrecursionlimit(old_limit)
 
 
 def test_process_runner_falls_back_on_non_offloadable_task(process_runner):
