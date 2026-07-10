@@ -39,6 +39,40 @@ class CxxCompilerDefaults:
     """Cxx compile flags"""
 
 
+def _intel_cxx_flags(optimization_level: str) -> list[str]:
+    flags = []
+    if optimization_level == "0":
+        flags.append("-g")
+        flags.append("-traceback")  # make sure to have a good stack
+        flags.append("-fp-model=strict")  # strict model for FP opts
+
+    return flags
+
+
+def _gnu_cxx_flags(optimization_level: str) -> list[str]:
+    flags = []
+    if optimization_level == "0":
+        flags.append("-g")
+
+    return flags
+
+
+def _apple_clang_cxx_flags(optimization_level: str) -> list[str]:
+    flags = []
+    if optimization_level == "0":
+        flags.append("-g")
+
+    return flags
+
+
+def _llvm_clang_cxx_flags(optimization_level: str) -> list[str]:
+    flags = []
+    if optimization_level == "0":
+        flags.append("-g")
+
+    return flags
+
+
 def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
     """Return a set of defaults for the compiler flags"""
 
@@ -49,12 +83,12 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
     # Defaults
     name = CxxCompilerName.DEFAULT
     open_mp_flags = "-fopenmp"
-    cxx_flags = ""
+    cxx_flags: list[str] = []
     enable_openmp = True
 
     # FMA is deactivated by default when running -O0
     if optimization_level == "0":
-        cxx_flags += "-ffp-contract=off"
+        cxx_flags.append("-ffp-contract=off")
 
     # Query the compiler version string
     try:
@@ -65,23 +99,31 @@ def cxx_compiler_defaults(optimization_level: str) -> CxxCompilerDefaults:
         version_name_on_cli = "default"
     if "gcc" in version_name_on_cli.lower():
         name = CxxCompilerName.GNU
-    elif "icx" in version_name_on_cli.lower() or "icpx" in version_name_on_cli.lower():
+        cxx_flags.extend(_gnu_cxx_flags(optimization_level))
+    elif (
+        "icx" in version_name_on_cli.lower()
+        or "icpx" in version_name_on_cli.lower()
+        or "intel" in version_name_on_cli.lower()
+    ):
         name = CxxCompilerName.INTEL
+        cxx_flags.extend(_intel_cxx_flags(optimization_level))
         open_mp_flags = "-qopenmp"
     elif "apple clang" in version_name_on_cli.lower():
         # By default Apple Clang doesn't have OpenMP installed,
         # so we remove the flag and disallow OpenMP altogether
         name = CxxCompilerName.APPLE_CLANG
         open_mp_flags = ""
+        cxx_flags.extend(_apple_clang_cxx_flags(optimization_level))
         enable_openmp = False
     elif "clang" in version_name_on_cli.lower():
         name = CxxCompilerName.CLANG
+        cxx_flags.extend(_llvm_clang_cxx_flags(optimization_level))
 
     return CxxCompilerDefaults(
         name,
         open_mp_flags,
         enable_openmp,
-        cxx_flags.strip(),  # be overly cautious for old GCC bad behavior
+        " ".join(cxx_flags).strip(),  # be overly cautious for old GCC bad behavior
     )
 
 
@@ -127,19 +169,18 @@ def gpu_configuration(optimization_level: str) -> GPUConfiguration:
         library_path = os.path.join(cuda_root, "lib64")
 
     # Default arguments for GPU source code
-    gpu_compile_flags_default = ""
+    gpu_compile_flags: list[str] = []
     if optimization_level == "0":
         # When running -O0 we deactivate FMA
-        gpu_compile_flags_default = "-fmad=false"
+        gpu_compile_flags.append("-fmad=false")
 
-    extra_cuda_compile_args = os.environ.get(
-        "GT4PY_CARTESIAN_EXTRA_CUDA_COMPILE_ARGS", gpu_compile_flags_default
-    )
-    gpu_compile_flags = extra_cuda_compile_args.split(" ") if extra_cuda_compile_args else []
+    extra_cuda_compile_args = os.environ.get("GT4PY_CARTESIAN_EXTRA_CUDA_COMPILE_ARGS", "")
+    gpu_compile_flags.extend(extra_cuda_compile_args.split(" "))
 
     return GPUConfiguration(
         name=name,
-        gpu_compile_flags=gpu_compile_flags,
+        # strip any leading/trailing whitespace and filter empty flags
+        gpu_compile_flags=[flag.strip() for flag in gpu_compile_flags if len(flag.strip()) > 0],
         binary_path=os.path.join(cuda_root, "bin"),
         include_path=os.path.join(cuda_root, "include"),
         library_path=library_path,

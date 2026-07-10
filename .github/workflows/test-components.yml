@@ -16,7 +16,7 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: get-versions
         uses: ./.github/actions/get-python-versions
 
@@ -26,7 +26,7 @@ jobs:
     outputs:
       test-sessions-exclusions: ${{ steps.test-sessions-exclusions.outputs.test-sessions-exclusions }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Use a deep clone to get target PR branch
 
@@ -41,7 +41,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             # Exclude test sessions not affected by the PR changes
-            ./scripts-cli.py github-ci matrix-exclude \
+            ./scripts/run github-ci matrix-exclude \
               --config nox-sessions-config.yml \
               --base "origin/${{ github.base_ref }}" \
               --output gh-exclude-test-sessions.json \
@@ -90,7 +90,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install uv and set the python version
         uses: astral-sh/setup-uv@v7
         with:

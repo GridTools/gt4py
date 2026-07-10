@@ -211,7 +211,7 @@ class BaseBackend(Backend):
 
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_text(module_source)
+            file_path.write_text(module_source, encoding="utf-8")
             self.builder.caching.update_cache_info()
 
         module = self._load()
@@ -287,7 +287,7 @@ class BasePyExtBackend(BaseBackend):
                 sources.append(str(src_file_path))
 
             if source is not gt_utils.NOTHING:
-                src_file_path.write_text(source)
+                src_file_path.write_text(source, encoding="utf-8")
 
         pyext_target_file_path = self.builder.pkg_path
         qualified_pyext_name = self.pyext_module_path

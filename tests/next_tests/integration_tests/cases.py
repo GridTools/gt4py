@@ -5,6 +5,16 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+"""Framework for gt4py.next integration ("feature") tests.
+
+A test requests the ``cartesian_case`` / ``unstructured_case`` fixture -- a
+``Case`` bundling a backend, allocator, offset provider and default sizes --
+builds inputs with ``allocate(...)``, and checks results with ``verify(...)`` /
+``verify_with_default_data(...)``. The backend matrix these fixtures
+parametrize over, and the per-backend skip/xfail lists, live in
+``next_tests.definitions`` (see ADR 0015). The shared fixtures and the
+dimension / offset / field aliases live in the sibling ``cases_utils`` module.
+"""
 
 from __future__ import annotations
 
@@ -37,7 +47,7 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.otf import arguments
 
 from next_tests import definitions as test_definitions
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
+from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-import]
     C2E,
     C2V,
     E2V,
@@ -48,12 +58,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     E2VDim,
     Edge,
     IDim,
-    Ioff,
     JDim,
-    Joff,
     KDim,
     KHalfDim,
-    Koff,
     V2EDim,
     Vertex,
     exec_alloc_descriptor,
@@ -572,7 +579,7 @@ def unstructured_case_3d(unstructured_case):
     return dataclasses.replace(
         unstructured_case,
         default_sizes={**unstructured_case.default_sizes, KDim: 10},
-        offset_provider={**unstructured_case.offset_provider, "Koff": KDim},
+        offset_provider=unstructured_case.offset_provider,
     )
 
 

@@ -33,7 +33,7 @@ from .utils import match
 
 def build_gridtools_test(tmp_path: Path, code: str):
     tmp_src = tmp_path / "test.cpp"
-    tmp_src.write_text(code)
+    tmp_src.write_text(code, encoding="utf-8")
 
     extra_compile_args = ["-std=c++17"]
     ext_module = setuptools.Extension(

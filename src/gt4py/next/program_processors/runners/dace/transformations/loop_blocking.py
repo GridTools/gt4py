@@ -19,6 +19,7 @@ from dace import (
     symbolic as dace_symb,
     transformation as dace_transformation,
 )
+from dace.libraries import standard as dace_stdlib
 from dace.sdfg import (
     graph as dace_graph,
     nodes as dace_nodes,
@@ -28,7 +29,10 @@ from dace.sdfg import (
 from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowering
+from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtx_lib,
+    lowering as gtx_dace_lowering,
+)
 
 
 @dace_properties.make_properties
@@ -599,7 +603,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             #  set of new independent nodes.
             new_independent_nodes.update(map_scope.nodes())
 
-        elif isinstance(node_to_classify, dace.libraries.standard.nodes.Reduce):
+        elif isinstance(node_to_classify, (dace_stdlib.Reduce, gtx_lib.ReduceWithSkipValues)):
             # The only checks we impose on them is the free symbols check and the
             #  input output checks.
             pass

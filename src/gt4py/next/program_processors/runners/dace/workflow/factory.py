@@ -16,10 +16,8 @@ import factory
 from gt4py._core import definitions as core_defs, filecache
 from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
-from gt4py.next.program_processors.runners.dace.workflow import (
-    bindings as bindings_step,
-    decoration as decoration_step,
-)
+from gt4py.next.otf.compilation import cache
+from gt4py.next.program_processors.runners.dace.workflow import bindings as bindings_step
 from gt4py.next.program_processors.runners.dace.workflow.compilation import (
     DaCeCompilationStepFactory,
 )
@@ -44,10 +42,15 @@ class DaCeWorkflowFactory(factory.Factory):
 
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(
+                lambda o: workflow.CachedStep.persistent(
                     o.bare_translation,
-                    hash_function=stages.fingerprint_compilable_program,
-                    cache=filecache.FileCache(str(config.BUILD_CACHE_DIR / "translation_cache")),
+                    input_fingerprinter=stages.compilable_program_fingerprinter,
+                    cache=filecache.FileCache(
+                        str(
+                            cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME)
+                            / "translation_cache"
+                        )
+                    ),
                 )
             ),
         )
@@ -71,10 +74,4 @@ class DaCeWorkflowFactory(factory.Factory):
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
-    )
-    decoration = factory.LazyAttribute(
-        lambda o: functools.partial(
-            decoration_step.convert_args,
-            device=o.device_type,
-        )
     )

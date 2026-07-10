@@ -33,21 +33,22 @@ from next_tests.integration_tests.cases import (
     Edge,
     Cell,
     IDim,
-    Ioff,
     JDim,
     KDim,
-    Koff,
     V2EDim,
     Vertex,
     exec_alloc_descriptor,
     mesh_descriptor,
     unstructured_case,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import simple_mesh
+from next_tests.integration_tests.cases_utils import simple_mesh
 
 bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+
+Ioff = im.cartesian_offset(IDim, IDim)
+Koff = im.cartesian_offset(KDim, KDim)
 float64_list_type = ts.ListType(element_type=float64_type, offset_type=V2EDim)
 int_list_type = ts.ListType(element_type=int_type, offset_type=V2EDim)
 
@@ -171,7 +172,8 @@ def expression_test_cases():
         ),
         # shift
         (im.shift("V2E", 1)(im.ref("it", it_on_v_of_e_type)), it_on_e_of_e_type),
-        (im.shift("Ioff", 1)(im.ref("it", it_ijk_type)), it_ijk_type),
+        # cartesian shift via `CartesianOffset`
+        (im.shift(Ioff, 1)(im.ref("it", it_ijk_type)), it_ijk_type),
         # as_fieldop
         (
             im.as_fieldop("deref", i_domain)(im.ref("inp", float_i_field)),
@@ -179,21 +181,21 @@ def expression_test_cases():
         ),
         (
             im.as_fieldop(
-                im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))),
+                im.lambda_("it")(im.deref(im.shift(Ioff, 1)("it"))),
                 i_domain,
             )(im.ref("inp", float_i_field)),
             float_i_field,
         ),
         (
             im.as_fieldop(
-                im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))),
+                im.lambda_("it")(im.deref(im.shift(Ioff, 1)("it"))),
                 ij_domain,
             )(im.ref("inp", float_ij_field)),
             float_ij_field,
         ),
         (
             im.as_fieldop(
-                im.lambda_("it")(im.deref(im.shift("Koff", 1)(im.shift("V2E", 0)("it")))),
+                im.lambda_("it")(im.deref(im.shift(Koff, 1)(im.shift("V2E", 0)("it")))),
                 vertex_k_domain,
             )(im.ref("inp", float_edge_k_field)),
             float_vertex_k_field,
@@ -203,7 +205,7 @@ def expression_test_cases():
                 im.lambda_("it1", "it2")(
                     im.plus(
                         im.deref(im.shift("E2V", 1)(im.shift("C2E", 1)("it1"))),
-                        im.deref(im.shift("Koff", 1)("it2")),
+                        im.deref(im.shift(Koff, 1)("it2")),
                     ),
                 ),
                 cell_k_domain,
@@ -298,7 +300,7 @@ def expression_test_cases():
 @pytest.mark.parametrize("test_case", expression_test_cases())
 def test_expression_type(test_case):
     mesh = simple_mesh(None)
-    offset_provider_type = {**mesh.offset_provider_type, "Ioff": IDim, "Joff": JDim, "Koff": KDim}
+    offset_provider_type = mesh.offset_provider_type
 
     testee, expected_type = test_case
     result = itir_type_inference.infer(
@@ -313,7 +315,7 @@ def test_expression_type(test_case):
 )
 def test_expression_type_as_fieldop_no_domain(test_case):
     mesh = simple_mesh(None)
-    offset_provider_type = {**mesh.offset_provider_type, "Ioff": IDim, "Joff": JDim, "Koff": KDim}
+    offset_provider_type = mesh.offset_provider_type
 
     testee_with_domain, expected_type = test_case
     result_with_domain = itir_type_inference.infer(
@@ -415,7 +417,7 @@ def test_cartesian_fencil_definition():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
+    result = itir_type_inference.infer(testee, offset_provider_type={})
 
     program_type = it_ts.ProgramType(params={"inp": float_i_field, "out": float_i_field})
     assert result.type == program_type
@@ -484,7 +486,7 @@ def test_function_definition():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
+    result = itir_type_inference.infer(testee, offset_provider_type={})
 
     program_type = it_ts.ProgramType(params={"inp": float_i_field, "out": float_i_field})
     assert result.type == program_type
@@ -543,7 +545,7 @@ def test_program_tuple_setat_short_target():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
+    result = itir_type_inference.infer(testee, offset_provider_type={})
 
     assert (
         isinstance(result.body[0].expr.type, ts.TupleType)
@@ -574,7 +576,7 @@ def test_program_setat_without_domain():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type={"Ioff": IDim})
+    result = itir_type_inference.infer(testee, offset_provider_type={})
 
     assert result.body[0].expr.type, ts.FieldType(dims=[IDim], dtype=float64_type)
 
