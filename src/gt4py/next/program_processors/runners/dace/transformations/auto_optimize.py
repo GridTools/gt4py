@@ -10,7 +10,7 @@
 
 import enum
 import warnings
-from typing import Any, Callable, List, Optional, Sequence, TypeAlias, Union
+from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 
 import dace
 from dace import data as dace_data
@@ -118,7 +118,7 @@ def gt_auto_optimize(
     gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
     gpu_block_size_3d: Optional[Sequence[int | str] | str] = None,
     gpu_maxnreg: Optional[int] = None,
-    blocking_dims: Optional[List[gtx_common.Dimension]] = None,
+    blocking_dims: Optional[Sequence[gtx_common.Dimension]] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
     promote_independent_memlets_for_blocking: bool = False,
@@ -675,7 +675,7 @@ def _gt_auto_process_top_level_maps(
 
 def _gt_auto_process_dataflow_inside_maps(
     sdfg: dace.SDFG,
-    blocking_dims: Optional[list[gtx_common.Dimension]],
+    blocking_dims: Optional[Sequence[gtx_common.Dimension]],
     blocking_size: int,
     blocking_only_if_independent_nodes: Optional[bool],
     promote_independent_memlets_for_blocking: Optional[bool],

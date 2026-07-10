@@ -762,6 +762,9 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                 block_size[i] = map_size[map_dim_idx_to_inspect]
 
         gpu_map.gpu_block_size = tuple(block_size)
+        # Only set `gpu_maxnreg` if it has not been set already (default is 0),
+        #  to avoid overriding a value that was set by another transformation
+        #  such as `LoopBlocking`.
         if self.maxnreg is not None and gpu_map.gpu_maxnreg == 0:
             gpu_map.gpu_maxnreg = self.maxnreg
         elif launch_bounds is not None:  # Note: empty string has a meaning in DaCe
