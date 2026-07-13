@@ -628,7 +628,7 @@ def map_list(op: TypeSynthesizer) -> TypeSynthesizer:
     return applied_map
 
 
-def _tuple_map_synthesizer(
+def _make_tuple_map_synthesizer(
     builtin_name: str, *, recursive: bool
 ) -> Callable[..., TypeOrTypeSynthesizer]:
     """Shared implementation for `tree_map_tuple` (recursive) and `map_tuple` (top-level)."""
@@ -640,7 +640,7 @@ def _tuple_map_synthesizer(
                 f"'{builtin_name}' requires all arguments to have the same tuple structure."
             )
 
-    def factory(op: TypeSynthesizer) -> TypeSynthesizer:
+    def tuple_map_synthesizer(op: TypeSynthesizer) -> TypeSynthesizer:
         @type_synthesizer
         def applied_map(
             *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
@@ -657,30 +657,29 @@ def _tuple_map_synthesizer(
             if recursive:
                 ensure_same_tuple_structure(args)
 
-            def leaf_op(*leaf_types: ts.TypeSpec) -> ts.TypeSpec:
-                return op(*leaf_types, offset_provider_type=offset_provider_type)  # type: ignore[return-value]
+            bound_op = functools.partial(op, offset_provider_type=offset_provider_type)
 
             if recursive:
                 return utils.tree_map(  # type: ignore[return-value]
-                    leaf_op,
+                    bound_op,
                     collection_type=ts.TupleType,
                     result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
                 )(*args)
 
             # Non-recursive: apply `op` once per top-level element.
             (arg,) = args
-            return ts.TupleType(types=[leaf_op(el) for el in arg.types])
+            return ts.TupleType(types=[bound_op(el) for el in arg.types])
 
         return applied_map
 
-    return factory
+    return tuple_map_synthesizer
 
 
 tree_map_tuple = _register_builtin_type_synthesizer(
-    _tuple_map_synthesizer("tree_map_tuple", recursive=True), fun_names=["tree_map_tuple"]
+    _make_tuple_map_synthesizer("tree_map_tuple", recursive=True), fun_names=["tree_map_tuple"]
 )
 map_tuple = _register_builtin_type_synthesizer(
-    _tuple_map_synthesizer("map_tuple", recursive=False), fun_names=["map_tuple"]
+    _make_tuple_map_synthesizer("map_tuple", recursive=False), fun_names=["map_tuple"]
 )
 
 

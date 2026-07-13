@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
 import functools
-from typing import TypeVar
+from typing import Callable, TypeVar
 
 from gt4py import eve
 from gt4py.next import common, utils
@@ -54,7 +54,7 @@ def _map_tuple_body(
     )
 
 
-_UNROLLERS = {
+_UNROLLERS: dict[str, Callable[[itir.Expr, list[itir.Expr], list[ts.TupleType]], itir.Expr]] = {
     "tree_map_tuple": _tree_map_tuple_body,
     "map_tuple": _map_tuple_body,
 }
@@ -92,7 +92,7 @@ class UnrollTupleMaps(eve.NodeTranslator):
     def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)
 
-        if not cpm.is_call_to(node.fun, ("map_tuple", "tree_map_tuple")):
+        if not cpm.is_call_to(node.fun, tuple(_UNROLLERS.keys())):
             return node
 
         assert isinstance(node.fun, itir.FunCall)
@@ -105,16 +105,12 @@ class UnrollTupleMaps(eve.NodeTranslator):
             assert isinstance(tup.type, ts.TupleType)
             tup_types.append(tup.type)
 
-        # Introduce a `let` binding for every argument to avoid duplicating (potentially
-        # expensive) sub-expressions across leaf projections. We deliberately do not simplify
-        # the result here: the regular `CollapseTuple` pass that runs later in the pipeline
-        # inlines the trivial bindings back and folds any `tuple_get(i, make_tuple(...))`
-        # patterns, so re-implementing that logic here would only duplicate work.
-        let_bindings = [(next(self.uids["_utm"]), tup) for tup in tup_args]
-        substituted_exprs: list[itir.Expr] = [im.ref(ref_name) for ref_name, _ in let_bindings]
+        # Let bind tuple args to avoid expression duplication
+        let_bindings = {next(self.uids["_utm"]): tup for tup in tup_args}
+        substituted_exprs: list[itir.Expr] = [im.ref(ref_name) for ref_name in let_bindings.keys()]
 
         body = _UNROLLERS[node.fun.fun.id](f, substituted_exprs, tup_types)
 
-        result = im.let(*let_bindings)(body)
+        result = im.let(*let_bindings.items())(body)
         itir_inference.reinfer(result)
         return result
