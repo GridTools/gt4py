@@ -181,22 +181,6 @@ def tree_map_type(
     )
 
 
-def tuple_structure(symbol_type: ts.TypeSpec) -> tuple[object, ...] | None:
-    """Return the nested tuple structure of ``symbol_type``, ignoring leaf types.
-
-    Examples:
-        >>> f64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-        >>> tuple_structure(f64) is None
-        True
-
-        >>> tuple_structure(ts.TupleType(types=[f64, ts.TupleType(types=[f64, f64])]))
-        (None, (None, None))
-    """
-    return tree_map_type(lambda _: None, result_collection_constructor=lambda _, elts: tuple(elts))(
-        symbol_type
-    )
-
-
 def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:
     """
     Extract the data type from ``symbol_type`` if it is either `FieldType` or `ScalarType`.

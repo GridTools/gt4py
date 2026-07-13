@@ -633,29 +633,18 @@ def _make_tuple_map_synthesizer(
 ) -> Callable[..., TypeOrTypeSynthesizer]:
     """Shared implementation for `tree_map_tuple` (recursive) and `map_tuple` (top-level)."""
 
-    def ensure_same_tuple_structure(args: tuple[ts.TupleType, ...]) -> None:
-        expected_structure = type_info.tuple_structure(args[0])
-        if any(type_info.tuple_structure(arg) != expected_structure for arg in args[1:]):
-            raise TypeError(
-                f"'{builtin_name}' requires all arguments to have the same tuple structure."
-            )
-
     def tuple_map_synthesizer(op: TypeSynthesizer) -> TypeSynthesizer:
         @type_synthesizer
         def applied_map(
             *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
         ) -> ts.TupleType:
-            if not args:
-                raise TypeError(f"'{builtin_name}' requires at least one argument.")
-            if not recursive and len(args) != 1:
+            if len(args) != 1:
                 raise TypeError(f"'{builtin_name}' requires exactly one argument, got {len(args)}.")
-            if not all(isinstance(a, ts.TupleType) for a in args):
+            (arg,) = args
+            if not isinstance(arg, ts.TupleType):
                 raise TypeError(
-                    f"'{builtin_name}' requires all top-level arguments to be TupleType, "
-                    f"got {[type(a).__name__ for a in args]}."
+                    f"'{builtin_name}' requires a 'TupleType' argument, got '{type(arg).__name__}'."
                 )
-            if recursive:
-                ensure_same_tuple_structure(args)
 
             bound_op = functools.partial(op, offset_provider_type=offset_provider_type)
 
@@ -664,10 +653,9 @@ def _make_tuple_map_synthesizer(
                     bound_op,
                     collection_type=ts.TupleType,
                     result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
-                )(*args)
+                )(arg)
 
             # Non-recursive: apply `op` once per top-level element.
-            (arg,) = args
             return ts.TupleType(types=[bound_op(el) for el in arg.types])
 
         return applied_map

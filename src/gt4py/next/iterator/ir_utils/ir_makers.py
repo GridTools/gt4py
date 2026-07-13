@@ -638,7 +638,7 @@ def map_list(op):
 
 
 def tree_map_tuple(op):
-    """Create a `tree_map_tuple` call: tree_map_tuple(op)(tup1, tup2, ...)."""
+    """Create a `tree_map_tuple` call: tree_map_tuple(op)(tup)."""
     return call(call("tree_map_tuple")(op))
 
 

@@ -46,25 +46,6 @@ def _unary_fun() -> itir.SymRef:
     return im.ref("unary_f", _fun_type(1))
 
 
-@pytest.fixture
-def _binary_fun() -> itir.SymRef:
-    return im.ref("binary_f", _fun_type(2))
-
-
-def test_tree_map_tuple_multi_arg(_binary_fun):
-    result = _apply_and_collapse(
-        im.call(im.call("tree_map_tuple")(_binary_fun))(
-            im.ref("a", i_tuple_field), im.ref("b", i_tuple_field)
-        )
-    )
-
-    expected = im.make_tuple(
-        im.call(_binary_fun)(im.tuple_get(0, "a"), im.tuple_get(0, "b")),
-        im.call(_binary_fun)(im.tuple_get(1, "a"), im.tuple_get(1, "b")),
-    )
-    assert result == expected
-
-
 def test_tree_map_tuple_nested(_unary_fun):
     nested = ts.TupleType(types=[i_tuple_field, i_tuple_field])
     result = _apply_and_collapse(
@@ -220,19 +201,3 @@ def test_unroll_then_collapse_inlines_trivial_arg(_unary_fun):
         im.call(_unary_fun)(im.tuple_get(0, "t")),
         im.call(_unary_fun)(im.tuple_get(1, "t")),
     )
-
-
-@pytest.mark.parametrize(
-    "lhs_type, rhs_type",
-    [
-        (ts.TupleType(types=[i_field, i_field, i_field]), i_tuple_field),
-        (ts.TupleType(types=[i_field, i_tuple_field]), i_tuple_field),
-    ],
-)
-def test_tree_map_tuple_mismatched_structure_raises_type_error(lhs_type, rhs_type, _binary_fun):
-    expr = im.call(im.call("tree_map_tuple")(_binary_fun))(
-        im.ref("a", lhs_type), im.ref("b", rhs_type)
-    )
-
-    with pytest.raises(TypeError, match=r"same tuple structure"):
-        _apply(expr)

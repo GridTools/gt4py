@@ -409,6 +409,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        # TODO: For tuples we unroll over the tuple structure via `process_elements` instead of
+        #  emitting `tree_map_tuple`. `where` would require a multi-argument `tree_map_tuple`, but
+        #  it currently only supports a single argument.
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
             return self._lower_and_map("if_", *node.args)
 
@@ -416,7 +419,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         cond_symref_name = f"__cond_{itir.lenient_ir_fingerprinter(cond_)}"
 
         def create_if(
-                true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
+            true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
         ) -> itir.FunCall:
             return _map(
                 "if_",
