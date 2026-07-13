@@ -31,18 +31,8 @@ DEFAULT_STORAGE_TYPE = {
 """Default dace residency types per device type."""
 
 
-def _resolve_loop_schedule(
-    device_type: dtypes.DeviceType, loop_order: common.LoopOrder
-) -> dtypes.ScheduleType:
-    """Optimal kernel schedule type based on syntax and target device.
-
-    Current strategy:
-        - respect OIR syntax: sequential on all non-parallel keyword
-        - maximize local parallel usage per target
-    """
-    if loop_order != common.LoopOrder.PARALLEL:
-        return dtypes.ScheduleType.Sequential
-
+def _resolve_map_schedule(device_type: dtypes.DeviceType) -> dtypes.ScheduleType:
+    """Optimal kernel schedule type based on target device."""
     if device_type == dtypes.DeviceType.GPU:
         return dtypes.ScheduleType.GPU_Device
 
@@ -156,9 +146,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         loop = tir.HorizontalLoop(
             bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
             bounds_j=tir.Bounds(start=axis_start_j, end=axis_end_j),
-            schedule=_resolve_loop_schedule(
-                self._device_type, common.LoopOrder.PARALLEL
-            ),  # Horizontal is always parallel
+            schedule=_resolve_map_schedule(self._device_type),
             children=[],
             parent=ctx.current_scope,
         )
@@ -286,14 +274,23 @@ class OIRToTreeIR(eve.NodeVisitor):
             axis_end=tir.Axis.K.domain_dace_symbol(),
         )
 
-        loop = tir.VerticalLoop(
-            iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
-            loop_order=loop_order,
-            bounds_k=bounds,
-            schedule=_resolve_loop_schedule(self._device_type, loop_order),
-            children=[],
-            parent=ctx.current_scope,
-        )
+        loop: tir.SequentialVerticalLoop | tir.ParallelVerticalLoop
+        if loop_order == common.LoopOrder.PARALLEL:
+            loop = tir.ParallelVerticalLoop(
+                iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
+                bounds_k=bounds,
+                schedule=_resolve_map_schedule(self._device_type),
+                children=[],
+                parent=ctx.current_scope,
+            )
+        else:
+            loop = tir.SequentialVerticalLoop(
+                iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
+                bounds_k=bounds,
+                loop_order=loop_order,
+                children=[],
+                parent=ctx.current_scope,
+            )
 
         with loop.scope(ctx):
             self.visit(node.horizontal_executions, ctx=ctx)
