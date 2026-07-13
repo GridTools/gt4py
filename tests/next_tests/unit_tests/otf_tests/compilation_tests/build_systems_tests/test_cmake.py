@@ -30,10 +30,13 @@ def clean_cmake_cache(extension_source_example):
 def test_get_cmake_device_arch_option_cuda():
     with (
         mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA),
-        mock.patch("gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "90"),
+        mock.patch("gt4py.next.otf.compilation.common._query_device_arch", lambda: "90"),
     ):
         # Test CUDA device without user-provided environment variable
+        # (`patch.dict` only layers on top of the inherited environment, so an
+        # ambient CUDAARCHS, e.g. set by CI, must be removed explicitly)
         with mock.patch.dict(os.environ, {}):
+            os.environ.pop("CUDAARCHS", None)
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_CUDA_ARCHITECTURES=90"
         with mock.patch.dict(os.environ, {"CUDAARCHS": ""}):
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_CUDA_ARCHITECTURES=90"
@@ -46,12 +49,11 @@ def test_get_cmake_device_arch_option_cuda():
 def test_get_cmake_device_arch_option_rocm():
     with (
         mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.ROCM),
-        mock.patch(
-            "gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "gfx942"
-        ),
+        mock.patch("gt4py.next.otf.compilation.common._query_device_arch", lambda: "gfx942"),
     ):
         # Test ROCM device without user-provided environment variable
         with mock.patch.dict(os.environ, {}):
+            os.environ.pop("HIPARCHS", None)
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx942"
         with mock.patch.dict(os.environ, {"HIPARCHS": ""}):
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx942"
