@@ -293,6 +293,41 @@ def test_premap_nbfield_with_vertical(premap_setup):
     )
 
 
+def test_premap_introduced_vertical_dim_canonicalized():
+    # Introduce a vertical dim (K) while a local dim (B) survives: insertion gives the non-canonical
+    # (K, B), the deduced type must be canonical (B, K).
+    Src = Dimension("Src")
+    B = Dimension("B", kind=DimensionKind.LOCAL)
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    SrcToK = FieldOffset("SrcToK", source=Src, target=(K,))
+
+    def premap_fo(bar: Field[[Src, B], int64]) -> Field[[B, K], int64]:
+        return bar(SrcToK)
+
+    parsed = FieldOperatorParser.apply_to_function(premap_fo)
+
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
+        dims=[B, K], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
+    )
+
+
+def test_premap_same_dim_connectivity_keeps_source():
+    # A same-dim connectivity (V2V: source reappears in the target) keeps the source dim:
+    # [V] -> [V, V2VDim].
+    V = Dimension("V")
+    V2VDim = Dimension("V2V", kind=DimensionKind.LOCAL)
+    V2V = FieldOffset("V2V", source=V, target=(V, V2VDim))
+
+    def premap_fo(bar: Field[[V], int64]) -> Field[[V, V2VDim], int64]:
+        return bar(V2V)
+
+    parsed = FieldOperatorParser.apply_to_function(premap_fo)
+
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
+        dims=[V, V2VDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
+    )
+
+
 def test_premap_reduce(premap_setup):
     X, Y, Y2XDim, Y2X = premap_setup
 
