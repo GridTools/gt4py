@@ -1835,3 +1835,12 @@ def test_offset_j_in_temporaries(backend: str) -> None:
                 if isnan(sqrt_res)
                 else 0.0
             )
+
+
+def test_if_statement_non_boolean_condition():
+
+    @gtscript.stencil(backend="debug")
+    def stencil(field: gtscript.Field[float]):  # type: ignore
+        with computation(PARALLEL), interval(...):
+            if field:
+                field[0, 0, 0] = 42
