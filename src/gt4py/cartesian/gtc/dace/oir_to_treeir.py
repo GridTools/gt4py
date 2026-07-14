@@ -20,7 +20,7 @@ from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 ControlFlow: TypeAlias = (
-    oir.HorizontalExecution | oir.While | oir.MaskStmt | oir.HorizontalRestriction
+    oir.HorizontalExecution | oir.While | oir.For | oir.MaskStmt | oir.HorizontalRestriction
 )
 """All control flow OIR nodes"""
 
@@ -231,6 +231,20 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
 
         with while_.scope(ctx):
+            groups = self._group_statements(node)
+            self.visit(groups, ctx=ctx)
+
+    def visit_For(self, node: oir.For, ctx: tir.Context) -> None:
+        for_ = tir.For(
+            index_name=node.index_name,
+            iter_start=node.iter_start,
+            iter_stop=node.iter_stop,
+            iter_step=node.iter_step,
+            children=[],
+            parent=ctx.current_scope,
+        )
+
+        with for_.scope(ctx):
             groups = self._group_statements(node)
             self.visit(groups, ctx=ctx)
 
@@ -524,6 +538,9 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> None:
         raise RuntimeError("visit_FieldDecl should not be called")
+
+    def visit_ForIndex(self, node: oir.ForIndex, **kwargs: Any) -> None:
+        raise RuntimeError("visit_ForIndex should not be called")
 
     def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> None:
         raise RuntimeError("visit_LocalScalar should not be called")

@@ -256,6 +256,14 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     While = as_mako("while(${cond}) {${''.join(body)}}")
 
+    ForIndex = as_mako("${name}")
+    For = as_mako(
+        "for(std::size_t ${index_name}=${iter_start}; "
+        "${index_name}${'<' if _this_node.iter_step > 0 else '>'}${iter_stop}; "
+        "${index_name}+=(${iter_step})) "
+        "{${''.join(body)}}"
+    )
+
     BlockStmt = as_mako("{${''.join(body)}}")
 
     def visit_GTComputationCall(

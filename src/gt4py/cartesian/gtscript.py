@@ -96,6 +96,7 @@ builtins = {
     "__externals__",
     "__INLINED",
     "compile_assert",
+    "range",
     *MATH_BUILTINS,
     *TYPE_HINT_AND_CAST_BUILTINS,
 }
@@ -311,7 +312,13 @@ def stencil(
 
     # Setup build_info timings
     if build_info is not None:
-        time_keys = ("parse_time", "module_time", "codegen_time", "build_time", "load_time")
+        time_keys = (
+            "parse_time",
+            "module_time",
+            "codegen_time",
+            "build_time",
+            "load_time",
+        )
         build_info.update({time_key: 0.0 for time_key in time_keys})
 
     build_options = gt_definitions.BuildOptions(

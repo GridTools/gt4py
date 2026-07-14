@@ -18,6 +18,7 @@ import types
 from typing import (
     Any,
     Callable,
+    ClassVar,
     Dict,
     Final,
     List,
@@ -46,6 +47,7 @@ from gt4py.cartesian.frontend.exceptions import (
     GTScriptValueError,
 )
 from gt4py.cartesian.utils import meta as gt_meta, warn_experimental_feature
+from gt4py.eve import datamodels as gt_datamodels
 
 
 PYTHON_AST_VERSION: Final = (3, 10)
@@ -454,11 +456,15 @@ class ValueInliner(ast.NodeTransformer):
 
 class ReturnReplacer(gt_meta.ASTTransformPass):
     @classmethod
-    def apply(cls, ast_object: ast.AST, target_node: ast.AST) -> None:
+    def apply(cls, ast_object: ast.AST, target_node: Optional[ast.AST]) -> None:
         """Ensure that there is only a single return statement (can still return a tuple)."""
         ret_count = sum(isinstance(node, ast.Return) for node in ast.walk(ast_object))
-        if ret_count != 1:
-            raise GTScriptSyntaxError("GTScript Functions should have a single return statement")
+        if ret_count > 1:
+            raise GTScriptSyntaxError("GTScript Functions cannot have multiple return statements")
+        elif ret_count == 0 and target_node is not None:
+            raise GTScriptSyntaxError(
+                "Attempting to assign the return value of a GTScript function that does not return anything."
+            )
         cls().visit(ast_object, target_node=target_node)
 
     @staticmethod
@@ -483,6 +489,98 @@ class ReturnReplacer(gt_meta.ASTTransformPass):
 def _filter_absolute_K_index_method(node: ast.Call) -> bool:
     """Detects `var.at(...)` calls to route towards Absolute K IR."""
     return isinstance(node.func, ast.Attribute) and node.func.attr == "at"
+
+
+@gt_datamodels.datamodel(frozen=True)
+class ForIndex(ast.AST):
+    name: str
+
+    def __deepcopy__(self, memo: dict) -> "ForIndex":
+        return self
+
+
+@gt_datamodels.datamodel(frozen=True)
+class ForIndexTransformer(ast.NodeTransformer):
+    name: str
+
+    def visit_Name(self, node: ast.Name) -> Union[ForIndex, ast.Name]:
+        super().generic_visit(node)
+        return ForIndex(self.name) if node.id == self.name else node
+
+
+@gt_datamodels.datamodel
+class For(ast.AST):
+    index_name: str
+    iter_start: int
+    iter_stop: int
+    iter_step: int
+    body: list[ast.AST]
+    lineno: Optional[int] = None
+    col_offset: Optional[int] = None
+    _fields: ClassVar[tuple[str, ...]] = ("body",)
+
+    def __post_init__(self) -> None:
+        transformer = ForIndexTransformer(self.index_name)
+        self.body = [transformer.visit(stmt) for stmt in self.body]
+
+    def __deepcopy__(self, memo: dict) -> "For":
+        return For(
+            index_name=self.index_name,
+            iter_start=self.iter_start,
+            iter_stop=self.iter_stop,
+            iter_step=self.iter_step,
+            body=copy.deepcopy(self.body),
+            lineno=self.lineno,
+            col_offset=self.col_offset,
+        )
+
+
+@gt_datamodels.datamodel(frozen=True)
+class ForTransformer(ast.NodeTransformer):
+    context: dict
+
+    @classmethod
+    def apply(cls, func_node: ast.FunctionDef, context: dict):
+        unroller = cls(context)
+        unroller(func_node)
+
+    def __call__(self, func_node: ast.FunctionDef) -> None:
+        self.visit(func_node)
+
+    def visit_For(self, node: Union[ast.For, For]) -> For:
+        super().generic_visit(node)
+        if isinstance(node, ast.For):
+            assert isinstance(node.target, ast.Name)
+
+            if (
+                isinstance(node.iter, ast.Call)
+                and isinstance(node.iter.func, ast.Name)
+                and node.iter.func.id == "range"
+            ):
+                range_args = [eval(ast.unparse(arg), self.context) for arg in node.iter.args]
+                assert 1 <= len(range_args) <= 3
+                if len(range_args) == 1:
+                    start, stop, step = 0, *range_args, 1
+                elif len(range_args) == 2:
+                    start, stop, step = *range_args, 1
+                else:
+                    start, stop, step = range_args
+            else:
+                raise GTScriptSyntaxError(
+                    "For-loop index values can only be specified using range()."
+                )
+
+            return For(
+                index_name=node.target.id,
+                iter_start=start,
+                iter_stop=stop,
+                iter_step=step,
+                body=[self.visit(item) for item in node.body],
+                lineno=node.lineno,
+                col_offset=node.col_offset,
+            )
+        else:
+            return node
 
 
 class CallInliner(ast.NodeTransformer):
@@ -554,6 +652,10 @@ class CallInliner(ast.NodeTransformer):
         node.body = self._process_stmts(node.body)
         return node
 
+    def visit_For(self, node: Union[ast.For, For]):
+        node.body = self._process_stmts(node.body)
+        return node
+
     def visit_Assign(self, node: ast.Assign):
         if isinstance(node.value, ast.Call):
             if _filter_absolute_K_index_method(node.value):
@@ -569,6 +671,12 @@ class CallInliner(ast.NodeTransformer):
                 return None
 
         return self.generic_visit(node)
+
+    def _get_sliced_symbol(self, node):
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Subscript):
+            return self._get_sliced_symbol(node.value)
 
     def visit_Call(self, node: ast.Call, *, target_node=None):  # Cyclomatic complexity too high
         if _filter_absolute_K_index_method(node):
@@ -589,17 +697,8 @@ class CallInliner(ast.NodeTransformer):
         if call_name not in self.context or not hasattr(self.context[call_name], "_gtscript_"):
             raise GTScriptSyntaxError("Unknown call", loc=nodes.Location.from_ast_node(node))
 
-        # Recursively inline any possible nested subroutine call
-        call_info = self.context[call_name]._gtscript_
-        call_ast = copy.deepcopy(call_info["ast"])
-        self.current_name = call_name
-        CallInliner.apply(
-            call_ast,
-            call_info["local_context"],
-            call_stack={*self.call_stack, call_name},
-        )
-
         # Extract call arguments
+        call_info = self.context[call_name]._gtscript_
         call_signature = call_info["api_signature"]
         arg_infos = {arg.name: arg.default for arg in call_signature}
         try:
@@ -623,6 +722,21 @@ class CallInliner(ast.NodeTransformer):
                 loc=nodes.Location.from_ast_node(node),
             ) from ex
 
+        # Inline constant arguments
+        call_ast = copy.deepcopy(call_info["ast"])
+        local_context = {
+            name: arg_node.value
+            for name, arg_node in call_args.items()
+            if isinstance(arg_node, ast.Constant)
+        }
+        ValueInliner.apply(call_ast, local_context)
+
+        # Recursively inline any possible nested subroutine call
+        self.current_name = call_name
+        CallInliner.apply(
+            call_ast, call_info["local_context"], call_stack={*self.call_stack, call_name}
+        )
+
         # Rename local names in subroutine to avoid conflicts with caller context names
         try:
             assign_targets = gt_meta.collect_assign_targets(call_ast, allow_multiple_targets=False)
@@ -633,10 +747,15 @@ class CallInliner(ast.NodeTransformer):
 
         assigned_symbols = set()
         for target in assign_targets:
-            if not isinstance(target, ast.Name):
-                raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
+            if isinstance(target, ast.Subscript):
+                sliced_symbol = self._get_sliced_symbol(target)
+                if sliced_symbol not in call_args:
+                    raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
+            else:
+                if not isinstance(target, ast.Name):
+                    raise GTScriptSyntaxError(message="Unsupported assignment target.", loc=target)
 
-            assigned_symbols.add(target.id)
+                assigned_symbols.add(target.id)
 
         name_mapping = {
             name: value.id
@@ -657,32 +776,32 @@ class CallInliner(ast.NodeTransformer):
 
         # Replace returns by assignments in subroutine
         if target_node is None:
-            if any(
-                isinstance(nd.value, ast.Tuple)
-                for nd in ast.walk(call_ast)
-                if isinstance(nd, ast.Return)
-            ):
+            return_nodes = [nd for nd in ast.walk(call_ast) if isinstance(nd, ast.Return)]
+            if any(isinstance(nd.value, ast.Tuple) for nd in return_nodes):
                 raise GTScriptSyntaxError(
                     "Only functions with a single return value can be used in expressions, including as call arguments. "
                     "Please assign the function results to symbols first."
                 )
-            target_node = ast.Name(
-                ctx=ast.Store(),
-                lineno=node.lineno,
-                col_offset=node.col_offset,
-                id=template_fmt.format(name="RETURN_VALUE"),
-            )
 
-        assert isinstance(target_node, (ast.Name, ast.Tuple, ast.Subscript)) and isinstance(
-            target_node.ctx, ast.Store
+            if len(return_nodes) > 0:
+                target_node = ast.Name(
+                    ctx=ast.Store(),
+                    lineno=node.lineno,
+                    col_offset=node.col_offset,
+                    id=template_fmt.format(name="RETURN_VALUE"),
+                )
+
+        assert target_node is None or (
+            isinstance(target_node, (ast.Name, ast.Tuple, ast.Subscript))
+            and isinstance(target_node.ctx, ast.Store)
         )
-
         ReturnReplacer.apply(call_ast, target_node)
 
         # Add subroutine sources prepending the required arg assignments
         inlined_stmts = []
         for arg_name, arg_value in call_args.items():
-            if arg_name not in name_mapping:
+            # note(stubbiali): filter out constant arguments (which have been previously inlined)
+            if arg_name not in name_mapping and not isinstance(arg_value, ast.Constant):
                 inlined_stmts.append(
                     ast.Assign(
                         lineno=node.lineno,
@@ -716,7 +835,7 @@ class CallInliner(ast.NodeTransformer):
                 col_offset=target_node.col_offset,
                 elts=target_node.elts,
             )
-        else:
+        elif isinstance(target_node, ast.Subscript):
             result_node = ast.Subscript(
                 ctx=ast.Load(),
                 lineno=target_node.lineno,
@@ -724,6 +843,8 @@ class CallInliner(ast.NodeTransformer):
                 value=target_node.value,
                 slice=target_node.slice,
             )
+        else:  # target_node is None
+            result_node = call_ast.body[0]
 
         # Add the temp_annotations and temp_init_values to the parent
         current_info = self.context[self.current_name]._gtscript_
@@ -738,9 +859,17 @@ class CallInliner(ast.NodeTransformer):
         return result_node
 
     def visit_Expr(self, node: ast.Expr):
-        """Ignore pure string statements in callee."""
-        pure_str_types = (ast.Constant,) + ((ast.Str,) if hasattr(ast, "Str") else ())
-        if not isinstance(node.value, pure_str_types):
+        if (
+            isinstance(node.value, ast.Call)
+            and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
+        ):
+            # Inline a function with no return value and then remove the current node
+            self.visit(node.value, target_node=None)
+            return None
+        elif not isinstance(
+            node.value, (ast.Constant,) + ((ast.Str,) if hasattr(ast, "Str") else ())
+        ):
+            # Ignore pure string statements in callee
             return super().visit(node.value)
 
 
@@ -1658,6 +1787,42 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    def visit_ForIndex(self, node: ForIndex) -> nodes.ForIndex:
+        return nodes.ForIndex(
+            name=node.name,
+            data_type=nodes.DataType.from_dtype(
+                self.dtypes[int] if self.dtypes and int in self.dtypes else int
+            ),
+        )
+
+    def visit_For(self, node: For) -> list:
+        assert isinstance(node, For)
+
+        loc = nodes.Location.from_ast_node(node)
+
+        self.decls_stack.append([])
+        stmts = gt_utils.flatten([self.visit(stmt) for stmt in node.body])
+        assert all(isinstance(item, nodes.Statement) for item in stmts)
+
+        result = [
+            nodes.For(
+                index_name=node.index_name,
+                iter_start=node.iter_start,
+                iter_stop=node.iter_stop,
+                iter_step=node.iter_step,
+                body=nodes.BlockStmt(stmts=stmts, loc=loc),
+                loc=nodes.Location.from_ast_node(node),
+            )
+        ]
+
+        if len(self.decls_stack) == 1:
+            result.extend(self.decls_stack.pop())
+        elif len(self.decls_stack) > 1:
+            self.decls_stack[-2].extend(self.decls_stack[-1])
+            self.decls_stack.pop()
+
+        return result
+
     def _absolute_K_index_method(self, node: ast.Call):
         # Dev note: we enforce .at(K=..., ddim=[...])
         #           A better version of this code would look through the keywords
@@ -2508,8 +2673,16 @@ class GTScriptParser(ast.NodeVisitor):
 
         ValueInliner.apply(main_func_node, context=local_context)
 
+        # Insert custom nodes for for-loops
+        # note(stubbiali): address the case of a function called within a for-loop
+        ForTransformer.apply(main_func_node, context=local_context)
+
         # Inline function calls
         CallInliner.apply(main_func_node, context=local_context)
+
+        # Insert custom nodes for for-loops
+        # note(stubbiali): address the case of a for-loop inside a function
+        ForTransformer.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context)

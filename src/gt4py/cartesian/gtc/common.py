@@ -438,6 +438,19 @@ class While(eve.GenericNode, Generic[StmtT, ExprT]):
         verify_condition_is_boolean(self, value)
 
 
+class ForIndex(eve.Node):
+    name: str
+    dtype: DataType
+
+
+class For(eve.GenericNode, Generic[StmtT]):
+    index_name: str
+    iter_start: int
+    iter_stop: int
+    iter_step: int
+    body: List[StmtT]
+
+
 class AssignStmt(eve.GenericNode, Generic[TargetT, ExprT]):
     left: TargetT
     right: ExprT

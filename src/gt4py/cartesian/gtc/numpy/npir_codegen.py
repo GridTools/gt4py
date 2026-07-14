@@ -109,6 +109,8 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     VarKOffset = as_fmt("lk + {k}")
 
+    ForIndex = as_fmt("{name}")
+
     def visit_KMaskFieldAccess(self, node: npir.KMaskFieldAccess, **kwargs: Any) -> str:
         return "__k_mask[i:I, j:J, k:K]"
 
@@ -139,7 +141,8 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             )
 
         args = _make_slice_access(offsets, kwargs["is_serial"], kwargs.get("horizontal_mask"))
-        data_index = self.visit(node.data_index, inside_slice=True, **kwargs)
+        kwargs["inside_slice"] = True
+        data_index = self.visit(node.data_index, **kwargs)
 
         access_slice = ", ".join(args + list(data_index))
 
@@ -265,6 +268,28 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         for stmt in self.visit(node.body, **kwargs):
             body.extend(stmt.split("\n"))
         return self.While.render(cond=cond, body=body)
+
+    For = as_jinja(
+        textwrap.dedent(
+            """\
+            for {{ index_name }} in range({{ iter_start }}, {{ iter_stop }}, {{ iter_step }}):
+                {% for stmt in body %}{{ stmt }}
+                {% endfor %}
+            """
+        )
+    )
+
+    def visit_For(self, node: npir.For, **kwargs: Any) -> str:
+        body = []
+        for stmt in self.visit(node.body, **kwargs):
+            body.extend(stmt.split("\n"))
+        return self.For.render(
+            index_name=self.visit(node.index_name, **kwargs),
+            iter_start=self.visit(node.iter_start, **kwargs),
+            iter_stop=self.visit(node.iter_stop, **kwargs),
+            iter_step=self.visit(node.iter_step, **kwargs),
+            body=body,
+        )
 
     def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
         is_serial = node.direction != common.LoopOrder.PARALLEL
