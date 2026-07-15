@@ -2098,7 +2098,7 @@ class GTScriptParser(ast.NodeVisitor):
     def annotate_definition(
         definition: Callable,
         options: gt_definitions.BuildOptions | None = None,
-        externals=None,
+        externals: dict[str, Any] | None = None,
     ) -> Callable:
         """Annotate the function definition with dtypes, resolve externals and add default values.
 
@@ -2115,7 +2115,7 @@ class GTScriptParser(ast.NodeVisitor):
             GTScriptSyntaxError
 
         Returns:
-            definition (Callable): function to annotate
+            definition (Callable): annotated function
         """
         api_signature = []
         api_annotations = []
@@ -2557,7 +2557,7 @@ class GTScriptFrontend(Frontend):
     def prepare_stencil_definition(
         cls,
         definition: Callable,
-        externals,
+        externals: dict[str, Any],
         options: gt_definitions.BuildOptions | None = None,
     ) -> Callable:
         """Return an annotated version of the stencil definition.
