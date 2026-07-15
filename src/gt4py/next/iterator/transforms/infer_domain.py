@@ -12,7 +12,7 @@ import typing
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Callable, Optional, TypeAlias, Unpack
+from gt4py.eve.extended_typing import Callable, NotRequired, Optional, TypeAlias, Unpack
 from gt4py.next import common, utils as gtx_utils
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import (
@@ -51,13 +51,18 @@ NonTupleDomainAccess: TypeAlias = domain_utils.SymbolicDomain | DomainAccessDesc
 #: fine to a tuple of a vertex and an edge domain.
 DomainAccess: TypeAlias = NonTupleDomainAccess | tuple["DomainAccess", ...]
 AccessedDomains: TypeAlias = dict[str, DomainAccess]
+ScanVerticalBounds: TypeAlias = dict[common.Dimension, domain_utils.SymbolicRange]
 
 
-class InferenceOptions(typing.TypedDict):
+class StatementInferenceOptions(typing.TypedDict):
     offset_provider: common.OffsetProvider | common.OffsetProviderType
     symbolic_domain_sizes: dict[str, itir.Expr] | None
     allow_uninferred: bool
     keep_existing_domains: bool
+
+
+class InferenceOptions(StatementInferenceOptions):
+    scan_vertical_bounds: NotRequired[ScanVerticalBounds | None]
 
 
 class DomainAnnexDebugger(eve.NodeVisitor):
@@ -168,10 +173,14 @@ def _filter_domain_dimensions(
 
 def _extract_vertical_dims(
     domain: domain_utils.SymbolicDomain,
-) -> dict[common.Dimension, domain_utils.SymbolicRange]:
+    scan_vertical_bounds: ScanVerticalBounds | None = None,
+) -> ScanVerticalBounds:
+    # For each vertical dimension of `domain`, take its range from `scan_vertical_bounds` if that
+    # dimension is present there, otherwise from `domain`.
     assert isinstance(domain, domain_utils.SymbolicDomain)
+    scan_vertical_bounds = scan_vertical_bounds or {}
     return {
-        dim: range_
+        dim: scan_vertical_bounds.get(dim, range_)
         for dim, range_ in domain.ranges.items()
         if dim.kind == common.DimensionKind.VERTICAL
     }
@@ -185,6 +194,7 @@ def _infer_as_fieldop(
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]],
     allow_uninferred: bool,
     keep_existing_domains: bool,
+    scan_vertical_bounds: ScanVerticalBounds | None = None,
 ) -> tuple[itir.FunCall, AccessedDomains]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
@@ -234,6 +244,7 @@ def _infer_as_fieldop(
             symbolic_domain_sizes=symbolic_domain_sizes,
             allow_uninferred=allow_uninferred,
             keep_existing_domains=keep_existing_domains,
+            scan_vertical_bounds=scan_vertical_bounds,
         )
         transformed_inputs.append(transformed_input)
 
@@ -442,6 +453,7 @@ def infer_expr(
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
+    scan_vertical_bounds: ScanVerticalBounds | None = None,
 ) -> tuple[itir.Expr, AccessedDomains]:
     """
     Infer the domain of all field subexpressions of `expr`.
@@ -485,9 +497,12 @@ def infer_expr(
     )
 
     if cpm.is_applied_as_fieldop(expr) and cpm.is_call_to(expr.fun.args[0], "scan"):
+        # Re-add the scan's vertical (column) dimension, clamped to the statement column.
         additional_dims = gtx_utils.tree_map(
             lambda d: (
-                _extract_vertical_dims(d) if isinstance(d, domain_utils.SymbolicDomain) else {}
+                _extract_vertical_dims(d, scan_vertical_bounds)
+                if isinstance(d, domain_utils.SymbolicDomain)
+                else {}
             )
         )(domain)
     else:
@@ -512,6 +527,7 @@ def infer_expr(
         symbolic_domain_sizes=symbolic_domain_sizes,
         allow_uninferred=allow_uninferred,
         keep_existing_domains=keep_existing_domains,
+        scan_vertical_bounds=scan_vertical_bounds,
     )
     if not keep_existing_domains or not hasattr(expr.annex, "domain"):
         expr.annex.domain = domain
@@ -528,7 +544,7 @@ def _make_symbolic_domain_tuple(domains: itir.Node) -> DomainAccess:
 
 def _infer_stmt(
     stmt: itir.Stmt,
-    **kwargs: Unpack[InferenceOptions],
+    **kwargs: Unpack[StatementInferenceOptions],
 ):
     if isinstance(stmt, itir.SetAt):
         # constant fold once otherwise constant folding after domain inference might create (syntactic) differences
@@ -537,7 +553,21 @@ def _infer_stmt(
 
         symbolic_domain = _make_symbolic_domain_tuple(domain)
 
-        transformed_call, _ = infer_expr(stmt.expr, symbolic_domain, **kwargs)
+        # All fields of a `SetAt` share one vertical column; pass any concrete target domain down so
+        # every scan is forced to compute it, ignoring vertical offsets on its result.
+        representative_domain = next(
+            (d for d in flatten_nested_tuple((symbolic_domain,)) if isinstance(d, SymbolicDomain)),
+            None,
+        )
+        scan_vertical_bounds = (
+            _extract_vertical_dims(representative_domain)
+            if representative_domain is not None
+            else None
+        )
+
+        transformed_call, _ = infer_expr(
+            stmt.expr, symbolic_domain, scan_vertical_bounds=scan_vertical_bounds, **kwargs
+        )
 
         return itir.SetAt(
             expr=transformed_call,

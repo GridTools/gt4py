@@ -1167,6 +1167,43 @@ def test_scan():
     )
 
 
+def test_scan_result_vertical_offset():
+    # Reading a scan result at a vertical offset (backward scan reading the forward result at
+    # `Koff[-2]`) must not extend the scan's compute domain, which would read out of bounds.
+    field = ts.FieldType(dims=[KDim], dtype=float_type)
+    domain = im.domain(common.GridType.CARTESIAN, {KDim: (0, 11)})
+    forward = im.scan(im.lambda_("state", "x")(im.plus("state", im.deref("x"))), True, 0.0)
+    backward = im.scan(
+        im.lambda_("state", "ff", "ff2")(
+            im.plus(im.plus("state", im.deref("ff")), im.deref("ff2"))
+        ),
+        False,
+        0.0,
+    )
+    testee = im.let("ff", im.as_fieldop(forward)(im.ref("x", field)))(
+        im.as_fieldop(backward)(im.ref("ff", field), premap_field(im.ref("ff", field), Koff, -2))
+    )
+    program = itir.Program(
+        id="fused_scan",
+        function_definitions=[],
+        params=[im.sym("x", field), im.sym("out", field)],
+        declarations=[],
+        body=[itir.SetAt(expr=testee, domain=domain, target=im.ref("out"))],
+    )
+
+    actual = infer_domain.infer_program(program, offset_provider={})
+
+    scan_domains = [
+        constant_fold_domain_exprs(node.fun.args[1])
+        for node in eve.walk_values(actual).if_isinstance(itir.FunCall)
+        if cpm.is_applied_as_fieldop(node)
+        and cpm.is_call_to(node.fun.args[0], "scan")
+        and len(node.fun.args) == 2
+    ]
+    assert len(scan_domains) == 2  # forward and backward scan
+    assert all(d == constant_fold_domain_exprs(domain) for d in scan_domains)
+
+
 def test_symbolic_domain_sizes(unstructured_offset_provider):
     stencil = im.lambda_("arg0")(im.deref(im.shift("E2V", 1)("arg0")))
     domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
