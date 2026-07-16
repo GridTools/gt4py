@@ -75,7 +75,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     blocking_parameters = dace_properties.ListProperty(
         element_type=str,
         allow_none=True,
-        desc="Names of the iteration variables on which to block. The first one that is found in the map parameters is used",
+        desc="Names of the iteration variables on which to block checked in order they are listed. Only the first one that is found is used for blocking.",
     )
     require_independent_nodes = dace_properties.Property(
         dtype=bool,
@@ -146,8 +146,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 self._memlet_to_promote.append(out_edge_outer_entry)
 
     def _get_blocking_parameter(self, map_params: list[str]) -> Optional[str]:
-        if self.blocking_parameters is None:
-            return None
+        assert self.blocking_parameters is not None
         for p in self.blocking_parameters:
             if p in map_params:
                 return p
@@ -168,9 +167,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         - The map range must have step size of 1.
         - The partition must exists (see `partition_map_output()`).
         """
-        if self.blocking_parameters is None:
+        if not self.blocking_parameters:
             raise ValueError("No blocking parameters were specified.")
-        elif self.blocking_size is None:
+        elif not self.blocking_size:
             raise ValueError("The blocking size was not specified.")
 
         outer_entry: dace_nodes.MapEntry = self.outer_entry
@@ -210,20 +209,15 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if (map_range_size[block_var_idx] <= self.blocking_size) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
             return False
 
+        if not self.partition_map_output(matched_blocking_var, graph, sdfg, outer_entry):
+            return False
+
         if self.promote_independent_memlets:
-            # Compute the partition first so that the independent nodes are known
-            # when checking if memlets can be promoted.
-            partition_succeeded = self.partition_map_output(
-                matched_blocking_var, graph, sdfg, outer_entry
-            )
+            # Partition must be computer first
             self._populate_memlet_to_promote(matched_blocking_var, graph, outer_entry)
-        else:
-            partition_succeeded = self.partition_map_output(
-                matched_blocking_var, graph, sdfg, outer_entry
-            )
 
         if (
-            not partition_succeeded
+            not self._dependent_nodes
             and self.require_independent_nodes
             and (
                 not self.promote_independent_memlets
@@ -236,8 +230,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         if not self._check_if_blocking_can_promote_anything(state=graph):
             return False
 
-        # Disable by default scans because there is `ScanLoopUnrolling` for them (if the blocking is done in the same dimension as the scan).
-        # Otherwise blocking the loop in the other dimension shouldn't be beneficial.
+        # Disable by default scans because there is `ScanLoopUnrolling` for them
+        #  (if the blocking is done in the same dimension as the scan).
+        #  Otherwise blocking the loop in the other dimension shouldn't be beneficial.
         for node in graph.scope_subgraph(outer_entry).nodes():
             if isinstance(node, dace_nodes.NestedSDFG) and node.label.startswith("scan_"):
                 return False
@@ -525,7 +520,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             state.out_edges(node_to_classify)
         )
 
-        # Despite its type the node's free symbols can not contain the blocking
+        # Regardless of its type the node's free symbols can not contain the blocking
         #  parameter. In case of a Tasklet this would be the body of the Tasklet.
         if matched_blocking_var in node_to_classify.free_symbols:
             return False
@@ -742,9 +737,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             # If the memlet is connected to an independent node, then we can not promote it, since it would be redundant.
             return False
 
-        if (
-            memlet.is_empty()
-        ):  # Empty Memlets should already be in independent nodes and don't have read dependencies
+        # Empty Memlets should already be in independent nodes and don't have read dependencies
+        if memlet.is_empty():
             return False
 
         # Now we have to look at the source and destination set of the Memlet.
@@ -790,6 +784,16 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             )
             return False
 
+        promote_subset: dace_subsets.Subset = edge.data.subset  # Works because of canonicalization.
+        buffer_shape = tuple(dace_symb.overapproximate(promote_subset.size()))
+        if not all(str(x).isdigit() for x in buffer_shape):
+            return False
+        for buffer_dim in buffer_shape:
+            # We don't want to promote memlets that are too big because then the register or stack usage would increase a lot and we will get worse performance.
+            # TODO(iomaganaris): Maybe find a better suited number
+            if buffer_dim > 100:
+                return False
+
         return True
 
     def _prepare_independent_memlets(
@@ -819,7 +823,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # data and subset, avoiding redundant buffer nodes.
         promoted_buffers: dict[
             tuple[str, dace_subsets.Subset],
-            tuple[dace_nodes.AccessNode, str, dace_data.Array, dace_subsets.Range],
+            tuple[dace_nodes.AccessNode, str, dace_subsets.Range],
         ] = {}
 
         for edge_to_promote in self._memlet_to_promote:
@@ -834,12 +838,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             )  # Works because of canonicalization.
             # TODO(phimuell): Handle the removal of pseudo dimensions.
             buffer_shape = tuple(dace_symb.overapproximate(promote_subset.size()))
-            assert all(str(x).isdigit() for x in buffer_shape)
 
             dedup_key = (original_data, copy.deepcopy(promote_subset))
             if dedup_key in promoted_buffers:
                 # Reuse the existing buffer instead of creating a new one.
-                buffer_node, buffer_data, buffer_desc, buffer_offset = promoted_buffers[dedup_key]
+                buffer_node, buffer_data, buffer_offset = promoted_buffers[dedup_key]
                 new_consumer_edge = state.add_edge(
                     buffer_node,
                     None,
@@ -855,6 +858,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     edge_to_correct.data.data = buffer_data
                     edge_to_correct.data.subset.offset(buffer_offset, negative=True)
 
+                # We took care of connecting the existing buffer to the consumer necessary, so there's nothing else to do
                 continue
 
             buffer_data, buffer_desc = sdfg.add_array(
@@ -880,7 +884,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             promoted_buffers[dedup_key] = (
                 buffer_node,
                 buffer_data,
-                buffer_desc,
                 buffer_offset,
             )
 
@@ -897,7 +900,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 ),
             )
 
-            # Create the old (uncorrected) consumer.
             new_consumer_edge = state.add_edge(
                 buffer_node,
                 None,
