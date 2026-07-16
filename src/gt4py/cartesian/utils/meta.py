@@ -74,7 +74,7 @@ def ast_dump(definition, *, feature_version: tuple[int, int]) -> str:
             return "".join(
                 [
                     node.__class__.__name__,
-                    f"({', '.join('{}={}'.format(name, value) for name, value in fields)})",
+                    f"({', '.join(f'{name}={value}' for name, value in fields)})",
                 ]
             )
 
