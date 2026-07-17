@@ -84,32 +84,32 @@ def get_gt_pyext_build_opts(
     extra_compile_args = dict(
         cxx=[
             "-std=c++17",
-            "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
+            f"-ftemplate-depth={gt_config.build_settings['cpp_template_depth']}",
             "-fvisibility=hidden",
             "-fPIC",
             # A compiler is allowed to choose if `char` is signed or unsigned. We force the signed behavior
             # because `char` is used to represent the `int8` type in GT4Py programs.
             "-fsigned-char",
-            "-isystem{}".format(gt_include_path),
+            f"-isystem{gt_include_path}",
             *extra_compile_args_from_config["cxx"],
         ]
     )
     extra_compile_args["cuda"] = [
         "-std=c++17",
-        "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
+        f"-ftemplate-depth={gt_config.build_settings['cpp_template_depth']}",
         *extra_compile_args_from_config["cuda"],
     ]
     if is_rocm_gpu:
         extra_compile_args["cuda"] += [
-            "-isystem{}".format(gt_include_path),
+            f"-isystem{gt_include_path}",
             "-fvisibility=hidden",
             "-fPIC",
             *([f"--offload-arch={cuda_arch}"] if cuda_arch else []),
         ]
     else:
         extra_compile_args["cuda"] += [
-            "-isystem={}".format(gt_include_path),
-            "-arch=sm_{}".format(cuda_arch),
+            f"-isystem={gt_include_path}",
+            f"-arch=sm_{cuda_arch}",
             "--expt-relaxed-constexpr",
             "--compiler-options",
             "-fvisibility=hidden",
@@ -127,16 +127,14 @@ def get_gt_pyext_build_opts(
     extra_link_args.extend(mode_flags)
 
     if dace_path := get_dace_module_path():
-        extra_compile_args["cxx"].append(
-            "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
-        )
+        extra_compile_args["cxx"].append(f"-isystem{os.path.join(dace_path, 'runtime/include')}")
         if is_rocm_gpu:
             extra_compile_args["cuda"].append(
-                "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
+                f"-isystem{os.path.join(dace_path, 'runtime/include')}"
             )
         else:
             extra_compile_args["cuda"].append(
-                "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
+                f"-isystem={os.path.join(dace_path, 'runtime/include')}"
             )
 
     if add_profile_info:
@@ -233,8 +231,8 @@ def build_pybind_ext(
         ext_modules=[py_extension],
         script_args=[
             "build_ext",
-            "--build-temp={}".format(build_path),
-            "--build-lib={}".format(build_path),
+            f"--build-temp={build_path}",
+            f"--build-lib={build_path}",
             "--force",
         ],
     )
