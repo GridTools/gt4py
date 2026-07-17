@@ -587,3 +587,36 @@ def test_lazy_sdfg():
     call_lazy_s.compile(locoutp=outp, locinp=inp)
 
     assert "implementation" not in lazy_s.__dict__
+
+
+def test_lazy_sdfg_raw():
+    def raw_stencil(
+        in_field: gtscript.Field[np.float64],  # type: ignore
+        out_field: gtscript.Field[np.float64],  # type: ignore
+    ) -> None:
+        with computation(PARALLEL), interval(...):
+            out_field = in_field
+
+        with computation(PARALLEL), interval(...):
+            out_field += 10
+
+    backend = "dace:cpu"
+    builder = StencilBuilder(raw_stencil, backend=backend).with_options(
+        name="simple_stencil", module=raw_stencil.__module__
+    )
+    lazy_raw_stencil = DaCeLazyStencil(builder)
+
+    @dace.program
+    def call_lazy_raw_stencil(in_field, out_field):
+        lazy_raw_stencil(in_field, out_field)
+
+    domain = (2, 2, 5)
+    in_field = gt_storage.ones(backend=backend, shape=domain, dtype=np.float64)
+    out_field = gt_storage.zeros(backend=backend, shape=domain, dtype=np.float64)
+
+    call_lazy_raw_stencil(in_field, out_field)
+
+    # TODO
+    # assert valid SDFG without warnings (not yet sure how to do so ...)
+
+    assert out_field  # just for testing

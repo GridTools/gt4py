@@ -267,6 +267,10 @@ def freeze_origin_domain_sdfg(
 
     # gather inputs & outputs (i.e. reads/writes without transients)
     inputs, outputs = inner_sdfg.read_and_write_sets()
+    # NOTE: DaCe is lying to us! `read_and_write_sets()` will not consider read after write
+    # situations and thus happily report reads that happen after writes as inputs to the
+    # NestedSDFG.
+    # The filtering of transients is not necessary, I think (at least it shouldn't be imo).
     inputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, inputs))
     outputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, outputs))
 
