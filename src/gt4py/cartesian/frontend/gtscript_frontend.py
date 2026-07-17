@@ -2316,8 +2316,8 @@ class GTScriptParser(ast.NodeVisitor):
             # Support @lazy_function() decorators by only evaluating them at this point
             if (
                 callable(value)
-                and value.__qualname__.startswith("lazy_function.")
                 and not hasattr(value, "_gtscript_")
+                and value.__qualname__.startswith("lazy_function.")
             ):
                 value = value()
                 nonlocal_symbols[key] = value
