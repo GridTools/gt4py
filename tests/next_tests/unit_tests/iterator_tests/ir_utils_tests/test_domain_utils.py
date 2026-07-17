@@ -33,21 +33,13 @@ right_infinity_range = domain_utils.SymbolicRange(0, itir.InfinityLiteral.POSITI
 left_infinity_range = domain_utils.SymbolicRange(itir.InfinityLiteral.NEGATIVE, 0)
 
 
-def _make_domain(i: int):
+def _make_domain(ranges: dict[common.Dimension, tuple[int, int]]):
     return domain_utils.SymbolicDomain(
         grid_type=common.GridType.CARTESIAN,
         ranges={
-            I: domain_utils.SymbolicRange(im.ref(f"start_I_{i}"), im.ref(f"end_I_{i}")),
-            J: domain_utils.SymbolicRange(im.ref(f"start_J_{i}"), im.ref(f"end_J_{i}")),
+            dim: domain_utils.SymbolicRange(start, stop) for dim, (start, stop) in ranges.items()
         },
     )
-
-
-def test_symbolic_range():
-    with pytest.raises(AssertionError):
-        domain_utils.SymbolicRange(itir.InfinityLiteral.POSITIVE, 0)
-    with pytest.raises(AssertionError):
-        domain_utils.SymbolicRange(0, itir.InfinityLiteral.NEGATIVE)
 
 
 def test_domain_op_preconditions():
@@ -69,53 +61,109 @@ def test_domain_op_preconditions():
 
 
 def test_domain_union():
-    domain0 = _make_domain(0)
-    domain1 = _make_domain(1)
-    domain2 = _make_domain(2)
+    domain0 = _make_domain({I: (0, 10), J: (0, 10)})
+    domain1 = _make_domain({I: (5, 15), J: (2, 8)})
+    domain2 = _make_domain({I: (3, 7), J: (4, 20)})
 
-    expected = domain_utils.SymbolicDomain(
-        grid_type=common.GridType.CARTESIAN,
-        ranges={
-            I: domain_utils.SymbolicRange(
-                im.minimum(
-                    im.minimum(im.ref("start_I_0"), im.ref("start_I_1")), im.ref("start_I_2")
-                ),
-                im.maximum(im.maximum(im.ref("end_I_0"), im.ref("end_I_1")), im.ref("end_I_2")),
-            ),
-            J: domain_utils.SymbolicRange(
-                im.minimum(
-                    im.minimum(im.ref("start_J_0"), im.ref("start_J_1")), im.ref("start_J_2")
-                ),
-                im.maximum(im.maximum(im.ref("end_J_0"), im.ref("end_J_1")), im.ref("end_J_2")),
-            ),
-        },
+    # the union is the convex hull per dimension: (min of starts, max of stops)
+    expected = im.domain(common.GridType.CARTESIAN, {I: (0, 15), J: (0, 20)})
+    result = domain_utils.domain_union(domain0, domain1, domain2)
+    assert result.as_expr() == expected
+
+
+def test_domain_union_drops_empty_domains():
+    # Empty domains are the union's identity element; keeping them would over-approximate (#2205).
+    non_empty = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN, ranges={I: domain_utils.SymbolicRange(0, 10)}
     )
-    assert expected == domain_utils.domain_union(domain0, domain1, domain2)
+    empty_a = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN, ranges={I: domain_utils.SymbolicRange(10, 10)}
+    )
+    empty_b = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN, ranges={I: domain_utils.SymbolicRange(11, 11)}
+    )
+
+    # a single non-empty domain among empty ones is returned unchanged
+    assert domain_utils.domain_union(empty_a, non_empty, empty_b) == non_empty
+    assert domain_utils.domain_union(empty_a) == empty_a
+
+
+def test_domain_union_all_empty():
+    # A union of only empty domains stays empty (not the convex hull `[10, 11)`).
+    empty_a = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN, ranges={I: domain_utils.SymbolicRange(10, 10)}
+    )
+    empty_b = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN, ranges={I: domain_utils.SymbolicRange(11, 11)}
+    )
+    result = domain_utils.domain_union(empty_a, empty_b)
+    assert result.empty()
+
+
+def test_unstructured_translate_empty_range():
+    offset_provider = {
+        "V2E": constructors.as_connectivity(
+            domain={Vertex: (0, 4), V2EDim: 1},
+            codomain=Edge,
+            data=np.asarray([0, 1, 2, 3], dtype=fbuiltins.IndexType).reshape((4, 1)),
+        )
+    }
+    domain = domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.UNSTRUCTURED, {Vertex: (2, 2)})  # empty
+    )
+    translated = domain.translate(
+        [itir.OffsetLiteral(value="V2E"), itir.OffsetLiteral(value=0)], offset_provider
+    )
+    assert translated.empty()
+    assert set(translated.ranges.keys()) == {Edge}
 
 
 def test_domain_intersection():
-    domain0 = _make_domain(0)
-    domain1 = _make_domain(1)
-    domain2 = _make_domain(2)
+    domain0 = _make_domain({I: (0, 10), J: (0, 10)})
+    domain1 = _make_domain({I: (5, 15), J: (2, 8)})
+    domain2 = _make_domain({I: (3, 7), J: (4, 20)})
 
-    expected = domain_utils.SymbolicDomain(
-        grid_type=common.GridType.CARTESIAN,
-        ranges={
-            I: domain_utils.SymbolicRange(
-                im.maximum(
-                    im.maximum(im.ref("start_I_0"), im.ref("start_I_1")), im.ref("start_I_2")
-                ),
-                im.minimum(im.minimum(im.ref("end_I_0"), im.ref("end_I_1")), im.ref("end_I_2")),
-            ),
-            J: domain_utils.SymbolicRange(
-                im.maximum(
-                    im.maximum(im.ref("start_J_0"), im.ref("start_J_1")), im.ref("start_J_2")
-                ),
-                im.minimum(im.minimum(im.ref("end_J_0"), im.ref("end_J_1")), im.ref("end_J_2")),
-            ),
-        },
+    # the intersection is per dimension: (max of starts, min of stops)
+    expected = im.domain(common.GridType.CARTESIAN, {I: (5, 7), J: (4, 8)})
+    result = domain_utils.domain_intersection(domain0, domain1, domain2)
+    assert result.as_expr() == expected
+
+
+def test_domain_intersection_with_empty_stays_empty():
+    # Empty domains are the intersection's absorbing element. Dropping them (as the union does)
+    # would yield a non-empty result.
+    non_empty = _make_domain({I: (0, 10)})
+    empty = _make_domain({I: (1, 1)})
+
+    assert domain_utils.domain_intersection(empty, non_empty).empty()
+    assert domain_utils.domain_intersection(non_empty, empty).empty()
+
+
+def test_domain_intersection_empty_with_infinite_range():
+    # An empty range intersected with a half-infinite one must stay empty. Dropping the empty
+    # range would leak the `InfinityLiteral` bound into the result.
+    empty = _make_domain({I: (1, 1)})
+    half_infinite = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN, ranges={I: right_infinity_range}
     )
-    assert expected == domain_utils.domain_intersection(domain0, domain1, domain2)
+
+    result = domain_utils.domain_intersection(empty, half_infinite)
+    assert result.empty()
+    assert result.ranges[I].stop != itir.InfinityLiteral.POSITIVE
+
+
+def test_domain_union_then_intersection():
+    # Cross-operation case: the union result flows into the intersection.
+    domain0 = _make_domain({I: (0, 10), J: (0, 10)})
+    domain1 = _make_domain({I: (5, 15), J: (2, 8)})
+    domain2 = _make_domain({I: (3, 7), J: (4, 20)})
+
+    union_result = domain_utils.domain_union(domain0, domain1)  # {I: (0, 15), J: (0, 10)}
+    result = domain_utils.domain_intersection(union_result, domain2)
+
+    # intersection of the union `{I: (0, 15), J: (0, 10)}` with `domain2`
+    expected = im.domain(common.GridType.CARTESIAN, {I: (3, 7), J: (4, 10)})
+    assert result.as_expr() == expected
 
 
 @pytest.mark.parametrize(

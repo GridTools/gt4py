@@ -24,7 +24,7 @@ from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils as eve_utils
-from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
+from gt4py.next import backend as gtx_backend, common, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
@@ -32,7 +32,7 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
-from gt4py.next.otf import arguments, stages
+from gt4py.next.otf import arguments, compilation_tasks, runners, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
@@ -154,19 +154,11 @@ def compiled_program_call_context(
     return metrics.metrics_source_key_setter(metrics_source_key(program_pool, key))
 
 
-# TODO(havogt): We would like this to be a ProcessPoolExecutor, which requires (to decide what) to pickle.
-_async_compilation_pool: concurrent.futures.Executor | None = None
-
-
-def _init_async_compilation_pool() -> None:
-    global _async_compilation_pool
-    if _async_compilation_pool is None and config.BUILD_JOBS > 0:
-        _async_compilation_pool = concurrent.futures.ThreadPoolExecutor(
-            max_workers=config.BUILD_JOBS
-        )
-
-
-_init_async_compilation_pool()
+# In-flight compilations (future -> "program (backend)" label). Weak keys: a
+# future disappears here once its pool consumed or dropped it.
+_ongoing_compilations: weakref.WeakKeyDictionary[
+    concurrent.futures.Future[stages.CompilationArtifact], str
+] = weakref.WeakKeyDictionary()
 
 
 def wait_for_compilation() -> None:
@@ -175,12 +167,34 @@ def wait_for_compilation() -> None:
 
     This is useful to ensure that all compiled programs are ready before
     proceeding with further operations. E.g. when the first call is included in timings.
+
+    Raises:
+        Exception: The exception of the failed compilation. If several
+            compilations failed, a `RuntimeError` summarizing all of them
+            (chaining the first). Each failure is raised only once; the
+            original exception is raised again when the failed program
+            variant is called. Failures of programs that have been garbage
+            collected in the meantime are not reported (they could never
+            raise at call time either).
     """
-    global _async_compilation_pool
-    if _async_compilation_pool is not None:
-        _async_compilation_pool.shutdown(wait=True)
-        _async_compilation_pool = None
-        _init_async_compilation_pool()
+    # TODO(havogt): reconsider tearing down the default runner here: a pure wait
+    # on the tracked futures would keep the workers warm between compilation
+    # phases, but the teardown is currently what releases the idle worker
+    # processes after the last phase.
+    runners.reset_default_runner()
+    failures: list[tuple[str, BaseException]] = []
+    for future, label in list(_ongoing_compilations.items()):
+        if (error := future.exception()) is not None:  # waits for completion
+            failures.append((label, error))
+        del _ongoing_compilations[future]
+    if len(failures) == 1:
+        raise failures[0][1]
+    if failures:
+        # TODO(havogt): raise ExceptionGroup once Python 3.10 is dropped.
+        raise RuntimeError(
+            "Multiple compilations failed: "
+            + "; ".join(f"'{label}': {error!r}" for label, error in failures)
+        ) from failures[0][1]
 
 
 def _make_tuple_expr(el_exprs: list[str]) -> str:
@@ -340,15 +354,13 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
-
     # store for the compiled programs
     compiled_programs: dict[CompiledProgramsKey, stages.ExecutableProgram] = dataclasses.field(
         default_factory=dict, init=False
     )
 
-    # store for the async compilation jobs
     _compilation_jobs: dict[
-        CompiledProgramsKey, concurrent.futures.Future[stages.ExecutableProgram]
+        CompiledProgramsKey, concurrent.futures.Future[stages.CompilationArtifact]
     ] = dataclasses.field(default_factory=dict, init=False)
 
     @functools.cached_property
@@ -568,10 +580,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if key not in self._compilation_jobs:
             return False
 
-        compiled_program_future = self._compilation_jobs.pop(key)
-        assert isinstance(compiled_program_future, concurrent.futures.Future)
+        artifact_future = self._compilation_jobs.pop(key)
+        assert isinstance(artifact_future, concurrent.futures.Future)
         assert key not in self.compiled_programs
-        self.compiled_programs[key] = compiled_program_future.result()
+        self.compiled_programs[key] = artifact_future.result().load()
         return True
 
     def _compile_variant(
@@ -629,9 +641,6 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             kwargs=kwarg_types,
             argument_descriptor_contexts=argument_descriptor_contexts,
         )
-        compile_call = functools.partial(
-            self.backend.compile, self.definition_stage, compile_time_args=compile_time_args
-        )
         compile_variant_hook(
             self,
             key=key,
@@ -640,10 +649,23 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             offset_provider=offset_provider,
         )
 
-        if _async_compilation_pool is None:
-            self.compiled_programs[key] = compile_call()
+        # The default runner is resolved at each submission, so the pool never
+        # holds on to a runner that `wait_for_compilation` has already shut down.
+        runner = runners.get_default_runner()
+        future = runner.submit(
+            compilation_tasks.make_compilation_task(
+                self.backend, self.definition_stage, compile_time_args
+            )
+        )
+        if future.done():
+            # Eager so compile() raises now; otherwise the error stays in the
+            # already-resolved future until the next call touches this key.
+            self.compiled_programs[key] = future.result().load()
         else:
-            self._compilation_jobs[key] = _async_compilation_pool.submit(compile_call)
+            self._compilation_jobs[key] = future
+            _ongoing_compilations[future] = (
+                f"{self.definition_stage.definition.__name__} ({getattr(self.backend, 'name', type(self.backend).__name__)})"
+            )
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time
     #  domains and of scans.
@@ -666,15 +688,19 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         """
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
+                # The argument descriptors built here must be kept in sync with the
+                # JIT code-path in `decorator._make_compiled_programs_pool`.
+                argument_descriptors: ArgStaticDescriptorsByType = {}
+                if static_args:
+                    #  Calls from `Program.compile()` / `FieldOperator.compile()`.
+                    argument_descriptors[arguments.StaticArg] = dict(
+                        zip(
+                            static_args.keys(),
+                            [arguments.StaticArg(value=v) for v in static_values],
+                            strict=True,
+                        )
+                    )
                 self._compile_variant(
-                    argument_descriptors={
-                        arguments.StaticArg: dict(
-                            zip(
-                                static_args.keys(),
-                                [arguments.StaticArg(value=v) for v in static_values],
-                                strict=True,
-                            )
-                        ),
-                    },
+                    argument_descriptors=argument_descriptors,
                     offset_provider=offset_provider,
                 )

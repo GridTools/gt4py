@@ -6,9 +6,15 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Test the compilation stage of the dace backend workflow."""
+"""Tests for the compilation stage of the dace backend workflow.
+
+Covers the GPU TX-marker instrumentation and the picklability of
+``DaCeCompilationArtifact``.
+"""
 
 import contextlib
+import pathlib
+import pickle
 import unittest.mock as mock
 
 import pytest
@@ -112,7 +118,6 @@ def _run_compiler(
             wraps=dace_wf_compilation._add_tx_markers,
         ) as spy,
         mock.patch.object(dace.SDFG, "compile", autospec=True) as compile_mock,
-        mock.patch.object(dace_wf_compilation, "CompiledDaceProgram"),
         mock.patch.object(
             dace_wf_compilation.locking, "lock", lambda *args, **kwargs: contextlib.nullcontext()
         ),
@@ -121,6 +126,7 @@ def _run_compiler(
         mock.patch.object(
             dace_wf_compilation.core_defs, "CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA
         ),
+        mock.patch("gt4py.next.otf.compilation.common.get_device_arch", return_value="xyz"),
     ):
         compiler(inp)
         compiled_sdfg = compile_mock.call_args.args[0]
@@ -162,6 +168,21 @@ def test_compiler_skips_tx_markers_for_non_gpu_device():
 
     spy.assert_not_called()
     assert compiled_sdfg.instrument == _NONE
+
+
+def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
+    artifact = dace_wf_compilation.DaCeCompilationArtifact(
+        build_folder=tmp_path,
+        library_path=tmp_path / "build" / "libprogram.so",
+        sdfg_json="{}",
+        binding_source_code="def update_sdfg_args(*a, **k): ...",
+        bind_func_name="update_sdfg_args",
+        device_type=core_defs.DeviceType.CPU,
+    )
+
+    restored = pickle.loads(pickle.dumps(artifact))
+
+    assert restored == artifact
 
 
 # `CXXFLAGS`, `CUDAFLAGS` and `HIPFLAGS` feed `compiler.cpu.args`, `compiler.cuda.args`

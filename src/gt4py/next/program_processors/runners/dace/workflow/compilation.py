@@ -9,19 +9,28 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
+import pathlib
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any
+from typing import Any, Final
 
 import dace
+import dace.codegen.compiler as dace_compiler
 import factory
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
-from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
+from gt4py.next.program_processors.runners.dace.workflow import (
+    common as gtx_wfdcommon,
+    decoration as gtx_wfddecoration,
+)
+
+
+_COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
 def _add_tx_markers(sdfg: dace.SDFG) -> None:
@@ -69,7 +78,7 @@ class CompiledDaceProgram:
         self,
         program: dace.CompiledSDFG,
         bind_func_name: str,
-        binding_source: stages.BindingSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        binding_source_code: str,
     ):
         self.sdfg_program = program
 
@@ -78,9 +87,10 @@ class CompiledDaceProgram:
         # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
         self.sdfg_argtypes = list(program.sdfg.arglist().values())
 
-        # Note that `binding_source` contains Python code tailored to this specific SDFG.
-        # Here we dinamically compile this function and add it to the compiled program.
-        exec(binding_source.source_code, global_namespace := {})  # type: ignore[var-annotated]
+        # The binding source code is Python tailored to this specific SDFG.
+        # We dynamically compile that function and add it to the compiled program.
+        global_namespace: dict[str, Any] = {}
+        exec(binding_source_code, global_namespace)
         self.update_sdfg_ctype_arglist = global_namespace[bind_func_name]
         # For debug purpose, we set a unique module name on the compiled function.
         self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
@@ -129,18 +139,45 @@ class CompiledDaceProgram:
 
 
 @dataclasses.dataclass(frozen=True)
+class DaCeCompilationArtifact:
+    """Result of a DaCe compilation: build folder + library path + SDFG bindings + the SDFG itself.
+
+    The SDFG is carried inline as JSON because dace's load path
+    (``get_program_handle``) needs an SDFG instance to wrap into the
+    returned ``CompiledSDFG``, and the build folder may not contain a
+    ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
+    """
+
+    build_folder: pathlib.Path
+    library_path: pathlib.Path
+    sdfg_json: str
+    binding_source_code: str
+    bind_func_name: str
+    device_type: core_defs.DeviceType
+
+    def load(self) -> stages.ExecutableProgram:
+        # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
+        #   exposes a load path that doesn't require an SDFG instance to wrap
+        #   into the returned ``CompiledSDFG``.
+        sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
+        sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
+        program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
+        return gtx_wfddecoration.convert_args(program, device=self.device_type)
+
+
+@dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
         stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-        CompiledDaceProgram,
+        DaCeCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-        CompiledDaceProgram,
+        DaCeCompilationArtifact,
     ],
     definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
-    """Use the dace build system to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
+    """Run the DaCe build system and produce an on-disk ``DaCeCompilationArtifact``."""
 
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
@@ -164,35 +201,58 @@ class DaCeCompiler(
     def __call__(
         self,
         inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-    ) -> CompiledDaceProgram:
+    ) -> DaCeCompilationArtifact:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            # We use the fingerprint of the compilation stage to ensure that the SDFG
-            # will be rebuilt if the user changes the backend configuration.
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+
+            # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
+            # user changes the backend configuration (PR #2650).
             sdfg_build_folder = gtx_cache.get_cache_folder(
                 inp,
                 self.cache_lifetime,
                 build_context_id=fingerprinting.strict_fingerprinter(self.dace_config_nondefaults),
             )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
-
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            sdfg.build_folder = sdfg_build_folder
 
             # Add TX markers to the generated GPU code for trace visualization tools.
             if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
                 _add_tx_markers(sdfg)
 
-            sdfg.build_folder = sdfg_build_folder
+            # ``build_folder_mode`` is set by ``dace_context``; resolve the library
+            # path here so ``get_binary_name`` sees the same mode dace built under.
+            library_path = dace_compiler.get_binary_name(
+                object_folder=sdfg_build_folder, sdfg_name=sdfg.name
+            )
+
             with locking.lock(sdfg_build_folder):
-                sdfg_program = sdfg.compile(validate=False)
+                # With `compiler.use_cache=True` dace reuses a cached library on mere
+                # *existence*, without validating it; an interrupted build can leave a
+                # truncated, unloadable library behind. The marker is written only
+                # after a completed compile: no marker -> drop the stale library so
+                # dace rebuilds it instead of handing it out.
+                marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
+                if not marker.exists():
+                    for stale in (
+                        library_path,
+                        *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),
+                    ):
+                        stale.unlink(missing_ok=True)
+                marker.unlink(missing_ok=True)
+                sdfg.compile(validate=False, return_program_handle=False)
+                marker.touch()
 
         assert inp.binding_source is not None
-        return CompiledDaceProgram(
-            sdfg_program,
-            self.bind_func_name,
-            inp.binding_source,
+        return DaCeCompilationArtifact(
+            build_folder=sdfg_build_folder,
+            library_path=library_path,
+            sdfg_json=json.dumps(inp.program_source.source_code),
+            binding_source_code=inp.binding_source.source_code,
+            bind_func_name=self.bind_func_name,
+            device_type=self.device_type,
         )
 
 

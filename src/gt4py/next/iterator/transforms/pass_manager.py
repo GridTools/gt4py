@@ -14,6 +14,7 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_maker
 from gt4py.next.iterator.transforms import (
     concat_where,
     dead_code_elimination,
+    expand_tuple_maps,
     fuse_as_fieldop,
     global_tmps,
     infer_domain,
@@ -24,7 +25,6 @@ from gt4py.next.iterator.transforms import (
     prune_empty_concat_where,
     remove_broadcast,
     symbol_ref_utils,
-    unroll_map_tuple,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -170,6 +170,9 @@ def apply_common_transforms(
     ir = inline_lifts.InlineLifts().visit(ir)
 
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+    ir = expand_tuple_maps.ExpandTupleMaps.apply(
+        ir, uids=uids, offset_provider_type=offset_provider_type
+    )
     ir = dead_code_elimination.dead_code_elimination(
         ir, uids=uids, offset_provider_type=offset_provider_type
     )  # domain inference does not support dead-code
@@ -178,7 +181,6 @@ def apply_common_transforms(
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
-    ir = unroll_map_tuple.UnrollMapTuple.apply(ir, uids=uids)
 
     ir = infer_domain.infer_program(
         ir,
@@ -284,6 +286,10 @@ def apply_fieldview_transforms(
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     # required for dead-code-elimination and `prune_empty_concat_where` pass
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
+    ir = expand_tuple_maps.ExpandTupleMaps.apply(
+        ir, uids=uids, offset_provider_type=offset_provider_type
+    )
+
     ir = dead_code_elimination.dead_code_elimination(
         ir, offset_provider_type=offset_provider_type, uids=uids
     )
@@ -293,7 +299,6 @@ def apply_fieldview_transforms(
 
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
-    ir = unroll_map_tuple.UnrollMapTuple.apply(ir, uids=uids)
     ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
 
     ir = infer_domain.infer_program(

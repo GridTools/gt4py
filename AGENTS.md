@@ -65,6 +65,13 @@ If a command above is wrong for your environment, fix `pyproject.toml`,
 ## Do
 
 - Run `uv run pre-commit run` on staged files before claiming a task done.
+- Write docstrings in **Google style** (rendered via Sphinx-napoleon). Use
+  `Args:` / `Returns:` / `Raises:` / `Examples:` sections — not the reST
+  `:param:` / `:returns:` / `:raises:` variants. **Do not** use Sphinx
+  cross-reference roles like `` :class:`Foo` ``, `` :meth:`bar` ``,
+  `` :func:`baz` `` inside docstrings; the only allowed inline markup is
+  plain `` `literal` `` backticks and bulleted lists (see
+  [`CODING_GUIDELINES.md`](CODING_GUIDELINES.md) §3.8).
 - When touching `gt4py.cartesian`, `gt4py.next`, `gt4py.eve`, `gt4py.storage`,
   or `gt4py._core`, run the matching `nox -s test_<subpackage>` session
   before opening the PR.

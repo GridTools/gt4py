@@ -44,10 +44,12 @@ class SymbolicRange:
         return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
 
     def empty(self) -> bool | None:
-        if isinstance(self.start, itir.Literal) and isinstance(self.stop, itir.Literal):
-            start, stop = int(self.start.value), int(self.stop.value)
-            return start >= stop
-        elif self.start == self.stop:
+        # constant fold so that translated bounds like `0 + 1` are recognized as literals
+        start = ConstantFolding.apply(self.start)
+        stop = ConstantFolding.apply(self.stop)
+        if isinstance(start, itir.Literal) and isinstance(stop, itir.Literal):
+            return int(start.value) >= int(stop.value)
+        elif start == stop:
             return True
         return None
 
@@ -80,6 +82,12 @@ def _unstructured_translate_range_statically(
     # expressions beforehand
     assert isinstance(start_expr, itir.Literal) and isinstance(stop_expr, itir.Literal)
     start, stop = int(start_expr.value), int(stop_expr.value)
+
+    if range_.empty():
+        return SymbolicRange(
+            im.literal(str("0"), builtins.INTEGER_INDEX_BUILTIN),
+            im.literal(str("0"), builtins.INTEGER_INDEX_BUILTIN),
+        )
 
     nb_index: slice | int
     if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
@@ -237,25 +245,43 @@ def _reduce_ranges(
     stop_reduce_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
 ) -> SymbolicRange:
     """Uses start_op and stop_op to fold the start and stop of a list of ranges."""
-    start = functools.reduce(
-        lambda current_expr, el_expr: start_reduce_op(current_expr, el_expr),
-        [range_.start for range_ in ranges],
-    )
-    stop = functools.reduce(
-        lambda current_expr, el_expr: stop_reduce_op(current_expr, el_expr),
-        [range_.stop for range_ in ranges],
-    )
-    # constant fold expression to keep the tree small
+    start = functools.reduce(start_reduce_op, [range_.start for range_ in ranges])
+    stop = functools.reduce(stop_reduce_op, [range_.stop for range_ in ranges])
+    # constant fold to keep the tree small and so translated bounds (e.g. `0 + 1`) collapse to a
+    # literal (we deliberately do not fold in `translate`)
     start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
     return SymbolicRange(start, stop)
 
 
-_range_union = functools.partial(
-    _reduce_ranges, start_reduce_op=im.minimum, stop_reduce_op=im.maximum
-)
-_range_intersection = functools.partial(
-    _reduce_ranges, start_reduce_op=im.maximum, stop_reduce_op=im.minimum
-)
+def _range_union(*ranges: SymbolicRange) -> SymbolicRange:
+    """
+    Return the union of a list of ranges, computed as the convex hull.
+
+    This only computes the correct value if the non-empty ranges are overlapping or adjacent.
+    An empty range is the identity element of the union, so empty ranges are dropped rather than
+    fed into the convex hull, which would otherwise over-approximate (e.g. `[10, 10[ | [11, 11[`
+    is empty, but its convex hull is `[10, 11[`). Emptiness is only decidable for static ranges;
+    non-static ranges may not be empty for now.
+    """
+    non_empty_ranges = [range_ for range_ in ranges if not range_.empty()]
+    if not non_empty_ranges:
+        return ranges[0]  # all empty -> empty
+    return _reduce_ranges(*non_empty_ranges, start_reduce_op=im.minimum, stop_reduce_op=im.maximum)
+
+
+def _range_intersection(*ranges: SymbolicRange) -> SymbolicRange:
+    """
+    Return the intersection of a list of ranges.
+
+    An empty range is the absorbing element of the intersection, so it is returned directly.
+    Folding it into `max`/`min` instead would give a wrong (possibly non-empty, possibly
+    unbounded) result, e.g. `[1, 1[ & [0, inf[` would yield `[1, inf[`. Emptiness is only
+    decidable for static ranges; non-static ranges may not be empty for now.
+    """
+    for range_ in ranges:
+        if range_.empty():
+            return range_
+    return _reduce_ranges(*ranges, start_reduce_op=im.maximum, stop_reduce_op=im.minimum)
 
 
 def _reduce_domains(

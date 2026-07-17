@@ -109,22 +109,6 @@ def test_multivalue_identity():
     assert lowered.expr == reference
 
 
-def test_premap():
-    # `field(Off[i])` for a Cartesian offset is deprecated in favor of `field(Dim + i)`.
-    def foo(inp: gtx.Field[[TDim], float64]):
-        return inp(TOff[1])
-
-    parsed = FieldOperatorParser.apply_to_function(foo)
-    with pytest.warns(DeprecationWarning, match="subscript syntax"):
-        lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.as_fieldop(
-        im.lambda_("__it")(im.deref(im.shift(im.cartesian_offset(TDim, TDim), 1)("__it")))
-    )("inp")
-
-    assert lowered.expr == reference
-
-
 def test_premap_cartesian_syntax():
     def foo(inp: gtx.Field[[TDim], float64]):
         return inp(TDim + 1)
@@ -302,7 +286,7 @@ def test_astype_local_field():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.op_as_fieldop(im.map_(im.lambda_("val")(im.cast_("val", "int32"))))("a")
+    reference = im.op_as_fieldop(im.map_list(im.lambda_("val")(im.cast_("val", "int32"))))("a")
 
     assert lowered.expr == reference
 
@@ -435,7 +419,7 @@ def test_var_len_tuple_comprehension_field_with_local_dim():
     reference = im.call(
         im.call("map_tuple")(
             im.lambda_("el")(
-                im.op_as_fieldop(im.map_("multiplies"))(
+                im.op_as_fieldop(im.map_list("multiplies"))(
                     im.op_as_fieldop("make_const_list")(two), "el"
                 )
             )
@@ -461,12 +445,12 @@ def test_fixed_len_tuple_comprehension_local_field():
     )(
         im.make_tuple(
             im.let("el", im.tuple_get(0, iterable))(
-                im.op_as_fieldop(im.map_("multiplies"))(
+                im.op_as_fieldop(im.map_list("multiplies"))(
                     im.op_as_fieldop("make_const_list")(two), "el"
                 )
             ),
             im.let("el", im.tuple_get(1, iterable))(
-                im.op_as_fieldop(im.map_("multiplies"))(
+                im.op_as_fieldop(im.map_list("multiplies"))(
                     im.op_as_fieldop("make_const_list")(two), "el"
                 )
             ),
@@ -494,10 +478,10 @@ def test_fixed_len_tuple_comprehension_mixed_local_field_tuple_target():
 
     iterable = "__tuple_comprh_0"
     two = im.literal("2.0", "float64")
-    local_term = im.op_as_fieldop(im.map_("multiplies"))(
+    local_term = im.op_as_fieldop(im.map_list("multiplies"))(
         im.op_as_fieldop("make_const_list")(two), "local_el"
     )
-    element_expr = im.op_as_fieldop(im.map_("plus"))(
+    element_expr = im.op_as_fieldop(im.map_list("plus"))(
         local_term, im.op_as_fieldop("make_const_list")("scalar_el")
     )
     tuple_el_0 = im.tuple_get(0, iterable)
@@ -1013,9 +997,9 @@ def test_reduction_lowering_expr():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    mapped = im.op_as_fieldop(im.map_("multiplies"))(
+    mapped = im.op_as_fieldop(im.map_list("multiplies"))(
         im.op_as_fieldop("make_const_list")(im.literal("1.1", "float64")),
-        im.op_as_fieldop(im.map_("plus"))(ssa.unique_name("e1_nbh", 0), "e2"),
+        im.op_as_fieldop(im.map_list("plus"))(ssa.unique_name("e1_nbh", 0), "e2"),
     )
 
     reference = im.let(
