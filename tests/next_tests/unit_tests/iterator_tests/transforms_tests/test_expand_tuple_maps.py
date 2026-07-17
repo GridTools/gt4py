@@ -12,7 +12,7 @@ from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
-from gt4py.next.iterator.transforms.unroll_tuple_maps import ExpandTupleMaps
+from gt4py.next.iterator.transforms.expand_tuple_maps import ExpandTupleMaps
 from gt4py.next.type_system import type_specifications as ts
 
 

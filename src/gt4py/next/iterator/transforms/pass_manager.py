@@ -24,7 +24,7 @@ from gt4py.next.iterator.transforms import (
     prune_empty_concat_where,
     remove_broadcast,
     symbol_ref_utils,
-    unroll_tuple_maps,
+    expand_tuple_maps,
 )
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
