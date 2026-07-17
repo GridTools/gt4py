@@ -217,7 +217,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             self._populate_memlet_to_promote(matched_blocking_var, graph, outer_entry)
 
         if (
-            not self._dependent_nodes
+            not self._independent_nodes
             and self.require_independent_nodes
             and (
                 not self.promote_independent_memlets
