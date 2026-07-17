@@ -426,7 +426,7 @@ class SDFGManager:
         sdfg = stree.as_sdfg(
             validate=validate,
             simplify=simplify,
-            skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
+            skip={"ScalarToSymbolPromotion", "ControlFlowRaising"},
         )
 
         if do_cache:
