@@ -409,9 +409,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        # TODO: For tuples we unroll over the tuple structure via `process_elements` instead of
-        #  emitting `tree_map_tuple`. `where` would require a multi-argument `tree_map_tuple`, but
-        #  it currently only supports a single argument.
+        # TODO(tehrengruber): For tuples we expand the tuple structure via `process_elements`
+        #  instead of emitting `tree_map_tuple` so mixed field types are supported,
+        #  e.g. (local field, regular field).
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
             return self._lower_and_map("if_", *node.args)
 

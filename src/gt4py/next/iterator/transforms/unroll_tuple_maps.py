@@ -18,7 +18,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 def _tree_map_tuple_body(f: itir.Expr, tup_expr: itir.Expr, tup_type: ts.TupleType) -> itir.Expr:
-    """Recursively unroll `tree_map_tuple(f)(t)` into `make_tuple` calls."""
+    """Recursively expand `tree_map_tuple(f)(t)` into `make_tuple` calls."""
 
     @utils.tree_map(
         collection_type=ts.TupleType,
@@ -32,13 +32,13 @@ def _tree_map_tuple_body(f: itir.Expr, tup_expr: itir.Expr, tup_type: ts.TupleTy
 
 
 def _map_tuple_body(f: itir.Expr, tup_expr: itir.Expr, tup_type: ts.TupleType) -> itir.Expr:
-    """Unroll `map_tuple(f)(t)` over top-level elements only (no recursion)."""
+    """Expand `map_tuple(f)(t)` over top-level elements only (no recursion)."""
     return im.make_tuple(
         *(im.call(f)(im.tuple_get(i, tup_expr)) for i in range(len(tup_type.types)))
     )
 
 
-_UNROLLERS: dict[str, Callable[[itir.Expr, itir.Expr, ts.TupleType], itir.Expr]] = {
+_MAP_EXPANDER: dict[str, Callable[[itir.Expr, itir.Expr, ts.TupleType], itir.Expr]] = {
     "tree_map_tuple": _tree_map_tuple_body,
     "map_tuple": _map_tuple_body,
 }
@@ -48,8 +48,8 @@ ProgramOrExpr = TypeVar("ProgramOrExpr", bound=itir.Program | itir.Expr)
 
 
 @dataclasses.dataclass
-class UnrollTupleMaps(eve.NodeTranslator):
-    """Unroll tuple-map ITIR builtins (`tree_map_tuple`, `map_tuple`) into `make_tuple`."""
+class ExpandTupleMaps(eve.NodeTranslator):
+    """Expand tuple-map ITIR builtins (`tree_map_tuple`, `map_tuple`) into `make_tuple`."""
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
@@ -76,7 +76,7 @@ class UnrollTupleMaps(eve.NodeTranslator):
     def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)
 
-        if not cpm.is_call_to(node.fun, tuple(_UNROLLERS.keys())):
+        if not cpm.is_call_to(node.fun, tuple(_MAP_EXPANDER.keys())):
             return node
 
         assert isinstance(node.fun, itir.FunCall)
@@ -86,8 +86,8 @@ class UnrollTupleMaps(eve.NodeTranslator):
         assert isinstance(tup.type, ts.TupleType)
 
         # Let bind the tuple arg to avoid expression duplication.
-        ref_name = next(self.uids["_utm"])
-        body = _UNROLLERS[node.fun.fun.id](f, im.ref(ref_name), tup.type)
+        ref_name = next(self.uids["_etm"])
+        body = _MAP_EXPANDER[node.fun.fun.id](f, im.ref(ref_name), tup.type)
 
         result = im.let(ref_name, tup)(body)
         itir_inference.reinfer(result)

@@ -636,11 +636,8 @@ def _make_tuple_map_synthesizer(
     def tuple_map_synthesizer(op: TypeSynthesizer) -> TypeSynthesizer:
         @type_synthesizer
         def applied_map(
-            *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
+            arg: ts.TupleType, offset_provider_type: common.OffsetProviderType
         ) -> ts.TupleType:
-            if len(args) != 1:
-                raise TypeError(f"'{builtin_name}' requires exactly one argument, got {len(args)}.")
-            (arg,) = args
             if not isinstance(arg, ts.TupleType):
                 raise TypeError(
                     f"'{builtin_name}' requires a 'TupleType' argument, got '{type(arg).__name__}'."
