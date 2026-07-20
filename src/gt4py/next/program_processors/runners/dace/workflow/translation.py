@@ -474,7 +474,17 @@ class DaCeTranslator(
 
 
 def _drop_element_ids(json_obj: Any) -> Any:
-    """Recursively remove `guid` keys from a serialized SDFG."""
+    """
+    Remove ``guid`` keys from a serialized SDFG with recursion.
+
+    We remove ``guid`` keys because of indeterminism of the ``guid`` values, which
+    would cause two identical programs to result in different compiled SDFGs, since
+    the cache key contains the hash of the serialized SDFG (a JSON string).
+    # FIXME(edopao): remove this workaround once the SDFG lowering is stable.
+
+    Note that this recursive implementation is 2-3x faster than the iterative one,
+    on a large SDFG, and it is also simpler to read.
+    """
     if isinstance(json_obj, dict):
         return {k: _drop_element_ids(v) for k, v in json_obj.items() if k != "guid"}
     if isinstance(json_obj, list):
