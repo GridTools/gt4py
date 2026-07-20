@@ -130,6 +130,29 @@ def test_domain_intersection():
     assert result.as_expr() == expected
 
 
+def test_domain_intersection_with_empty_stays_empty():
+    # Empty domains are the intersection's absorbing element. Dropping them (as the union does)
+    # would yield a non-empty result.
+    non_empty = _make_domain({I: (0, 10)})
+    empty = _make_domain({I: (1, 1)})
+
+    assert domain_utils.domain_intersection(empty, non_empty).empty()
+    assert domain_utils.domain_intersection(non_empty, empty).empty()
+
+
+def test_domain_intersection_empty_with_infinite_range():
+    # An empty range intersected with a half-infinite one must stay empty. Dropping the empty
+    # range would leak the `InfinityLiteral` bound into the result.
+    empty = _make_domain({I: (1, 1)})
+    half_infinite = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN, ranges={I: right_infinity_range}
+    )
+
+    result = domain_utils.domain_intersection(empty, half_infinite)
+    assert result.empty()
+    assert result.ranges[I].stop != itir.InfinityLiteral.POSITIVE
+
+
 def test_domain_union_then_intersection():
     # Cross-operation case: the union result flows into the intersection.
     domain0 = _make_domain({I: (0, 10), J: (0, 10)})

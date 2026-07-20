@@ -266,14 +266,12 @@ class BaseModuleGenerator(abc.ABC):
         for arg in self.builder.gtir.api_signature:
             if arg.is_keyword:
                 if arg.default:
-                    keyword_args.append(
-                        "{name}={default}".format(name=arg.name, default=arg.default)
-                    )
+                    keyword_args.append(f"{arg.name}={arg.default}")
                 else:
                     keyword_args.append(arg.name)
             else:
                 if arg.default:
-                    args.append("{name}={default}".format(name=arg.name, default=arg.default))
+                    args.append(f"{arg.name}={arg.default}")
                 else:
                     args.append(arg.name)
 

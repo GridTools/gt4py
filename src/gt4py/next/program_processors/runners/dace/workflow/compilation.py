@@ -14,7 +14,7 @@ import os
 import pathlib
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any
+from typing import Any, Final
 
 import dace
 import dace.codegen.compiler as dace_compiler
@@ -28,6 +28,9 @@ from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
 )
+
+
+_COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
 def _add_tx_markers(sdfg: dace.SDFG) -> None:
@@ -203,6 +206,8 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+
             # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
             # user changes the backend configuration (PR #2650).
             sdfg_build_folder = gtx_cache.get_cache_folder(
@@ -211,21 +216,34 @@ class DaCeCompiler(
                 build_context_id=fingerprinting.strict_fingerprinter(self.dace_config_nondefaults),
             )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
-
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            sdfg.build_folder = sdfg_build_folder
 
             # Add TX markers to the generated GPU code for trace visualization tools.
             if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
                 _add_tx_markers(sdfg)
 
-            sdfg.build_folder = sdfg_build_folder
-            with locking.lock(sdfg_build_folder):
-                sdfg.compile(validate=False, return_program_handle=False)
             # ``build_folder_mode`` is set by ``dace_context``; resolve the library
             # path here so ``get_binary_name`` sees the same mode dace built under.
             library_path = dace_compiler.get_binary_name(
                 object_folder=sdfg_build_folder, sdfg_name=sdfg.name
             )
+
+            with locking.lock(sdfg_build_folder):
+                # With `compiler.use_cache=True` dace reuses a cached library on mere
+                # *existence*, without validating it; an interrupted build can leave a
+                # truncated, unloadable library behind. The marker is written only
+                # after a completed compile: no marker -> drop the stale library so
+                # dace rebuilds it instead of handing it out.
+                marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
+                if not marker.exists():
+                    for stale in (
+                        library_path,
+                        *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),
+                    ):
+                        stale.unlink(missing_ok=True)
+                marker.unlink(missing_ok=True)
+                sdfg.compile(validate=False, return_program_handle=False)
+                marker.touch()
 
         assert inp.binding_source is not None
         return DaCeCompilationArtifact(
