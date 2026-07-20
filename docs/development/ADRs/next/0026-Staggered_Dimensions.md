@@ -80,7 +80,7 @@ through the `is_staggered` / `flip_staggered` / `as_non_staggered` helpers
 **A dimension and its staggered counterpart must not appear together** in the
 same field or domain. This follows directly from the geometric meaning of
 staggered dimension and is enforced by `check_dims` (`common.py`), which
-raises otherwise. Other functions may rely on this, e.g `order_dims` just orders 
+raises otherwise. Other functions may rely on this, e.g `order_dims` just orders
 by the `as_non_staggered` name.
 
 ## gtfn backend
