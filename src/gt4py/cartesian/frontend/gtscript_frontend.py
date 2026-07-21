@@ -2312,6 +2312,16 @@ class GTScriptParser(ast.NodeVisitor):
                         loc=nodes.Location.from_ast_node(name_nodes[collected_name][0]),
                     )
 
+        for key, value in nonlocal_symbols.items():
+            # Support @lazy_function() decorators by only evaluating them at this point
+            if (
+                callable(value)
+                and not hasattr(value, "_gtscript_")
+                and value.__qualname__.startswith("lazy_function.")
+            ):
+                value = value()
+                nonlocal_symbols[key] = value
+
         return nonlocal_symbols, imported_symbols
 
     @staticmethod
