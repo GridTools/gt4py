@@ -84,6 +84,7 @@ from typing import Annotated
 import typer
 
 
+PROGRAM_FOLDER_RE = re.compile(r"^(?P<name>.+)_[0-9a-f]{64}(?:_(?P<extra>.+))?$")
 CODEGEN_DIR = "src"
 SUPPORTED_BACKENDS = frozenset({"cpu", "cuda"})
 
@@ -198,7 +199,8 @@ def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter[ProgramSignat
     )
     n_folders = 0
     for folder in sorted(p for p in cache_root.iterdir() if p.is_dir()):
-        if not (folder / "program.sdfg").exists():
+        m = PROGRAM_FOLDER_RE.match(folder.name)
+        if not m:
             continue
         n_folders += 1
 
@@ -229,8 +231,8 @@ def _diagnose_empty(cache_root: Path) -> str:
     subdirs = [p for p in cache_root.iterdir() if p.is_dir()]
     if not subdirs:
         return "no subdirectories (nothing cached)"
-    if not any((p / "program.sdfg").exists() for p in subdirs):
-        return "no SDFG build directories found"
+    if not any(PROGRAM_FOLDER_RE.match(p.name) for p in subdirs):
+        return "no subdirectory matches `<name>_<64-hex-digest>/`"
     return "program folders present but none could be read"
 
 
