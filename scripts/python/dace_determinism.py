@@ -84,7 +84,7 @@ from typing import Annotated
 import typer
 
 
-PROGRAM_FOLDER_RE = re.compile(r"^(?P<name>.+)_[0-9a-f]{64}$")
+PROGRAM_FOLDER_RE = re.compile(r"^(?P<name>.+)(?:_[0-9a-f]{64}){1,2}$")  # <name>_<sha256>_<sha256>
 CODEGEN_DIR = "src"
 SUPPORTED_BACKENDS = frozenset({"cpu", "cuda"})
 
@@ -232,7 +232,7 @@ def _diagnose_empty(cache_root: Path) -> str:
     if not subdirs:
         return "no subdirectories (nothing cached)"
     if not any(PROGRAM_FOLDER_RE.match(p.name) for p in subdirs):
-        return "no subdirectory matches `<name>_<64-hex-digest>/`"
+        return "no subdirectory matches `<name>_<64-hex-digest>_<64-hex-digest>/`"
     return "program folders present but none could be read"
 
 
