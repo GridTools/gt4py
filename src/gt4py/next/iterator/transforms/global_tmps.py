@@ -181,12 +181,16 @@ def _transform_by_pattern(
                 lambda x: next(uids["__tmp"]),
                 result_collection_constructor=as_tuple,
             )(tmp_expr.type)
+            # the lowered IR is concrete, so `extract_dtype` never yields a `TypeVarType` here
             tmp_dtypes: (
                 ts.ScalarType | ts.ListType | tuple[ts.ScalarType | ts.ListType | tuple, ...]
-            ) = type_info.tree_map_type(
-                type_info.extract_dtype,
-                result_collection_constructor=as_tuple,
-            )(tmp_expr.type)
+            ) = cast(
+                "ts.ScalarType | ts.ListType | tuple[ts.ScalarType | ts.ListType | tuple, ...]",
+                type_info.tree_map_type(
+                    type_info.extract_dtype,
+                    result_collection_constructor=as_tuple,
+                )(tmp_expr.type),
+            )
 
             tmp_domains: SymbolicDomain | tuple[SymbolicDomain | tuple, ...] = tmp_expr.annex.domain
 
