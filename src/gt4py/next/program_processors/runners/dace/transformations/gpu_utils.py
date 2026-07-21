@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import warnings
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
@@ -752,15 +753,86 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             if num_map_params > 3:
                 dims_to_inspect = 2
 
+        independent_input_bytes = 0
+        total_input_bytes = 0
+        defining_param_name = gpu_map.params[0]
+        # Create a set of already seen data assuming that the compiler will optimize the code and load once the same memory address
+        seen_data = set()
+        for out_edge in graph.out_edges(self.map_entry):
+            if out_edge.data.src_subset is None:
+                continue
+            if out_edge.data in seen_data:
+                continue
+            seen_data.add(out_edge.data)
+            out_edge_data_bytes = sdfg.arrays[out_edge.data.data].dtype.bytes
+            if isinstance(out_edge.dst, dace_nodes.MapEntry):
+                inner_map_length = math.prod(out_edge.dst.range.size_exact())
+                total_input_bytes += inner_map_length * out_edge_data_bytes
+            else:
+                total_input_bytes += out_edge_data_bytes
+            found_independent_input = True
+            for edge_src_subset_range in out_edge.data.src_subset:
+                start_of_range, end_of_range, _ = edge_src_subset_range
+                if defining_param_name in str(start_of_range) or defining_param_name in str(end_of_range):
+                    found_independent_input = False
+                    break
+            if found_independent_input:
+                if isinstance(out_edge.dst, dace_nodes.MapEntry):
+                    inner_map_length = math.prod(out_edge.dst.range.size_exact())
+                    independent_input_bytes += inner_map_length * out_edge_data_bytes
+                elif isinstance(out_edge.dst, dace_nodes.Tasklet) and out_edge.dst_conn == "__tlet_field": # Case where we have indirect access to the K level as well
+                    pass
+                # elif isinstance(out_edge.dst, dace_nodes.Tasklet) and out_edge.dst_conn == "__tlet_index_K": # Add extra weight if the tasklet is accessing the K level indirectly, as this is a more expensive operation
+                #     independent_inputs += 4
+                else:
+                    independent_input_bytes += out_edge_data_bytes
+        print(f"For map {gpu_map.label} with ranges {map_size} independent_input_bytes: {independent_input_bytes} total_input_bytes: {total_input_bytes}", flush=True)
+        original_block_size = list(block_size)
+        # Thread block size heuristics defined by compute_rho_theta_pgrad_and_update_vn and vertically_implicit_solver_at_predictor_step
+        D = total_input_bytes - independent_input_bytes  # y-dependent bytes
+        Ry = map_size[0] if len(map_size) > 1 else 0
+        Rx = map_size[1] if len(map_size) > 1 else map_size[0]
+        if Ry == 0:
+            if total_input_bytes == 0:
+                block_size = [32, 8, 1]
+            else:
+                block_size = [128, 2, 1]
+        elif Ry < 50:
+            if D >= 100 and Ry <= 20:
+                block_size = [32, 8, 1]
+            elif D >= 90 and Ry > 20:
+                block_size = [32, 8, 1]
+            else:
+                block_size = [128, 2, 1]
+        else:  # Ry >= 50
+            if independent_input_bytes == 0:
+                block_size = [128, 2, 1]
+            elif independent_input_bytes < 100:
+                block_size = [256, 1, 1]
+            else:
+                block_size = [64, 4, 1]
+
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
+        original_thread_block_size = math.prod(list(block_size))
+        assert original_thread_block_size == 256
         assert dims_to_inspect <= 3
         for i in range(dims_to_inspect):
             map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
                 block_size[i] = map_size[map_dim_idx_to_inspect]
-
+        if dims_to_inspect == 2 and map_size[0] % block_size[1] != 0:
+            # If the last dimension is not a multiple of the block size, we reduce the block size to the largest factor of the map size that is less than or equal to the original block size.
+            for j in range(int(block_size[1]), 0, -1):
+                if map_size[0] % j > 2:
+                    block_size[1] = j
+                    break
+            for j in range(int(block_size[0]), original_thread_block_size+1, block_size[0]):
+                if j * int(block_size[1]) <= original_thread_block_size:
+                    block_size[0] = j
+        launch_bounds = str(int(block_size[0]) * int(block_size[1]) * int(block_size[2]))
+        print(f"For map {gpu_map.label} with ranges {map_size} original block size: {original_block_size} new block size: {list(block_size)}", flush=True)
         gpu_map.gpu_block_size = tuple(block_size)
         if self.maxnreg is not None:
             gpu_map.gpu_maxnreg = self.maxnreg
