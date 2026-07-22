@@ -159,7 +159,8 @@ class DaCeCompilationArtifact:
         #   exposes a load path that doesn't require an SDFG instance to wrap
         #   into the returned ``CompiledSDFG``.
         sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
-        sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
+        # TODO(phimuell): Add teh build folder directly to the artifact.
+        sdfg_program = dace_compiler.load_precompiled_sdfg(sdfg.build_folder, sdfg)
         program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
         return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
