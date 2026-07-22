@@ -130,7 +130,7 @@ Confirm all three occurrences use the same `X.Y.Z`:
 - **Branch**: `releasing_vX.Y.Z`
 - **Commit / PR title**: `Releasing vX.Y.Z` (note the `v` prefix here only)
 - **PR body**: `Bump version to X.Y.Z and update CHANGELOG.` (optional)
-- **Target**: `main`
+- **Target**: upstream `main` (`GridTools/gt4py:main`)
 
 If `releasing_vX.Y.Z` already exists, commit on that branch and push; do not
 open a duplicate PR.
