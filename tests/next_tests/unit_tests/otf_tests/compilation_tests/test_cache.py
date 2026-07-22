@@ -7,8 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
+import re
 
-from gt4py.next import config
+import pytest
+
+from gt4py.next import config, fingerprinting
 from gt4py.next.otf.compilation import cache
 
 from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conftest import (
@@ -58,3 +61,34 @@ def test_build_context_id_busts_cache_folder(extension_source_example):
 
     assert folder_a != folder_b
     assert folder_b.name.endswith("_ctx")
+
+
+@pytest.mark.parametrize("with_bindings", [True, False])
+@pytest.mark.parametrize("with_context_id", [True, False])
+def test_folder_name_round_trips_through_documented_pattern(
+    extension_source_example, with_bindings, with_context_id
+):
+    """Names built by `get_cache_folder` must parse back through `CACHE_FOLDER_NAME_PATTERN`.
+
+    External tooling (e.g. `scripts/python/dace_determinism.py`) recognizes cached
+    program folders and recovers the program name through this pattern, so any
+    change to the folder naming scheme must update the pattern together with it.
+    """
+    ext_source = (
+        extension_source_example
+        if with_bindings
+        else dataclasses.replace(extension_source_example, binding_source=None)
+    )
+    context_id = (
+        fingerprinting.strict_fingerprinter("build configuration") if with_context_id else ""
+    )
+    folder = cache.get_cache_folder(
+        ext_source, config.BuildCacheLifetime.SESSION, build_context_id=context_id
+    )
+
+    match = re.fullmatch(cache.CACHE_FOLDER_NAME_PATTERN, folder.name)
+    assert match is not None
+    expected_name = ext_source.program_source.entry_point.name + ("_pyext" if with_bindings else "")
+    assert match["name"] == expected_name
+    assert match["version_id"] == config.BUILD_CACHE_VERSION_ID
+    assert match["build_context_id"] == (context_id if with_context_id else None)
