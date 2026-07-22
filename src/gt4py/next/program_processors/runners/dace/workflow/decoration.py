@@ -43,11 +43,8 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        # NOTE: For some reasons it is not possible to deduce all symbols, strides seems to work,
-        #   but for shapes it does not work. I attached a debugger and saw this:
-        #   `('air', Array (dtype=int, shape=(-__air_IDim_range_0 + __air_IDim_range_1, -__air_JDim_range_0 + __air_JDim_range_1, -__air_KDim_range_0 + __air_KDim_range_1)))`
-        #   which is pretty obvious why it does not work. We need to come up with something.
-        #   Until then we run this extraction loop _ever_ time.
+        # Simply forward the call.
+
         flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
         this_call_args = sdfg_callable.get_sdfg_args(
             fun.sdfg_program.sdfg,
@@ -59,8 +56,7 @@ def convert_args(
             gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: metrics.get_current_level(),
             gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
         }
-
-        fun(**this_call_args)
+        fun.sdfg_program(**this_call_args)
 
         if collect_time:
             metrics.add_sample_to_current_source(metrics.COMPUTE_METRIC, collect_time_arg[0].item())
