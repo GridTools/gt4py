@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import factory
 
@@ -19,6 +19,10 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common, config
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
+
+
+if TYPE_CHECKING:
+    import dace
 
 
 class DaCeBackendFactory(factory.Factory):
@@ -64,7 +68,7 @@ def make_dace_backend(
     auto_optimize: bool = True,
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
-    external_memory_allocator: Callable[[int], Any] | None = None,
+    external_memory_allocator: Callable[[int, dace.StorageType], Any] | None = None,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
     use_zero_origin: bool = False,
@@ -79,8 +83,9 @@ def make_dace_backend(
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
-        external_memory_allocator: Callable used later for external-memory workspace
-            allocation. Threaded through the backend workflow for now.
+        external_memory_allocator: Callable taking `(required_nbytes, storage_type)`
+            used later for external-memory workspace allocation. Threaded through
+            the backend workflow for now.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
             in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil

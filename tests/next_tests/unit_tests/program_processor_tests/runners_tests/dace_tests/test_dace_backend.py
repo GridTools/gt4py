@@ -149,7 +149,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
 
 
 def test_make_backend_accepts_external_allocator_with_external_mode():
-    external_memory_allocator = lambda size: bytearray(size)
+    external_memory_allocator = lambda size, storage: bytearray(size)
 
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
@@ -165,7 +165,7 @@ def test_make_backend_accepts_external_allocator_with_external_mode():
 
 
 def test_make_backend_infers_external_mode_when_allocator_is_provided():
-    external_memory_allocator = lambda size: bytearray(size)
+    external_memory_allocator = lambda size, storage: bytearray(size)
 
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
@@ -190,5 +190,5 @@ def test_make_backend_rejects_external_allocator_without_external_mode():
             optimization_args={
                 "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
             },
-            external_memory_allocator=lambda size: bytearray(size),
+            external_memory_allocator=lambda size, storage: bytearray(size),
         )
