@@ -17,6 +17,7 @@ from .auto_optimize import (
     GT4PyAutoOptHook,
     GT4PyAutoOptHookFun,
     GT4PyAutoOptHookStage,
+    TransientMemoryMode,
     gt_auto_optimize,
 )
 from .concat_where_mapper import (
@@ -84,7 +85,7 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
-from .utils import gt_make_transients_persistent
+from .utils import gt_make_transients_external, gt_make_transients_persistent
 
 
 __all__ = [
@@ -119,6 +120,7 @@ __all__ = [
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
     "SplitConsumerMemlet",
+    "TransientMemoryMode",
     "VerticalMapFusionCallback",
     "VerticalMapSplitCallback",
     "constants",
@@ -132,6 +134,7 @@ __all__ = [
     "gt_gpu_transformation",
     "gt_horizontal_map_split_fusion",
     "gt_inline_nested_sdfg",
+    "gt_make_transients_external",
     "gt_make_transients_persistent",
     "gt_map_strides_to_dst_nested_sdfg",
     "gt_map_strides_to_src_nested_sdfg",

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 from typing import Any, Final
 
 import factory
@@ -16,6 +17,7 @@ import factory
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common, config
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
@@ -35,6 +37,7 @@ class DaCeBackendFactory(factory.Factory):
     class Params:
         name_device = "cpu"
         name_postfix = ""
+        external_memory_allocator = None
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
@@ -46,6 +49,7 @@ class DaCeBackendFactory(factory.Factory):
             cached_translation=True,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
+            external_memory_allocator=factory.SelfAttribute("..external_memory_allocator"),
         )
         auto_optimize = factory.Trait(name_postfix="_opt")
 
@@ -60,6 +64,7 @@ def make_dace_backend(
     auto_optimize: bool = True,
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
+    external_memory_allocator: Callable[[int], Any] | None = None,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
     use_zero_origin: bool = False,
@@ -74,6 +79,8 @@ def make_dace_backend(
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
+        external_memory_allocator: Callable used later for external-memory workspace
+            allocation. Threaded through the backend workflow for now.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
             in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
@@ -110,11 +117,25 @@ def make_dace_backend(
         else None
     }
 
+    if external_memory_allocator is not None:
+        expected_mode = gtx_transformations.TransientMemoryMode.EXTERNAL
+        if "transient_memory_mode" in optimization_args:
+            if (
+                transient_memory_mode := optimization_args["transient_memory_mode"]
+            ) is not expected_mode:
+                raise ValueError(
+                    f"'external_memory_allocator' requires 'transient_memory_mode=external', found {transient_memory_mode}."
+                )
+        else:
+            optimization_args["transient_memory_mode"] = expected_mode
+
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         auto_optimize=auto_optimize,
+        external_memory_allocator=external_memory_allocator,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
+        otf_workflow__compilation__external_memory_allocator=external_memory_allocator,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
