@@ -14,10 +14,11 @@ gt4py.next caches each compiled program at ``<root>/<folder>/src/...``, where
 the folder name embeds the program name and a fingerprint of the generated
 source. The folder-name layout is owned by gt4py — ``CACHE_FOLDER_NAME_PATTERN``
 next to ``get_cache_folder`` in ``gt4py/next/otf/compilation/cache.py``, kept in
-sync by a round-trip test there — and the ``ci-check`` subcommand reads it from
-the gt4py installation it drives, so this script follows folder-naming changes
-automatically. The ``check`` subcommand uses a built-in copy of the pattern,
-overridable with ``--folder-pattern``.
+sync by a round-trip test there — and this script always reads it from a gt4py
+installation, so it follows folder-naming changes automatically: ``ci-check``
+asks the interpreter it drives, ``check`` asks the interpreter running the
+script. There is no fallback; if no gt4py can provide the pattern, the check
+fails rather than guessing.
 
 Non-deterministic codegen changes the fingerprint from one run to the next.
 Programs are compared by logical name (the pattern's ``name`` group); a name may
@@ -55,14 +56,17 @@ its dependency (``typer``) is available.
    So ``ci-check`` is either driven by a gt4py-capable interpreter (this is what
    the ``test_next_dace_determinism`` nox session does: it executes the script
    with its session venv's python) or told one explicitly with ``--python``.
-   The ``check`` subcommand has no such requirement — it only reads caches.
+   The ``check`` subcommand only reads caches, but it too needs gt4py — the
+   interpreter executing the script provides the folder-name pattern — so run
+   it through a gt4py environment (e.g. ``uv run python
+   scripts/python/dace_determinism.py check ...``), not ``./scripts/run``.
 
 Usage::
 
-    # Compare two existing build caches:
-    ./scripts/run dace-determinism check --run1 PATH --run2 PATH \\
-        [--folder-pattern REGEX] [--diffs-dir DIR] [--report FILE] \\
-        [--runs-healthy/--no-runs-healthy]
+    # Compare two existing build caches (needs a gt4py-capable interpreter,
+    # see the note above):
+    uv run python scripts/python/dace_determinism.py check --run1 PATH --run2 PATH \\
+        [--diffs-dir DIR] [--report FILE] [--runs-healthy/--no-runs-healthy]
 
     # Run a pytest selection twice and compare (used by the
     # `test_next_dace_determinism` nox session, which omits --python because it
@@ -71,8 +75,8 @@ Usage::
         --workdir DIR -- <pytest args>
 
 Exit codes (both subcommands): 0 deterministic, 1 differs, 2 bad args /
-unsupported backend / no source files / nothing comparable, 3 no programs
-observed.
+unsupported backend / no source files / nothing comparable / folder-name
+pattern unavailable, 3 no programs observed.
 """
 
 from __future__ import annotations
@@ -92,17 +96,6 @@ from typing import Annotated
 import typer
 
 
-# The program cache folder-name layout is owned by gt4py: it is documented by
-# `CACHE_FOLDER_NAME_PATTERN` next to `get_cache_folder` in
-# `gt4py/next/otf/compilation/cache.py`, and a round-trip unit test there keeps
-# the two in sync. `ci-check` reads that pattern from the gt4py installation
-# under test (see `fetch_cache_folder_pattern`), so this constant is only the
-# fallback — and the default for the cache-only `check` subcommand, where no
-# gt4py interpreter is involved.
-DEFAULT_PROGRAM_FOLDER_PATTERN = (
-    r"(?P<name>.+)_(?P<fingerprint>[0-9a-f]{16})_(?P<version_id>.+?)"
-    r"(?:_(?P<build_context_id>[0-9a-f]{16}))?"
-)
 CODEGEN_DIR = "src"
 SUPPORTED_BACKENDS = frozenset({"cpu", "cuda"})
 
@@ -154,6 +147,16 @@ class PytestRunError(RuntimeError):
     Distinct from the comparison exceptions above so the CLI can map it to its
     own exit code without depending on ``except`` ordering against the shared
     ``RuntimeError`` base.
+    """
+
+
+class CacheFolderPatternError(RuntimeError):
+    """gt4py's cache folder-name pattern could not be obtained.
+
+    The pattern (`CACHE_FOLDER_NAME_PATTERN` next to `get_cache_folder` in
+    gt4py/next/otf/compilation/cache.py) is the only source of the folder-name
+    layout — there is deliberately no fallback — so without a gt4py-capable
+    interpreter to provide it, no cache can be scanned.
     """
 
 
@@ -383,12 +386,12 @@ def check_determinism(
     cache1: Path,
     cache2: Path,
     *,
-    folder_pattern: str | None = None,
+    folder_pattern: str,
     runs_healthy: bool | None = None,
     diffs_dir: Path | None = None,
     report_path: Path | None = None,
 ) -> list[ComparisonResult]:
-    folder_re = _compile_folder_pattern(folder_pattern or DEFAULT_PROGRAM_FOLDER_PATTERN)
+    folder_re = _compile_folder_pattern(folder_pattern)
     bags1, n_folders1 = _scan(cache1, folder_re)
     bags2, n_folders2 = _scan(cache2, folder_re)
     results = compare(bags1, bags2)
@@ -456,29 +459,38 @@ _PATTERN_PROBE_SNIPPET = (
 )
 
 
-def fetch_cache_folder_pattern(python: str) -> str | None:
+def fetch_cache_folder_pattern(python: str) -> str:
     """Read the cache folder-name pattern from a gt4py-capable interpreter.
 
     The pattern is owned by gt4py (`CACHE_FOLDER_NAME_PATTERN`, defined next to
     `get_cache_folder` and held in sync with it by a round-trip unit test), so
     reading it from the interpreter under test keeps this script correct across
-    folder-naming changes without edits here. Returns None when the pattern
-    cannot be read (no or too-old gt4py in that interpreter) or is unusable;
-    callers then fall back to `DEFAULT_PROGRAM_FOLDER_PATTERN`.
+    folder-naming changes without edits here. Raises `CacheFolderPatternError`
+    when the pattern cannot be read (no or too-old gt4py in that interpreter)
+    or is unusable — deliberately no fallback, failing beats guessing.
     """
     try:
         result = subprocess.run(
             [python, "-c", _PATTERN_PROBE_SNIPPET], capture_output=True, text=True, timeout=120
         )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise CacheFolderPatternError(
+            f"could not run `{python}` to read gt4py's cache folder-name pattern: {e}"
+        ) from e
     if result.returncode != 0:
-        return None
+        detail = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "no output"
+        raise CacheFolderPatternError(
+            f"`{python}` could not provide gt4py's cache folder-name pattern "
+            f"(exit {result.returncode}: {detail}). The interpreter must have a gt4py "
+            f"recent enough to define `CACHE_FOLDER_NAME_PATTERN`."
+        )
     pattern = result.stdout.strip()
     try:
         _compile_folder_pattern(pattern)
-    except (re.error, ValueError):
-        return None
+    except (re.error, ValueError) as e:
+        raise CacheFolderPatternError(
+            f"`{python}` reported an unusable cache folder-name pattern `{pattern}`: {e}"
+        ) from e
     return pattern
 
 
@@ -548,22 +560,17 @@ def run_determinism_check(
     The two per-run caches and ``dacecache`` are removed afterwards; ``diffs/``
     and ``report.txt`` under ``workdir`` are kept as debugging artifacts. Returns
     the comparison results, or raises the same exceptions as ``check_determinism``
-    (plus ``PytestRunError`` if a pytest run fails for an infrastructure reason).
+    (plus ``CacheFolderPatternError`` if ``python`` cannot provide gt4py's
+    folder-name pattern and ``PytestRunError`` if a pytest run fails for an
+    infrastructure reason).
     """
     workdir = workdir.expanduser().resolve()
     dacecache = (dacecache or Path.cwd() / ".dacecache").expanduser().resolve()
 
-    # The folder-name pattern comes from the gt4py under test whenever possible,
-    # so a gt4py-side change to the cache folder naming cannot silently turn
+    # The folder-name pattern comes from the gt4py under test — no fallback —
+    # so a gt4py-side change to the cache folder naming can never silently turn
     # every run into "no programs observed".
     folder_pattern = fetch_cache_folder_pattern(python)
-    if folder_pattern is None:
-        print(
-            f"warning: could not read gt4py's cache folder-name pattern from `{python}`; "
-            "falling back to this script's built-in pattern, which may be stale if the "
-            "cache folder naming has changed.",
-            file=sys.stderr,
-        )
 
     # Self-check the comparator first: a broken script aborts here, before the
     # two expensive test-suite runs.
@@ -627,6 +634,7 @@ _EXIT_CODES: dict[type[Exception], int] = {
     UnsupportedBackendError: 2,
     NoSourceFilesObservedError: 2,
     NoComparableProgramsError: 2,
+    CacheFolderPatternError: 2,
     NoProgramsObservedError: 3,
 }
 
@@ -643,18 +651,6 @@ cli = typer.Typer(no_args_is_help=True, name="dace-determinism", help=__doc__)
 def check(
     run1: Annotated[Path, typer.Option("--run1", metavar="PATH", help="First cache root.")],
     run2: Annotated[Path, typer.Option("--run2", metavar="PATH", help="Second cache root.")],
-    folder_pattern: Annotated[
-        str | None,
-        typer.Option(
-            "--folder-pattern",
-            metavar="REGEX",
-            help="Regex (with a `name` capture group) that program cache folder names "
-            "fully match; the `name` group is the logical program name used for "
-            "grouping. Defaults to the built-in copy of gt4py's "
-            "`CACHE_FOLDER_NAME_PATTERN`; pass the pattern of the gt4py version that "
-            "produced the caches if it differs.",
-        ),
-    ] = None,
     diffs_dir: Annotated[
         Path | None,
         typer.Option(
@@ -676,19 +672,29 @@ def check(
         ),
     ] = None,
 ) -> None:
-    """Compare two gt4py.next build caches for deterministic DaCe codegen."""
+    """Compare two gt4py.next build caches for deterministic DaCe codegen.
+
+    Runs the caches against gt4py's cache folder-name pattern, read from the
+    interpreter executing this script — which must therefore have gt4py
+    installed (e.g. run via `uv run python scripts/python/dace_determinism.py`).
+    """
     try:
         results = check_determinism(
             run1.expanduser().resolve(),
             run2.expanduser().resolve(),
-            folder_pattern=folder_pattern,
+            folder_pattern=fetch_cache_folder_pattern(sys.executable),
             runs_healthy=runs_healthy,
             diffs_dir=diffs_dir.expanduser().resolve() if diffs_dir else None,
             report_path=report.expanduser().resolve() if report else None,
         )
-    except (re.error, ValueError) as e:
-        typer.echo(f"error: invalid --folder-pattern: {e}", err=True)
-        raise typer.Exit(2) from e
+    except CacheFolderPatternError as e:
+        typer.echo(
+            f"error: {e}\nhint: `check` needs gt4py to know the cache folder-name "
+            f"pattern; run it with a gt4py-capable interpreter, e.g. "
+            f"`uv run python scripts/python/dace_determinism.py check ...`.",
+            err=True,
+        )
+        raise typer.Exit(_EXIT_CODES[CacheFolderPatternError]) from e
     except DeterminismError as e:
         if report is None:
             typer.echo(render_report(e.results, runs_healthy=runs_healthy))
@@ -768,6 +774,9 @@ def ci_check(
     except PytestRunError as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2) from e
+    except CacheFolderPatternError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(_EXIT_CODES[CacheFolderPatternError]) from e
     except (
         DeterminismError,
         UnsupportedBackendError,
