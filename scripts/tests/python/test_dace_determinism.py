@@ -19,28 +19,43 @@ import sys
 
 import pytest
 from dace_determinism import (
+    DEFAULT_PROGRAM_FOLDER_PATTERN,
     DeterminismError,
     NoComparableProgramsError,
     NoProgramsObservedError,
     NoSourceFilesObservedError,
     PytestRunError,
     UnsupportedBackendError,
+    _compile_folder_pattern,
     _scan,
     check_determinism,
     cli,
     compare,
+    fetch_cache_folder_pattern,
     render_report,
     run_determinism_check,
 )
 from typer.testing import CliRunner
 
 
+_DEFAULT_FOLDER_RE = _compile_folder_pattern(DEFAULT_PROGRAM_FOLDER_PATTERN)
+
+
 def _bags(cache: pathlib.Path):
-    return _scan(cache)[0]
+    return _scan(cache, _DEFAULT_FOLDER_RE)[0]
+
+
+def _hex16(salt: str) -> str:
+    return hashlib.sha256(salt.encode()).hexdigest()[:16]
+
+
+def _folder_name(name: str, salt: str) -> str:
+    # Mirrors gt4py's current naming: {name}_{fingerprint}_{version_id}_{context_id}.
+    return f"{name}_{_hex16(salt)}_1.0.0_{_hex16('build config')}"
 
 
 def _program(cache: pathlib.Path, name: str, salt: str, sources: dict[str, str]) -> None:
-    folder = cache / f"{name}_{hashlib.sha256(salt.encode()).hexdigest()}"
+    folder = cache / _folder_name(name, salt)
     for rel, content in sources.items():
         path = folder / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,7 +84,7 @@ def test_collect_unsupported_backend_raises(tmp_path):
 
 def test_empty_src_program_excluded(tmp_path):
     cache = tmp_path / ".gt4py_cache"
-    (cache / f"p_{hashlib.sha256(b'a').hexdigest()}" / "src").mkdir(parents=True)
+    (cache / _folder_name("p", "a") / "src").mkdir(parents=True)
     assert "p" not in _bags(cache)
 
 
@@ -212,9 +227,8 @@ def test_no_programs_raises(tmp_path):
 def test_no_source_files_raises(tmp_path):
     c1 = tmp_path / "r1" / ".gt4py_cache"
     c2 = tmp_path / "r2" / ".gt4py_cache"
-    digest = hashlib.sha256(b"a").hexdigest()
-    (c1 / f"p_{digest}").mkdir(parents=True)
-    (c2 / f"p_{digest}").mkdir(parents=True)
+    (c1 / _folder_name("p", "a")).mkdir(parents=True)
+    (c2 / _folder_name("p", "a")).mkdir(parents=True)
     with pytest.raises(NoSourceFilesObservedError, match="development"):
         check_determinism(c1, c2)
 
@@ -290,17 +304,29 @@ def test_report_marks_count_as_failure_when_healthy(tmp_path):
 # fabricating a `.gt4py_cache` program tree under GT4PY_BUILD_CACHE_DIR plus a
 # JUnit XML, so the loop, health parsing, and comparison are exercised without
 # needing gt4py installed.
+#
+# The stub also answers the folder-name pattern probe (`python -c ...`) with its
+# OWN naming scheme, which deliberately does NOT match this script's built-in
+# default (no version/context segments). The orchestration therefore only finds
+# the stub's program folders if it really uses the fetched pattern — making
+# these tests an end-to-end guard on the pattern-fetch mechanism.
+
+_STUB_FOLDER_PATTERN = r"(?P<name>.+)_(?P<salt>[0-9a-f]{16})"
 
 _STUB_PYTEST = """\
 #!{python}
 import hashlib, os, pathlib, sys
+
+if sys.argv[1:2] == ["-c"]:  # the folder-name pattern probe
+    print({pattern!r})
+    sys.exit(0)
 
 junit = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--junit-xml="))
 cache = pathlib.Path(os.environ["GT4PY_BUILD_CACHE_DIR"]) / ".gt4py_cache"
 run_name = pathlib.Path(os.environ["GT4PY_BUILD_CACHE_DIR"]).name
 # Codegen differs between runs only when perturbation is requested.
 content = run_name if os.environ.get("FAKE_PERTURB") else "stable"
-folder = cache / ("prog_" + hashlib.sha256(b"prog").hexdigest()) / "src" / "cpu"
+folder = cache / ("prog_" + hashlib.sha256(b"prog").hexdigest()[:16]) / "src" / "cpu"
 folder.mkdir(parents=True, exist_ok=True)
 (folder / "k.cpp").write_text(content)
 pathlib.Path(junit).write_text('<testsuite tests="1" failures="0" errors="0" />')
@@ -309,7 +335,7 @@ pathlib.Path(junit).write_text('<testsuite tests="1" failures="0" errors="0" />'
 
 def _stub_interpreter(tmp_path: pathlib.Path) -> str:
     stub = tmp_path / "fake_pytest.py"
-    stub.write_text(_STUB_PYTEST.format(python=sys.executable))
+    stub.write_text(_STUB_PYTEST.format(python=sys.executable, pattern=_STUB_FOLDER_PATTERN))
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IRWXU)
     return str(stub)
 
@@ -447,3 +473,103 @@ def test_ci_check_command_success_echoes_report(monkeypatch, tmp_path):
     result = CliRunner().invoke(cli, ["ci-check", "--workdir", str(workdir), "--no-self-check"])
     assert result.exit_code == 0
     assert "deterministic" in result.output
+
+
+# --- folder-name pattern handling ---
+#
+# The folder-name layout belongs to gt4py: `CACHE_FOLDER_NAME_PATTERN` in
+# gt4py/next/otf/compilation/cache.py, held in sync with `get_cache_folder` by a
+# round-trip test there. These tests cover this script's side of the contract:
+# the built-in fallback parses real-world names, custom patterns are honored,
+# and the runtime fetch degrades cleanly.
+
+
+@pytest.mark.parametrize(
+    ("folder", "expected"),
+    [
+        (
+            "__field_operator_solve_tridiag_pyext_ebf83e9be18232fd_1.1.12_db5ed39d9f2c69fb",
+            "__field_operator_solve_tridiag_pyext",
+        ),
+        (  # no build context id (e.g. the cmake build system passes none)
+            "__field_operator_solve_tridiag_pyext_ebf83e9be18232fd_1.1.12",
+            "__field_operator_solve_tridiag_pyext",
+        ),
+        (  # dev-install version tags contain dots and plus signs
+            "prog_pyext_0123456789abcdef_1.1.13.dev4+g1234abc.d20260722_fedcba9876543210",
+            "prog_pyext",
+        ),
+        ("translation_cache", None),
+        ("run1", None),
+    ],
+)
+def test_default_pattern_extracts_program_name(folder, expected):
+    m = _DEFAULT_FOLDER_RE.fullmatch(folder)
+    assert (m["name"] if m else None) == expected
+
+
+def test_pattern_without_name_group_rejected(tmp_path):
+    with pytest.raises(ValueError, match="name"):
+        check_determinism(tmp_path / "r1", tmp_path / "r2", folder_pattern=r".+_[0-9a-f]{16}")
+
+
+def test_check_cli_honors_folder_pattern(tmp_path):
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    for cache in (c1, c2):
+        src = cache / "copy-ABC" / "src" / "cpu"
+        src.mkdir(parents=True)
+        (src / "k.cpp").write_text("stable")
+
+    runner = CliRunner()
+    default = runner.invoke(cli, ["check", "--run1", str(c1), "--run2", str(c2)])
+    assert default.exit_code == 3  # the built-in pattern does not recognize these folders
+
+    custom = runner.invoke(
+        cli,
+        [
+            "check",
+            "--run1",
+            str(c1),
+            "--run2",
+            str(c2),
+            "--folder-pattern",
+            r"(?P<name>.+)-[A-Z]{3}",
+        ],
+    )
+    assert custom.exit_code == 0
+    assert "deterministic" in custom.output
+
+
+def test_check_cli_rejects_pattern_without_name_group(tmp_path):
+    (tmp_path / "r1").mkdir()
+    (tmp_path / "r2").mkdir()
+    r1, r2 = str(tmp_path / "r1"), str(tmp_path / "r2")
+    result = CliRunner().invoke(
+        cli,
+        ["check", "--run1", r1, "--run2", r2, "--folder-pattern", "no_name_group_[0-9a-f]{16}"],
+    )
+    assert result.exit_code == 2
+
+
+def _fake_interpreter(tmp_path: pathlib.Path, body: str) -> str:
+    stub = tmp_path / "fake_python.py"
+    stub.write_text(f"#!{sys.executable}\n{body}")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IRWXU)
+    return str(stub)
+
+
+def test_fetch_pattern_returns_advertised_pattern(tmp_path):
+    python = _fake_interpreter(tmp_path, f"print({_STUB_FOLDER_PATTERN!r})\n")
+    assert fetch_cache_folder_pattern(python) == _STUB_FOLDER_PATTERN
+
+
+def test_fetch_pattern_none_on_failing_interpreter(tmp_path):
+    python = _fake_interpreter(tmp_path, "import sys; sys.exit(1)\n")
+    assert fetch_cache_folder_pattern(python) is None
+
+
+def test_fetch_pattern_none_on_unusable_pattern(tmp_path):
+    for body in ("print('no name group here')\n", "print('(?P<name>unbalanced')\n", "print()\n"):
+        python = _fake_interpreter(tmp_path, body)
+        assert fetch_cache_folder_pattern(python) is None

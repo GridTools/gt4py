@@ -10,13 +10,20 @@
 
 """Check that gt4py's DaCe backend generates identical source across two runs.
 
-gt4py.next caches each compiled program at ``<root>/<name>_<sha256>/src/...``,
-where the digest is derived from the generated source. Non-deterministic codegen
-therefore changes the digest from one run to the next. Programs are compared by
-logical name (the folder name without the trailing digest); a name may be
-compiled several times with different parameters, so each run yields a multiset
-of source signatures per name. A signature is the set of ``(relpath, sha256)``
-pairs of one compiled program.
+gt4py.next caches each compiled program at ``<root>/<folder>/src/...``, where
+the folder name embeds the program name and a fingerprint of the generated
+source. The folder-name layout is owned by gt4py — ``CACHE_FOLDER_NAME_PATTERN``
+next to ``get_cache_folder`` in ``gt4py/next/otf/compilation/cache.py``, kept in
+sync by a round-trip test there — and the ``ci-check`` subcommand reads it from
+the gt4py installation it drives, so this script follows folder-naming changes
+automatically. The ``check`` subcommand uses a built-in copy of the pattern,
+overridable with ``--folder-pattern``.
+
+Non-deterministic codegen changes the fingerprint from one run to the next.
+Programs are compared by logical name (the pattern's ``name`` group); a name may
+be compiled several times with different parameters, so each run yields a
+multiset of source signatures per name. A signature is the set of
+``(relpath, sha256)`` pairs of one compiled program.
 
 A name is compared only when both runs compiled the same number of programs for
 it. The program count is a function of which tests ran, not of codegen, so equal
@@ -54,7 +61,8 @@ Usage::
 
     # Compare two existing build caches:
     ./scripts/run dace-determinism check --run1 PATH --run2 PATH \\
-        [--diffs-dir DIR] [--report FILE] [--runs-healthy/--no-runs-healthy]
+        [--folder-pattern REGEX] [--diffs-dir DIR] [--report FILE] \\
+        [--runs-healthy/--no-runs-healthy]
 
     # Run a pytest selection twice and compare (used by the
     # `test_next_dace_determinism` nox session, which omits --python because it
@@ -84,9 +92,33 @@ from typing import Annotated
 import typer
 
 
-PROGRAM_FOLDER_RE = re.compile(r"^(?P<name>.+)_[0-9a-f]{64}$")
+# The program cache folder-name layout is owned by gt4py: it is documented by
+# `CACHE_FOLDER_NAME_PATTERN` next to `get_cache_folder` in
+# `gt4py/next/otf/compilation/cache.py`, and a round-trip unit test there keeps
+# the two in sync. `ci-check` reads that pattern from the gt4py installation
+# under test (see `fetch_cache_folder_pattern`), so this constant is only the
+# fallback — and the default for the cache-only `check` subcommand, where no
+# gt4py interpreter is involved.
+DEFAULT_PROGRAM_FOLDER_PATTERN = (
+    r"(?P<name>.+)_(?P<fingerprint>[0-9a-f]{16})_(?P<version_id>.+?)"
+    r"(?:_(?P<build_context_id>[0-9a-f]{16}))?"
+)
 CODEGEN_DIR = "src"
 SUPPORTED_BACKENDS = frozenset({"cpu", "cuda"})
+
+
+def _compile_folder_pattern(pattern: str) -> re.Pattern[str]:
+    """Compile a folder-name pattern, requiring the ``name`` capture group.
+
+    The ``name`` group is what programs are grouped and compared by, so a
+    pattern without it cannot drive the comparison. Raises ``re.error`` on an
+    invalid regex and ``ValueError`` on a missing ``name`` group.
+    """
+    folder_re = re.compile(pattern)
+    if "name" not in folder_re.groupindex:
+        raise ValueError(f"cache folder pattern must define a `name` capture group: `{pattern}`")
+    return folder_re
+
 
 SourceFileHash = tuple[str, str]  # (source file path, source file contents hash)
 ProgramSignature = frozenset[SourceFileHash]  # all source files of one compiled program
@@ -179,7 +211,9 @@ def _sha256_of_contents(path: Path) -> str:
     return h.hexdigest()
 
 
-def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter[ProgramSignature]], int]:
+def _scan(
+    cache_root: Path, folder_re: re.Pattern[str]
+) -> tuple[dict[str, collections.Counter[ProgramSignature]], int]:
     """Return the signature multiset per logical name and the program count.
 
     Each program folder yields one ``ProgramSignature``: the set of
@@ -199,7 +233,7 @@ def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter[ProgramSignat
     )
     n_folders = 0
     for folder in sorted(p for p in cache_root.iterdir() if p.is_dir()):
-        m = PROGRAM_FOLDER_RE.match(folder.name)
+        m = folder_re.fullmatch(folder.name)
         if not m:
             continue
         n_folders += 1
@@ -223,7 +257,7 @@ def _scan(cache_root: Path) -> tuple[dict[str, collections.Counter[ProgramSignat
     return dict(by_name), n_folders
 
 
-def _diagnose_empty(cache_root: Path) -> str:
+def _diagnose_empty(cache_root: Path, folder_re: re.Pattern[str]) -> str:
     if not cache_root.exists():
         return "path does not exist"
     if not cache_root.is_dir():
@@ -231,8 +265,8 @@ def _diagnose_empty(cache_root: Path) -> str:
     subdirs = [p for p in cache_root.iterdir() if p.is_dir()]
     if not subdirs:
         return "no subdirectories (nothing cached)"
-    if not any(PROGRAM_FOLDER_RE.match(p.name) for p in subdirs):
-        return "no subdirectory matches `<name>_<64-hex-digest>/`"
+    if not any(folder_re.fullmatch(p.name) for p in subdirs):
+        return f"no subdirectory matches the program folder pattern `{folder_re.pattern}`"
     return "program folders present but none could be read"
 
 
@@ -349,12 +383,14 @@ def check_determinism(
     cache1: Path,
     cache2: Path,
     *,
+    folder_pattern: str | None = None,
     runs_healthy: bool | None = None,
     diffs_dir: Path | None = None,
     report_path: Path | None = None,
 ) -> list[ComparisonResult]:
-    bags1, n_folders1 = _scan(cache1)
-    bags2, n_folders2 = _scan(cache2)
+    folder_re = _compile_folder_pattern(folder_pattern or DEFAULT_PROGRAM_FOLDER_PATTERN)
+    bags1, n_folders1 = _scan(cache1, folder_re)
+    bags2, n_folders2 = _scan(cache2, folder_re)
     results = compare(bags1, bags2)
 
     if diffs_dir is not None:
@@ -366,8 +402,8 @@ def check_determinism(
     if n_folders1 == 0 and n_folders2 == 0:
         raise NoProgramsObservedError(
             "no programs observed in either cache:\n"
-            f"  run1 ({cache1}): {_diagnose_empty(cache1)}\n"
-            f"  run2 ({cache2}): {_diagnose_empty(cache2)}"
+            f"  run1 ({cache1}): {_diagnose_empty(cache1, folder_re)}\n"
+            f"  run2 ({cache2}): {_diagnose_empty(cache2, folder_re)}"
         )
     if not results:
         raise NoSourceFilesObservedError(
@@ -414,6 +450,36 @@ def check_determinism(
 
 CACHE_SUBDIR = ".gt4py_cache"
 PYTEST_TOLERATED_EXIT_CODES = frozenset({0, 1, 5})  # ok, tests failed, no tests collected
+
+_PATTERN_PROBE_SNIPPET = (
+    "from gt4py.next.otf.compilation import cache; print(cache.CACHE_FOLDER_NAME_PATTERN)"
+)
+
+
+def fetch_cache_folder_pattern(python: str) -> str | None:
+    """Read the cache folder-name pattern from a gt4py-capable interpreter.
+
+    The pattern is owned by gt4py (`CACHE_FOLDER_NAME_PATTERN`, defined next to
+    `get_cache_folder` and held in sync with it by a round-trip unit test), so
+    reading it from the interpreter under test keeps this script correct across
+    folder-naming changes without edits here. Returns None when the pattern
+    cannot be read (no or too-old gt4py in that interpreter) or is unusable;
+    callers then fall back to `DEFAULT_PROGRAM_FOLDER_PATTERN`.
+    """
+    try:
+        result = subprocess.run(
+            [python, "-c", _PATTERN_PROBE_SNIPPET], capture_output=True, text=True, timeout=120
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    pattern = result.stdout.strip()
+    try:
+        _compile_folder_pattern(pattern)
+    except (re.error, ValueError):
+        return None
+    return pattern
 
 
 def _run_is_healthy(junit_xml: Path) -> bool:
@@ -469,7 +535,9 @@ def run_determinism_check(
     ``pytest_args`` are the arguments passed to ``python -m pytest`` (without the
     leading ``pytest``) for each of the two runs. ``python`` is the interpreter
     used to run the suite (defaults to the current one, i.e. the environment that
-    has gt4py installed when this script is executed there). Each run sets
+    has gt4py installed when this script is executed there); it is also asked for
+    gt4py's cache folder-name pattern, so the comparison recognizes program
+    folders even after gt4py changes its naming scheme. Each run sets
     ``GT4PY_BUILD_CACHE_DIR`` so its cache lands at ``<run_dir>/.gt4py_cache/``.
 
     ``dacecache`` is DaCe's build-cache directory, wiped before each run so the
@@ -484,6 +552,18 @@ def run_determinism_check(
     """
     workdir = workdir.expanduser().resolve()
     dacecache = (dacecache or Path.cwd() / ".dacecache").expanduser().resolve()
+
+    # The folder-name pattern comes from the gt4py under test whenever possible,
+    # so a gt4py-side change to the cache folder naming cannot silently turn
+    # every run into "no programs observed".
+    folder_pattern = fetch_cache_folder_pattern(python)
+    if folder_pattern is None:
+        print(
+            f"warning: could not read gt4py's cache folder-name pattern from `{python}`; "
+            "falling back to this script's built-in pattern, which may be stale if the "
+            "cache folder naming has changed.",
+            file=sys.stderr,
+        )
 
     # Self-check the comparator first: a broken script aborts here, before the
     # two expensive test-suite runs.
@@ -526,6 +606,7 @@ def run_determinism_check(
         return check_determinism(
             run1_dir / CACHE_SUBDIR,
             run2_dir / CACHE_SUBDIR,
+            folder_pattern=folder_pattern,
             runs_healthy=runs_healthy,
             diffs_dir=workdir / "diffs",
             report_path=workdir / "report.txt",
@@ -562,6 +643,18 @@ cli = typer.Typer(no_args_is_help=True, name="dace-determinism", help=__doc__)
 def check(
     run1: Annotated[Path, typer.Option("--run1", metavar="PATH", help="First cache root.")],
     run2: Annotated[Path, typer.Option("--run2", metavar="PATH", help="Second cache root.")],
+    folder_pattern: Annotated[
+        str | None,
+        typer.Option(
+            "--folder-pattern",
+            metavar="REGEX",
+            help="Regex (with a `name` capture group) that program cache folder names "
+            "fully match; the `name` group is the logical program name used for "
+            "grouping. Defaults to the built-in copy of gt4py's "
+            "`CACHE_FOLDER_NAME_PATTERN`; pass the pattern of the gt4py version that "
+            "produced the caches if it differs.",
+        ),
+    ] = None,
     diffs_dir: Annotated[
         Path | None,
         typer.Option(
@@ -588,10 +681,14 @@ def check(
         results = check_determinism(
             run1.expanduser().resolve(),
             run2.expanduser().resolve(),
+            folder_pattern=folder_pattern,
             runs_healthy=runs_healthy,
             diffs_dir=diffs_dir.expanduser().resolve() if diffs_dir else None,
             report_path=report.expanduser().resolve() if report else None,
         )
+    except (re.error, ValueError) as e:
+        typer.echo(f"error: invalid --folder-pattern: {e}", err=True)
+        raise typer.Exit(2) from e
     except DeterminismError as e:
         if report is None:
             typer.echo(render_report(e.results, runs_healthy=runs_healthy))
