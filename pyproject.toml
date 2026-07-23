@@ -458,13 +458,9 @@ find = {namespaces = false, where = ['src']}
 conflicts = [
   [
     {extra = 'cuda12'},
-    {extra = 'cuda13'}
-  ],
-  [
+    {extra = 'cuda13'},
     {extra = 'jax-cuda12'},
-    {extra = 'jax-cuda13'}
-  ],
-  [
+    {extra = 'jax-cuda13'},
     {extra = 'rocm6'},
     {extra = 'rocm7'}
   ],
