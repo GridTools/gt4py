@@ -964,30 +964,34 @@ def _gt_auto_post_processing(
     # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
     dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
-    if transient_memory_mode in (TransientMemoryMode.PERSISTENT, TransientMemoryMode.EXTERNAL):
-        if transient_memory_mode == TransientMemoryMode.PERSISTENT:
+    match transient_memory_mode:
+        case TransientMemoryMode.PERSISTENT:
             gtx_transformations.gt_configure_transient_lifetime(
                 sdfg=sdfg, lifetime=dace.AllocationLifetime.Persistent
             )
-        else:
+            if gpu:
+                # NOTE: For unknown reasons the counterpart of the
+                #   `gt_make_transients_persistent()` function in DaCe, resets the
+                #   `wcr_nonatomic` property of every memlet, i.e. makes it atomic.
+                #   However, it does this only for edges on the top level and on GPU.
+                #   For compatibility with DaCe (and until we found out why) the GT4Py
+                #   auto optimizer will emulate this behaviour.
+                for state in sdfg.states():
+                    assert isinstance(state, dace.SDFGState)
+                    for edge in state.edges():
+                        edge.data.wcr_nonatomic = False
+
+        case TransientMemoryMode.EXTERNAL:
             gtx_transformations.gt_configure_transient_lifetime(
                 sdfg=sdfg, lifetime=dace.AllocationLifetime.External
             )
 
-        if gpu and transient_memory_mode == TransientMemoryMode.PERSISTENT:
-            # NOTE: For unknown reasons the counterpart of the
-            #   `gt_make_transients_persistent()` function in DaCe, resets the
-            #   `wcr_nonatomic` property of every memlet, i.e. makes it atomic.
-            #   However, it does this only for edges on the top level and on GPU.
-            #   For compatibility with DaCe (and until we found out why) the GT4Py
-            #   auto optimizer will emulate this behaviour.
-            for state in sdfg.states():
-                assert isinstance(state, dace.SDFGState)
-                for edge in state.edges():
-                    edge.data.wcr_nonatomic = False
+        case TransientMemoryMode.POOL:
+            if gpu:
+                gtx_transformations.gpu_utils.gt_gpu_apply_mempool(sdfg)
 
-    elif transient_memory_mode == TransientMemoryMode.POOL and gpu:
-        gtx_transformations.gpu_utils.gt_gpu_apply_mempool(sdfg)
+        case TransientMemoryMode.SCOPED:
+            pass
 
     if validate_all:
         sdfg.validate()
