@@ -791,26 +791,30 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         # Thread block size heuristics defined by compute_rho_theta_pgrad_and_update_vn and vertically_implicit_solver_at_predictor_step
         D = total_input_bytes - independent_input_bytes  # y-dependent bytes
         Ry = map_size[0] if len(map_size) > 1 else 0
-        Rx = map_size[1] if len(map_size) > 1 else map_size[0]
-        if Ry == 0:
-            if total_input_bytes == 0:
-                block_size = [32, 8, 1]
-            else:
-                block_size = [128, 2, 1]
-        elif Ry < 50:
-            if D >= 100 and Ry <= 20:
-                block_size = [32, 8, 1]
-            elif D >= 90 and Ry > 20:
-                block_size = [32, 8, 1]
-            else:
-                block_size = [128, 2, 1]
-        else:  # Ry >= 50
-            if independent_input_bytes == 0:
-                block_size = [128, 2, 1]
-            elif independent_input_bytes < 100:
-                block_size = [256, 1, 1]
-            else:
-                block_size = [64, 4, 1]
+        Ry_is_digit = str(Ry).isdigit()
+        if Ry_is_digit:
+            if Ry == 0:
+                # Scan loop
+                block_size = [128, 1, 1]
+            elif Ry == 1:
+                if total_input_bytes == 0:
+                    block_size = [64, 1, 1]
+                else:
+                    block_size = [128, 1, 1]
+            elif Ry < 50:
+                if D >= 100 and Ry <= 20:
+                    block_size = [32, 8, 1]
+                elif D >= 90 and Ry > 20:
+                    block_size = [32, 8, 1]
+                else:
+                    block_size = [128, 2, 1]
+            else:  # Ry >= 50
+                if independent_input_bytes == 0:
+                    block_size = [128, 2, 1]
+                elif independent_input_bytes < 100:
+                    block_size = [256, 1, 1]
+                else:
+                    block_size = [64, 4, 1]
 
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
@@ -822,15 +826,17 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
                 block_size[i] = map_size[map_dim_idx_to_inspect]
-        if dims_to_inspect == 2 and map_size[0] % block_size[1] != 0:
-            # If the last dimension is not a multiple of the block size, we reduce the block size to the largest factor of the map size that is less than or equal to the original block size.
-            for j in range(int(block_size[1]), 0, -1):
-                if map_size[0] % j > 2:
-                    block_size[1] = j
-                    break
-            for j in range(int(block_size[0]), original_thread_block_size+1, block_size[0]):
-                if j * int(block_size[1]) <= original_thread_block_size:
-                    block_size[0] = j
+        map_size_is_digit = all(str(x).isdigit() for x in map_size)
+        if map_size_is_digit:
+            if dims_to_inspect == 2 and map_size[0] % block_size[1] != 0:
+                # If the last dimension is not a multiple of the block size, we reduce the block size to the largest factor of the map size that is less than or equal to the original block size.
+                for j in range(int(block_size[1]), 0, -1):
+                    if map_size[0] % j > 2:
+                        block_size[1] = j
+                        break
+                for j in range(int(block_size[0]), original_thread_block_size+1, block_size[0]):
+                    if j * int(block_size[1]) <= original_thread_block_size:
+                        block_size[0] = j
         launch_bounds = str(int(block_size[0]) * int(block_size[1]) * int(block_size[2]))
         print(f"For map {gpu_map.label} with ranges {map_size} original block size: {original_block_size} new block size: {list(block_size)}", flush=True)
         gpu_map.gpu_block_size = tuple(block_size)
