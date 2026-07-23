@@ -91,7 +91,11 @@ def gt_configure_transient_lifetime(
 
         result[nsdfg.cfg_id] = modify_lifetime - not_modify_lifetime
         for aname in result[nsdfg.cfg_id]:
-            nsdfg.arrays[aname].lifetime = lifetime
+            adesc = nsdfg.arrays[aname]
+            adesc.lifetime = lifetime
+            if adesc.storage == dace.StorageType.Default and isinstance(adesc, dace.data.Array):
+                # GPU transformation have already change the storage for GPU arrays.
+                adesc.storage = dace.StorageType.CPU_Heap
 
     return result
 

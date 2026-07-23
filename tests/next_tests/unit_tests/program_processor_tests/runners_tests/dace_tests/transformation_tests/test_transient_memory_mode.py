@@ -48,7 +48,7 @@ def _make_sdfg_with_top_level_transient(storage):
 @pytest.mark.parametrize(
     "storage",
     [
-        dace.StorageType.CPU_Heap,
+        dace.StorageType.Default,
         dace.StorageType.GPU_Global,
     ],
 )
@@ -60,4 +60,8 @@ def test_configure_transient_lifetime(lifetime, storage):
     assert candidates == {"tmp_arr", "tmp_scalar"}
 
     assert sdfg.arrays["tmp_arr"].lifetime == lifetime
+    assert sdfg.arrays["tmp_arr"].storage == (
+        dace.StorageType.CPU_Heap if storage == dace.StorageType.Default else storage
+    )
     assert sdfg.arrays["tmp_scalar"].lifetime == lifetime
+    assert sdfg.arrays["tmp_scalar"].storage == dace.StorageType.Default
