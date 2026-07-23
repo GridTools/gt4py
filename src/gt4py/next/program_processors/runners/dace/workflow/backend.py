@@ -124,8 +124,9 @@ def make_dace_backend(
             if (
                 transient_memory_mode := optimization_args["transient_memory_mode"]
             ) is not expected_mode:
-                raise ValueError(
-                    f"'external_memory_allocator' requires 'transient_memory_mode=external', found {transient_memory_mode}."
+                warnings.warn(
+                    f"External memory allocator provided but 'transient_memory_mode' is '{transient_memory_mode}', it requires '{expected_mode}'.",
+                    stacklevel=2,
                 )
         else:
             optimization_args["transient_memory_mode"] = expected_mode

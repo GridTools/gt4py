@@ -181,14 +181,23 @@ def test_make_backend_infers_external_mode_when_allocator_is_provided():
     assert backend.executor.compilation.external_memory_allocator is external_memory_allocator
 
 
-def test_make_backend_rejects_external_allocator_without_external_mode():
-    with pytest.raises(ValueError, match="transient_memory_mode=external"):
-        dace_wf_backend.make_dace_backend(
+def test_make_backend_warns_external_allocator_without_external_mode():
+    external_memory_allocator = lambda size, storage: bytearray(size)
+
+    with pytest.warns(UserWarning, match="External memory allocator provided"):
+        backend = dace_wf_backend.make_dace_backend(
             gpu=False,
             auto_optimize=True,
             async_sdfg_call=False,
             optimization_args={
                 "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
             },
-            external_memory_allocator=lambda size, storage: bytearray(size),
+            external_memory_allocator=external_memory_allocator,
         )
+
+    # Explicit mode stays as requested by the caller; backend only warns.
+    assert (
+        backend.executor.translation.step.auto_optimize_args["transient_memory_mode"]
+        == gtx_transformations.TransientMemoryMode.POOL
+    )
+    assert backend.executor.compilation.external_memory_allocator is external_memory_allocator
