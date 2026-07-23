@@ -265,9 +265,6 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
             "transient_memory_mode": transient_memory_mode,
         },
         external_memory_allocator=external_memory_allocator,
-        # Ensure this test exercises the monkeypatched auto-optimize path and does
-        # not reuse a persistent translation cache from earlier test runs.
-        cached_translation=False,
     )
 
     test_case = cases.Case.from_cartesian_grid_descriptor(

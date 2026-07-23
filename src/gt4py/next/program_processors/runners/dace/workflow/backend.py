@@ -43,11 +43,10 @@ class DaCeBackendFactory(factory.Factory):
             device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
             name_device="gpu",
         )
-        cached_translation: bool = True
         device_type = core_defs.DeviceType.CPU
         otf_workflow = factory.SubFactory(
             DaCeWorkflowFactory,
-            cached_translation=factory.SelfAttribute("..cached_translation"),
+            cached_translation=True,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
             external_memory_allocator=factory.SelfAttribute("..external_memory_allocator"),
@@ -64,7 +63,6 @@ def make_dace_backend(
     gpu: bool,
     auto_optimize: bool = True,
     async_sdfg_call: bool = True,
-    cached_translation: bool = True,
     optimization_args: dict[str, Any] | None = None,
     external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None = None,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
@@ -79,8 +77,6 @@ def make_dace_backend(
         auto_optimize: Enable the SDFG auto-optimize pipeline.
         async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
             of GPU kernel execution with the Python driver code.
-        cached_translation: Enable caching of the SDFG translation step to avoid
-            re-generating the SDFG.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
         external_memory_allocator: Callable taking `(required_nbytes, storage_type)`
@@ -138,7 +134,6 @@ def make_dace_backend(
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         auto_optimize=auto_optimize,
-        cached_translation=cached_translation,
         external_memory_allocator=external_memory_allocator,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
@@ -154,24 +149,20 @@ run_dace_cpu = make_dace_backend(
     gpu=False,
     auto_optimize=True,
     async_sdfg_call=False,
-    cached_translation=False,
 )
 run_dace_cpu_noopt = make_dace_backend(
     gpu=False,
     auto_optimize=False,
     async_sdfg_call=False,
-    cached_translation=False,
 )
 
 run_dace_gpu = make_dace_backend(
     gpu=True,
     auto_optimize=True,
     async_sdfg_call=True,
-    cached_translation=False,
 )
 run_dace_gpu_noopt = make_dace_backend(
     gpu=True,
     auto_optimize=False,
     async_sdfg_call=True,
-    cached_translation=False,
 )
