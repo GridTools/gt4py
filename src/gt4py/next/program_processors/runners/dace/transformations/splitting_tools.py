@@ -266,6 +266,7 @@ def split_node(
     # NOTE: Turning them into a string is the best solution is probably the only way
     #   to achieve some stability. The only downside is that the order now depends
     #   on the specialization level that is used, i.e. if we have numbers or symbols.
+    # TODO(tehrengruber): Is this still needed?
     split_description = sorted(split_description, key=lambda split: str(split))
 
     desc_to_split = node_to_split.desc(sdfg)

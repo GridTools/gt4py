@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 from typing import Any, Optional
 
 import dace
@@ -27,6 +28,35 @@ from gt4py.next.program_processors.runners.dace import (
 )
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
+
+
+def remove_guid(data: Any) -> Any:
+    """
+    Recursively traverse a dict and remove all keys named 'guid'.
+
+    Args:
+        data: A dictionary, list, or other data structure to traverse
+
+    Returns:
+        The data structure with all 'guid' keys removed
+    """
+    if isinstance(data, dict):
+        return {key: remove_guid(value) for key, value in data.items() if key != "guid"}
+    elif isinstance(data, list):
+        return [remove_guid(item) for item in data]
+    elif isinstance(data, tuple):
+        return tuple(remove_guid(item) for item in data)
+    elif isinstance(data, (str, int, float, bool)) or data is None:
+        return data
+    else:
+        raise RuntimeError("Unsupported data type")
+
+
+def remove_guid_and_save_to_file(sdfg: dace.SDFG, filename: str) -> None:
+    cleaned_data = remove_guid(sdfg.to_json())
+
+    with open(filename, "w") as f:
+        json.dump(cleaned_data, f, indent=2)
 
 
 def find_constant_symbols(
@@ -364,7 +394,10 @@ class DaCeTranslator(
         *args: Any,
         **kwargs: Any,
     ) -> dace.SDFG:
-        with gtx_wfdcommon.dace_context(device_type=self.device_type):
+        with (
+            gtx_wfdcommon.dace_context(device_type=self.device_type),
+            dace.sdfg.nodes.reset_node_id_counter(),
+        ):
             return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
     def _generate_sdfg_without_configuring_dace(

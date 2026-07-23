@@ -1036,7 +1036,9 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
 
         # Now we will reroute the edges went through the inner map, through the
         #  inner access node instead.
-        for old_inner_edge in list(
+        for (
+            old_inner_edge
+        ) in list(  # TODO(tehrengruber): Why all these list comprehensions everywhere?
             graph.out_edges_by_connector(map_entry, "OUT_" + connector_name)
         ):
             # We now modify the downstream data. This is because we no longer refer

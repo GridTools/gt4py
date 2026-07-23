@@ -594,7 +594,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        relocatable_dataflow: set[dace_nodes.Node],
+        relocatable_dataflow: OrderedSet[dace_nodes.Node],
         if_block: dace_nodes.NestedSDFG,
         enclosing_map: dace_nodes.MapEntry,
     ) -> bool:
@@ -724,7 +724,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         non_relocatable_dataflow: dict[str, OrderedSet[dace_nodes.Node]],
         connector_usage_location: dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]],
         enclosing_map: dace_nodes.MapEntry,
-    ) -> set[dace_nodes.Node]:
+    ) -> OrderedSet[dace_nodes.Node]:
         """Compute the final set of the relocatable nodes.
 
         The function expects the dataflow that is upstream of every connector
@@ -749,8 +749,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         """
 
         # These are the nodes that can not be relocated anyway.
-        all_non_relocatable_dataflow: set[dace_nodes.Node] = functools.reduce(
-            lambda s1, s2: s1.union(s2), non_relocatable_dataflow.values(), set()
+        all_non_relocatable_dataflow: OrderedSet[dace_nodes.Node] = functools.reduce(
+            lambda s1, s2: s1.union(s2), non_relocatable_dataflow.values(), OrderedSet()
         )
 
         # While we can relocate nodes that are needed by multiple connectors, we can
@@ -782,8 +782,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #  process all of them together. We do this because a node can be associated to
         #  multiple connectors and as such data dependencies can show up. We will,
         #  after the filtering distribute them back.
-        nodes_proposed_for_reloc: set[dace_nodes.Node] = functools.reduce(
-            lambda s1, s2: s1.union(s2), raw_relocatable_dataflow.values(), set()
+        nodes_proposed_for_reloc: OrderedSet[dace_nodes.Node] = functools.reduce(
+            lambda s1, s2: s1.union(s2), raw_relocatable_dataflow.values(), OrderedSet()
         )
 
         # Filtering out all nodes that can not be relocated anyway.
@@ -874,8 +874,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if len(if_block.out_connectors.keys()) == 0:
             return None
 
-        input_names: set[str] = set(if_block.in_connectors.keys())
-        output_names: set[str] = set(if_block.out_connectors.keys())
+        input_names: OrderedSet[str] = OrderedSet(if_block.in_connectors.keys())
+        output_names: OrderedSet[str] = OrderedSet(if_block.out_connectors.keys())
 
         # If data is used as input and output we ignore it.
         # TODO(phimuell): Think if this case can be handled.
@@ -895,7 +895,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         connector_usage_location: dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]] = {}
 
         # This is the dataflow that can not be relocated.
-        non_relocatable_connectors: set[str] = set()
+        non_relocatable_connectors: OrderedSet[str] = OrderedSet()
 
         # Now inspect all states.
         for _, if_branch in inner_if_block.branches:
@@ -943,7 +943,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         # In addition to the non relocatable connectors that were found above, we also
         #  mark all connectors that were not found as non relocatable.
         non_relocatable_connectors.update(
-            conn for conn in input_names if conn not in connector_usage_location
+            [conn for conn in input_names if conn not in connector_usage_location]
         )
 
         # We require that at least one non relocatable dataflow is there, this is for
