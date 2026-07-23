@@ -112,13 +112,17 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
     "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
 }
-# Use dace-cartesian group to select the appropriate dace version
-CodeGenCartesianTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "groups": ["dace-cartesian"], "markers": ["requires_dace"]},
-}
-# Install dace-next group to select the appropriate dace version
+# Filter "dace tests" with the marker
 CodeGenNextTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "groups": ["dace-next"], "markers": ["requires_dace"]},
+    "dace": {"extras": [], "markers": ["requires_dace"]},
+}
+# Filter "dace tests" with the marker and use group to refine dace version
+CodeGenCartesianTestSettings = CodeGenTestSettings | {
+    "dace": {
+        "extras": [],
+        "markers": ["requires_dace"],
+        "groups": ["dace-cartesian"],
+    },
 }
 
 
