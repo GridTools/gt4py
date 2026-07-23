@@ -54,20 +54,18 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
         optimization_args = {}
     elif on_gpu:
         optimization_args = {
-            "make_persistent": False,
+            "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
             "gpu_block_size": (32, 8, 1),
             "gpu_block_size_2d": (20, 20),
-            "gpu_memory_pool": True,
             "optimization_hooks": {
                 gtx_transformations.GT4PyAutoOptHook.TopLevelDataFlowPost: mock_top_level_dataflow_hook1,
             },
         }
     else:
         optimization_args = {
-            "make_persistent": True,
+            "transient_memory_mode": gtx_transformations.TransientMemoryMode.PERSISTENT,
             "blocking_dim": KDim,
             "blocking_size": 10,
-            "gpu_memory_pool": False,
             "optimization_hooks": {
                 gtx_transformations.GT4PyAutoOptHook.TopLevelDataFlowPost: mock_top_level_dataflow_hook2,
             },
@@ -123,10 +121,9 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
                     "__b_IDim_stride": 1,
                     "__out_IDim_stride": 1,
                 },
-                make_persistent=optimization_args["make_persistent"],
+                transient_memory_mode=optimization_args["transient_memory_mode"],
                 gpu_block_size=optimization_args["gpu_block_size"],
                 gpu_block_size_2d=optimization_args["gpu_block_size_2d"],
-                gpu_memory_pool=optimization_args["gpu_memory_pool"],
                 optimization_hooks=optimization_args["optimization_hooks"],
                 unit_strides_kind=gtx.common.DimensionKind.HORIZONTAL,
             )
@@ -137,10 +134,9 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
                 sdfg,
                 gpu=on_gpu,
                 constant_symbols={},
-                make_persistent=optimization_args["make_persistent"],
+                transient_memory_mode=optimization_args["transient_memory_mode"],
                 blocking_dim=optimization_args["blocking_dim"],
                 blocking_size=optimization_args["blocking_size"],
-                gpu_memory_pool=optimization_args["gpu_memory_pool"],
                 optimization_hooks=optimization_args["optimization_hooks"],
                 unit_strides_kind=None,
             )
@@ -150,3 +146,58 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
         mock_auto_optimize.assert_not_called()
         mock_top_level_dataflow_hook1.assert_not_called()
         mock_top_level_dataflow_hook2.assert_not_called()
+
+
+def test_make_backend_accepts_external_allocator_with_external_mode():
+    external_memory_allocator = lambda size, storage: bytearray(size)
+
+    backend = dace_wf_backend.make_dace_backend(
+        gpu=False,
+        auto_optimize=True,
+        async_sdfg_call=False,
+        optimization_args={
+            "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
+        },
+        external_memory_allocator=external_memory_allocator,
+    )
+
+    assert backend.executor.compilation.external_memory_allocator is external_memory_allocator
+
+
+def test_make_backend_infers_external_mode_when_allocator_is_provided():
+    external_memory_allocator = lambda size, storage: bytearray(size)
+
+    backend = dace_wf_backend.make_dace_backend(
+        gpu=False,
+        auto_optimize=True,
+        async_sdfg_call=False,
+        external_memory_allocator=external_memory_allocator,
+    )
+
+    assert (
+        backend.executor.translation.step.auto_optimize_args["transient_memory_mode"]
+        == gtx_transformations.TransientMemoryMode.EXTERNAL
+    )
+    assert backend.executor.compilation.external_memory_allocator is external_memory_allocator
+
+
+def test_make_backend_warns_external_allocator_without_external_mode():
+    external_memory_allocator = lambda size, storage: bytearray(size)
+
+    with pytest.warns(UserWarning, match="External memory allocator provided"):
+        backend = dace_wf_backend.make_dace_backend(
+            gpu=False,
+            auto_optimize=True,
+            async_sdfg_call=False,
+            optimization_args={
+                "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
+            },
+            external_memory_allocator=external_memory_allocator,
+        )
+
+    # Explicit mode stays as requested by the caller; backend only warns.
+    assert (
+        backend.executor.translation.step.auto_optimize_args["transient_memory_mode"]
+        == gtx_transformations.TransientMemoryMode.POOL
+    )
+    assert backend.executor.compilation.external_memory_allocator is external_memory_allocator

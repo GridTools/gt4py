@@ -111,11 +111,42 @@ GT4PyAutoOptHookFun: TypeAlias = Union[
 ]
 
 
+class TransientMemoryMode(str, enum.Enum):
+    """
+    Policy selecting the lifetime/allocation strategy of transient arrays.
+
+    Supported strategies are:
+    - `SCOPED`: Transients are allocated and deallocated in the scope of the SDFG
+        where they are defined, being it the top-level SDFG or a nested one.
+        This is the default strategy.
+    - `PERSISTENT`: Transients are allocated the first time the SDFG is called and
+        retained through the entire life of the compiled SDFG, and freed only once
+        it goes out of scope.
+    - `POOL`: Transients are allocated in a memory pool, associated to the GPU
+        default stream. These allocations are managed by an asynchronous allocator,
+        since all memory is allocated and freed in stream order.
+    - `EXTERNAL`: Transients are allocated and deallocated by an external allocator.
+        This strategy allows to reuse a workspace memory for multiple SDFGs, relying
+        on sequential execution of the programs on the default stream.
+    Note:
+        The `EXTERNAL` strategy requires that the `external_memory_allocator`
+        attribute of the dace backend workflow is set to a callable that takes
+        `(required_nbytes, device_type)` and returns the allocated memory, in the
+        form of an array object that can handled by `dace.dtypes.array_interface_ptr()`.
+        The callable is expected to raise an exception if the allocation fails.
+    """
+
+    SCOPED = "SCOPED"
+    PERSISTENT = "PERSISTENT"
+    POOL = "POOL"
+    EXTERNAL = "EXTERNAL"
+
+
 def gt_auto_optimize(
     sdfg: dace.SDFG,
     gpu: bool,
     unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
-    make_persistent: bool = False,
+    transient_memory_mode: TransientMemoryMode = TransientMemoryMode.POOL,
     gpu_block_size: Optional[Sequence[int | str] | str] = (32, 8, 1),
     gpu_block_size_1d: Optional[Sequence[int | str] | str] = (64, 1, 1),
     gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
@@ -130,7 +161,6 @@ def gt_auto_optimize(
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
-    gpu_memory_pool: bool = True,
     constant_symbols: Optional[dict[str, Any]] = None,
     assume_pointwise: bool = True,
     optimization_hooks: Optional[dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun]] = None,
@@ -174,9 +204,7 @@ def gt_auto_optimize(
         gpu: Optimize for GPU or CPU.
         unit_strides_kind: All dimensions of this kind are considered to have unit
             strides, see `gt_set_iteration_order()` for more.
-        make_persistent: Turn all transients to persistent lifetime, thus they are
-            allocated over the whole lifetime of the program, even if the kernel exits.
-            Thus the SDFG can not be called by different threads.
+        transient_memory_mode: Lifetime for transient arrays.
         gpu_block_size: This is used as default thread block size for GPU Maps. See
             also the `gpu_block_size_*d` arguments
         gpu_block_size_{1, 2, 3}d: Allows to specify the GPU thread block size for
@@ -194,7 +222,6 @@ def gt_auto_optimize(
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
             for _all_ GPU Maps.
-        gpu_memory_pool: Enable CUDA memory pool in gpu codegen.
         constant_symbols: Symbols listed in this `dict` will be replaced by the
             respective value inside the SDFG. This might increase performance.
         assume_pointwise: Assume that the SDFG has no risk for race condition in
@@ -400,13 +427,12 @@ def gt_auto_optimize(
         sdfg = _gt_auto_post_processing(
             sdfg=sdfg,
             gpu=gpu,
-            make_persistent=make_persistent,
+            transient_memory_mode=transient_memory_mode,
             # TODO(phimuell): In general `TransientReuse` is a good idea, but the
             #   current implementation also reuses transients scalars inside Map
             #   scopes, which I do not like. Thus we should fix the transformation
             #   to avoid that.
             reuse_transients=reuse_transients,
-            gpu_memory_pool=gpu_memory_pool,
             validate_all=validate_all,
         )
 
@@ -918,9 +944,8 @@ def _gt_auto_configure_maps_and_strides(
 def _gt_auto_post_processing(
     sdfg: dace.SDFG,
     gpu: bool,
-    make_persistent: bool,
+    transient_memory_mode: TransientMemoryMode,
     reuse_transients: bool,
-    gpu_memory_pool: bool,
     validate_all: bool,
 ) -> dace.SDFG:
     """Perform post processing on the SDFG.
@@ -939,27 +964,34 @@ def _gt_auto_post_processing(
     # TODO(phimuell): Fix the bug, it uses the tile value and not the stack array value.
     dace_aoptimize.move_small_arrays_to_stack(sdfg)
 
-    if make_persistent and gpu_memory_pool:
-        raise ValueError("Cannot set both 'make_persistent' and 'gpu_memory_pool'.")
+    match transient_memory_mode:
+        case TransientMemoryMode.PERSISTENT:
+            gtx_transformations.gt_configure_transient_lifetime(
+                sdfg=sdfg, lifetime=dace.AllocationLifetime.Persistent
+            )
+            if gpu:
+                # NOTE: For unknown reasons the counterpart of the
+                #   `gt_make_transients_persistent()` function in DaCe, resets the
+                #   `wcr_nonatomic` property of every memlet, i.e. makes it atomic.
+                #   However, it does this only for edges on the top level and on GPU.
+                #   For compatibility with DaCe (and until we found out why) the GT4Py
+                #   auto optimizer will emulate this behaviour.
+                for state in sdfg.states():
+                    assert isinstance(state, dace.SDFGState)
+                    for edge in state.edges():
+                        edge.data.wcr_nonatomic = False
 
-    if make_persistent:
-        device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
-        gtx_transformations.gt_make_transients_persistent(sdfg=sdfg, device=device)
+        case TransientMemoryMode.EXTERNAL:
+            gtx_transformations.gt_configure_transient_lifetime(
+                sdfg=sdfg, lifetime=dace.AllocationLifetime.External
+            )
 
-        if device == dace.DeviceType.GPU:
-            # NOTE: For unknown reasons the counterpart of the
-            #   `gt_make_transients_persistent()` function in DaCe, resets the
-            #   `wcr_nonatomic` property of every memlet, i.e. makes it atomic.
-            #   However, it does this only for edges on the top level and on GPU.
-            #   For compatibility with DaCe (and until we found out why) the GT4Py
-            #   auto optimizer will emulate this behaviour.
-            for state in sdfg.states():
-                assert isinstance(state, dace.SDFGState)
-                for edge in state.edges():
-                    edge.data.wcr_nonatomic = False
+        case TransientMemoryMode.POOL:
+            if gpu:
+                gtx_transformations.gpu_utils.gt_gpu_apply_mempool(sdfg)
 
-    if gpu and gpu_memory_pool:
-        gtx_transformations.gpu_utils.gt_gpu_apply_mempool(sdfg)
+        case TransientMemoryMode.SCOPED:
+            pass
 
     if validate_all:
         sdfg.validate()

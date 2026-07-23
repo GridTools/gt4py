@@ -181,6 +181,7 @@ class DaCeCompiler(
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType
+    external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None = None
     add_gpu_trace_markers: bool = dataclasses.field(
         default_factory=lambda: config.ADD_GPU_TRACE_MARKERS
     )
