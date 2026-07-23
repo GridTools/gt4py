@@ -8,7 +8,10 @@ requires = ['cython>=3.0.0', 'setuptools>=77.0.3', 'versioningit>=3.1.1', 'wheel
 [dependency-groups]
 build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=77.0.3', 'wheel>=0.33.6']
 dace-cartesian = [
-  'dace'  # refined in [tool.uv.sources]
+  'dace>=1.0.2'  # refined in [tool.uv.sources]
+]
+dace-next = [
+  'dace==43!2026.04.27'  # uses custom index at 'https://github.com/GridTools/pypi'
 ]
 dev = [
   {include-group = 'build'},
@@ -462,6 +465,10 @@ conflicts = [
     {extra = 'jax-cuda13'},
     {extra = 'rocm6'},
     {extra = 'rocm7'}
+  ],
+  [
+    {group = 'dace-cartesian'},
+    {group = 'dace-next'}
   ]
 ]
 default-groups = ["dev"]
@@ -481,7 +488,8 @@ url = 'https://gridtools.github.io/pypi/'
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
-  {git = "https://github.com/romanc/dace", branch = "gmao-visit", group = "dace-cartesian"}
+  {git = "https://github.com/romanc/dace", branch = "gmao-visit", group = "dace-cartesian"},
+  {git = "https://github.com/spcl/dace", tag = "v2.0.0-alpha4 ", group = "dace-next"}
 ]
 
 # -- versioningit --
