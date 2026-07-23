@@ -8,6 +8,8 @@
 
 """Test the bindings stage of the dace backend workflow."""
 
+import re
+
 import numpy as np
 import pytest
 import unittest.mock as mock
@@ -214,10 +216,10 @@ def test_make_backend_warns_external_allocator_without_external_mode():
 def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
     gpu_api_prefix = "hip" if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM else "cuda"
-    gpu_malloc_marker = f"{gpu_api_prefix}Malloc"
-    gpu_malloc_async_marker = f"{gpu_api_prefix}MallocAsync"
-    gpu_free_marker = f"{gpu_api_prefix}Free"
-    gpu_free_async_marker = f"{gpu_api_prefix}FreeAsync"
+    gpu_malloc_marker = f"{gpu_api_prefix}Malloc("
+    gpu_malloc_async_marker = f"{gpu_api_prefix}MallocAsync("
+    gpu_free_marker = f"{gpu_api_prefix}Free("
+    gpu_free_async_marker = f"{gpu_api_prefix}FreeAsync("
     workspace_requests: list[tuple[int, core_defs.DeviceType]] = []
 
     def external_memory_allocator(required_nbytes: int, device: core_defs.DeviceType):
@@ -286,9 +288,24 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     program(a, b, out=out, offset_provider={})
 
     assert captured_sdfg is not None
-    generated_code = "\n".join(
-        code.clean_code for code in captured_sdfg.generate_code() if not code.name.endswith("_main")
+
+    # For the sake of the checks below, we ignore the allocation calls to initialize the gpu device.
+    malloc_re = re.compile(
+        rf"DACE_GPU_CHECK\(\s*{gpu_api_prefix}Malloc\(\s*\(void \*\*\)\s*&dev_X\s*,\s*1\s*\)\s*\)\s*;"
     )
+    free_re = re.compile(rf"DACE_GPU_CHECK\(\s*{gpu_api_prefix}Free\(\s*dev_X\s*\)\s*\)\s*;")
+    generated_code = ""
+    for code in captured_sdfg.generate_code():
+        if code.language == "cu":
+            clean_code_iter = iter(code.clean_code.splitlines())
+            for line in clean_code_iter:
+                if malloc_re.match(line.strip()):
+                    line = next(clean_code_iter)  # not relevant to this test
+                    assert free_re.match(line.strip())
+                else:
+                    generated_code += line + "\n"
+        elif not code.name.endswith("_main"):
+            generated_code += code.clean_code + "\n"
 
     match transient_memory_mode:
         case gtx_transformations.TransientMemoryMode.EXTERNAL:
