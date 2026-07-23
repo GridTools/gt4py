@@ -110,7 +110,7 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
+    "internal": {"extras": [], "markers": ["not requires_dace"]}
 }
 CodeGenDaceTestSettings = CodeGenTestSettings | {
     "dace": {"extras": [], "markers": ["requires_dace"]},
@@ -170,8 +170,7 @@ def test_cartesian(
     codegen_settings = CodeGenDaceTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     extras = [
-        "standard",
-        "testing",
+        "cartesian",
         *codegen_settings.get("extras", []),
         *device_settings.get("extras", []),
     ]
@@ -253,8 +252,7 @@ def test_next(
     codegen_settings = CodeGenDaceTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     extras = [
-        "standard",
-        "testing",
+        "next",
         *codegen_settings.get("extras", []),
         *device_settings.get("extras", []),
     ]
@@ -388,8 +386,7 @@ def test_next_dace_determinism(
     codegen_settings = CodeGenDaceTestSettings["dace"]
     device_settings = DeviceTestSettings[device]
     extras = [
-        "standard",
-        "testing",
+        "next",
         *codegen_settings.get("extras", []),
         *device_settings.get("extras", []),
     ]
