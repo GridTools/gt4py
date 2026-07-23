@@ -249,7 +249,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     def external_memory_allocator(required_nbytes: int, device: core_defs.DeviceType):
         workspace_requests.append((required_nbytes, device))
         if device == core_defs.CUPY_DEVICE_TYPE:
-            cp = pytest.importorskip("cupy")
+            import cupy as cp
             return cp.empty((required_nbytes,), dtype=cp.uint8)
         return np.empty((required_nbytes,), dtype=np.uint8)
 
