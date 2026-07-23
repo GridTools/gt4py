@@ -53,7 +53,17 @@ def neighbors(*args):
 
 
 @builtin_dispatch
-def map_(*args):
+def map_list(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def tree_map_tuple(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def map_tuple(*args):
     raise BackendNotSelectedError()
 
 
@@ -498,7 +508,9 @@ BUILTINS = {
     "lift",
     "make_const_list",
     "make_tuple",
-    "map_",
+    "tree_map_tuple",
+    "map_tuple",
+    "map_list",
     "named_range",
     "neighbors",
     "reduce",

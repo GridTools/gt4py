@@ -409,6 +409,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        # TODO(tehrengruber): For tuples we expand the tuple structure via `process_elements`
+        #  instead of emitting `tree_map_tuple` so mixed field types are supported,
+        #  e.g. (local field, regular field).
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
             return self._lower_and_map("if_", *node.args)
 
@@ -434,6 +437,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.let(cond_symref_name, cond_)(result)
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        # TODO(tehrengruber): Use `tree_map_tuple` when the domain inference is able to handle
+        #  lambda functions (with the results domain depending on the caller / args)
         domain, true_branch, false_branch = self.visit(node.args, **kwargs)
         return im.concat_where(domain, true_branch, false_branch)
 
@@ -535,7 +540,7 @@ def _map(
     original_arg_types: tuple[ts.TypeSpec, ...],
 ) -> itir.FunCall:
     """
-    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
+    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_list`ing lists.
     """
     if all(
         isinstance(t, (ts.ScalarType, ts.DimensionType, ts.DomainType))
@@ -548,7 +553,7 @@ def _map(
             promote_to_list(arg_type)(larg)
             for arg_type, larg in zip(original_arg_types, lowered_args)
         )
-        op = im.map_(op)
+        op = im.map_list(op)
 
     return im.op_as_fieldop(op)(*lowered_args)
 
