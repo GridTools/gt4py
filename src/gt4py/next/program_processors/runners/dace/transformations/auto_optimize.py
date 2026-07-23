@@ -112,7 +112,28 @@ GT4PyAutoOptHookFun: TypeAlias = Union[
 
 
 class TransientMemoryMode(str, enum.Enum):
-    """Policy selecting the lifetime/allocation strategy of transient arrays."""
+    """
+    Policy selecting the lifetime/allocation strategy of transient arrays.
+
+    Supported strategies are:
+    - `scoped`: Transients are allocated and deallocated in the scope of the SDFG
+        where they are defined, being it the top-level SDFG or a nested one.
+        This is the default strategy.
+    - `persistent`: Transients are allocated at the beginning of the program and
+        deallocated at the end of the program, for all SDFGs.
+    - `pool`: Transients are allocated in a memory pool, associated to the GPU
+        default stream. These allocations are managed by an asynchronous allocator,
+        since all memory is allocated and freed in stream order.
+    - `external`: Transients are allocated and deallocated by an external allocator.
+        This strategy allows to reuse a workspace memory for multiple SDFGs, relying
+        on sequential execution of the programs on the default stream.
+    Note:
+        The `external` strategy requires that the `external_memory_allocator`
+        attribute of the dace backend workflow is set to a callable that takes
+        `(required_nbytes, device_type)` and returns a numpy-like array to the
+        allocated memory. The callable is expected to raise an exception if the
+        allocation fails.
+    """
 
     SCOPED = "scoped"
     PERSISTENT = "persistent"
@@ -944,9 +965,13 @@ def _gt_auto_post_processing(
 
     if transient_memory_mode in (TransientMemoryMode.PERSISTENT, TransientMemoryMode.EXTERNAL):
         if transient_memory_mode == TransientMemoryMode.PERSISTENT:
-            gtx_transformations.gt_make_transients_persistent(sdfg)
+            gtx_transformations.gt_configure_transient_lifetime(
+                sdfg=sdfg, lifetime=dace.AllocationLifetime.Persistent
+            )
         else:
-            gtx_transformations.gt_make_transients_external(sdfg)
+            gtx_transformations.gt_configure_transient_lifetime(
+                sdfg=sdfg, lifetime=dace.AllocationLifetime.External
+            )
 
         if gpu:
             # NOTE: The counterpart of the `gt_make_transients_persistent()` function
@@ -955,6 +980,7 @@ def _gt_auto_post_processing(
             #   for edges on the top level and on GPU. For compatibility with DaCe
             #   (and until we found out why) the GT4Py auto optimizer will emulate
             #   this behaviour, for both `PERSISTENT` and `EXTERNAL` mode.
+            # TODO(phimuell): Find out if we can remove it.
             for state in sdfg.states():
                 assert isinstance(state, dace.SDFGState)
                 for edge in state.edges():

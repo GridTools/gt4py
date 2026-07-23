@@ -8,7 +8,6 @@
 
 import pytest
 
-from gt4py._core import definitions as core_defs
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 dace = pytest.importorskip("dace")
@@ -40,10 +39,10 @@ def _make_sdfg_with_top_level_transient(storage):
 
 
 @pytest.mark.parametrize(
-    ("transform", "expected_lifetime"),
+    "lifetime",
     [
-        (gtx_transformations.gt_make_transients_persistent, dace.AllocationLifetime.Persistent),
-        (gtx_transformations.gt_make_transients_external, dace.AllocationLifetime.External),
+        dace.AllocationLifetime.Persistent,
+        dace.AllocationLifetime.External,
     ],
 )
 @pytest.mark.parametrize(
@@ -53,12 +52,12 @@ def _make_sdfg_with_top_level_transient(storage):
         dace.StorageType.GPU_Global,
     ],
 )
-def test_configure_transient_lifetime(transform, expected_lifetime, storage):
+def test_configure_transient_lifetime(lifetime, storage):
     sdfg = _make_sdfg_with_top_level_transient(storage)
 
-    result = transform(sdfg)
+    result = gtx_transformations.gt_configure_transient_lifetime(sdfg, lifetime)
     candidates = next(iter(result.values()))
     assert candidates == {"tmp_arr", "tmp_scalar"}
 
-    assert sdfg.arrays["tmp_arr"].lifetime == expected_lifetime
-    assert sdfg.arrays["tmp_scalar"].lifetime == expected_lifetime
+    assert sdfg.arrays["tmp_arr"].lifetime == lifetime
+    assert sdfg.arrays["tmp_scalar"].lifetime == lifetime

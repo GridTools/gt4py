@@ -10,29 +10,33 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, TypeVar, Union
+from typing import Optional, Sequence, Union
 
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.libraries import standard as dace_stdlib
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
-from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
 from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import library_nodes as gtx_lib
 
 
-_PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
-
-
-def _gt_configure_transient_lifetime(
+def gt_configure_transient_lifetime(
     sdfg: dace.SDFG,
     lifetime: dace.AllocationLifetime,
 ) -> dict[int, set[str]]:
-    """Configure transient lifetimes for top-level eligible data nodes.
+    """
+    Configure transient lifetime for eligible data nodes in the given SDFG and all nested SDFGs.
 
-    Supported target lifetimes are `Persistent` and `External`.
+    Supported target lifetimes are `Persistent` and `External`, refer to
+    dace documentation for `dace.AllocationLifetime`.
+
+    Eligible data nodes are transient arrays or scalars excluding:
+    - data nodes with storage type `Register` (relevant for scalars)
+    - data nodes with lifetime `External` (already externally managed)
+    - data nodes used inside a scope (e.g., maps)
+    - data nodes whose size is not fully determined by the SDFG's free symbols (dynamic allocations)
     """
     if lifetime not in {dace.AllocationLifetime.Persistent, dace.AllocationLifetime.External}:
         raise ValueError(f"Unsupported transient lifetime '{lifetime}'.")
@@ -90,57 +94,6 @@ def _gt_configure_transient_lifetime(
             nsdfg.arrays[aname].lifetime = lifetime
 
     return result
-
-
-def gt_make_transients_persistent(
-    sdfg: dace.SDFG,
-) -> dict[int, set[str]]:
-    """
-    Changes the lifetime of certain transients to `Persistent`.
-
-    A persistent lifetime means that the transient is allocated only the very first
-    time the SDFG is executed and only deallocated if the underlying `CompiledSDFG`
-    object goes out of scope. The main advantage is, that memory must not be
-    allocated every time the SDFG is run. The downside is that the SDFG can not be
-    called by different threads.
-
-    Args:
-        sdfg: The SDFG to process.
-
-    Returns:
-        A `dict` mapping SDFG IDs to a set of transient arrays that
-        were made persistent.
-
-    Note:
-        This function is based on a similar function in DaCe. However, the DaCe
-        function does, for unknown reasons, also reset the `wcr_nonatomic` property,
-        but only for GPU.
-    """
-    return _gt_configure_transient_lifetime(
-        sdfg=sdfg,
-        lifetime=dace.AllocationLifetime.Persistent,
-    )
-
-
-def gt_make_transients_external(
-    sdfg: dace.SDFG,
-) -> dict[int, set[str]]:
-    """Changes the lifetime of eligible transients to ``External``.
-
-    External lifetime means storage is provided by the caller through DaCe's
-    workspace mechanism (``CompiledSDFG.set_workspace``).
-
-    Args:
-        sdfg: The SDFG to process.
-
-    Returns:
-        A ``dict`` mapping SDFG IDs to the set of transient arrays that were
-        changed to external lifetime.
-    """
-    return _gt_configure_transient_lifetime(
-        sdfg=sdfg,
-        lifetime=dace.AllocationLifetime.External,
-    )
 
 
 def is_accessed_downstream(
