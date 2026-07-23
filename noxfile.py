@@ -110,7 +110,7 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
+    "internal": {"extras": [], "markers": ["not requires_dace"]}
 }
 CodeGenDaceTestSettings = CodeGenTestSettings | {
     "dace": {"extras": [], "markers": ["requires_dace"]},
