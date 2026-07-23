@@ -212,6 +212,30 @@ def test_make_backend_warns_external_allocator_without_external_mode():
     assert backend.executor.compilation.external_memory_allocator is external_memory_allocator
 
 
+def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
+    # Helper function to ignore the GPU device initialization code in the generated
+    # cuda code, which is not relevant to the test.
+    malloc_re = re.compile(
+        rf"DACE_GPU_CHECK\(\s*{gpu_api_prefix}Malloc\(\s*\(void \*\*\)\s*&dev_X\s*,\s*1\s*\)\s*\)\s*;"
+    )
+    free_re = re.compile(rf"DACE_GPU_CHECK\(\s*{gpu_api_prefix}Free\(\s*dev_X\s*\)\s*\)\s*;")
+
+    generated_code = ""
+    for code in sdfg.generate_code():
+        if code.language == "cu":
+            clean_code_iter = iter(code.clean_code.splitlines())
+            for line in clean_code_iter:
+                if malloc_re.match(line.strip()):
+                    line = next(clean_code_iter)  # not relevant to this test
+                    assert free_re.match(line.strip())
+                else:
+                    generated_code += line + "\n"
+        elif not code.name.endswith("_main"):
+            generated_code += code.clean_code + "\n"
+
+    return generated_code
+
+
 @pytest.mark.parametrize("transient_memory_mode", list(gtx_transformations.TransientMemoryMode))
 def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
@@ -285,24 +309,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     program(a, b, out=out, offset_provider={})
 
     assert captured_sdfg is not None
-
-    # For the sake of the checks below, we ignore the allocation calls to initialize the gpu device.
-    malloc_re = re.compile(
-        rf"DACE_GPU_CHECK\(\s*{gpu_api_prefix}Malloc\(\s*\(void \*\*\)\s*&dev_X\s*,\s*1\s*\)\s*\)\s*;"
-    )
-    free_re = re.compile(rf"DACE_GPU_CHECK\(\s*{gpu_api_prefix}Free\(\s*dev_X\s*\)\s*\)\s*;")
-    generated_code = ""
-    for code in captured_sdfg.generate_code():
-        if code.language == "cu":
-            clean_code_iter = iter(code.clean_code.splitlines())
-            for line in clean_code_iter:
-                if malloc_re.match(line.strip()):
-                    line = next(clean_code_iter)  # not relevant to this test
-                    assert free_re.match(line.strip())
-                else:
-                    generated_code += line + "\n"
-        elif not code.name.endswith("_main"):
-            generated_code += code.clean_code + "\n"
+    generated_code = _parse_generated_code_from_sdfg(captured_sdfg, gpu_api_prefix)
 
     match transient_memory_mode:
         case gtx_transformations.TransientMemoryMode.EXTERNAL:
