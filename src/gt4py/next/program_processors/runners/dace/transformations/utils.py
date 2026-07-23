@@ -29,14 +29,19 @@ def gt_configure_transient_lifetime(
     """
     Configure transient lifetime for eligible data nodes in the given SDFG and all nested SDFGs.
 
-    Supported target lifetimes are `Persistent` and `External`, refer to
-    dace documentation for `dace.AllocationLifetime`.
-
     Eligible data nodes are transient arrays or scalars excluding:
     - data nodes with storage type `Register` (relevant for scalars)
     - data nodes with lifetime `External` (already externally managed)
     - data nodes used inside a scope (e.g., maps)
     - data nodes whose size is not fully determined by the SDFG's free symbols (dynamic allocations)
+
+    Args:
+        sdfg: The SDFG to process.
+        lifetime: The desired lifetime to set for eligible transient data nodes.
+
+    Returns:
+        A dictionary mapping SDFG configuration IDs to the data node names whose
+        lifetimes were modified.
     """
     if lifetime not in {dace.AllocationLifetime.Persistent, dace.AllocationLifetime.External}:
         raise ValueError(f"Unsupported transient lifetime '{lifetime}'.")
@@ -59,6 +64,7 @@ def gt_configure_transient_lifetime(
 
                 desc = dnode.desc(nsdfg)
                 if not desc.transient or type(desc) not in {dace.data.Array, dace.data.Scalar}:
+                    # TODO(phimuell): Find out why scalars are processed.
                     not_modify_lifetime.add(dnode.data)
                     continue
                 if desc.storage == dace.StorageType.Register:

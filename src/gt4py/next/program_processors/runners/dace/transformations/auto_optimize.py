@@ -116,29 +116,30 @@ class TransientMemoryMode(str, enum.Enum):
     Policy selecting the lifetime/allocation strategy of transient arrays.
 
     Supported strategies are:
-    - `scoped`: Transients are allocated and deallocated in the scope of the SDFG
+    - `SCOPED`: Transients are allocated and deallocated in the scope of the SDFG
         where they are defined, being it the top-level SDFG or a nested one.
         This is the default strategy.
-    - `persistent`: Transients are allocated at the beginning of the program and
-        deallocated at the end of the program, for all SDFGs.
-    - `pool`: Transients are allocated in a memory pool, associated to the GPU
+    - `PERSISTENT`: Transients are allocated the first time the SDFG is called and
+        retained through the entire life of the compiled SDFG, and freed only once
+        it goes out of scope.
+    - `POOL`: Transients are allocated in a memory pool, associated to the GPU
         default stream. These allocations are managed by an asynchronous allocator,
         since all memory is allocated and freed in stream order.
-    - `external`: Transients are allocated and deallocated by an external allocator.
+    - `EXTERNAL`: Transients are allocated and deallocated by an external allocator.
         This strategy allows to reuse a workspace memory for multiple SDFGs, relying
         on sequential execution of the programs on the default stream.
     Note:
-        The `external` strategy requires that the `external_memory_allocator`
+        The `EXTERNAL` strategy requires that the `external_memory_allocator`
         attribute of the dace backend workflow is set to a callable that takes
-        `(required_nbytes, device_type)` and returns a numpy-like array to the
-        allocated memory. The callable is expected to raise an exception if the
-        allocation fails.
+        `(required_nbytes, device_type)` and returns the allocated memory, in the
+        form of an array object that can handled by `dace.dtypes.array_interface_ptr()`.
+        The callable is expected to raise an exception if the allocation fails.
     """
 
-    SCOPED = "scoped"
-    PERSISTENT = "persistent"
-    POOL = "pool"
-    EXTERNAL = "external"
+    SCOPED = "SCOPED"
+    PERSISTENT = "PERSISTENT"
+    POOL = "POOL"
+    EXTERNAL = "EXTERNAL"
 
 
 def gt_auto_optimize(
@@ -203,7 +204,7 @@ def gt_auto_optimize(
         gpu: Optimize for GPU or CPU.
         unit_strides_kind: All dimensions of this kind are considered to have unit
             strides, see `gt_set_iteration_order()` for more.
-        transient_memory_mode: Modify the lifetime of transient arrays.
+        transient_memory_mode: Lifetime for transient arrays.
         gpu_block_size: This is used as default thread block size for GPU Maps. See
             also the `gpu_block_size_*d` arguments
         gpu_block_size_{1, 2, 3}d: Allows to specify the GPU thread block size for
@@ -973,14 +974,13 @@ def _gt_auto_post_processing(
                 sdfg=sdfg, lifetime=dace.AllocationLifetime.External
             )
 
-        if gpu:
-            # NOTE: The counterpart of the `gt_make_transients_persistent()` function
-            #   in DaCe, for unknown reasons, resets the `wcr_nonatomic` property
-            #   of every memlet, i.e. makes it atomic. However, it does this only
-            #   for edges on the top level and on GPU. For compatibility with DaCe
-            #   (and until we found out why) the GT4Py auto optimizer will emulate
-            #   this behaviour, for both `PERSISTENT` and `EXTERNAL` mode.
-            # TODO(phimuell): Find out if we can remove it.
+        if gpu and transient_memory_mode == TransientMemoryMode.PERSISTENT:
+            # NOTE: For unknown reasons the counterpart of the
+            #   `gt_make_transients_persistent()` function in DaCe, resets the
+            #   `wcr_nonatomic` property of every memlet, i.e. makes it atomic.
+            #   However, it does this only for edges on the top level and on GPU.
+            #   For compatibility with DaCe (and until we found out why) the GT4Py
+            #   auto optimizer will emulate this behaviour.
             for state in sdfg.states():
                 assert isinstance(state, dace.SDFGState)
                 for edge in state.edges():
