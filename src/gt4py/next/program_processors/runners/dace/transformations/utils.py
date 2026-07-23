@@ -94,7 +94,16 @@ def gt_configure_transient_lifetime(
             adesc = nsdfg.arrays[aname]
             adesc.lifetime = lifetime
             if adesc.storage == dace.StorageType.Default and isinstance(adesc, dace.data.Array):
-                # GPU transformation have already change the storage for GPU arrays.
+                # GPU transformation have already changed the storage for GPU arrays.
+                # NOTE: If we do not change the storage during lowering / transformations,
+                #  it will be done in code generation when calling `sdfg.compile()`.
+                #  This side effect is a potential issue, because we do not store
+                #  the program handle, see `sdfg.compile(return_program_handle=False)`
+                #  in `compilation.py`; therefore, we do not have the modified SDFG.
+                #  The original SDFG is deserialized, at call time, and the storage
+                #  type is reset to `Default`. This is a problem for arrays with
+                #  external storage, because `CompiledSDFG.set_workspace()` will
+                #  try to load a symbol from the library for the wrong storage type.
                 adesc.storage = dace.StorageType.CPU_Heap
 
     return result
