@@ -16,7 +16,9 @@ import contextlib
 import pathlib
 import pickle
 import unittest.mock as mock
+from typing import Any
 
+import numpy as np
 import pytest
 
 dace = pytest.importorskip("dace")
@@ -230,3 +232,80 @@ def test_cmake_build_type_changes_build_folder():
     artifact_debug, _, _ = _run_compiler(cmake_build_type=config.CMakeBuildType.DEBUG)
 
     assert artifact_release.library_path != artifact_debug.library_path
+
+
+def _make_compiled_program(
+    *,
+    external_memory_allocator=None,
+    workspace_sizes: dict[Any, int] | None = None,
+):
+    if workspace_sizes is None:
+        workspace_sizes = {}
+
+    sdfg = mock.MagicMock()
+    sdfg.arglist.return_value = {}
+    sdfg.build_folder = "build-folder"
+
+    sdfg_program = mock.MagicMock()
+    sdfg_program.sdfg = sdfg
+    sdfg_program.get_workspace_sizes.return_value = workspace_sizes
+    sdfg_program.construct_arguments.return_value = ((), ())
+
+    return dace_wf_compilation.CompiledDaceProgram(
+        program=sdfg_program,
+        bind_func_name="update_sdfg_args",
+        binding_source_code="def update_sdfg_args(*a, **k):\n    return None\n",
+        external_memory_allocator=external_memory_allocator,
+    )
+
+
+def test_construct_arguments_installs_external_workspaces_once():
+    allocator = mock.MagicMock(side_effect=[np.empty((128,), dtype=np.uint8)])
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={dace.StorageType.CPU_Heap: 128},
+    )
+
+    program.construct_arguments(alpha=1)
+    program.construct_arguments(alpha=2)
+
+    # Workspace configuration is done exactly once and reused afterwards.
+    assert program.sdfg_program.initialize.call_count == 1
+    assert program.sdfg_program.get_workspace_sizes.call_count == 1
+    assert allocator.call_count == 1
+    allocator.assert_called_once_with(128, core_defs.DeviceType.CPU)
+    assert program.sdfg_program.set_workspace.call_count == 1
+    assert program.sdfg_program.construct_arguments.call_count == 2
+
+    set_workspace_call = program.sdfg_program.set_workspace.call_args
+    assert set_workspace_call.args[0] == dace.StorageType.CPU_Heap
+    configured_workspace = set_workspace_call.args[1]
+    assert program.external_workspaces[dace.StorageType.CPU_Heap] is configured_workspace
+
+
+def test_construct_arguments_propagates_allocator_error_for_invalid_size_request():
+    allocator = mock.MagicMock(side_effect=ValueError("invalid workspace size request"))
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={dace.StorageType.CPU_Heap: -1},
+    )
+
+    with pytest.raises(ValueError, match="invalid workspace size request"):
+        program.construct_arguments(alpha=1)
+
+    allocator.assert_called_once_with(-1, core_defs.DeviceType.CPU)
+    program.sdfg_program.set_workspace.assert_not_called()
+
+
+def test_construct_arguments_propagates_allocator_error_for_invalid_storage_request():
+    allocator = mock.MagicMock(side_effect=TypeError("invalid storage type request"))
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={dace.StorageType.CPU_Heap: 16},
+    )
+
+    with pytest.raises(TypeError, match="invalid storage type request"):
+        program.construct_arguments(alpha=1)
+
+    allocator.assert_called_once_with(16, core_defs.DeviceType.CPU)
+    program.sdfg_program.set_workspace.assert_not_called()

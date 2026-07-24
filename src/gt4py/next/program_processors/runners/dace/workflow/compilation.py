@@ -47,6 +47,18 @@ def _add_tx_markers(sdfg: dace.SDFG) -> None:
                 node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
 
+def _map_workspace_storage_to_device(storage: dace.StorageType) -> core_defs.DeviceType:
+    if storage == dace.StorageType.CPU_Heap:
+        device = core_defs.DeviceType.CPU
+    elif storage == dace.StorageType.GPU_Global:
+        assert core_defs.CUPY_DEVICE_TYPE is not None
+        device = core_defs.CUPY_DEVICE_TYPE
+    else:
+        raise ValueError(f"Unsupported storage type '{storage}' for external workspace allocation.")
+
+    return device
+
+
 class CompiledDaceProgram:
     sdfg_program: dace.CompiledSDFG
 
@@ -73,12 +85,15 @@ class CompiledDaceProgram:
     #       never updated.
     csdfg_argv: MutableSequence[Any] | None
     csdfg_init_argv: Sequence[Any] | None
+    external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None
+    external_workspaces: dict[dace.StorageType, Any]
 
     def __init__(
         self,
         program: dace.CompiledSDFG,
         bind_func_name: str,
         binding_source_code: str,
+        external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None = None,
     ):
         self.sdfg_program = program
 
@@ -98,6 +113,28 @@ class CompiledDaceProgram:
         # Since the SDFG hasn't been called yet.
         self.csdfg_argv = None
         self.csdfg_init_argv = None
+        self.external_memory_allocator = external_memory_allocator
+        self.external_workspaces = {}
+
+    def _configure_external_workspaces(self, **kwargs: Any) -> None:
+        if self.external_workspaces:
+            # We already allocated the external workspaces, no need to do it again.
+            return
+
+        # DaCe computes workspace sizes during ``initialize`` and stores them
+        # for subsequent ``get_workspace_sizes``/``set_workspace`` calls.
+        self.sdfg_program.initialize(**kwargs)
+        if workspace_sizes := self.sdfg_program.get_workspace_sizes():
+            if self.external_memory_allocator is None:
+                raise ValueError(
+                    "SDFG requires external workspaces, but no allocator was provided."
+                )
+            for storage, required_nbytes in workspace_sizes.items():
+                device = _map_workspace_storage_to_device(storage)
+                workspace = self.external_memory_allocator(required_nbytes, device)
+                self.sdfg_program.set_workspace(storage, workspace)
+                # Keep the workspace buffers alive as long as the compiled program lives.
+                self.external_workspaces[storage] = workspace
 
     def construct_arguments(self, **kwargs: Any) -> None:
         """
@@ -106,6 +143,7 @@ class CompiledDaceProgram:
         """
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
             csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
+            self._configure_external_workspaces(**kwargs)
         # Note we only care about `csdfg_argv` (normal call), since we have to update it,
         #  we ensure that it is a `list`.
         self.csdfg_argv = [*csdfg_argv]
@@ -153,6 +191,7 @@ class DaCeCompilationArtifact:
     binding_source_code: str
     bind_func_name: str
     device_type: core_defs.DeviceType
+    external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None = None
 
     def load(self) -> stages.ExecutableProgram:
         # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
@@ -160,7 +199,12 @@ class DaCeCompilationArtifact:
         #   into the returned ``CompiledSDFG``.
         sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
         sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
-        program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
+        program = CompiledDaceProgram(
+            sdfg_program,
+            self.bind_func_name,
+            self.binding_source_code,
+            external_memory_allocator=self.external_memory_allocator,
+        )
         return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
 
@@ -181,6 +225,7 @@ class DaCeCompiler(
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType
+    external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None = None
     add_gpu_trace_markers: bool = dataclasses.field(
         default_factory=lambda: config.ADD_GPU_TRACE_MARKERS
     )
@@ -251,6 +296,7 @@ class DaCeCompiler(
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
+            external_memory_allocator=self.external_memory_allocator,
         )
 
 
