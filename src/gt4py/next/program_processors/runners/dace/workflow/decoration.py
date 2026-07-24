@@ -44,8 +44,8 @@ def convert_args(
             args = (*args, out)
 
         # Simply forward the call.
-
         flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
+
         this_call_args = sdfg_callable.get_sdfg_args(
             fun.sdfg_program.sdfg,
             offset_provider,
