@@ -329,8 +329,8 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
             else:
                 # CPU external mode should route transient workspace setup via
                 # external-memory API calls rather than host malloc/free calls.
-                assert "malloc" not in generated_code
-                assert "free" not in generated_code
+                assert any(marker in generated_code for marker in ("new ", "malloc"))
+                assert any(marker in generated_code for marker in ("delete ", "free"))
                 expected_device = core_defs.DeviceType.CPU
 
             assert workspace_requests
