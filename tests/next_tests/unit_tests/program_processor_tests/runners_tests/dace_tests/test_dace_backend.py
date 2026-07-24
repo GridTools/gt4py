@@ -19,10 +19,13 @@ dace = pytest.importorskip("dace")
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next.otf import runners
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
 )
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace.workflow import (
+    translation as gtx_dace_translation,
+)
 from gt4py.next.program_processors.runners.dace.transformations import (
     auto_optimize as gtx_auto_optimize,
 )
@@ -250,6 +253,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         workspace_requests.append((required_nbytes, device))
         if device == core_defs.CUPY_DEVICE_TYPE:
             import cupy as cp
+
             return cp.empty((required_nbytes,), dtype=cp.uint8)
         return np.empty((required_nbytes,), dtype=np.uint8)
 
@@ -263,22 +267,22 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         testee_op(a, b, out=out)
 
     captured_sdfg: dace.SDFG | None = None
-    gt_auto_optimize = gtx_transformations.gt_auto_optimize
+    gt_generate_sdfg = gtx_dace_translation.DaCeTranslator.generate_sdfg
 
-    def mocked_auto_optimize(*args, **kwargs) -> dace.SDFG:
+    def mocked_generate_sdfg(self, *args, **kwargs) -> dace.SDFG:
         nonlocal captured_sdfg
-        result = gt_auto_optimize(*args, **kwargs)
+        result = gt_generate_sdfg(self, *args, **kwargs)
         captured_sdfg = result
         return result
 
     def no_op_top_level_map_processing(*, sdfg: dace.SDFG, **kwargs) -> dace.SDFG:
-        return sdfg  # we need to keep the intermediate transient array
+        return sdfg
 
-    monkeypatch.setattr(gtx_transformations, "gt_auto_optimize", mocked_auto_optimize)
+    monkeypatch.setattr(gtx_dace_translation.DaCeTranslator, "generate_sdfg", mocked_generate_sdfg)
     monkeypatch.setattr(
         gtx_auto_optimize,
         "_gt_auto_process_top_level_maps",
-        no_op_top_level_map_processing,
+        no_op_top_level_map_processing,  # we need to keep the intermediate transient array
     )
 
     custom_backend = dace_wf_backend.make_dace_backend(
