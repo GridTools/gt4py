@@ -37,6 +37,7 @@ ECDim = Dimension("ECDim")
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+IHalfDim = common.flip_staggered(IDim)
 
 
 @pytest.fixture
@@ -588,6 +589,12 @@ def dimension_promotion_cases() -> list[
             "There are more than one dimension with DimensionKind 'LOCAL'.",
         ),
         ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, V2E, KDim], None),
+        # a dimension and its staggered counterpart must not be promoted into the same field
+        (
+            [[IDim], [common.flip_staggered(IDim)]],
+            None,
+            "staggered counterpart must not appear together",
+        ),
     ]
     return [
         ([[el for el in arg] for arg in args], [el for el in result] if result else result, msg)
@@ -676,6 +683,25 @@ class TestCartesianConnectivity:
         assert result.domain_dim == I_half
         assert result.codomain == I
         assert result.offset == 0
+
+    @pytest.mark.parametrize(
+        "dim, offset, exp_codomain, exp_offset",
+        [
+            (IDim, 3, IDim, 3),
+            (IDim, 2.0, IDim, 2),
+            (IDim, 0.5, IHalfDim, 1),
+            (IDim, -0.5, IHalfDim, 0),
+            (IDim, 1.5, IHalfDim, 2),
+            (IDim, -1.5, IHalfDim, -1),
+            (IHalfDim, 0.5, IDim, 0),
+            (IHalfDim, -0.5, IDim, -1),
+        ],
+    )
+    def test_connectivity_for_cartesian_shift(self, dim, offset, exp_codomain, exp_offset):
+        conn = common.connectivity_for_cartesian_shift(dim, offset)
+        assert conn.domain_dim == dim
+        assert conn.codomain == exp_codomain
+        assert conn.offset == exp_offset
 
 
 class TestDimensionComparisonOperators:

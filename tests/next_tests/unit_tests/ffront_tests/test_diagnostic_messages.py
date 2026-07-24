@@ -127,6 +127,19 @@ def test_bool_op_suggests_bitwise_operators():
     assert any("'&' and '|'" in hint for hint in err.hints)
 
 
+def test_invalid_cartesian_offset_suggests_valid_offsets():
+    def foo(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return a(IDim + 0.25)
+
+    err = parse_error(foo)
+
+    assert err.message == "Invalid offset '0.25' for a Cartesian shift of dimension 'IDim'."
+    assert any("half-integer offset" in hint for hint in err.hints)
+    rendered = str(err)
+    assert "return a(IDim + 0.25)" in rendered
+    assert "Hint:" in rendered
+
+
 def test_add_note_uses_pep678_notes():
     # 'add_note' uses the standard PEP 678 mechanism ('__notes__'); the
     # structured 'notes' field is reserved for content authored at the raise
