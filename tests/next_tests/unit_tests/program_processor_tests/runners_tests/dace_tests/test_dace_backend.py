@@ -313,10 +313,20 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     program(a, b, out=out, offset_provider={})
 
     assert captured_sdfg is not None
+    transient_arrays = [
+        (aname, adesc)
+        for aname, adesc in captured_sdfg.arrays.items()
+        if isinstance(adesc, dace.data.Array) and adesc.transient
+    ]
+    assert len(transient_arrays) == 2
+
     generated_code = _parse_generated_code_from_sdfg(captured_sdfg, gpu_api_prefix)
 
     match transient_memory_mode:
         case gtx_transformations.TransientMemoryMode.EXTERNAL:
+            assert all(
+                tdesc.lifetime == dace.AllocationLifetime.External for _, tdesc in transient_arrays
+            )
             # External mode wires explicit workspace API calls in generated host code.
             assert "set_external_memory" in generated_code
             assert "__dace_get_external_memory_size_" in generated_code
@@ -341,6 +351,10 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
             assert all(device == expected_device for _, device in workspace_requests)
 
         case gtx_transformations.TransientMemoryMode.POOL:
+            assert all(
+                tdesc.pool == on_gpu and tdesc.lifetime == dace.AllocationLifetime.Scope
+                for _, tdesc in transient_arrays
+            )
             assert "set_external_memory" not in generated_code
             assert "__dace_get_external_memory_size_" not in generated_code
             assert not workspace_requests
@@ -362,6 +376,12 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
             gtx_transformations.TransientMemoryMode.PERSISTENT,
             gtx_transformations.TransientMemoryMode.SCOPED,
         ):
+            expected_lifetime = (
+                dace.AllocationLifetime.Persistent
+                if transient_memory_mode == gtx_transformations.TransientMemoryMode.PERSISTENT
+                else dace.AllocationLifetime.SDFG
+            )
+            assert all(tdesc.lifetime == expected_lifetime for _, tdesc in transient_arrays)
             # `PERSISTENT` and `SCOPED` mode use the same memory APIs, but in different contexts.
             assert "set_external_memory" not in generated_code
             assert "__dace_get_external_memory_size_" not in generated_code
