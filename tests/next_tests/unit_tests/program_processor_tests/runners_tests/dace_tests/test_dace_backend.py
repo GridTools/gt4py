@@ -224,8 +224,13 @@ def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str
     free_re = re.compile(rf"DACE_GPU_CHECK\(\s*{gpu_api_prefix}Free\(\s*dev_X\s*\)\s*\)\s*;")
 
     generated_code = ""
+    device_code_language = (
+        "cu" if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA else "cpp"
+    )
     for code in sdfg.generate_code():
-        if code.language == "cu":
+        if code.name.endswith("_main"):
+            pass
+        elif code.language == device_code_language:
             clean_code_iter = iter(code.clean_code.splitlines())
             for line in clean_code_iter:
                 if malloc_re.match(line.strip()):
@@ -233,7 +238,7 @@ def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str
                     assert free_re.match(line.strip())
                 else:
                     generated_code += line + "\n"
-        elif not code.name.endswith("_main"):
+        else:
             generated_code += code.clean_code + "\n"
 
     return generated_code
