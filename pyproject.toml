@@ -456,10 +456,10 @@ find = {namespaces = false, where = ['src']}
 [tool.uv]
 conflicts = [
   [
-    {package = "gt4py", extra = "cuda12"},
-    {package = "gt4py", extra = "jax-cuda13"},
-    {package = "gt4py", extra = "rocm6"},
-    {package = "gt4py", extra = "rocm7"}
+    {extra = 'cuda12'},
+    {extra = 'jax-cuda13'},
+    {extra = 'rocm6'},
+    {extra = 'rocm7'}
   ]
 ]
 default-groups = ["dev"]
