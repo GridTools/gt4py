@@ -70,7 +70,12 @@ def _make_sdfg_with_gpu_map() -> dace.SDFG:
     gpu_map_entry.map.schedule = dace.dtypes.ScheduleType.GPU_Device
     _add_sequential_map(sdfg, state, "seq_map", "a", "b")
     nsdfg, _, _ = _make_nested_sdfg()
-    state.add_nested_sdfg(nsdfg, inputs={"c"}, outputs={"d"})
+    nested_node = state.add_nested_sdfg(nsdfg, inputs={"c"}, outputs={"d"})
+    a_in = state.add_access("a")
+    b_out = state.add_access("b")
+    state.add_edge(a_in, None, nested_node, "c", dace.Memlet("a[0:10]"))
+    state.add_edge(nested_node, "d", b_out, None, dace.Memlet("b[0:10]"))
+    sdfg.validate()
     return sdfg
 
 
@@ -95,11 +100,10 @@ def _run_compiler(
     add_gpu_trace_markers: bool = False,
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.RELEASE,
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU,
-) -> tuple[mock.MagicMock, dace.SDFG]:
+) -> tuple[dace_wf_compilation.DaCeCompilationArtifact, dace.SDFG, mock.MagicMock]:
     """Run `DaCeCompiler` on a GPU SDFG with compilation stubbed out.
 
-    Returns the spy wrapping `_add_tx_markers` and the SDFG that was handed to
-    ``SDFG.compile`` (i.e. the SDFG after any marker processing).
+    Returns the compilation artifact, the SDFG which was compiled, and the spy wrapping `_add_tx_markers`.
     """
     inp = _make_extension_source()
 
@@ -116,7 +120,7 @@ def _run_compiler(
             dace_wf_compilation,
             "_add_tx_markers",
             wraps=dace_wf_compilation._add_tx_markers,
-        ) as spy,
+        ) as spy_add_tx_markers,
         mock.patch.object(dace.SDFG, "compile", autospec=True) as compile_mock,
         mock.patch.object(
             dace_wf_compilation.locking, "lock", lambda *args, **kwargs: contextlib.nullcontext()
@@ -128,51 +132,50 @@ def _run_compiler(
         ),
         mock.patch("gt4py.next.otf.compilation.common.get_device_arch", return_value="xyz"),
     ):
-        compiler(inp)
-        compiled_sdfg = compile_mock.call_args.args[0]
+        artifact = compiler(inp)
+        compile_input = compile_mock.call_args.args[0]
 
-    return spy, compiled_sdfg
+    return artifact, compile_input, spy_add_tx_markers
 
 
 def test_compiler_applies_tx_markers_for_gpu():
     """On a CUDA target with the flag on, the compiler applies the markers to the SDFG."""
-    spy, compiled_sdfg = _run_compiler(
+    _, compile_input, spy = _run_compiler(
         add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CUDA
     )
 
     spy.assert_called_once()
     # The SDFG that was marked is the very one passed on to compilation.
-    assert spy.call_args.args[0] is compiled_sdfg
-    assert compiled_sdfg.instrument == _TX
+    assert spy.call_args.args[0] is compile_input
+    assert compile_input.instrument == _TX
     map_entries = [
-        n for n, _ in compiled_sdfg.all_nodes_recursive() if isinstance(n, dace_nodes.MapEntry)
+        n for n, _ in compile_input.all_nodes_recursive() if isinstance(n, dace_nodes.MapEntry)
     ]
     assert map_entries and all(me.instrument == _TX for me in map_entries)
 
 
 def test_compiler_skips_tx_markers_when_flag_disabled():
     """With the flag off the compiler must not touch instrumentation, even on CUDA."""
-    spy, compiled_sdfg = _run_compiler(
+    _, compile_input, spy = _run_compiler(
         add_gpu_trace_markers=False, device_type=core_defs.DeviceType.CUDA
     )
 
     spy.assert_not_called()
-    assert compiled_sdfg.instrument == _NONE
+    assert compile_input.instrument == _NONE
 
 
 def test_compiler_skips_tx_markers_for_non_gpu_device():
     """On a CPU target the markers must not be applied even with the flag on."""
-    spy, compiled_sdfg = _run_compiler(
+    _, compile_input, spy = _run_compiler(
         add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CPU
     )
 
     spy.assert_not_called()
-    assert compiled_sdfg.instrument == _NONE
+    assert compile_input.instrument == _NONE
 
 
 def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
     artifact = dace_wf_compilation.DaCeCompilationArtifact(
-        build_folder=tmp_path,
         library_path=tmp_path / "build" / "libprogram.so",
         sdfg_json="{}",
         binding_source_code="def update_sdfg_args(*a, **k): ...",
@@ -204,14 +207,14 @@ def test_compiler_flags_change_build_folder(monkeypatch, device_type, compiler_f
     build cache.
     """
     monkeypatch.delenv(compiler_flags_env, raising=False)
-    _, sdfg_default = _run_compiler(device_type=device_type)
+    artifact_default, _, _ = _run_compiler(device_type=device_type)
 
     monkeypatch.setenv(compiler_flags_env, "-O0 -some-custom-flag")
-    _, sdfg_custom = _run_compiler(device_type=device_type)
+    artifact_custom, _, _ = _run_compiler(device_type=device_type)
 
     # The differing `dace_config_nondefaults` make the two compilers fingerprint differently,
     # so `get_cache_folder` names two distinct build folders.
-    assert sdfg_default.build_folder != sdfg_custom.build_folder
+    assert artifact_default.library_path != artifact_custom.library_path
 
 
 def test_cmake_build_type_changes_build_folder():
@@ -223,7 +226,7 @@ def test_cmake_build_type_changes_build_folder():
     changing the build type lands the SDFG build in a different folder of the
     build cache.
     """
-    _, sdfg_release = _run_compiler(cmake_build_type=config.CMakeBuildType.RELEASE)
-    _, sdfg_debug = _run_compiler(cmake_build_type=config.CMakeBuildType.DEBUG)
+    artifact_release, _, _ = _run_compiler(cmake_build_type=config.CMakeBuildType.RELEASE)
+    artifact_debug, _, _ = _run_compiler(cmake_build_type=config.CMakeBuildType.DEBUG)
 
-    assert sdfg_release.build_folder != sdfg_debug.build_folder
+    assert artifact_release.library_path != artifact_debug.library_path

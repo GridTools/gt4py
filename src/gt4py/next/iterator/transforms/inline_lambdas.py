@@ -79,7 +79,7 @@ def inline_lambda(  # see todo above
         # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: ERA001 [commented-out-code]
         name_map: dict[str, str] = {}
 
-        for sym in clashes:
+        for sym in sorted(clashes):
             name_map[sym] = ir_misc.unique_symbol(sym, refs | syms | {*name_map.values()})
 
         # Let's rename the symbols (including params) of the function.
