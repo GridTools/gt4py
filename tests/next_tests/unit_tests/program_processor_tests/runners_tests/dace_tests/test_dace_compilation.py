@@ -13,6 +13,7 @@ Covers the GPU TX-marker instrumentation and the picklability of
 """
 
 import contextlib
+import dataclasses
 import pathlib
 import pickle
 import unittest.mock as mock
@@ -489,3 +490,92 @@ def test_close_with_no_allocator_is_a_safe_noop():
     # close() must not raise even though no allocator is configured.
     program.close()
     assert program.external_workspaces == {}
+
+
+# --- Phase 5: allocator pickleability -------------------------------------
+#
+# ``DaCeCompiler`` is the step that gets pickled when the OTF runner offloads
+# compilation to a ``ProcessPoolExecutor`` (``otf/runners.py``), and it carries
+# the ``external_memory_allocator``. A non-picklable allocator (closure,
+# lambda, local class) must fail fast at construction with
+# ``AllocatorNotPicklableError`` rather than silently degrading to in-process
+# compilation via a generic runner warning.
+
+
+@dataclasses.dataclass(frozen=True)
+class _ModuleLevelPicklableAllocator:
+    """A picklable allocator defined at module scope.
+
+    ``allocate``/``deallocate`` are never called by the tests below; only the
+    type's picklability and identity through a round-trip matter. Defined at
+    module scope (not inside a test) so ``pickle`` can locate it by qualname.
+    Frozen with no fields so two instances are structurally equal, mirroring
+    a stateless allocator and the frozenness of ``DaCeCompilationArtifact``.
+    """
+
+    def allocate(self, request: gtx_auto_optimize.AllocationRequest):
+        raise AssertionError("pickleability tests must not call allocate")
+
+    def deallocate(self, buffer) -> None:
+        raise AssertionError("pickleability tests must not call deallocate")
+
+
+def _make_compiler(allocator=None) -> dace_wf_compilation.DaCeCompiler:
+    return dace_wf_compilation.DaCeCompiler(
+        bind_func_name="bind",
+        cache_lifetime=config.BuildCacheLifetime.SESSION,
+        device_type=core_defs.DeviceType.CPU,
+        external_memory_allocator=allocator,
+    )
+
+
+def test_dace_compiler_rejects_non_picklable_allocator():
+    """An allocator that can not be pickled fails fast at construction."""
+
+    class _LocalAllocator:  # local class -> not picklable by qualname
+        def allocate(self, request): ...
+
+        def deallocate(self, buffer) -> None: ...
+
+    with pytest.raises(
+        dace_wf_compilation.AllocatorNotPicklableError,
+        match="external_memory_allocator .* is not picklable",
+    ) as excinfo:
+        _make_compiler(allocator=_LocalAllocator())
+
+    # The original pickle error is chained so the user can see *why*.
+    assert isinstance(excinfo.value.__cause__, Exception)
+    assert "Can't pickle" in str(excinfo.value.__cause__)
+
+
+def test_dace_compiler_accepts_picklable_allocator():
+    """A module-level allocator (and the ``None`` default) pass the gate."""
+    # ``None`` default: no probe, no raise.
+    _make_compiler(allocator=None)
+
+    # Module-level class: picklable, no raise.
+    _make_compiler(allocator=_ModuleLevelPicklableAllocator())
+
+
+def test_dace_compilation_artifact_pickle_round_trip_with_allocator(tmp_path: pathlib.Path):
+    """The allocator round-trips through the pickled compilation artifact.
+
+    The existing ``test_dace_compilation_artifact_pickle_round_trip`` covers the
+    no-allocator default; this ensures a real allocator is carried through
+    serialization with identity of intent preserved (structural equality,
+    since the allocator class defines no per-instance state).
+    """
+    allocator = _ModuleLevelPicklableAllocator()
+    artifact = dace_wf_compilation.DaCeCompilationArtifact(
+        library_path=tmp_path / "build" / "libprogram.so",
+        sdfg_json="{}",
+        binding_source_code="def update_sdfg_args(*a, **k): ...",
+        bind_func_name="update_sdfg_args",
+        device_type=core_defs.DeviceType.CPU,
+        external_memory_allocator=allocator,
+    )
+
+    restored = pickle.loads(pickle.dumps(artifact))
+
+    assert restored == artifact
+    assert isinstance(restored.external_memory_allocator, _ModuleLevelPicklableAllocator)

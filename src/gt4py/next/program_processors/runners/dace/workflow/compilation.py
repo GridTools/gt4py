@@ -12,6 +12,7 @@ import dataclasses
 import json
 import os
 import pathlib
+import pickle
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
 from typing import Any, Final
@@ -37,6 +38,39 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 
 
 _COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
+
+
+class AllocatorNotPicklableError(TypeError):
+    """Raised when an ``external_memory_allocator`` cannot be pickled.
+
+    The allocator is part of the compilation artifact and is pickled when
+    compilation is offloaded to a worker process. Allocators that can not be
+    pickled -- typically closures, lambdas, or classes defined inside a
+    function -- would otherwise degrade silently to in-process compilation
+    via a generic runner warning. This error surfaces the contract failure
+    early, at backend construction, with the original :mod:`pickle` error
+    chained as ``__cause__``.
+    """
+
+
+def _assert_allocator_picklable(allocator: ExternalMemoryAllocator) -> None:
+    """Fail fast if ``allocator`` is not picklable.
+
+    Args:
+        allocator: The allocator to probe; must not be ``None``.
+
+    Raises:
+        AllocatorNotPicklableError: If ``pickle.dumps(allocator)`` raises.
+    """
+    try:
+        pickle.dumps(allocator)
+    except Exception as error:  # pickle raises arbitrary exceptions
+        raise AllocatorNotPicklableError(
+            f"external_memory_allocator {allocator!r} is not picklable: {error!s}."
+            " The allocator is part of the compilation artifact and is pickled"
+            " when compilation is offloaded to a worker process. Use a"
+            " module-level class or functools.partial of picklable callables."
+        ) from error
 
 
 def _add_tx_markers(sdfg: dace.SDFG) -> None:
@@ -306,6 +340,10 @@ class DaCeCompiler(
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType
+    #: Allocator providing external workspace memory when
+    #: ``transient_memory_mode`` is ``EXTERNAL``. Must be picklable (a
+    #: module-level class or :py:func:`functools.partial` of picklable
+    #: callables is recommended); probed at construction time.
     external_memory_allocator: ExternalMemoryAllocator | None = None
     add_gpu_trace_markers: bool = dataclasses.field(
         default_factory=lambda: config.ADD_GPU_TRACE_MARKERS
@@ -317,6 +355,13 @@ class DaCeCompiler(
     dace_config_nondefaults: dict[str, Any] = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
+        # The allocator is part of the compilation artifact and is pickled
+        # when compilation is offloaded to a worker process. Probe it here,
+        # at backend construction, so a non-picklable allocator (closure,
+        # lambda, local class) fails fast with an actionable error instead
+        # of silently degrading to in-process compilation.
+        if self.external_memory_allocator is not None:
+            _assert_allocator_picklable(self.external_memory_allocator)
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
