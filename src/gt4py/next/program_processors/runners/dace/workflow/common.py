@@ -86,6 +86,7 @@ def set_dace_config(
 
     # FORCE NANOBIND
     dace.Config.set("compiler.interface", value="nanobind")
+    dace.Config.set("compiler.nanobind_name_collision", value="error")
 
     if cmake_build_type is not None:
         dace.Config.set("compiler.build_type", value=cmake_build_type.value)
