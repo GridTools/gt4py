@@ -455,12 +455,10 @@ find = {namespaces = false, where = ['src']}
 # -- uv: packages & workspace --
 [tool.uv]
 conflicts = [
-  [
-    {extra = 'cuda12'},
-    {extra = 'jax-cuda13'},
-    {extra = 'rocm6'},
-    {extra = 'rocm7'}
-  ],
+  {extra = 'cuda12'},
+  {extra = 'jax-cuda13'},
+  {extra = 'rocm6'},
+  {extra = 'rocm7'}
 ]
 default-groups = ["dev"]
 required-version = ">=0.6.10"
