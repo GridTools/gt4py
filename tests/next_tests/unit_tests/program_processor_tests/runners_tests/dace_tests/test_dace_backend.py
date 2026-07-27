@@ -241,12 +241,22 @@ class _WorkspaceRecordingAllocator:
         self.requests: list[tuple[int, core_defs.DeviceType]] = []
 
     def allocate(self, request: gtx_auto_optimize.AllocationRequest):
+        # Overallocate by `request.alignment - 1` bytes and slices forward to the
+        # nearest aligned boundary, using `request.alignment` directly. This makes
+        # the returned buffer deterministically aligned to the requested value
+        # (256 by default) for any workspace size — both host (`__array_interface__`)
+        # and device (`__cuda_array_interface__`) paths.
         self.requests.append((request.nbytes, request.device))
         if request.device == core_defs.CUPY_DEVICE_TYPE:
             import cupy as cp
 
-            return cp.empty((request.nbytes,), dtype=cp.uint8)
-        return np.empty((request.nbytes,), dtype=np.uint8)
+            raw = cp.empty(request.nbytes + request.alignment - 1, dtype=cp.uint8)
+            offset = (-raw.__cuda_array_interface__["data"][0]) % request.alignment
+            return raw[offset : offset + request.nbytes]
+
+        raw = np.empty(request.nbytes + request.alignment - 1, dtype=np.uint8)
+        offset = (-raw.__array_interface__["data"][0]) % request.alignment
+        return raw[offset : offset + request.nbytes]
 
     def deallocate(self, buffer) -> None:
         pass

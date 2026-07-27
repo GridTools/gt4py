@@ -265,7 +265,7 @@ def _make_compiled_program(
 
 def test_construct_arguments_installs_external_workspaces_once():
     allocator = mock.MagicMock()
-    allocator.allocate.side_effect = [np.empty((128,), dtype=np.uint8)]
+    allocator.allocate.side_effect = [_make_array_buffer(nbytes=128, address=256)]
     program = _make_compiled_program(
         external_memory_allocator=allocator,
         workspace_sizes={dace.StorageType.CPU_Heap: 128},
@@ -325,6 +325,21 @@ def test_construct_arguments_propagates_allocator_error_for_invalid_storage_requ
     program.sdfg_program.set_workspace.assert_not_called()
 
 
+def _make_array_buffer(*, nbytes: int, address: int, cuda: bool = False) -> mock.MagicMock:
+    """A minimal array-like buffer with a configurable base pointer.
+
+    Exposes ``__array_interface__`` (host) or ``__cuda_array_interface__``
+    (device) so it is accepted by ``_validate_external_workspace``; the
+    ``data`` tuple carries the address that DaCe's ``array_interface_ptr``
+    would hand to the SDFG.
+    """
+    buffer = mock.MagicMock()
+    buffer.nbytes = nbytes
+    interface = {"data": (address, False), "shape": (nbytes,), "typestr": "|u1", "version": 3}
+    setattr(buffer, "__cuda_array_interface__" if cuda else "__array_interface__", interface)
+    return buffer
+
+
 def test_construct_arguments_rejects_buffer_without_array_interface():
     """The allocator must return something ``set_workspace`` can consume."""
     allocator = mock.MagicMock()
@@ -340,10 +355,80 @@ def test_construct_arguments_rejects_buffer_without_array_interface():
     program.sdfg_program.set_workspace.assert_not_called()
 
 
+def test_construct_arguments_rejects_misaligned_buffer():
+    """A host buffer whose base pointer is not aligned is rejected."""
+    allocator = mock.MagicMock()
+    allocator.allocate.side_effect = [_make_array_buffer(nbytes=128, address=100)]  # 100 % 256
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={dace.StorageType.CPU_Heap: 128},
+    )
+
+    with pytest.raises(ValueError, match="not aligned to the required 256 bytes"):
+        program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_not_called()
+
+
+def test_construct_arguments_accepts_aligned_buffer():
+    """A host buffer whose base pointer is aligned is accepted."""
+    allocator = mock.MagicMock()
+    workspace = _make_array_buffer(nbytes=128, address=1024)  # 1024 % 256 == 0
+    allocator.allocate.side_effect = [workspace]
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={dace.StorageType.CPU_Heap: 128},
+    )
+
+    program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_called_once()
+    assert program.external_workspaces[dace.StorageType.CPU_Heap] is workspace
+
+
+def test_construct_arguments_rejects_misaligned_gpu_buffer():
+    """A device buffer whose base pointer is not aligned is rejected."""
+    allocator = mock.MagicMock()
+    allocator.allocate.side_effect = [_make_array_buffer(nbytes=128, address=100, cuda=True)]
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={dace.StorageType.GPU_Global: 128},
+    )
+
+    with (
+        mock.patch.object(
+            dace_wf_compilation.core_defs, "CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA
+        ),
+        pytest.raises(ValueError, match="not aligned to the required 256 bytes"),
+    ):
+        program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_not_called()
+
+
+def test_construct_arguments_skips_alignment_when_data_missing():
+    """When the array interface omits ``data`` alignment is trust-based."""
+    allocator = mock.MagicMock()
+    buffer = mock.MagicMock()
+    buffer.nbytes = 64
+    # ``data`` is optional on the host array interface.
+    buffer.__array_interface__ = {"shape": (64,), "typestr": "|u1", "version": 3}
+    allocator.allocate.side_effect = [buffer]
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={dace.StorageType.CPU_Heap: 64},
+    )
+
+    # Must not raise even though alignment can't be verified.
+    program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_called_once()
+
+
 def test_close_calls_deallocate_once_per_storage():
     """``close()`` releases each workspace exactly once and is idempotent."""
     allocator = mock.MagicMock()
-    workspace = np.empty((128,), dtype=np.uint8)
+    workspace = _make_array_buffer(nbytes=128, address=256)
     allocator.allocate.side_effect = [workspace]
     program = _make_compiled_program(
         external_memory_allocator=allocator,
@@ -359,6 +444,42 @@ def test_close_calls_deallocate_once_per_storage():
     # close() is idempotent.
     program.close()
     assert allocator.deallocate.call_count == 1
+
+
+def test_close_continues_and_is_idempotent_when_deallocate_fails():
+    """If one ``deallocate`` raises, the remaining workspaces are still released.
+
+    A failing buffer must not prevent the others from being deallocated, and
+    ``external_workspaces`` must still be cleared so a subsequent ``close()``
+    (e.g. the pool finalizer) is a no-op rather than re-deallocating the
+    buffers that already succeeded.
+    """
+    allocator = mock.MagicMock()
+    workspace_a = _make_array_buffer(nbytes=16, address=256)  # aligned for CPU
+    workspace_b = _make_array_buffer(nbytes=32, address=512, cuda=True)  # aligned for GPU
+    allocator.allocate.side_effect = [workspace_a, workspace_b]
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={
+            dace.StorageType.CPU_Heap: 16,
+            dace.StorageType.GPU_Global: 32,
+        },
+    )
+    with mock.patch.object(
+        dace_wf_compilation.core_defs, "CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA
+    ):
+        program.construct_arguments(alpha=1)
+    # The first deallocate raises; the second must still be called.
+    allocator.deallocate.side_effect = [RuntimeError("boom"), None]
+
+    with pytest.warns(UserWarning, match="Failed to deallocate"):
+        program.close()
+
+    assert allocator.deallocate.call_count == 2
+    assert program.external_workspaces == {}
+    # close() is idempotent even after partial failures.
+    program.close()
+    assert allocator.deallocate.call_count == 2
 
 
 def test_close_with_no_allocator_is_a_safe_noop():

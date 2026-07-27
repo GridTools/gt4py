@@ -78,7 +78,8 @@ def _validate_external_workspace(
     Raises:
         TypeError: If ``buffer`` exposes neither ``__array_interface__`` nor
             ``__cuda_array_interface__``.
-        ValueError: If ``buffer`` is smaller than ``request.nbytes``.
+        ValueError: If ``buffer`` is smaller than ``request.nbytes`` or its
+            base pointer is not aligned to ``request.alignment`` bytes.
     """
     if not (
         xtyping.supports_array_interface(buffer) or xtyping.supports_cuda_array_interface(buffer)
@@ -93,6 +94,22 @@ def _validate_external_workspace(
         raise ValueError(
             f"External memory allocator returned a buffer of {nbytes} bytes for storage "
             f"{storage!r}, but at least {request.nbytes} were required."
+        )
+    # Validate alignment against the base pointer DaCe will hand to the SDFG
+    # (see ``dace.dtypes.array_interface_ptr``). The ``data`` field is
+    # optional on the host array interface; if it is missing the alignment
+    # contract is trust-based and the check is skipped, mirroring ``nbytes``.
+    interface = (
+        getattr(buffer, "__cuda_array_interface__", None)
+        if storage == dace.StorageType.GPU_Global
+        else getattr(buffer, "__array_interface__", None)
+    )
+    data = interface.get("data") if interface is not None else None
+    if data is not None and request.alignment > 1 and data[0] % request.alignment != 0:
+        raise ValueError(
+            f"External memory allocator returned a buffer for storage {storage!r} "
+            f"whose base pointer ({data[0]}) is not aligned to the required "
+            f"{request.alignment} bytes."
         )
 
 
@@ -180,13 +197,24 @@ class CompiledDaceProgram:
 
         Calls ``deallocate`` once per allocated storage type. Safe to call
         multiple times: after the first call the per-storage buffers are
-        dropped from :pyattr:`external_workspaces` and subsequent calls are
+        dropped from ``external_workspaces`` and subsequent calls are
         no-ops. A ``None`` allocator performs no work but still clears any
         externally-installed workspaces.
+
+        Failures during deallocation are surfaced as warnings rather than
+        raised, so that one failing buffer does not prevent the remaining
+        workspaces from being released.
         """
         if self.external_memory_allocator is not None:
             for buffer in self.external_workspaces.values():
-                self.external_memory_allocator.deallocate(buffer)
+                try:
+                    self.external_memory_allocator.deallocate(buffer)
+                except Exception:
+                    warnings.warn(
+                        f"Failed to deallocate external workspace "
+                        f"({type(buffer).__name__!r}); it may be leaked.",
+                        stacklevel=1,
+                    )
         self.external_workspaces = {}
 
     def construct_arguments(self, **kwargs: Any) -> None:
