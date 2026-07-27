@@ -454,12 +454,12 @@ find = {namespaces = false, where = ['src']}
 
 # -- uv: packages & workspace --
 [tool.uv]
-conflicts = [
-  {extra = 'cuda12'},
-  {extra = 'jax-cuda13'},
-  {extra = 'rocm6'},
-  {extra = 'rocm7'}
-]
+conflicts = [[
+    { package = "gt4py", extra = "cuda12" },
+    { package = "gt4py", extra = "jax-cuda13" },
+    { package = "gt4py", extra = "rocm6" },
+    { package = "gt4py", extra = "rocm7" },
+]]
 default-groups = ["dev"]
 required-version = ">=0.6.10"
 
