@@ -9,29 +9,28 @@
 """Test the bindings stage of the dace backend workflow."""
 
 import re
+import unittest.mock as mock
 
 import numpy as np
 import pytest
-import unittest.mock as mock
+
 
 dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
+from gt4py.next import config
 from gt4py.next.otf import runners
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-from gt4py.next.program_processors.runners.dace.workflow import (
-    backend as dace_wf_backend,
-)
-from gt4py.next.program_processors.runners.dace.workflow import (
-    translation as gtx_dace_translation,
-)
 from gt4py.next.program_processors.runners.dace.transformations import (
     auto_optimize as gtx_auto_optimize,
 )
+from gt4py.next.program_processors.runners.dace.workflow import (
+    backend as dace_wf_backend,
+    translation as gtx_dace_translation,
+)
 
-from next_tests.integration_tests import cases
-from next_tests.integration_tests import cases_utils
+from next_tests.integration_tests import cases, cases_utils
 from next_tests.integration_tests.cases_utils import KDim
 
 
@@ -160,8 +159,23 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
         mock_top_level_dataflow_hook2.assert_not_called()
 
 
+class _RecordingAllocator:
+    """Minimal `ExternalMemoryAllocator` for backend-wiring tests.
+
+    Only the identity of the allocator matters here (it is threaded through
+    to ``executor.compilation.external_memory_allocator``); ``allocate`` is
+    never called by these tests.
+    """
+
+    def allocate(self, request: gtx_auto_optimize.AllocationRequest):
+        raise AssertionError("backend-wiring tests must not call allocate")
+
+    def deallocate(self, buffer) -> None:
+        raise AssertionError("backend-wiring tests must not call deallocate")
+
+
 def test_make_backend_accepts_external_allocator_with_external_mode():
-    external_memory_allocator = lambda size, storage: bytearray(size)
+    external_memory_allocator = _RecordingAllocator()
 
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
@@ -177,7 +191,7 @@ def test_make_backend_accepts_external_allocator_with_external_mode():
 
 
 def test_make_backend_infers_external_mode_when_allocator_is_provided():
-    external_memory_allocator = lambda size, storage: bytearray(size)
+    external_memory_allocator = _RecordingAllocator()
 
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
@@ -194,7 +208,7 @@ def test_make_backend_infers_external_mode_when_allocator_is_provided():
 
 
 def test_make_backend_warns_external_allocator_without_external_mode():
-    external_memory_allocator = lambda size, storage: bytearray(size)
+    external_memory_allocator = _RecordingAllocator()
 
     with pytest.warns(UserWarning, match="External memory allocator provided"):
         backend = dace_wf_backend.make_dace_backend(
@@ -213,6 +227,29 @@ def test_make_backend_warns_external_allocator_without_external_mode():
         == gtx_transformations.TransientMemoryMode.POOL
     )
     assert backend.executor.compilation.external_memory_allocator is external_memory_allocator
+
+
+class _WorkspaceRecordingAllocator:
+    """Minimal picklable `ExternalMemoryAllocator` that records every request.
+
+    Allocations are recorded as ``(nbytes, device)`` tuples in ``requests``;
+    ``deallocate`` is a no-op. Defined at module scope so the allocator can
+    be pickled when compilation is dispatched to a worker process.
+    """
+
+    def __init__(self) -> None:
+        self.requests: list[tuple[int, core_defs.DeviceType]] = []
+
+    def allocate(self, request: gtx_auto_optimize.AllocationRequest):
+        self.requests.append((request.nbytes, request.device))
+        if request.device == core_defs.CUPY_DEVICE_TYPE:
+            import cupy as cp
+
+            return cp.empty((request.nbytes,), dtype=cp.uint8)
+        return np.empty((request.nbytes,), dtype=np.uint8)
+
+    def deallocate(self, buffer) -> None:
+        pass
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
@@ -252,15 +289,14 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     gpu_malloc_async_marker = f"{gpu_api_prefix}MallocAsync("
     gpu_free_marker = f"{gpu_api_prefix}Free("
     gpu_free_async_marker = f"{gpu_api_prefix}FreeAsync("
-    workspace_requests: list[tuple[int, core_defs.DeviceType]] = []
+    external_memory_allocator = _WorkspaceRecordingAllocator()
+    workspace_requests = external_memory_allocator.requests
 
-    def external_memory_allocator(required_nbytes: int, device: core_defs.DeviceType):
-        workspace_requests.append((required_nbytes, device))
-        if device == core_defs.CUPY_DEVICE_TYPE:
-            import cupy as cp
-
-            return cp.empty((required_nbytes,), dtype=cp.uint8)
-        return np.empty((required_nbytes,), dtype=np.uint8)
+    # ``_WorkspaceRecordingAllocator`` is picklable (a module-level class),
+    # so compilation would otherwise be dispatched to a worker process where
+    # the ``DaCeTranslator.generate_sdfg`` monkeypatch below does not apply.
+    # Force in-process compilation so the patched translator is observed.
+    monkeypatch.setattr(config, "BUILD_JOBS_MODE", config.BuildJobsMode.SERIAL)
 
     @gtx.field_operator
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:

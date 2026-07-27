@@ -21,9 +21,15 @@ import dace.codegen.compiler as dace_compiler
 import factory
 
 from gt4py._core import definitions as core_defs, locking
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
+from gt4py.next.program_processors.runners.dace.transformations.auto_optimize import (
+    AllocationRequest,
+    Buffer,
+    ExternalMemoryAllocator,
+)
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
@@ -59,6 +65,37 @@ def _map_workspace_storage_to_device(storage: dace.StorageType) -> core_defs.Dev
     return device
 
 
+def _validate_external_workspace(
+    storage: dace.StorageType, request: AllocationRequest, buffer: Buffer
+) -> None:
+    """Validate that ``buffer`` satisfies ``request`` for ``storage``.
+
+    Args:
+        storage: SDFG storage type the buffer is being installed for.
+        request: Allocation request that was issued.
+        buffer: Buffer returned by the external allocator.
+
+    Raises:
+        TypeError: If ``buffer`` exposes neither ``__array_interface__`` nor
+            ``__cuda_array_interface__``.
+        ValueError: If ``buffer`` is smaller than ``request.nbytes``.
+    """
+    if not (
+        xtyping.supports_array_interface(buffer) or xtyping.supports_cuda_array_interface(buffer)
+    ):
+        raise TypeError(
+            f"External memory allocator returned {type(buffer).__name__!r} for storage "
+            f"{storage!r}, which does not expose `__array_interface__` or "
+            f"`__cuda_array_interface__`."
+        )
+    nbytes = getattr(buffer, "nbytes", None)
+    if nbytes is not None and nbytes < request.nbytes:
+        raise ValueError(
+            f"External memory allocator returned a buffer of {nbytes} bytes for storage "
+            f"{storage!r}, but at least {request.nbytes} were required."
+        )
+
+
 class CompiledDaceProgram:
     sdfg_program: dace.CompiledSDFG
 
@@ -85,15 +122,15 @@ class CompiledDaceProgram:
     #       never updated.
     csdfg_argv: MutableSequence[Any] | None
     csdfg_init_argv: Sequence[Any] | None
-    external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None
-    external_workspaces: dict[dace.StorageType, Any]
+    external_memory_allocator: ExternalMemoryAllocator | None
+    external_workspaces: dict[dace.StorageType, Buffer]
 
     def __init__(
         self,
         program: dace.CompiledSDFG,
         bind_func_name: str,
         binding_source_code: str,
-        external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None = None,
+        external_memory_allocator: ExternalMemoryAllocator | None = None,
     ):
         self.sdfg_program = program
 
@@ -131,10 +168,26 @@ class CompiledDaceProgram:
                 )
             for storage, required_nbytes in workspace_sizes.items():
                 device = _map_workspace_storage_to_device(storage)
-                workspace = self.external_memory_allocator(required_nbytes, device)
+                request = AllocationRequest(nbytes=required_nbytes, device=device)
+                workspace = self.external_memory_allocator.allocate(request)
+                _validate_external_workspace(storage, request, workspace)
                 self.sdfg_program.set_workspace(storage, workspace)
                 # Keep the workspace buffers alive as long as the compiled program lives.
                 self.external_workspaces[storage] = workspace
+
+    def close(self) -> None:
+        """Release external workspaces.
+
+        Calls ``deallocate`` once per allocated storage type. Safe to call
+        multiple times: after the first call the per-storage buffers are
+        dropped from :pyattr:`external_workspaces` and subsequent calls are
+        no-ops. A ``None`` allocator performs no work but still clears any
+        externally-installed workspaces.
+        """
+        if self.external_memory_allocator is not None:
+            for buffer in self.external_workspaces.values():
+                self.external_memory_allocator.deallocate(buffer)
+        self.external_workspaces = {}
 
     def construct_arguments(self, **kwargs: Any) -> None:
         """
@@ -191,7 +244,7 @@ class DaCeCompilationArtifact:
     binding_source_code: str
     bind_func_name: str
     device_type: core_defs.DeviceType
-    external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None = None
+    external_memory_allocator: ExternalMemoryAllocator | None = None
 
     def load(self) -> stages.ExecutableProgram:
         # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
@@ -225,7 +278,7 @@ class DaCeCompiler(
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType
-    external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None = None
+    external_memory_allocator: ExternalMemoryAllocator | None = None
     add_gpu_trace_markers: bool = dataclasses.field(
         default_factory=lambda: config.ADD_GPU_TRACE_MARKERS
     )

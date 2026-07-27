@@ -21,6 +21,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+
 dace = pytest.importorskip("dace")
 
 from dace.sdfg import nodes as dace_nodes
@@ -29,6 +30,9 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
+from gt4py.next.program_processors.runners.dace.transformations import (
+    auto_optimize as gtx_auto_optimize,
+)
 from gt4py.next.program_processors.runners.dace.workflow import compilation as dace_wf_compilation
 
 
@@ -260,7 +264,8 @@ def _make_compiled_program(
 
 
 def test_construct_arguments_installs_external_workspaces_once():
-    allocator = mock.MagicMock(side_effect=[np.empty((128,), dtype=np.uint8)])
+    allocator = mock.MagicMock()
+    allocator.allocate.side_effect = [np.empty((128,), dtype=np.uint8)]
     program = _make_compiled_program(
         external_memory_allocator=allocator,
         workspace_sizes={dace.StorageType.CPU_Heap: 128},
@@ -272,8 +277,11 @@ def test_construct_arguments_installs_external_workspaces_once():
     # Workspace configuration is done exactly once and reused afterwards.
     assert program.sdfg_program.initialize.call_count == 1
     assert program.sdfg_program.get_workspace_sizes.call_count == 1
-    assert allocator.call_count == 1
-    allocator.assert_called_once_with(128, core_defs.DeviceType.CPU)
+    assert allocator.allocate.call_count == 1
+    allocate_request = allocator.allocate.call_args.args[0]
+    assert isinstance(allocate_request, gtx_auto_optimize.AllocationRequest)
+    assert allocate_request.nbytes == 128
+    assert allocate_request.device == core_defs.DeviceType.CPU
     assert program.sdfg_program.set_workspace.call_count == 1
     assert program.sdfg_program.construct_arguments.call_count == 2
 
@@ -284,7 +292,8 @@ def test_construct_arguments_installs_external_workspaces_once():
 
 
 def test_construct_arguments_propagates_allocator_error_for_invalid_size_request():
-    allocator = mock.MagicMock(side_effect=ValueError("invalid workspace size request"))
+    allocator = mock.MagicMock()
+    allocator.allocate.side_effect = ValueError("invalid workspace size request")
     program = _make_compiled_program(
         external_memory_allocator=allocator,
         workspace_sizes={dace.StorageType.CPU_Heap: -1},
@@ -293,12 +302,15 @@ def test_construct_arguments_propagates_allocator_error_for_invalid_size_request
     with pytest.raises(ValueError, match="invalid workspace size request"):
         program.construct_arguments(alpha=1)
 
-    allocator.assert_called_once_with(-1, core_defs.DeviceType.CPU)
+    allocator.allocate.assert_called_once()
+    assert allocator.allocate.call_args.args[0].nbytes == -1
+    assert allocator.allocate.call_args.args[0].device == core_defs.DeviceType.CPU
     program.sdfg_program.set_workspace.assert_not_called()
 
 
 def test_construct_arguments_propagates_allocator_error_for_invalid_storage_request():
-    allocator = mock.MagicMock(side_effect=TypeError("invalid storage type request"))
+    allocator = mock.MagicMock()
+    allocator.allocate.side_effect = TypeError("invalid storage type request")
     program = _make_compiled_program(
         external_memory_allocator=allocator,
         workspace_sizes={dace.StorageType.CPU_Heap: 16},
@@ -307,5 +319,52 @@ def test_construct_arguments_propagates_allocator_error_for_invalid_storage_requ
     with pytest.raises(TypeError, match="invalid storage type request"):
         program.construct_arguments(alpha=1)
 
-    allocator.assert_called_once_with(16, core_defs.DeviceType.CPU)
+    allocator.allocate.assert_called_once()
+    assert allocator.allocate.call_args.args[0].nbytes == 16
+    assert allocator.allocate.call_args.args[0].device == core_defs.DeviceType.CPU
     program.sdfg_program.set_workspace.assert_not_called()
+
+
+def test_construct_arguments_rejects_buffer_without_array_interface():
+    """The allocator must return something ``set_workspace`` can consume."""
+    allocator = mock.MagicMock()
+    allocator.allocate.side_effect = ["not-an-array"]  # str exposes no array interface
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={dace.StorageType.CPU_Heap: 64},
+    )
+
+    with pytest.raises(TypeError, match="does not expose `__array_interface__`"):
+        program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_not_called()
+
+
+def test_close_calls_deallocate_once_per_storage():
+    """``close()`` releases each workspace exactly once and is idempotent."""
+    allocator = mock.MagicMock()
+    workspace = np.empty((128,), dtype=np.uint8)
+    allocator.allocate.side_effect = [workspace]
+    program = _make_compiled_program(
+        external_memory_allocator=allocator,
+        workspace_sizes={dace.StorageType.CPU_Heap: 128},
+    )
+
+    program.construct_arguments(alpha=1)
+
+    program.close()
+    assert allocator.deallocate.call_count == 1
+    assert allocator.deallocate.call_args.args[0] is workspace
+    assert program.external_workspaces == {}
+    # close() is idempotent.
+    program.close()
+    assert allocator.deallocate.call_count == 1
+
+
+def test_close_with_no_allocator_is_a_safe_noop():
+    """A ``None`` allocator performs no work but still clears workspaces."""
+    program = _make_compiled_program(external_memory_allocator=None)
+
+    # close() must not raise even though no allocator is configured.
+    program.close()
+    assert program.external_workspaces == {}

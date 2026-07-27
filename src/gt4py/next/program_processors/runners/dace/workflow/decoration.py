@@ -79,4 +79,12 @@ def convert_args(
         if collect_time:
             metrics.add_sample_to_current_source(metrics.COMPUTE_METRIC, collect_time_arg[0].item())
 
+    # Forward teardown to the underlying ``CompiledDaceProgram`` so that the
+    # generic otf pool -- which only sees this closure -- can release
+    # external-memory workspaces when the pool is finalized.
+    def close() -> None:
+        fun.close()
+
+    decorated_program.close = close  # type: ignore[attr-defined]
+
     return decorated_program
