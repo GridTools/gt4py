@@ -1207,7 +1207,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a5"
-source = { git = "https://github.com/philip-paul-mueller/dace?branch=nanobind-compiled-sdfg#8c8664fc7f25cb914d4df3f0fbc3a36e34bfac7d" }
+source = { git = "https://github.com/philip-paul-mueller/dace?branch=nanobind-compiled-sdfg-work#a9bb2ca4f5a8cd249f1e25078485b42ac702bbb5" }
 dependencies = [
     { name = "astunparse" },
     { name = "dill" },
@@ -1859,7 +1859,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", git = "https://github.com/philip-paul-mueller/dace?branch=nanobind-compiled-sdfg" },
+    { name = "dace", git = "https://github.com/philip-paul-mueller/dace?branch=nanobind-compiled-sdfg-work" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "factory-boy", specifier = ">=3.3.3" },
