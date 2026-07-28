@@ -28,8 +28,8 @@ from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.transformations.auto_optimize import (
     AllocationRequest,
-    Buffer,
     ExternalMemoryAllocator,
+    ExternalWorkspace,
 )
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
@@ -100,30 +100,28 @@ def _map_workspace_storage_to_device(storage: dace.StorageType) -> core_defs.Dev
 
 
 def _validate_external_workspace(
-    storage: dace.StorageType, request: AllocationRequest, buffer: Buffer
+    storage: dace.StorageType, request: AllocationRequest, wsp: ExternalWorkspace
 ) -> None:
-    """Validate that ``buffer`` satisfies ``request`` for ``storage``.
+    """Validate that ``wsp`` satisfies ``request`` for ``storage``.
 
     Args:
-        storage: SDFG storage type the buffer is being installed for.
+        storage: SDFG storage type the workspace buffer is being installed for.
         request: Allocation request that was issued.
-        buffer: Buffer returned by the external allocator.
+        wsp: External workspace returned by the external allocator.
 
     Raises:
-        TypeError: If ``buffer`` exposes neither ``__array_interface__`` nor
+        TypeError: If ``wsp`` exposes neither ``__array_interface__`` nor
             ``__cuda_array_interface__``.
-        ValueError: If ``buffer`` is smaller than ``request.nbytes`` or its
+        ValueError: If ``wsp`` is smaller than ``request.nbytes`` or its
             base pointer is not aligned to ``request.alignment`` bytes.
     """
-    if not (
-        xtyping.supports_array_interface(buffer) or xtyping.supports_cuda_array_interface(buffer)
-    ):
+    if not (xtyping.supports_array_interface(wsp) or xtyping.supports_cuda_array_interface(wsp)):
         raise TypeError(
-            f"External memory allocator returned {type(buffer).__name__!r} for storage "
+            f"External memory allocator returned {type(wsp).__name__!r} for storage "
             f"{storage!r}, which does not expose `__array_interface__` or "
             f"`__cuda_array_interface__`."
         )
-    nbytes = getattr(buffer, "nbytes", None)
+    nbytes = getattr(wsp, "nbytes", None)
     if nbytes is not None and nbytes < request.nbytes:
         raise ValueError(
             f"External memory allocator returned a buffer of {nbytes} bytes for storage "
@@ -134,9 +132,9 @@ def _validate_external_workspace(
     # optional on the host array interface; if it is missing the alignment
     # contract is trust-based and the check is skipped, mirroring ``nbytes``.
     interface = (
-        getattr(buffer, "__cuda_array_interface__", None)
+        getattr(wsp, "__cuda_array_interface__", None)
         if storage == dace.StorageType.GPU_Global
-        else getattr(buffer, "__array_interface__", None)
+        else getattr(wsp, "__array_interface__", None)
     )
     data = interface.get("data") if interface is not None else None
     if data is not None and request.alignment > 1 and data[0] % request.alignment != 0:
@@ -174,7 +172,7 @@ class CompiledDaceProgram:
     csdfg_argv: MutableSequence[Any] | None
     csdfg_init_argv: Sequence[Any] | None
     external_memory_allocator: ExternalMemoryAllocator | None
-    external_workspaces: dict[dace.StorageType, Buffer]
+    external_workspaces: dict[dace.StorageType, ExternalWorkspace]
 
     def __init__(
         self,
@@ -231,7 +229,7 @@ class CompiledDaceProgram:
 
         Finalizes the underlying ``sdfg_program`` and calls ``deallocate``
         once per allocated storage type. Safe to call multiple times: after
-        the first call the per-storage buffers are dropped from
+        the first call the per-storage workspace buffers are dropped from
         ``external_workspaces`` and subsequent calls are no-ops. A ``None``
         allocator performs no work but still clears any externally-installed
         workspaces.
@@ -242,13 +240,13 @@ class CompiledDaceProgram:
         """
         self.sdfg_program.finalize()
         if self.external_memory_allocator is not None:
-            for buffer in self.external_workspaces.values():
+            for wsp in self.external_workspaces.values():
                 try:
-                    self.external_memory_allocator.deallocate(buffer)
+                    self.external_memory_allocator.deallocate(wsp)
                 except Exception:
                     warnings.warn(
                         f"Failed to deallocate external workspace "
-                        f"({type(buffer).__name__!r}); it may be leaked.",
+                        f"({type(wsp).__name__!r}); it may be leaked.",
                         stacklevel=1,
                     )
         self.external_workspaces = {}

@@ -60,10 +60,10 @@ allocator.
   GPU mempool pass, and `EXTERNAL` sets `AllocationLifetime.External` on
   eligible transients via `gt_configure_transient_lifetime`.
 - A public `ExternalMemoryAllocator` Protocol
-  (`allocate(request: AllocationRequest) -> Buffer` /
-  `deallocate(buffer) -> None`), defined in `transformations/auto_optimize.py`
+  (`allocate(request: AllocationRequest) -> ExternalWorkspace` /
+  `deallocate(wsp) -> None`), defined in `transformations/auto_optimize.py`
   alongside `AllocationRequest` (`nbytes`, `device`, `alignment=256`) and
-  `Buffer` (a `TypeAlias` over the existing `ArrayInterface` /
+  `ExternalWorkspace` (a `TypeAlias` over the existing `ArrayInterface` /
   `CUDAArrayInterface` from `gt4py.eve.extended_typing`, not a new protocol).
 - At runtime, `CompiledDaceProgram.construct_arguments` calls
   `sdfg_program.get_workspace_sizes()`, invokes `allocate` once per storage
@@ -127,12 +127,12 @@ allocator.
   `__cuda_array_interface__` and `hasattr('data_ptr')`, and does not consume
   DLPack for this path. Introducing a DLPack requirement would narrow the set
   of accepted buffers without buying anything on this code path. Rejected;
-  `Buffer` is kept as a `TypeAlias` over the two array interfaces.
+  `ExternalWorkspace` is kept as a `TypeAlias` over the two array interfaces.
 
 ## References
 
 - `src/gt4py/next/program_processors/runners/dace/transformations/auto_optimize.py`
-  (`ExternalMemoryAllocator`, `AllocationRequest`, `Buffer`,
+  (`ExternalMemoryAllocator`, `AllocationRequest`, `ExternalWorkspace`,
   `TransientMemoryMode`, `_gt_auto_post_processing`).
 - `src/gt4py/next/program_processors/runners/dace/workflow/compilation.py`
   (`CompiledDaceProgram.construct_arguments`/`finalize`,

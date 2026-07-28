@@ -141,7 +141,7 @@ class AllocationRequest:
 #: bytes; allocators that return a larger slab are acceptable. Reuses the
 #: existing array-interface protocols from :mod:`gt4py.eve.extended_typing`
 #: rather than introducing a new one.
-Buffer: TypeAlias = xtyping.ArrayInterface | xtyping.CUDAArrayInterface
+ExternalWorkspace: TypeAlias = xtyping.ArrayInterface | xtyping.CUDAArrayInterface
 
 
 @runtime_checkable
@@ -150,28 +150,26 @@ class ExternalMemoryAllocator(Protocol):
 
     The allocator owns the lifetime of the memory it hands out. For each SDFG
     that requires external workspaces, ``allocate`` is called once per
-    SDFG storage type during
-    :py:meth:`~gt4py.next.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram.construct_arguments`,
-    and ``deallocate`` is called once per storage type when the
-    :py:class:`~gt4py.next.program_processors.runners.dace.workflow.compilation.CompiledDaceProgram`
-    is closed. Allocators that wish to reuse a single slab across many programs
+    SDFG storage type during `CompiledDaceProgram.construct_arguments`,
+    and ``deallocate`` is called once per storage type when the `CompiledDaceProgram`
+    is finalized. Allocators that wish to reuse a single slab across many programs
     must keep the slab alive after ``deallocate`` returns: ``deallocate``
-    signals "this program is done with the buffer", not "destroy the memory".
+    signals "this program is done with the workspace", not "destroy the memory".
 
     Implementations must be picklable (module-level classes or
     :py:func:`functools.partial` of picklable callables are recommended),
     because the allocator is part of the compilation artifact.
     """
 
-    def allocate(self, request: AllocationRequest) -> Buffer:
+    def allocate(self, request: AllocationRequest) -> ExternalWorkspace:
         """Return a buffer of at least ``request.nbytes`` bytes on
         ``request.device``. Must raise on failure; never return ``None``.
         """
         ...
 
-    def deallocate(self, buffer: Buffer) -> None:
-        """Release or reclaim ``buffer``. Called once per buffer when the
-        owning compiled program is closed.
+    def deallocate(self, wsp: ExternalWorkspace) -> None:
+        """Release or reclaim ``wsp``. Called once per workspace when the
+        owning compiled program is finalized.
         """
         ...
 
@@ -198,7 +196,7 @@ class TransientMemoryMode(str, enum.Enum):
         attribute of the dace backend workflow is set to an
         `ExternalMemoryAllocator`. Workspaces are allocated once per compiled
         program (one `allocate` call per SDFG storage type) and freed when the
-        compiled program is closed (one `deallocate` call per storage type).
+        compiled program is finalized (one `deallocate` call per storage type).
         The allocator must be picklable.
     """
 

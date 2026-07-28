@@ -15,8 +15,8 @@ that explains the general structure and requirements on the SDFGs.
 from . import constants, splitting_tools
 from .auto_optimize import (  # re-exported for the external-memory public API
     AllocationRequest,
-    Buffer,
     ExternalMemoryAllocator,
+    ExternalWorkspace,
     GT4PyAutoOptHook,
     GT4PyAutoOptHookFun,
     GT4PyAutoOptHookStage,
@@ -93,10 +93,10 @@ from .utils import gt_configure_transient_lifetime
 
 __all__ = [
     "AllocationRequest",
-    "Buffer",
     "CopyChainRemover",
     "DoubleWriteRemover",
     "ExternalMemoryAllocator",
+    "ExternalWorkspace",
     "FuseHorizontalConditionBlocks",
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
