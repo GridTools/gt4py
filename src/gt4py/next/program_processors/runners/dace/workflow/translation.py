@@ -25,7 +25,10 @@ from gt4py.next.program_processors.runners.dace import (
     sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
 )
-from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
+from gt4py.next.program_processors.runners.dace.workflow import (
+    common as gtx_wfdcommon,
+    nanobinings as gtx_dace_nano,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -434,6 +437,8 @@ class DaCeTranslator(
 
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
+
+        sdfg.user_args = gtx_dace_nano.make_user_args(sdfg, ir, self.use_metrics)
 
         return sdfg
 

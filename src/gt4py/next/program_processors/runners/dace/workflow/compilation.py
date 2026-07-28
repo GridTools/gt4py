@@ -12,7 +12,6 @@ import dataclasses
 import json
 import os
 import pathlib
-import warnings
 from collections.abc import Callable, MutableSequence, Sequence
 from typing import Any, Final
 
@@ -99,30 +98,6 @@ class CompiledDaceProgram:
         self.csdfg_argv = None
         self.csdfg_init_argv = None
 
-    def construct_arguments(self, **kwargs: Any) -> None:
-        """
-        This function will process the arguments and store the processed argument
-        vectors in `self.csdfg_args`, to call them use `self.fast_call()`.
-        """
-        with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-            csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
-        # Note we only care about `csdfg_argv` (normal call), since we have to update it,
-        #  we ensure that it is a `list`.
-        self.csdfg_argv = [*csdfg_argv]
-        self.csdfg_init_argv = csdfg_init_argv
-
-    def fast_call(self) -> None:
-        """
-        Perform a call to the compiled SDFG using the previously generated argument
-        vectors, see `self.construct_arguments()`.
-        """
-        assert self.csdfg_argv is not None and self.csdfg_init_argv is not None, (
-            "Argument vector was not set properly."
-        )
-        self.sdfg_program.fast_call(
-            self.csdfg_argv, self.csdfg_init_argv, do_gpu_check=config.DEBUG
-        )
-
     def __call__(self, **kwargs: Any) -> None:
         """Call the compiled SDFG with the given arguments.
 
@@ -130,10 +105,6 @@ class CompiledDaceProgram:
         `self`. Furthermore, it is not recommended to use this function as it is
         very slow.
         """
-        warnings.warn(
-            "Called an SDFG through the standard DaCe interface is not recommended, use `fast_call()` instead.",
-            stacklevel=1,
-        )
         result = self.sdfg_program(**kwargs)
         assert result is None
 
