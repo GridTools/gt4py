@@ -12,7 +12,7 @@ import abc
 import dataclasses
 import enum
 import warnings
-from typing import Any, Callable, Optional, Protocol, Sequence, TypeAlias, Union, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Sequence, TypeAlias, Union
 
 import dace
 from dace import data as dace_data
@@ -145,7 +145,6 @@ class AllocationRequest:
 ExternalWorkspace: TypeAlias = xtyping.ArrayInterface | xtyping.CUDAArrayInterface
 
 
-@runtime_checkable
 class ExternalMemoryAllocator(Protocol):
     """Allocates and frees workspace memory for ``TransientMemoryMode.EXTERNAL``.
 
