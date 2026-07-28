@@ -36,7 +36,7 @@ class DaCeBackendFactory(factory.Factory):
     class Params:
         name_device = "cpu"
         name_postfix = ""
-        external_memory_allocator = None
+        external_memory_allocator: gtx_transformations.ExternalMemoryAllocator | None = None
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,

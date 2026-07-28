@@ -356,13 +356,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     b = cases.allocate(test_case, testee, "b", strategy=cases.UniqueInitializer())()
     out = cases.allocate(test_case, testee, "out")()
 
-    program = (
-        testee.with_grid_type(gtx.common.GridType.CARTESIAN)
-        .with_backend(custom_backend)
-        .compile(offset_provider={})
-    )
-    gtx.wait_for_compilation()
-    program(a, b, out=out, offset_provider={})
+    testee.with_backend(custom_backend)(a, b, out=out, offset_provider={})
 
     assert captured_sdfg is not None
     transient_arrays = [

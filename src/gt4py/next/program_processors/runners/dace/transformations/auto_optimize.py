@@ -8,6 +8,7 @@
 
 """Fast access to the auto optimization on DaCe."""
 
+import abc
 import dataclasses
 import enum
 import warnings
@@ -161,12 +162,14 @@ class ExternalMemoryAllocator(Protocol):
     because the allocator is part of the compilation artifact.
     """
 
+    @abc.abstractmethod
     def allocate(self, request: AllocationRequest) -> ExternalWorkspace:
         """Return a buffer of at least ``request.nbytes`` bytes on
         ``request.device``. Must raise on failure; never return ``None``.
         """
         ...
 
+    @abc.abstractmethod
     def deallocate(self, wsp: ExternalWorkspace) -> None:
         """Release or reclaim ``wsp``. Called once per workspace when the
         owning compiled program is finalized.
