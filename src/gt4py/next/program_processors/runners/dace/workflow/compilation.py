@@ -228,7 +228,6 @@ class CompiledDaceProgram:
         raised, so that one failing buffer does not prevent the remaining
         workspaces from being released.
         """
-        self.sdfg_program.finalize()
         if self.external_memory_allocator is not None:
             for wsp in self.external_workspaces.values():
                 try:
