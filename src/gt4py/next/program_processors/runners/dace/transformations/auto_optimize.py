@@ -8,9 +8,10 @@
 
 """Fast access to the auto optimization on DaCe."""
 
+import dataclasses
 import enum
 import warnings
-from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
+from typing import Any, Callable, Optional, Protocol, Sequence, TypeAlias, Union, runtime_checkable
 
 import dace
 from dace import data as dace_data
@@ -19,6 +20,8 @@ from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
+from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import (
     library_nodes as gtx_library_nodes,
@@ -111,6 +114,66 @@ GT4PyAutoOptHookFun: TypeAlias = Union[
 ]
 
 
+@dataclasses.dataclass(frozen=True)
+class AllocationRequest:
+    """A single workspace allocation request issued by the DaCe runtime.
+
+    Attributes:
+        nbytes: Number of bytes the compiled SDFG requires for this workspace.
+        device: Target device for the workspace, derived from the SDFG
+            transient storage type (``CPU`` for ``CPU_Heap``, the configured
+            GPU device for ``GPU_Global``).
+        alignment: Minimum byte alignment required for the returned buffer.
+            Allocators may return more strictly aligned memory; the default
+            matches the alignment DaCe assumes for transient storage on the
+            target device.
+    """
+
+    nbytes: int
+    device: core_defs.DeviceType
+    alignment: int = 256
+
+
+#: Array-like object that ``dace.dtypes.array_interface_ptr()`` accepts as a
+#: workspace: a host array exposing :class:`~gt4py.eve.extended_typing.ArrayInterface`
+#: or a device array exposing :class:`~gt4py.eve.extended_typing.CUDAArrayInterface`.
+#: The returned object must be at least as large as the requested number of
+#: bytes; allocators that return a larger slab are acceptable. Reuses the
+#: existing array-interface protocols from :mod:`gt4py.eve.extended_typing`
+#: rather than introducing a new one.
+ExternalWorkspace: TypeAlias = xtyping.ArrayInterface | xtyping.CUDAArrayInterface
+
+
+@runtime_checkable
+class ExternalMemoryAllocator(Protocol):
+    """Allocates and frees workspace memory for ``TransientMemoryMode.EXTERNAL``.
+
+    The allocator owns the lifetime of the memory it hands out. For each SDFG
+    that requires external workspaces, ``allocate`` is called once per
+    SDFG storage type during `CompiledDaceProgram.construct_arguments`,
+    and ``deallocate`` is called once per storage type when the `CompiledDaceProgram`
+    is finalized. Allocators that wish to reuse a single slab across many programs
+    must keep the slab alive after ``deallocate`` returns: ``deallocate``
+    signals "this program is done with the workspace", not "destroy the memory".
+
+    Implementations must be picklable (module-level classes or
+    :py:func:`functools.partial` of picklable callables are recommended),
+    because the allocator is part of the compilation artifact.
+    """
+
+    def allocate(self, request: AllocationRequest) -> ExternalWorkspace:
+        """Return a buffer of at least ``request.nbytes`` bytes on
+        ``request.device``. Must raise on failure; never return ``None``.
+        """
+        ...
+
+    def deallocate(self, wsp: ExternalWorkspace) -> None:
+        """Release or reclaim ``wsp``. Called once per workspace when the
+        owning compiled program is finalized.
+        """
+        ...
+
+
 class TransientMemoryMode(str, enum.Enum):
     """
     Policy selecting the lifetime/allocation strategy of transient arrays.
@@ -130,10 +193,11 @@ class TransientMemoryMode(str, enum.Enum):
         on sequential execution of the programs on the default stream.
     Note:
         The `EXTERNAL` strategy requires that the `external_memory_allocator`
-        attribute of the dace backend workflow is set to a callable that takes
-        `(required_nbytes, device_type)` and returns the allocated memory, in the
-        form of an array object that can handled by `dace.dtypes.array_interface_ptr()`.
-        The callable is expected to raise an exception if the allocation fails.
+        attribute of the dace backend workflow is set to an
+        `ExternalMemoryAllocator`. Workspaces are allocated once per compiled
+        program (one `allocate` call per SDFG storage type) and freed when the
+        compiled program is finalized (one `deallocate` call per storage type).
+        The allocator must be picklable.
     """
 
     SCOPED = "SCOPED"

@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable
 from typing import Any, Final
 
 import factory
@@ -64,7 +63,7 @@ def make_dace_backend(
     auto_optimize: bool = True,
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
-    external_memory_allocator: Callable[[int, core_defs.DeviceType], Any] | None = None,
+    external_memory_allocator: gtx_transformations.ExternalMemoryAllocator | None = None,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
     use_zero_origin: bool = False,
@@ -79,9 +78,11 @@ def make_dace_backend(
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
-        external_memory_allocator: Callable taking `(required_nbytes, storage_type)`
-            used later for external-memory workspace allocation. Threaded through
-            the backend workflow for now.
+        external_memory_allocator: Allocator used to provide workspace memory
+            when `transient_memory_mode` is `EXTERNAL`. Threaded through the
+            backend workflow and called once per SDFG storage type when
+            arguments are constructed; see
+            `gtx_transformations.ExternalMemoryAllocator` for the contract.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
             in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
