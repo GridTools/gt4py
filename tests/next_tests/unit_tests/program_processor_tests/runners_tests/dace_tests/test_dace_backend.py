@@ -19,7 +19,6 @@ dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import config
 from gt4py.next.otf import runners
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
@@ -302,12 +301,6 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     gpu_free_async_marker = f"{gpu_api_prefix}FreeAsync("
     external_memory_allocator = _WorkspaceRecordingAllocator()
     workspace_requests = external_memory_allocator.requests
-
-    # ``_WorkspaceRecordingAllocator`` is picklable (a module-level class),
-    # so compilation would otherwise be dispatched to a worker process where
-    # the ``DaCeTranslator.generate_sdfg`` monkeypatch below does not apply.
-    # Force in-process compilation so the patched translator is observed.
-    monkeypatch.setattr(config, "BUILD_JOBS_MODE", config.BuildJobsMode.SERIAL)
 
     @gtx.field_operator
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
