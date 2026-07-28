@@ -139,6 +139,8 @@ def run_and_verify_fastcall(
 def test_dace_fastcall(cartesian_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
+    pytest.skip("`fast_call` is no longer supported.")
+
     @gtx.field_operator
     def testee(
         a: cases.IField,
@@ -208,6 +210,8 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
+
+    pytest.skip("`fast_call` is no longer supported.")
 
     connectivity_E2V = unstructured_case.offset_provider["E2V"].asnumpy()
 
