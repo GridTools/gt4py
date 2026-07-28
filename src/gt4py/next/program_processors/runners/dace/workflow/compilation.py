@@ -226,19 +226,21 @@ class CompiledDaceProgram:
                 # Keep the workspace buffers alive as long as the compiled program lives.
                 self.external_workspaces[storage] = workspace
 
-    def close(self) -> None:
+    def finalize(self) -> None:
         """Release external workspaces.
 
-        Calls ``deallocate`` once per allocated storage type. Safe to call
-        multiple times: after the first call the per-storage buffers are
-        dropped from ``external_workspaces`` and subsequent calls are
-        no-ops. A ``None`` allocator performs no work but still clears any
-        externally-installed workspaces.
+        Finalizes the underlying ``sdfg_program`` and calls ``deallocate``
+        once per allocated storage type. Safe to call multiple times: after
+        the first call the per-storage buffers are dropped from
+        ``external_workspaces`` and subsequent calls are no-ops. A ``None``
+        allocator performs no work but still clears any externally-installed
+        workspaces.
 
         Failures during deallocation are surfaced as warnings rather than
         raised, so that one failing buffer does not prevent the remaining
         workspaces from being released.
         """
+        self.sdfg_program.finalize()
         if self.external_memory_allocator is not None:
             for buffer in self.external_workspaces.values():
                 try:
@@ -320,7 +322,7 @@ class DaCeCompilationArtifact:
             self.binding_source_code,
             external_memory_allocator=self.external_memory_allocator,
         )
-        return gtx_wfddecoration.convert_args(program, device=self.device_type)
+        return gtx_wfddecoration.DaCeDecoratedProgram(program, device_type=self.device_type)
 
 
 @dataclasses.dataclass(frozen=True)

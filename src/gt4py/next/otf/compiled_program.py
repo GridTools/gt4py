@@ -85,24 +85,24 @@ def metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> 
         return source_key
 
 
-def _close_compiled_programs(programs: stages.ExecutableProgram | dict[Any, Any]) -> None:
+def _finalize_compiled_programs(programs: stages.ExecutableProgram | dict[Any, Any]) -> None:
     """Best-effort cleanup of compiled programs when their pool is deleted.
 
     Invoked via :py:func:`weakref.finalize` on a
     :py:class:`CompiledProgramsPool`. The pool holds each compiled program
     as a generic :py:data:`stages.ExecutableProgram` (a backend-specific
-    callable, e.g. the DaCe ``decorated_program`` closure); backends that
-    own external resources expose a ``close()`` method, which is forwarded
+    callable, e.g. the DaCe ``DaCeDecoratedProgram``); backends that
+    own external resources expose a ``finalize()`` method, which is forwarded
     to the underlying compiled object. Failures are surfaced as warnings
     rather than raised, because finalizers cannot propagate exceptions.
     """
     values = programs.values() if isinstance(programs, dict) else (programs,)
     for program in values:
-        close = getattr(program, "close", None)
-        if close is None:
+        finalize = getattr(program, "finalize", None)
+        if finalize is None:
             continue
         try:
-            close()
+            finalize()
         except Exception:
             warnings.warn(
                 f"Compiled program {type(program).__name__!r} raised during "
@@ -402,8 +402,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
     def __post_init__(self) -> None:
         # Best-effort teardown: when this pool is deleted (and its
-        # ``compiled_programs`` dict goes with it), close any compiled
-        # program that exposes a ``close()`` method so backends that own
+        # ``compiled_programs`` dict goes with it), finalize any compiled
+        # program that exposes a ``finalize()`` method so backends that own
         # external resources -- e.g. the DaCe external-memory allocator --
         # can release them. The dict is passed by reference so the
         # finalizer walks the live collection (programs may be added after
@@ -413,7 +413,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         #
         # Registered first so a ``__post_init__`` that fails validation
         # still installs teardown for whatever is already cached.
-        weakref.finalize(self, _close_compiled_programs, self.compiled_programs)
+        weakref.finalize(self, _finalize_compiled_programs, self.compiled_programs)
 
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.

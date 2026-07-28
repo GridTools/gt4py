@@ -426,8 +426,8 @@ def test_construct_arguments_skips_alignment_when_data_missing():
     program.sdfg_program.set_workspace.assert_called_once()
 
 
-def test_close_calls_deallocate_once_per_storage():
-    """``close()`` releases each workspace exactly once and is idempotent."""
+def test_finalize_calls_deallocate_once_per_storage():
+    """``finalize()`` releases each workspace exactly once and is idempotent."""
     allocator = mock.MagicMock()
     workspace = _make_array_buffer(nbytes=128, address=256)
     allocator.allocate.side_effect = [workspace]
@@ -438,20 +438,20 @@ def test_close_calls_deallocate_once_per_storage():
 
     program.construct_arguments(alpha=1)
 
-    program.close()
+    program.finalize()
     assert allocator.deallocate.call_count == 1
     assert allocator.deallocate.call_args.args[0] is workspace
     assert program.external_workspaces == {}
-    # close() is idempotent.
-    program.close()
+    # finalize() is idempotent.
+    program.finalize()
     assert allocator.deallocate.call_count == 1
 
 
-def test_close_continues_and_is_idempotent_when_deallocate_fails():
+def test_finalize_continues_and_is_idempotent_when_deallocate_fails():
     """If one ``deallocate`` raises, the remaining workspaces are still released.
 
     A failing buffer must not prevent the others from being deallocated, and
-    ``external_workspaces`` must still be cleared so a subsequent ``close()``
+    ``external_workspaces`` must still be cleared so a subsequent ``finalize()``
     (e.g. the pool finalizer) is a no-op rather than re-deallocating the
     buffers that already succeeded.
     """
@@ -474,21 +474,21 @@ def test_close_continues_and_is_idempotent_when_deallocate_fails():
     allocator.deallocate.side_effect = [RuntimeError("boom"), None]
 
     with pytest.warns(UserWarning, match="Failed to deallocate"):
-        program.close()
+        program.finalize()
 
     assert allocator.deallocate.call_count == 2
     assert program.external_workspaces == {}
-    # close() is idempotent even after partial failures.
-    program.close()
+    # finalize() is idempotent even after partial failures.
+    program.finalize()
     assert allocator.deallocate.call_count == 2
 
 
-def test_close_with_no_allocator_is_a_safe_noop():
+def test_finalize_with_no_allocator_is_a_safe_noop():
     """A ``None`` allocator performs no work but still clears workspaces."""
     program = _make_compiled_program(external_memory_allocator=None)
 
-    # close() must not raise even though no allocator is configured.
-    program.close()
+    # finalize() must not raise even though no allocator is configured.
+    program.finalize()
     assert program.external_workspaces == {}
 
 

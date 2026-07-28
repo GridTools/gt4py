@@ -14,7 +14,7 @@ many times (e.g. inside a time loop), facing per-call GPU transient allocation
 overhead and the desire to bound workspace memory to one SDFG's transient
 footprint, we decided to add an explicit `EXTERNAL` transient-memory mode
 backed by a caller-supplied `ExternalMemoryAllocator` protocol (allocate once
-per SDFG storage type, release when the compiled program is closed).
+per SDFG storage type, release when the compiled program is finalized).
 
 ## Context
 
@@ -37,7 +37,7 @@ The existing `PERSISTENT` mode ties one workspace to exactly one SDFG:
 transients are allocated once and retained for that SDFG's lifetime, so the
 workspace grows without bound across distinct SDFGs and is owned by the
 compiled program, not the caller. `EXTERNAL` can reproduce that behaviour --
-allocate once, retain, release at close -- but is more general: it hands
+allocate once, retain, release at finalize -- but is more general: it hands
 ownership of the workspace memory to the caller. With that ownership the
 caller can reuse a single workspace buffer across multiple compiled programs
 (sized to the largest, or per storage type), which `PERSISTENT` cannot.
@@ -71,15 +71,15 @@ allocator.
   installs it via `sdfg_program.set_workspace(...)`. The buffers are kept on
   the `CompiledDaceProgram` for its lifetime.
 - Teardown is explicit and pool-driven, not `__del__`-based:
-  `CompiledDaceProgram.close()` calls `deallocate` once per storage type (and
-  is idempotent and resilient: a failing `deallocate` is warned, not raised,
-  so one bad buffer does not strand the rest). `decorated_program` in
-  `workflow/decoration.py` forwards `close()` to the underlying
-  `CompiledDaceProgram`, and `CompiledProgramsPool.__post_init__` registers a
-  `weakref.finalize` that walks `compiled_programs` and calls `close()` on
-  each when the pool is collected. This mirrors the existing
-  `metrics_source_key` finalizer and its "avoid id reuse once a pool dies"
-  rationale.
+  `CompiledDaceProgram.finalize()` finalizes the underlying SDFG and calls
+  `deallocate` once per storage type (and is idempotent and resilient: a
+  failing `deallocate` is warned, not raised, so one bad buffer does not
+  strand the rest). `DaCeDecoratedProgram` in `workflow/decoration.py`
+  forwards `finalize()` to the underlying `CompiledDaceProgram`, and
+  `CompiledProgramsPool.__post_init__` registers a `weakref.finalize` that
+  walks `compiled_programs` and calls `finalize()` on each when the pool is
+  collected. This mirrors the existing `metrics_source_key` finalizer and its
+  "avoid id reuse once a pool dies" rationale.
 - The allocator is part of `DaCeCompilationArtifact` and is therefore
   **picklable**: when the OTF runner offloads compilation to a
   `ProcessPoolExecutor` it pickles the executor chain, which carries the
@@ -98,7 +98,7 @@ allocator.
   runtime path while keeping memory bounded to one SDFG's transient footprint.
 - Workspace lifetime is explicit and tied to the compiled program's lifetime
   through the pool finalizer, not to GC timing. Backends owning external
-  resources (this one) get `close()` called at pool teardown.
+  resources (this one) get `finalize()` called at pool teardown.
 - The public API has a typed allocator protocol and a single mode enum;
   incompatible combinations (e.g. an allocator with a non-`EXTERNAL` mode)
   are detected and warned at backend construction.
@@ -117,7 +117,7 @@ allocator.
 - Bad, because the codebase strongly prefers `weakref.finalize` over `__del__`
   (hostile conditions at interpreter shutdown, partial initialization, and an
   allocator that may already be gone). Rejected in favor of the explicit
-  `close()` forwarded through the closure and driven by the pool finalizer.
+  `finalize()` forwarded through the callable and driven by the pool finalizer.
 
 ### A DLPack-consuming `set_workspace`
 
@@ -135,12 +135,12 @@ allocator.
   (`ExternalMemoryAllocator`, `AllocationRequest`, `Buffer`,
   `TransientMemoryMode`, `_gt_auto_post_processing`).
 - `src/gt4py/next/program_processors/runners/dace/workflow/compilation.py`
-  (`CompiledDaceProgram.construct_arguments`/`close`,
+  (`CompiledDaceProgram.construct_arguments`/`finalize`,
   `DaCeCompilationArtifact`, `DaCeCompiler`, `AllocatorNotPicklableError`).
 - `src/gt4py/next/program_processors/runners/dace/workflow/decoration.py`
-  (`decorated_program.close` forwarding).
+  (`DaCeDecoratedProgram.finalize` forwarding).
 - `src/gt4py/next/otf/compiled_program.py`
-  (`_close_compiled_programs`, `CompiledProgramsPool.__post_init__`
+  (`_finalize_compiled_programs`, `CompiledProgramsPool.__post_init__`
   finalizer).
 - [ADR 0023](0023-Fingerprinting.md) and
   [ADR 0025](0025-Crash_Consistent_Build_Caches.md) for the cache and

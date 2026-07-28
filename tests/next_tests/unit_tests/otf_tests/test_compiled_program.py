@@ -316,53 +316,53 @@ def test_metrics_source_key_finalizer_removes_cache_entry_when_pool_is_deleted()
     ctx.run(test_f)
 
 
-class _CloseableProgram:
-    """Minimal stand-in for a backend compiled program exposing ``close()``."""
+class _FinalizableProgram:
+    """Minimal stand-in for a backend compiled program exposing ``finalize()``."""
 
     def __init__(self) -> None:
-        self.close_count = 0
+        self.finalize_count = 0
 
-    def close(self) -> None:
-        self.close_count += 1
+    def finalize(self) -> None:
+        self.finalize_count += 1
 
 
-class _FailingCloseProgram:
-    def close(self) -> None:
+class _FailingFinalizeProgram:
+    def finalize(self) -> None:
         raise RuntimeError("teardown blew up")
 
 
-def test_close_compiled_programs_calls_close_on_each_value():
-    a = _CloseableProgram()
-    b = _CloseableProgram()
+def test_finalize_compiled_programs_calls_finalize_on_each_value():
+    a = _FinalizableProgram()
+    b = _FinalizableProgram()
     programs = {("a",): a, ("b",): b}
 
-    compiled_program._close_compiled_programs(programs)
+    compiled_program._finalize_compiled_programs(programs)
 
-    assert a.close_count == 1
-    assert b.close_count == 1
+    assert a.finalize_count == 1
+    assert b.finalize_count == 1
 
 
-def test_close_compiled_programs_skips_programs_without_close():
-    class _NoClose:
+def test_finalize_compiled_programs_skips_programs_without_finalize():
+    class _NoFinalize:
         pass
 
-    programs = {("a",): _NoClose(), ("b",): _CloseableProgram()}
-    compiled_program._close_compiled_programs(programs)  # must not raise on _NoClose
+    programs = {("a",): _NoFinalize(), ("b",): _FinalizableProgram()}
+    compiled_program._finalize_compiled_programs(programs)  # must not raise on _NoFinalize
 
 
-def test_close_compiled_programs_surfaces_close_failures_as_warnings():
-    programs = {("a",): _FailingCloseProgram(), ("b",): _CloseableProgram()}
+def test_finalize_compiled_programs_surfaces_finalize_failures_as_warnings():
+    programs = {("a",): _FailingFinalizeProgram(), ("b",): _FinalizableProgram()}
     ok = programs[("b",)]
 
     with pytest.warns(UserWarning, match="raised during pool teardown"):
-        compiled_program._close_compiled_programs(programs)
+        compiled_program._finalize_compiled_programs(programs)
 
     # A failing program does not stop teardown of the rest.
-    assert ok.close_count == 1
+    assert ok.finalize_count == 1
 
 
-def test_pool_finalizer_closes_compiled_programs_when_pool_is_deleted():
-    """A program held in ``CompiledProgramsPool.compiled_programs`` is closed
+def test_pool_finalizer_finalizes_compiled_programs_when_pool_is_deleted():
+    """A program held in ``CompiledProgramsPool.compiled_programs`` is finalized
     when the pool is garbage-collected, so backends that own external
     resources release them."""
     # ``CompiledProgramsPool.__post_init__`` validates its (heavy)
@@ -372,9 +372,9 @@ def test_pool_finalizer_closes_compiled_programs_when_pool_is_deleted():
     # helper production uses.
     pool = compiled_program.CompiledProgramsPool.__new__(compiled_program.CompiledProgramsPool)
     pool.compiled_programs = {}
-    weakref.finalize(pool, compiled_program._close_compiled_programs, pool.compiled_programs)
+    weakref.finalize(pool, compiled_program._finalize_compiled_programs, pool.compiled_programs)
 
-    program = _CloseableProgram()
+    program = _FinalizableProgram()
     pool.compiled_programs[("only",)] = program
 
     pool_ref = weakref.ref(pool)
@@ -382,4 +382,4 @@ def test_pool_finalizer_closes_compiled_programs_when_pool_is_deleted():
     gc.collect()
 
     assert pool_ref() is None
-    assert program.close_count == 1
+    assert program.finalize_count == 1
