@@ -19,6 +19,7 @@ dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
+from gt4py.next import config
 from gt4py.next.otf import runners
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
@@ -302,6 +303,16 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     external_memory_allocator = _WorkspaceRecordingAllocator()
     workspace_requests = external_memory_allocator.requests
 
+    custom_backend = dace_wf_backend.make_dace_backend(
+        gpu=on_gpu,
+        auto_optimize=True,
+        async_sdfg_call=False,
+        optimization_args={
+            "transient_memory_mode": transient_memory_mode,
+        },
+        external_memory_allocator=external_memory_allocator,
+    )
+
     @gtx.field_operator
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
         tmp = a + b
@@ -310,6 +321,15 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     @gtx.program
     def testee(a: cases.IField, b: cases.IField, out: cases.IField):
         testee_op(a, b, out=out)
+
+    test_case = cases.Case.from_cartesian_grid_descriptor(
+        cases_utils.simple_cartesian_grid(),
+        backend=custom_backend,
+        allocator=custom_backend,
+    )
+    a = cases.allocate(test_case, testee, "a", strategy=cases.UniqueInitializer())()
+    b = cases.allocate(test_case, testee, "b", strategy=cases.UniqueInitializer())()
+    out = cases.allocate(test_case, testee, "out")()
 
     captured_sdfg: dace.SDFG | None = None
     gt_generate_sdfg = gtx_dace_translation.DaCeTranslator.generate_sdfg
@@ -330,26 +350,12 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         no_op_top_level_map_processing,  # we need to keep the intermediate transient array
     )
 
-    custom_backend = dace_wf_backend.make_dace_backend(
-        gpu=on_gpu,
-        auto_optimize=True,
-        async_sdfg_call=False,
-        optimization_args={
-            "transient_memory_mode": transient_memory_mode,
-        },
-        external_memory_allocator=external_memory_allocator,
-    )
-
-    test_case = cases.Case.from_cartesian_grid_descriptor(
-        cases_utils.simple_cartesian_grid(),
-        backend=custom_backend,
-        allocator=custom_backend,
-    )
-    a = cases.allocate(test_case, testee, "a", strategy=cases.UniqueInitializer())()
-    b = cases.allocate(test_case, testee, "b", strategy=cases.UniqueInitializer())()
-    out = cases.allocate(test_case, testee, "out")()
-
-    testee.with_backend(custom_backend)(a, b, out=out, offset_provider={})
+    # ``_WorkspaceRecordingAllocator`` is picklable (a module-level class),
+    # so compilation would otherwise be dispatched to a worker process where
+    # the ``DaCeTranslator.generate_sdfg`` monkeypatch above does not apply.
+    # Force in-process compilation so the patched translator is observed.
+    with mock.patch.object(config, "BUILD_JOBS_MODE", config.BuildJobsMode.SERIAL):
+        testee.with_backend(custom_backend)(a, b, out=out, offset_provider={})
 
     assert captured_sdfg is not None
     transient_arrays = [
