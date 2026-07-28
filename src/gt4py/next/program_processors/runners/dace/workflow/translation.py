@@ -438,7 +438,7 @@ class DaCeTranslator(
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
 
-        sdfg.user_args = gtx_dace_nano.make_user_args(sdfg, ir, self.use_metrics)
+        sdfg.user_args = gtx_dace_nano.make_user_args(sdfg, ir, self.use_metrics, offset_provider)
 
         return sdfg
 

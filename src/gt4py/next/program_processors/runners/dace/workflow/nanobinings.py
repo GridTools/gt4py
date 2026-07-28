@@ -24,6 +24,7 @@ def make_user_args(
     sdfg: dace.SDFG,
     prog: ir.Program,
     use_metrics: bool,
+    offset_provider: Mapping[str, Any],
 ) -> list[Any]:
     sdfg_arglist = sdfg.arglist().copy()
 
@@ -36,6 +37,10 @@ def make_user_args(
         )
         for param in prog.params
     ]
+
+    user_args.extend(
+        _handle_connectivities(sdfg_arglist=sdfg_arglist, offset_provider=offset_provider)
+    )
 
     if use_metrics:
         user_args.extend(
@@ -71,7 +76,32 @@ def _make_user_args(
         #   1) The argument is a symbol/scalar that is not used in the generated code.
         #   2) The argument was demoted, see `demote_fields` argument of `gt_auto_optimize()`
         #       and was not put back.
-        raise NotImplementedError("IMPLEMENT ME.")
+
+        if (isinstance(param_type, ts.FieldType) and len(param_type.dims) == 0) or isinstance(
+            param_type, ts.ScalarType
+        ):
+            alt_param_name, _ = sdfg.add_scalar(
+                f"__gt4py_unused_{param_name}",
+                dtype=dace.dtypes.pyobject(),
+                transient=False,
+                find_new_name=True,
+            )
+            return alt_param_name
+
+        else:
+            alt_param_name, _ = sdfg.add_scalar(
+                f"__gt4py_unused_{param_name}_value",
+                dtype=dace.dtypes.pyobject(),
+                transient=False,
+                find_new_name=True,
+            )
+            alt_param_origin_name, _ = sdfg.add_scalar(
+                f"__gt4py_unused_{param_name}_origin",
+                dtype=dace.dtypes.pyobject(),
+                transient=False,
+                find_new_name=True,
+            )
+            return alt_param_name, alt_param_origin_name
 
     elif isinstance(param_type, ts.FieldType):
         if param_name not in sdfg.arrays:
@@ -128,6 +158,19 @@ def _make_user_args(
 
     else:
         raise ValueError(f"Parameter `{param_name}` had unexpected type `{param_type}`")
+
+
+def _handle_connectivities(
+    sdfg_arglist: Mapping[str, dace.data.Data],
+    offset_provider: Mapping[str, Any],
+) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            arg_name
+            for arg_name in sdfg_arglist.keys()
+            if gtx_dace_args.is_connectivity_identifier(arg_name)
+        )
+    )
 
 
 #######################################

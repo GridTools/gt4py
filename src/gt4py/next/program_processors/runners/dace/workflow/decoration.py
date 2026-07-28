@@ -16,7 +16,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import stages
-from gt4py.next.program_processors.runners.dace import sdfg_callable
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args, sdfg_callable
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     nanobinings as gtx_dace_nano,
@@ -63,6 +63,16 @@ def convert_args(
             fun.sdfg_program(**this_call_args)
         else:
             args = gtx_dace_nano.convert_arg(args)
+
+            # Works becauuse of constant prefix, but it is very fragile.
+            args = args + tuple(
+                offset_provider[pn].ndarray
+                for pn in sorted(
+                    pn
+                    for pn in offset_provider.keys()
+                    if gtx_dace_args.connectivity_identifier(pn) in fun.sdfg_program.sdfg.user_args
+                )
+            )
 
             if gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME in fun.sdfg_program.sdfg.arrays:
                 args = (*args, metrics.get_current_level(), collect_time_arg)
