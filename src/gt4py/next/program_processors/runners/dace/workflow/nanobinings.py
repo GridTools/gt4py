@@ -39,7 +39,7 @@ def make_user_args(
     ]
 
     user_args.extend(
-        _handle_connectivities(sdfg_arglist=sdfg_arglist, offset_provider=offset_provider)
+        _add_connectivities_to_user_args(sdfg_arglist=sdfg_arglist, offset_provider=offset_provider)
     )
 
     if use_metrics:
@@ -80,28 +80,13 @@ def _make_user_args(
         if (isinstance(param_type, ts.FieldType) and len(param_type.dims) == 0) or isinstance(
             param_type, ts.ScalarType
         ):
-            alt_param_name, _ = sdfg.add_scalar(
-                f"__gt4py_unused_{param_name}",
-                dtype=dace.dtypes.pyobject(),
-                transient=False,
-                find_new_name=True,
-            )
-            return alt_param_name
-
+            # Passed as 1 parameter (must be consistent with `convert_arg()`.
+            return ""
         else:
-            alt_param_name, _ = sdfg.add_scalar(
-                f"__gt4py_unused_{param_name}_value",
-                dtype=dace.dtypes.pyobject(),
-                transient=False,
-                find_new_name=True,
-            )
-            alt_param_origin_name, _ = sdfg.add_scalar(
-                f"__gt4py_unused_{param_name}_origin",
-                dtype=dace.dtypes.pyobject(),
-                transient=False,
-                find_new_name=True,
-            )
-            return alt_param_name, alt_param_origin_name
+            # Arrays are passed as a tuple consisting of the array and a tuple for the origin.
+            # TODO(phimuell): Find out if also a single ignore slot is okay.
+            assert isinstance(param_type, ts.FieldType)
+            return ("", ("") * len(param_type.dims))
 
     elif isinstance(param_type, ts.FieldType):
         if param_name not in sdfg.arrays:
@@ -133,16 +118,10 @@ def _make_user_args(
                     origins.append(rstart)
                 else:
                     # For certain reason the dimension parameter is not needed and thus not
-                    #  included. In this case it can not be an SDFG array nor a symbol. For
-                    #  compatibility with GTFN we have to pass it as an argument and thus
-                    #  put it back.
-                    # TODO(phimuell): Give it a name that is different.
+                    #  included. For compatibility with GTFN we have to provide it, but ignore it.
                     assert rstart not in sdfg.symbols
                     assert rstart not in sdfg.arrays
-
-                    # TODO(phimuell): Find out what the true type should be.
-                    sdfg.add_symbol(rstart, dace.dtypes.int32, find_new_name=False)
-                    origins.append(rstart)
+                    origins.append("")
 
             return (param_name, tuple(origins))
 
@@ -160,16 +139,15 @@ def _make_user_args(
         raise ValueError(f"Parameter `{param_name}` had unexpected type `{param_type}`")
 
 
-def _handle_connectivities(
+def _add_connectivities_to_user_args(
     sdfg_arglist: Mapping[str, dace.data.Data],
     offset_provider: Mapping[str, Any],
-) -> tuple[str, ...]:
+) -> tuple:
+    # This is fully call compatible with GTFN and also depends on that the order of the dict is stable.
+    # TODO(phimuell): Find out if a single ignore `""` in the full ignore case is enough.
     return tuple(
-        sorted(
-            arg_name
-            for arg_name in sdfg_arglist.keys()
-            if gtx_dace_args.is_connectivity_identifier(arg_name)
-        )
+        (offset_arg_name, ("", "")) if offset_arg_name in sdfg_arglist else ("", ("", ""))
+        for offset_arg_name in map(gtx_dace_args.connectivity_identifier, offset_provider.keys())
     )
 
 

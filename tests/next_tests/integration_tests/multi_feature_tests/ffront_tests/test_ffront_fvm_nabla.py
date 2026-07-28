@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from packaging import version
 
-pytest.importorskip("atlas4py")
+# pytest.importorskip("atlas4py")
 
 from gt4py import next as gtx
 from gt4py.next import neighbor_sum
@@ -76,7 +76,7 @@ def pnabla(
 
 
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.requires_atlas
+# @pytest.mark.requires_atlas
 def test_ffront_compute_zavgS(exec_alloc_descriptor):
     _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor)
 
@@ -99,7 +99,7 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
 
 @pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_tuple_returns
-@pytest.mark.requires_atlas
+# @pytest.mark.requires_atlas
 def test_ffront_nabla(exec_alloc_descriptor):
     _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor)
 
