@@ -481,6 +481,58 @@ class TestFunction:
             )
 
 
+class TestLazyFunction:
+    def test_simple_case(self) -> None:
+        @gtscript.lazy_function()
+        def constant():
+            return 1.0
+
+        def definition_func(out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = constant()
+
+        stencil = parse_definition(
+            definition_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        # check that constant was properly inlined
+        assert stencil.computations[0].body.stmts[0].value.value == 1.0
+
+    def test_annotation_deferred_type(self) -> None:
+        class DeferredType:
+            pass
+
+        def resolve_type(func: Callable):
+            """This function resolves the deferred type"""
+            for name, type_ in func.__annotations__.items():
+                if type_ == DeferredType:
+                    func.__annotations__[name] = gtscript.Field[float]
+
+        # configure lazy_function to resolve the deferred type on the `plus_one()` function
+        @gtscript.lazy_function(before_annotation=resolve_type)
+        def plus_one(a: DeferredType):
+            return a + 1.0
+
+        def definition_func(in_field: DeferredType, out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = plus_one(in_field)
+
+        # resolve deferred type on stencil
+        resolve_type(definition_func)
+
+        # parse stencil, which will automatically resolve the deferred type in the lazy_function
+        stencil = parse_definition(
+            definition_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        # check that constant was properly inlined
+        assert stencil.computations[0].body.stmts[0].value.rhs.value == 1.0
+
+
 class TestAxisSyntax:
     def test_good_syntax(self):
         def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
