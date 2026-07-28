@@ -31,7 +31,10 @@ from .common import (
     Field,
     GridType,
     UnitRange,
+    as_non_staggered,
     domain,
+    flip_staggered,
+    is_staggered,
     unit_range,
 )
 from .constructors import FieldConstructor, as_connectivity, as_field, empty, full, ones, zeros
@@ -122,6 +125,9 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "Domain",
     "unit_range",
     "UnitRange",
+    "is_staggered",
+    "flip_staggered",
+    "as_non_staggered",
     # from constructors
     "FieldConstructor",
     "empty",

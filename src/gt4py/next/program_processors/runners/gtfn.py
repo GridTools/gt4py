@@ -90,16 +90,16 @@ def extract_connectivity_args(
     # This is currently true only because when hashing offset provider dicts,
     # the keys' order is taken into account. Any modification to the hashing
     # of offset providers may break this assumption here.
-    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
-        (ndarray, zero_origin)
-        for conn in offset_provider.values()
-        if (ndarray := getattr(conn, "ndarray", None)) is not None
-    ]
     assert all(
         common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
         for conn in offset_provider.values()
         if hasattr(conn, "ndarray")
     )
+    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
+        (conn.ndarray, zero_origin)
+        for conn in offset_provider.values()
+        if common.is_neighbor_table(conn)
+    ]
 
     return args
 
