@@ -57,6 +57,9 @@ ShapeTs = TypeVarTuple("ShapeTs")
 class Dims(tuple[Unpack[ShapeTs]]): ...
 
 
+class XTuple(tuple[Unpack[ShapeTs]]): ...
+
+
 DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
 
 Tag: TypeAlias = str

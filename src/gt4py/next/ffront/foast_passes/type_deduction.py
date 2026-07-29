@@ -633,6 +633,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         err_msg = f"Unsupported operand type(s) for {node.op}: '{left.type}' and '{right.type}'."
 
+        if isinstance(left.type, (ts.XTupleType, ts.XVarArgType)) or isinstance(
+            right.type, (ts.XTupleType, ts.XVarArgType)
+        ):
+            return self._deduce_elementwise_binop_type(node, left=left, right=right)
+
         if isinstance(left.type, (ts.ScalarType, ts.FieldType)) and isinstance(
             right.type, (ts.ScalarType, ts.FieldType)
         ):
@@ -687,6 +692,114 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return ts.DomainType(dims=promote_dims(left.type.dims, right.type.dims))
         else:
             raise errors.DSLError(node.location, err_msg)
+
+    def _deduce_elementwise_binop_type(
+        self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr
+    ) -> ts.XTupleType | ts.XVarArgType:
+        def operand_with_type(operand: foast.Expr, type_: ts.TypeSpec) -> foast.Expr:
+            return foast.Constant(value=None, location=operand.location, type=type_)
+
+        def tuple_element_type(
+            type_: ts.TypeSpec,
+        ) -> ts.DataType | ts.DimensionType | ts.DeferredType:
+            if not isinstance(type_, (ts.DataType, ts.DimensionType, ts.DeferredType)):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' produced unsupported tuple element type "
+                    f"'{type_}'.",
+                )
+            return type_
+
+        def vararg_element_type(type_: ts.TypeSpec) -> ts.DataType:
+            if not isinstance(type_, ts.DataType):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' produced unsupported variadic tuple "
+                    f"element type '{type_}'.",
+                )
+            return type_
+
+        def deduce(left_type: ts.TypeSpec, right_type: ts.TypeSpec) -> ts.TypeSpec:
+            for type_ in (left_type, right_type):
+                if isinstance(type_, (ts.TupleType, ts.VarArgType)) and not isinstance(
+                    type_, (ts.XTupleType, ts.XVarArgType)
+                ):
+                    raise errors.DSLError(
+                        node.location,
+                        f"Element-wise operator '{node.op}' requires tuple operands to be 'XTuple', "
+                        f"got '{type_}'.",
+                    )
+
+            if isinstance(left_type, ts.XTupleType) and isinstance(right_type, ts.XTupleType):
+                if len(left_type.types) != len(right_type.types):
+                    raise errors.DSLError(
+                        node.location,
+                        f"Element-wise operator '{node.op}' requires tuple operands to have the "
+                        f"same structure, got '{left.type}' and '{right.type}'.",
+                    )
+                return ts.XTupleType(
+                    types=[
+                        tuple_element_type(deduce(left_el_type, right_el_type))
+                        for left_el_type, right_el_type in zip(
+                            left_type.types, right_type.types, strict=True
+                        )
+                    ]
+                )
+
+            if isinstance(left_type, ts.XTupleType) and isinstance(right_type, ts.XVarArgType):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' can not be applied between a fixed-length "
+                    f"tuple and a variable-length tuple: '{left.type}' and '{right.type}'.",
+                )
+            if isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XTupleType):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' can not be applied between a variable-length "
+                    f"tuple and a fixed-length tuple: '{left.type}' and '{right.type}'.",
+                )
+
+            if isinstance(left_type, ts.XTupleType):
+                return ts.XTupleType(
+                    types=[
+                        tuple_element_type(deduce(left_el_type, right_type))
+                        for left_el_type in left_type.types
+                    ]
+                )
+            if isinstance(right_type, ts.XTupleType):
+                return ts.XTupleType(
+                    types=[
+                        tuple_element_type(deduce(left_type, right_el_type))
+                        for right_el_type in right_type.types
+                    ]
+                )
+
+            if isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XVarArgType):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' can not be applied between two "
+                    f"variable-length tuples: '{left.type}' and '{right.type}'.",
+                )
+            if isinstance(left_type, ts.XVarArgType):
+                return ts.XVarArgType(
+                    element_type=vararg_element_type(deduce(left_type.element_type, right_type))
+                )
+            if isinstance(right_type, ts.XVarArgType):
+                return ts.XVarArgType(
+                    element_type=vararg_element_type(deduce(left_type, right_type.element_type))
+                )
+
+            result_type = self._deduce_binop_type(
+                node,
+                left=operand_with_type(left, left_type),
+                right=operand_with_type(right, right_type),
+            )
+            assert result_type is not None
+            return result_type
+
+        result = deduce(left.type, right.type)
+        assert isinstance(result, (ts.XTupleType, ts.XVarArgType))
+        return result
 
     def _check_operand_dtypes_match(
         self, node: foast.BinOp | foast.Compare, left: foast.Expr, right: foast.Expr

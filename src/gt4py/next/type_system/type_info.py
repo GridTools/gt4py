@@ -470,10 +470,16 @@ def is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec) -> bool:
             is_compatible &= type_a.defined_dims == type_b.defined_dims
         is_compatible &= type_a.element_type == type_b.element_type
     elif isinstance(type_a, ts.TupleType) and isinstance(type_b, ts.TupleType):
+        if type(type_a) is not type(type_b):
+            return False
         if len(type_a.types) != len(type_b.types):
             return False
         for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
             is_compatible &= is_compatible_type(el_type_a, el_type_b)
+    elif isinstance(type_a, ts.VarArgType) and isinstance(type_b, ts.VarArgType):
+        if type(type_a) is not type(type_b):
+            return False
+        is_compatible &= is_compatible_type(type_a.element_type, type_b.element_type)
     elif isinstance(type_a, ts.NamedCollectionType) and isinstance(type_b, ts.NamedCollectionType):
         if type_a.keys != type_b.keys:
             return False
@@ -554,8 +560,12 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     ):
         return True
     if isinstance(symbol_type, ts.VarArgType) and isinstance(to_type, ts.VarArgType):
+        if type(symbol_type) is not type(to_type):
+            return False
         return is_concretizable(symbol_type.element_type, to_type.element_type)
     if isinstance(symbol_type, ts.VarArgType) and isinstance(to_type, ts.TupleType):
+        if isinstance(symbol_type, ts.XVarArgType) != isinstance(to_type, ts.XTupleType):
+            return False
         if len(to_type.types) == 0 or (
             all(type_ == to_type.types[0] for type_ in to_type.types)
             and is_concretizable(symbol_type.element_type, to_type.types[0])

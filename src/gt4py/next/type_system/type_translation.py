@@ -189,6 +189,27 @@ def from_type_hint(
     )
 
     match canonical_type:
+        case common.XTuple:
+            if (
+                isinstance(args, tuple)
+                and len(args) > 0
+                and not any(arg is Ellipsis for arg in args)
+            ):
+                tuple_types = [from_type_hint_same_ns(arg) for arg in args]
+                assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
+                return ts.XTupleType(types=tuple_types)
+            elif isinstance(args, tuple) and len(args) == 2 and args[1] is Ellipsis:
+                return ts.XVarArgType(element_type=from_type_hint_same_ns(args[0]))
+            elif args is None or (isinstance(args, tuple) and len(args) == 0):
+                return ts.DeferredType(constraint=ts.XTupleType)
+            else:
+                raise ValueError(
+                    f"XTuple annotation '{type_hint}' must either "
+                    f"be a list of concrete arguments (e.g. 'XTuple[int]'), "
+                    f"be a variadic tuple (e.g. 'XTuple[int, ...]'), "
+                    f"or have no arguments (e.g. 'XTuple')."
+                )
+
         case builtins.tuple:
             if (
                 isinstance(args, tuple)

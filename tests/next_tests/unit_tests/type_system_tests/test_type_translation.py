@@ -87,6 +87,20 @@ def _make_type_string_for_container(cls: type) -> str:
             ),
         ),
         (
+            gtx.XTuple[bool, typing.Tuple[int, float]],
+            ts.XTupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                    ts.TupleType(
+                        types=[
+                            ts.ScalarType(kind=ts.ScalarKind.INT64),
+                            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                        ]
+                    ),
+                ]
+            ),
+        ),
+        (
             gtx.Field[[IDim], float],
             ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         ),
@@ -219,6 +233,9 @@ def test_invalid_symbol_types():
     )
     assert type_translation.from_type_hint(typing.Tuple["float", ...]) == ts.VarArgType(
         element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+    assert type_translation.from_type_hint(gtx.XTuple[int, ...]) == ts.XVarArgType(
+        element_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
     )
 
     # Fields

@@ -31,6 +31,7 @@ from .common import (
     Field,
     GridType,
     UnitRange,
+    XTuple,
     domain,
     unit_range,
 )
@@ -115,6 +116,7 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "DimensionKind",
     "Dims",
     "Field",
+    "XTuple",
     "CartesianConnectivity",
     "Connectivity",
     "GridType",
