@@ -119,18 +119,24 @@ def make_dace_backend(
         else None
     }
 
-    if external_memory_allocator is not None:
-        expected_mode = gtx_transformations.TransientMemoryMode.EXTERNAL
-        if "transient_memory_mode" in optimization_args:
-            if (
-                transient_memory_mode := optimization_args["transient_memory_mode"]
-            ) is not expected_mode:
-                warnings.warn(
-                    f"External memory allocator provided but 'transient_memory_mode' is '{transient_memory_mode}', it requires '{expected_mode}'.",
-                    stacklevel=2,
-                )
-        else:
-            optimization_args["transient_memory_mode"] = expected_mode
+    if external_memory_allocator is None:
+        if (
+            optimization_args.get("transient_memory_mode")
+            is gtx_transformations.TransientMemoryMode.EXTERNAL
+        ):
+            raise ValueError(
+                "External memory allocator must be provided when 'transient_memory_mode' is 'EXTERNAL'."
+            )
+    elif transient_memory_mode := optimization_args.get("transient_memory_mode"):
+        if transient_memory_mode is not gtx_transformations.TransientMemoryMode.EXTERNAL:
+            warnings.warn(
+                f"External memory allocator provided but 'transient_memory_mode' is '{transient_memory_mode}', it requires '{gtx_transformations.TransientMemoryMode.EXTERNAL}'.",
+                stacklevel=2,
+            )
+    else:
+        optimization_args["transient_memory_mode"] = (
+            gtx_transformations.TransientMemoryMode.EXTERNAL
+        )
 
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
@@ -138,7 +144,6 @@ def make_dace_backend(
         external_memory_allocator=external_memory_allocator,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
-        otf_workflow__compilation__external_memory_allocator=external_memory_allocator,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
