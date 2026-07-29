@@ -479,7 +479,7 @@ url = 'https://gridtools.github.io/pypi/'
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
-  {git = "https://github.com/philip-paul-mueller/dace", branch = "nanobind-compiled-sdfg"}
+  {git = "https://github.com/philip-paul-mueller/dace", branch = "nanobind-compiled-sdfg-work"}
 ]
 
 # -- versioningit --
