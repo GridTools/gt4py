@@ -18,3 +18,17 @@ def test_simple():
     expected = ir.SymRef(id="deref")
     actual = EtaReduction().visit(testee)
     assert actual == expected
+
+
+def test_param_referenced_in_fun():
+    # `λ(x) → (λ(y) → x)(x)` must not be reduced: `x` occurs free in the called function.
+    testee = ir.Lambda(
+        params=[ir.Sym(id="x")],
+        expr=ir.FunCall(
+            fun=ir.Lambda(params=[ir.Sym(id="y")], expr=ir.SymRef(id="x")),
+            args=[ir.SymRef(id="x")],
+        ),
+    )
+    expected = testee
+    actual = EtaReduction().visit(testee)
+    assert actual == expected

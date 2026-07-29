@@ -8,10 +8,11 @@
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
 
 
 class EtaReduction(PreserveLocationVisitor, NodeTranslator):
-    """Eta reduction: simplifies `λ(args...) → f(args...)` to `f`."""
+    """Eta reduction: simplifies `λ(args...) → f(args...)` to `f`, if `args` do not occur in `f`."""
 
     def visit_Lambda(self, node: ir.Lambda) -> ir.Node:
         if (
@@ -21,6 +22,7 @@ class EtaReduction(PreserveLocationVisitor, NodeTranslator):
                 isinstance(a, ir.SymRef) and p.id == a.id
                 for p, a in zip(node.params, node.expr.args)
             )
+            and not collect_symbol_refs(node.expr.fun, [p.id for p in node.params])
         ):
             return self.visit(node.expr.fun)
 
