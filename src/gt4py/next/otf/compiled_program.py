@@ -429,37 +429,86 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
         try:
             compiled_program = self.compiled_programs[key]
+        except KeyError:
+            # The handler is empty on purpose: everything that could raise while it is active
+            # would be chained to this `KeyError`, whose opaque key then dominates the traceback
+            # and hides the actual failure. Leaving the handler clears the exception context.
+            pass
+        else:
+            with compiled_program_call_context(self, key, args, kwargs, offset_provider):
+                compiled_program(*args, **kwargs, offset_provider=offset_provider)
+            return
 
-        except KeyError as e:
-            if self._finish_compilation_job(key):
-                compiled_program = self.compiled_programs[key]
-            elif enable_jit:
-                assert self.argument_descriptor_mapping is not None
-                self._compile_variant(
-                    argument_descriptors=_make_argument_descriptors(
-                        self.program_type, self.argument_descriptor_mapping, args, kwargs
-                    ),
-                    # note: it is important to use the args before named collections are extracted
-                    #  as otherwise the implicit program generation from an operator fails
-                    arg_specialization_info=(
-                        tuple(type_translation.from_value(arg) for arg in canonical_args),
-                        {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
-                    ),
-                    offset_provider=offset_provider,
-                    call_key=key,
+        self._dispatch_miss(
+            key, args, kwargs, canonical_args, canonical_kwargs, offset_provider, enable_jit
+        )
+
+    def _dispatch_miss(
+        self,
+        key: CompiledProgramsKey,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        canonical_args: tuple[Any, ...],
+        canonical_kwargs: dict[str, Any],
+        offset_provider: common.OffsetProvider,
+        enable_jit: bool,
+    ) -> None:
+        """
+        Make the variant for `key` available and call it, or report why that is not possible.
+
+        Must be called outside of the `except KeyError` handler of `__call__`, such that failures
+        here are not chained to the dispatch miss.
+        """
+        if not self._finish_compilation_job(key):
+            if not enable_jit:
+                raise RuntimeError(
+                    f"No program compiled for this set of static arguments of "
+                    f"'{self.definition.__name__}'{self._describe_argument_descriptors(key[0])}."
+                    " Note that a variant is also selected by the identity of the"
+                    " 'offset_provider' entries and, for generic programs, by the argument types."
                 )
-                return self(
-                    *canonical_args,
-                    offset_provider=offset_provider,
-                    enable_jit=False,
-                    **canonical_kwargs,
-                )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
+            assert self.argument_descriptor_mapping is not None
+            self._compile_variant(
+                argument_descriptors=_make_argument_descriptors(
+                    self.program_type, self.argument_descriptor_mapping, args, kwargs
+                ),
+                # note: it is important to use the args before named collections are extracted
+                #  as otherwise the implicit program generation from an operator fails
+                arg_specialization_info=(
+                    tuple(type_translation.from_value(arg) for arg in canonical_args),
+                    {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
+                ),
+                offset_provider=offset_provider,
+                call_key=key,
+            )
 
-            else:
-                raise RuntimeError("No program compiled for this set of static arguments.") from e
+        return self(
+            *canonical_args, offset_provider=offset_provider, enable_jit=False, **canonical_kwargs
+        )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call
 
-        with compiled_program_call_context(self, key, args, kwargs, offset_provider):
-            compiled_program(*args, **kwargs, offset_provider=offset_provider)
+    def _describe_argument_descriptors(self, descriptor_values: tuple[Hashable, ...]) -> str:
+        exprs = [
+            expr
+            for descriptor_cls, arg_exprs in (self.argument_descriptor_mapping or {}).items()
+            for arg_expr in arg_exprs
+            for expr in descriptor_cls.attribute_extractor_exprs(arg_expr).values()
+        ]
+        if not exprs:
+            return ""
+        return ": " + ", ".join(
+            f"{expr}={value!r}" for expr, value in zip(exprs, descriptor_values, strict=True)
+        )
+
+    def _load_artifact(
+        self, artifact_future: concurrent.futures.Future[stages.CompilationArtifact]
+    ) -> stages.ExecutableProgram:
+        artifact = artifact_future.result()  # re-raises errors from the compilation worker
+        try:
+            return artifact.load()
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load the compiled program '{self.definition.__name__}'."
+            ) from e
 
     @functools.cached_property
     def _primitive_values_extractor(self) -> Callable | None:
@@ -581,9 +630,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             return False
 
         artifact_future = self._compilation_jobs.pop(key)
-        assert isinstance(artifact_future, concurrent.futures.Future)
         assert key not in self.compiled_programs
-        self.compiled_programs[key] = artifact_future.result().load()
+        self.compiled_programs[key] = self._load_artifact(artifact_future)
         return True
 
     def _compile_variant(
@@ -660,7 +708,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.
-            self.compiled_programs[key] = future.result().load()
+            self.compiled_programs[key] = self._load_artifact(future)
         else:
             self._compilation_jobs[key] = future
             _ongoing_compilations[future] = (

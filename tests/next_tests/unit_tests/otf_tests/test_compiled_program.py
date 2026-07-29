@@ -7,8 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
 import collections
+import concurrent.futures
 import contextvars
 import gc
+import traceback
 import weakref
 
 import pytest
@@ -173,6 +175,75 @@ def test_different_static_args_break_same_prg_after_static_params_change(testee_
         match="Argument descriptor StaticArg must be the same for all compiled programs",
     ):
         prg.compile(cond=[True], offset_provider={})
+
+
+@dataclasses.dataclass
+class _DeferredRunner:
+    """A runner handing out futures that the test resolves by hand."""
+
+    futures: list[concurrent.futures.Future] = dataclasses.field(default_factory=list)
+
+    def submit(self, task):
+        self.futures.append(concurrent.futures.Future())
+        return self.futures[-1]
+
+    def shutdown(self, wait: bool = True) -> None:
+        pass
+
+
+@pytest.fixture
+def deferred_runner(monkeypatch):
+    runner = _DeferredRunner()
+    monkeypatch.setattr(compiled_program.runners, "get_default_runner", lambda: runner)
+    return runner
+
+
+def _formatted_traceback(error: BaseException) -> str:
+    return "".join(traceback.format_exception(type(error), error, error.__traceback__))
+
+
+def test_dispatch_miss_reports_load_error_as_cause(testee_prog, deferred_runner):
+    class _StaleArtifact:
+        def load(self):
+            raise OSError(116, "Stale file handle")
+
+    testee = testee_prog.compile(cond=[True], offset_provider={})
+    (future,) = deferred_runner.futures
+    future.set_result(_StaleArtifact())
+
+    with pytest.raises(
+        RuntimeError, match="Failed to load the compiled program 'prog'"
+    ) as exc_info:
+        testee(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert "KeyError" not in _formatted_traceback(exc_info.value)
+
+
+def test_dispatch_miss_propagates_compilation_error(testee_prog, deferred_runner):
+    class _WorkerError(Exception):
+        pass
+
+    testee = testee_prog.compile(cond=[True], offset_provider={})
+    (future,) = deferred_runner.futures
+    future.set_exception(_WorkerError("compilation failed in the worker"))
+
+    with pytest.raises(_WorkerError) as exc_info:
+        testee(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+
+    assert exc_info.value.__context__ is None
+    assert "KeyError" not in _formatted_traceback(exc_info.value)
+
+
+def test_dispatch_miss_without_jit_names_static_args(testee_prog, deferred_runner):
+    testee = testee_prog.with_compilation_options(enable_jit=False).compile(
+        cond=[True], offset_provider={}
+    )
+
+    with pytest.raises(RuntimeError, match=r"No program compiled.*'prog'.*cond=False") as exc_info:
+        testee(cond=False, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+
+    assert "KeyError" not in _formatted_traceback(exc_info.value)
 
 
 def _verify_program_has_expected_domain(
