@@ -8,6 +8,7 @@
 
 """Test the bindings stage of the dace backend workflow."""
 
+import dataclasses
 import re
 import unittest.mock as mock
 
@@ -20,14 +21,13 @@ dace = pytest.importorskip("dace")
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf import runners
+from gt4py.next.otf import definitions, runners
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
     auto_optimize as gtx_auto_optimize,
 )
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
-    translation as gtx_dace_translation,
 )
 
 from next_tests.integration_tests import cases, cases_utils
@@ -332,18 +332,25 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     out = cases.allocate(test_case, testee, "out")()
 
     captured_sdfg: dace.SDFG | None = None
-    gt_generate_sdfg = gtx_dace_translation.DaCeTranslator.generate_sdfg
+    translation_step = custom_backend.executor.translation.step
 
-    def mocked_generate_sdfg(self, *args, **kwargs) -> dace.SDFG:
+    def mocked_translator(inp: definitions.CompilableProgramDef) -> dace.SDFG:
         nonlocal captured_sdfg
-        result = gt_generate_sdfg(self, *args, **kwargs)
-        captured_sdfg = result
+        result = translation_step(inp)
+        captured_sdfg = dace.SDFG.from_json(result.source_code)
         return result
+
+    custom_backend = dataclasses.replace(
+        custom_backend,
+        executor=dataclasses.replace(
+            custom_backend.executor,
+            translation=mocked_translator,
+        ),
+    )
 
     def no_op_top_level_map_processing(*, sdfg: dace.SDFG, **kwargs) -> dace.SDFG:
         return sdfg
 
-    monkeypatch.setattr(gtx_dace_translation.DaCeTranslator, "generate_sdfg", mocked_generate_sdfg)
     monkeypatch.setattr(
         gtx_auto_optimize,
         "_gt_auto_process_top_level_maps",
