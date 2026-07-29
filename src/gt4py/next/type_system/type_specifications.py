@@ -71,8 +71,7 @@ class IndexType(TypeSpec):
 
 
 class OffsetType(TypeSpec):
-    # TODO(havogt): replace by ConnectivityType, once it can be built without an offset provider
-    # (`skip_value`/`dtype`/`max_neighbors`) and has a home for `name`.
+    # TODO(havogt): replace by ConnectivityType
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
     #: `None` for the offsets synthesized from `Dim + idx` dimension arithmetic, which are
