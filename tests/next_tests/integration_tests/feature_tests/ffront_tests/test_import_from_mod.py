@@ -20,7 +20,9 @@ from next_tests.integration_tests.cases import (
     IDim,
     IHalfDim,
     KDim,
+    V2EDim,
 )
+from next_tests.integration_tests.cases import E2V as RenamedE2V, V2E as RenamedV2E
 
 from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
@@ -97,6 +99,33 @@ def test_import_offset_module_unstructured_shift(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: np.sum(a[v2e_table], axis=1, where=v2e_table != common._DEFAULT_SKIP_VALUE),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_import_renamed_offset_unstructured_shift(unstructured_case):
+    @gtx.field_operator
+    def testee(a: cases.EField) -> cases.VField:
+        return neighbor_sum(a(RenamedV2E), axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.sum(a[v2e_table], axis=1, where=v2e_table != common._DEFAULT_SKIP_VALUE),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_import_renamed_offset_sparse_shift(unstructured_case):
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.EField:
+        return a(RenamedE2V[0])
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: a[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]],
     )
 
 

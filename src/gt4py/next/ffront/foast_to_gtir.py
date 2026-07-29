@@ -295,14 +295,16 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         for arg in node.args:
             match arg:
                 # `field(Off[idx])`
-                case foast.Subscript(value=foast.Name() as offset_name, index=index):
+                case foast.Subscript(
+                    value=foast.LocatedNode(type=ts.OffsetType(name=str() as offset_name)),
+                    index=index,
+                ):
                     # Constant folding to a `Literal` ensures that `index` becomes an `OffsetLiteral`,
                     # which can be generated as compile-time value backend code.
                     new_index = constant_folding.ConstantFolding.apply(self.visit(index, **kwargs))
                     assert isinstance(new_index, itir.Literal)
-                    assert isinstance(offset_name.type, ts.OffsetType)
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(im.deref(im.shift(offset_name.id, new_index)("__it")))
+                        im.lambda_("__it")(im.deref(im.shift(offset_name, new_index)("__it")))
                     )(current_expr)
                 # `field(Dim + idx)` (where `idx` is integer or half integer)
                 case foast.BinOp(
@@ -322,14 +324,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                             )
                         )
                     )(current_expr)
-                # `field(Off)` or `field(mod.Off)`
-                case foast.Name(id=offset_name) | foast.Attribute(attr=offset_name):
-                    # only a single unstructured shift is supported so returning here is fine even though we
-                    # are in a loop.
-                    assert len(node.args) == 1 and len(arg.type.target) > 1  # type: ignore[attr-defined] # ensured by pattern
-                    return im.as_fieldop_neighbors(
-                        str(offset_name), self.visit(node.func, **kwargs)
-                    )
                 # `field(as_offset(Off, offset_field))`
                 case foast.Call(func=foast.Name(id="as_offset")):
                     func_args = arg
@@ -344,6 +338,14 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                             )
                         )
                     )(current_expr, offset_field)
+                # `field(Off)`
+                case foast.LocatedNode(
+                    type=ts.OffsetType(name=str() as offset_name, target=[_, _])
+                ):
+                    # only a single unstructured shift is supported so returning here is fine even though we
+                    # are in a loop.
+                    assert len(node.args) == 1
+                    return im.as_fieldop_neighbors(offset_name, self.visit(node.func, **kwargs))
                 case _:
                     raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
