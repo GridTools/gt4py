@@ -92,6 +92,12 @@ def _map_field_value(value: Any, transform: Callable[[ts.TypeSpec], ts.TypeSpec]
     return value
 
 
+def _field_names(symbol_type: ts.TypeSpec) -> Iterator[str]:
+    # `__datamodel_fields__` is a namespace exposing each field as an attribute, so a field
+    # named like one of its accessors (e.g. `NamedCollectionType.keys`) shadows that accessor.
+    yield from vars(type(symbol_type).__datamodel_fields__)
+
+
 def iter_type_children(symbol_type: ts.TypeSpec) -> Iterator[ts.TypeSpec]:
     """
     Iterate over the immediate `TypeSpec` children of ``symbol_type``, in field order.
@@ -103,7 +109,7 @@ def iter_type_children(symbol_type: ts.TypeSpec) -> Iterator[ts.TypeSpec]:
     callable wrapper types (field operators etc.) -- including `TypeSpec` subclasses defined
     outside this module, without requiring registration here.
     """
-    for name in type(symbol_type).__datamodel_fields__.keys():
+    for name in _field_names(symbol_type):
         value = getattr(symbol_type, name)
         if isinstance(value, ts.TypeSpec):
             yield value
@@ -126,7 +132,7 @@ def map_type_children(
     `substitute_type_vars`, ...).
     """
     changes: dict[str, Any] = {}
-    for name in type(symbol_type).__datamodel_fields__.keys():
+    for name in _field_names(symbol_type):
         value = getattr(symbol_type, name)
         new_value = _map_field_value(value, transform)
         if new_value is not value:

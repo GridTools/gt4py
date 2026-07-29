@@ -384,6 +384,13 @@ def is_generic_cases() -> list[tuple[ts.TypeSpec, bool]]:
             returns=ts.VoidType(),
         )
 
+    def named_collection_type(types: list[ts.TypeSpec]) -> ts.NamedCollectionType:
+        return ts.NamedCollectionType(
+            types=types,
+            keys=[f"f{i}" for i in range(len(types))],
+            original_python_type="some.module:SomeClass",
+        )
+
     return [
         (deferred_type, True),
         (float_type, False),
@@ -392,6 +399,8 @@ def is_generic_cases() -> list[tuple[ts.TypeSpec, bool]]:
         # `DeferredType` nested inside a composite type, e.g. the program context signature
         #  of a scan operator with tuple arguments
         (ts.TupleType(types=[float_type, deferred_type]), True),
+        (named_collection_type([float_type, concrete_field_type]), False),
+        (named_collection_type([float_type, deferred_type]), True),
         (function_type([concrete_field_type]), False),
         (function_type([deferred_type]), True),
         (function_type([ts.TupleType(types=[deferred_type])]), True),
