@@ -322,8 +322,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                             )
                         )
                     )(current_expr)
-                # `field(Off)`
-                case foast.Name(id=offset_name):
+                # `field(Off)` or `field(mod.Off)`
+                case foast.Name(id=offset_name) | foast.Attribute(attr=offset_name):
                     # only a single unstructured shift is supported so returning here is fine even though we
                     # are in a loop.
                     assert len(node.args) == 1 and len(arg.type.target) > 1  # type: ignore[attr-defined] # ensured by pattern
