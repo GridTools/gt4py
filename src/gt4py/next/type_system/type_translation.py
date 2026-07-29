@@ -13,12 +13,13 @@ from __future__ import annotations
 import builtins
 import collections.abc
 import dataclasses
+import enum
 import functools
 import pkgutil
 import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional
+from typing import Any, ForwardRef, Optional, TypeAlias
 
 import numpy as np
 import numpy.typing as npt
@@ -211,7 +212,7 @@ def from_type_hint(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')."
                 ) from error
             if not isinstance(dtype, ts.ScalarType) or dtype.kind == ts.ScalarKind.STRING:
-                raise ValueError("Field dtype argument must be a scalar type (got '{dtype}').")
+                raise ValueError(f"Field dtype argument must be a scalar type (got '{dtype}').")
             return ts.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
@@ -258,15 +259,36 @@ def from_type_hint(
     raise ValueError(f"'{type_hint}' type is not supported.")
 
 
-class UnknownPythonObject(ts.TypeSpec):
-    _object: Any
+ConstantPythonNamespaceObject: TypeAlias = eve_utils.FrozenNamespace | enum.EnumMeta
+PythonNamespaceObject: TypeAlias = ConstantPythonNamespaceObject | types.ModuleType
+
+
+class NamespaceProxy(ts.TypeSpec):
+    _object: PythonNamespaceObject
 
     def __getattr__(self, key: str) -> ts.TypeSpec:
-        value = getattr(self._object, key)
-        return from_value(value)
+        # `__getattr__` is called only when normal lookup fails. Two guards are
+        # needed so this never recurses:
+        #   1. Dunder probes: pickle / copy / cloudpickle look up things like
+        #      ``__setstate__``, ``__reduce_ex__``, ``__deepcopy__`` on freshly-
+        #      constructed instances *before* ``_object`` has been restored.
+        #      Forwarding them to ``self._object`` is both wrong and unbounded —
+        #      ``self._object`` itself would re-enter this method since
+        #      ``_object`` has not been assigned yet.
+        #   2. Any other attribute that arrives here before ``_object`` is bound:
+        #      use ``object.__getattribute__`` to consult the actual instance
+        #      dict so we reach base-class ``AttributeError`` rather than
+        #      recursing.
+        if key.startswith("_"):
+            raise AttributeError(key)
+        try:
+            obj = object.__getattribute__(self, "_object")
+        except AttributeError:
+            raise AttributeError(key) from None
+        return from_value(getattr(obj, key))
 
-    def __deepcopy__(self, _: dict[int, Any]) -> UnknownPythonObject:
-        return UnknownPythonObject(self._object)  # don't deep copy the module
+    def __deepcopy__(self, _: dict[int, Any]) -> NamespaceProxy:
+        return NamespaceProxy(self._object)  # don't deep copy the module
 
 
 def from_value(value: Any) -> ts.TypeSpec:
@@ -317,8 +339,8 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)
-    elif isinstance(value, (types.ModuleType, eve_utils.FrozenNamespace)):
-        return UnknownPythonObject(value)
+    elif isinstance(value, PythonNamespaceObject):
+        return NamespaceProxy(value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)

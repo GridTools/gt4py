@@ -2,6 +2,95 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.12] - 2026-07-10
+
+### Cartesian
+
+- Improve DaCe loop scheduling for CPU and CUDA backends.
+- Generate cleaner index-bound expressions in the DaCe backend.
+- Use descriptive loop names in the DaCe schedule tree for easier profiling and debugging.
+- Fix out-of-bounds reads for stencils using K-axis interfaces without extra vertical padding.
+
+### Next
+
+See commit history.
+
+## [1.1.11] - 2026-06-18
+
+### General
+
+- Add minimal harness for coding agents.
+- Improve the infrastructure for development scripts.
+
+### Cartesian
+
+- Add a DaCe GPU backend with `IJK`-loop layout.
+- Change DaCe GPU backends to unit alignment, enabling Fortran-style memory mapping and reducing memory footprint.
+- Change DaCe backends to nest the sequential vertical `K`-loop inside the parallel `IJ`-kernel on parallel targets.
+- Fix format of `extra` flags for device compilation.
+
+### Next
+
+See commit history.
+
+## [1.1.10] - 2026-05-22
+
+### General
+
+- Drop support for NumPy 1.x
+
+### Cartesian
+
+- Front-end improvements to interval parsing.
+- Change field indexation to always require full indexation.
+- Fix array lifetime for frozen stencil SDFGs.
+- Use utf-8 encoding for generated code.
+- Fix hashing used in stencil program cache.
+- Enforce cartesian layout to be given precedence in allocation striding.
+- Bump `pybind11` to `3.0.3` to fix issue in previous `3.x` version.
+- Disable OpenMP for GPU backends.
+- Fix setting of CXX compiler flags.
+
+### Next
+
+See commit history.
+
+## [1.1.9] - 2026-04-01
+
+### Cartesian
+
+- Fix loop re-ordering in schedule tree.
+- Fix scalarization of temporaries
+- Redundant region syntax removed.
+
+### Next
+
+See commit history.
+
+## [1.1.8] - 2026-03-25
+
+### Cartesian
+
+- Fix default compile flags for for various compilers.
+- Generate numpy >= 2.0 compatible code in the debug backend.
+- Support for data dims of size one in dace backends.
+
+### Next
+
+See commit history.
+
+## [1.1.7] - 2026-03-11
+
+### Cartesian
+
+- Leverage unrolling of integer power calls, in dace backends, for exponents 1, 2, and 3.
+- Faster SDFG construction in dace backends.
+- Introduce default compiler flags.
+
+### Next
+
+See commit history.
+
 ## [1.1.6] - 2026-02-27
 
 ### Cartesian

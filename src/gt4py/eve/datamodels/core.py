@@ -13,6 +13,7 @@ Check :mod:`eve.datamodels` for additional information.
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import functools
 import sys
@@ -98,6 +99,23 @@ class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
     __post_init__: ClassVar[Callable[[DataModelTP], None]] = cast(
         Callable[["DataModelTP"], None], None
     )
+
+
+class DataModelABC(abc.ABC):
+    """ABC for data models."""
+
+    __datamodel_fields__: ClassVar[utils.FrozenNamespace[Attribute]]
+    __datamodel_params__: ClassVar[utils.FrozenNamespace[Any]]
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        # Treat any data model as a virtual subclass of `DataModelABC` itself.
+        # Everything else (in particular real subclasses and checks against
+        # derived ABCs) is deferred to the normal MRO-based check by returning
+        # `NotImplemented`.
+        if cls is DataModelABC and is_datamodel(subclass):
+            return True
+        return NotImplemented
 
 
 DataModelT = TypeVar("DataModelT", bound=DataModelTP)

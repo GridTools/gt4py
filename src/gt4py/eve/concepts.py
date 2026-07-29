@@ -11,22 +11,19 @@
 from __future__ import annotations
 
 import copy
-import functools
-import pickle
 import re
+from collections.abc import Callable
 
 from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
 from .datamodels import validators as _validators
 from .extended_typing import (
     Any,
-    Callable,
     ClassVar,
     Dict,
     Final,
     Iterable,
     List,
     Optional,
-    Self,
     Set,
     Tuple,
     Type,
@@ -232,28 +229,3 @@ class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from Da
 
 class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
     pass
-
-
-def eq_nonlocated(a: Node, b: Node) -> bool:
-    """Compare two nodes, ignoring their `SourceLocation` or `SourceLocationGroup`."""
-    return len(utils.ddiff(a, b, exclude_types=[SourceLocation, SourceLocationGroup])) == 0
-
-
-@functools.cache
-def selective_node_pickler(*skipped_fields: str) -> type:
-    """
-    Return a `pickle.Pickler` to serialize a node skipping the given fields in the node or any of
-    its child nodes.
-    """
-
-    class SelectiveNodePickler(pickle.Pickler):
-        def reducer_override(self: Self, obj: Any) -> tuple[type, tuple, tuple] | None:
-            if not isinstance(obj, Node):
-                return NotImplemented  # no override
-            return (
-                obj.__class__,
-                (),
-                tuple((k, v) for k, v in obj.iter_children_items() if k not in skipped_fields),
-            )
-
-    return SelectiveNodePickler

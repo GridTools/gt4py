@@ -8,24 +8,14 @@
 
 import functools
 import types
-from collections.abc import Callable, Iterator
-from typing import (
-    Any,
-    Generic,
-    Literal,
-    Protocol,
-    Sequence,
-    Type,
-    TypeGuard,
-    TypeVar,
-    cast,
-    overload,
-)
+from collections.abc import Callable, Collection, Iterable, Iterator
+from typing import Any, Final, Literal, Sequence, Type, TypeGuard, TypeVar, cast, overload
 
 import numpy as np
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping, utils
-from gt4py.next import common
+from gt4py.next import common, utils as next_utils
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
 
@@ -69,15 +59,14 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     Determine which class should be used to create a compatible concrete type.
 
     Examples:
-    ---------
-    >>> type_class(ts.DeferredType(constraint=ts.ScalarType)).__name__
-    'ScalarType'
+        >>> type_class(ts.DeferredType(constraint=ts.ScalarType)).__name__
+        'ScalarType'
 
-    >>> type_class(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))).__name__
-    'FieldType'
+        >>> type_class(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))).__name__
+        'FieldType'
 
-    >>> type_class(ts.TupleType(types=[])).__name__
-    'TupleType'
+        >>> type_class(ts.TupleType(types=[])).__name__
+        'TupleType'
     """
     if isinstance(symbol_type, ts.DeferredType):
         constraint = symbol_type.constraint
@@ -143,63 +132,53 @@ def primitive_constituents(
     return utils.xiter(constituents_yielder(symbol_type, ()))  # type: ignore[return-value] # why resolved to XIterable[object]?
 
 
-_R = TypeVar("_R", covariant=True)
 _T = TypeVar("_T")
+_C = TypeVar("_C")
 
 
-class TupleConstructorType(Protocol, Generic[_R]):
-    def __call__(self, *args: Any) -> _R: ...
-
-
-def apply_to_primitive_constituents(
-    fun: Callable[..., _T],
-    *symbol_types: ts.TypeSpec,
-    with_path_arg: bool = False,
-    tuple_constructor: TupleConstructorType[_R] = lambda *elements: ts.TupleType(types=[*elements]),  # type: ignore[assignment] # probably related to https://github.com/python/mypy/issues/10854
-    _path: tuple[int, ...] = (),
-) -> _T | _R:
-    """
-    Apply function to all primitive constituents of a type.
-
-    >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    >>> tuple_type = ts.TupleType(types=[int_type, int_type])
-    >>> print(
-    ...     apply_to_primitive_constituents(
-    ...         lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type),
-    ...         tuple_type,
-    ...     )
-    ... )
-    tuple[Field[[], int64], Field[[], int64]]
-
-    >>> apply_to_primitive_constituents(
-    ...     lambda primitive_type, path: (path, primitive_type),
-    ...     tuple_type,
-    ...     with_path_arg=True,
-    ...     tuple_constructor=lambda *elements: dict(elements),
-    ... )
-    {(0,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 8>, shape=None)}
-    """
-    if isinstance(symbol_types[0], ts.TupleType):
-        assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
-
-        return tuple_constructor(
-            *[
-                apply_to_primitive_constituents(
-                    fun,
-                    *el_types,
-                    _path=(*_path, i),
-                    with_path_arg=with_path_arg,
-                    tuple_constructor=tuple_constructor,
-                )
-                for i, el_types in enumerate(
-                    zip(*(symbol_type.types for symbol_type in symbol_types))  # type: ignore[attr-defined]  # ensured by assert above
-                )
-            ]
+def tree_map_type_constructor(
+    value: ts.CollectionTypeSpecT,
+    elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
+) -> ts.CollectionTypeSpecT:
+    return (
+        ts.NamedCollectionType(
+            keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
         )
-    if with_path_arg:
-        return fun(*symbol_types, path=_path)
-    else:
-        return fun(*symbol_types)
+        if isinstance(value, ts.NamedCollectionType)
+        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
+    )
+
+
+@overload
+def tree_map_type(
+    fun: Callable[..., _T], *, with_path_arg: bool = ..., unpack: bool = ...
+) -> Callable[..., _T | ts.CollectionTypeSpec]: ...
+
+
+@overload
+def tree_map_type(
+    fun: Callable[..., _T],
+    *,
+    result_collection_constructor: Callable[..., _C],
+    with_path_arg: bool = ...,
+    unpack: bool = ...,
+) -> Callable[..., _T | _C]: ...
+
+
+def tree_map_type(
+    fun: Callable[..., _T],
+    *,
+    result_collection_constructor: Callable[..., Any] = tree_map_type_constructor,
+    with_path_arg: bool = False,
+    unpack: bool = False,
+) -> Callable[..., Any]:
+    return next_utils.tree_map(
+        fun,
+        collection_type=ts.COLLECTION_TYPE_SPECS,
+        result_collection_constructor=result_collection_constructor,
+        with_path_arg=with_path_arg,
+        unpack=unpack,
+    )
 
 
 def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:
@@ -209,12 +188,13 @@ def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:
     Raise an error if no dtype can be found or the result would be ambiguous.
 
     Examples:
-    ---------
-    >>> print(extract_dtype(ts.ScalarType(kind=ts.ScalarKind.FLOAT64)))
-    float64
+        >>> print(extract_dtype(ts.ScalarType(kind=ts.ScalarKind.FLOAT64)))
+        float64
 
-    >>> print(extract_dtype(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))))
-    bool
+        >>> print(
+        ...     extract_dtype(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)))
+        ... )
+        bool
     """
     match symbol_type:
         case ts.FieldType(dtype=dtype):
@@ -224,51 +204,58 @@ def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.ListType:
     raise ValueError(f"Can not unambiguosly extract data type from '{symbol_type}'.")
 
 
+def _scalar_kinds(scalar_types: tuple[type, ...]) -> frozenset[ts.ScalarKind]:
+    # Derived from the canonical scalar-type tuples in `gt4py._core.definitions` so the two
+    # stay in sync; the `int`/`float` builtins collapse onto their fixed-width kind.
+    return frozenset(ts.ScalarKind[np.dtype(t).name.upper()] for t in scalar_types)
+
+
+_FLOATING_POINT_KINDS: Final[frozenset[ts.ScalarKind]] = _scalar_kinds(core_defs.FLOAT_TYPES)
+_INTEGRAL_KINDS: Final[frozenset[ts.ScalarKind]] = _scalar_kinds(core_defs.INTEGRAL_TYPES)
+
+
+def _is_field_or_scalar_of_kind(symbol_type: ts.TypeSpec, kinds: Collection[ts.ScalarKind]) -> bool:
+    """Check if ``symbol_type`` is a scalar or a field whose dtype kind is in ``kinds``."""
+    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
+        return False
+    dtype = extract_dtype(symbol_type)
+    return isinstance(dtype, ts.ScalarType) and dtype.kind in kinds
+
+
 def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     """
     Check if the dtype of ``symbol_type`` is a floating point type.
 
     Examples:
-    ---------
-    >>> is_floating_point(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-    True
-    >>> is_floating_point(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
-    True
-    >>> is_floating_point(ts.ScalarType(kind=ts.ScalarKind.INT32))
-    False
-    >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
-    True
+        >>> is_floating_point(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+        True
+        >>> is_floating_point(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+        True
+        >>> is_floating_point(ts.ScalarType(kind=ts.ScalarKind.INT32))
+        False
+        >>> is_floating_point(
+        ...     ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+        ... )
+        True
     """
-    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
-        return False
-    return isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType) and dtype.kind in [
-        ts.ScalarKind.FLOAT32,
-        ts.ScalarKind.FLOAT64,
-    ]
+    return _is_field_or_scalar_of_kind(symbol_type, _FLOATING_POINT_KINDS)
 
 
-def is_integer(symbol_type: ts.TypeSpec) -> bool:
+def is_integral_scalar(symbol_type: ts.TypeSpec) -> bool:
     """
-    Check if ``symbol_type`` is an integral type.
+    Check if ``symbol_type`` is an integral scalar (rejecting fields).
 
     Examples:
-    ---------
-    >>> is_integer(ts.ScalarType(kind=ts.ScalarKind.INT32))
-    True
-    >>> is_integer(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
-    False
-    >>> is_integer(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
-    False
+        >>> is_integral_scalar(ts.ScalarType(kind=ts.ScalarKind.INT32))
+        True
+        >>> is_integral_scalar(ts.ScalarType(kind=ts.ScalarKind.UINT64))
+        True
+        >>> is_integral_scalar(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+        False
+        >>> is_integral_scalar(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
+        False
     """
-    return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in {
-        ts.ScalarKind.INT8,
-        ts.ScalarKind.UINT8,
-        ts.ScalarKind.INT16,
-        ts.ScalarKind.UINT16,
-        ts.ScalarKind.INT32,
-        ts.ScalarKind.UINT32,
-        ts.ScalarKind.INT64,
-    }
+    return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in _INTEGRAL_KINDS
 
 
 def is_integral(symbol_type: ts.TypeSpec) -> bool:
@@ -276,47 +263,50 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
     Check if the dtype of ``symbol_type`` is an integral type.
 
     Examples:
-    ---------
-    >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.INT32))
-    True
-    >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
-    False
-    >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
-    True
+        >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.INT32))
+        True
+        >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+        False
+        >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
+        True
     """
-    if not isinstance(symbol_type, (ts.ScalarType, ts.FieldType)):
-        return False
-    return is_integer(extract_dtype(symbol_type))
+    return _is_field_or_scalar_of_kind(symbol_type, _INTEGRAL_KINDS)
 
 
-def is_number(symbol_type: ts.TypeSpec) -> bool:
+def is_arithmetic_scalar(symbol_type: ts.TypeSpec) -> bool:
     """
-    Check if ``symbol_type`` is either intergral or float.
+    Check if ``symbol_type`` is an arithmetic scalar (rejecting fields).
 
     Examples:
-    ---------
-    >>> is_number(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-    True
-    >>> is_number(ts.ScalarType(kind=ts.ScalarKind.INT32))
-    True
-    >>> is_number(ts.ScalarType(kind=ts.ScalarKind.BOOL))
-    False
-    >>> is_number(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
-    False
+        >>> is_arithmetic_scalar(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+        True
+        >>> is_arithmetic_scalar(ts.ScalarType(kind=ts.ScalarKind.INT32))
+        True
+        >>> is_arithmetic_scalar(ts.ScalarType(kind=ts.ScalarKind.BOOL))
+        False
+        >>> is_arithmetic_scalar(
+        ...     ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64))
+        ... )
+        False
     """
     if not isinstance(symbol_type, ts.ScalarType):
         return False
-    # TODO(nfarabullini): re-factor is_arithmetic such that it only checks for scalars
-    #  and the emtpy field pass in an another function
     return is_arithmetic(symbol_type)
 
 
 def is_logical(symbol_type: ts.TypeSpec) -> bool:
-    return (
-        isinstance(symbol_type, (ts.FieldType, ts.ScalarType))
-        and isinstance(dtype := extract_dtype(symbol_type), ts.ScalarType)
-        and dtype.kind is ts.ScalarKind.BOOL
-    )
+    """
+    Check if the dtype of ``symbol_type`` is a boolean type.
+
+    Examples:
+        >>> is_logical(ts.ScalarType(kind=ts.ScalarKind.BOOL))
+        True
+        >>> is_logical(ts.ScalarType(kind=ts.ScalarKind.INT32))
+        False
+        >>> is_logical(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)))
+        True
+    """
+    return _is_field_or_scalar_of_kind(symbol_type, (ts.ScalarKind.BOOL,))
 
 
 def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
@@ -324,15 +314,14 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
     Check if ``symbol_type`` is compatible with arithmetic operations.
 
     Examples:
-    ---------
-    >>> is_arithmetic(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-    True
-    >>> is_arithmetic(ts.ScalarType(kind=ts.ScalarKind.BOOL))
-    False
-    >>> is_arithmetic(ts.ScalarType(kind=ts.ScalarKind.STRING))
-    False
-    >>> is_arithmetic(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
-    True
+        >>> is_arithmetic(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+        True
+        >>> is_arithmetic(ts.ScalarType(kind=ts.ScalarKind.BOOL))
+        False
+        >>> is_arithmetic(ts.ScalarType(kind=ts.ScalarKind.STRING))
+        False
+        >>> is_arithmetic(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
+        True
     """
     return is_floating_point(symbol_type) or is_integral(symbol_type)
 
@@ -358,19 +347,18 @@ def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) ->
     Return True if ``type_`` matches any of the expected or is a tuple of them.
 
     Examples:
-    ---------
-    >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
-    >>> is_type_or_tuple_of_type(field_type, ts.FieldType)
-    True
-    >>> is_type_or_tuple_of_type(
-    ...     ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType)
-    ... )
-    True
-    >>> is_type_or_tuple_of_type(scalar_type, ts.FieldType)
-    False
-    >>> is_type_or_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), ts.FieldType)
-    False
+        >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
+        >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
+        >>> is_type_or_tuple_of_type(field_type, ts.FieldType)
+        True
+        >>> is_type_or_tuple_of_type(
+        ...     ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType)
+        ... )
+        True
+        >>> is_type_or_tuple_of_type(scalar_type, ts.FieldType)
+        False
+        >>> is_type_or_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), ts.FieldType)
+        False
     """
     return all(isinstance(t, expected_type) for t in primitive_constituents(type_))
 
@@ -380,19 +368,18 @@ def is_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> TypeGua
     Return True if ``type_`` matches (nested) tuple of ``expected_type``.
 
     Examples:
-    ---------
-    >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
-    >>> is_tuple_of_type(field_type, ts.FieldType)
-    False
-    >>> is_tuple_of_type(
-    ...     ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType)
-    ... )
-    True
-    >>> is_tuple_of_type(ts.TupleType(types=[scalar_type]), ts.FieldType)
-    False
-    >>> is_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), ts.FieldType)
-    False
+        >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
+        >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
+        >>> is_tuple_of_type(field_type, ts.FieldType)
+        False
+        >>> is_tuple_of_type(
+        ...     ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType)
+        ... )
+        True
+        >>> is_tuple_of_type(ts.TupleType(types=[scalar_type]), ts.FieldType)
+        False
+        >>> is_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), ts.FieldType)
+        False
     """
     return isinstance(type_, ts.TupleType) and is_type_or_tuple_of_type(type_, expected_type)
 
@@ -404,13 +391,12 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
     Scalars are treated as zero-dimensional
 
     Examples:
-    ---------
-    >>> extract_dims(ts.ScalarType(kind=ts.ScalarKind.INT64, shape=[3, 4]))
-    []
-    >>> I = common.Dimension(value="I")
-    >>> J = common.Dimension(value="J")
-    >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
-    [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
+        >>> extract_dims(ts.ScalarType(kind=ts.ScalarKind.INT64, shape=[3, 4]))
+        []
+        >>> I = common.Dimension(value="I")
+        >>> J = common.Dimension(value="J")
+        >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
+        [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
     """
     if isinstance(symbol_type, ts.ScalarType):
         return []
@@ -424,13 +410,14 @@ def is_local_field(type_: ts.FieldType) -> bool:
     Return if `type_` is a field defined on a local dimension.
 
     Examples:
-    ---------
-    >>> V = common.Dimension(value="V")
-    >>> V2E = common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL)
-    >>> is_local_field(ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
-    True
-    >>> is_local_field(ts.FieldType(dims=[V], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
-    False
+        >>> V = common.Dimension(value="V")
+        >>> V2E = common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL)
+        >>> is_local_field(
+        ...     ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64))
+        ... )
+        True
+        >>> is_local_field(ts.FieldType(dims=[V], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
+        False
     """
     return any(dim.kind == common.DimensionKind.LOCAL for dim in type_.dims)
 
@@ -523,41 +510,41 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     Check if ``symbol_type`` can be concretized to ``to_type``.
 
     Examples:
-    ---------
-    >>> is_concretizable(
-    ...     ts.ScalarType(kind=ts.ScalarKind.INT64), to_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
-    ... )
-    True
+        >>> is_concretizable(
+        ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+        ...     to_type=ts.ScalarType(kind=ts.ScalarKind.INT64),
+        ... )
+        True
 
-    >>> is_concretizable(
-    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     to_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-    ... )
-    False
+        >>> is_concretizable(
+        ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+        ...     to_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+        ... )
+        False
 
-    >>> is_concretizable(
-    ...     ts.DeferredType(constraint=None),
-    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
-    ... )
-    True
+        >>> is_concretizable(
+        ...     ts.DeferredType(constraint=None),
+        ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
+        ... )
+        True
 
-    >>> is_concretizable(
-    ...     ts.DeferredType(constraint=ts.DataType),
-    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
-    ... )
-    True
+        >>> is_concretizable(
+        ...     ts.DeferredType(constraint=ts.DataType),
+        ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
+        ... )
+        True
 
-    >>> is_concretizable(
-    ...     ts.DeferredType(constraint=ts.OffsetType),
-    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
-    ... )
-    False
+        >>> is_concretizable(
+        ...     ts.DeferredType(constraint=ts.OffsetType),
+        ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
+        ... )
+        False
 
-    >>> is_concretizable(
-    ...     ts.DeferredType(constraint=ts.TypeSpec),
-    ...     to_type=ts.DeferredType(constraint=ts.ScalarType),
-    ... )
-    True
+        >>> is_concretizable(
+        ...     ts.DeferredType(constraint=ts.TypeSpec),
+        ...     to_type=ts.DeferredType(constraint=ts.ScalarType),
+        ... )
+        True
 
     """
     if isinstance(symbol_type, ts.DeferredType) and (

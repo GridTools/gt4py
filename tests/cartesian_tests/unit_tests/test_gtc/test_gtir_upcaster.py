@@ -42,8 +42,10 @@ def contains_cast_node(cast_node, expr):
             expr.walk_values()
             .if_isinstance(Cast)
             .filter(
-                lambda node: node.dtype == cast_node.dtype
-                and (isinstance(cast_node.expr, Placeholder) or node.expr == cast_node.expr)
+                lambda node: (
+                    node.dtype == cast_node.dtype
+                    and (isinstance(cast_node.expr, Placeholder) or node.expr == cast_node.expr)
+                )
             )
             .to_list()
         )

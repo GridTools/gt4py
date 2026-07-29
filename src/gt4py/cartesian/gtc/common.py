@@ -279,7 +279,9 @@ class Stmt(LocNode):
 
 def verify_condition_is_boolean(parent_node_cls: datamodels.DataModel, cond: Expr) -> None:
     if cond.dtype and cond.dtype is not DataType.BOOL:
-        raise ValueError("Condition in `{}` must be boolean.".format(type(parent_node_cls)))
+        raise ValueError(
+            f"Condition in `{type(parent_node_cls)}` must be boolean, got {cond.dtype} instead. Condition: {cond}."
+        )
 
 
 def verify_and_get_common_dtype(
@@ -648,7 +650,7 @@ def validate_dtype_is_set() -> datamodels.RootValidator:
                 nodes_without_dtype.append(node)
 
         if len(nodes_without_dtype) > 0:
-            raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
+            raise ValueError(f"Nodes without dtype detected: {nodes_without_dtype}.")
 
     return _make_root_validator(_impl)
 
@@ -684,7 +686,7 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
     ) -> None:
         decl = symtable.get(node.left.name, None)
         if decl is None:
-            raise ValueError("Symbol {} not found.".format(node.left.name))
+            raise ValueError(f"Symbol {node.left.name} not found.")
         if not isinstance(decl, self.decl_type):
             return None
 

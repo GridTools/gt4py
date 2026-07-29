@@ -106,6 +106,7 @@ def nabla(n_nodes, out, pp, S_MXX, S_MYY, sign, vol):
     set_at(as_fieldop(pnabla, domain)(pp, S_MXX, S_MYY, sign, vol), domain, out)
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.requires_atlas
 def test_compute_zavgS(program_processor):
     program_processor, validate = program_processor
@@ -147,6 +148,9 @@ def compute_zavgS2_fencil(n_edges, out, pp, S_M):
     set_at(as_fieldop(compute_zavgS2, domain)(pp, S_M), domain, out)
 
 
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 @pytest.mark.uses_tuple_iterator
 @pytest.mark.requires_atlas
 def test_compute_zavgS2(program_processor):
@@ -176,6 +180,8 @@ def test_compute_zavgS2(program_processor):
         assert_close(1000788897.3202186, np.max(zavgS[1].asnumpy()))
 
 
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_tuple_returns
 @pytest.mark.uses_tuple_iterator
 @pytest.mark.requires_atlas
 def test_nabla(program_processor):
@@ -217,6 +223,9 @@ def nabla2(n_nodes, out, pp, S, sign, vol):
     set_at(as_fieldop(compute_pnabla2, domain)(pp, S, sign, vol), domain, out)
 
 
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 @pytest.mark.uses_tuple_iterator
 @pytest.mark.requires_atlas
 def test_nabla2(program_processor):
@@ -287,6 +296,7 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_tuple_iterator
 @pytest.mark.requires_atlas
 def test_nabla_sign(program_processor):

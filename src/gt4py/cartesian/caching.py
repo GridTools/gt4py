@@ -197,9 +197,8 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def backend_root_path(self) -> pathlib.Path:
-        cpython_id = "py{version.major}{version.minor}_{api_version}".format(
-            version=sys.version_info, api_version=sys.api_version
-        )
+        version = sys.version_info
+        cpython_id = f"py{version.major}{version.minor}_{sys.api_version}"
         backend_root = self.root_path / cpython_id / gt_utils.slugify(self.builder.backend.name)
         if not backend_root.exists():
             if not backend_root.parent.exists():
@@ -243,7 +242,7 @@ class JITCachingStrategy(CachingStrategy):
                 for k, v in self.builder.backend.extra_cache_info.items()
                 if k in self.builder.backend.extra_cache_validation_keys
             }
-            source = self.builder.module_path.read_text()
+            source = self.builder.module_path.read_text(encoding="utf-8")
             module_shash = gt_utils.shash(source)
 
             if validate_hash:
@@ -266,9 +265,7 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def cache_info(self) -> Dict[str, Any]:
-        if not self.cache_info_path:
-            return {}
-        if not self.cache_info_path.exists():
+        if not self.cache_info_path or not self.cache_info_path.exists():
             return {}
         return self._unpickle_cache_info_file(self.cache_info_path)
 
@@ -322,7 +319,7 @@ class JITCachingStrategy(CachingStrategy):
         if self.builder.backend.name == "dace:gpu":
             fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
 
-        # typeignore because attrclass StencilID has generated constructor
+        # ignore type because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
             self.builder.options.qualified_name,
             gt_utils.shashed_id(fingerprint, self.options_id),

@@ -8,21 +8,35 @@
 
 import os
 import pathlib
+import shutil
 from unittest import mock
+
+import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf.compilation import build_data, importer
+from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.compilation.build_systems import cmake
+
+
+@pytest.fixture
+def clean_cmake_cache(extension_source_example):
+    cache_dir = cache.get_cache_folder(extension_source_example, config.BuildCacheLifetime.SESSION)
+    if cache_dir.exists():
+        shutil.rmtree(cache_dir)
+    yield
 
 
 def test_get_cmake_device_arch_option_cuda():
     with (
         mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA),
-        mock.patch("gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "90"),
+        mock.patch("gt4py.next.otf.compilation.common._query_device_arch", lambda: "90"),
     ):
         # Test CUDA device without user-provided environment variable
+        # (`patch.dict` only layers on top of the inherited environment, so an
+        # ambient CUDAARCHS, e.g. set by CI, must be removed explicitly)
         with mock.patch.dict(os.environ, {}):
+            os.environ.pop("CUDAARCHS", None)
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_CUDA_ARCHITECTURES=90"
         with mock.patch.dict(os.environ, {"CUDAARCHS": ""}):
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_CUDA_ARCHITECTURES=90"
@@ -35,12 +49,11 @@ def test_get_cmake_device_arch_option_cuda():
 def test_get_cmake_device_arch_option_rocm():
     with (
         mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.ROCM),
-        mock.patch(
-            "gt4py.next.otf.compilation.build_systems.cmake.get_device_arch", lambda: "gfx942"
-        ),
+        mock.patch("gt4py.next.otf.compilation.common._query_device_arch", lambda: "gfx942"),
     ):
         # Test ROCM device without user-provided environment variable
         with mock.patch.dict(os.environ, {}):
+            os.environ.pop("HIPARCHS", None)
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx942"
         with mock.patch.dict(os.environ, {"HIPARCHS": ""}):
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx942"
@@ -50,9 +63,9 @@ def test_get_cmake_device_arch_option_rocm():
             assert cmake.get_cmake_device_arch_option() == "-DCMAKE_HIP_ARCHITECTURES=gfx90a"
 
 
-def test_default_cmake_factory(compilable_source_example, clean_example_session_cache):
+def test_default_cmake_factory(extension_source_example, clean_cmake_cache):
     otf_builder = cmake.CMakeFactory()(
-        source=compilable_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
+        source=extension_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
     )
     assert not build_data.contains_data(otf_builder.root_path)
 

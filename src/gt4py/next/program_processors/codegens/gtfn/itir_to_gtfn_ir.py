@@ -126,49 +126,57 @@ def _collect_dimensions_from_domain(
     return offset_definitions
 
 
+def _collect_dimensions_from_params(
+    params: Iterable[itir.Sym], grid_type: common.GridType
+) -> dict[str, TagDefinition]:
+    # gtfn references `generated::<dim>_t` for every parameter field dimension; declare a tag
+    # for each here so that dimensions appearing only in argument types (not in any domain or
+    # offset) are still defined. Restricted to cartesian: unstructured dimension tags need the
+    # horizontal/vertical aliases that the domain and connectivity collection provide.
+    offset_definitions: dict[str, TagDefinition] = {}
+    if grid_type != common.GridType.CARTESIAN:
+        return offset_definitions
+    for param in params:
+        if param.type is None:
+            continue
+        for type_ in type_info.primitive_constituents(param.type):
+            if isinstance(type_, ts.FieldType):
+                for dim in type_.dims:
+                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+    return offset_definitions
+
+
 def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
     offset_provider_type: common.OffsetProviderType,
 ) -> dict[str, TagDefinition]:
-    used_offset_tags: set[str] = (
-        node.walk_values()
-        .if_isinstance(itir.OffsetLiteral)
-        .filter(lambda offset_literal: isinstance(offset_literal.value, str))
-        .getattr("value")
-    ).to_set()
-    # implicit offsets don't occur in the `offset_provider_type`, get them from the used offset tags
-    offset_provider_type = {
-        offset_name: common.get_offset_type(offset_provider_type, offset_name)
-        for offset_name in used_offset_tags
-    } | {**offset_provider_type}
     offset_definitions = {}
+    offset_provider_type = {**offset_provider_type}
 
-    for offset_name, dim_or_connectivity_type in offset_provider_type.items():
-        if isinstance(dim_or_connectivity_type, common.Dimension):
-            dim: common.Dimension = dim_or_connectivity_type
+    cartesian_offsets: set[itir.CartesianOffset] = (
+        node.walk_values().if_isinstance(itir.CartesianOffset)
+    ).to_set()
+    for cart_offset in cartesian_offsets:
+        dims = [
+            ir_utils_misc.dim_from_axis_literal(v)
+            for v in (cart_offset.domain, cart_offset.codomain)
+        ]
+        for dim in dims:
             if grid_type == common.GridType.CARTESIAN:
-                # create alias from offset to dimension
                 offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim.kind == common.DimensionKind.VERTICAL:
+                if dim.kind != common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
-                # create alias from vertical offset to vertical dimension
                 offset_definitions[dim.value] = TagDefinition(
                     name=Sym(id=dim.value), alias=_vertical_dimension
                 )
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
-                )
-        elif isinstance(
-            connectivity_type := dim_or_connectivity_type, common.NeighborConnectivityType
-        ):
+
+    for offset_name, connectivity_type in offset_provider_type.items():
+        if isinstance(connectivity_type, common.NeighborConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
             if offset_name != connectivity_type.neighbor_dim.value:
@@ -184,13 +192,30 @@ def _collect_offset_definitions(
                 )
         else:
             raise AssertionError(
-                "Elements of offset provider need to be either 'Dimension' or 'Connectivity'."
+                "Elements of the offset provider type need to be a 'NeighborConnectivityType'."
             )
     return offset_definitions
 
 
+def _add_staggered_aliases(
+    offset_definitions: dict[str, TagDefinition],
+) -> dict[str, TagDefinition]:
+    """Turn every staggered dimension tag into a alias of its base dimension."""
+    result: dict[str, TagDefinition] = {}
+    aliases: dict[str, TagDefinition] = {}
+    for name, tag_def in offset_definitions.items():
+        if tag_def.alias is None and common.is_staggered(common.Dimension(value=name)):
+            base_name = common.as_non_staggered(common.Dimension(value=name)).value
+            # ensure the base tag exists (as alias target and loop dimension) in this position
+            result.setdefault(base_name, TagDefinition(name=Sym(id=base_name)))
+            aliases[name] = TagDefinition(name=Sym(id=name), alias=SymRef(id=base_name))
+        else:
+            result[name] = tag_def
+    return {**result, **aliases}
+
+
 def _literal_as_integral_constant(node: itir.Literal) -> IntegralConstant:
-    assert type_info.is_integer(node.type)
+    assert type_info.is_integral_scalar(node.type)
     return IntegralConstant(value=int(node.value))
 
 
@@ -235,7 +260,7 @@ def _process_elements(
     obj: Expr,
     type_: ts.TypeSpec,
     *,
-    tuple_constructor: Callable[..., Expr] = lambda _, *elements: FunCall(
+    tuple_constructor: Callable[..., Expr] = lambda _, elements: FunCall(
         fun=SymRef(id="make_tuple"), args=list(elements)
     ),
 ) -> Expr:
@@ -264,13 +289,11 @@ def _process_elements(
         )
         return process_func(el, el_type)
 
-    result = type_info.apply_to_primitive_constituents(
+    return type_info.tree_map_type(
         _gen_constituent_expr,
-        type_,
+        result_collection_constructor=tuple_constructor,
         with_path_arg=True,
-        tuple_constructor=tuple_constructor,
-    )
-    return result
+    )(type_)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -372,8 +395,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
 
+    def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> Literal:
+        return self.visit(node.codomain, **kwargs)
+
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
-        return Literal(value=node.value, type="axis_literal")
+        assert isinstance(node.type, ts.DimensionType)
+        return Literal(value=node.type.dim.value, type="axis_literal")
 
     def _make_domain(self, node: itir.FunCall) -> tuple[TaggedValues, TaggedValues]:
         tags = []
@@ -523,7 +550,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             check_el_type,
             lowered_output,
             node.type,
-            tuple_constructor=lambda *elements: SidComposite(values=list(elements)),
+            tuple_constructor=lambda _, elements: SidComposite(values=list(elements)),
         )
 
         assert isinstance(lowered_output_as_sid, (SidComposite, SymRef))
@@ -615,7 +642,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 convert_el_to_sid,
                 lowered_input,
                 input_.type,
-                tuple_constructor=lambda *elements: SidComposite(values=list(elements)),
+                tuple_constructor=lambda _, elements: SidComposite(values=list(elements)),
             )
 
             lowered_inputs.append(lowered_input_as_sid)
@@ -666,9 +693,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {
+            **_collect_dimensions_from_params(node.params, self.grid_type),
             **_collect_dimensions_from_domain(node.body),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider_type),
         }
+        offset_definitions = _add_staggered_aliases(offset_definitions)
         return Program(
             id=SymbolName(node.id),
             params=self.visit(node.params),

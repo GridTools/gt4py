@@ -12,10 +12,11 @@ import functools
 import inspect
 import itertools
 import types
+from collections.abc import Callable
 from typing import (
     Any,
-    Callable,
     ClassVar,
+    Final,
     Optional,
     ParamSpec,
     Sequence,
@@ -26,6 +27,24 @@ from typing import (
 )
 
 from gt4py.eve import utils as eve_utils
+
+
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
+
+
+def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
+    """
+    Helper function to store dataclass/datamodel field metadata within a GT4Py namespace.
+
+    Individual fields can opt out of fingerprinting with
+    `foo = field(..., metadata=gt4py_metadata(fingerprint=False))`.
+    """
+    return {GT4PY_CLASS_METADATA_NS: kwargs}
 
 
 class RecursionGuard:
@@ -62,11 +81,6 @@ class RecursionGuard:
 
     def __exit__(self, *exc: Any) -> None:
         self.guarded_objects.remove(id(self.obj))
-
-
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
 
 
 def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
@@ -138,9 +152,9 @@ def tree_map(
 
         >>> tree_map(
         ...     collection_type=(list, tuple),
-        ...     result_collection_constructor=lambda value, elts: tuple(elts)
-        ...     if isinstance(value, list)
-        ...     else list(elts),
+        ...     result_collection_constructor=lambda value, elts: (
+        ...         tuple(elts) if isinstance(value, list) else list(elts)
+        ...     ),
         ... )(lambda x: x + 1)([(1, 2), 3])
         ([2, 3], 4)
 

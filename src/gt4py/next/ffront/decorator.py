@@ -79,7 +79,7 @@ def embedded_program_call_context(
     kwargs: dict[str, Any],
 ) -> contextlib.AbstractContextManager:
     """Hook called at the beginning and end of an embedded program call."""
-    return metrics.metrics_context(f"{program.__name__}<'<embedded>')>")
+    return metrics.metrics_source_key_setter(f"{program.__name__}<'embedded'>")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -91,13 +91,21 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     """
 
     definition_stage: ffront_stages.DSLDefinitionT
-    backend: Optional[next_backend.Backend]
+    # The backend is excluded from the fingerprint: it does not affect the
+    # lowering (which these program-likes cache by their definition/FOAST stage,
+    # e.g. when they appear in another program's closure variables), the
+    # backend-specific compilation is keyed separately in the backend's own
+    # caches, and fingerprinting the whole backend object graph is both wasteful
+    # and fragile (it may hold non-importable callables, see also test doubles).
+    backend: Optional[next_backend.Backend] = dataclasses.field(
+        metadata=utils.gt4py_metadata(fingerprint=False)
+    )
     compilation_options: options.CompilationOptions
 
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
 
-    def with_backend(self, backend: next_backend.Backend) -> Self:
+    def with_backend(self, backend: next_backend.Backend | None) -> Self:
         return dataclasses.replace(self, backend=backend)
 
     def with_compilation_options(
@@ -130,6 +138,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
 
+        # The argument descriptor mapping built here must be kept in sync with the descriptors
+        # created in the explicitly-triggered-compilation code path
+        # `CompiledProgramsPool.compile()`.
         argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
 
         if static_params:
@@ -348,7 +359,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
         >>> import gt4py.next as gtx
         >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821 [undefined-name]
+        ... def program(condition: bool, out: gtx.Field[Dims[IDim], float]):  # noqa: F821 [undefined-name]
         ...     sample_field_operator(condition, out=out)  # noqa: F821 [undefined-name]
 
         Create a new program from `program` with the `condition` parameter set to `True`:
@@ -358,7 +369,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         The resulting program is equivalent to
 
         >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821 [undefined-name]
+        ... def program(condition: bool, out: gtx.Field[Dims[IDim], float]):  # noqa: F821 [undefined-name]
         ...     sample_field_operator(condition=True, out=out)  # noqa: F821 [undefined-name]
 
         and can be executed without passing `condition`.
@@ -504,32 +515,34 @@ class ProgramWithBoundArgs(Program):
 
 
 @typing.overload
-def program(definition: types.FunctionType) -> Program: ...
+def program(definition: Callable) -> Program: ...
 
 
 @typing.overload
 def program(
     *,
-    backend: next_backend.Backend | eve.NothingType | None,
-    grid_type: common.GridType | None,
+    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
-) -> Callable[[types.FunctionType], Program]: ...
+) -> Callable[[Callable], Program]: ...
 
 
 def program(
-    definition: types.FunctionType | None = None,
+    definition: Callable | None = None,
     *,
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
-) -> Program | Callable[[types.FunctionType], Program]:
+) -> Program | Callable[[Callable], Program]:
     """
     Generate an implementation of a program from a Python function object.
 
     Examples:
         >>> @program  # noqa: F821 [undefined-name]  # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821 [undefined-name]
+        ... def program(
+        ...     in_field: Field[Dims[TDim], float64], out_field: Field[Dims[TDim], float64]
+        ... ):  # noqa: F821 [undefined-name]
         ...     field_op(in_field, out=out_field)
         >>> program(in_field, out=out_field)  # noqa: F821 [undefined-name]  # doctest: +SKIP
 
@@ -537,12 +550,15 @@ def program(
         >>> # not passing it will result in embedded execution by default
         >>> # the above is equivalent to
         >>> @program(backend="roundtrip")  # noqa: F821 [undefined-name]  # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821 [undefined-name]
+        ... def program(
+        ...     in_field: Field[Dims[TDim], float64], out_field: Field[Dims[TDim], float64]
+        ... ):  # noqa: F821 [undefined-name]
         ...     field_op(in_field, out=out_field)
         >>> program(in_field, out=out_field)  # noqa: F821 [undefined-name]  # doctest: +SKIP
     """
 
-    def program_inner(definition: types.FunctionType) -> Program:
+    def program_inner(definition: Callable) -> Program:
+        assert isinstance(definition, types.FunctionType)
         program = Program.from_function(
             definition,
             backend=typing.cast(
@@ -730,21 +746,23 @@ class FieldOperatorFromFoast(FieldOperator):
 
 @typing.overload
 def field_operator(
-    definition: types.FunctionType,
+    definition: Callable,
     *,
-    backend: next_backend.Backend | eve.NothingType | None,
-    grid_type: common.GridType | None,
+    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    grid_type: common.GridType | None = None,
 ) -> FieldOperator: ...
 
 
 @typing.overload
 def field_operator(
-    *, backend: next_backend.Backend | eve.NothingType | None, grid_type: common.GridType | None
-) -> Callable[[types.FunctionType], FieldOperator]: ...
+    *,
+    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    grid_type: common.GridType | None = None,
+) -> Callable[[Callable], FieldOperator]: ...
 
 
 def field_operator(
-    definition: types.FunctionType | None = None,
+    definition: Callable | None = None,
     *,
     backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
@@ -755,18 +773,19 @@ def field_operator(
 
     Examples:
         >>> @field_operator  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821 [undefined-name]
+        ... def field_op(in_field: Field[Dims[TDim], float64]) -> Field[Dims[TDim], float64]:  # noqa: F821 [undefined-name]
         ...     ...
         >>> field_op(in_field, out=out_field)  # noqa: F821 [undefined-name]  # doctest: +SKIP
 
         >>> # the backend can optionally be passed if already decided
         >>> # not passing it will result in embedded execution by default
         >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821 [undefined-name]
+        ... def field_op(in_field: Field[Dims[TDim], float64]) -> Field[Dims[TDim], float64]:  # noqa: F821 [undefined-name]
         ...     ...
     """
 
-    def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
+    def field_operator_inner(definition: Callable) -> FieldOperator:
+        assert isinstance(definition, types.FunctionType)
         return FieldOperator.from_function(
             definition,
             typing.cast(
@@ -781,11 +800,11 @@ def field_operator(
 
 @typing.overload
 def scan_operator(
-    definition: types.FunctionType,
+    definition: Callable,
     *,
     axis: common.Dimension,
-    forward: bool,
-    init: core_defs.Scalar,
+    forward: bool = True,
+    init: core_defs.Scalar = 0.0,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
 ) -> FieldOperator: ...
@@ -795,22 +814,38 @@ def scan_operator(
 def scan_operator(
     *,
     axis: common.Dimension,
-    forward: bool,
-    init: core_defs.Scalar,
+) -> Callable[[Callable], FieldOperator]: ...
+
+
+@typing.overload
+def scan_operator(
+    *,
+    axis: common.Dimension,
+    forward: bool = True,
+    init: core_defs.Scalar = 0.0,
+) -> Callable[[Callable], FieldOperator]: ...
+
+
+@typing.overload
+def scan_operator(
+    *,
+    axis: common.Dimension,
+    forward: bool = True,
+    init: core_defs.Scalar = 0.0,
     backend: next_backend.Backend | eve.NothingType | None,
     grid_type: common.GridType | None,
-) -> Callable[[types.FunctionType], FieldOperator]: ...
+) -> Callable[[Callable], FieldOperator]: ...
 
 
 def scan_operator(
-    definition: Optional[types.FunctionType] = None,
+    definition: Callable | None = None,
     *,
     axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
     backend: next_backend.Backend | None | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
-) -> FieldOperator | Callable[[types.FunctionType], FieldOperator]:
+) -> FieldOperator | Callable[[Callable], FieldOperator]:
     """
     Generate an implementation of the scan operator from a Python function object.
 
@@ -840,7 +875,8 @@ def scan_operator(
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
     #  the above doctest fails when executed using `pytest --doctest-modules`.
 
-    def scan_operator_inner(definition: types.FunctionType) -> FieldOperator:
+    def scan_operator_inner(definition: Callable) -> FieldOperator:
+        assert isinstance(definition, types.FunctionType)
         return FieldOperator.from_function(
             definition,
             typing.cast(
@@ -852,23 +888,3 @@ def scan_operator(
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_fieldop_to_fingerprint(obj: FieldOperator, hasher: xtyping.HashlibAlgorithm) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_foast_fieldop_to_fingerprint(
-    obj: FieldOperatorFromFoast, hasher: xtyping.HashlibAlgorithm
-) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.foast_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_program_to_fingerprint(obj: Program, hasher: xtyping.HashlibAlgorithm) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)

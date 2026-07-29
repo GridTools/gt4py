@@ -12,12 +12,9 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import as_fieldop, cartesian_domain, deref, named_range
-from gt4py.next.iterator.runtime import fendef, fundef, if_stmt, offset, set_at
+from gt4py.next.iterator.runtime import fendef, fundef, if_stmt, set_at
 
 from next_tests.unit_tests.conftest import program_processor_no_transforms, run_processor
-
-
-i = offset("i")
 
 
 @fundef
@@ -34,7 +31,7 @@ def test_if_stmt(program_processor_no_transforms, cond):
     program_processor, validate = program_processor_no_transforms
     size = 10
 
-    @fendef(offset_provider={"i": IDim})
+    @fendef
     def fencil(cond1, inp, out):
         domain = cartesian_domain(named_range(IDim, 0, size))
         if_stmt(

@@ -20,6 +20,7 @@ from gt4py.next.type_system import type_specifications as ts
 IDim = common.Dimension("IDim")
 JDim = common.Dimension("JDim")
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+IOff = im.cartesian_offset(IDim, IDim)
 
 
 def _with_domain_annex(node: itir.Expr, domain: itir.Expr):
@@ -125,13 +126,13 @@ def test_no_inline(uids: utils.IDGeneratorPool):
     d2 = im.domain("cartesian_domain", {IDim: (0, 3)})
     testee = im.as_fieldop(
         im.lambda_("a")(
-            im.plus(im.deref(im.shift("IOff", 1)("a")), im.deref(im.shift("IOff", -1)("a")))
+            im.plus(im.deref(im.shift(IOff, 1)("a")), im.deref(im.shift(IOff, -1)("a")))
         ),
         d1,
     )(im.op_as_fieldop("plus", d2)(im.ref("inp1", field_type), im.ref("inp2", field_type)))
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
         testee,
-        offset_provider_type={"IOff": IDim},
+        offset_provider_type={},
         allow_undeclared_symbols=True,
         enable_cse=False,
         uids=uids,
@@ -294,7 +295,7 @@ def test_partial_inline(uids: utils.IDGeneratorPool):
         # second argument only read at a single location -> inlined
         im.lambda_("a", "b")(
             im.plus(
-                im.plus(im.deref(im.shift("IOff", 1)("a")), im.deref(im.shift("IOff", -1)("a"))),
+                im.plus(im.deref(im.shift(IOff, 1)("a")), im.deref(im.shift(IOff, -1)("a"))),
                 im.deref("b"),
             )
         ),
@@ -306,7 +307,7 @@ def test_partial_inline(uids: utils.IDGeneratorPool):
     expected = im.as_fieldop(
         im.lambda_("a", "inp1", "inp2")(
             im.plus(
-                im.plus(im.deref(im.shift("IOff", 1)("a")), im.deref(im.shift("IOff", -1)("a"))),
+                im.plus(im.deref(im.shift(IOff, 1)("a")), im.deref(im.shift(IOff, -1)("a"))),
                 im.plus(im.deref("inp1"), im.deref("inp2")),
             )
         ),
@@ -318,7 +319,7 @@ def test_partial_inline(uids: utils.IDGeneratorPool):
     )
     actual = fuse_as_fieldop.FuseAsFieldOp.apply(
         testee,
-        offset_provider_type={"IOff": IDim},
+        offset_provider_type={},
         allow_undeclared_symbols=True,
         enable_cse=False,
         uids=uids,

@@ -134,11 +134,9 @@ class GTFNTranslationStep(
                 arg_exprs.append(
                     f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
                 )
-            elif isinstance(connectivity_type, common.Dimension):
-                pass
             else:
                 raise AssertionError(
-                    f"Expected offset provider type '{name}' to be a 'NeighborConnectivityType' or 'Dimension', "
+                    f"Expected offset provider type '{name}' to be a 'NeighborConnectivityType', "
                     f"got '{type(connectivity_type).__name__}'."
                 )
 

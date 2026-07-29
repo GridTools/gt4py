@@ -11,9 +11,10 @@ import pytest
 
 
 dace = pytest.importorskip("dace")
-from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
+from dace.sdfg import nodes as dace_nodes
 from dace.transformation import dataflow as dace_dataflow
 
+from gt4py.next import utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
@@ -26,7 +27,7 @@ def _make_movable_tasklet(
 ) -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.Tasklet, dace_nodes.AccessNode, dace_nodes.MapEntry
 ]:
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("gpu_promotable_sdfg"))
+    sdfg = dace.SDFG(util.unique_name("gpu_promotable_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
 
     sdfg.add_scalar("outer_scalar", dtype=dace.float64, transient=True)
@@ -60,13 +61,13 @@ def _make_movable_tasklet(
     return sdfg, state, outer_tasklet, outer_scalar, me
 
 
-def test_move_tasklet_inside_trivial_memlet_tree():
+def test_move_tasklet_inside_trivial_memlet_tree(uids: gtx_utils.IDGeneratorPool):
     sdfg, state, outer_tasklet, outer_scalar, me = _make_movable_tasklet(
         outer_tasklet_code="1.2",
     )
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyMoveTaskletIntoMap,
+        gtx_transformations.GT4PyMoveTaskletIntoMap(uids=uids),
         validate_all=True,
     )
     assert count == 1
@@ -79,7 +80,7 @@ def test_move_tasklet_inside_trivial_memlet_tree():
     assert np.allclose(B, ref)
 
 
-def test_move_tasklet_inside_non_trivial_memlet_tree():
+def test_move_tasklet_inside_non_trivial_memlet_tree(uids: gtx_utils.IDGeneratorPool):
     sdfg, state, outer_tasklet, outer_scalar, me = _make_movable_tasklet(
         outer_tasklet_code="1.2",
     )
@@ -89,7 +90,7 @@ def test_move_tasklet_inside_non_trivial_memlet_tree():
     me = None
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyMoveTaskletIntoMap,
+        gtx_transformations.GT4PyMoveTaskletIntoMap(uids=uids),
         validate_all=True,
     )
     assert count == 1
@@ -102,7 +103,7 @@ def test_move_tasklet_inside_non_trivial_memlet_tree():
     assert np.allclose(B, ref)
 
 
-def test_move_tasklet_inside_two_inner_connector():
+def test_move_tasklet_inside_two_inner_connector(uids: gtx_utils.IDGeneratorPool):
     sdfg, state, outer_tasklet, outer_scalar, me = _make_movable_tasklet(
         outer_tasklet_code="32.2",
     )
@@ -121,7 +122,7 @@ def test_move_tasklet_inside_two_inner_connector():
     mapped_tasklet.code.as_string = "__out = __in0 + __in1 + __in2"
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyMoveTaskletIntoMap,
+        gtx_transformations.GT4PyMoveTaskletIntoMap(uids=uids),
         validate_all=True,
     )
     assert count == 1
@@ -134,7 +135,7 @@ def test_move_tasklet_inside_two_inner_connector():
     assert np.allclose(B, ref)
 
 
-def test_move_tasklet_inside_outer_scalar_used_outside():
+def test_move_tasklet_inside_outer_scalar_used_outside(uids: gtx_utils.IDGeneratorPool):
     sdfg, state, outer_tasklet, outer_scalar, me = _make_movable_tasklet(
         outer_tasklet_code="22.6",
     )
@@ -142,7 +143,7 @@ def test_move_tasklet_inside_outer_scalar_used_outside():
     state.add_edge(outer_scalar, None, state.add_access("C"), None, dace.Memlet("C[0]"))
 
     count = sdfg.apply_transformations_repeated(
-        gtx_transformations.GT4PyMoveTaskletIntoMap,
+        gtx_transformations.GT4PyMoveTaskletIntoMap(uids=uids),
         validate_all=True,
     )
     assert count == 1

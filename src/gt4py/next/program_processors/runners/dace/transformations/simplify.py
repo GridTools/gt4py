@@ -10,7 +10,6 @@
 
 import collections
 import copy
-import uuid
 import warnings
 from typing import Any, Iterable, Optional, TypeAlias
 
@@ -29,6 +28,7 @@ from dace.transformation import (
     passes as dace_passes,
 )
 
+from gt4py.next import utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
@@ -551,11 +551,11 @@ class DistributedBufferRelocator(dace_transformation.Pass):
     def should_reapply(self, modified: dace_ppl.Modifies) -> bool:
         return modified & (dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes)
 
-    def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {
+    def depends_on(self) -> list[type[dace_transformation.Pass]]:
+        return [
             dace_transformation.passes.StateReachability,
             dace_transformation.passes.FindAccessStates,
-        }
+        ]
 
     def apply_pass(
         self, sdfg: dace.SDFG, pipeline_results: dict[str, Any]
@@ -933,13 +933,16 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
     tasklet = dace_transformation.PatternNode(dace_nodes.Tasklet)
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
     map_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
+    _uids: gtx_utils.IDGeneratorPool
 
     def __init__(
         self,
         *args: Any,
+        uids: gtx_utils.IDGeneratorPool,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        self._uids = uids
 
     @classmethod
     def expressions(cls) -> Any:
@@ -1008,7 +1011,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         # This is the tasklet that we will put inside the map, note we have to do it
         #  this way to avoid some name clash stuff.
         inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
-            name=f"{tasklet.label}__clone_{str(uuid.uuid1()).replace('-', '_')}",
+            name=next(self._uids[f"{tasklet.label}__clone"]),
             outputs=tasklet.out_connectors.keys(),
             inputs=set(),
             code=tasklet.code,
@@ -1157,8 +1160,8 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
     def expressions(cls) -> Any:
         return [dace.sdfg.utils.node_path_graph(cls.map_exit, cls.tmp_ac, cls.glob_ac)]
 
-    def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {dace_transformation.passes.ConsolidateEdges}
+    def depends_on(self) -> list[type[dace_transformation.Pass]]:
+        return [dace_transformation.passes.ConsolidateEdges]
 
     def can_be_applied(
         self,

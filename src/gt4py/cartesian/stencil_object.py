@@ -207,26 +207,15 @@ class StencilObject(abc.ABC):
         return type(self) is type(other)
 
     def __str__(self) -> str:
-        result = """
-<StencilObject: {name}> [backend="{backend}"]
-    - I/O fields: {fields}
-    - Parameters: {params}
-    - Constants: {constants}
-    - Version: {version}
-    - Definition ({func}):
-{source}
-        """.format(
-            name=self.options["module"] + "." + self.options["name"],
-            version=self._gt_id_,
-            backend=self.backend,
-            fields=self.field_info,
-            params=self.parameter_info,
-            constants=self.constants,
-            func=self.definition_func,
-            source=self.source,
-        )
-
-        return result
+        return f"""
+<StencilObject: {self.options["module"] + "." + self.options["name"]}> [backend="{self.backend}"]
+    - I/O fields: {self.field_info}
+    - Parameters: {self.parameter_info}
+    - Constants: {self.constants}
+    - Version: {self._gt_id_}
+    - Definition ({self.definition_func}):
+{self.source}
+        """
 
     def __hash__(self) -> int:
         return int.from_bytes(type(self)._gt_id_.encode(), byteorder="little")
@@ -293,7 +282,7 @@ class StencilObject(abc.ABC):
         except Exception:
             pass
 
-        raise ValueError("Invalid 'origin' value ({})".format(origin))
+        raise ValueError(f"Invalid 'origin' value ({origin})")
 
     @staticmethod
     def _get_max_domain(
@@ -370,19 +359,32 @@ class StencilObject(abc.ABC):
         try:
             domain = Shape(domain)
         except Exception as ex:
-            raise ValueError("Invalid 'domain' value ({})".format(domain)) from ex
+            raise ValueError(f"Invalid 'domain' value ({domain})") from ex
 
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
 
         if not domain <= (
-            max_domain := self._get_max_domain(
+            self._get_max_domain(
                 arg_infos, self.domain_info, self.field_info, origin, squeeze=False
             )
         ):
-            raise ValueError(
-                f"Compute domain too large (provided: {domain}, maximum: {max_domain}. Check stencil domain provided or adjust K interval as needed.)"
+            offending_fields = []
+            for name, info in self.field_info.items():
+                field_used_domain = self._get_max_domain(
+                    arg_infos, self.domain_info, {name: info}, origin, squeeze=False
+                )
+                if field_used_domain < domain:
+                    offending_fields.append((name, field_used_domain))
+
+            error = ValueError(
+                f"Compute domain too large for stencil {self.options['name']}: \n"
+                f"  Stencil domain is {domain} but field indexation leads to read outside of bounds.\n"
+                f"  Check region/horizontal offsets or interval/vertical offsets, or stencil domain.\n"
+                f"  Offending fields (name, size with offset removed): {offending_fields}"
             )
+
+            raise error
 
         if domain[2] < self.domain_info.min_sequential_axis_size:
             raise ValueError(

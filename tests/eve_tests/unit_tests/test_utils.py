@@ -93,6 +93,153 @@ def test_register_subclasses():
     )
 
 
+def test_singledispatcher():
+    from gt4py.eve.utils import singledispatcher
+
+    class Base:
+        pass
+
+    class Derived(Base):
+        pass
+
+    dispatcher = singledispatcher(
+        lambda _: "default",
+        implementations={
+            Base: lambda _: "base",
+            Derived: lambda _: "derived",
+        },
+    )
+
+    assert dispatcher(1) == "default"
+    assert dispatcher(Base()) == "base"
+    assert dispatcher(Derived()) == "derived"
+    assert dispatcher.registry.keys() == {object, Base, Derived}
+
+
+def test_singledispatcher_default_from_object_implementation():
+    from gt4py.eve.utils import singledispatcher
+
+    class Base:
+        pass
+
+    # When no explicit `default` is given, the 'object' implementation is used as default.
+    dispatcher = singledispatcher(
+        implementations={
+            object: lambda _: "default",
+            Base: lambda _: "base",
+        }
+    )
+
+    assert dispatcher(1) == "default"
+    assert dispatcher(Base()) == "base"
+    assert dispatcher.registry.keys() == {object, Base}
+
+
+def test_singledispatcher_dispatcher_as_default_is_not_mutated():
+    from gt4py.eve.utils import singledispatcher
+
+    # Chaining dispatchers: a dispatcher is used as the `default` (fallback) of
+    # another. Registering implementations on the new dispatcher must NOT leak
+    # into the one used as default (a regression: `functools.singledispatch`
+    # aliases `register`/`registry` of a single-dispatch default via
+    # `update_wrapper`).
+    class Base:
+        pass
+
+    base = singledispatcher(lambda _: "default", implementations={Base: lambda _: "base"})
+    chained = singledispatcher(base, implementations={int: lambda _: "int"})
+
+    assert chained(1) == "int"
+    assert chained(Base()) == "base"  # delegated to `base`
+    assert chained("x") == "default"
+
+    # `base` is unchanged: its registry never learned about `int`.
+    assert base.registry.keys() == {object, Base}
+    assert base(1) == "default"
+
+
+def test_singledispatcher_validation_errors():
+    from gt4py.eve.utils import singledispatcher
+
+    # Neither an explicit `default` nor an 'object' implementation is provided.
+    with pytest.raises(ValueError, match="default implementation for 'object' must be provided"):
+        singledispatcher(implementations={})
+
+    # A non-callable default is rejected.
+    with pytest.raises(ValueError, match="must be callable"):
+        singledispatcher("not-callable", implementations={})  # type: ignore[arg-type]  # intentionally wrong
+
+    # Providing both an explicit `default` and an 'object' implementation is ambiguous.
+    with pytest.raises(ValueError, match="already provided in 'implementations'"):
+        singledispatcher(lambda _: "default", implementations={object: lambda _: "obj"})
+
+
+def test_get_fully_qualified_name():
+    import json
+
+    from gt4py.eve.utils import get_fully_qualified_name
+
+    # Built-in type and a regular function: "<module>.<qualname>".
+    assert get_fully_qualified_name(dict) == "builtins.dict"
+    assert get_fully_qualified_name(json.dumps) == "json.dumps"
+
+    # Nested objects use the dotted __qualname__.
+    class Outer:
+        class Inner: ...
+
+    assert get_fully_qualified_name(Outer.Inner).endswith(".Outer.Inner")
+
+    # Modules are identified by their import name only (no qualname).
+    assert get_fully_qualified_name(json) == "json"
+
+
+def test_merge_dispatchers_merges_registries_and_uses_last_default():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    class A:
+        pass
+
+    class B:
+        pass
+
+    d1 = singledispatcher(lambda _: "first-default", implementations={A: lambda _: "a"})
+    d2 = singledispatcher(lambda _: "second-default", implementations={B: lambda _: "b"})
+
+    merged = merge_dispatchers(d1, d2)
+
+    # Without an explicit default, the default of the *last* dispatcher is used.
+    assert merged("x") == "second-default"
+    assert merged(A()) == "a"
+    assert merged(B()) == "b"
+    assert merged.registry.keys() == {object, A, B}
+
+
+def test_merge_dispatchers_uses_explicit_default_and_last_registration_wins():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    class A:
+        pass
+
+    d1 = singledispatcher(lambda _: "default-1", implementations={A: lambda _: "a-1"})
+    d2 = singledispatcher(lambda _: "default-2", implementations={A: lambda _: "a-2"})
+
+    merged = merge_dispatchers(d1, d2, default=lambda _: "custom-default")
+
+    assert merged("x") == "custom-default"
+    assert merged(A()) == "a-2"
+
+
+def test_merge_dispatchers_validation_errors():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    with pytest.raises(ValueError, match="At least one dispatcher"):
+        merge_dispatchers()
+
+    dispatcher = singledispatcher(lambda _: "default", implementations={})
+    with pytest.raises(TypeError, match="single-dispatch callables"):
+        merge_dispatchers(dispatcher, lambda _: "not-a-dispatcher")
+
+
 class ModelClass(eve.datamodels.DataModel):
     data: Any
 
@@ -270,6 +417,22 @@ def test_lru_cache_key_id_called_once():
     assert cached.cache_info().misses == 1
 
 
+def test_lru_cache_no_eq_call():
+    class A:
+        def __hash__(self) -> int:
+            return 1
+
+        def __eq__(self, other):
+            raise ValueError()  # this function should never be called
+
+    @eve.utils.lru_cache(key=lambda x: hash(x))
+    def func(x):
+        pass
+
+    func(A())
+    func(A())
+
+
 def test_fluid_partial():
     from gt4py.eve.utils import fluid_partial
 
@@ -307,9 +470,7 @@ def test_noninstantiable_class():
     assert not eve.utils.is_noninstantiable(InstantiableSubclass)
 
 
-@pytest.fixture(
-    params=[None, hashlib.md5(), "md5", hashlib.sha1(), "sha1", hashlib.sha256(), "sha256"]
-)
+@pytest.fixture(params=[None, hashlib.md5(), hashlib.sha1(), hashlib.sha256()])
 def hash_algorithm(request):
     yield request.param
 

@@ -15,7 +15,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import code_specs, definitions, stages, workflow
@@ -33,12 +33,13 @@ def find_constant_symbols(
     ir: itir.Program,
     sdfg: dace.SDFG,
     offset_provider_type: common.OffsetProviderType,
-    disable_field_origin_on_program_arguments: bool = False,
+    disable_field_origin_on_program_arguments: bool,
+    unstructured_horizontal_has_unit_stride: bool,
 ) -> dict[str, int]:
     """Helper function to find symbols to replace with constant values."""
     constant_symbols: dict[str, int] = {}
 
-    if config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE:
+    if unstructured_horizontal_has_unit_stride:
         # Search the stride symbols corresponding to the horizontal dimension
         for p in ir.params:
             if isinstance(p.type, ts.FieldType):
@@ -172,7 +173,9 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
-    metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
+    metrics_level = sdfg.add_symbol(
+        gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL_DTYPE
+    )
 
     #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
     # Even when the target device is GPU, it can happen that dace emits code without
@@ -189,33 +192,31 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         has_side_effects = True
 
     else:
-        sync_code = ""
+        sync_code = "/* The SDFG execution should already be synchronized */"
         has_side_effects = False
 
     #### 2. Timestamp the SDFG entry point.
+    start_block = sdfg.start_block
     entry_if_region, begin_state = _make_if_region_for_metrics_collection(
-        "program_entry", metrics_level, sdfg
+        "metrics_entry", metrics_level, sdfg
     )
-
-    for source_state in sdfg.source_nodes():
-        if source_state is entry_if_region:
-            continue
-        sdfg.add_edge(entry_if_region, source_state, dace.InterstateEdge())
-        source_state.is_start_block = False
-    assert sdfg.out_degree(entry_if_region) > 0
-    entry_if_region.is_start_block = True
+    sdfg.add_edge(entry_if_region, start_block, dace.InterstateEdge())
+    sdfg.start_block = sdfg.node_id(entry_if_region)
+    assert sdfg.start_block is entry_if_region
 
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
         outputs={"time"},
-        code="""\
+        code=f"""\
+{sync_code}
 auto now = std::chrono::high_resolution_clock::now();
 time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
     ).count();
         """,
         language=dace.dtypes.Language.CPP,
+        side_effects=has_side_effects,
     )
     begin_state.add_edge(
         tlet_start_timer,
@@ -227,13 +228,12 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
 
     #### 3. Collect the SDFG end timestamp and produce the compute metric.
     exit_if_region, end_state = _make_if_region_for_metrics_collection(
-        "program_exit", metrics_level, sdfg
+        "metrics_exit", metrics_level, sdfg
     )
-
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is exit_if_region:
+    for sink_node in sdfg.sink_nodes():
+        if sink_node is exit_if_region:
             continue
-        sdfg.add_edge(sink_state, exit_if_region, dace.InterstateEdge())
+        sdfg.add_edge(sink_node, exit_if_region, dace.InterstateEdge())
     assert sdfg.in_degree(exit_if_region) > 0
 
     # Populate the branch that computes the stencil time metric
@@ -241,8 +241,8 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         "gt_stop_timer",
         inputs={"run_cpp_start_time"},
         outputs={"duration"},
-        code=sync_code
-        + """
+        code=f"""\
+{sync_code}
 auto now = std::chrono::high_resolution_clock::now();
 auto run_cpp_end_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
@@ -267,16 +267,6 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         dace.Memlet(f"{output}[0]"),
     )
 
-    if gpu and _has_gpu_schedule(sdfg) and config.ADD_GPU_TRACE_MARKERS:
-        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for node, _ in sdfg.all_nodes_recursive():
-            if isinstance(
-                node, dace.nodes.MapEntry
-            ):  # Add ranges to scopes and maps that are NOT scheduled to the GPU
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-            elif isinstance(node, dace.sdfg.state.SDFGState):
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-
     # Check SDFG validity after applying the above changes.
     # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
     #  the wrapper provided by `DataflowBuilder`, that modifies the tasklet connectors
@@ -292,8 +282,6 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     This means that `CompiledSDFG.fast_call()` will return only after all computations
     have _finished_ and the results are available. This function only has an effect for
     work that runs on the GPU. Furthermore, all work is scheduled on the default stream.
-
-    Todo: Revisit this function once DaCe changes its behaviour in this regard.
     """
 
     if not gpu:
@@ -319,10 +307,10 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     #  because that code is only run at the `exit()` stage, not after a call. Thus we
     #  will generate an SDFGState that contains a Tasklet with the sync call.
     sync_state = sdfg.add_state("sync_state")
-    for sink_state in sdfg.sink_nodes():
-        if sink_state is sync_state:
+    for sink_node in sdfg.sink_nodes():
+        if sink_node is sync_state:
             continue
-        sdfg.add_edge(sink_state, sync_state, dace.InterstateEdge())
+        sdfg.add_edge(sink_node, sync_state, dace.InterstateEdge())
     assert sdfg.in_degree(sync_state) > 0
 
     # NOTE: Since the synchronization is done through the Tasklet explicitly,
@@ -364,6 +352,7 @@ class DaCeTranslator(
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
     async_sdfg_call: bool
+    unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
 
     disable_itir_transforms: bool = False
@@ -396,7 +385,11 @@ class DaCeTranslator(
         sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
-            ir, sdfg, offset_provider_type, self.disable_field_origin_on_program_arguments
+            ir,
+            sdfg,
+            offset_provider_type,
+            self.disable_field_origin_on_program_arguments,
+            self.unstructured_horizontal_has_unit_stride,
         )
 
         if self.auto_optimize:
@@ -469,11 +462,36 @@ class DaCeTranslator(
             # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
             #   We compute the hash in order to refresh `cfg_list` on the SDFG,
             #   which makes the JSON serialization stable.
-            source_code=sdfg.to_json(hash=True),
+            # `guid` is a per-element identity token: it does not affect code generation, and
+            #   `SDFG.from_json()` assigns fresh ids anyway. Keeping it would make the compile
+            #   cache key depend on element creation order, so two structurally identical
+            #   lowerings of the same program would not share a cached build.
+            source_code=_drop_element_ids(sdfg.to_json(hash=True)),
             library_deps=tuple(),
             code_spec=code_specs.SDFGCodeSpec(),
         )
         return module
+
+
+def _drop_element_ids(json_obj: Any) -> Any:
+    """
+    Remove ``guid`` keys from a serialized SDFG with recursion.
+
+    We remove ``guid`` keys because of indeterminism of the ``guid`` values, which
+    would cause two identical programs to result in different compiled SDFGs, since
+    the cache key contains the hash of the serialized SDFG (a JSON string).
+    # FIXME(edopao): remove this workaround once the SDFG lowering is stable.
+
+    Note that this recursive implementation is 2-3x faster than the iterative one,
+    on a large SDFG, and it is also simpler to read.
+    """
+    if isinstance(json_obj, dict):
+        return {k: _drop_element_ids(v) for k, v in json_obj.items() if k != "guid"}
+    if isinstance(json_obj, list):
+        return [_drop_element_ids(v) for v in json_obj]
+    if isinstance(json_obj, tuple):
+        return tuple(_drop_element_ids(v) for v in json_obj)
+    return json_obj
 
 
 class DaCeTranslationStepFactory(factory.Factory):

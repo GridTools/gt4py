@@ -79,3 +79,5 @@ As mentioned above, this feature is is rather immature, we are actively explorin
 ## References
 
 Issues [#208](https://github.com/GridTools/gt4py/issues/208) and maybe also [#72](https://github.com/GridTools/gt4py/issues/72).
+
+See also [runtime intervals](./runtime-intervals.md).

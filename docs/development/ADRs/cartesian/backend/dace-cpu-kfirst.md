@@ -20,7 +20,7 @@ On disadvantage of this approach is that we add duplicate the dace cpu backend. 
 
 ### Change the loop structure of `dace:cpu`
 
-We could just change the loop structure / memory layout of the existing `dace:cpu` backend to be K-first. This would allow direct comparison with `gt:cpu_kfirst` and avoid the backend duplication. We see loop reordering as an optimization step and would like to keep the naive direct translations (with the K-I-J loops) or comparison.
+We could just change the loop structure / memory layout of the existing `dace:cpu` backend to be K-first. This would allow direct comparison with `gt:cpu_kfirst` and avoid the backend duplication. We see loop reordering as an optimization step and would like to keep the naive direct translations (with the K-I-J loops) for comparison.
 
 ### Derive loop structure from memory layout
 

@@ -11,10 +11,8 @@ from gt4py.next.program_processors.runners.dace.sdfg_callable import get_sdfg_ar
 from gt4py.next.program_processors.runners.dace.workflow.backend import (
     make_dace_backend,
     run_dace_cpu,
-    run_dace_cpu_cached,
     run_dace_cpu_noopt,
     run_dace_gpu,
-    run_dace_gpu_cached,
     run_dace_gpu_noopt,
 )
 
@@ -23,9 +21,7 @@ __all__ = [
     "get_sdfg_args",
     "make_dace_backend",
     "run_dace_cpu",
-    "run_dace_cpu_cached",
     "run_dace_cpu_noopt",
     "run_dace_gpu",
-    "run_dace_gpu_cached",
     "run_dace_gpu_noopt",
 ]

@@ -221,6 +221,50 @@ WriteableBuffer: TypeAlias = Union[
 ReadableBuffer: TypeAlias = Union[ReadOnlyBuffer, WriteableBuffer]
 
 
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+@runtime_checkable
+class SingleDispatchCallable(Protocol[_P, _T]):
+    # `functools.singledispatch` copies the wrapped function's identity onto
+    # the dispatcher; declaring these attributes allows callers to overwrite
+    # it (e.g. to give a dispatcher its own pickle identity).
+    __name__: str
+    __qualname__: str
+    registry: Mapping[Any, Callable[_P, _T]]
+
+    def dispatch(self, cls: Any) -> Callable[_P, _T]: ...
+
+    @overload
+    def register(
+        self, cls: Any, func: Literal[None] = None
+    ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
+
+    @overload
+    def register(self, cls: Any, func: Callable[_P, _T]) -> Callable[_P, _T]: ...
+
+    def register(
+        self, cls: Any, func: Callable[_P, _T] | None = None
+    ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]] | Callable[_P, _T]: ...
+
+    def _clear_cache(self) -> None: ...
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+
+
+def is_single_dispatch_callable(
+    func: Callable[_P, _T],
+) -> TypeGuard[SingleDispatchCallable[_P, _T]]:
+    return (
+        callable(func)
+        and getattr(func, "registry", None) is not None
+        and callable(getattr(func, "dispatch", None))
+        and callable(getattr(func, "register", None))
+        and callable(getattr(func, "_clear_cache", None))
+    )
+
+
 class HashlibAlgorithm(Protocol):
     """Used in the hashlib module of the standard library."""
 
@@ -380,9 +424,6 @@ else:
 def has_type_parameters(cls: Type) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
-
-
-_T = TypeVar("_T")
 
 
 def get_actual_type(obj: _T) -> Type[_T]:
@@ -743,7 +784,9 @@ def infer_type(
     if isinstance(value, (StdGenericAliasType, _TypingSpecialFormType)):
         return value
 
-    if value in (None, type(None)):
+    # note: identity check instead of `in`, which would use `__eq__` and fail
+    # for values with non-boolean equality (e.g. NumPy arrays)
+    if value is None or value is type(None):
         return type(None) if none_as_type else None
 
     if isinstance(value, type):

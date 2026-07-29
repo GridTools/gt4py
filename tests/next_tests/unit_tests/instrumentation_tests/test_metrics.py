@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import json
 import pathlib
 import unittest.mock
@@ -66,7 +68,7 @@ class TestSourceKeyContextManager:
             assert metrics.is_current_source_key_set() is False
 
             key = "context_test_key"
-            with metrics.metrics_context(key):
+            with metrics.metrics_source_key_context(key):
                 assert metrics.is_current_source_key_set() is True
                 assert metrics._source_key_cvar.get() == key
                 assert metrics.get_current_source_key() == key

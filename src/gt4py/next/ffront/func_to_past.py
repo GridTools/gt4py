@@ -17,6 +17,8 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
+    experimental,
+    fbuiltins,
     program_ast as past,
     source_utils,
     stages as ffront_stages,
@@ -80,7 +82,9 @@ def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSLProgramDef
     """
     wf = workflow.make_step(func_to_past)
     if cached:
-        wf = workflow.CachedStep(wf, hash_function=ffront_stages.fingerprint_stage)
+        wf = workflow.CachedStep.in_memory(
+            wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        )
     return wf
 
 
@@ -97,6 +101,8 @@ def adapted_func_to_past_factory(
 class ProgramParser(DialectParser[past.Program]):
     """Parse program definition from Python source code into PAST."""
 
+    reserved_names = fbuiltins.BUILTIN_NAMES + experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
+
     @classmethod
     def _postprocess_dialect_ast(
         cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
@@ -105,6 +111,7 @@ class ProgramParser(DialectParser[past.Program]):
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
+        self._check_not_a_reserved_name(node.name, self.get_location(node))
         closure_symbols: list[past.Symbol] = [
             past.Symbol(
                 id=name,

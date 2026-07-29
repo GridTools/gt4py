@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from copy import deepcopy
+
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 
 from gt4py.cartesian.gtc.dace.passes import utils
@@ -41,6 +43,9 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
             // computation here (2)
     """
 
+    def __init__(self, *, forscope_only: bool = False) -> None:
+        self._forscope_only = forscope_only
+
     def _push_K_loop_in_IJ(self, node: tn.MapScope | tn.ForScope):
         # take refs before moving things around
         parent = node
@@ -54,14 +59,17 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
 
             # New loop with MapEntry (`node`) from parent and children from `child`
             if isinstance(node, tn.MapScope):
-                new_loop = tn.MapScope(node=parent.node, children=child.children)
-                new_loop.parent = child
-            elif isinstance(node, tn.ForScope):
-                new_loop = node
-                node.children = child.children
-                node.parent = child
+                new_loop = tn.MapScope(
+                    node=deepcopy(parent.node), children=[c for c in child.children], parent=child
+                )
             else:
-                raise ValueError(f"Unknown node of type {type(node)}")
+                assert isinstance(node, tn.ForScope)
+                new_loop = tn.ForScope(
+                    loop=deepcopy(parent.loop),
+                    children=[c for c in child.children],
+                    parent=child,
+                )
+
             child.children = [new_loop]
             child.parent = grandparent
             grandparent_children.insert(k_loop_index, child)
@@ -71,6 +79,8 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
         grandparent_children.remove(node)
 
     def visit_MapScope(self, node: tn.MapScope):
+        if self._forscope_only:
+            return
         if node.node.map.params[0].startswith("__k"):
             self._push_K_loop_in_IJ(node)
 

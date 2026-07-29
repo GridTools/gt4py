@@ -1272,3 +1272,18 @@ def test_non_empty():
 
     with pytest.raises(ValueError, match="Empty"):
         Model("AAAA", [])
+
+
+def test_datamodel_abc_virtual_subclasses():
+    class Model(datamodels.DataModel):
+        value: int
+
+    class Plain:
+        value: int
+
+    # Datamodel classes and instances match the ABC via the subclass hook,
+    # without inheriting from it.
+    assert issubclass(Model, datamodels.DataModelABC)
+    assert isinstance(Model(value=1), datamodels.DataModelABC)
+    assert not issubclass(Plain, datamodels.DataModelABC)
+    assert not isinstance(Plain(), datamodels.DataModelABC)

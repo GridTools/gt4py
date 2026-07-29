@@ -1353,18 +1353,16 @@ def _handle_special_case_of_gt4py_scan_point(
     if _handle_special_case_of_gt4py_scan_point_impl(
         state, descending_point, concat_node, consumed_subset
     ):
-        if __debug__:
-            warnings.warn(
-                f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}`.",
-                stacklevel=1,
-            )
+        warnings.warn(
+            f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}`.",
+            stacklevel=1,
+        )
         return True
     else:
-        if __debug__:
-            warnings.warn(
-                f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}` was rejected.",
-                stacklevel=1,
-            )
+        warnings.warn(
+            f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}` was rejected.",
+            stacklevel=1,
+        )
         return False
 
 

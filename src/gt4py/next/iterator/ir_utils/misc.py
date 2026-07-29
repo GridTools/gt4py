@@ -231,6 +231,10 @@ def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
         return common.GridType.UNSTRUCTURED
 
 
+def dim_from_axis_literal(axis_literal: itir.AxisLiteral) -> common.Dimension:
+    return common.Dimension(value=axis_literal.value, kind=axis_literal.kind)
+
+
 def _flatten_tuple_expr(expr: itir.Expr) -> tuple[itir.Expr]:
     if cpm.is_call_to(expr, "make_tuple"):
         return sum(

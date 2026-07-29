@@ -13,9 +13,7 @@ import copy
 import inspect
 import operator
 import textwrap
-from typing import Callable, Dict, Final, List, Tuple, Type
-
-from gt4py.cartesian.utils.base import shashed_id
+from typing import Callable, Final
 
 
 def get_closure(func, *, include_globals=True, included_nonlocals=True, include_builtins=True):
@@ -54,7 +52,7 @@ def get_source(func):
     return source
 
 
-def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
+def get_ast(func_or_source_or_ast, *, feature_version: tuple[int, int]):
     if callable(func_or_source_or_ast):
         func_or_source_or_ast = get_source(func_or_source_or_ast)
     if isinstance(func_or_source_or_ast, str):
@@ -64,60 +62,31 @@ def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
     if isinstance(func_or_source_or_ast, (ast.AST, list)):
         ast_root = func_or_source_or_ast
     else:
-        raise ValueError("Invalid function definition ({})".format(func_or_source_or_ast))
+        raise ValueError(f"Invalid function definition ({func_or_source_or_ast})")
     return ast_root
 
 
-def ast_dump(
-    definition,
-    *,
-    skip_annotations: bool = True,
-    skip_decorators: bool = True,
-    feature_version: Tuple[int, int],
-) -> str:
-    def _dump(node: ast.AST, excluded_names):
+def ast_dump(definition, *, feature_version: tuple[int, int]) -> str:
+    def _dump(node: ast.AST) -> str:
         if isinstance(node, ast.AST):
-            if excluded_names:
-                fields = [
-                    (name, _dump(value, excluded_names))
-                    for name, value in sorted(ast.iter_fields(node))
-                    if name not in excluded_names
-                ]
-            else:
-                fields = [
-                    (name, _dump(value, excluded_names))
-                    for name, value in sorted(ast.iter_fields(node))
-                ]
+            fields = [(name, _dump(value)) for name, value in sorted(ast.iter_fields(node))]
 
             return "".join(
                 [
                     node.__class__.__name__,
-                    "({content})".format(
-                        content=", ".join("{}={}".format(name, value) for name, value in fields)
-                    ),
+                    f"({', '.join(f'{name}={value}' for name, value in fields)})",
                 ]
             )
 
-        elif isinstance(node, list):
-            lines = ["[", *[_dump(i, excluded_names) + "," for i in node], "]"]
+        if isinstance(node, list):
+            lines = ["[", *[_dump(i) + "," for i in node], "]"]
             return "\n".join(lines)
 
-        else:
-            return repr(node)
+        return repr(node)
 
-    skip_node_names = set()
-    if skip_decorators:
-        skip_node_names.add("decorator_list")
-    if skip_annotations:
-        skip_node_names.add("annotation")
-
-    dumped_ast = _dump(get_ast(definition, feature_version=feature_version), skip_node_names)
+    dumped_ast = _dump(get_ast(definition, feature_version=feature_version))
 
     return dumped_ast
-
-
-def ast_shash(ast_node, *, skip_decorators=True):
-    return shashed_id(ast_dump(ast_node, skip_decorators=skip_decorators))
 
 
 def collect_decorators(func_or_source_or_ast):
@@ -245,7 +214,7 @@ class ASTTransformPass(ASTPass):
 
 
 class ASTEvaluator(ASTPass):
-    AST_OP_TO_OP: Final[Dict[Type, Callable]] = {
+    AST_OP_TO_OP: Final[dict[type, Callable]] = {
         # Arithmetic operations
         ast.UAdd: operator.pos,
         ast.USub: operator.neg,
@@ -330,7 +299,7 @@ class ASTEvaluator(ASTPass):
         return all(comparisons)
 
     def generic_visit(self, node):
-        raise ValueError("Invalid AST node for evaluation: {}".format(repr(node)))
+        raise ValueError(f"Invalid AST node for evaluation: {node!r}")
 
 
 ast_eval = ASTEvaluator.apply
@@ -416,7 +385,7 @@ class QualifiedNameCollector(ASTPass):
             self.name_nodes[node.id].append(node)
 
     def _get_name_components(self, node: ast.AST):
-        components: List
+        components: list
         if isinstance(node, ast.Name):
             components = [node.id]
             valid = self.prefixes is None or node.id in self.prefixes

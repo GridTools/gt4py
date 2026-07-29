@@ -10,6 +10,7 @@ import inspect
 import functools
 import textwrap
 import types
+import re
 from typing import Any, Callable, Dict, Optional, Type
 
 import numpy as np
@@ -480,6 +481,58 @@ class TestFunction:
             )
 
 
+class TestLazyFunction:
+    def test_simple_case(self) -> None:
+        @gtscript.lazy_function()
+        def constant():
+            return 1.0
+
+        def definition_func(out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = constant()
+
+        stencil = parse_definition(
+            definition_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        # check that constant was properly inlined
+        assert stencil.computations[0].body.stmts[0].value.value == 1.0
+
+    def test_annotation_deferred_type(self) -> None:
+        class DeferredType:
+            pass
+
+        def resolve_type(func: Callable):
+            """This function resolves the deferred type"""
+            for name, type_ in func.__annotations__.items():
+                if type_ == DeferredType:
+                    func.__annotations__[name] = gtscript.Field[float]
+
+        # configure lazy_function to resolve the deferred type on the `plus_one()` function
+        @gtscript.lazy_function(before_annotation=resolve_type)
+        def plus_one(a: DeferredType):
+            return a + 1.0
+
+        def definition_func(in_field: DeferredType, out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = plus_one(in_field)
+
+        # resolve deferred type on stencil
+        resolve_type(definition_func)
+
+        # parse stencil, which will automatically resolve the deferred type in the lazy_function
+        stencil = parse_definition(
+            definition_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        # check that constant was properly inlined
+        assert stencil.computations[0].body.stmts[0].value.rhs.value == 1.0
+
+
 class TestAxisSyntax:
     def test_good_syntax(self):
         def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
@@ -658,7 +711,22 @@ class TestImportedExternals:
 
 
 class TestIntervalSyntax:
-    def test_simple(self):
+    # Static intervals
+    def test_ellipsis(self):
+        def definition_func(field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert def_ir.computations[0].interval.end.offset == 0
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.END
+
+    def test_positive_numbers(self):
         def definition_func(field: gtscript.Field[float]):
             with computation(PARALLEL), interval(0, 1):
                 field = 0
@@ -690,6 +758,20 @@ class TestIntervalSyntax:
             level=nodes.LevelMarker.END, offset=0, loc=loc
         )
 
+    def test_negative_numbers(self):
+        def definition_func(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(1, -2):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 1
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert def_ir.computations[0].interval.end.offset == -2
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.END
+
     def test_externals(self):
         def definition_func(field: gtscript.Field[float]):
             from gt4py.cartesian.__externals__ import kstart
@@ -715,22 +797,88 @@ class TestIntervalSyntax:
                 level=nodes.LevelMarker.END, offset=-1, loc=loc
             )
 
-    def test_axisinterval(self):
+    def test_nonoverlapping_intervals(self):
         def definition_func(field: gtscript.Field[float]):
-            with computation(PARALLEL), interval(K[1:-1]):
-                field = 0
+            with computation(PARALLEL):
+                with interval(0, 2):
+                    field = 0
+                with interval(3, -1):
+                    field = 1
+                with interval(-1, None):
+                    field = 2
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    # Dynamic intervals
+    def test_dynamic_scalar(self):
+        def definition_func(field: gtscript.Field[float], scalar: int):  # type: ignore
+            with computation(PARALLEL), interval(0, scalar):
+                field[0, 0, 0] = 1
 
         def_ir = parse_definition(
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
-        loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == nodes.AxisBound(
-            level=nodes.LevelMarker.START, offset=1, loc=loc
-        )
-        assert def_ir.computations[0].interval.end == nodes.AxisBound(
-            level=nodes.LevelMarker.END, offset=-1, loc=loc
-        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
 
+        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.VarRef)
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
+
+    def test_dynamic_field(self):
+        def definition_func(
+            field: gtscript.Field[float],  # type: ignore
+            idx_field: gtscript.Field[gtscript.IJ, int],  # type: ignore
+        ):
+            with computation(PARALLEL), interval(0, idx_field):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.FieldRef)
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
+
+    def test_dynamic_field_zero_offset(self):
+        def definition_func(
+            field: gtscript.Field[float],  # type: ignore
+            idx_field: gtscript.Field[gtscript.IJ, int],  # type: ignore
+        ):
+            with computation(PARALLEL), interval(0, idx_field[0, 0]):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.FieldRef)
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
+
+    def test_dynamic_field_higher_dim(self):
+        def definition_func(
+            field: gtscript.Field[float],  # type: ignore
+            idx_field: gtscript.Field[gtscript.IJ, (int, 2)],  # type: ignore
+        ):
+            with computation(PARALLEL), interval(0, idx_field[0, 0][1]):
+                field[0, 0, 0] = 1
+
+        def_ir = parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+        assert def_ir.computations[0].interval.start.offset == 0
+        assert def_ir.computations[0].interval.start.level == nodes.LevelMarker.START
+
+        assert isinstance(def_ir.computations[0].interval.end.offset, nodes.FieldRef)
+        assert def_ir.computations[0].interval.end.offset.name == "idx_field"
+        assert def_ir.computations[0].interval.end.level == nodes.LevelMarker.START
+
+    # Illegal syntax
     def test_error_none(self):
         def definition_func(field: gtscript.Field[float]):
             with computation(PARALLEL), interval(None, -1):
@@ -751,7 +899,10 @@ class TestIntervalSyntax:
             with computation(PARALLEL), interval(K[2], -1):
                 field = 0
 
-        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Two-argument syntax"):
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid interval range specification",
+        ):
             parse_definition(
                 definition_func,
                 name=inspect.stack()[0][3],
@@ -803,25 +954,26 @@ class TestIntervalSyntax:
                 module=self.__class__.__name__,
             )
 
-    def test_nonoverlapping_intervals(self):
-        def definition_func(field: gtscript.Field[float]):
-            with computation(PARALLEL):
-                with interval(0, 2):
-                    field = 0
-                with interval(3, -1):
-                    field = 1
-                with interval(-1, None):
-                    field = 2
+    def test_field_index_with_offset(self):
+        def definition_func(
+            field: gtscript.Field[float],  # type: ignore
+            idx_field: gtscript.Field[gtscript.IJ, int],  # type: ignore
+        ):
+            with computation(PARALLEL), interval(0, idx_field[0, 1]):
+                field[0, 0, 0] = 1
 
-        parse_definition(
-            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
-        )
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
+        ):
+            def_ir = parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
 
 
 class TestRegions:
     def test_one_interval_only(self):
         def stencil(in_f: gtscript.Field[np.float64]):
-            with computation(PARALLEL), interval(...), horizontal(region[I[0:3], :]):
+            with computation(PARALLEL), interval(...), horizontal(region[I[0] : I[0] + 3, :]):
                 in_f = 1.0
 
         def_ir = parse_definition(
@@ -854,7 +1006,7 @@ class TestRegions:
             stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            externals={"i1": I[1]},
+            externals={"i1": I[0] + 1},
         )
 
         assert len(def_ir.computations) == 1
@@ -926,6 +1078,54 @@ class TestRegions:
             match="Cannot nest `with` node inside a horizontal region.",
         ):
             parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_axis_offset(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                with horizontal(region[I[0] : I[2], :]):
+                    field[0, 0, 0] = 0
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid horizontal range specification",
+        ):
+            parse_definition(
+                stencil,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+    def test_axis_offset_negative(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                with horizontal(region[I[-3] : I[-1], :]):
+                    field[0, 0, 0] = 0
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid horizontal range specification",
+        ):
+            parse_definition(
+                stencil,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+    def test_axis_slice(self):
+        def stencil(field: gtscript.Field[float]):  # type: ignore
+            with computation(PARALLEL), interval(...):
+                with horizontal(region[I[0:2], :]):
+                    field[0, 0, 0] = 0
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid interval range specification",
+        ):
+            parse_definition(
+                stencil,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
 
 
 class TestExternalsWithSubroutines:
@@ -1617,8 +1817,9 @@ class TestAssignmentSyntax:
 
             parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-    def test_datadims_direct_access(self):
-        # Check classic data dimensions are working
+
+class TestGlobalTablesWithDataDimensions:
+    def test_classic_data_dimensions_access(self) -> None:
         def data_dims(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.Field[(np.int32, (3, 3, 3))],
@@ -1628,7 +1829,8 @@ class TestAssignmentSyntax:
 
         parse_definition(data_dims, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-        # Check .A on read
+    def test_dotA_read(self) -> None:
+        # NOTE: This should be merged with `.at()` syntax on fields.
         def at_read(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.GlobalTable[(np.int32, (3, 3, 3, 3))],
@@ -1638,7 +1840,8 @@ class TestAssignmentSyntax:
 
         parse_definition(at_read, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-        # Can't write to the field
+    def test_dotA_write_forbidden(self) -> None:
+        # NOTE: This should be merged with `.at()` syntax on fields.
         def at_write(
             in_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.GlobalTable[(np.int32, (3, 3, 3))],
@@ -1652,7 +1855,7 @@ class TestAssignmentSyntax:
         ):
             parse_definition(at_write, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-        # Can't index cartesian style
+    def test_cartesian_style_index_forbidden(self) -> None:
         def GlobalTable_access_as_IJK(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.GlobalTable[(np.int32, (3, 3, 3))],
@@ -1670,16 +1873,71 @@ class TestAssignmentSyntax:
                 module=self.__class__.__name__,
             )
 
-        # Check .A on read with a Field with data dimensions
+    def test_dotA_read_on_field(self) -> None:
+        # NOTE This should be banished in favor of `.at()`
         def data_dims_with_at(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
-            global_field: gtscript.Field[(np.int32, (3, 3, 3))],
+            in_field: gtscript.Field[(np.int32, (3, 3, 3))],
         ):
             with computation(PARALLEL), interval(...):
-                out_field = global_field.A[1, 0, 2]
+                out_field = in_field.A[1, 0, 2]
 
         parse_definition(
             data_dims_with_at,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+    def test_forgot_to_index_ddims(self) -> None:
+        def data_dims_rhs_not_fully_indexed(
+            out_field: gtscript.Field[gtscript.IJK, np.int32],
+            global_field: gtscript.Field[gtscript.IJK, (np.int32, (3))],
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = global_field[0, 0, 0]  # Expecting [0,0,0][0]
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Field global_field has data dimensions but no data dimensions index is specified. Use",
+        ):
+            parse_definition(
+                data_dims_rhs_not_fully_indexed,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+    def test_forgot_to_index_ddim_with_at(self) -> None:
+        def data_dims_rhs_absolute_not_fully_indexed(
+            out_field: gtscript.Field[gtscript.IJK, np.int32],
+            global_field: gtscript.Field[gtscript.IJK, (np.int32, (3))],
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = global_field.at(K=1)  # Expecting ddims=[]
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Field global_field has data dimensions but no data dimensions index is specified. Use*",
+        ):
+            parse_definition(
+                data_dims_rhs_absolute_not_fully_indexed,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+            )
+
+    @pytest.mark.xfail(
+        reason="IR validation expects ddim sizes to be of type `int`",
+        raises=gt_frontend.GTScriptSyntaxError,
+    )
+    def test_ddims_with_numpy_type(self) -> None:
+        def data_dims_with_numpy_int_type(
+            out_field: gtscript.Field[gtscript.IJK, np.int32],
+            in_field: gtscript.Field[gtscript.IJK, (np.int32, (np.int32(3)))],
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field.A[0]
+
+        parse_definition(
+            data_dims_with_numpy_int_type,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
         )

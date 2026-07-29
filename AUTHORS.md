@@ -21,6 +21,7 @@
 - Kardos, Péter. ETH Zurich - EXCLAIM
 - Kellerhals, Samuel. ETH Zurich - EXCLAIM
 - Kotsalos, Christos. ETH Zurich - CSCS
+- Kropiewnicki, Charles. SSAI/NASA-GSFC
 - Luz, Magdalena. ETH Zurich - EXCLAIM
 - Madonna, Alberto. ETH Zurich - CSCS
 - Mariotti, Kean. ETH Zurich - CSCS

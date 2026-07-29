@@ -11,12 +11,15 @@ from __future__ import annotations
 import abc
 import dataclasses
 import functools
+import pathlib
 import typing
 from typing import Any, Callable, Generic, Protocol, TypeVar
 
 from typing_extensions import Self
 
+from gt4py._core import filecache
 from gt4py.eve.extended_typing import OpaqueMutableMapping
+from gt4py.next import config, fingerprinting, utils
 
 
 StartT = TypeVar("StartT")
@@ -92,7 +95,8 @@ class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co
 
 @dataclasses.dataclass(frozen=True)
 class NamedStepSequence(
-    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
 ):
     """
     Workflow with linear succession of named steps.
@@ -159,7 +163,8 @@ class NamedStepSequence(
 
 @dataclasses.dataclass(frozen=True)
 class MultiWorkflow(
-    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
 ):
     """A flexible workflow, where the sequence of steps depends on the input type."""
 
@@ -175,7 +180,9 @@ class MultiWorkflow(
 
 
 @dataclasses.dataclass(frozen=True)
-class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
+class StepSequence(
+    ChainableWorkflowMixin[StartT, EndT],
+):
     """
     Composable workflow of single input callables.
 
@@ -195,32 +202,23 @@ class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
 
     """
 
-    @dataclasses.dataclass(frozen=True)
-    class __Steps:
-        inner: tuple[Workflow[Any, Any], ...]
-
-    # todo(ricoh): replace with normal tuple with TypeVarTuple hints
-    #   to enable automatic deduction StartT and EndT fom constructor
-    #   calls. TypeVarTuple is available in typing_extensions in
-    #   Python <= 3.11. Revise after mypy constraint is > 1.0.1,
-    #   which fails on trying to check TypeVarTuple.
-    steps: __Steps
+    steps: tuple[Workflow[Any, Any], ...]
 
     def __call__(self, inp: StartT) -> EndT:
         step_result: Any = inp
-        for step in self.steps.inner:
+        for step in self.steps:
             step_result = step(step_result)
         return step_result
 
     def chain(self, next_step: Workflow[EndT, NewEndT]) -> ChainableWorkflowMixin[StartT, NewEndT]:
         return typing.cast(
             ChainableWorkflowMixin[StartT, NewEndT],
-            self.__class__(self.__Steps((*self.steps.inner, next_step))),
+            self.__class__((*self.steps, next_step)),
         )
 
     @classmethod
     def start(cls, first_step: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
-        return cls(cls.__Steps((first_step,)))
+        return cls((first_step,))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -232,44 +230,123 @@ class CachedStep(
     """
     Cached workflow of single input callables.
 
+    The cache key combines a fingerprint of the workflow state (so that changes
+    to the step invalidate the cache) with the value returned by
+    ``input_fingerprinter`` for the given input. The caller selects both
+    fingerprinters explicitly:
+
+    - ``input_fingerprinter`` fingerprints each input value.
+    - ``step_fingerprinter`` fingerprints the workflow state and combines the
+      two halves into the final key. Its choice fixes the cache's durability.
+      The default, :data:`~gt4py.next.fingerprinting.lenient_fingerprinter`, suits an
+      in-memory cache (a plain ``dict``, the default): it lives within a single
+      process and so tolerates non-importable callables in the step graph
+      (lambdas, closures, dynamically-created steps) by hashing them
+      structurally. A persistent cache (e.g. ``FileCache``) instead requires
+      :data:`~gt4py.next.fingerprinting.strict_fingerprinter`, so that every referenced
+      function is importable by qualified name and the on-disk keys stay
+      reproducible across processes.
+
+    Because the ``step_fingerprinter`` must match the cache's durability, prefer
+    the :meth:`in_memory` and :meth:`persistent` constructors, which pair the
+    cache with the matching fingerprinter for you. Use the raw constructor only
+    when you need a non-default fingerprinter combination.
+
     Examples:
     ---------
-    >>> def heavy_computation(x: int) -> int:
-    ...     print("This might take a while...")
-    ...     return x
+    >>> cached_step = CachedStep.in_memory(step=tuple, input_fingerprinter=lambda x: x)
 
-    >>> cached_step = CachedStep(step=heavy_computation)
+    The result of the first invocation is computed and stored in the cache:
+    >>> result = cached_step([1, 2, 3])
+    >>> result
+    (1, 2, 3)
 
-    >>> cached_step(42)
-    This might take a while...
-    42
+    The next invocation for the same argument returns the cached object without
+    recomputing it:
+    >>> cached_step([1, 2, 3]) is result
+    True
 
-    The next invocation for the same argument will be cached:
-    >>> cached_step(42)
-    42
-
-    >>> cached_step(1)
-    This might take a while...
-    1
+    A different argument is computed and cached separately:
+    >>> cached_step([4, 5]) is result
+    False
     """
 
     step: Workflow[StartT, EndT]
-    hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
-    cache: OpaqueMutableMapping[HashT, EndT] = dataclasses.field(repr=False, default_factory=dict)
+    input_fingerprinter: Callable[[StartT], HashT] = dataclasses.field(
+        metadata=utils.gt4py_metadata(fingerprint=False)
+    )
+    step_fingerprinter: fingerprinting.Fingerprinter = dataclasses.field(
+        default=fingerprinting.lenient_fingerprinter,
+        metadata=utils.gt4py_metadata(fingerprint=False),
+    )
+    cache: OpaqueMutableMapping[str, EndT] = dataclasses.field(
+        repr=False, default_factory=dict, metadata=utils.gt4py_metadata(fingerprint=False)
+    )
+
+    @classmethod
+    def in_memory(
+        cls,
+        step: Workflow[StartT, EndT],
+        *,
+        input_fingerprinter: Callable[[StartT], HashT],
+        cache: OpaqueMutableMapping[str, EndT] | None = None,
+    ) -> CachedStep[StartT, EndT, HashT]:
+        """
+        Build an in-memory store with the lenient fingerprinter.
+
+        Defaults to a fresh ``dict``.
+        """
+        return cls(
+            step=step,
+            input_fingerprinter=input_fingerprinter,
+            step_fingerprinter=fingerprinting.lenient_fingerprinter,
+            cache={} if cache is None else cache,
+        )
+
+    @classmethod
+    def persistent(
+        cls,
+        step: Workflow[StartT, EndT],
+        *,
+        input_fingerprinter: Callable[[StartT], HashT],
+        cache: OpaqueMutableMapping[str, EndT] | str | pathlib.Path,
+    ) -> CachedStep[StartT, EndT, HashT]:
+        """Build a persistent folder-based store with the lenient fingerprinter."""
+
+        if isinstance(cache, (str, pathlib.Path)):
+            cache = filecache.FileCache(cache)
+
+        return cls(
+            step=step,
+            input_fingerprinter=input_fingerprinter,
+            step_fingerprinter=fingerprinting.lenient_fingerprinter,
+            cache=cache,
+        )
+
+    @functools.cached_property
+    def _step_fingerprint(self) -> str:
+        # The step and the build-cache version are immutable, so their
+        # (potentially expensive) fingerprint is computed once per instance
+        # instead of on every cache lookup.
+        return self.step_fingerprinter((config.BUILD_CACHE_VERSION_ID, self))
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
-        hash_ = self.hash_function(inp)
+        key = self.cache_key(inp)
         try:
-            result = self.cache[hash_]
+            result = self.cache[key]
         except KeyError:
-            result = self.cache[hash_] = self.step(inp)
+            result = self.cache[key] = self.step(inp)
         return result
+
+    def cache_key(self, inp: StartT) -> str:
+        return self.step_fingerprinter((self._step_fingerprint, self.input_fingerprinter(inp)))
 
 
 @dataclasses.dataclass(frozen=True)
 class SkippableStep(
-    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
 ):
     step: Workflow[StartT, EndT]
 

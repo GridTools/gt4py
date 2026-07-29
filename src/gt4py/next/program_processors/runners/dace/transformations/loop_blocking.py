@@ -16,6 +16,7 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
+from dace.libraries import standard as dace_stdlib
 from dace.sdfg import (
     graph as dace_graph,
     nodes as dace_nodes,
@@ -25,7 +26,10 @@ from dace.sdfg import (
 from dace.transformation import helpers as dace_helpers
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowering
+from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtx_lib,
+    lowering as gtx_dace_lowering,
+)
 
 
 @dace_properties.make_properties
@@ -255,12 +259,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """Computes the partition the of the nodes of the Map.
 
         The function divides the nodes into two sets, defined as:
-        - The independent nodes `\mathcal{I}`:
+        - The independent nodes `\\mathcal{I}`:
             These are the nodes, whose output does not depend on the blocked
             dimension. These nodes can be relocated between the outer and inner map.
             Nodes in these set does not necessarily have a direct edge to map entry.
             However, the exists a path from `outer_entry` to any node in this set.
-        - The dependent nodes `\mathcal{D}`:
+        - The dependent nodes `\\mathcal{D}`:
             These are the nodes, whose output depend on the blocked dimension.
             Thus they can not be relocated between the two maps, but will remain
             inside the inner scope. All these nodes have at least one edge to map entry.
@@ -492,7 +496,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             #  set of new independent nodes.
             new_independent_nodes.update(map_scope.nodes())
 
-        elif isinstance(node_to_classify, dace.libraries.standard.nodes.Reduce):
+        elif isinstance(node_to_classify, (dace_stdlib.Reduce, gtx_lib.ReduceWithSkipValues)):
             # The only checks we impose on them is the free symbols check and the
             #  input output checks.
             pass
