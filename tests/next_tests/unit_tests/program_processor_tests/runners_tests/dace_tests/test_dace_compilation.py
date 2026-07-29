@@ -176,6 +176,7 @@ def test_compiler_skips_tx_markers_for_non_gpu_device():
 
 def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
     artifact = dace_wf_compilation.DaCeCompilationArtifact(
+        sdfg_build_folder=tmp_path,
         library_path=tmp_path / "build" / "libprogram.so",
         sdfg_json="{}",
         binding_source_code="def update_sdfg_args(*a, **k): ...",
